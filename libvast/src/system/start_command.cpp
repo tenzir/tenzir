@@ -89,13 +89,15 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   if (!node_opt)
     return caf::make_message(std::move(node_opt.error()));
   auto const& node = node_opt->get();
+  VAST_INFO("{}", inv.options);
+  auto is_fleet_manager
+    = caf::get_or(inv.options, "vast.fleet.is-manager-node", false);
+  VAST_INFO("{}", is_fleet_manager);
   // FIXME: Encapsulate this logic into a `fleet-client` plugin
   if (!sys.has_openssl_manager()) {
     return caf::make_message(caf::make_error(
       ec::invalid_argument, "need valid tls credentials to connect to fleet"));
   }
-  auto is_fleet_manager
-    = caf::get_or(inv.options, "vast.fleet.is-manager-node", false);
   // Publish our node.
   auto const* host = node_endpoint.host.empty()
                        ? defaults::system::endpoint_host.data()

@@ -104,6 +104,20 @@ std::vector<std::string> get_tls_destinations(const caf::settings& settings) {
   if (auto const* url
       = caf::get_if<std::string>(&settings, "vast.fleet.manager-url"))
     result.push_back(*url);
+  // VAST only has a single listening port, so if we're running that in TLS mode
+  // even connections from within the same process via `connect_to_node()` need
+  // to be TLS. This should only be relevant for the manager node.
+  // TODO: The condition here should probably be `if (VAST is expecting incoming
+  // TLS)`
+  if (auto const* is_manager
+      = caf::get_if<bool>(&settings, "vast.fleet.is-manager-node");
+      *is_manager) {
+    auto endpoint = get_node_endpoint(settings);
+    VAST_ASSERT_CHEAP(endpoint); // Already checked in `connect_to_node()`.
+    VAST_ASSERT_CHEAP(
+      endpoint->port); // Always assigned in `get_node_endpoint()`.
+    result.push_back(fmt::format("{}:{}", endpoint->host, *endpoint->port));
+  }
   return result;
 }
 

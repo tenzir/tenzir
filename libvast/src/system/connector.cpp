@@ -155,6 +155,7 @@ connector_actor::behavior_type make_no_retry_behavior(
                                fmt::format("{} couldn't connect to VAST node"
                                            "within a given deadline",
                                            *self));
+      VAST_INFO("using middleman? {}", self->state.is_tls_destination(request));
       auto middleman = self->state.is_tls_destination(request)
                          ? self->system().openssl_manager().actor_handle()
                          : self->system().middleman().actor_handle();
@@ -185,6 +186,8 @@ connector_actor::behavior_type make_no_retry_behavior(
 bool connector_state::is_tls_destination(connect_request request) const {
   // TODO: Allow a default port without writing it out
   auto dest_url = fmt::format("{}:{}", request.host, request.port);
+  // if (dest_url == "127.0.0.1:42000")
+  // return true; // FIXME
   VAST_INFO("using {} against outgoing whitelist: {}", dest_url,
             tls_whitelist); // FIXME: INFO -> DEBUG
   return std::find(tls_whitelist.begin(), tls_whitelist.end(), dest_url)
@@ -204,6 +207,7 @@ connector(connector_actor::stateful_pointer<connector_state> self,
   return {
     [self, delay = *retry_delay, deadline](
       atom::connect, connect_request request) -> caf::result<node_actor> {
+      VAST_INFO("using middleman? {}", self->state.is_tls_destination(request));
       auto middleman = self->state.is_tls_destination(request)
                          ? self->system().openssl_manager().actor_handle()
                          : self->system().middleman().actor_handle();
