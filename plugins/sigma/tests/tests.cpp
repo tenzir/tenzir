@@ -69,7 +69,7 @@ TEST(maps - single value) {
 TEST(maps - empty value) {
   auto yaml = "foo: ''";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == \"\"");
+  auto expected = to_expr("foo == //i");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -158,7 +158,7 @@ TEST(modifier - re) {
     foo|re: "^.*$"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /^.*$/i");
+  auto expected = to_expr("foo == /^.*$/");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -167,11 +167,11 @@ TEST(modifier - re 2) {
     foo|re: '.*foobar.*'
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /.*foobar.*/i");
+  auto expected = to_expr("foo == /.*foobar.*/");
   CHECK_EQUAL(search_id, expected);
 }
 
-TEST(modifier - re - case sensitive) {
+TEST(modifier - re - no wildcards) {
   auto yaml = R"__(
     foo|re: 'foobar'
   )__";
@@ -185,7 +185,7 @@ TEST(modifier - startswith) {
     foo|startswith: "x"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /^x.*/");
+  auto expected = to_expr("foo == /^x.*/i");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -194,7 +194,7 @@ TEST(modifier - endswith) {
     foo|endswith: "x"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /.*x$/");
+  auto expected = to_expr("foo == /.*x$/i");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -476,13 +476,13 @@ level: critical
 TEST(real example) {
   auto expr = to_rule(unc2452);
   // clang-format off
-  auto selection1 = R"__(CommandLine ni "7z.exe a -v500m -mx9 -r0 -p")__"s;
-  auto selection2a = R"__(ParentCommandLine ni "wscript.exe" && ParentCommandLine ni ".vbs")__"s;
-  auto selection2b = R"__(CommandLine ni "rundll32.exe" && CommandLine ni "C:\Windows" && CommandLine ni ".dll,Tk_")__"s;
-  auto selection3 = R"__(ParentImage == /.*\rundll32.exe$/ && ParentCommandLine ni "C:\Windows" && CommandLine ni "cmd.exe /C ")__"s;
-  auto selection4 = R"__(CommandLine ni "rundll32 c:\windows\\" && CommandLine ni ".dll ")__"s;
-  auto specific1 = R"__(ParentImage == /.*\rundll32.exe$/ && Image == /.*\dllhost.exe$/)__"s;
-  auto filter1 = R"__(CommandLine == " " || CommandLine == "")__"s;
+  auto selection1 = R"__(CommandLine == /7z.exe a -v500m -mx9 -r0 -p/i)__"s;
+  auto selection2a = R"__(ParentCommandLine == /wscript.exe/i && ParentCommandLine == /.vbs/i)__"s;
+  auto selection2b = R"__(CommandLine == /rundll32.exe/i && CommandLine == /C:\Windows/i && CommandLine == /.dll,Tk_/i)__"s;
+  auto selection3 = R"__(ParentImage == /.*\rundll32.exe$/i && ParentCommandLine == /C:\Windows/i && CommandLine == /cmd.exe \/C /i)__"s;
+  auto selection4 = R"__(CommandLine == /rundll32 c:\windows\\/i && CommandLine == /.dll /i)__"s;
+  auto specific1 = R"__(ParentImage == /.*\rundll32.exe$/i && Image == /.*\dllhost.exe$/i)__"s;
+  auto filter1 = R"__(CommandLine == / /i || CommandLine == //i)__"s;
   // clang-format on
   conjunction selection2;
   selection2.emplace_back(to_expr(selection2a));
