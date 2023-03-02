@@ -98,9 +98,6 @@ RUN apt-get update && \
       libasan5 \
       libc++1 \
       libc++abi1 \
-      libcaf-core0.17 \
-      libcaf-io0.17 \
-      libcaf-openssl0.17 \
       libflatbuffers1 \
       libfmt7 \
       libhttp-parser2.9 \
