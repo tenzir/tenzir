@@ -11,6 +11,7 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/printable/stream.hpp>
+#include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/expression.hpp>
 #include <vast/detail/base64.hpp>
 #include <vast/expression.hpp>
@@ -189,6 +190,17 @@ TEST(modifier - startswith) {
   CHECK_EQUAL(search_id, expected);
 }
 
+TEST(modifier - startswith - proper backslash escaping) {
+  auto yaml = R"__(
+    foo|startswith: "C:\rundll32"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr(R"(foo == /^C:\rundll32.*/i)");
+  CHECK_EQUAL(search_id, expected);
+  auto str = to_string(expected);
+  CHECK_EQUAL(str, "foo == /^C:\\rundll32.*/i");
+}
+
 TEST(modifier - endswith) {
   auto yaml = R"__(
     foo|endswith: "x"
@@ -196,6 +208,17 @@ TEST(modifier - endswith) {
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo == /.*x$/i");
   CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - endswith - proper backslash escaping) {
+  auto yaml = R"__(
+    foo|endswith: "\rundll32.exe"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr(R"(foo == /.*\rundll32.exe$/i)");
+  CHECK_EQUAL(search_id, expected);
+  auto str = to_string(expected);
+  CHECK_EQUAL(str, "foo == /.*\\rundll32.exe$/i");
 }
 
 TEST(modifier - lt) {
@@ -241,7 +264,7 @@ TEST(modifier - base64) {
   auto search_id = to_search_id(yaml);
   auto base64_value = detail::base64::encode("value"sv);
   REQUIRE_EQUAL(base64_value, "dmFsdWU="); // echo -n value | base64
-  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
+  auto expected = to_expr(fmt::format("foo == /{}/i", base64_value));
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -253,7 +276,7 @@ TEST(modifier - double base64) {
   auto base64_value = detail::base64::encode("value"sv);
   base64_value = detail::base64::encode(base64_value);
   REQUIRE_EQUAL(base64_value, "ZG1Gc2RXVT0="); // echo -n dmFsdWU= | base64
-  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
+  auto expected = to_expr(fmt::format("foo == /{}/i", base64_value));
   CHECK_EQUAL(search_id, expected);
 }
 
