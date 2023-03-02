@@ -23,8 +23,6 @@ type all_types_i = record {
     z: time,
     lrc: list<record { x1: int64, x2: uint64 }>,
   },
-  // active indexer instantiated (and failing) despite #skip
-  m: map<int, real> #skip, 
 } #top_level_key=v
 
 type all_types = all_types_i #some=attr

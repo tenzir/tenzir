@@ -1,4 +1,4 @@
-# identity
+# pass
 
 Does nothing with the input. (This operator primarily for testing and
 debugging.)
@@ -6,13 +6,13 @@ debugging.)
 ## Synopsis
 
 ```
-identity
+pass
 ```
 
 ## Example
 
 ```
-identity
+pass
 ```
 
 ## YAML Syntax Example
@@ -23,5 +23,5 @@ release. Please use the pipeline syntax instead.
 :::
 
 ```yaml
-identity:
+pass:
 ```

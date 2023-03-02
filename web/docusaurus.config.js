@@ -213,6 +213,11 @@ async function createConfig() {
               label: 'Roadmap',
               position: 'left',
             },
+            {
+              type: 'docsVersionDropdown',
+              position: 'right',
+              dropdownActiveClassDisabled: true,
+            },
             // TODO: Uncomment once the API is available.
             //{
             //  to: '/api',

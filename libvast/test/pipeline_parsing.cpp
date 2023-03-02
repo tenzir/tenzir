@@ -402,22 +402,22 @@ TEST(pipeline string parsing - value assignment - double assignment) {
   REQUIRE(!parsed_pipeline);
 }
 
-TEST(pipeline string parsing - pipeline - identity) {
-  std::string pipeline_str = "identity";
+TEST(pipeline string parsing - pipeline - pass) {
+  std::string pipeline_str = "pass";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
-TEST(pipeline string parsing - pipeline - identity with extra input) {
-  std::string pipeline_str = "identity haha";
+TEST(pipeline string parsing - pipeline - pass with extra input) {
+  std::string pipeline_str = "pass haha";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
 TEST(pipeline string parsing - pipeline - string with superfluous delimiter) {
-  std::string pipeline_str = "identity | ";
+  std::string pipeline_str = "pass | ";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
@@ -425,7 +425,7 @@ TEST(pipeline string parsing - pipeline - string with superfluous delimiter) {
 
 TEST(pipeline string parsing - pipeline
      - string with two superfluous delimiters) {
-  std::string pipeline_str = "identity | | ";
+  std::string pipeline_str = "pass | | ";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
@@ -438,39 +438,37 @@ TEST(pipeline string parsing - pipeline - invalid operator syntax) {
   REQUIRE(!parsed_pipeline);
 }
 
-TEST(pipeline string parsing - pipeline - two identities - no space) {
-  std::string pipeline_str = "identity|identity";
+TEST(pipeline string parsing - pipeline - pass twice - no space) {
+  std::string pipeline_str = "pass|pass";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
-TEST(pipeline string parsing - pipeline - two identities
-     - space after delimiter) {
-  std::string pipeline_str = "identity| identity";
+TEST(pipeline string parsing - pipeline - pass twice - space after delimiter) {
+  std::string pipeline_str = "pass| pass";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
-TEST(pipeline string parsing - pipeline - two identities
-     - space before delimiter) {
-  std::string pipeline_str = "identity |identity";
+TEST(pipeline string parsing - pipeline - pass twice - space before delimiter) {
+  std::string pipeline_str = "pass |pass";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - pipeline - invalid operator) {
-  std::string pipeline_str = "identity | invalid --test=test";
+  std::string pipeline_str = "pass | invalid --test=test";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
-TEST(pipeline string parsing - pipeline - identity->select->where) {
+TEST(pipeline string parsing - pipeline - pass->select->where) {
   std::string pipeline_str
-    = "identity | select ip, timestamp | where ip !=127.0.0.1";
+    = "pass | select ip, timestamp | where ip !=127.0.0.1";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
