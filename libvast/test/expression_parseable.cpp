@@ -205,6 +205,8 @@ TEST(parseable - custom type extractor predicate) {
   REQUIRE(pred);
   auto extractor = caf::get_if<type_extractor>(&pred->lhs);
   REQUIRE(extractor);
+  auto expected = type{"foo.bar", type{}};
+  CHECK_EQUAL(extractor->type, expected);
   CHECK_EQUAL(pred->op, relational_operator::not_equal);
   CHECK_EQUAL(pred->rhs, predicate::operand{data{}});
 }
