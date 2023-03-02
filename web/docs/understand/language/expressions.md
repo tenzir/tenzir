@@ -185,7 +185,6 @@ value. This allows for quick type-based point queries, such as
 test for the existance of a field or type. They are useful to filter
 out events with missing information.
 
-
 :::tip
 Values of type `subnet` expand more broadly. For example, the subnet
 `10.0.0.0/8` expands to:
