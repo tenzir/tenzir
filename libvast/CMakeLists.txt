@@ -91,6 +91,10 @@ else ()
   set(ARROW_LIBRARY arrow_static)
 endif ()
 
+# -- re2 ----------------------------------------------------------------------
+
+find_package(re2 REQUIRED)
+
 # -- libsystemd ----------------------------------------------------------------
 
 option(VAST_ENABLE_JOURNALD_LOGGING
@@ -301,6 +305,10 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 # Link against Apache Arrow.
 target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
+
+# Link against re2.
+target_link_libraries(libvast PRIVATE re2::re2)
+dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against fast_float
 option(VAST_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)

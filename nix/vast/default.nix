@@ -24,6 +24,7 @@
     jemalloc,
     libunwind,
     xxHash,
+    re2,
     python3,
     jq,
     tcpdump,
@@ -107,6 +108,7 @@
           libpcap
           libunwind
           libyamlcpp
+          re2
           restinio
         ];
         propagatedBuildInputs = [

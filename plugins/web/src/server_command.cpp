@@ -13,6 +13,7 @@
 #include "web/mime.hpp"
 #include "web/restinio_response.hpp"
 #include "web/restinio_server.hpp"
+#include "web/specification_command.hpp"
 
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/parseable/to.hpp>
@@ -385,7 +386,16 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       return request->create_response(restinio::status_temporary_redirect())
         .append_header(restinio::http_field::server, "VAST")
         .append_header_date_field()
-        .append_header(restinio::http_field::location, "/index")
+        .append_header(restinio::http_field::location, "/api/v0/status")
+        .done();
+    });
+  auto openapi = generate_openapi_json();
+  router->http_get(
+    "/openapi.json",
+    [openapi](auto request, auto) -> restinio::request_handling_status_t {
+      return request->create_response(restinio::status_ok())
+        .append_header(restinio::http_field::content_type, "application/json")
+        .set_body(openapi)
         .done();
     });
   if (server_config->webroot) {

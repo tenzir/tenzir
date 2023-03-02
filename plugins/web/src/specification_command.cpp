@@ -10,8 +10,7 @@
 
 namespace vast::plugins::web {
 
-auto specification_command(const vast::invocation&, caf::actor_system&)
-  -> caf::message {
+auto openapi_record() -> record {
   auto paths = record{};
   for (auto const* plugin : plugins::get<rest_endpoint_plugin>()) {
     auto spec = plugin->openapi_specification();
@@ -50,9 +49,27 @@ on the command-line using the `vast rest generate-token` command.)_"},
     {"paths", std::move(paths)},
   };
   // clang-format on
-  auto yaml = to_yaml(openapi);
+  return openapi;
+}
+
+std::string generate_openapi_json() noexcept {
+  auto record = openapi_record();
+  auto json = to_json(record);
+  VAST_ASSERT_CHEAP(json);
+  return *json;
+}
+
+std::string generate_openapi_yaml() noexcept {
+  auto record = openapi_record();
+  auto yaml = to_yaml(record);
   VAST_ASSERT_CHEAP(yaml);
-  fmt::print("---\n{}\n", *yaml);
+  return *yaml;
+}
+
+auto specification_command(const vast::invocation&, caf::actor_system&)
+  -> caf::message {
+  auto yaml = generate_openapi_yaml();
+  fmt::print("---\n{}\n", yaml);
   return {};
 }
 
