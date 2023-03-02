@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[7096],{41724:(e,t,c)=>{c.r(t),c.d(t,{default:()=>n});var s=c(67294);function n(){return s.useEffect((()=>{window.location.replace("https://github.com/orgs/tenzir/projects/8/views/1")}),[]),s.createElement(s.Fragment,null)}}}]);

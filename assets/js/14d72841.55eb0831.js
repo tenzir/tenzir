@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[7362],{66906:(e,c,t)=>{t.r(c),t.d(c,{default:()=>n});var l=t(67294);function n(){return l.useEffect((()=>{window.location.replace("https://webforms.pipedrive.com/f/clRn2zcF1N5NGHAJ4Rzd3mVU6Xr55uL2Dm3z62Np2KUlq6vxaslf6xQ5Te3P1O1A6T")}),[]),l.createElement(l.Fragment,null)}}}]);

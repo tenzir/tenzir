@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[4560],{26827:(e,t,c)=>{c.r(t),c.d(t,{default:()=>s});var n=c(67294);function s(){return n.useEffect((()=>{window.location.replace("https://discord.gg/xEyaRSMCPQ")}),[]),n.createElement(n.Fragment,null)}}}]);
