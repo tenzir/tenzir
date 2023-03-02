@@ -12,11 +12,18 @@ VAST is the open-source pipeline and storage engine for security event data.
 
 ![VAST Building Blocks](/img/building-blocks.excalidraw.svg)
 
-VAST provides [dataflow pipelines](../understand/language/pipelines.md) as
-unified abstraction for data acquisition, reshaping, routing, and integration of
-security tools. VAST's native storage engine builds on pipelines for executing
-historical queries and streaming workloads in threat detection, hunting, and
-investigation.
+VAST offers dataflow **pipelines** for data acquisition, reshaping, routing, and
+integration of security tools. Pipelines transport richly typed data frames to
+enable efficient analytical high-bandwidth streaming workloads. VAST's open
+**storage engine** uses the same dataflow language to deliver a unified
+abstraction for batch and stream processing to drive a wide variety of security
+use cases.
+
+A **VAST node** provides managed pipelines and storage as a continuously running
+service. You can run pipelines across multiple nodes to create a distributed
+security data architecture.
+
+![VAST Building Blocks](architecture-nodes.excalidraw.svg)
 
 Consider VAST if you want to:
 
