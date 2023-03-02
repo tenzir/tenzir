@@ -39,7 +39,7 @@ VAST is an open-source pipeline and storage engine for security event data.
 
 <!-- Keep in sync with https://vast.io/about -->
 
-VAST is an open-source processing and storage engine for security event data.
+VAST is the open-source processing and storage engine for security event data.
 
 <img src="./web/static/img/building-blocks.excalidraw.svg#gh-dark-mode-only" width="75%" alt="VAST">
 <img src="./web/static/img/building-blocks.excalidraw.svg#gh-light-mode-only" width="75%" alt="VAST">

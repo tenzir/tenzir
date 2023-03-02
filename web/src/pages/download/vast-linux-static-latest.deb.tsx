@@ -1,9 +1,11 @@
-import React from 'react';
+import ExternalLink from "@site/src/components/ExternalLink";
 
-export default function Home(): JSX.Element {
-  const url = 'https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz';
-  React.useEffect(() => {
-    window.location.replace(url)
-  }, [])
-  return <></>;
-}
+const Element = () => {
+  return (
+    <ExternalLink
+      url={"https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.deb"}
+    />
+  );
+};
+
+export default Element;

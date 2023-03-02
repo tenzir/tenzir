@@ -1,9 +1,11 @@
-import React from 'react';
+import ExternalLink from "@site/src/components/ExternalLink";
 
-export default function Home(): JSX.Element {
-  const url = 'https://github.com/tenzir/vast/archive/refs/heads/stable.zip';
-  React.useEffect(() => {
-    window.location.replace(url)
-  }, [])
-  return <></>;
-}
+const Element = () => {
+  return (
+    <ExternalLink
+      url={"https://github.com/tenzir/vast/archive/refs/heads/stable.zip"}
+    />
+  );
+};
+
+export default Element;

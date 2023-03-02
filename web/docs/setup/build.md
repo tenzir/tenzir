@@ -54,8 +54,8 @@ manual testing. Older versions may still work in select cases.
 
 Building VAST involves the following steps:
 
-1. [Download the latest release](https://github.com/tenzir/vast/releases/latest)
-   or clone the repository recursively:
+1. [Download the latest release](download.md) or clone the repository
+   recursively:
   ```bash
   git clone --recursive https://github.com/tenzir/vast
   ```

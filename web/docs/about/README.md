@@ -8,7 +8,7 @@ discussion](https://github.com/tenzir/vast/discussions).
 
 <!-- Keep in sync with project README at https://github.com/tenzir/vast -->
 
-VAST is an open-source pipeline and storage engine for security event data.
+VAST is the open-source pipeline and storage engine for security event data.
 
 ![VAST Building Blocks](/img/building-blocks.excalidraw.svg)
 
