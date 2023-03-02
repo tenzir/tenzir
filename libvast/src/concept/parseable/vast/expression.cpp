@@ -129,7 +129,8 @@ auto make_field_char_parser() {
   return parsers::alnum | chr{'_'} | chr{'-'} | chr{':'};
 }
 
-/// Creates a parser that returns an operand containing either a type or field extractor.
+/// Creates a parser that returns an operand containing either a type or field
+/// extractor.
 auto make_extractor_parser() {
   using namespace parser_literals;
   // A field cannot start with:
