@@ -15,6 +15,8 @@
 
 namespace vast::plugins::web {
 
+std::string generate_openapi_json() noexcept;
+
 auto specification_command(const vast::invocation&, caf::actor_system&)
   -> caf::message;
 
