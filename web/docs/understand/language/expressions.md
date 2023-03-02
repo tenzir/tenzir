@@ -197,7 +197,6 @@ Values of type `subnet` expand more broadly. For example, the subnet
 This makes it easier to search for IP addresses belonging to a specific subnet.
 :::
 
-
 ## Values
 
 Every [type](/docs/understand/data-model/type-system) has a corresponding
