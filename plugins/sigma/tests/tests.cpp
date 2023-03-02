@@ -198,7 +198,7 @@ TEST(modifier - startswith - proper backslash escaping) {
   auto expected = to_expr(R"(foo == /^C:\rundll32.*/i)");
   CHECK_EQUAL(search_id, expected);
   auto str = to_string(expected);
-  CHECK_EQUAL(str, "foo == /^C:\\rundll32.*/i");
+  CHECK_EQUAL(str, R"(foo == /^C:\rundll32.*/i)");
 }
 
 TEST(modifier - endswith) {
@@ -218,7 +218,7 @@ TEST(modifier - endswith - proper backslash escaping) {
   auto expected = to_expr(R"(foo == /.*\rundll32.exe$/i)");
   CHECK_EQUAL(search_id, expected);
   auto str = to_string(expected);
-  CHECK_EQUAL(str, "foo == /.*\\rundll32.exe$/i");
+  CHECK_EQUAL(str, R"(foo == /.*\rundll32.exe$/i)");
 }
 
 TEST(modifier - lt) {

@@ -80,7 +80,7 @@ std::string byte_escape_all(std::string_view str);
 std::string byte_unescape(std::string_view str);
 
 /// Escapes a string by splitting all singular control characters into two
-/// chars, e.g. the character \n becomes a two-character string "\n".
+/// chars, e.g., the character '\n' becomes a two-character string "\n".
 /// @param str The string to escape.
 /// @returns The escaped string.
 std::string control_char_escape(std::string_view str);
