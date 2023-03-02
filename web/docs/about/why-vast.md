@@ -21,23 +21,25 @@ threats. This creates a significant barrier for organizations looking to
 effectively protect their data and infrastructure from cyber attacks.
 
 What is needed is a security-native data architecture that enables security
-teams to take control of their data and easily deploy and manage data pipelines.
-This solution should be able to integrate seamlessly with existing data
-architectures, scale from single nodes to highly distributed data fabrics, and
-support a variety of deployment options including cloud, on-premises,
-decentralized, and even air-gapped environments.
+teams to take control of their data and easily deploy and manage the flow of
+security data. This solution should be able to integrate seamlessly with
+existing data architectures, scale from single nodes to highly distributed data
+fabrics, and support a variety of deployment options including cloud,
+on-premises, decentralized, and even air-gapped environments.
 
 Importantly, a security-native data architecture should be easy to deploy, use,
 and manage *without* the need for dedicated data engineering resources. It
 should also be built around security standards and integrate easily with
-security tools in a plug-and-play fashion. The security-native aspects manifest
-as specialized operators to interact with security data and tools.
+security tools in a plug-and-play fashion.
 
-VAST is an open, embeddable security data platform and analytics engine for
-building large-scale, distributed detection and response architectures. VAST is
-built using open standards, such as Apache Arrow, Parquet, and STIX, to prevent
-vendor lock-in and promote full control of your telemetry data and security
-content.
+VAST aims to fill this gap as an open pipelines and storage engine for building
+scalable security architectures. Pipelines make it easy to transport, filter,
+reshape, and aggregate security events, whereas the embedded storage and query
+engine enables numerous detection and response workloads to move upstream of
+SIEM for a more cost-effective and scalable implementation. VAST is built using
+open standards, such as Apache Arrow for data in motion and Apache Parquet for
+data at rest, preventing vendor lock-in and promote full control of your event
+data and security content.
 
 ## VAST vs. SIEMs
 
