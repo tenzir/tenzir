@@ -114,7 +114,7 @@ publicly.
 
 Until then, it is only possible to run an open pipelines. When using the `vast`
 binary, source and sink operators are implicit. You can [run an open
-pipeline](/docs/use/export) with the `export` command as follows:
+pipeline](../../use/export/README.md) with the `export` command as follows:
 
 ```bash
 vast export json 'where ... | ... | head 20'

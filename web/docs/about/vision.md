@@ -118,7 +118,7 @@ There are several general issues with this approach:
 
 Aside from these general issues, there are also more specific ones with the
 above architecture. This concerns [advanced security
-teams](/docs/about/target-audience) that strive for full control over their
+teams](target-audience.md) that strive for full control over their
 detections. These teams operate with a data-first mindset and bring their own
 tools for analytics. The SIEM functionality rarely suffices to perform the
 desired analysis, and needs to be ETL'ed into a dedicated analytics workbench,
@@ -130,7 +130,7 @@ re-implementing data acquisition partially. Few SOCs have the required data
 engineering inhouse to scale this, which leads to buying a *second* SIEM-ish
 system capable of the analytics.
 
-[SIEM Offloading](/docs/about/use-cases/siem-offloading) is a valid use
+[SIEM Offloading](use-cases/siem-offloading.md) is a valid use
 case, but it's duct tape from an architectural perspective.
 :::
 
@@ -156,7 +156,7 @@ The diagram below outlines the abstraction of the fabric:
    and possible to automate when more data for decision support is present.
 2. **Improved collaboration**: given the drastic talent shortage, productivity
    in the SOC is key. In particular, this means efficient collaboration between
-   the [central roles](/docs/about/target-audience). When SOC Analyst,
+   the [central roles](target-audience.md). When SOC Analyst,
    Detection Engineer, and Data Scientist can work with the same interface,
    their throughput improves across the board, reducing friction and improving
    all central MTT* metrics, e.g.,

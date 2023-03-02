@@ -6,7 +6,7 @@ description: Columnar format for analytics workloads
 
 VAST supports reading and writing data in the binary [`Arrow IPC`][arrow-ipc]
 columnar format, suitable for efficient handling of large data sets. For
-example, VAST's [Python bindings](/docs/use/integrate/python) use this format
+example, VAST's [Python bindings](../../use/integrate/python.md) use this format
 for high-bandwidth data exchange.
 
 :::note Extension Types
@@ -82,4 +82,4 @@ VAST's [Python bindings][vast-python] use this method to retrieve data from a
 VAST server.
 
 [arrow-ipc]: https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc
-[vast-python]: /docs/use/integrate/python
+[vast-python]: ../../use/integrate/python.md

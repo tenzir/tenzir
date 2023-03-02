@@ -15,7 +15,7 @@ frontend translates Sigma rules written in YAML to VAST queries. The
 [VAST](frontends/vast) plugin is the default frontend that implements the
 language we designed for VAST.
 
-[language-plugin]: /docs/understand/architecture/plugins#language
+[language-plugin]: ../../architecture/plugins.md#language
 
 VAST ships with the following frontends:
 

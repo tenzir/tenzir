@@ -15,7 +15,7 @@ These mechanisms are sorted by precedence, i.e., command-line arguments override
 environment variables, which override configuration file settings.
 
 Compile-time defaults can only be changed by [rebuilding VAST from
-source](/docs/setup/build).
+source](build.md).
 
 ## Command Line
 
@@ -158,8 +158,8 @@ system- and user-specified configuration paths.
 
 ## Plugins
 
-VAST's [plugin architecture](/docs/understand/architecture/plugins) allows
-for flexible replacement and enhancement of functionality at various pre-defined
+VAST's [plugin architecture](../understand/architecture/plugins.md) allows for
+flexible replacement and enhancement of functionality at various pre-defined
 customization points. There exist **dynamic plugins** that ship as shared
 libraries and **static plugins** that are compiled into libvast.
 

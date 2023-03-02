@@ -83,7 +83,7 @@ cases and to filter out less useful data.
 
 ### Natively Scalable Runtime
 
-[We envision](/docs/about/vision) a distributed system that can perform the
+[We envision](../../about/vision.md) a distributed system that can perform the
 same processing centralized in the cloud and deep at the edge. CPU, memory, and
 storage have drastically different forms along this spectrum. Our goal is to
 deploy the same engine across the entire spectrum, but with different pluggable

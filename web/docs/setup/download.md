@@ -53,8 +53,7 @@ version.
 You can download pre-built Docker images from
 [Docker Hub](https://hub.docker.com/repository/docker/tenzir/vast).
 
-Read our [Docker instructions](/docs/setup/deploy/docker) for more details
-on using Docker.
+Read our [Docker instructions](deploy/docker.md) for more details on using Docker.
 
 ## Source Code
 

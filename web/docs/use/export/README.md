@@ -2,7 +2,7 @@
 
 Querying data from VAST (aka *exporting*) involves spinning up a VAST client
 that executes a query expression. In the following, we assume that you [set up a
-server](/docs/use/run) listening at `localhost:42000`.
+server](../run/README.md) listening at `localhost:42000`.
 
 To run a query, you need to:
 
@@ -15,7 +15,7 @@ Let's go through each of these steps.
 ## Decide what to query
 
 To figure out what you can query, VAST offers
-[introspection](/docs/use/introspect) via the `show` command.
+[introspection](../introspect/README.md) via the `show` command.
 
 Use `show schemas` to display the schema of all types:
 
@@ -23,7 +23,7 @@ Use `show schemas` to display the schema of all types:
 vast show schemas --yaml
 ```
 
-In case you ingested [Suricata](/docs/understand/formats/suricata) data, this
+In case you ingested [Suricata](../../understand/formats/suricata.md) data, this
 may print:
 
 ```yaml
@@ -114,12 +114,13 @@ schema.
 
 ## Begin with an expression
 
-We designed the [VAST language](/docs/understand/language) to make it easy to
-reference the data schema and put constraints on it. Specifically, VAST's
-[expression language](/docs/understand/language/expressions) has the concept of
-[extractors](/docs/understand/language/expressions#extractors) that refer
-to various parts of the event structure. For example, you can query the above
-schemas with a *meta extractor* to select a specific set of event types:
+We designed the [VAST language](../../understand/language/README.md) to make it
+easy to reference the data schema and put constraints on it. Specifically,
+VAST's [expression language](../../understand/language/expressions.md) has the
+concept of [extractors](../../understand/language/expressions.md#extractors)
+that refer to various parts of the event structure. For example, you can query
+the above schemas with a *meta extractor* to select a specific set of event
+types:
 
 ```c
 #type == /suricata.(http|flow)/
@@ -159,8 +160,8 @@ above query as an example, you can also write:
 ```
 
 In fact, both predicates in this expression are what we call [value
-predicates](/docs/understand/language/expressions#value-predicates), making it
-possible to shorten this expression to:
+predicates](../../understand/language/expressions.md#value-predicates), making
+it possible to shorten this expression to:
 
 ```c
 "evil.com" || 10.0.0.0/8
@@ -168,7 +169,7 @@ possible to shorten this expression to:
 
 Using type extractors (and thereby value predicates) hinges on having
 a powerful type system. If you only have strings and numbers, this is not
-helping much. VAST's [type system](/docs/understand/data-model/type-system)
+helping much. VAST's [type system](../../understand/data-model/type-system.md)
 supports *aliases*, e.g., you can define an alias called `port` that points to a
 `uint64`. Then you'd write a query only over ports:
 
@@ -196,12 +197,12 @@ VAST resolves the concept `net.src.ip` to all fieldnames that this concept has
 been defined with. We defer to the [taxonomy documentation][taxonomies] for a
 more detailed discussion.
 
-[taxonomies]: /docs/understand/data-model/taxonomies
+[taxonomies]: ../../understand/data-model/taxonomies.md
 
 ## Apply a pipeline
 
 After providing a filter expression, you can optionally continue with a
-[pipeline](/docs/understand/language/pipelines).
+[pipeline](../../understand/language/pipelines.md).
 
 ```cpp
 src_ip == 192.168.1.104
@@ -220,11 +221,11 @@ then render them on standard output:
 vast export [options] <format> [options] [expr]
 ```
 
-The [format](/docs/understand/formats) defines how VAST renders the query
-results. Text formats include [JSON](/docs/understand/formats/json),
-[CSV](/docs/understand/formats/csv), or tool-specific data encodings like
-[Zeek](/docs/understand/formats/zeek). [PCAP](/docs/understand/formats/pcap) is
-an example for a binary format.
+The [format](../../understand/formats/README.md) defines how VAST renders the
+query results. Text formats include [JSON](../../understand/formats/json.md),
+[CSV](../../understand/formats/csv.md), or tool-specific data encodings like
+[Zeek](../../understand/formats/zeek.md).
+[PCAP](../../understand/formats/pcap.md) is an example for a binary format.
 
 For example, to run query that exports the results as JSON, run:
 

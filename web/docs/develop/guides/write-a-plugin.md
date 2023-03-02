@@ -48,7 +48,7 @@ files/directories:
 ## Choose a plugin type
 
 VAST offers [a variety of customization
-points](/docs/understand/architecture/plugins#plugin-types),
+points](../../understand/architecture/plugins.md#plugin-types),
 each of which defines its own API by inheriting from the plugin base class
 `vast::plugin`. When writing a new plugin, you can choose a subset of available
 types by inheriting from the respective plugin classes.
@@ -175,7 +175,7 @@ To test that VAST loads the plugin properly, you can use `vast
 --plugins=example version` and look into the `plugins`. A key-value pair with
 your plugin name and version should exist in the output.
 
-Refer to the [plugin loading](/docs/setup/configure#load-plugins) section of
+Refer to the [plugin loading](../../setup/configure.md#load-plugins) section of
 the documentation to find out how to explicitly de-/activate plugins.
 
 ### Building against an installed VAST

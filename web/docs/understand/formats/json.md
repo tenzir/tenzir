@@ -10,10 +10,10 @@ according to a specified schema. That is, one line corresponds to one event. The
 object field names correspond to record field names.
 
 JSON can express only a subset [VAST's type
-system](/docs/understand/data-model/type-system). For example, VAST has
+system](../data-model/type-system.md). For example, VAST has
 first-class support for IP addresses but they are strings in JSON. To get the
 most out of your data and retain domain semantics, [define a schema for your
-JSON objects](/docs/use/import#provide-a-schema-for-unknown-types).
+JSON objects](../../use/import/README.md#provide-a-schema-for-unknown-types).
 
 ## Parser
 
@@ -34,7 +34,7 @@ vast import --type=zeek.conn json < data.json
 Passing a schema type via `--type` is necessary because the NDJSON objects are
 just a collection of fields. VAST cannot know how to name the corresponding
 record without an external hint. See the section on [mapping events to
-schemas](/docs/use/import#map-events-to-schemas) for details.
+schemas](../../use/import/README.md#map-events-to-schemas) for details.
 
 ## Printer
 

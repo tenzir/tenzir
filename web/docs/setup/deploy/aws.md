@@ -24,7 +24,7 @@ illustrates the high-level architecture:
 ## Create an environment file
 
 :::info Source Code Required
-Make sure you have [downloaded the VAST source code](/docs/setup/download)
+Make sure you have [downloaded the VAST source code](../download.md)
 and change into the directory
 [cloud/aws](https://github.com/tenzir/vast/tree/master/cloud/aws) that contains
 all deployment scripts.
@@ -127,7 +127,7 @@ a VAST server as Fargate task, run:
 
 By default, this launches the official `tenzir/vast` Docker image and executes
 the command `vast start`. To use the VAST Pro image, check out the [AWS
-Pro](/docs/setup/deploy/aws-pro) documentation.
+Pro](aws-pro.md) documentation.
 
 Check the status of the running server with:
 ```bash

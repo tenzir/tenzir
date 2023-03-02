@@ -1,9 +1,9 @@
 # Linux
 
-Use our [pre-built build packages](/docs/setup/download#packages) or [build
-from source](/docs/setup/build) to install VAST on any Linux distribution.
-This package is relocatable, which means you can extract it in any filesystem
-location and it will work.
+Use our [pre-built build packages](../download.md#packages) or [build from
+source](../build.md) to install VAST on any Linux distribution. This package is
+relocatable, which means you can extract it in any filesystem location and it
+will work.
 
 To deploy VAST as system service, you can use our [systemd
 configuration](#systemd).
@@ -69,8 +69,8 @@ systemctl start vast
 
 ### Debian
 
-We provide [pre-built packages](/docs/setup/download#debian) for Debian
-and Debian-derived distributions. After downloading, install VAST using `dpkg`:
+We provide [pre-built packages](../download.md#debian) for Debian and
+Debian-derived distributions. After downloading, install VAST using `dpkg`:
 
 ```bash
 dpkg -i vast-${version}_amd64.deb

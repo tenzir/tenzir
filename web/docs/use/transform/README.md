@@ -2,7 +2,7 @@
 
 VAST has powerful features for transforming [data in
 motion](#modify-data-in-motion) and [data at rest](#modify-data-at-rest). Both
-aspects rely on [pipelines](/docs/understand/language/pipelines) as building
+aspects rely on [pipelines](../../understand/language/pipelines.md) as building
 block.
 
 ## Define a pipeline
@@ -30,8 +30,9 @@ vast:
 This `example` pipeline consists of two operators, `hash` and `summarize` that
 execute in sequential order.
 
-Have a look at [all available operators](/docs/understand/language/operators) to
-understand what other transformations you can apply.
+Have a look at [all available
+operators](../../understand/language/operators/README.md) to understand what
+other transformations you can apply.
 
 ## Modify data in motion
 
