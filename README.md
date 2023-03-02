@@ -114,7 +114,7 @@ zcat *.log.gz | vast import zeek
 **Run a query over the last hour, rendered as JSON**:
 
 ```bash
-vast export json ':timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
+vast export json ':timestamp > 1 hour ago && (6.6.6.6 || :port == 5353)'
 ```
 
 **Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
@@ -128,7 +128,7 @@ vast import pcap -c 1024 < trace.pcap
 `tcpdump`:
 
 ```bash
-vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
+vast export pcap "sport > 60000 && src !in 10.0.0.0/8" \
   | ipsumdump --collate -w - \
   | tcpdump -r - -nl
 ```
