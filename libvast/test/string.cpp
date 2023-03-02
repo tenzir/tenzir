@@ -90,6 +90,26 @@ TEST(JSON string escaping) {
   CHECK_EQUAL(json_unescape("\"Hello®, world!\""), "Hello®, world!");
 }
 
+TEST(control character escaping) {
+  CHECK_EQUAL(control_char_escape(""), "");
+  CHECK_EQUAL(control_char_escape("\r"), R"(\r)");
+  CHECK_EQUAL(control_char_escape("\r\n"), R"(\r\n)");
+  CHECK_EQUAL(control_char_escape("\begin"), R"(\begin)");
+  CHECK_EQUAL(control_char_escape("end\n"), R"(end\n)");
+
+  CHECK_EQUAL(control_char_escape("foo\"bar"), R"(foo"bar)");
+  CHECK_EQUAL(control_char_escape("foo\\bar"), R"(foo\bar)");
+  CHECK_EQUAL(control_char_escape("foo\bbar"), R"(foo\bbar)");
+  CHECK_EQUAL(control_char_escape("foo\fbar"), R"(foo\fbar)");
+  CHECK_EQUAL(control_char_escape("foo\rbar"), R"(foo\rbar)");
+  CHECK_EQUAL(control_char_escape("foo\nbar"), R"(foo\nbar)");
+  CHECK_EQUAL(control_char_escape("foo\tbar"), R"(foo\tbar)");
+  CHECK_EQUAL(control_char_escape("foo\xFF\xFF"), "foo\xFF\xFF");
+
+  // Registered Sign: ®
+  CHECK_EQUAL(control_char_escape("®"), R"(®)");
+}
+
 TEST(percent escaping) {
   CHECK_EQUAL(percent_escape(""), "");
   CHECK_EQUAL(percent_unescape(""), "");

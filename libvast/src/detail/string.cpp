@@ -33,6 +33,17 @@ std::string byte_unescape(std::string_view str) {
   return unescape(str, byte_unescaper);
 }
 
+std::string control_char_escape(std::string_view str) {
+  std::string result;
+  result.reserve(str.size());
+  auto f = str.begin();
+  auto l = str.end();
+  auto out = std::back_inserter(result);
+  while (f != l)
+    control_character_escaper(f, out);
+  return result;
+}
+
 std::string json_escape(std::string_view str) {
   if (str.empty())
     return "\"\"";

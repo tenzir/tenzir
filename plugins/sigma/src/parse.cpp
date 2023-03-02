@@ -324,7 +324,8 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "startswith") {
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
-              auto str = fmt::format("^{}.*", to_string(x));
+              auto str = vast::detail::control_char_escape(to_string(x));
+              str = fmt::format("^{}.*", str);
               auto result = pattern::make(str, {.case_insensitive = true});
               if (!result)
                 return std::move(result.error());
@@ -337,7 +338,8 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           op = relational_operator::equal;
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
-              auto str = fmt::format(".*{}$", to_string(x));
+              auto str = vast::detail::control_char_escape(to_string(x));
+              str = fmt::format(".*{}$", str);
               auto result = pattern::make(str, {.case_insensitive = true});
               if (!result)
                 return std::move(result.error());
