@@ -15,14 +15,14 @@ release and the current development version.
 
 <div align="center" class="padding-bottom--md">
   <a class="button button--md button--primary margin-right--md" href="/download/vast-linux-static.tar.gz">Static Build (Release)</a>
-  <a class="button button--md button--info margin-left--md" href="/download/vast-static-latest.tar.gz">Static Build (Development)</a>
+  <a class="button button--md button--info margin-left--md" href="/download/vast-linux-static-latest.tar.gz">Static Build (Development)</a>
 </div>
 
 ### Debian
 
 <div align="center" class="padding-bottom--md">
   <a class="button button--md button--primary margin-right--md" href="/download/vast-linux-static.deb">Static Build (Release)</a>
-  <a class="button button--md button--info margin-left--md" href="/download/vast-static-latest.deb">Static Build (Development)</a>
+  <a class="button button--md button--info margin-left--md" href="/download/vast-linux-static-latest.deb">Static Build (Development)</a>
 </div>
 
 We also offer prebuilt statically linked binaries for every Git commit to the
