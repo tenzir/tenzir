@@ -167,20 +167,28 @@ Meta extractors have the form `#extractor`. They work on the event metadata
 - `#import_time > 1 hour ago`: events that have been imported within the last
   hour
 
-### Value Predicates
+### Short Forms
 
-Predicates with type extractors and equality operators can be written tersely
-as **value predicates**. That is, if a predicate has the form `:T == X` where
-`X` is a value and `T` the type of `X`, it suffices to write `X`.
-The predicate parser deduces the type of `X` automatically in this case.
+There are three short forms for defining predicates succinctly. They are merely
+syntactic sugar and can be used whenever a predicate is expected. The following
+table shows how values, field extractors and type extractors are expanded.
 
-For example, `6.6.6.6` is a valid predicate and expands to `:ip == 6.6.6.6`.
-This allows for quick type-based point queries, such as
-`(6.6.6.6 || 10.0.0.0/8) && "evil"`.
+| Short Form | Expansion        | Example
+| ---------- | ---------------- | --------------------------------
+| `value`    | `:type == value` | `"needle"` → `:string == "needle"`
+| `field`    | `field != nil`   | `header.req` → `header.req != nil`
+| `:type`    | `:type != nil`   | `:ip` → `:ip != nil`
+
+The first form requires the event to contain a field with the given
+value. This allows for quick type-based point queries, such as
+`(6.6.6.6 || 10.0.0.0/8) && "evil"`. The second and third short forms
+test for the existance of a field or type. They are useful to filter
+out events with missing information.
+
 
 :::tip
-Value predicates of type `subnet` expand more broadly. Given a subnet
-`10.0.0.0/8`, the parser expands this to:
+Values of type `subnet` expand more broadly. For example, the subnet
+`10.0.0.0/8` expands to:
 
 ```c
 :subnet == 10.0.0.0/8 || :ip in 10.0.0.0/8
@@ -189,13 +197,6 @@ Value predicates of type `subnet` expand more broadly. Given a subnet
 This makes it easier to search for IP addresses belonging to a specific subnet.
 :::
 
-### Extractor Predicates
-
-Similarly, predicates that test for the existance of a field or type can be
-written tersely as well. That is, every predicate `E != nil`, where `E` is a
-field or type extractor, can also be equivalently written as `E`. For example,
-if the field extractor `id.orig_h` is used as a predicate, it expands to
-`id.orig_h != nil`. The type extractor `:uint64` expands to `:uint64 = nil`.
 
 ## Values
 
