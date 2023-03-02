@@ -155,7 +155,7 @@ connector_actor::behavior_type make_no_retry_behavior(
                                fmt::format("{} couldn't connect to VAST node"
                                            "within a given deadline",
                                            *self));
-      auto middleman = request.host == "tenant-a.fleet.tenzir.net"
+      auto middleman = self->state.is_tls_destination(request)
                          ? self->system().openssl_manager().actor_handle()
                          : self->system().middleman().actor_handle();
       auto rp = self->make_response_promise<node_actor>();
@@ -182,6 +182,15 @@ connector_actor::behavior_type make_no_retry_behavior(
 
 } // namespace
 
+bool connector_state::is_tls_destination(connect_request request) const {
+  // TODO: Allow a default port without writing it out
+  auto dest_url = fmt::format("{}:{}", request.host, request.port);
+  VAST_INFO("using {} against outgoing whitelist: {}", dest_url,
+            tls_whitelist); // FIXME: INFO -> DEBUG
+  return std::find(tls_whitelist.begin(), tls_whitelist.end(), dest_url)
+         != tls_whitelist.end();
+}
+
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
@@ -191,18 +200,13 @@ connector(connector_actor::stateful_pointer<connector_state> self,
     return make_no_retry_behavior(std::move(self), deadline);
   if (!tls_whitelist.empty())
     VAST_ASSERT(self->system().has_openssl_manager()); // FIXME
+  self->state.tls_whitelist = std::move(tls_whitelist);
   return {
-    [self, delay = *retry_delay, deadline, tls_whitelist](
+    [self, delay = *retry_delay, deadline](
       atom::connect, connect_request request) -> caf::result<node_actor> {
-      // TODO: Allow a default port without writing it out
-      auto dest_url = fmt::format("{}:{}", request.host, request.port);
-      VAST_INFO("using {} against outgoing whitelist: {}", dest_url,
-                tls_whitelist); // FIXME: INFO -> DEBUG
-      auto middleman
-        = std::find(tls_whitelist.begin(), tls_whitelist.end(), dest_url)
-              != tls_whitelist.end()
-            ? self->system().openssl_manager().actor_handle()
-            : self->system().middleman().actor_handle();
+      auto middleman = self->state.is_tls_destination(request)
+                         ? self->system().openssl_manager().actor_handle()
+                         : self->system().middleman().actor_handle();
       const auto remaining_time = calculate_remaining_time(deadline);
       if (!remaining_time)
         return caf::make_error(ec::timeout,
