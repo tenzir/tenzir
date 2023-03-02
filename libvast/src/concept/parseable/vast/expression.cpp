@@ -16,6 +16,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/operator.hpp"
 
 namespace vast {
 
@@ -114,23 +115,43 @@ static expression expand(data x) {
   return caf::visit(expander{}, expression{std::move(pred)});
 }
 
+expression expand_extractor(predicate::operand operand) {
+  return predicate{
+    std::move(operand),
+    relational_operator::not_equal,
+    predicate::operand{data{}},
+  };
+}
+
+auto make_field_char_parser() {
+  using parsers::chr;
+  return parsers::alnum | chr{'_'} | chr{'-'} | chr{':'};
+}
+
+auto make_extractor_parser() {
+  using namespace parser_literals;
+  // A field cannot start with:
+  //  - '-' to leave room for potential arithmetic expressions in operands
+  //  - ':' so it won't be interpreted as a type extractor
+  auto field = !(':'_p | '-') >> (+make_field_char_parser() % '.');
+  // clang-format off
+  auto extractor
+    = ':' >> parsers::legacy_type ->* to_type_extractor
+    | field ->* to_field_extractor;
+  // clang-format on
+  return extractor;
+}
+
 static auto make_predicate_parser() {
   using parsers::alnum;
   using parsers::chr;
   using namespace parser_literals;
   // clang-format off
-  // TODO: Align this with identifier_char.
-  auto field_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
-  // A field cannot start with:
-  //  - '-' to leave room for potential arithmetic expressions in operands
-  //  - ':' so it won't be interpreted as a type extractor
-  auto field = !(':'_p | '-') >> (+field_char % '.');
   auto operand
-    = (parsers::data >> !(field_char | '.')) ->* to_data_operand
+    = (parsers::data >> !(make_field_char_parser() | '.')) ->* to_data_operand
     | "#type"_p  ->* [] { return meta_extractor{meta_extractor::type}; }
     | "#import_time"_p ->* [] { return meta_extractor{meta_extractor::import_time}; }
-    | ':' >> parsers::legacy_type ->* to_type_extractor
-    | field ->* to_field_extractor
+    | make_extractor_parser()
     ;
   auto operation
     = "=="_p  ->* [] { return relational_operator::equal; }
@@ -237,7 +258,8 @@ static auto make_expression_parser() {
   // clang-format off
   auto pred_expr
     = parsers::predicate ->* [](predicate p) { return expression{std::move(p)}; }
-    | parsers::data ->* expand;
+    | parsers::data ->* expand
+    | make_extractor_parser() ->* expand_extractor
     ;
   group
     = '(' >> ws >> ref(expr) >> ws >> ')'

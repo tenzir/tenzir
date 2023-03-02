@@ -189,6 +189,14 @@ Value predicates of type `subnet` expand more broadly. Given a subnet
 This makes it easier to search for IP addresses belonging to a specific subnet.
 :::
 
+### Extractor Predicates
+
+Similarly, predicates that test for the existance of a field or type can be
+written tersely as well. That is, every predicate `E != nil`, where `E` is a
+field or type extractor, can also be equivalently written as `E`. For example,
+if the field extractor `id.orig_h` is used as a predicate, it expands to
+`id.orig_h != nil`. The type extractor `:uint64` expands to `:uint64 = nil`.
+
 ## Values
 
 Every [type](/docs/understand/data-model/type-system) has a corresponding

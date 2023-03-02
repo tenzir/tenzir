@@ -451,6 +451,15 @@ tests:
   #     - command: -N export json '#import_time < 5 seconds ago'
   #       transformation: jq -ec '.'
 
+  Extractor Predicates:
+    tags: [import, export, suricata]
+    steps:
+      - command: -N import suricata
+        input: data/suricata/eve.json
+      - command: -N count "timestamp && :ip"
+      - command: -N count does_not_exist
+      - command: -N export json flow.alerted
+
   # Nesting Records in Lists is not currently fully supported, but its presence
   # should also not crash the JSON reader.
   Nested Records:

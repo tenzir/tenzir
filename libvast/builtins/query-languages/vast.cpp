@@ -39,6 +39,12 @@ class plugin final : public virtual language_plugin {
       };
     }
     using parsers::space, parsers::expr, parsers::eoi;
+    // Try to parse pipline first, because e.g. `head` is both a valid
+    // expression and a valid pipeline.
+    auto parsed_pipeline = pipeline::parse("export", query);
+    if (parsed_pipeline) {
+      return std::pair{match_everything, std::move(*parsed_pipeline)};
+    }
     auto f = query.begin();
     const auto l = query.end();
     auto parsed_expr = expression{};
@@ -71,7 +77,7 @@ class plugin final : public virtual language_plugin {
       }
     }
     const auto pipeline_query = std::string_view{f, l};
-    auto parsed_pipeline = pipeline::parse("export", pipeline_query);
+    parsed_pipeline = pipeline::parse("export", pipeline_query);
     if (!parsed_pipeline) {
       return caf::make_error(ec::syntax_error,
                              fmt::format("failed to parse pipeline in query "
