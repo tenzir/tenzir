@@ -15,6 +15,12 @@ FIleCopyrightText: Copyright (C) 2018-2020 by George Cave - gcave@stablecoder.ca
 LicenseConcluded: Apache-2.0
 
 SPDXID: SPDXRef-File
+FileName: ./cmake/Findre2.cmake
+FIleCopyrightText: Copyright (C) Apache Software Foundation
+LicenseConcluded: Apache-2.0
+LicenseComments: Adapated from the Apache Arrow library.
+
+SPDXID: SPDXRef-File
 FileName: ./libvast/aux/robin-map/*
 FIleCopyrightText: (c) 2017 Tessil
 LicenseConcluded: MIT
@@ -3175,5 +3181,3 @@ SPDXID: SPDXRef-Package-npm-yocto-queue-dc66df52dd693ee0
 PackageVersion: 0.1.0
 PackageLicenseConcluded: MIT
 ExternalRef: PACKAGE_MANAGER purl pkg:npm/yocto-queue@0.1.0
->>>>>>> origin/master
-

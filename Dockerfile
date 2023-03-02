@@ -95,20 +95,21 @@ RUN apt-get update && \
       ca-certificates \
       gnupg2 \
       libasan5 \
+      libc++1 \
+      libc++abi1 \
       libcaf-core0.17 \
       libcaf-io0.17 \
       libcaf-openssl0.17 \
-      libc++1 \
-      libc++abi1 \
       libflatbuffers1 \
       libfmt7 \
       libhttp-parser2.9 \
       libpcap0.8 \
+      libre2-9 \
       libsimdjson5 \
       libspdlog1 \
       libunwind8 \
-      libyaml-cpp0.6 \
       libxxhash-dev \
+      libyaml-cpp0.6 \
       lsb-release \
       openssl \
       robin-map-dev \

@@ -31,6 +31,7 @@ dependencies and versions.
 |✓|[OpenSSL](https://www.openssl.org)||Utilities for secure networking and cryptography.|
 |✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 1.12.0|Memory-efficient cross-platform serialization library.|
 |✓|[Apache Arrow](https://arrow.apache.org)|>= 8.0.0|Required for in-memory data representation. Must be built with Compute, Zstd and Parquet enabled.|
+|✓|[re2](https://github.com/google/re2)||Required for regular expressione evaluation.|
 |✓|[yaml-cpp](https://github.com/jbeder/yaml-cpp)|>= 0.6.2|Required for reading YAML configuration files.|
 |✓|[simdjson](https://github.com/simdjson/simdjson)|>= 0.7|Required for high-performance JSON parsing.|
 |✓|[spdlog](https://github.com/gabime/spdlog)|>= 1.5|Required for logging.|
