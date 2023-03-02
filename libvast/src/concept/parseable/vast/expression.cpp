@@ -125,6 +125,7 @@ expression expand_extractor(predicate::operand operand) {
 
 auto make_field_char_parser() {
   using parsers::chr;
+  // TODO: Align this with identifier_char.
   return parsers::alnum | chr{'_'} | chr{'-'} | chr{':'};
 }
 
