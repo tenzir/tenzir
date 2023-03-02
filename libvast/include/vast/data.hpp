@@ -12,6 +12,8 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/ip.hpp"
 #include "vast/pattern.hpp"
@@ -248,6 +250,73 @@ void merge(const record& src, record& dst,
 /// @param op The relational operator.
 /// @param rhs The RHS of the predicate.
 bool evaluate(const data& lhs, relational_operator op, const data& rhs);
+
+/// Tries to find the entry with the dot-sperated `path`.
+/// @pre `!path.empty()`
+template <typename T>
+  requires caf::detail::tl_contains<data::types, T>::value
+const T* get_if(const record* r, std::string_view path) {
+  VAST_ASSERT(!path.empty());
+  auto names = detail::split(path, ".");
+  VAST_ASSERT(!names.empty());
+  auto current = r;
+  for (auto& name : names) {
+    auto last = &name == &names.back();
+    auto it = current->find(name);
+    if (it == current->end())
+      // Field not found.
+      return nullptr;
+    auto& field = it->second;
+    if (last) {
+      // Path was completely processed.
+      auto f = detail::overload{
+        [](const T& result) {
+          return &result;
+        },
+        [](const auto&) -> const T* {
+          // Found, but type does not match.
+          return nullptr;
+        },
+      };
+      return caf::visit(f, field);
+    }
+    auto f = detail::overload{
+      [](const record& sub_record) {
+        return &sub_record;
+      },
+      [](const auto&) -> const record* {
+        return nullptr;
+      },
+    };
+    current = caf::visit(f, field);
+    if (!current) {
+      // This is not a record, but path continues.
+      return nullptr;
+    }
+  }
+  die("unreachable");
+}
+
+template <typename T>
+T* get_if(record* r, std::string_view path) {
+  auto result = get_if<T>(static_cast<const record*>(r), path);
+  return const_cast<T*>(result); // NOLINT
+}
+
+/// Finds the entry with the dot-sperated `path` or returns the `fallback` value.
+/// @pre `!path.empty()`
+template <class T>
+T const& get_or(const record& r, std::string_view path, T const& fallback) {
+  VAST_ASSERT(!path.empty());
+  auto result = get_if<T>(&r, path);
+  if (result)
+    return *result;
+  return fallback;
+}
+
+template <class T>
+  requires(!std::is_reference_v<T>)
+T const& get_or(const record& r, std::string_view key, T&& fallback) = delete;
 
 // -- convertible -------------------------------------------------------------
 
