@@ -306,13 +306,6 @@ if (NOT simdjson_FOUND)
       "${CMAKE_CURRENT_BINARY_DIR}/simdjsonTargets.cmake"
       "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake"
     COMMENT "Linking simdjson targets")
-  install(
-    EXPORT simdjsonTargets
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-    NAMESPACE simdjson::
-    COMPONENT Development)
-  string(APPEND VAST_EXTRA_TARGETS_FILES
-         "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/simdjsonTargets.cmake\")")
   VASTSystemizeTarget(simdjson)
   add_dependencies(simdjson simdjson-targets-link)
   dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
@@ -452,7 +445,7 @@ endif ()
 # install the static libvast_builtins archive for development targets because
 # the plugin unit test binaries need to be able to link against it.
 install(
-  TARGETS libvast libvast_builtins simdjson
+  TARGETS libvast libvast_builtins
   EXPORT VASTTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
