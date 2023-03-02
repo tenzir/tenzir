@@ -276,7 +276,12 @@ if (NOT simdjson_FOUND)
     )
   endif ()
   # TODO: Think about it.
-  set(SIMDJSON_ENABLE_THREADS OFF)
+  set(SIMDJSON_ENABLE_THREADS
+      OFF
+      CACHE BOOL "")
+  set(SIMDJSON_ENABLE_DEVELOPER_MODE
+      OFF
+      CACHE BOOL "")
   add_subdirectory(aux/simdjson)
   export(
     EXPORT simdjsonTargets
