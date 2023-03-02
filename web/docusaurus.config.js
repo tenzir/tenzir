@@ -364,6 +364,19 @@ async function createConfig() {
         },
       }),
 
+    // This replaces Docusaurus' default babel loader with esbuild
+    // See more at https://github.com/facebook/docusaurus/issues/4765#issuecomment-841135926
+    webpack: {
+      jsLoader: (isServer) => ({
+        loader: require.resolve('esbuild-loader'),
+        options: {
+          loader: 'tsx',
+          format: isServer ? 'cjs' : undefined,
+          target: isServer ? 'node12' : 'es2017',
+        },
+      }),
+    },
+
     scripts: [
       {
         src: 'https://plausible.io/js/script.js',
