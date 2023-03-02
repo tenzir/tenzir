@@ -1,4 +1,5 @@
 import ExternalLink from "@site/src/components/ExternalLink";
+import React from "react";
 
 const Element = () => {
   return (
