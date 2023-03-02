@@ -61,16 +61,16 @@ if [[ "${new_version}" != *"-rc"* ]]; then
   popd
 fi
 
-# Copy the unreleased changelog directory.
-if [ -d "${source_dir}/changelog/unreleased" ]; then
-  for entry in "${source_dir}/changelog/unreleased/"**/*.md; do
+# Copy the next changelog directory.
+if [ -d "${source_dir}/changelog/next" ]; then
+  for entry in "${source_dir}/changelog/next/"**/*.md; do
     if [[ "$entry" != "${entry/--*.md/.md}" ]]; then
       mv "$entry" "${entry/--*.md/.md}"
     fi
   done
-  rsync -avzh "${source_dir}/changelog/unreleased/" \
+  rsync -avzh "${source_dir}/changelog/next/" \
     "${source_dir}/changelog/${new_version}"
-  rm -r "${source_dir}/changelog/unreleased"
+  rm -r "${source_dir}/changelog/next"
 fi
 
 # If the previous release was an rc as well, merge the changelog directories.
