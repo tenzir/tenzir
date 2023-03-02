@@ -33,6 +33,12 @@ auto test_schema = record_type{
     }}
   };
 
+auto test_layout2 = record_type{
+  {"struct", record_type{
+    {"foo", type{string_type{}, {{"required"}}}},
+    {"bar", string_type{}}
+  }}};
+
 // clang-format on
 
 } // namespace
@@ -100,5 +106,20 @@ TEST(incompatible field) {
                   valid);
   CHECK_NOT_EQUAL(vast::validate(*data, test_schema, validate::strict), valid);
   CHECK_NOT_EQUAL(vast::validate(*data, test_schema, validate::exhaustive),
+                  valid);
+}
+
+TEST(required field) {
+  auto data = vast::from_yaml(R"_(
+    struct:
+      bar: no
+      # !! missing required field 'foo'
+  )_");
+  REQUIRE_NOERROR(data);
+  auto valid = caf::error{};
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout2, validate::permissive),
+                  valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout2, validate::strict), valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout2, validate::exhaustive),
                   valid);
 }
