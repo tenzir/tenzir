@@ -11,7 +11,7 @@
     "under the assumption that the release-preparing PR contains exactly one",
     "commit and is rebased before merging."
   ],
-  "vast-version-rev-count": 15535,
+  "vast-version-rev-count": 15536,
   "vast-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",
