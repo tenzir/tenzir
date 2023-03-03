@@ -73,13 +73,13 @@ jobs:
       cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
       docker-build-args: ${{ steps.configure.outputs.docker-build-args }}
       vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
-      run-policy-enforcement: ${{ steps.configure.outputs.run-policy-enforcement }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
       run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
       run-vast-thehive-app: ${{ steps.configure.outputs.run-vast-thehive-app }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
+      run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
       run-vast: ${{ steps.configure.outputs.run-vast }}
       run-vast-plugins: ${{ steps.configure.outputs.run-vast-plugins }}
@@ -161,11 +161,10 @@ jobs:
           # TODO: Split this into two steps:
           # * Set version variables (above)
           # * Enable Jobs (below)
-          echo "::notice Policy checks are ALWAYS ON"
-          echo "run-policy-enforcement=true" >> $GITHUB_OUTPUT
           echo "::notice Disable all others so we can selectivly enable again"
           echo "run-changelog=false" >> $GITHUB_OUTPUT
           echo "run-example-notebooks=false" >> $GITHUB_OUTPUT
+          echo "run-regression-tests=false" >> $GITHUB_OUTPUT
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
           echo "run-vast-io=false" >> $GITHUB_OUTPUT
@@ -180,6 +179,7 @@ jobs:
           alias run_all_checks=' \
             echo "run-changelog=true" >> $GITHUB_OUTPUT; \
             echo "run-example-notebooks=true" >> $GITHUB_OUTPUT; \
+            echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-vast-io=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-vast=true" >> $GITHUB_OUTPUT; \
@@ -248,13 +248,14 @@ jobs:
           run_if_changed_default vast-thehive-app $run_docker_compose
           run_docker_vast="$(any ${run_docker_compose} ${run_vast_io} ${run_python})"
           run_if_changed_default docker-vast $run_docker_vast
+          run_if_changed_default regression-tests $run_docker_vast
           run_if_changed vast-nix "$VAST_SOURCES[@]" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/
 
   policy-enforcement:
     name: Policy Enforcement
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-policy-enforcement == 'true' }}
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -491,6 +492,7 @@ jobs:
     needs:
       - docker-vast
       - configure
+    if: needs.configure.outputs.run-regression-tests == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -1305,7 +1307,7 @@ jobs:
       - vast-io
       - vast-nix
       - vast-plugins
-    if: always()
+    if: always() && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Pass Branch Protections
     steps:
