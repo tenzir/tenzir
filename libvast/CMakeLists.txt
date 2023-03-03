@@ -264,6 +264,7 @@ option(VAST_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
 add_feature_info("VAST_ENABLE_BUNDLED_SIMDJSON" VAST_ENABLE_BUNDLED_SIMDJSON
                  "use the simdjson submodule.")
 
+unset(_vast_bundled_simdjson)
 if (NOT VAST_ENABLE_BUNDLED_SIMDJSON)
   find_package(simdjson 3.1)
   dependency_summary("simdjson" simdjson::simdjson "Dependencies")
@@ -294,11 +295,23 @@ if (NOT simdjson_FOUND)
   set(SIMDJSON_ENABLE_DEVELOPER_MODE
       OFF
       CACHE BOOL "")
+  # <workaround>
+  # A combination of two bugs leads to us having to do this horrible mess:
+  # 1. CPACK_COMPONENTS_ALL does not register components only used within export
+  #    commands, but rather only references components used in install commands.
+  # 2. simdjson 3.1.3 mislabels this simdjsonTargets.cmake export file
+  #    installation into the example_Development rather than the
+  #    simdjson_Development component.
+  # As a workaround, we simply install a stub file in the wrong component. This
+  # must happen before we add simdjson as a subdirectory for whatever reason.
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/installed-via-vast" "")
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/installed-via-vast"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/simdjson/"
+    COMPONENT example_Development)
+  # </end workaround>
   add_subdirectory(aux/simdjson)
-  export(
-    EXPORT simdjsonTargets
-    FILE simdjsonTargets.cmake
-    NAMESPACE simdjson::)
+  set(_vast_bundled_simdjson "simdjson")
   add_custom_target(
     simdjson-targets-link
     COMMAND
@@ -445,7 +458,7 @@ endif ()
 # install the static libvast_builtins archive for development targets because
 # the plugin unit test binaries need to be able to link against it.
 install(
-  TARGETS libvast libvast_builtins
+  TARGETS libvast libvast_builtins ${_vast_bundled_simdjson}
   EXPORT VASTTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
