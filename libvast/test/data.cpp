@@ -443,4 +443,6 @@ TEST(get_or) {
   CHECK_EQUAL(foo, "bar");
   auto bar = get_or(x, "bar", fallback);
   CHECK_EQUAL(bar, "fallback");
+  auto qux = get_or(x, "qux", "literal");
+  CHECK_EQUAL(qux, "literal");
 }

@@ -12,7 +12,6 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
-#include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/ip.hpp"
@@ -26,6 +25,7 @@
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/none.hpp>
+#include <caf/sum_type.hpp>
 #include <caf/variant.hpp>
 
 #include <chrono>
@@ -269,26 +269,9 @@ const T* get_if(const record* r, std::string_view path) {
     auto& field = it->second;
     if (last) {
       // Path was completely processed.
-      auto f = detail::overload{
-        [](const T& result) {
-          return &result;
-        },
-        [](const auto&) -> const T* {
-          // Found, but type does not match.
-          return nullptr;
-        },
-      };
-      return caf::visit(f, field);
+      return caf::get_if<T>(&field);
     }
-    auto f = detail::overload{
-      [](const record& sub_record) {
-        return &sub_record;
-      },
-      [](const auto&) -> const record* {
-        return nullptr;
-      },
-    };
-    current = caf::visit(f, field);
+    current = caf::get_if<record>(&field);
     if (!current) {
       // This is not a record, but path continues.
       return nullptr;
@@ -306,6 +289,7 @@ T* get_if(record* r, std::string_view path) {
 /// Finds the entry with the dot-sperated `path` or returns the `fallback` value.
 /// @pre `!path.empty()`
 template <class T>
+  requires(!std::convertible_to<T, std::string_view>)
 T const& get_or(const record& r, std::string_view path, T const& fallback) {
   VAST_ASSERT(!path.empty());
   auto result = get_if<T>(&r, path);
@@ -316,7 +300,31 @@ T const& get_or(const record& r, std::string_view path, T const& fallback) {
 
 template <class T>
   requires(!std::is_reference_v<T>)
-T const& get_or(const record& r, std::string_view key, T&& fallback) = delete;
+T const& get_or(const record& r, std::string_view path, T&& fallback) = delete;
+
+inline std::string_view
+get_or(const record& r, std::string_view path, std::string_view fallback) {
+  auto result = get_if<std::string>(&r, path);
+  if (result)
+    return *result;
+  return fallback;
+}
+
+/// Finds the entry with the dot-seperated `path`, asserting that it exists.
+/// @pre `!path.empty()`
+template <typename T>
+T const& get(record const& r, std::string_view path) {
+  auto result = get_if<T>(&r, path);
+  VAST_ASSERT(result);
+  return *result;
+}
+
+template <typename T>
+T& get(record& r, std::string_view path) {
+  auto result = get_if<T>(&r, path);
+  VAST_ASSERT(result);
+  return *result;
+}
 
 // -- convertible -------------------------------------------------------------
 
