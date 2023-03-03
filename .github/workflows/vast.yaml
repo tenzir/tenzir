@@ -6,6 +6,16 @@ on:
         description: "Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`"
         required: false
         default: ""
+      upload-static-binary-to-github:
+        description: "Build the static binary packages and attach to the Workflow Run"
+        type: boolean
+        required: false
+        default: false
+      upload-docker-image-to-ecr:
+        description: "Build the vast-manager image and upload to ECR"
+        type: boolean
+        required: false
+        default: false
   push:
     branches:
       - main
@@ -123,9 +133,6 @@ jobs:
           # Inject the branch slugs for cache names.
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
-          # Utility alias for detecting changes to files.
-          shopt -s expand_aliases
-          alias is_unchanged="git diff --exit-code ${before_sha} --"
           # For pull requests we make it possible to cache all layers by setting
           # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
           # accept the downaside that this means that Docker images created
@@ -151,93 +158,97 @@ jobs:
           docker_build_args="${docker_build_args} -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF"
           echo "docker-build-args=${docker_build_args}" >> $GITHUB_OUTPUT
           echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
-          # Decide what jobs to run
-          run_python_package=false
-          if [[ $GITHUB_EVENT_NAME == "release" ]]; then
-            run_python_package=true
-          fi
-          run_example_notebooks=true
-          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_example_notebooks=false
-          fi
-          # Policy checks are not constrained.
+          #################################
+          ######## Decide what jobs to run.
+          #################################
+          # TODO: Split this into two steps:
+          # * Set version variables (above)
+          # * Enable Jobs (below)
+          echo "::notice Policy checks are ALWAYS ON"
           echo "run-policy-enforcement=true" >> $GITHUB_OUTPUT
-          echo "run-example-notebooks=${run_example_notebooks}" >> $GITHUB_OUTPUT
-          echo "run-python-package=${run_python_package}" >> $GITHUB_OUTPUT
-          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]] || ! is_unchanged .github/workflows/vast.yaml; then
-            echo "run-changelog=true" >> $GITHUB_OUTPUT
-            echo "run-python=true" >> $GITHUB_OUTPUT
-            echo "run-vast-io=true" >> $GITHUB_OUTPUT
-            echo "run-docker-vast=true" >> $GITHUB_OUTPUT
-            echo "run-docker-compose=true" >> $GITHUB_OUTPUT
-            echo "run-vast-nix=true" >> $GITHUB_OUTPUT
-            echo "run-vast=true" >> $GITHUB_OUTPUT
-            echo "run-vast-plugins=true" >> $GITHUB_OUTPUT
+          echo "::notice Disable all others so we can selectivly enable again"
+          echo "run-changelog=false" >> $GITHUB_OUTPUT
+          echo "run-example-notebooks=false" >> $GITHUB_OUTPUT
+          echo "run-python=false" >> $GITHUB_OUTPUT
+          echo "run-python-package=false" >> $GITHUB_OUTPUT
+          echo "run-vast-io=false" >> $GITHUB_OUTPUT
+          echo "run-docker-vast=false" >> $GITHUB_OUTPUT
+          echo "run-docker-compose=false" >> $GITHUB_OUTPUT
+          echo "run-vast-nix=false" >> $GITHUB_OUTPUT
+          echo "run-vast=false" >> $GITHUB_OUTPUT
+          echo "run-vast-plugins=false" >> $GITHUB_OUTPUT
+          # A little helper to enable all checks.
+          shopt -s expand_aliases
+          alias run_all_checks=' \
+            echo "run-changelog=true" >> $GITHUB_OUTPUT; \
+            echo "run-example-notebooks=true" >> $GITHUB_OUTPUT; \
+            echo "run-python=true" >> $GITHUB_OUTPUT; \
+            echo "run-vast-io=true" >> $GITHUB_OUTPUT; \
+            echo "run-docker-vast=true" >> $GITHUB_OUTPUT; \
+            echo "run-docker-compose=true" >> $GITHUB_OUTPUT; \
+            echo "run-vast-nix=true" >> $GITHUB_OUTPUT; \
+            echo "run-vast=true" >> $GITHUB_OUTPUT; \
+            echo "run-vast-plugins=true" >> $GITHUB_OUTPUT;'
+          # Run all if this is a release.
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            echo "::notice Enabling release jobs"
+            run_all_checks
+            # Publish pyvast to Pypi.
+            echo "run-python-package=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          run_python=false
-          if ! is_unchanged python/; then
-            run_python=true
+          # Run all checks if this is a push to master or a tag.
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            echo "::notice Enabling push jobs"
+            run_all_checks
+            exit 0
           fi
-          echo "run-python=${run_python}" >> $GITHUB_OUTPUT
-          run_vast_io=${run_python}
-          if ! is_unchanged web/; then
-            run_vast_io=true
+          # Run only what is requested for a workflow dispatch.
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "::notice Enabling workflow dispatch jobs"
+            if [[ "${{ inputs.upload-static-binary-to-github }}" == "true" ]]; then
+              echo "run-vast-nix=true" >> $GITHUB_OUTPUT
+            fi
+            if [[ "${{ inputs.upload-docker-image-to-ecr }}" == "true" ]]; then
+              echo "run-docker-vast=true" >> $GITHUB_OUTPUT
+            fi
+            exit 0
           fi
-          echo "run-vast-io=${run_vast_io}" >> $GITHUB_OUTPUT
-          run_changelog=${run_vast_io}
-          if ! is_unchanged CHANGELOG.md changelog/; then
-            run_changelog=true
+          # From here on we should be in a pull request.
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "::error Unexpected GitHub Event: $GITHUB_EVENT_NAME"
+            exit 1
           fi
-          echo "run-changelog=${run_changelog}" >> $GITHUB_OUTPUT
-          run_vast=false
-          if ! is_unchanged cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json; then
-            run_vast=true
+          echo "::notice Enabling pull request jobs"
+          echo "::notice sourcing configure helpers"
+          source ./.github/workflows/configure_helpers.bash
+          # Run all checks if this file changed.
+          if is_changed .github/workflows/vast.yaml; then
+            run_all_checks
+            exit 0
           fi
-          run_vast_plugins=${run_vast}
-          if ! is_unchanged plugins/; then
-            run_vast_plugins=true
-          fi
-          if ! is_unchanged contrib/vast-plugins/; then
-            run_vast_plugins=true
-          fi
-          echo "run-vast-plugins=${run_vast_plugins}" >> $GITHUB_OUTPUT
-          # Build vast if no artifact is present in google store
+          run_if_changed python "python/"
+          run_if_changed vast-io "web/" "python/"
+          run_if_changed changelog "CHANGELOG.md" "changelog/" "web/" "python/"
+          VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json)
+          run_if_changed vast "$VAST_SOURCES[@]"
+          run_if_changed vast-plugins "plugins/" "contrib/vast-plugins/"
+          # The vast-plugins job downloads the VAST artifact from GCS, so we
+          # need to run the vast job in case it is missing.
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
             deb_package="$(echo "vast-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
             mac_package="$(echo "vast-${before_version}-darwin-Release-Clang" | awk '{ print tolower($0) }')"
-            if ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${deb_package}.tar.gz; then
-              run_vast=true
-            elif ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${mac_package}.tar.gz; then
+            if ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${deb_package}.tar.gz || \
+               ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${mac_package}.tar.gz; then
+              echo "run-vast=true" >> $GITHUB_OUTPUT
               run_vast=true
             fi
           fi
-          echo "run-vast=${run_vast}" >> $GITHUB_OUTPUT
-          run_docker_compose=${run_vast}
-          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_docker_compose=false
-          elif [[ ${run_vast_plugins} == "true" || ${run_python} == "true" ]]; then
-            run_docker_compose=true
-          elif ! is_unchanged docker/ Dockerfile .dockerignore; then
-            run_docker_compose=true
-          fi
-          echo "run-docker-compose=${run_docker_compose}" >> $GITHUB_OUTPUT
-          run_docker_vast=${run_docker_compose}
-          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_docker_vast=false
-          elif [[ ${run_vast_io} == "true" || ${run_python} == "true" ]]; then
-            run_docker_vast=true
-          fi
-          echo "run-docker-vast=${run_docker_vast}" >> $GITHUB_OUTPUT
-          run_vast_nix=${run_vast}
-          if ${run_vast_plugins}; then
-            run_vast_nix=true
-          elif ! is_unchanged nix/ flake.lock *.nix; then
-            run_vast_nix=true
-          elif [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_vast_nix=true
-          fi
-          echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
+          run_docker_compose="$(any ${run_vast} ${run_vast_plugins} ${run_python})"
+          run_if_changed_default docker-compose $run_docker_compose "docker/" "Dockerfile" ".dockerignore"
+          run_docker_vast="$(any ${run_docker_compose} ${run_vast_io} ${run_python})"
+          run_if_changed_default docker-vast $run_docker_vast
+          run_if_changed vast-nix "$VAST_SOURCES[@]" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/
 
   policy-enforcement:
     name: Policy Enforcement
