@@ -44,9 +44,8 @@ fi
 # Create a new branch that bases off of current origin/master.
 git fetch origin master
 git switch -C "topic/release-${new_version}" origin/master
-
 # Update the fallback version and its ancestor count.
-rev_count="$(($(git rev-list --count) + 1))"
+rev_count="$(($(git rev-list --count HEAD) + 1))"
 version_json="$(jq --arg v "${new_version#v}" --arg cnt "${rev_count}" \
   '."vast-version-fallback" = $v | ."vast-version-rev-count" = $cnt' version.json)"
 echo -E "${version_json}" > version.json
