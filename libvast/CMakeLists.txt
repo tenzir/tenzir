@@ -259,20 +259,73 @@ string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(spdlog 1.5.0 REQUIRED)")
 target_link_libraries(libvast PUBLIC spdlog::spdlog)
 dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
-# Link against simdjson.
-find_package(
-  simdjson
-  REQUIRED
-  # simdjson 0.8.0 exports it package configuration file under the wrong name,
-  # so we look for "simdjson-targets.cmake" as well.
-  CONFIGS
-  "simdjson-config.cmake"
-  "simdjson-targets.cmake")
-string(APPEND VAST_FIND_DEPENDENCY_LIST
-       "\nfind_package(simdjson REQUIRED CONFIGS "
-       "\"simdjson-config.cmake\" \"simdjson-targets.cmake\")")
+# Link against simdjson
+option(VAST_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
+add_feature_info("VAST_ENABLE_BUNDLED_SIMDJSON" VAST_ENABLE_BUNDLED_SIMDJSON
+                 "use the simdjson submodule.")
+
+unset(_vast_bundled_simdjson)
+if (NOT VAST_ENABLE_BUNDLED_SIMDJSON)
+  find_package(simdjson 3.1)
+  dependency_summary("simdjson" simdjson::simdjson "Dependencies")
+endif ()
+if (NOT simdjson_FOUND)
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "simdjson library not found. Initialize the libvast/aux/simdjson submodule"
+    )
+  endif ()
+  # TODO: Think about it.
+  set(SIMDJSON_ENABLE_THREADS
+      OFF
+      CACHE BOOL "")
+  set(SIMDJSON_GOOGLE_BENCHMARKS
+      OFF
+      CACHE BOOL "")
+  set(SIMDJSON_COMPETITION
+      OFF
+      CACHE BOOL "")
+  set(SIMDJSON_ALLOW_DOWNLOADS
+      OFF
+      CACHE BOOL "")
+  set(SIMDJSON_ENABLE_FUZZING
+      OFF
+      CACHE BOOL "")
+  set(SIMDJSON_ENABLE_DEVELOPER_MODE
+      OFF
+      CACHE BOOL "")
+  # <workaround>
+  # A combination of two bugs leads to us having to do this horrible mess:
+  # 1. CPACK_COMPONENTS_ALL does not register components only used within export
+  #    commands, but rather only references components used in install commands.
+  # 2. simdjson 3.1.3 mislabels this simdjsonTargets.cmake export file
+  #    installation into the example_Development rather than the
+  #    simdjson_Development component.
+  # As a workaround, we simply install a stub file in the wrong component. This
+  # must happen before we add simdjson as a subdirectory for whatever reason.
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/installed-via-vast" "")
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/installed-via-vast"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/simdjson/"
+    COMPONENT example_Development)
+  # </end workaround>
+  add_subdirectory(aux/simdjson)
+  set(_vast_bundled_simdjson "simdjson")
+  add_custom_target(
+    simdjson-targets-link
+    COMMAND
+      "${CMAKE_COMMAND}" -E create_symlink
+      "${CMAKE_CURRENT_BINARY_DIR}/simdjsonTargets.cmake"
+      "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake"
+    COMMENT "Linking simdjson targets")
+  VASTSystemizeTarget(simdjson)
+  add_dependencies(simdjson simdjson-targets-link)
+  dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
+                     "Dependencies")
+endif ()
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
-dependency_summary("simdjson" simdjson::simdjson "Dependencies")
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(simdjson 3.1 REQUIRED)")
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
@@ -401,19 +454,11 @@ if (TARGET vast-schema)
   add_dependencies(libvast vast-schema)
 endif ()
 
-# Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
-install(
-  TARGETS libvast
-  EXPORT VASTTargets
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
-  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
-  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
-
-# We install the static libvast_builtins archive for development targets because
+# Install libvast in PREFIX/lib and headers in PREFIX/include/vast. We also
+# install the static libvast_builtins archive for development targets because
 # the plugin unit test binaries need to be able to link against it.
 install(
-  TARGETS libvast_builtins
-  COMPONENT Development
+  TARGETS libvast libvast_builtins ${_vast_bundled_simdjson}
   EXPORT VASTTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime

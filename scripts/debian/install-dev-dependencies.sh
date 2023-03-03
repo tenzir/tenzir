@@ -22,7 +22,6 @@ apt-get -y --no-install-recommends install \
     libhttp-parser-dev \
     libpcap-dev tcpdump \
     libre2-dev \
-    libsimdjson-dev \
     libspdlog-dev \
     libssl-dev \
     libunwind-dev \

@@ -57,6 +57,7 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_ENABLE_BUNDLED_CAF:BOOL="ON" \
+      -D VAST_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
@@ -97,15 +98,11 @@ RUN apt-get update && \
       libasan5 \
       libc++1 \
       libc++abi1 \
-      libcaf-core0.17 \
-      libcaf-io0.17 \
-      libcaf-openssl0.17 \
       libflatbuffers1 \
       libfmt7 \
       libhttp-parser2.9 \
       libpcap0.8 \
       libre2-9 \
-      libsimdjson5 \
       libspdlog1 \
       libunwind8 \
       libxxhash-dev \
