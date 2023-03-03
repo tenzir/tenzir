@@ -164,6 +164,14 @@ in {
       ps.matcher
       ps.netflow
     ]);
+  vast-manager = let
+    pkg = final.vast.override {
+      pname = "vast-manager";
+    };
+  in
+    pkg.withPlugins (ps: [
+      ps.fleet
+    ]);
   vast-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [
