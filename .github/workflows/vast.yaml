@@ -144,17 +144,12 @@ jobs:
             vast_tag="${build_version}"
             vast_container_ref="${{ github.sha }}"
           fi
+          echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
           cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}"
-          for plugin in $(ls plugins); do
-            var="VAST_PLUGIN_${plugin^^}_REVISION"
-            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
-            cmake_version_args="${cmake_version_args} -D${var}:STRING=${value}"
-          done
           echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
           docker_build_args="${cmake_version_args} -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
           docker_build_args="${docker_build_args} -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF"
           echo "docker-build-args=${docker_build_args}" >> $GITHUB_OUTPUT
-          echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
           #################################
           ######## Decide what jobs to run.
           #################################
