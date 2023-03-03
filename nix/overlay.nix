@@ -153,9 +153,9 @@ in {
       ps.matcher
       ps.netflow
     ]);
-  vast-full = let
+  vast-ee = let
     pkg = final.vast.override {
-      pname = "vast-full";
+      pname = "vast-ee";
     };
   in
     pkg.withPlugins (ps: [
