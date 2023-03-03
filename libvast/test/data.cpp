@@ -404,3 +404,45 @@ TEST(pack / unpack) {
   REQUIRE_EQUAL(unpack(*flatbuffer, x2), caf::none);
   CHECK_EQUAL(x, x2);
 }
+
+TEST(get_if) {
+  // clang-format off
+  auto x = record{
+    {"foo", "bar"},
+    {"baz", record{
+      {"qux", int64_t{42}},
+      {"quux", record{
+        {"quuux", 3.14}
+      }},
+    }},
+  };
+  // clang-format on
+  auto foo = get_if<std::string>(&x, "foo");
+  REQUIRE(foo);
+  CHECK_EQUAL(*foo, "bar");
+  auto invalid = get_if<ip>(&x, "foo");
+  CHECK(!invalid);
+  auto baz = get_if<record>(&x, "baz");
+  CHECK(baz);
+  auto qux = get_if<int64_t>(&x, "baz.qux");
+  REQUIRE(qux);
+  CHECK_EQUAL(*qux, 42);
+  auto quux = get_if<record>(&x, "baz.quux");
+  CHECK(quux);
+  auto quuux = get_if<double>(&x, "baz.quux.quuux");
+  REQUIRE(quuux);
+  CHECK_EQUAL(*quuux, 3.14);
+  auto unknown = get_if<ip>(&x, "foo.baz");
+  CHECK(!unknown);
+}
+
+TEST(get_or) {
+  auto x = record{{"foo", "bar"}};
+  auto fallback = std::string{"fallback"};
+  auto foo = get_or(x, "foo", fallback);
+  CHECK_EQUAL(foo, "bar");
+  auto bar = get_or(x, "bar", fallback);
+  CHECK_EQUAL(bar, "fallback");
+  auto qux = get_or(x, "qux", "literal");
+  CHECK_EQUAL(qux, "literal");
+}
