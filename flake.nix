@@ -95,6 +95,8 @@
           vast-ce-static = pkgs.pkgsStatic.vast-ce;
           vast-ee = pkgs.vast-ee;
           vast-ee-static = pkgs.pkgsStatic.vast-ee;
+          vast-manager = pkgs.vast-manager;
+          vast-manager-static = pkgs.pkgsStatic.vast-manager;
           vast-integration-test-shell = pkgs.mkShell {
             packages = pkgs.vast-integration-test-deps;
           };
@@ -113,6 +115,8 @@
         apps.vast-ce-static = flake-utils.lib.mkApp {drv = packages.vast-ce-static;};
         apps.vast-ee = flake-utils.lib.mkApp {drv = packages.vast-ee;};
         apps.vast-ee-static = flake-utils.lib.mkApp {drv = packages.vast-ee-static;};
+        apps.vast-manager = flake-utils.lib.mkApp {drv = packages.vast-manager;};
+        apps.vast-manager-static = flake-utils.lib.mkApp {drv = packages.vast-manager-static;};
         apps.stream-vast-image = stream-image {
           name = "tenzir/vast";
           pkg = self.packages.${system}.vast;
@@ -136,6 +140,14 @@
         apps.stream-vast-ee-slim-image = stream-image {
           name = "tenzir/vast-ee-slim";
           pkg = self.packages.${system}.vast-ee-static;
+        };
+        apps.stream-vast-manager-image = stream-image {
+          name = "tenzir/vast-manager";
+          pkg = self.packages.${system}.vast-manager;
+        };
+        apps.stream-vast-manager-slim-image = stream-image {
+          name = "tenzir/vast-manager-slim";
+          pkg = self.packages.${system}.vast-manager-static;
         };
         apps.default = apps.vast;
         devShell = import ./shell.nix {inherit pkgs;};
