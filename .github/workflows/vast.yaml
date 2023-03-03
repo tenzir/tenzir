@@ -2,10 +2,6 @@ name: VAST
 on:
   workflow_dispatch:
     inputs:
-      arguments:
-        description: "Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`"
-        required: false
-        default: ""
       upload-static-binary-to-github:
         description: "Build the static binary packages and attach to the Workflow Run"
         type: boolean
