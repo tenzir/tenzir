@@ -201,6 +201,15 @@ TEST(modifier - startswith - proper backslash escaping) {
   CHECK_EQUAL(str, R"(foo == /^C:\rundll32.*/i)");
 }
 
+TEST(modifier - startswith - wildcards) {
+  auto yaml = R"__(
+    foo|startswith: "f*b?r"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo == /^f.*b.r.*/i");
+  CHECK_EQUAL(search_id, expected);
+}
+
 TEST(modifier - endswith) {
   auto yaml = R"__(
     foo|endswith: "x"
@@ -219,6 +228,15 @@ TEST(modifier - endswith - proper backslash escaping) {
   CHECK_EQUAL(search_id, expected);
   auto str = to_string(expected);
   CHECK_EQUAL(str, R"(foo == /.*\rundll32.exe$/i)");
+}
+
+TEST(modifier - endswith - wildcards) {
+  auto yaml = R"__(
+    foo|endswith: "f*b?r"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo == /.*f.*b.r$/i");
+  CHECK_EQUAL(search_id, expected);
 }
 
 TEST(modifier - lt) {

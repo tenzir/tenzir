@@ -325,6 +325,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
+              str = transform_sigma_string(str);
               str = fmt::format("^{}.*", str);
               auto result = pattern::make(str, {.case_insensitive = true});
               if (!result)
@@ -339,6 +340,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
+              str = transform_sigma_string(str);
               str = fmt::format(".*{}$", str);
               auto result = pattern::make(str, {.case_insensitive = true});
               if (!result)
