@@ -71,7 +71,6 @@ jobs:
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
-      docker-build-args: ${{ steps.configure.outputs.docker-build-args }}
       vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
@@ -146,9 +145,6 @@ jobs:
           echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
           cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}"
           echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
-          docker_build_args="${cmake_version_args} -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
-          docker_build_args="${docker_build_args} -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF"
-          echo "docker-build-args=${docker_build_args}" >> $GITHUB_OUTPUT
           #################################
           ######## Decide what jobs to run.
           #################################
@@ -427,7 +423,7 @@ jobs:
           else
             ref_tag="${{ github.sha }}"
           fi
-          docker_build_args="${{ needs.configure.outputs.docker-build-args }}"
+          cmake_version_args="${{ needs.configure.outputs.cmake-version-args }}"
           # Build the Docker images using ghcr.io/tenzir/vast as a registry-type
           # layer cache. We upload this cache for every merge but also for every
           # pull request, using the head ref slug as an identifier within PRs.
@@ -437,19 +433,19 @@ jobs:
           # the merge-base for pull requests.
           docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}:latest --target production --load \
             --platform linux/amd64 \
-            --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
+            --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
           if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
             docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-dev:latest --target development --load \
               --platform linux/amd64 \
-              --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
+              --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}" \
               --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
               --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
             docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-deps:latest --target dependencies --load \
               --platform linux/amd64 \
-              --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
+              --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}" \
               --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
               --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
           fi
