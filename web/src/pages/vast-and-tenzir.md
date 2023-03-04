@@ -65,27 +65,23 @@ social media, blog posts, conference talks, and more.
 
 ## Who is the audience of VAST and Tenzir?
 
-As an open-source project, VAST aims to build a community of passionate users
-and developers that cultivate an active exchange, contribute enhancements, and
-spread the word. The mission of the VAST community is to offer a diverse
+As an open-source project, the audience of VAST is a community of passionate
+users and developers that cultivate an active exchange, contribute enhancements,
+and spread the word. The mission of the VAST community is to offer a diverse
 exchange point at the intersection of security and data.
 
-Tenzir focuses on customers. The *community edition* is a free edition for
-consultants, small business, and researchers with a very small budget. The
-*enterprise edition* focuses on security professionals for larger enterprise
-deployments, OEM/SI embeddings, as well as MSSP and MDR platforms.
+As a commercial entity, the audience of Tenzir concerns customers. There exist
+mutiple product editions, geared towards different personas. The *community
+edition* is a free edition for consultants, small business, and researchers with
+a small budget. The *enterprise edition* focuses on security professionals for
+larger enterprise deployments, OEM/SI embeddings, and the *provider edition* is
+for redistribution by MSSP and MDR vendors.
 
 :::info Early Access
-We are working at full steam towards the launch of our community and enterprise
-editions. We are working with a select group of early adopters who enjoy giving
-feedback and don't mind rough edges. If that's you, please join the waitlist
-below.
+Tenzir is working towards the launch of the community edition with a select
+group of early adopters. If you are interested join the waitlist below.
 
 <div align="center">
   <a class="button button--md button--primary margin-right--md" href="https://webforms.pipedrive.com/f/c6vwqvg8HuWVVyE4GOE3fTYE7gAfsA9ggVjjicdBWZa674pIQqh1BP2p7CbVxpbq95">Sign Up</a>
 </div>
 :::
-
-The following diagram illustrates the scope and audiences of the three editions:
-
-![Editions](/img/editions.excalidraw.svg)
