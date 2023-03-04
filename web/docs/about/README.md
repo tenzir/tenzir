@@ -23,7 +23,7 @@ A **VAST node** provides managed pipelines and storage as a continuously running
 service. You can run pipelines across multiple nodes to create a distributed
 security data architecture.
 
-![VAST Building Blocks](architecture-nodes.excalidraw.svg)
+![VAST Building Blocks](/img/architecture-nodes.excalidraw.svg)
 
 Consider VAST if you want to:
 
