@@ -88,12 +88,22 @@ struct element_type_traits<events> {
 struct runtime_element_type {
   template <element_type ElementType>
   explicit(false) runtime_element_type(element_type_traits<ElementType>)
-    : id{element_type_id<ElementType>} {
+    : id{element_type_id<ElementType>},
+      name{element_type_traits<ElementType>::name} {
   }
 
   int id;
+  std::string_view name;
 
-  // TODO: Do we need name?
-};
+  friend auto
+  operator<=>(runtime_element_type lhs, runtime_element_type rhs) noexcept {
+    return lhs.id <=> rhs.id;
+  }
+
+  friend bool
+  operator==(runtime_element_type lhs, runtime_element_type rhs) noexcept {
+    return lhs.id == rhs.id;
+  }
+}; // namespace vast
 
 } // namespace vast

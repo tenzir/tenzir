@@ -8,6 +8,8 @@
 
 #include "vast/element_type.hpp"
 
+#include <string_view>
+
 namespace vast {
 
 template <element_type Input, element_type Output>
@@ -63,7 +65,8 @@ public:
     return {};
   }
 
-  [[nodiscard]] virtual auto runtime_make(const type& input_schema) noexcept
+  [[nodiscard]] virtual auto
+  runtime_instantiate(const type& input_schema) noexcept
     -> caf::expected<runtime_physical_operator>
     = 0;
 
@@ -82,13 +85,13 @@ class logical_operator : public runtime_logical_operator {
     return element_type_traits<Output>{};
   }
 
-  [[nodiscard]] virtual auto make(const type& input_schema) noexcept
+  [[nodiscard]] virtual auto instantiate(const type& input_schema) noexcept
     -> caf::expected<physical_operator<Input, Output>>
     = 0;
 
-  [[nodiscard]] auto runtime_make(const type& input_schema) noexcept
+  [[nodiscard]] auto runtime_instantiate(const type& input_schema) noexcept
     -> caf::expected<runtime_physical_operator> final {
-    auto op = make(input_schema);
+    auto op = instantiate(input_schema);
     if (not op)
       return std::move(op.error());
     return std::move(*op);
@@ -96,5 +99,14 @@ class logical_operator : public runtime_logical_operator {
 };
 
 using logical_operator_ptr = std::unique_ptr<runtime_logical_operator>;
-
 } // namespace vast
+
+template <>
+struct fmt::formatter<vast::logical_operator_ptr>
+  : fmt::formatter<std::string_view> {
+  template <class FormatContext>
+  auto
+  format(const vast::logical_operator_ptr& value, FormatContext& ctx) const {
+    return fmt::formatter<std::string_view>::format(value->to_string(), ctx);
+  }
+};
