@@ -61,6 +61,30 @@ static auto const* SPEC_V0 = R"_(
         required: false
         description: |
           Whether to use the expanded output schema.
+      - in: query
+        name: flatten
+        schema:
+          type: boolean
+          default: false
+        required: false
+        description: Flatten nested elements in the response data.
+        example: false
+      - in: query
+        name: omit-nulls
+        schema:
+          type: boolean
+          default: false
+        required: false
+        description: Omit null elements in the response data.
+        example: false
+      - in: query
+        name: numeric-durations
+        schema:
+          type: boolean
+          default: false
+        required: false
+        description: Render durations as numeric values.
+        example: false
     responses:
       200:
         description: Success.
@@ -159,6 +183,12 @@ namespace {
 
 constexpr auto BATCH_SIZE = uint32_t{1};
 
+struct query_format_options {
+  bool flatten = defaults::rest::export_::flatten;
+  bool numeric_durations = defaults::rest::export_::numeric_durations;
+  bool omit_nulls = defaults::rest::export_::omit_nulls;
+};
+
 } // namespace
 
 struct query_manager_state {
@@ -168,6 +198,7 @@ struct query_manager_state {
 
   query_manager_actor::pointer self;
   system::index_actor index = {};
+  query_format_options format_opts = {};
   bool expand = {};
   duration ttl = {};
   caf::disposable ttl_disposable = {};
@@ -203,7 +234,11 @@ struct query_manager_state {
   }
 
   std::string create_response() {
-    auto printer = json_printer{{.oneline = true}};
+    auto printer
+      = json_printer{{.oneline = true,
+                      .flattened = format_opts.flatten,
+                      .numeric_durations = format_opts.numeric_durations,
+                      .omit_nulls = format_opts.omit_nulls}};
     auto result = std::string{"{\"events\":["};
     auto out_iter = std::back_inserter(result);
     auto seen_schemas = std::unordered_set<type>{};
@@ -310,12 +345,13 @@ query_manager_actor::behavior_type
 query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
               system::index_actor index,
               std::optional<vast::pipeline_executor> executor, bool expand,
-              duration ttl) {
+              duration ttl, query_format_options format_opts) {
   VAST_VERBOSE("{} starts with a TTL of {}", *self, data{ttl});
   self->state.self = self;
   self->state.index = std::move(index);
   self->state.expand = expand;
   self->state.ttl = ttl;
+  self->state.format_opts = format_opts;
   self->state.pipeline_executor_ = std::move(executor);
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     if (self->state.promise.pending())
@@ -408,6 +444,22 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         auto ttl = duration{std::chrono::minutes{5}};
         if (rq.params.contains("ttl"))
           ttl = caf::get<duration>(rq.params["ttl"]);
+        auto format_opts = query_format_options{};
+        if (rq.params.contains("flatten")) {
+          auto& param = rq.params.at("flatten");
+          VAST_ASSERT(caf::holds_alternative<bool>(param));
+          format_opts.flatten = caf::get<bool>(param);
+        }
+        if (rq.params.contains("omit-nulls")) {
+          auto& param = rq.params.at("omit-nulls");
+          VAST_ASSERT(caf::holds_alternative<bool>(param));
+          format_opts.omit_nulls = caf::get<bool>(param);
+        }
+        if (rq.params.contains("numeric-durations")) {
+          auto& param = rq.params.at("numeric-durations");
+          VAST_ASSERT(caf::holds_alternative<bool>(param));
+          format_opts.numeric_durations = caf::get<bool>(param);
+        }
         if (rq.params.contains("query")) {
           auto& param = rq.params.at("query");
           // Should be type-checked by the server.
@@ -434,7 +486,7 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         auto handler
           = self->spawn<caf::monitored>(query_manager, self->state.index_,
                                         std::move(pipeline_executor), expand,
-                                        ttl);
+                                        ttl, std::move(format_opts));
         auto query = vast::query_context::make_extract(
           "http-request", handler, std::move(*normalized_expr));
         query.taste = 0;
@@ -508,6 +560,9 @@ class plugin final : public virtual rest_endpoint_plugin {
         .path = "/query/new",
         .params = vast::record_type{
           {"query", vast::string_type{}},
+          {"flatten", vast::bool_type{}},
+          {"omit-nulls", vast::bool_type{}},
+          {"numeric-durations", vast::bool_type{}},
           {"expand", vast::bool_type{}},
           {"ttl", vast::duration_type{}},
         },
