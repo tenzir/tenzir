@@ -31,7 +31,7 @@ public:
     auto flattened = std::vector<logical_operator_ptr>{};
     flattened.reserve(ops.size());
     for (auto& op : ops) {
-      if (auto p = dynamic_cast<pipeline2*>(op.get())) {
+      if (auto* p = dynamic_cast<pipeline2*>(op.get())) {
         flattened.insert(flattened.end(),
                          std::make_move_iterator(p->ops_.begin()),
                          std::make_move_iterator(p->ops_.end()));
@@ -62,8 +62,8 @@ public:
     return fmt::to_string(fmt::join(ops_, " | "));
   }
 
-  auto definition() const -> std::span<const logical_operator_ptr> {
-    return ops_;
+  [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr> {
+    return std::move(ops_);
   }
 
 private:

@@ -125,7 +125,37 @@ struct element_type_to_batch {
   using type = typename element_type_traits<T>::batch;
 };
 
-using runtime_batch = caf::detail::tl_apply_t<
-  caf::detail::tl_map_t<element_types, element_type_to_batch>, std::variant>;
+template <element_type T>
+using element_type_to_batch_t = typename element_type_to_batch<T>::type;
+
+struct runtime_batch
+  : caf::detail::tl_apply_t<
+      caf::detail::tl_map_t<element_types, element_type_to_batch>, std::variant> {
+  using variant::variant;
+
+  [[nodiscard]] auto size() const noexcept -> size_t {
+    return std::visit(
+      []<class Batch>(const Batch& batch) noexcept {
+        return batch_traits<Batch>::size(batch);
+      },
+      *this);
+  }
+
+  [[nodiscard]] auto bytes() const noexcept -> size_t {
+    return std::visit(
+      []<class Batch>(const Batch& batch) noexcept {
+        return batch_traits<Batch>::bytes(batch);
+      },
+      *this);
+  }
+
+  [[nodiscard]] auto schema() const noexcept -> type {
+    return std::visit(
+      []<class Batch>(const Batch& batch) noexcept {
+        return batch_traits<Batch>::schema(batch);
+      },
+      *this);
+  }
+};
 
 } // namespace vast
