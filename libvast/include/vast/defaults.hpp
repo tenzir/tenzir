@@ -166,8 +166,8 @@ inline constexpr const size_t rotate_files = 3;
 // -- constants for the various builtin REST endpoints -------------------------
 namespace rest {
 
-/// Settings related to the `/export` endpoint.
-namespace export_ {
+/// Settings related to the `/query` endpoint.
+namespace query_ {
 
 /// The maximum number of results
 inline constexpr const size_t limit = 50;
@@ -181,7 +181,7 @@ inline constexpr const bool numeric_durations = false;
 /// Whether to omit null fields.
 inline constexpr const bool omit_nulls = false;
 
-} // namespace export_
+} // namespace query_
 
 } // namespace rest
 
