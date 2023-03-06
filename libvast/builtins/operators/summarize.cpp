@@ -15,7 +15,7 @@
 #include <vast/concept/parseable/vast/time.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
-#include <vast/pipeline.hpp>
+#include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>

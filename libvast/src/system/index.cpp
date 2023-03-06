@@ -540,7 +540,7 @@ caf::error index_state::load_from_disk() {
   for (const auto& id : oversized_partitions) {
     VAST_INFO("{} recovers corrupted partition {}", *self, id);
     auto pipeline
-      = std::make_shared<vast::pipeline>("recover", std::vector<std::string>{});
+      = std::make_shared<vast::legacy_pipeline>("recover", std::vector<std::string>{});
     auto pass_operator = make_pipeline_operator("pass", {});
     if (!pass_operator)
       return pass_operator.error();

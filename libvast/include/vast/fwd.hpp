@@ -149,7 +149,7 @@ class table_slice;
 class table_slice_builder;
 class table_slice_column;
 class time_type;
-class pipeline;
+class legacy_pipeline;
 class pipeline_operator;
 class type;
 class uuid;
@@ -235,7 +235,7 @@ class legacy_deserializer;
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
-using pipeline_ptr = std::shared_ptr<pipeline>;
+using pipeline_ptr = std::shared_ptr<legacy_pipeline>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.

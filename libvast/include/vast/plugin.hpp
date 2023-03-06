@@ -365,7 +365,7 @@ public:
   /// In the future, we may want to let this plugin return a substrait query
   /// plan instead of a VAST expression.
   [[nodiscard]] virtual caf::expected<
-    std::pair<expression, std::optional<pipeline>>>
+    std::pair<expression, std::optional<legacy_pipeline>>>
   make_query(std::string_view query) const = 0;
 };
 

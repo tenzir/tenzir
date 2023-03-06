@@ -54,7 +54,7 @@ make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
             catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
-            std::vector<pipeline>&& pipelines, expression expr, bool detached) {
+            std::vector<legacy_pipeline>&& pipelines, expression expr, bool detached) {
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
   // Placeholder thingies.

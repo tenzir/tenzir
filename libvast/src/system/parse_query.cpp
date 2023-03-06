@@ -13,7 +13,7 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
@@ -27,7 +27,7 @@
 
 namespace vast::system {
 
-caf::expected<std::pair<expression, std::optional<pipeline>>>
+caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(const std::string& query) {
   // Get all query languages, but make sure that VAST is at the front.
   // TODO: let the user choose exactly one language instead.
@@ -48,7 +48,7 @@ parse_query(const std::string& query) {
                          fmt::format("invalid query: {}", query));
 }
 
-caf::expected<std::pair<expression, std::optional<pipeline>>>
+caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(std::vector<std::string>::const_iterator begin,
             std::vector<std::string>::const_iterator end) {
   if (begin == end)
@@ -57,12 +57,12 @@ parse_query(std::vector<std::string>::const_iterator begin,
   return parse_query(query);
 }
 
-caf::expected<std::pair<expression, std::optional<pipeline>>>
+caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(const std::vector<std::string>& args) {
   return parse_query(args.begin(), args.end());
 }
 
-caf::expected<std::pair<expression, std::optional<pipeline>>>
+caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(const spawn_arguments& args) {
   auto query_result = system::parse_query(args.inv.arguments);
   if (!query_result)

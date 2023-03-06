@@ -24,7 +24,7 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
@@ -44,7 +44,7 @@ caf::behavior datagram_source(
   size_t table_slice_size, std::optional<size_t> max_events,
   const catalog_actor& catalog, vast::module local_module,
   std::string type_filter, accountant_actor accountant,
-  std::vector<pipeline>&& pipelines) {
+  std::vector<legacy_pipeline>&& pipelines) {
   self->state.executor = pipeline_executor{std::move(pipelines)};
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);

@@ -13,7 +13,7 @@
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/system/counter.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/node_control.hpp"

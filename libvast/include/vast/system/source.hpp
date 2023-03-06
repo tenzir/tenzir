@@ -13,7 +13,7 @@
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/module.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
@@ -123,6 +123,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
        const catalog_actor& catalog, vast::module local_module,
        std::string type_filter, accountant_actor accountant,
-       std::vector<pipeline>&& input_pipelines);
+       std::vector<legacy_pipeline>&& input_pipelines);
 
 } // namespace vast::system

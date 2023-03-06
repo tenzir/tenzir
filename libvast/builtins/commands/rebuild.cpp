@@ -14,7 +14,7 @@
 #include <vast/detail/narrow.hpp>
 #include <vast/fwd.hpp>
 #include <vast/partition_synopsis.hpp>
-#include <vast/pipeline.hpp>
+#include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/catalog.hpp>
@@ -435,7 +435,7 @@ struct rebuilder_state {
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
     auto pipeline
-      = std::make_shared<vast::pipeline>("rebuild", std::vector<std::string>{});
+      = std::make_shared<vast::legacy_pipeline>("rebuild", std::vector<std::string>{});
     pipeline->add_operator(std::make_unique<class rebatch_operator>(
       current_run_partitions[0].schema,
       detail::narrow_cast<int64_t>(desired_batch_size)));

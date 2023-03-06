@@ -217,7 +217,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<pipeline>&& pipelines,
+         query_options options, std::vector<legacy_pipeline>&& pipelines,
          index_actor index) {
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {

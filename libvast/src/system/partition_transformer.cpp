@@ -13,7 +13,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/value_index_factory.hpp"
 
