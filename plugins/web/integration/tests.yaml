@@ -58,7 +58,7 @@ tests:
       - command: 'curl -XPOST -H"Content-Type: application/json" -d''{"query": "192.168.1.102"}'' http://127.0.0.1:42025/api/v0/query/new'
         transformation: 'jq .id | xargs -I _ curl http://127.0.0.1:42025/api/v0/query/_/next?n=20 | jq .events'
         prepend_vast: false
-  Query Endpoint - Formatting Options:
+  Query Endpoint With Formatters:
     tags: [rest, query]
     fixture: ServerTester
     steps:
