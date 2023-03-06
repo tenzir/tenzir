@@ -44,7 +44,7 @@ using runtime_physical_operator = caf::detail::tl_apply<
 
 class runtime_logical_operator {
 public:
-  ~runtime_logical_operator() noexcept = default;
+  virtual ~runtime_logical_operator() noexcept = default;
 
   [[nodiscard]] virtual auto input_element_type() const noexcept
     -> runtime_element_type
