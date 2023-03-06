@@ -93,44 +93,36 @@ struct where final : public logical_operator<events, events> {
   expression expr_;
 };
 
-auto compile_into(std::vector<runtime_physical_operator>& out,
-                  const runtime_logical_operator& op) -> caf::expected<void> {
-  if (auto p = dynamic_cast<const pipeline2*>(&op)) {
-    for (auto& pipeline_op : p->definition()) {
-      auto result = compile_into(out, *pipeline_op);
-      if (!result)
-        return result.error();
-    }
-  } else {
-    auto schema = TODO;
-    auto result = op.runtime_instantiate(schema);
-    if (result) {
-      out.push_back(std::move(*result));
-    } else {
-      return result.error();
-    }
-  }
-  return {};
-}
+auto execute(std::span<logical_operator_ptr> ops) -> caf::expected<void> {
+  REQUIRE(!ops.empty());
+  REQUIRE(ops.front()->input_element_type().id == element_type_id<void>);
+  REQUIRE(ops.back()->output_element_type().id == element_type_id<void>);
+  auto a = unbox(ops[0]->runtime_instantiate(type{}));
+  auto gen = std::visit(
+    []<element_type Input, element_type Output>(
+      physical_operator<Input, Output>& f) -> generator<runtime_batch> {
+      if constexpr (!std::is_void_v<Input>) {
+        FAIL("input type is void");
+      } else {
+        for (auto&& elem : f()) {
+          co_yield std::move(elem);
+        }
+      }
+    },
+    a);
 
-auto compile(const runtime_logical_operator& op)
-  -> caf::expected<std::vector<runtime_physical_operator>> {
-  auto out = std::vector<runtime_physical_operator>{};
-  auto result = compile_into(out, op);
-  if (!result) {
-    return result.error();
+  for (auto&& elem : gen) {
+    std::visit(
+      []<class Batch>(Batch&& batch) {
+        auto schema = batch_traits<Batch>::schema(batch);
+      },
+      std::move(elem));
   }
-  return out;
-}
 
-auto execute(pipeline2 p) -> caf::expected<void> {
-  auto compiled = compile(p);
-  if (!compiled) {
-    return compiled.error();
-  }
-  for (auto& op : *compiled) {
-    // TODO
-  }
+  // for (auto it = ops.begin() + 1; it != ops.end(); ++it) {
+  //   std::visit(, gen)
+  // }
+
   return {};
 }
 

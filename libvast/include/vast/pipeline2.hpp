@@ -11,7 +11,7 @@
 #include <caf/error.hpp>
 
 namespace vast {
-class pipeline2 : public runtime_logical_operator {
+class pipeline2 final : public runtime_logical_operator {
 public:
   static auto make(std::vector<logical_operator_ptr> ops)
     -> caf::expected<pipeline2> {
@@ -28,7 +28,18 @@ public:
                     (*mismatch)->output_element_type().name,
                     (*(mismatch + 1))->input_element_type().name));
     }
-    return pipeline2{std::move(ops)};
+    auto flattened = std::vector<logical_operator_ptr>{};
+    flattened.reserve(ops.size());
+    for (auto& op : ops) {
+      if (auto p = dynamic_cast<pipeline2*>(op.get())) {
+        flattened.insert(flattened.end(),
+                         std::make_move_iterator(p->ops_.begin()),
+                         std::make_move_iterator(p->ops_.end()));
+      } else {
+        flattened.push_back(std::move(op));
+      }
+    }
+    return pipeline2{std::move(flattened)};
   }
 
   [[nodiscard]] auto input_element_type() const noexcept

@@ -26,10 +26,12 @@ struct physical_operator_traits<void, Output> {
 };
 
 template <element_type Input, element_type Output>
-using physical_operator =
-  typename physical_operator_traits<Input, Output>::type;
+struct physical_operator : physical_operator_traits<Input, Output>::type {
+  using super = typename physical_operator_traits<Input, Output>::type;
+  using super::super;
+};
 
-using runtime_physical_operator = caf::detail::tl_apply<
+using runtime_physical_operator = caf::detail::tl_apply_t<
   decltype([]<int... Indices>(std::integer_sequence<int, Indices...>) {
     return caf::detail::type_list<physical_operator<
       caf::detail::tl_at_t<
@@ -41,6 +43,16 @@ using runtime_physical_operator = caf::detail::tl_apply<
     int, caf::detail::tl_size<element_types>::value
            * caf::detail::tl_size<element_types>::value>())),
   std::variant>;
+
+static_assert(
+  std::is_same_v<
+    runtime_physical_operator,
+    std::variant<
+      physical_operator<void, void>, physical_operator<void, bytes>,
+      physical_operator<void, events>, physical_operator<bytes, void>,
+      physical_operator<bytes, bytes>, physical_operator<bytes, events>,
+      physical_operator<events, void>, physical_operator<events, bytes>,
+      physical_operator<events, events>>>);
 
 class runtime_logical_operator {
 public:
@@ -94,7 +106,7 @@ class logical_operator : public runtime_logical_operator {
     auto op = instantiate(input_schema);
     if (not op)
       return std::move(op.error());
-    return std::move(*op);
+    return runtime_physical_operator{std::move(*op)};
   }
 };
 
