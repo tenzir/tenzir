@@ -260,7 +260,8 @@ struct query_fixture : public fixture {
   auto send_new_query(std::string query) {
     auto response = std::make_shared<test_response>();
     auto request = vast::http_request{
-      .params = {{"query", query}, {"ttl", vast::duration::zero()}},
+      .params
+      = {{"query", query}, {"flatten", true}, {"ttl", vast::duration::zero()}},
       .response = response};
     self->send(handler, vast::atom::http_request_v,
                new_query_endpoint.endpoint_id, std::move(request));
