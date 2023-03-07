@@ -12,6 +12,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/expression.hpp"
+#include "vast/operator_control_plane.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
@@ -26,9 +27,10 @@ namespace {
 
 struct command final : public logical_operator<void, void> {
   caf::expected<physical_operator<void, void>>
-  instantiate(const type& input_schema) noexcept override {
+  instantiate(const type& input_schema,
+              operator_control_plane* ctrl) noexcept override {
     REQUIRE(!input_schema);
-    return []() -> generator<std::monostate> {
+    return [=]() -> generator<std::monostate> {
       MESSAGE("hello, world!");
       co_return;
     };
@@ -45,7 +47,8 @@ struct source final : public logical_operator<void, events> {
   }
 
   caf::expected<physical_operator<void, events>>
-  instantiate(const type& input_schema) noexcept override {
+  instantiate(const type& input_schema,
+              operator_control_plane*) noexcept override {
     REQUIRE(!input_schema);
     return [*this]() -> generator<table_slice> {
       auto guard = caf::detail::scope_guard{[] {
@@ -72,7 +75,8 @@ struct sink final : public logical_operator<events, void> {
   }
 
   caf::expected<physical_operator<events, void>>
-  instantiate(const type& input_schema) noexcept override {
+  instantiate(const type& input_schema,
+              operator_control_plane*) noexcept override {
     return [=](generator<table_slice> input) -> generator<std::monostate> {
       auto guard = caf::detail::scope_guard{[] {
         MESSAGE("sink destroy");
@@ -102,7 +106,8 @@ struct where final : public logical_operator<events, events> {
   }
 
   caf::expected<physical_operator<events, events>>
-  instantiate(const type& input_schema) noexcept override {
+  instantiate(const type& input_schema,
+              operator_control_plane*ctrl) noexcept override {
     auto expr = tailor(expr_, input_schema);
     if (!expr) {
       return caf::make_error(ec::invalid_argument,
@@ -136,6 +141,51 @@ struct where final : public logical_operator<events, events> {
   expression expr_;
 };
 
+class execute_ctrl final : public operator_control_plane {
+public:
+  explicit execute_ctrl(caf::event_based_actor* self) : self_{self} {
+  }
+
+  [[nodiscard]] auto error() const noexcept
+    -> const caf::error& {
+    return error_;
+  }
+
+private:
+  [[nodiscard]] auto self() noexcept -> caf::event_based_actor* override {
+    return self_;
+  }
+
+  auto abort(caf::error error) noexcept -> void override {
+    error_ = std::move(error);
+  }
+
+  auto warn(caf::error ) noexcept -> void override {
+    FAIL("not implemented");
+  }
+
+  auto emit(table_slice ) noexcept -> void override {
+    FAIL("not implemented");
+  }
+
+  auto demand(type = {}) const noexcept -> size_t override {
+    FAIL("not implemented");
+  }
+
+  /// Access available schemas.
+  auto schemas() const noexcept -> const std::vector<type>& override {
+    FAIL("not implemented");
+  }
+
+  /// Access available concepts.
+  auto concepts() const noexcept -> const concepts_map& override {
+    FAIL("not implemented");
+  }
+
+  caf::error error_ = {};
+  caf::event_based_actor* self_ = {};
+};
+
 // All generators must ...
 // - co_return if the input is exhausted
 // - co_yield empty if the input yields empty (because we have to stall?)
@@ -162,13 +212,14 @@ auto make_batch_buffer(std::shared_ptr<bool> stop) {
   return std::tuple{std::move(queue), std::move(gen)};
 }
 
-auto make_run(std::vector<logical_operator_ptr> ops) {
+auto make_run(std::vector<logical_operator_ptr> ops,
+              operator_control_plane* ctrl) {
   // We can handle the first operator in a special way, as its input element
   // type is always void.
   auto current_op = ops.begin();
   auto run
-    = [](logical_operator_ptr op) mutable noexcept -> generator<runtime_batch> {
-    auto gen = unbox(op->runtime_instantiate({}));
+    = [ctrl](logical_operator_ptr op) mutable noexcept -> generator<runtime_batch> {
+    auto gen = unbox(op->runtime_instantiate({}, ctrl));
     auto f = [op = std::move(op)]<element_type Input, element_type Output>(
                physical_operator<Input, Output> gen) mutable noexcept
       -> generator<runtime_batch> {
@@ -187,9 +238,9 @@ auto make_run(std::vector<logical_operator_ptr> ops) {
   // Now we repeat the process for the following operators, knowing that their
   // input element type is never void.
   for (; current_op != ops.end(); ++current_op) {
-    run =
-      [](generator<runtime_batch> prev_run,
-         logical_operator_ptr op) mutable noexcept -> generator<runtime_batch> {
+    run = [ctrl](generator<runtime_batch> prev_run,
+                 logical_operator_ptr op) mutable noexcept
+      -> generator<runtime_batch> {
       struct gen_state {
         generator<runtime_batch> gen;
         generator<runtime_batch>::iterator current;
@@ -198,7 +249,7 @@ auto make_run(std::vector<logical_operator_ptr> ops) {
       // For every input element, we take the following steps:
       auto stop = std::make_shared<bool>(false);
       auto gens = std::unordered_map<type, gen_state>{};
-      auto f = [&gens, &stop, op = op.get()]<class Batch>(
+      auto f = [&gens, &stop, op = op.get(), ctrl]<class Batch>(
                  Batch input) mutable -> generator<runtime_batch> {
         if (batch_traits<Batch>::size(input) == 0) {
           co_return;
@@ -231,8 +282,8 @@ auto make_run(std::vector<logical_operator_ptr> ops) {
           };
           gen_it = gens.emplace_hint(gen_it, input_schema, gen_state{});
           auto& state = gen_it->second;
-          state.gen = std::visit(std::move(f),
-                                 unbox(op->runtime_instantiate(input_schema)));
+          state.gen = std::visit(
+            std::move(f), unbox(op->runtime_instantiate(input_schema, ctrl)));
           state.push = [queue = std::move(buffer_queue)](runtime_batch batch) {
             queue->push(std::get<Batch>(std::move(batch)));
           };
@@ -301,12 +352,17 @@ auto execute(pipeline2 pipeline) noexcept -> caf::expected<void> {
                                        element_type_traits<void>::name,
                                        ops.back()->output_element_type().name));
   }
-  for (auto&& elem : make_run(std::move(ops))) {
-    // TODO: We should check whether there's been an error every time we arrive
-    // here.
-    // FIXME: this can just be an assertion; nothing to do here
-    MESSAGE("got output with size " << elem.size());
+  auto ctrl = execute_ctrl{nullptr};
+  for (auto&& elem : make_run(std::move(ops), &ctrl)) {
+    if (ctrl.error()) {
+      MESSAGE("got error: " << ctrl.error());
+      return ctrl.error();
+    }
     REQUIRE(std::holds_alternative<std::monostate>(elem));
+  }
+  if (ctrl.error()) {
+    MESSAGE("got error: " << ctrl.error());
+    return ctrl.error();
   }
   return {};
 }

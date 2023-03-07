@@ -26,7 +26,7 @@ struct fixture {
     [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor* {
       FAIL("no mock implementation available");
     }
-    virtual auto stop([[maybe_unused]] caf::error error = {}) noexcept -> void {
+    virtual auto abort([[maybe_unused]] caf::error error) noexcept -> void {
       FAIL("no mock implementation available");
     }
 

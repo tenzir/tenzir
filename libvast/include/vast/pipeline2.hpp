@@ -56,7 +56,8 @@ public:
   }
 
   [[nodiscard]] auto
-  runtime_instantiate([[maybe_unused]] const type& input_schema) noexcept
+  runtime_instantiate([[maybe_unused]] const type& input_schema,
+                      [[maybe_unused]] operator_control_plane* ctrl) noexcept
     -> caf::expected<runtime_physical_operator> final {
     return caf::make_error(ec::logic_error, "instantiated pipeline");
   }

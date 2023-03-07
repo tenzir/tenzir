@@ -27,7 +27,8 @@ struct operator_control_plane {
   [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor* = 0;
 
   /// Stop the execution of the operator.
-  virtual auto stop(caf::error error = {}) noexcept -> void = 0;
+  /// @pre error != caf::none
+  virtual auto abort(caf::error error) noexcept -> void = 0;
 
   /// Emit a warning that gets transported via the executor's side-channel.
   /// An executor may treat warnings as errors. Warnings additionally get
