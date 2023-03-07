@@ -12,8 +12,8 @@
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/error.hpp>
-#include <vast/logger.hpp>
 #include <vast/legacy_pipeline.hpp>
+#include <vast/logger.hpp>
 #include <vast/plugin.hpp>
 #include <vast/type.hpp>
 

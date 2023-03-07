@@ -16,6 +16,7 @@
 #include "vast/detail/pp.hpp"
 #include "vast/detail/weak_handle.hpp"
 #include "vast/http_api.hpp"
+#include "vast/logical_operator.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
@@ -273,6 +274,13 @@ public:
   [[nodiscard]] virtual std::pair<
     std::string_view, caf::expected<std::unique_ptr<pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const = 0;
+};
+
+class logical_operator_plugin : public virtual plugin {
+public:
+  [[nodiscard]] virtual std::pair<std::string_view,
+                                  caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const = 0;
 };
 
 // -- aggregation function plugin ---------------------------------------------

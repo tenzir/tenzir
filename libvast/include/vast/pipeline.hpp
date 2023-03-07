@@ -71,6 +71,8 @@ public:
     return ops_;
   }
 
+  [[nodiscard]] auto execute() const noexcept -> caf::expected<void>;
+
 private:
   explicit pipeline(std::vector<logical_operator_ptr> ops)
     : ops_(std::move(ops)) {

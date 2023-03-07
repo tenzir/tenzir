@@ -3,313 +3,249 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/legacy_pipeline.hpp"
+#include "vast/pipeline.hpp"
 
-#include "vast/concept/parseable/string/char_class.hpp"
-#include "vast/logger.hpp"
-#include "vast/plugin.hpp"
-#include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_encoding.hpp"
-
-#include <arrow/type.h>
-#include <caf/expected.hpp>
-#include <caf/none.hpp>
-#include <caf/type_id.hpp>
-
-#include <algorithm>
+#include <queue>
+#include <unordered_map>
 
 namespace vast {
 
-caf::expected<legacy_pipeline> legacy_pipeline::parse(std::string name, std::string_view repr,
-                                        std::vector<std::string> schema_names) {
-  auto result = legacy_pipeline{std::move(name), std::move(schema_names)};
-  // plugin name parser
-  using parsers::alnum, parsers::chr, parsers::space;
-  const auto optional_ws = ignore(*space);
-  const auto plugin_name_char_parser = alnum | chr{'-'};
-  const auto plugin_name_parser = optional_ws >> +plugin_name_char_parser;
-  while (!repr.empty()) {
-    // 1. parse a single word as operator plugin name
-    const auto* f = repr.begin();
-    const auto* const l = repr.end();
-    auto plugin_name = std::string{};
-    if (!plugin_name_parser(f, l, plugin_name)) {
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("failed to parse pipeline '{}': "
-                                         "operator name is invalid",
-                                         repr));
-    }
-    // 2. find plugin using operator name
-    const auto* plugin = plugins::find<pipeline_operator_plugin>(plugin_name);
-    if (!plugin) {
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("failed to parse pipeline '{}': "
-                                         "operator '{}' does not exist",
-                                         repr, plugin_name));
-    }
-    // 3. ask the plugin to parse itself from the remainder
-    auto [remaining_repr, op]
-      = plugin->make_pipeline_operator(std::string_view{f, l});
-    if (!op)
-      return caf::make_error(ec::unspecified, fmt::format("failed to parse "
-                                                          "pipeline '{}': {}",
-                                                          repr, op.error()));
-    result.add_operator(std::move(*op));
-    repr = remaining_repr;
+namespace {
+
+class execute_ctrl final : public operator_control_plane {
+public:
+  explicit execute_ctrl() {
   }
-  return result;
-}
 
-legacy_pipeline::legacy_pipeline(std::string name, std::vector<std::string>&& schema_names)
-  : name_(std::move(name)), schema_names_(std::move(schema_names)) {
-}
+  [[nodiscard]] auto error() const noexcept -> const caf::error& {
+    return error_;
+  }
 
-void legacy_pipeline::add_operator(std::unique_ptr<pipeline_operator> op) {
-  operators_.emplace_back(std::move(op));
-}
+private:
+  [[nodiscard]] auto self() noexcept -> caf::event_based_actor* override {
+    die("not implemented");
+  }
 
-const std::string& legacy_pipeline::name() const {
-  return name_;
-}
+  auto abort(caf::error error) noexcept -> void override {
+    error_ = std::move(error);
+  }
 
-const std::vector<std::string>& legacy_pipeline::schema_names() const {
-  return schema_names_;
-}
+  auto warn(caf::error) noexcept -> void override {
+    die("not implemented");
+  }
 
-bool legacy_pipeline::is_blocking() const {
-  return std::any_of(operators_.begin(), operators_.end(), [](const auto& op) {
-    return op->is_blocking();
-  });
-}
+  auto emit(table_slice) noexcept -> void override {
+    die("not implemented");
+  }
 
-bool legacy_pipeline::applies_to(std::string_view event_name) const {
-  return schema_names_.empty()
-         || std::find(schema_names_.begin(), schema_names_.end(), event_name)
-              != schema_names_.end();
-}
+  auto demand(type = {}) const noexcept -> size_t override {
+    die("not implemented");
+  }
 
-caf::error legacy_pipeline::add(table_slice&& x) {
-  VAST_DEBUG("transform {} adds a slice", name_);
-  import_timestamps_.push_back(x.import_time());
-  return add_slice(std::move(x));
-}
+  /// Access available schemas.
+  auto schemas() const noexcept -> const std::vector<type>& override {
+    die("not implemented");
+  }
 
-caf::expected<std::vector<table_slice>> legacy_pipeline::finish() {
-  VAST_DEBUG("transform {} retrieves results from {} steps", name_,
-             operators_.size());
-  auto guard = caf::detail::make_scope_guard([this]() {
-    this->to_transform_.clear();
-    this->import_timestamps_.clear();
-  });
-  std::vector<table_slice> result{};
-  auto finished = finish_batch();
-  if (!finished)
-    return std::move(finished.error());
-  if (finished->empty())
-    return result;
-  result.reserve(finished->size());
-  // Wrap the batches into table slices and assign import timestamps.
-  // In case the numbers of input and output batches differ we use the
-  // maximum of the input timestamps, otherwise we assume the input and output
-  // streams are aligned.
-  if (finished->size() != import_timestamps_.size()) {
-    VAST_ASSERT_CHEAP(!import_timestamps_.empty());
-    auto max_import_timestamp
-      = *std::max_element(import_timestamps_.begin(), import_timestamps_.end());
-    for (auto& slice : *finished) {
-      if (slice.rows() == 0)
+  /// Access available concepts.
+  auto concepts() const noexcept -> const concepts_map& override {
+    die("not implemented");
+  }
+
+  caf::error error_ = {};
+};
+
+template <class Batch>
+auto make_batch_buffer(std::shared_ptr<bool> stop) {
+  auto queue = std::make_shared<std::queue<Batch>>();
+  auto gen = [](std::shared_ptr<std::queue<Batch>> queue,
+                std::shared_ptr<bool> stop) -> generator<Batch> {
+    // This generator never co_returns...
+    while (!*stop) {
+      if (queue->empty()) {
+        // MESSAGE("yield empty");
+        co_yield Batch{};
         continue;
-      if (slice.import_time() == time{})
-        slice.import_time(max_import_timestamp);
-      result.push_back(std::move(slice));
+      }
+      auto element = std::move(queue->front());
+      VAST_ASSERT(batch_traits<Batch>::size(element) != 0);
+      queue->pop();
+      // MESSAGE("yield element");
+      co_yield std::move(element);
     }
-  } else {
-    for (size_t i = 0; auto& slice : *finished) {
-      if (slice.rows() == 0)
-        continue;
-      if (slice.import_time() == time{})
-        slice.import_time(import_timestamps_[i++]);
-      result.push_back(std::move(slice));
+  }(queue, stop);
+  return std::tuple{std::move(queue), std::move(gen)};
+}
+
+auto make_run(std::span<const logical_operator_ptr> ops,
+              operator_control_plane* ctrl) {
+  // We can handle the first operator in a special way, as its input element
+  // type is always void.
+  auto current_op = ops.begin();
+  auto run = [](const runtime_logical_operator* op,
+                operator_control_plane* ctrl) mutable noexcept
+    -> generator<runtime_batch> {
+    auto f = []<element_type Input, element_type Output>(
+               physical_operator<Input, Output> gen) mutable noexcept
+      -> generator<runtime_batch> {
+      if constexpr (not std::is_void_v<Input>) {
+        die("unreachable");
+      } else {
+        // gen lives throughout the iteration
+        for (auto&& output : gen()) {
+          // MESSAGE("yield output");
+          co_yield std::move(output);
+        }
+      }
+    };
+    auto gen = op->runtime_instantiate({}, ctrl);
+    if (not gen) {
+      ctrl->abort(gen.error());
+      return {};
     }
+    return std::visit(std::move(f), std::move(*gen));
+  }((current_op++)->get(), ctrl);
+  // Now we repeat the process for the following operators, knowing that their
+  // input element type is never void.
+  for (; current_op != ops.end(); ++current_op) {
+    run = [](generator<runtime_batch> prev_run,
+             const runtime_logical_operator* op,
+             operator_control_plane* ctrl) mutable noexcept
+      -> generator<runtime_batch> {
+      struct gen_state {
+        generator<runtime_batch> gen;
+        generator<runtime_batch>::iterator current;
+        std::function<void(runtime_batch)> push;
+      };
+      // For every input element, we take the following steps:
+      auto stop = std::make_shared<bool>(false);
+      auto gens = std::unordered_map<type, gen_state>{};
+      auto f = [&gens, &stop, op, ctrl]<class Batch>(
+                 Batch input) mutable -> generator<runtime_batch> {
+        if (batch_traits<Batch>::size(input) == 0) {
+          co_return;
+        }
+        // 1. Find the input schema.
+        auto input_schema = batch_traits<Batch>::schema(input);
+        // 2. Try to find an already existing generator, or create a new one
+        // if it doesn't exist yet for the given input schema.
+        auto gen_it = gens.find(input_schema);
+        if (gen_it == gens.end()) {
+          auto [buffer_queue, buffer] = make_batch_buffer<Batch>(stop);
+          auto f
+            = [buffer
+               = std::move(buffer)]<element_type Input, element_type Output>(
+                physical_operator<Input, Output> gen) mutable noexcept
+            -> generator<runtime_batch> {
+            if constexpr (std::is_void_v<Input>
+                          || !std::is_same_v<element_type_to_batch_t<Input>,
+                                             Batch>) {
+              die("unreachable"); // TODO
+            } else {
+              // gen lives throughout the iteration
+              for (auto&& output : gen(std::move(buffer))) {
+                // MESSAGE("yield 123");
+                co_yield std::move(output);
+              }
+            }
+          };
+
+          auto gen = op->runtime_instantiate(input_schema, ctrl);
+          if (not gen) {
+            ctrl->abort(std::move(gen.error()));
+            co_return;
+          }
+
+          gen_it = gens.emplace_hint(gen_it, input_schema, gen_state{});
+          auto& state = gen_it->second;
+          state.gen = std::visit(std::move(f), std::move(*gen));
+          state.push = [queue = std::move(buffer_queue)](runtime_batch batch) {
+            queue->push(std::get<Batch>(std::move(batch)));
+          };
+          // 3. Push the input element into the buffer.
+          state.push(std::move(input));
+          state.current = state.gen.begin();
+
+        } else {
+          // 3. Push the input element into the buffer.
+          gen_it->second.push(std::move(input));
+        }
+        // 4. Pull from the buffer
+        auto& state = gen_it->second;
+        while (true) {
+          // TODO: never happens
+          if (state.current == state.gen.end()) {
+            // MESSAGE("at end of generator");
+            co_return;
+          }
+          auto output = std::move(*state.current);
+          ++state.current;
+          // MESSAGE("yielded in generator");
+          co_yield std::move(output);
+        }
+      };
+      for (auto&& input : prev_run) {
+        for (auto&& output : std::visit(f, std::move(input))) {
+          auto const empty = output.size() == 0;
+          // MESSAGE("will yield in outer generator");
+          co_yield std::move(output);
+          if (empty) {
+            // MESSAGE("empty break");
+            break;
+          }
+        }
+      }
+      *stop = true;
+      for (auto& gen : gens) {
+        for (; gen.second.current != gen.second.gen.end();
+             ++gen.second.current) {
+          auto output = std::move(*gen.second.current);
+          if (output.size() != 0) {
+            co_yield std::move(output);
+          }
+        }
+      }
+    }(std::move(run), current_op->get(), ctrl);
   }
-  return result;
+  return run;
 }
 
-caf::error legacy_pipeline::add_slice(table_slice slice) {
-  VAST_TRACE("add arrow data to transform {}", name_);
-  to_transform_.emplace_back(std::move(slice));
-  return caf::none;
-}
+} // namespace
 
-caf::error
-legacy_pipeline::process_queue(pipeline_operator& op, std::vector<table_slice>& result,
-                        bool check_schema) {
-  caf::error failed{};
-  const auto size = to_transform_.size();
-  for (size_t i = 0; i < size; ++i) {
-    auto slice = std::move(to_transform_.front());
-    to_transform_.pop_front();
-    if (check_schema && !applies_to(slice.schema().name())) {
-      // The transform does not change slices of unconfigured event types.
-      VAST_TRACE("{} transform skips a '{}' schema slice with {} event(s)",
-                 this->name(), std::string{slice.schema().name()},
-                 slice.rows());
-      result.push_back(std::move(slice));
-      continue;
+auto pipeline::execute() const noexcept -> caf::expected<void> {
+  if (ops_.empty())
+    return {}; // no-op
+  if (ops_.front()->input_element_type().id != element_type_id<void>) {
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("unable to execute pipeline: expected "
+                  "input type {}, got {}",
+                  element_type_traits<void>::name,
+                  ops_.front()->input_element_type().name));
+  }
+  if (ops_.back()->output_element_type().id != element_type_id<void>) {
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("unable to execute pipeline: expected "
+                  "output type {}, got {}",
+                  element_type_traits<void>::name,
+                  ops_.back()->output_element_type().name));
+  }
+  auto ctrl = execute_ctrl{};
+  for (auto&& elem : make_run(ops_, &ctrl)) {
+    if (ctrl.error()) {
+      VAST_INFO("got error: {}", ctrl.error());
+      return ctrl.error();
     }
-    if (auto err = op.add(std::move(slice))) {
-      failed = caf::make_error(
-        static_cast<vast::ec>(err.code()),
-        fmt::format("transform aborts because of an error: {}", err));
-      to_transform_.clear();
-      break;
-    }
+    VAST_ASSERT(std::holds_alternative<std::monostate>(elem));
   }
-  // Finish frees up resource inside the plugin.
-  auto finished = op.finish();
-  if (!finished && !failed)
-    failed = std::move(finished.error());
-  if (failed) {
-    to_transform_.clear();
-    return failed;
+  if (ctrl.error()) {
+    VAST_INFO("got error: {}", ctrl.error());
+    return ctrl.error();
   }
-  for (const auto& b : *finished)
-    if (b.rows() > 0)
-      to_transform_.push_back(b);
-  return caf::none;
+  return {};
 }
-
-caf::expected<std::vector<table_slice>> legacy_pipeline::finish_batch() {
-  VAST_DEBUG("applying {} pipeline {}", operators_.size(), name_);
-  bool first_run = true;
-  std::vector<table_slice> result{};
-  for (const auto& op : operators_) {
-    auto failed = process_queue(*op, result, first_run);
-    first_run = false;
-    if (failed) {
-      to_transform_.clear();
-      return failed;
-    }
-  }
-  while (!to_transform_.empty()) {
-    result.emplace_back(std::move(to_transform_.front()));
-    to_transform_.pop_front();
-  }
-  to_transform_.clear();
-  return result;
-}
-
-pipeline_executor::pipeline_executor(std::vector<legacy_pipeline>&& pipelines)
-  : pipelines_(std::move(pipelines)) {
-  for (size_t i = 0; i < pipelines_.size(); ++i) {
-    auto const& schema_names = pipelines_[i].schema_names();
-    if (!schema_names.empty())
-      for (const auto& type : schema_names)
-        schema_mapping_[type].push_back(i);
-    else
-      general_pipelines_.push_back(i);
-  }
-}
-
-/// Apply relevant pipelines to the table slice.
-caf::error pipeline_executor::add(table_slice&& x) {
-  VAST_TRACE("pipeline engine adds a slice");
-  auto schema = x.schema();
-  to_transform_[schema].emplace_back(std::move(x));
-  return caf::none;
-}
-
-caf::error pipeline_executor::process_queue(legacy_pipeline& pipeline,
-                                            std::deque<table_slice>& queue) {
-  caf::error failed{};
-  const auto size = queue.size();
-  for (size_t i = 0; i < size; ++i) {
-    auto slice = std::move(queue.front());
-    queue.pop_front();
-    if (auto err = pipeline.add_slice(std::move(slice))) {
-      failed = err;
-      while (!queue.empty())
-        queue.pop_front();
-      break;
-    }
-  }
-  // Finish frees up resource inside the plugin.
-  auto finished = pipeline.finish_batch();
-  if (!finished && !failed)
-    failed = std::move(finished.error());
-  if (failed)
-    return failed;
-  for (const auto& b : *finished)
-    queue.push_back(b);
-  return caf::none;
-}
-
-/// Apply relevant pipelines to the table slice.
-caf::expected<std::vector<table_slice>> pipeline_executor::finish() {
-  VAST_TRACE("pipeline engine retrieves results");
-  auto to_transform = std::exchange(to_transform_, {});
-  std::unordered_map<vast::type, std::deque<table_slice>> batches{};
-  std::vector<table_slice> result{};
-  for (auto& [schema, queue] : to_transform) {
-    // TODO: Consider using a tsl robin map instead for transparent key lookup.
-    const auto& matching = schema_mapping_.find(std::string{schema.name()});
-    if (matching == schema_mapping_.end() && general_pipelines_.empty()) {
-      if (!schema_mapping_.empty())
-        VAST_TRACE("transform_engine cannot find a transform for schema {}",
-                   schema);
-      for (auto& s : queue)
-        result.emplace_back(std::move(s));
-      queue.clear();
-      continue;
-    }
-    auto& bq = batches[schema];
-    for (auto& slice : queue)
-      bq.push_back(std::move(slice));
-    queue.clear();
-    auto indices = matching == schema_mapping_.end() ? std::vector<size_t>{}
-                                                     : matching->second;
-    // If we have pipelines that always apply, make some effort
-    // to apply them in the same order as they appear in the
-    // configuration. While we do not officially guarantee this
-    // currently, some kind of rule is required so the user is
-    // able to reason about the behavior.
-    if (!general_pipelines_.empty()) {
-      std::vector<size_t> all_indices;
-      all_indices.reserve(indices.size() + general_pipelines_.size());
-      std::merge(indices.begin(), indices.end(), general_pipelines_.begin(),
-                 general_pipelines_.end(), std::back_inserter(all_indices));
-      indices = std::move(all_indices);
-    }
-    VAST_DEBUG("pipeline engine applies {} pipelines on received table "
-               "slices with schema {}",
-               indices.size(), schema);
-    for (auto idx : indices) {
-      auto& t = pipelines_.at(idx);
-      auto failed = process_queue(t, bq);
-      if (failed)
-        return failed;
-    }
-  }
-  for (auto& [schema, queue] : batches) {
-    for (auto& slice : queue)
-      result.push_back(std::move(slice));
-    queue.clear();
-  }
-  return result;
-}
-
-const std::vector<legacy_pipeline>& pipeline_executor::pipelines() const {
-  return pipelines_;
-}
-
-bool pipeline_executor::is_blocking() const {
-  return std::any_of(pipelines_.begin(), pipelines_.end(),
-                     [](const auto& pipeline) {
-                       return pipeline.is_blocking();
-                     });
-}
-
 } // namespace vast
