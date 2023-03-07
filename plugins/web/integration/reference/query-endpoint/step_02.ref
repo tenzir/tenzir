@@ -1,0 +1,602 @@
+[
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:00:21.486539",
+      "uid": "Pii6cUUq1v4",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 68,
+        "resp_h": "192.168.1.1",
+        "resp_p": 67
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": "163.82ms",
+      "orig_bytes": 301,
+      "resp_bytes": 300,
+      "conn_state": "SF",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "Dd",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 329,
+      "resp_pkts": 1,
+      "resp_ip_bytes": 328,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:08:13.816224",
+      "uid": "9VdICMMnxQ7",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 137,
+        "resp_h": "192.168.1.255",
+        "resp_p": 137
+      },
+      "proto": "udp",
+      "service": "dns",
+      "duration": "3.75s",
+      "orig_bytes": 350,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 7,
+      "orig_ip_bytes": 546,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:08:13.825211",
+      "uid": "Ol4qkvXOksc",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 138,
+        "resp_h": "192.168.1.255",
+        "resp_p": 138
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": "2.25s",
+      "orig_bytes": 348,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 2,
+      "orig_ip_bytes": 404,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:12:19.613070",
+      "uid": "tP3DM6npTdj",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 138,
+        "resp_h": "192.168.1.255",
+        "resp_p": 138
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": null,
+      "orig_bytes": null,
+      "resp_bytes": null,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 229,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:15:43.457078",
+      "uid": "xvWLhxgUmj5",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 1170,
+        "resp_h": "192.168.1.1",
+        "resp_p": 53
+      },
+      "proto": "udp",
+      "service": "dns",
+      "duration": "68.51ms",
+      "orig_bytes": 36,
+      "resp_bytes": 215,
+      "conn_state": "SF",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "Dd",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 64,
+      "resp_pkts": 1,
+      "resp_ip_bytes": 243,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:20:18.272516",
+      "uid": "Su3RwTCaHL3",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 137,
+        "resp_h": "192.168.1.255",
+        "resp_p": 137
+      },
+      "proto": "udp",
+      "service": "dns",
+      "duration": "3.75s",
+      "orig_bytes": 350,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 7,
+      "orig_ip_bytes": 546,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:20:56.089023",
+      "uid": "4x5ezf34Rkh",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 1173,
+        "resp_h": "192.168.1.1",
+        "resp_p": 53
+      },
+      "proto": "udp",
+      "service": "dns",
+      "duration": "267.0us",
+      "orig_bytes": 33,
+      "resp_bytes": 497,
+      "conn_state": "SF",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "Dd",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 61,
+      "resp_pkts": 1,
+      "resp_ip_bytes": 525,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:20:18.281001",
+      "uid": "mymcd8Veike",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 138,
+        "resp_h": "192.168.1.255",
+        "resp_p": 138
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": "2.25s",
+      "orig_bytes": 348,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 2,
+      "orig_ip_bytes": 404,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:24:17.288676",
+      "uid": "AbCe0UeHRD6",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 138,
+        "resp_h": "192.168.1.255",
+        "resp_p": 138
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": null,
+      "orig_bytes": null,
+      "resp_bytes": null,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 229,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:30:03.551467",
+      "uid": "3VNZpT9V3G8",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 68,
+        "resp_h": "192.168.1.1",
+        "resp_p": 67
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": "11.81ms",
+      "orig_bytes": 301,
+      "resp_bytes": 300,
+      "conn_state": "SF",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "Dd",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 329,
+      "resp_pkts": 1,
+      "resp_ip_bytes": 328,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:32:22.729062",
+      "uid": "jH5gXia1V2b",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 137,
+        "resp_h": "192.168.1.255",
+        "resp_p": 137
+      },
+      "proto": "udp",
+      "service": "dns",
+      "duration": "3.75s",
+      "orig_bytes": 350,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 7,
+      "orig_ip_bytes": 546,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:32:22.737803",
+      "uid": "KEbhCATVhq6",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 138,
+        "resp_h": "192.168.1.255",
+        "resp_p": 138
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": "2.25s",
+      "orig_bytes": 348,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 2,
+      "orig_ip_bytes": 404,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:42:46.050096",
+      "uid": "IxBAxd8IHQd",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 138,
+        "resp_h": "192.168.1.255",
+        "resp_p": 138
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": null,
+      "orig_bytes": null,
+      "resp_bytes": null,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 229,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:44:27.185568",
+      "uid": "HzzKOZy8Zl",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 137,
+        "resp_h": "192.168.1.255",
+        "resp_p": 137
+      },
+      "proto": "udp",
+      "service": "dns",
+      "duration": "3.75s",
+      "orig_bytes": 350,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 7,
+      "orig_ip_bytes": 546,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:44:27.194312",
+      "uid": "Z0o7i3H04Mb",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 138,
+        "resp_h": "192.168.1.255",
+        "resp_p": 138
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": "2.25s",
+      "orig_bytes": 348,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 2,
+      "orig_ip_bytes": 404,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:49:12.488883",
+      "uid": "91kNv7QfCzi",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 1180,
+        "resp_h": "68.216.79.113",
+        "resp_p": 37
+      },
+      "proto": "tcp",
+      "service": null,
+      "duration": "2.85s",
+      "orig_bytes": 0,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "S",
+      "orig_pkts": 2,
+      "orig_ip_bytes": 96,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:49:12.297747",
+      "uid": "LOurbPuyqk7",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 59040,
+        "resp_h": "192.168.1.1",
+        "resp_p": 53
+      },
+      "proto": "udp",
+      "service": "dns",
+      "duration": "189.14ms",
+      "orig_bytes": 44,
+      "resp_bytes": 178,
+      "conn_state": "SF",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "Dd",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 72,
+      "resp_pkts": 1,
+      "resp_ip_bytes": 206,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:49:21.354320",
+      "uid": "xDClpF8rSJf",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 1180,
+        "resp_h": "68.216.79.113",
+        "resp_p": 37
+      },
+      "proto": "tcp",
+      "service": null,
+      "duration": null,
+      "orig_bytes": null,
+      "resp_bytes": null,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "S",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 48,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:54:48.491105",
+      "uid": "EEdJBMA9rCk",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 138,
+        "resp_h": "192.168.1.255",
+        "resp_p": 138
+      },
+      "proto": "udp",
+      "service": null,
+      "duration": null,
+      "orig_bytes": null,
+      "resp_bytes": null,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 229,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  },
+  {
+    "schema-ref": "77b29dac1e7618a4",
+    "data": {
+      "ts": "2009-11-18T08:56:31.642070",
+      "uid": "FVtn6tTYXr4",
+      "id": {
+        "orig_h": "192.168.1.102",
+        "orig_p": 137,
+        "resp_h": "192.168.1.255",
+        "resp_p": 137
+      },
+      "proto": "udp",
+      "service": "dns",
+      "duration": "3.75s",
+      "orig_bytes": 350,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "local_resp": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 7,
+      "orig_ip_bytes": 546,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": [],
+      "community_id": null,
+      "_write_ts": null
+    }
+  }
+]
