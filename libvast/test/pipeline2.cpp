@@ -218,13 +218,10 @@ auto execute(pipeline2 pipeline) noexcept -> caf::expected<void> {
       auto f = [&gens, &stop, op = op.get()]<class Batch>(
                  Batch input) mutable -> generator<runtime_batch> {
         if (batch_traits<Batch>::size(input) == 0) {
-          co_yield {};
           co_return;
         }
-
         // 1. Find the input schema.
         auto input_schema = batch_traits<Batch>::schema(input);
-
         // 2. Try to find an already existing generator, or create a new one
         // if it doesn't exist yet for the given input schema.
         auto gen_it = gens.find(input_schema);
