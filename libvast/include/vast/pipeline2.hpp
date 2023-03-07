@@ -15,8 +15,6 @@ class pipeline2 final : public runtime_logical_operator {
 public:
   static auto make(std::vector<logical_operator_ptr> ops)
     -> caf::expected<pipeline2> {
-    if (ops.empty())
-      return caf::make_error(ec::logic_error, "encountered empty pipeline");
     auto mismatch
       = std::adjacent_find(ops.begin(), ops.end(), [](auto& a, auto& b) {
           return a->output_element_type() != b->input_element_type();
@@ -44,11 +42,15 @@ public:
 
   [[nodiscard]] auto input_element_type() const noexcept
     -> runtime_element_type final {
+    if (ops_.empty())
+      return element_type_traits<void>{};
     return ops_.front()->input_element_type();
   }
 
   [[nodiscard]] auto output_element_type() const noexcept
     -> runtime_element_type final {
+    if (ops_.empty())
+      return element_type_traits<void>{};
     return ops_.back()->output_element_type();
   }
 

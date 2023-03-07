@@ -165,7 +165,7 @@ auto make_batch_buffer(std::shared_ptr<bool> stop) {
 auto execute(pipeline2 pipeline) noexcept -> caf::expected<void> {
   auto ops = std::move(pipeline).unwrap();
   if (ops.empty())
-    return {}; // no-op. TODO: not reachable
+    return {}; // no-op
   if (ops.front()->input_element_type().id != element_type_id<void>) {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("unable to execute pipeline: expected "
