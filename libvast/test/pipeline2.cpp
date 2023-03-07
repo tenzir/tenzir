@@ -12,6 +12,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/expression.hpp"
+#include "vast/operator.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
@@ -107,7 +108,7 @@ struct where final : public logical_operator<events, events> {
 
   caf::expected<physical_operator<events, events>>
   instantiate(const type& input_schema,
-              operator_control_plane*ctrl) noexcept override {
+              operator_control_plane* ctrl) noexcept override {
     auto expr = tailor(expr_, input_schema);
     if (!expr) {
       return caf::make_error(ec::invalid_argument,
@@ -116,7 +117,7 @@ struct where final : public logical_operator<events, events> {
                                          expr.error()));
     }
     return [expr = std::move(*expr)](
-             generator<table_slice> input) -> generator<table_slice> {
+             generator<table_slice> input) mutable -> generator<table_slice> {
       auto guard = caf::detail::scope_guard{[] {
         MESSAGE("where destroy");
       }};
@@ -146,8 +147,7 @@ public:
   explicit execute_ctrl(caf::event_based_actor* self) : self_{self} {
   }
 
-  [[nodiscard]] auto error() const noexcept
-    -> const caf::error& {
+  [[nodiscard]] auto error() const noexcept -> const caf::error& {
     return error_;
   }
 
@@ -160,11 +160,11 @@ private:
     error_ = std::move(error);
   }
 
-  auto warn(caf::error ) noexcept -> void override {
+  auto warn(caf::error) noexcept -> void override {
     FAIL("not implemented");
   }
 
-  auto emit(table_slice ) noexcept -> void override {
+  auto emit(table_slice) noexcept -> void override {
     FAIL("not implemented");
   }
 
@@ -218,9 +218,9 @@ auto make_run(std::vector<logical_operator_ptr> ops,
   // type is always void.
   auto current_op = ops.begin();
   auto run
-    = [ctrl](logical_operator_ptr op) mutable noexcept -> generator<runtime_batch> {
-    auto gen = unbox(op->runtime_instantiate({}, ctrl));
-    auto f = [op = std::move(op)]<element_type Input, element_type Output>(
+    = [](logical_operator_ptr op, operator_control_plane* ctrl) mutable noexcept
+    -> generator<runtime_batch> {
+    auto f = []<element_type Input, element_type Output>(
                physical_operator<Input, Output> gen) mutable noexcept
       -> generator<runtime_batch> {
       if constexpr (not std::is_void_v<Input>) {
@@ -233,13 +233,18 @@ auto make_run(std::vector<logical_operator_ptr> ops,
         }
       }
     };
-    return std::visit(std::move(f), std::move(gen));
-  }(std::move(*current_op++));
+    auto gen = op->runtime_instantiate({}, ctrl);
+    if (not gen) {
+      ctrl->abort(gen.error());
+      return {};
+    }
+    return std::visit(std::move(f), std::move(*gen));
+  }(std::move(*current_op++), ctrl);
   // Now we repeat the process for the following operators, knowing that their
   // input element type is never void.
   for (; current_op != ops.end(); ++current_op) {
-    run = [ctrl](generator<runtime_batch> prev_run,
-                 logical_operator_ptr op) mutable noexcept
+    run = [](generator<runtime_batch> prev_run, logical_operator_ptr op,
+             operator_control_plane* ctrl) mutable noexcept
       -> generator<runtime_batch> {
       struct gen_state {
         generator<runtime_batch> gen;
@@ -280,16 +285,23 @@ auto make_run(std::vector<logical_operator_ptr> ops,
               }
             }
           };
+
+          auto gen = op->runtime_instantiate(input_schema, ctrl);
+          if (not gen) {
+            ctrl->abort(std::move(gen.error()));
+            co_return;
+          }
+
           gen_it = gens.emplace_hint(gen_it, input_schema, gen_state{});
           auto& state = gen_it->second;
-          state.gen = std::visit(
-            std::move(f), unbox(op->runtime_instantiate(input_schema, ctrl)));
+          state.gen = std::visit(std::move(f), std::move(*gen));
           state.push = [queue = std::move(buffer_queue)](runtime_batch batch) {
             queue->push(std::get<Batch>(std::move(batch)));
           };
           // 3. Push the input element into the buffer.
           state.push(std::move(input));
           state.current = state.gen.begin();
+
         } else {
           // 3. Push the input element into the buffer.
           gen_it->second.push(std::move(input));
@@ -329,7 +341,7 @@ auto make_run(std::vector<logical_operator_ptr> ops,
           }
         }
       }
-    }(std::move(run), std::move(*current_op));
+    }(std::move(run), std::move(*current_op), ctrl);
   }
   return run;
 }
