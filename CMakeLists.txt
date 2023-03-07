@@ -792,10 +792,8 @@ else ()
   install(TARGETS libcaf_core libcaf_openssl libcaf_io COMPONENT Runtime)
   install(TARGETS libcaf_test COMPONENT Development)
   # Figure out whether we point to a build directory or a prefix.
-  if (NOT caf_dir)
-    set(caf_dir ${CAF_INCLUDE_DIRS})
-  endif ()
-  dependency_summary("CAF" "${CMAKE_CURRENT_SOURCE_DIR}/aux/caf" "Dependencies")
+  dependency_summary("CAF" "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf"
+                     "Dependencies")
 endif ()
 
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
