@@ -53,6 +53,7 @@ default_configuration::default_configuration() {
   set("caf.stream.credit-policy", "token-based");
   set("caf.stream.token-based-policy.batch-size", 1);
   set("caf.stream.token-based-policy.buffer-size", 64);
+  set("caf.middleman.connection-timeout", caf::timespan{120s});
 }
 
 } // namespace vast::system
