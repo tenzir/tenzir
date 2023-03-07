@@ -17,12 +17,13 @@ public:
     -> caf::expected<pipeline2> {
     auto mismatch
       = std::adjacent_find(ops.begin(), ops.end(), [](auto& a, auto& b) {
-          return a->output_element_type() != b->input_element_type();
+          return a->output_element_type() != b->input_element_type()
+                 && a->output_element_type().id != element_type_id<void>;
         });
     if (mismatch != ops.end()) {
       return caf::make_error(
         ec::invalid_argument,
-        fmt::format("type mismatch: {} != {}",
+        fmt::format("element type mismatch: cannot connect {} -> {}",
                     (*mismatch)->output_element_type().name,
                     (*(mismatch + 1))->input_element_type().name));
     }
