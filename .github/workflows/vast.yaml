@@ -359,6 +359,7 @@ jobs:
           user_email: engineering@tenzir.com
 
   docker-vast:
+    name: Docker
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
