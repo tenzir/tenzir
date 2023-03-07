@@ -56,6 +56,10 @@ auto inspect(Inspector& f, api_version& x) {
 
 struct rest_endpoint {
   /// Arbitrary id for endpoint identification
+  //  The purpose of this id is so that plugins providing multiple endpoints can
+  //  determine which one was called by the client without having to reimplement
+  //  the routing logic, which can get complex in the presence of path
+  //  parameters and multiple request methods.
   uint64_t endpoint_id = 0ull;
 
   /// The HTTP verb of this endpoint
