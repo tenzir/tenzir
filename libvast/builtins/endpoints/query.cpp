@@ -184,9 +184,9 @@ namespace {
 constexpr auto BATCH_SIZE = uint32_t{1};
 
 struct query_format_options {
-  bool flatten{defaults::rest::query_::flatten};
-  bool numeric_durations{defaults::rest::query_::numeric_durations};
-  bool omit_nulls{defaults::rest::query_::omit_nulls};
+  bool flatten{defaults::rest::query::flatten};
+  bool numeric_durations{defaults::rest::query::numeric_durations};
+  bool omit_nulls{defaults::rest::query::omit_nulls};
 };
 
 } // namespace

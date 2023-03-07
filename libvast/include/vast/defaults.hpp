@@ -167,7 +167,7 @@ inline constexpr const size_t rotate_files = 3;
 namespace rest {
 
 /// Settings related to the `/query` endpoint.
-namespace query_ {
+namespace query {
 
 /// The maximum number of results
 inline constexpr const size_t limit = 50;
@@ -181,7 +181,7 @@ inline constexpr const bool numeric_durations = false;
 /// Whether to omit null fields.
 inline constexpr const bool omit_nulls = false;
 
-} // namespace query_
+} // namespace query
 
 } // namespace rest
 
