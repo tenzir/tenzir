@@ -30,13 +30,13 @@ The following snippet illustrates a small script to query VAST.
 #!/usr/bin/env python3
 
 import asyncio
-from pyvast import VAST
+from pyvast import VAST, to_json_rows
 
 async def example():
     vast = VAST()
 
-    generator = await vast.export("192.168.1.103", max_events=10)
-    for row in to_json_rows(generator):
+    generator = vast.export("192.168.1.103", limit=10)
+    async for row in to_json_rows(generator):
         print(row)
 
 asyncio.run(example())
@@ -55,7 +55,7 @@ Many options that exist on the CLI are not mapped to PyVAST. The idea here is to
 avoid overwhelming the API with options that are actually not needed when
 interacting with VAST from Python.
 
-### `class VAST`
+### class VAST
 
 ```py
     class VAST(
@@ -69,14 +69,14 @@ that is also not present the `vast.endpoint` value from a local `vast.yaml`
 configuration file is used. In case that value is also not present the default
 connection endpoint of `127.0.0.1:42000` is used.
 
-#### `export`
+#### export
 
 ```py
     coroutine export(
         expression: str,
         mode: ExportMode = ExportMode.HISTORICAL,
         limit: int = 100
-    ) -> AsyncIterable[TableSlice]:
+    ) -> AsyncIterable[TableSlice]
 ```
 
 Evaluate an expression in a VAST node and receive the resulting events in an
@@ -93,7 +93,7 @@ The `limit` argument sets an upper bound on the number of events that should
 be produced. The special value `0` indicates that the number of results is
 unbounded.
 
-#### `count`
+#### count
 
 ```py
     coroutine count(
@@ -103,7 +103,7 @@ unbounded.
 
 Evaluate the sum of all events in the database that match the given expression.
 
-#### `status`
+#### status
 
 ```py
     coroutine status() -> dict
@@ -121,23 +121,27 @@ Retrieve the current status from VAST.
  'swap-space-usage': 0}
 ```
 
-### `class TableSlice`
+### class TableSlice
 
 ```py
     coroutine collect_pyarrow(
         stream: AsyncIterable[TableSlice],
-    ) -> dict[str, list[pyarrow.Table]]:
+    ) -> dict[str, list[pyarrow.Table]]
 ```
 
-Collect a stream of `TableSlice` and return a dictionary of Arrow tables indexed
-by schema name.
+Collect a stream of `TableSlice` and return a dictionary of [Arrow
+tables][pyarrow] indexed by schema name.
+[pyarrow]: https://arrow.apache.org/docs/python/index.html
 
-### `class VastRow`
+### class VastRow
+
+A `VastRow` is a Python native representation of an "event" from VAST. It
+consists of a `name` and a `data` dictionary.
 
 ```py
     coroutine to_json_rows(
         stream: AsyncIterable[TableSlice],
-    ) -> AsyncIterable[VastRow]:
+    ) -> AsyncIterable[VastRow]
 ```
 
 Convert a stream of `TableSlice`s to a stream of `VastRow`s.
