@@ -49,7 +49,7 @@ git switch -C "topic/release-${new_version}" origin/master
 # -> the tag's rev-count is that of HEAD + 2.
 rev_count="$(($(git rev-list --count HEAD) + 2))"
 version_json="$(jq --arg v "${new_version#v}" --arg cnt "${rev_count}" \
-  '."vast-version-fallback" = $v | ."vast-version-rev-count" = $cnt' version.json)"
+  '."vast-version-fallback" = $v | ."vast-version-rev-count" = ($cnt|tonumber)' version.json)"
 echo -E "${version_json}" > version.json
 
 # If the new version is not a release candidate, change mentions of the version
