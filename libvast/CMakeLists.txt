@@ -205,15 +205,6 @@ endif ()
 
 # Link against CAF.
 target_link_libraries(libvast PUBLIC CAF::core CAF::io CAF::openssl)
-if (VAST_ENABLE_BUNDLED_CAF)
-  # Figure out whether we point to a build directory or a prefix.
-  if (NOT caf_dir)
-    set(caf_dir ${CAF_INCLUDE_DIRS})
-  endif ()
-  dependency_summary("CAF" "${caf_dir}" "Dependencies")
-else ()
-  dependency_summary("CAF" CAF::core "Dependencies")
-endif ()
 
 # Link against libvast-fbs.
 target_link_libraries(libvast PUBLIC libvast-fbs)
