@@ -162,24 +162,7 @@ auto make_batch_buffer(std::shared_ptr<bool> stop) {
   return std::tuple{std::move(queue), std::move(gen)};
 }
 
-auto execute(pipeline2 pipeline) noexcept -> caf::expected<void> {
-  auto ops = std::move(pipeline).unwrap();
-  if (ops.empty())
-    return {}; // no-op
-  if (ops.front()->input_element_type().id != element_type_id<void>) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("unable to execute pipeline: expected "
-                                       "input type {}, got {}",
-                                       element_type_traits<void>::name,
-                                       ops.front()->input_element_type().name));
-  }
-  if (ops.back()->output_element_type().id != element_type_id<void>) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("unable to execute pipeline: expected "
-                                       "output type {}, got {}",
-                                       element_type_traits<void>::name,
-                                       ops.back()->output_element_type().name));
-  }
+auto make_run(std::vector<logical_operator_ptr> ops) {
   // We can handle the first operator in a special way, as its input element
   // type is always void.
   auto current_op = ops.begin();
@@ -297,7 +280,28 @@ auto execute(pipeline2 pipeline) noexcept -> caf::expected<void> {
       }
     }(std::move(run), std::move(*current_op));
   }
-  for (auto&& elem : run) {
+  return run;
+}
+
+auto execute(pipeline2 pipeline) noexcept -> caf::expected<void> {
+  auto ops = std::move(pipeline).unwrap();
+  if (ops.empty())
+    return {}; // no-op
+  if (ops.front()->input_element_type().id != element_type_id<void>) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("unable to execute pipeline: expected "
+                                       "input type {}, got {}",
+                                       element_type_traits<void>::name,
+                                       ops.front()->input_element_type().name));
+  }
+  if (ops.back()->output_element_type().id != element_type_id<void>) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("unable to execute pipeline: expected "
+                                       "output type {}, got {}",
+                                       element_type_traits<void>::name,
+                                       ops.back()->output_element_type().name));
+  }
+  for (auto&& elem : make_run(std::move(ops))) {
     // TODO: We should check whether there's been an error every time we arrive
     // here.
     // FIXME: this can just be an assertion; nothing to do here
