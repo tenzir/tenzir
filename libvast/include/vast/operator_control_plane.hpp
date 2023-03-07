@@ -22,10 +22,9 @@ struct operator_control_plane {
   /// Destroy the operator control plane.
   virtual ~operator_control_plane() noexcept = default;
 
-  /// Returns the hosting actor. This function is supposed to terminate if the
-  /// hosting actor is no longer alive, and must only be called from within the
-  /// operator.
-  [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor& = 0;
+  /// Returns the hosting actor.
+  /// @post result != nullptr
+  [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor* = 0;
 
   /// Stop the execution of the operator.
   virtual auto stop(caf::error error = {}) noexcept -> void = 0;

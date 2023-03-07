@@ -23,7 +23,7 @@ namespace {
 
 struct fixture {
   struct mock_control_plane : operator_control_plane {
-    [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor& {
+    [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor* {
       FAIL("no mock implementation available");
     }
     virtual auto stop([[maybe_unused]] caf::error error = {}) noexcept -> void {
