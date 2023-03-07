@@ -3,629 +3,417 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/legacy_pipeline.hpp"
+#include "vast/pipeline.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/ip.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/expression.hpp"
-#include "vast/ip.hpp"
-#include "vast/plugin.hpp"
-#include "vast/table_slice_builder.hpp"
+#include "vast/operator.hpp"
+#include "vast/operator_control_plane.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
-#include "vast/uuid.hpp"
 
-#include <arrow/array/array_base.h>
-#include <arrow/array/array_binary.h>
-#include <arrow/array/data.h>
-#include <caf/settings.hpp>
+#include <caf/detail/scope_guard.hpp>
 #include <caf/test/dsl.hpp>
 
-#include <string_view>
+#include <queue>
+#include <unordered_map>
 
-using namespace std::literals;
-using namespace vast;
+namespace vast {
+namespace {
 
-const auto testdata_schema = type{
-  "testdata",
-  record_type{
-    {"uid", string_type{}},
-    {"desc", string_type{}},
-    {"index", int64_type{}},
-  },
-};
-
-const auto testdata_schema2 = type{
-  "testdata",
-  record_type{
-    {"uid", string_type{}},
-    {"desc", string_type{}},
-    {"index", int64_type{}},
-    {"note", string_type{}},
-  },
-};
-
-const auto testresult_schema2 = type{
-  "testdata",
-  record_type{
-    {"uid", string_type{}},
-    {"index", int64_type{}},
-  },
-};
-
-const auto testdata_schema3 = type{
-  "testdata",
-  record_type{
-    {"orig_addr", ip_type{}},
-    {"orig_port", int64_type{}},
-    {"dest_addr", ip_type{}},
-    {"non_anon_addr", ip_type{}},
-  },
-};
-
-struct pipelines_fixture : fixtures::events {
-  // Creates a table slice with a single string field and random data.
-  static table_slice make_pipelines_testdata() {
-    auto builder = std::make_shared<table_slice_builder>(testdata_schema);
-    REQUIRE(builder);
-    for (int i = 0; i < 10; ++i) {
-      auto uuid = uuid::random();
-      auto str = fmt::format("{}", uuid);
-      REQUIRE(builder->add(str, "test-datum", int64_t{i}));
-    }
-    table_slice slice = builder->finish();
-    return slice;
+struct command final : public logical_operator<void, void> {
+  caf::expected<physical_operator<void, void>>
+  instantiate(const type& input_schema,
+              operator_control_plane* ctrl) const noexcept override {
+    REQUIRE(!input_schema);
+    return [=]() -> generator<std::monostate> {
+      MESSAGE("hello, world!");
+      co_return;
+    };
   }
 
-  /// Creates a table slice with four fields and another with two of the same
-  /// fields.
-  static std::tuple<table_slice, table_slice> make_proj_and_del_testdata() {
-    auto builder = std::make_shared<table_slice_builder>(testdata_schema2);
-    REQUIRE(builder);
-    auto builder2 = std::make_shared<table_slice_builder>(testresult_schema2);
-    REQUIRE(builder2);
-    for (int i = 0; i < 10; ++i) {
-      auto uuid = uuid::random();
-      auto str = fmt::format("{}", uuid);
-      auto str2 = fmt::format("test-datum {}", i);
-      auto str3 = fmt::format("note {}", i);
-      REQUIRE(builder->add(str, str2, int64_t{i}, str3));
-      REQUIRE(builder2->add(str, int64_t{i}));
-    }
-    return {builder->finish(), builder2->finish()};
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return "command";
+  }
+};
+
+struct source final : public logical_operator<void, events> {
+  explicit source(std::vector<table_slice> events)
+    : events_(std::move(events)) {
   }
 
-  /// Creates a table slice with ten rows(type, record_batch), a second having
-  /// only the row with index==2 and a third having only the rows with index>5.
-  static std::tuple<table_slice, table_slice, table_slice>
-  make_where_testdata() {
-    auto builder = std::make_shared<table_slice_builder>(testdata_schema);
-    REQUIRE(builder);
-    auto builder2 = std::make_shared<table_slice_builder>(testdata_schema);
-    REQUIRE(builder2);
-    auto builder3 = std::make_shared<table_slice_builder>(testdata_schema);
-    REQUIRE(builder3);
-    for (int i = 0; i < 10; ++i) {
-      auto uuid = uuid::random();
-      auto str = fmt::format("{}", uuid);
-      auto str2 = fmt::format("test-datum {}", i);
-      REQUIRE(builder->add(str, str2, int64_t{i}));
-      if (i == 2) {
-        REQUIRE(builder2->add(str, str2, int64_t{i}));
+  caf::expected<physical_operator<void, events>>
+  instantiate(const type& input_schema,
+              operator_control_plane*) const noexcept override {
+    REQUIRE(!input_schema);
+    return [*this]() -> generator<table_slice> {
+      auto guard = caf::detail::scope_guard{[] {
+        MESSAGE("source destroy");
+      }};
+      for (auto& table_slice : events_) {
+        MESSAGE("source yield");
+        co_yield table_slice;
       }
-      if (i > 5) {
-        REQUIRE(builder3->add(str, str2, int64_t{i}));
-      }
-    }
-    return {builder->finish(), builder2->finish(), builder3->finish()};
+      MESSAGE("source return");
+    };
   }
 
-  /// Creates a table slice with three IP address and one port column.
-  static table_slice
-  make_pseudonymize_testdata(const std::string& orig_ip,
-                             const std::string& dest_ip,
-                             const std::string& non_anon_ip) {
-    auto builder = std::make_shared<table_slice_builder>(testdata_schema3);
-    REQUIRE(builder);
-    REQUIRE(builder->add(*to<ip>(orig_ip), int64_t{40002}, *to<ip>(dest_ip),
-                         *to<ip>(non_anon_ip)));
-    return builder->finish();
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return "source";
   }
 
-  const pipeline_operator_plugin* rename_plugin
-    = plugins::find<pipeline_operator_plugin>("rename");
+  std::vector<table_slice> events_;
 };
 
-type schema(caf::expected<std::vector<table_slice>> slices) {
-  const auto& unboxed = unbox(slices);
-  if (unboxed.empty())
-    FAIL("cannot retrieve schema from empty list of slices");
-  return unboxed.front().schema();
+struct sink final : public logical_operator<events, void> {
+  explicit sink(std::function<void(table_slice)> callback)
+    : callback_(std::move(callback)) {
+  }
+
+  caf::expected<physical_operator<events, void>>
+  instantiate(const type& input_schema,
+              operator_control_plane*) const noexcept override {
+    return [=](generator<table_slice> input) -> generator<std::monostate> {
+      auto guard = caf::detail::scope_guard{[] {
+        MESSAGE("sink destroy");
+      }};
+      for (auto&& slice : input) {
+        if (slice.rows() != 0) {
+          REQUIRE_EQUAL(slice.schema(), input_schema);
+          MESSAGE("sink callback");
+          callback_(slice);
+        }
+        MESSAGE("sink yield");
+        co_yield {};
+      }
+      MESSAGE("sink return");
+    };
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return "sink";
+  }
+
+  std::function<void(table_slice)> callback_;
+};
+
+struct where final : public logical_operator<events, events> {
+  explicit where(expression expr) : expr_(std::move(expr)) {
+  }
+
+  caf::expected<physical_operator<events, events>>
+  instantiate(const type& input_schema,
+              operator_control_plane* ctrl) const noexcept override {
+    auto expr = tailor(expr_, input_schema);
+    if (!expr) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("failed to instantiate where "
+                                         "operator: {}",
+                                         expr.error()));
+    }
+    return [expr = std::move(*expr)](
+             generator<table_slice> input) mutable -> generator<table_slice> {
+      auto guard = caf::detail::scope_guard{[] {
+        MESSAGE("where destroy");
+      }};
+      for (auto&& slice : input) {
+        // TODO: adjust filter
+        if (auto result = filter(slice, expr)) {
+          MESSAGE("where yield result");
+          co_yield *result;
+        } else {
+          MESSAGE("where yield no result");
+          co_yield {};
+        }
+      }
+      MESSAGE("where return");
+    };
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return fmt::format("where {}", expr_);
+  }
+
+  expression expr_;
+};
+
+class execute_ctrl final : public operator_control_plane {
+public:
+  explicit execute_ctrl(caf::event_based_actor* self) : self_{self} {
+  }
+
+  [[nodiscard]] auto error() const noexcept -> const caf::error& {
+    return error_;
+  }
+
+private:
+  [[nodiscard]] auto self() noexcept -> caf::event_based_actor* override {
+    return self_;
+  }
+
+  auto abort(caf::error error) noexcept -> void override {
+    error_ = std::move(error);
+  }
+
+  auto warn(caf::error) noexcept -> void override {
+    FAIL("not implemented");
+  }
+
+  auto emit(table_slice) noexcept -> void override {
+    FAIL("not implemented");
+  }
+
+  auto demand(type = {}) const noexcept -> size_t override {
+    FAIL("not implemented");
+  }
+
+  /// Access available schemas.
+  auto schemas() const noexcept -> const std::vector<type>& override {
+    FAIL("not implemented");
+  }
+
+  /// Access available concepts.
+  auto concepts() const noexcept -> const concepts_map& override {
+    FAIL("not implemented");
+  }
+
+  caf::error error_ = {};
+  caf::event_based_actor* self_ = {};
+};
+
+// All generators must ...
+// - co_return if the input is exhausted
+// - co_yield empty if the input yields empty (because we have to stall?)
+
+template <class Batch>
+auto make_batch_buffer(std::shared_ptr<bool> stop) {
+  auto queue = std::make_shared<std::queue<Batch>>();
+  auto gen = [](std::shared_ptr<std::queue<Batch>> queue,
+                std::shared_ptr<bool> stop) -> generator<Batch> {
+    // This generator never co_returns...
+    while (!*stop) {
+      if (queue->empty()) {
+        // MESSAGE("yield empty");
+        co_yield Batch{};
+        continue;
+      }
+      auto element = std::move(queue->front());
+      VAST_ASSERT(batch_traits<Batch>::size(element) != 0);
+      queue->pop();
+      // MESSAGE("yield element");
+      co_yield std::move(element);
+    }
+  }(queue, stop);
+  return std::tuple{std::move(queue), std::move(gen)};
 }
 
-table_slice concatenate(caf::expected<std::vector<table_slice>> slices) {
-  return concatenate(unbox(slices));
+auto make_run(std::span<const logical_operator_ptr> ops,
+              operator_control_plane* ctrl) {
+  // We can handle the first operator in a special way, as its input element
+  // type is always void.
+  auto current_op = ops.begin();
+  auto run = [](const runtime_logical_operator* op,
+                operator_control_plane* ctrl) mutable noexcept
+    -> generator<runtime_batch> {
+    auto f = []<element_type Input, element_type Output>(
+               physical_operator<Input, Output> gen) mutable noexcept
+      -> generator<runtime_batch> {
+      if constexpr (not std::is_void_v<Input>) {
+        die("unreachable");
+      } else {
+        // gen lives throughout the iteration
+        for (auto&& output : gen()) {
+          // MESSAGE("yield output");
+          co_yield std::move(output);
+        }
+      }
+    };
+    auto gen = op->runtime_instantiate({}, ctrl);
+    if (not gen) {
+      ctrl->abort(gen.error());
+      return {};
+    }
+    return std::visit(std::move(f), std::move(*gen));
+  }((current_op++)->get(), ctrl);
+  // Now we repeat the process for the following operators, knowing that their
+  // input element type is never void.
+  for (; current_op != ops.end(); ++current_op) {
+    run = [](generator<runtime_batch> prev_run,
+             const runtime_logical_operator* op,
+             operator_control_plane* ctrl) mutable noexcept
+      -> generator<runtime_batch> {
+      struct gen_state {
+        generator<runtime_batch> gen;
+        generator<runtime_batch>::iterator current;
+        std::function<void(runtime_batch)> push;
+      };
+      // For every input element, we take the following steps:
+      auto stop = std::make_shared<bool>(false);
+      auto gens = std::unordered_map<type, gen_state>{};
+      auto f = [&gens, &stop, op, ctrl]<class Batch>(
+                 Batch input) mutable -> generator<runtime_batch> {
+        if (batch_traits<Batch>::size(input) == 0) {
+          co_return;
+        }
+        // 1. Find the input schema.
+        auto input_schema = batch_traits<Batch>::schema(input);
+        // 2. Try to find an already existing generator, or create a new one
+        // if it doesn't exist yet for the given input schema.
+        auto gen_it = gens.find(input_schema);
+        if (gen_it == gens.end()) {
+          MESSAGE("created batch buffer for '" << op->to_string()
+                                               << "': " << input_schema.name());
+          auto [buffer_queue, buffer] = make_batch_buffer<Batch>(stop);
+          auto f
+            = [buffer
+               = std::move(buffer)]<element_type Input, element_type Output>(
+                physical_operator<Input, Output> gen) mutable noexcept
+            -> generator<runtime_batch> {
+            if constexpr (std::is_void_v<Input>
+                          || !std::is_same_v<element_type_to_batch_t<Input>,
+                                             Batch>) {
+              die("unreachable"); // TODO
+            } else {
+              // gen lives throughout the iteration
+              for (auto&& output : gen(std::move(buffer))) {
+                // MESSAGE("yield 123");
+                co_yield std::move(output);
+              }
+            }
+          };
+
+          auto gen = op->runtime_instantiate(input_schema, ctrl);
+          if (not gen) {
+            ctrl->abort(std::move(gen.error()));
+            co_return;
+          }
+
+          gen_it = gens.emplace_hint(gen_it, input_schema, gen_state{});
+          auto& state = gen_it->second;
+          state.gen = std::visit(std::move(f), std::move(*gen));
+          state.push = [queue = std::move(buffer_queue)](runtime_batch batch) {
+            queue->push(std::get<Batch>(std::move(batch)));
+          };
+          // 3. Push the input element into the buffer.
+          state.push(std::move(input));
+          state.current = state.gen.begin();
+
+        } else {
+          // 3. Push the input element into the buffer.
+          gen_it->second.push(std::move(input));
+        }
+        // 4. Pull from the buffer
+        auto& state = gen_it->second;
+        while (true) {
+          // TODO: never happens
+          if (state.current == state.gen.end()) {
+            // MESSAGE("at end of generator");
+            co_return;
+          }
+          auto output = std::move(*state.current);
+          ++state.current;
+          // MESSAGE("yielded in generator");
+          co_yield std::move(output);
+        }
+      };
+      for (auto&& input : prev_run) {
+        for (auto&& output : std::visit(f, std::move(input))) {
+          auto const empty = output.size() == 0;
+          // MESSAGE("will yield in outer generator");
+          co_yield std::move(output);
+          if (empty) {
+            // MESSAGE("empty break");
+            break;
+          }
+        }
+      }
+      *stop = true;
+      for (auto& gen : gens) {
+        for (; gen.second.current != gen.second.gen.end();
+             ++gen.second.current) {
+          auto output = std::move(*gen.second.current);
+          if (output.size() != 0) {
+            co_yield std::move(output);
+          }
+        }
+      }
+    }(std::move(run), current_op->get(), ctrl);
+  }
+  return run;
 }
 
-FIXTURE_SCOPE(pipeline_tests, pipelines_fixture)
-
-TEST(head 1) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
-  auto [expr, pipeline] = unbox(vast->make_query("head 1"));
-  REQUIRE(pipeline);
-  for (auto slice : zeek_conn_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  for (auto slice : zeek_http_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  for (auto slice : zeek_dns_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  auto results = unbox(pipeline->finish());
-  REQUIRE_EQUAL(results.size(), 1u);
-  REQUIRE_EQUAL(results[0], head(concatenate(zeek_conn_log), 1u));
+auto execute(const pipeline& pipe) noexcept -> caf::expected<void> {
+  auto ops = pipe.operators();
+  if (ops.empty())
+    return {}; // no-op
+  if (ops.front()->input_element_type().id != element_type_id<void>) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("unable to execute pipeline: expected "
+                                       "input type {}, got {}",
+                                       element_type_traits<void>::name,
+                                       ops.front()->input_element_type().name));
+  }
+  if (ops.back()->output_element_type().id != element_type_id<void>) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("unable to execute pipeline: expected "
+                                       "output type {}, got {}",
+                                       element_type_traits<void>::name,
+                                       ops.back()->output_element_type().name));
+  }
+  auto ctrl = execute_ctrl{nullptr};
+  for (auto&& elem : make_run(ops, &ctrl)) {
+    if (ctrl.error()) {
+      MESSAGE("got error: " << ctrl.error());
+      return ctrl.error();
+    }
+    REQUIRE(std::holds_alternative<std::monostate>(elem));
+  }
+  if (ctrl.error()) {
+    MESSAGE("got error: " << ctrl.error());
+    return ctrl.error();
+  }
+  return {};
 }
 
-TEST(head 0) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
-  auto [expr, pipeline] = unbox(vast->make_query("head 0"));
-  REQUIRE(pipeline);
-  for (auto slice : zeek_conn_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  for (auto slice : zeek_http_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  for (auto slice : zeek_dns_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  auto results = unbox(pipeline->finish());
-  CHECK(results.empty());
+template <class... Ts>
+auto make_pipeline(Ts&&... ts) -> pipeline {
+  auto ops = std::vector<logical_operator_ptr>{};
+  (ops.push_back(std::make_unique<Ts>(ts)), ...);
+  return unbox(pipeline::make(std::move(ops)));
 }
 
-TEST(head 10 with overlap) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
-  auto [expr, pipeline] = unbox(vast->make_query("head"));
-  REQUIRE(pipeline);
-  CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 9u)),
-              caf::error{});
-  CHECK_EQUAL(pipeline->add(concatenate(zeek_http_log)), caf::error{});
-  auto results = unbox(pipeline->finish());
-  REQUIRE_EQUAL(results.size(), 2u);
-  REQUIRE_EQUAL(results[0], head(concatenate(zeek_conn_log), 9u));
-  REQUIRE_EQUAL(results[1], head(concatenate(zeek_http_log), 1u));
+struct fixture : fixtures::events {};
+
+} // namespace
+
+TEST(command) {
+  auto put = make_pipeline(command{});
+  REQUIRE_NOERROR(execute(std::move(put)));
 }
 
-TEST(taste 1) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
-  auto [expr, pipeline] = unbox(vast->make_query("taste 1"));
-  REQUIRE(pipeline);
-  for (auto slice : zeek_conn_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  for (auto slice : zeek_http_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  for (auto slice : zeek_dns_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  auto results = unbox(pipeline->finish());
-  REQUIRE_EQUAL(results.size(), 3u);
-  REQUIRE_EQUAL(results[0], head(concatenate(zeek_conn_log), 1u));
-  REQUIRE_EQUAL(results[1], head(concatenate(zeek_http_log), 1u));
-  REQUIRE_EQUAL(results[2], head(concatenate(zeek_dns_log), 1u));
-}
+FIXTURE_SCOPE(pipeline_fixture, fixture);
 
-TEST(taste 0) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
-  auto [expr, pipeline] = unbox(vast->make_query("taste 0"));
-  REQUIRE(pipeline);
-  for (auto slice : zeek_conn_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  for (auto slice : zeek_http_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  for (auto slice : zeek_dns_log)
-    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
-  auto results = unbox(pipeline->finish());
-  CHECK(results.empty());
-}
-
-TEST(taste 10 with overlap) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
-  auto [expr, pipeline] = unbox(vast->make_query("taste"));
-  REQUIRE(pipeline);
-  CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 4u)),
-              caf::error{});
-  CHECK_EQUAL(pipeline->add(concatenate(zeek_http_log)), caf::error{});
-  auto results = unbox(pipeline->finish());
-  REQUIRE_EQUAL(results.size(), 2u);
-  REQUIRE_EQUAL(results[0], head(concatenate(zeek_conn_log), 4u));
-  REQUIRE_EQUAL(results[1], head(concatenate(zeek_http_log), 10u));
-}
-
-TEST(head and taste fail with negative limit) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
-  REQUIRE_ERROR(vast->make_query("head -1"));
-  REQUIRE_ERROR(vast->make_query("taste -5"));
-}
-
-TEST(drop operator) {
-  auto [slice, expected_slice] = make_proj_and_del_testdata();
-  const auto* drop_plugin = plugins::find<pipeline_operator_plugin>("drop");
-  REQUIRE(drop_plugin);
-  auto drop_operator = unbox(
-    drop_plugin->make_pipeline_operator({{"fields", list{"desc", "note"}}}));
-  auto add_failed = drop_operator->add(slice);
-  REQUIRE(!add_failed);
-  auto deleted = unbox(drop_operator->finish());
-  REQUIRE_EQUAL(deleted.size(), 1ull);
-  REQUIRE_EQUAL(concatenate(deleted), expected_slice);
-  auto invalid_drop_operator
-    = unbox(drop_plugin->make_pipeline_operator({{"fields", list{"xxx"}}}));
-  auto invalid_add_failed = invalid_drop_operator->add(slice);
-  REQUIRE(!invalid_add_failed);
-  auto not_dropped = unbox(invalid_drop_operator->finish());
-  REQUIRE_EQUAL(not_dropped.size(), 1ull);
-  REQUIRE_EQUAL(concatenate(not_dropped), slice);
-  auto schema_drop_operator = unbox(
-    drop_plugin->make_pipeline_operator({{"schemas", list{"testdata"}}}));
-  auto schema_add_failed = schema_drop_operator->add(slice);
-  REQUIRE(!schema_add_failed);
-  auto dropped = unbox(invalid_drop_operator->finish());
-  CHECK(dropped.empty());
-}
-
-TEST(select operator) {
-  auto project_operator = unbox(
-    make_pipeline_operator("select", {{"fields", list{"index", "uid"}}}));
-  auto invalid_project_operator
-    = unbox(make_pipeline_operator("select", {{"fields", list{"xxx"}}}));
-  // Arrow test:
-  auto [slice, expected_slice] = make_proj_and_del_testdata();
-  auto add_failed = project_operator->add(slice);
-  REQUIRE(!add_failed);
-  auto projected = unbox(project_operator->finish());
-  REQUIRE_EQUAL(projected.size(), 1ull);
-  REQUIRE_EQUAL(concatenate(projected), expected_slice);
-  auto invalid_add_failed = invalid_project_operator->add(slice);
-  REQUIRE(!invalid_add_failed);
-  auto not_projected = concatenate(unbox(invalid_project_operator->finish()));
-  CHECK_EQUAL(not_projected.rows(), 0u);
-}
-
-TEST(replace operator) {
-  auto slice = make_pipelines_testdata();
-  auto replace_operator = unbox(make_pipeline_operator(
-    "replace", {{"fields", record{{"uid", "xxx"}, {"desc", "1.2.3.4"}}}}));
-  auto add_failed = replace_operator->add(slice);
-  REQUIRE(!add_failed);
-  auto replaced = unbox(replace_operator->finish());
-  REQUIRE_EQUAL(replaced.size(), 1ull);
-  REQUIRE_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).num_fields(), 3ull);
-  CHECK_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).field(0).name, "uid");
-  CHECK_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).field(1).name,
-    "desc");
-  const auto table_slice = concatenate(replaced);
-  CHECK_EQUAL(materialize(table_slice.at(0, 0)), "xxx");
-  CHECK_EQUAL(materialize(table_slice.at(0, 1)), unbox(to<ip>("1.2.3.4")));
-}
-
-TEST(extend operator) {
-  auto slice = make_pipelines_testdata();
-  auto replace_operator = unbox(make_pipeline_operator(
-    "extend", {{"fields", record{{"secret", "xxx"}, {"ip", "1.2.3.4"}}}}));
-  auto add_failed = replace_operator->add(slice);
-  REQUIRE(!add_failed);
-  auto replaced = unbox(replace_operator->finish());
-  REQUIRE_EQUAL(replaced.size(), 1ull);
-  REQUIRE_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).num_fields(), 5ull);
-  CHECK_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).field(3).name,
-    "secret");
-  CHECK_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).field(4).name, "ip");
-  const auto table_slice = concatenate(replaced);
-  CHECK_EQUAL(materialize(table_slice.at(0, 3)), "xxx");
-  CHECK_EQUAL(materialize(table_slice.at(0, 4)), unbox(to<ip>("1.2.3.4")));
-}
-
-TEST(where operator) {
-  auto [slice, single_row_slice, multi_row_slice] = make_where_testdata();
-  CHECK_EQUAL(slice.rows(), 10ull);
-  CHECK_EQUAL(single_row_slice.rows(), 1ull);
-  CHECK_EQUAL(multi_row_slice.rows(), 4ull);
-  auto where_plugin = plugins::find<pipeline_operator_plugin>("where");
-  REQUIRE(where_plugin);
-  auto where_operator = unbox(
-    where_plugin->make_pipeline_operator({{"expression", "index == +2"}}));
-  REQUIRE(where_operator);
-  auto add_failed = where_operator->add(slice);
-  REQUIRE(!add_failed);
-  auto selected = where_operator->finish();
-  REQUIRE_NOERROR(selected);
-  REQUIRE_EQUAL(selected->size(), 1ull);
-  CHECK_EQUAL(concatenate(selected), single_row_slice);
-  auto where_operator2 = unbox(
-    where_plugin->make_pipeline_operator({{"expression", "index > +5"}}));
-  REQUIRE(where_operator2);
-  auto add2_failed = where_operator2->add(slice);
-  REQUIRE(!add2_failed);
-  auto selected2 = where_operator2->finish();
-  REQUIRE_NOERROR(selected2);
-  REQUIRE_EQUAL(selected2->size(), 1ull);
-  CHECK_EQUAL(concatenate(selected2), multi_row_slice);
-  auto where_operator3 = unbox(
-    where_plugin->make_pipeline_operator({{"expression", "index > +9"}}));
-  REQUIRE(where_operator3);
-  auto add3_failed = where_operator3->add(slice);
-  REQUIRE(!add3_failed);
-  auto selected3 = where_operator3->finish();
-  REQUIRE_NOERROR(selected3);
-  CHECK_EQUAL(selected3->size(), 0ull);
-  auto where_operator4 = unbox(where_plugin->make_pipeline_operator(
-    {{"expression", "#type == \"testdata\""}}));
-  auto add4_failed = where_operator4->add(slice);
-  REQUIRE(!add4_failed);
-  auto selected4 = where_operator4->finish();
-  REQUIRE_NOERROR(selected4);
-  REQUIRE_EQUAL(selected4->size(), 1ull);
-  CHECK_EQUAL(concatenate(selected4), slice);
-  auto where_operator5 = unbox(where_plugin->make_pipeline_operator(
-    {{"expression", "#type != \"testdata\""}}));
-  auto add5_failed = where_operator5->add(slice);
-  REQUIRE(!add5_failed);
-  auto selected5 = where_operator5->finish();
-  REQUIRE_NOERROR(selected5);
-  CHECK_EQUAL(selected5->size(), 0ull);
-}
-
-TEST(hash operator) {
-  auto slice = make_pipelines_testdata();
-  auto hash_operator = unbox(
-    make_pipeline_operator("hash", {{"field", "uid"}, {"out", "hashed_uid"}}));
-  auto add_failed = hash_operator->add(slice);
-  REQUIRE(!add_failed);
-  auto hashed = unbox(hash_operator->finish());
-  REQUIRE_EQUAL(hashed.size(), 1ull);
-  REQUIRE_EQUAL(caf::get<record_type>(schema(hashed)).num_fields(), 4ull);
-  REQUIRE_EQUAL(caf::get<record_type>(schema(hashed)).field(1).name,
-                "hashed_uid");
-  // TODO: not sure how we can check that the data was correctly hashed.
-}
-
-TEST(pseudonymize - invalid seed) {
-  auto slice
-    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
-  REQUIRE_ERROR(make_pipeline_operator(
-    "pseudonymize", {{"method", "crypto-pan"},
-                     {"seed", "foobar"},
-                     {"fields", list{"orig_addr", "dest_addr"}}}));
-}
-
-TEST(pseudonymize - seed but no fields) {
-  auto slice
-    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
-  REQUIRE_ERROR(make_pipeline_operator("pseudonymize", {{"seed", "1"}}));
-}
-
-TEST(pseudonymize - fields but no seed) {
-  auto slice
-    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
-  REQUIRE_ERROR(make_pipeline_operator(
-    "pseudonymize", {{"fields", list{"orig_addr", "dest_addr"}}}));
-}
-
-TEST(pseudonymize - seed and fields but no method) {
-  auto slice
-    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
-  REQUIRE_ERROR(make_pipeline_operator(
-    "pseudonymize",
-    {{"seed", "deadbee"}, {"fields", list{"orig_addr", "dest_addr"}}}));
-}
-
-TEST(pseudonymize - seed input too short and odd amount of chars) {
-  auto slice
-    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
-  auto pseudonymize_op = unbox(make_pipeline_operator(
-    "pseudonymize", {{"method", "crypto-pan"},
-                     {"seed", "deadbee"},
-                     {"fields", list{"orig_addr", "dest_addr"}}}));
-  auto pseudonymize_failed = pseudonymize_op->add(slice);
-  REQUIRE(!pseudonymize_failed);
-  auto pseudonymized = unbox(pseudonymize_op->finish());
-  auto pseudonymized_values = caf::get<record_type>(schema(pseudonymized));
-  const auto table_slice = concatenate(pseudonymized);
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 0)), *to<ip>("20.251.116.68"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 2)), *to<ip>("72.57.233.231"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *to<ip>("0.0.0."
-                                                           "0"));
-}
-
-TEST(pseudonymize - seed input too long) {
-  auto slice
-    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
-  auto pseudonymize_op = unbox(make_pipeline_operator(
-    "pseudonymize",
-    {{"method", "crypto-pan"},
-     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
-              "8be5de53836e8009ab3a605435bea0c385bea18485d8b0a1103d"
-              "6590bdf48c968be5de53836e"},
-     {"fields", list{"orig_addr", "dest_addr"}}}));
-  auto pseudonymize_failed = pseudonymize_op->add(slice);
-  REQUIRE(!pseudonymize_failed);
-  auto pseudonymized = unbox(pseudonymize_op->finish());
-  auto pseudonymized_values = caf::get<record_type>(schema(pseudonymized));
-  const auto table_slice = concatenate(pseudonymized);
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 0)), *to<ip>("117.8.135.123"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 2)), *to<ip>("55.21.62.136"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *to<ip>("0.0.0."
-                                                           "0"));
-}
-
-TEST(pseudonymize - IPv4 address batch pseudonymizing) {
-  auto slice
-    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
-  auto pseudonymize_op = unbox(make_pipeline_operator(
-    "pseudonymize", {{"method", "crypto-pan"},
-                     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf4"
-                              "8c96"
-                              "8be5de53836e"},
-                     {"fields", list{"orig_addr", "dest_addr"}}}));
-  auto pseudonymize_failed = pseudonymize_op->add(slice);
-  REQUIRE(!pseudonymize_failed);
-  auto pseudonymized = unbox(pseudonymize_op->finish());
-  auto pseudonymized_values = caf::get<record_type>(schema(pseudonymized));
-  const auto table_slice = concatenate(pseudonymized);
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 0)), *to<ip>("117.8.135.123"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 2)), *to<ip>("55.21.62.136"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *to<ip>("0.0.0."
-                                                           "0"));
-}
-
-TEST(pseudonymize - IPv6 address batch pseudonymizing) {
-  auto slice
-    = make_pseudonymize_testdata("2a02:0db8:85a3:0000:0000:8a2e:0370:7344",
-                                 "fc00::", "2a02:db8:85a3::8a2e:370:7344");
-  auto pseudonymize_op = unbox(make_pipeline_operator(
-    "pseudonymize", {{"method", "crypto-pan"},
-                     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf4"
-                              "8c96"
-                              "8be5de53836e"},
-                     {"fields", list{"orig_addr", "dest_addr"}}}));
-  auto pseudonymize_failed = pseudonymize_op->add(slice);
-  REQUIRE(!pseudonymize_failed);
-  auto pseudonymized = unbox(pseudonymize_op->finish());
-  auto pseudonymized_values = caf::get<record_type>(schema(pseudonymized));
-  const auto table_slice = concatenate(pseudonymized);
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *to<ip>("1482:f447:75b3:f1f9:"
-                        "fbdf:622e:34f:"
-                        "ff7b"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *to<ip>("f33c:8ca3:ef0f:e019:"
-                        "e7ff:f1e3:f91f:"
-                        "f800"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *to<ip>("2a02:db8:85a3::8a2e:"
-                        "370:7344"));
-}
-
-TEST(pipeline with multiple steps) {
-  legacy_pipeline pipeline("test_pipeline", {{"testdata"}});
-  pipeline.add_operator(unbox(
-    make_pipeline_operator("replace", {{"fields", record{{"uid", "xxx"}}}})));
-  pipeline.add_operator(
-    unbox(make_pipeline_operator("drop", {{"fields", list{"index"}}})));
-  auto slice = make_pipelines_testdata();
-  auto add_failed = pipeline.add(std::move(slice));
-  REQUIRE(!add_failed);
-  auto transformed = pipeline.finish();
-  REQUIRE_NOERROR(transformed);
-  REQUIRE_EQUAL(transformed->size(), 1ull);
-  REQUIRE_EQUAL(caf::get<record_type>((*transformed)[0].schema()).num_fields(),
-                2ull);
-  CHECK_EQUAL(caf::get<record_type>((*transformed)[0].schema()).field(0).name,
-              "ui"
-              "d");
-  CHECK_EQUAL(materialize((*transformed)[0].at(0, 0)), "xxx");
-  auto wrong_schema = type{"stub", testdata_schema};
-  wrong_schema.assign_metadata(type{"foo", type{}});
-  auto builder = std::make_shared<table_slice_builder>(wrong_schema);
-  REQUIRE(builder->add("asdf", "jklo", int64_t{23}));
-  auto wrong_slice = builder->finish();
-  auto add2_failed = pipeline.add(std::move(wrong_slice));
-  REQUIRE(!add2_failed);
-  auto not_transformed = pipeline.finish();
-  REQUIRE_NOERROR(not_transformed);
-  REQUIRE_EQUAL(not_transformed->size(), 1ull);
-  REQUIRE_EQUAL(
-    caf::get<record_type>((*not_transformed)[0].schema()).num_fields(), 3ull);
-  CHECK_EQUAL(
-    caf::get<record_type>((*not_transformed)[0].schema()).field(0).name, "uid");
-  CHECK_EQUAL(
-    caf::get<record_type>((*not_transformed)[0].schema()).field(1).name,
-    "desc");
-  CHECK_EQUAL(
-    caf::get<record_type>((*not_transformed)[0].schema()).field(2).name,
-    "index");
-  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 0)), "asdf");
-  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 1)), "jklo");
-  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), int64_t{23});
-}
-
-TEST(pipeline rename schema) {
-  legacy_pipeline pipeline("test_pipeline", {{"testdata"}});
-  auto rename_settings = record{
-    {"schemas", list{record{
-                  {"from", std::string{"testdata"}},
-                  {"to", std::string{"testdata_renamed"}},
-                }}},
-  };
-  pipeline.add_operator(
-    unbox(rename_plugin->make_pipeline_operator(rename_settings)));
-  pipeline.add_operator(
-    unbox(make_pipeline_operator("drop", {{"fields", list{"index"}}})));
-  auto slice = make_pipelines_testdata();
-  REQUIRE_SUCCESS(pipeline.add(std::move(slice)));
-  auto transformed = pipeline.finish();
-  REQUIRE_NOERROR(transformed);
-  REQUIRE_EQUAL(transformed->size(), 1ull);
-  REQUIRE_EQUAL(caf::get<record_type>((*transformed)[0].schema()).num_fields(),
-                2ull);
-}
-
-TEST(Pipeline executor - single matching pipeline) {
-  std::vector<legacy_pipeline> pipelines;
-  pipelines.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
-  pipelines.emplace_back("t2", std::vector<std::string>{"foo"});
-  auto& pipeline1 = pipelines.at(0);
-  auto& pipeline2 = pipelines.at(1);
-  pipeline1.add_operator(
-    unbox(make_pipeline_operator("drop", {{"fields", list{"uid"}}})));
-  pipeline2.add_operator(
-    unbox(make_pipeline_operator("drop", {{"fields", list{"index"}}})));
-  pipeline_executor executor(std::move(pipelines));
-  auto slice = make_pipelines_testdata();
-  auto add_failed = executor.add(std::move(slice));
-  REQUIRE(!add_failed);
-  auto transformed = executor.finish();
-  REQUIRE_EQUAL(transformed->size(), 1ull);
-  // We expect that only one pipeline has been applied.
-  REQUIRE_EQUAL(caf::get<record_type>((*transformed)[0].schema()).num_fields(),
-                2ull);
-  CHECK_EQUAL(caf::get<record_type>((*transformed)[0].schema()).field(0).name,
-              "des"
-              "c");
-  CHECK_EQUAL(caf::get<record_type>((*transformed)[0].schema()).field(1).name,
-              "index");
-}
-
-TEST(pipeline executor - multiple matching pipelines) {
-  std::vector<legacy_pipeline> pipelines;
-  pipelines.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
-  pipelines.emplace_back("t2", std::vector<std::string>{"testdata"});
-  auto& pipeline1 = pipelines.at(0);
-  auto& pipeline2 = pipelines.at(1);
-  pipeline1.add_operator(
-    unbox(make_pipeline_operator("drop", {{"fields", list{"uid"}}})));
-  pipeline2.add_operator(
-    unbox(make_pipeline_operator("drop", {{"fields", list{"index"}}})));
-  pipeline_executor executor(std::move(pipelines));
-  auto slice = make_pipelines_testdata();
-  REQUIRE_EQUAL(slice.encoding(), defaults::import::table_slice_type);
-  auto add_failed = executor.add(std::move(slice));
-  REQUIRE(!add_failed);
-  auto transformed = executor.finish();
-  REQUIRE_NOERROR(transformed);
-  REQUIRE_EQUAL(transformed->size(), 1ull);
-  REQUIRE_EQUAL((*transformed)[0].encoding(),
-                defaults::import::table_slice_type);
-  CHECK_EQUAL(caf::get<record_type>((*transformed)[0].schema()).num_fields(),
-              1ull);
+TEST(source | where #type == "zeek.conn" | sink) {
+  auto put = make_pipeline(
+    source{{head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+            head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}},
+    where{unbox(to<expression>(R"(#type == "zeek.conn")"))},
+    where{unbox(to<expression>(R"(#type == "zeek.conn")"))},
+    where{unbox(to<expression>(R"(#type == "zeek.conn")"))},
+    where{unbox(to<expression>(R"(#type == "zeek.conn")"))},
+    where{unbox(to<expression>(R"(#type == "zeek.conn")"))},
+    sink{[](const table_slice&) {
+      MESSAGE("---- sink ----");
+      return;
+    }});
+  REQUIRE_NOERROR(execute(std::move(put)));
 }
 
 FIXTURE_SCOPE_END()
+
+} // namespace vast

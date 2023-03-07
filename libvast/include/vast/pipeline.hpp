@@ -11,10 +11,10 @@
 #include <caf/error.hpp>
 
 namespace vast {
-class pipeline2 final : public runtime_logical_operator {
+class pipeline final : public runtime_logical_operator {
 public:
   static auto make(std::vector<logical_operator_ptr> ops)
-    -> caf::expected<pipeline2> {
+    -> caf::expected<pipeline> {
     auto mismatch
       = std::adjacent_find(ops.begin(), ops.end(), [](auto& a, auto& b) {
           return a->output_element_type() != b->input_element_type()
@@ -30,7 +30,7 @@ public:
     auto flattened = std::vector<logical_operator_ptr>{};
     flattened.reserve(ops.size());
     for (auto& op : ops) {
-      if (auto* p = dynamic_cast<pipeline2*>(op.get())) {
+      if (auto* p = dynamic_cast<pipeline*>(op.get())) {
         flattened.insert(flattened.end(),
                          std::make_move_iterator(p->ops_.begin()),
                          std::make_move_iterator(p->ops_.end()));
@@ -38,40 +38,41 @@ public:
         flattened.push_back(std::move(op));
       }
     }
-    return pipeline2{std::move(flattened)};
+    return pipeline{std::move(flattened)};
   }
 
   [[nodiscard]] auto input_element_type() const noexcept
-    -> runtime_element_type final {
+    -> runtime_element_type override {
     if (ops_.empty())
       return element_type_traits<void>{};
     return ops_.front()->input_element_type();
   }
 
   [[nodiscard]] auto output_element_type() const noexcept
-    -> runtime_element_type final {
+    -> runtime_element_type override {
     if (ops_.empty())
       return element_type_traits<void>{};
     return ops_.back()->output_element_type();
   }
 
-  [[nodiscard]] auto
-  runtime_instantiate([[maybe_unused]] const type& input_schema,
-                      [[maybe_unused]] operator_control_plane* ctrl) noexcept
-    -> caf::expected<runtime_physical_operator> final {
+  [[nodiscard]] auto runtime_instantiate(
+    [[maybe_unused]] const type& input_schema,
+    [[maybe_unused]] operator_control_plane* ctrl) const noexcept
+    -> caf::expected<runtime_physical_operator> override {
     return caf::make_error(ec::logic_error, "instantiated pipeline");
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string final {
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
     return fmt::to_string(fmt::join(ops_, " | "));
   }
 
-  [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr> {
-    return std::move(ops_);
+  [[nodiscard]] auto operators() const
+    -> std::span<const logical_operator_ptr> {
+    return ops_;
   }
 
 private:
-  explicit pipeline2(std::vector<logical_operator_ptr> ops)
+  explicit pipeline(std::vector<logical_operator_ptr> ops)
     : ops_(std::move(ops)) {
   }
 
@@ -80,9 +81,9 @@ private:
 } // namespace vast
 
 template <>
-struct fmt::formatter<vast::pipeline2> : fmt::formatter<std::string_view> {
+struct fmt::formatter<vast::pipeline> : fmt::formatter<std::string_view> {
   template <class FormatContext>
-  auto format(const vast::pipeline2& value, FormatContext& ctx) const {
+  auto format(const vast::pipeline& value, FormatContext& ctx) const {
     return fmt::formatter<std::string_view>::format(value.to_string(), ctx);
   }
 };
