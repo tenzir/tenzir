@@ -19,6 +19,7 @@
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
+#include <vast/system/builtin_rest_endpoints.hpp>
 #include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/table_slice.hpp>
@@ -158,9 +159,6 @@ static auto const* SPEC_V0 = R"_(
       422:
         description: Invalid arguments.
     )_";
-
-static constexpr auto QUERY_NEW_ENDPOINT = 0;
-static constexpr auto QUERY_NEXT_ENDPOINT = 1;
 
 /// An actor to help with handling a single query.
 using query_manager_actor = system::typed_actor_fwd<
@@ -553,11 +551,13 @@ auto request_multiplexer(
     self->state.live_queries_.erase(it);
   });
   return {
-    [self](atom::http_request, uint64_t endpoint_id, http_request rq) {
+    [self](atom::http_request, uint64_t endpoint_id_raw, http_request rq) {
       VAST_VERBOSE("{} handles /query request for endpoint id {} with params "
                    "{}",
-                   *self, endpoint_id, rq.params);
-      if (endpoint_id == QUERY_NEW_ENDPOINT) {
+                   *self, endpoint_id_raw, rq.params);
+      auto endpoint_id = static_cast<system::query_endpoints>(endpoint_id_raw);
+      switch (endpoint_id) {
+      case system::query_endpoints::new_: {
         auto query_string = std::optional<std::string>{};
         auto expand = false;
         if (rq.params.contains("expand"))
@@ -640,8 +640,9 @@ auto request_multiplexer(
             [response = rq.response](const caf::error& e) {
               response->abort(500, "index evaluation failed\n", e);
             });
-      } else {
-        VAST_ASSERT_CHEAP(endpoint_id == QUERY_NEXT_ENDPOINT);
+        break;
+      }
+      case system::query_endpoints::next: {
         if (!rq.params.contains("id"))
           return rq.response->abort(400, "missing id\n", caf::error{});
         if (!rq.params.contains("n"))
@@ -658,7 +659,12 @@ auto request_multiplexer(
                 [response = rq.response](const caf::error& e) {
                   response->abort(500, "internal server error\n", e);
                 });
+        break;
       }
+      default:
+        // If we get here there's a bug in the server.
+        VAST_ASSERT_CHEAP(false, "unknown endpoint id");
+    }
     },
   };
 }
@@ -689,7 +695,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   rest_endpoints() const override {
     static auto endpoints = std::vector<vast::rest_endpoint>{
       {
-        .endpoint_id = QUERY_NEW_ENDPOINT,
+        // .endpoint_id = system::query_endpoints::new_,
         .method = http_method::post,
         .path = "/query/new",
         .params = vast::record_type{
@@ -704,7 +710,7 @@ class plugin final : public virtual rest_endpoint_plugin {
         .content_type = http_content_type::json,
       },
       {
-        .endpoint_id = QUERY_NEXT_ENDPOINT,
+        // .endpoint_id = system::query_endpoints::next,
         .method = http_method::get,
         .path = "/query/:id/next",
         .params = vast::record_type{
