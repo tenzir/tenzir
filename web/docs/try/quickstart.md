@@ -253,9 +253,12 @@ operator returns a random number of events per unique schema:
 [20:39:12.647] json-writer processed 33 events at a rate of 2675 events/sec in 12.34ms
 ```
 
-Here we see all the variety of our data. This can be a bit overwhelming. There
-are many other ways to slice and dice the data. For example, we could pick a
-single schema:
+Here we see all the variety of our data. This can be a bit overwhelming. 
+
+### Filter and reshape data
+
+There are many other ways to slice and dice the data. For example, we could pick
+a single schema:
 
 ```bash
 ❯ vast export json '#type == "suricata.alert" | head 3'
@@ -292,6 +295,8 @@ operator helps selecting fields of interest:
 {"src_ip": "14.1.112.177", "dest_ip": "198.71.247.91", "alert": {"signature": "ET DOS Possible NTP DDoS Inbound Frequent Un-Authed MON_LIST Requests IMPL 0x03", "severity": 2}}
 {"src_ip": "167.94.138.20", "dest_ip": "198.71.247.91", "alert": {"signature": "SURICATA UDPv4 invalid checksum", "severity": 3}}`
 ```
+
+### Summarize data with aggregations
 
 Looking at the output, we see multiple alert severities. Let's understand their
 distribution:
@@ -376,6 +381,8 @@ rendering data:
 The [`ascii`](/docs/understand/formats/ascii) format displays the raw data
 without field names, for experiencing maximum data density.
 
+### Extract data with rich expressions
+
 Finally, let's get a feel for the [expression
 language](/docs/understand/language/expressions). VAST comes with native types
 for IP addresses, subnets, timestamps, and durations. These come in handy
@@ -383,6 +390,7 @@ to succinctly describe what you want:
 
 ```bash
 ❯ vast export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | select orig_h, resp_h, orig_bytes'
+```
 
 ```json
 {"id": {"orig_h": "10.10.5.101", "resp_h": "87.120.8.190"}, "orig_bytes": 1394538}
