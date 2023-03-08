@@ -209,7 +209,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   if (auto error = unpack(*partition.uuid(), state.id))
     return error;
   state.events = partition.events();
-  state.name = "partition-" + to_string(state.id);
   if (auto schema = unpack_schema(partition))
     state.combined_schema_ = std::move(*schema);
   else
@@ -335,7 +334,6 @@ partition_actor::behavior_type passive_partition(
   self->state.path = path;
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
-  self->state.name = "partition-" + id_string;
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_down_handler([=](const caf::down_msg& msg) {
     if (msg.source != self->state.store.address()) {
