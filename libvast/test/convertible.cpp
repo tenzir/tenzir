@@ -6,12 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <iterator>
-#define SUITE convertible
-
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/ip.hpp"
+#include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/data.hpp"
@@ -19,6 +17,8 @@
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
+
+#include <iterator>
 
 using namespace vast;
 using namespace vast::test;
@@ -70,7 +70,7 @@ BASIC(double, 0.42)
 BASIC(duration, std::chrono::minutes{55})
 BASIC(vast::time, unbox(to<vast::time>("2012-08-12+23:55-0130")))
 BASIC(std::string, "test")
-BASIC(pattern, "pat")
+BASIC(pattern, unbox(to<pattern>("/pat/")))
 BASIC(ip, unbox(to<ip>("44.0.0.1")))
 BASIC(subnet, unbox(to<subnet>("44.0.0.1/20")))
 #undef BASIC

@@ -6,13 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE parquet
-
 #include <vast/chunk.hpp>
+#include <vast/collect.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/subnet.hpp>
-#include <vast/detail/collect.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/spawn_container_source.hpp>
 #include <vast/expression.hpp>
@@ -306,7 +304,7 @@ TEST(passive parquet store fetchall small row group size) {
   auto _
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
     = const_cast<store_actor_plugin*>(plugin)->initialize(
-      record{{"row-group-size", 512u}});
+      record{{"row-group-size", 512u}}, {});
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);

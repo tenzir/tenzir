@@ -301,14 +301,14 @@ data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
 /// Access VAST data views for all elements of an Arrow Array.
 auto values(const type& type,
             const std::same_as<arrow::Array> auto& array) noexcept
-  -> detail::generator<data_view>;
+  -> generator<data_view>;
 
 template <concrete_type Type>
 auto values(const Type& type, const type_to_arrow_array_t<Type>& arr) noexcept
-  -> detail::generator<std::optional<view<type_to_data_t<Type>>>> {
+  -> generator<std::optional<view<type_to_data_t<Type>>>> {
   auto impl = [](const Type& type,
                  const type_to_arrow_array_storage_t<Type>& arr) noexcept
-    -> detail::generator<std::optional<view<type_to_data_t<Type>>>> {
+    -> generator<std::optional<view<type_to_data_t<Type>>>> {
     for (int i = 0; i < arr.length(); ++i) {
       if (arr.IsNull(i))
         co_yield {};
@@ -325,10 +325,10 @@ auto values(const Type& type, const type_to_arrow_array_t<Type>& arr) noexcept
 
 auto values(const type& type,
             const std::same_as<arrow::Array> auto& array) noexcept
-  -> detail::generator<data_view> {
-  const auto f = []<concrete_type Type>(
-                   const Type& type,
-                   const arrow::Array& array) -> detail::generator<data_view> {
+  -> generator<data_view> {
+  const auto f
+    = []<concrete_type Type>(
+        const Type& type, const arrow::Array& array) -> generator<data_view> {
     for (auto&& result :
          values(type, caf::get<type_to_arrow_array_t<Type>>(array))) {
       if (!result)

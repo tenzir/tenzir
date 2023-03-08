@@ -2,8 +2,36 @@
 
 VAST has powerful features for transforming [data in
 motion](#modify-data-in-motion) and [data at rest](#modify-data-at-rest). Both
-aspects rely on [pipelines](/docs/understand/query-language/pipelines) as
-building block.
+aspects rely on [pipelines](/docs/understand/language/pipelines) as building
+block.
+
+## Define a pipeline
+
+To reference and use a pipeline as building block, you must add give it a unique
+name under the key `vast.pipelines` in the configuration file:
+
+```yaml
+vast:
+  pipelines:
+     example: |
+       hash --salt="B3IwnumKPEJDAA4u" src_ip
+       | summarize 
+           pkts_toserver=sum(flow.pkts_toserver),
+           pkts_toclient=sum(flow.pkts_toclient),
+           bytes_toserver=sum(flow.bytes_toserver),
+           bytes_toclient=sum(flow.bytes_toclient),
+           start=min(flow.start),
+           end=max(flow.end)
+         by
+           src_ip,
+           dest_ip
+```
+
+This `example` pipeline consists of two operators, `hash` and `summarize` that
+execute in sequential order.
+
+Have a look at [all available operators](/docs/understand/language/operators) to
+understand what other transformations you can apply.
 
 ## Modify data in motion
 
@@ -13,8 +41,7 @@ import and export pipelines can run in the server or client process. For
 imports, the client is the source generating the data, for exports the client is
 the sink receiving the exported data.
 
-![Pipelines](/img/pipelines.light.png#gh-light-mode-only)
-![Pipelines](/img/pipelines.dark.png#gh-dark-mode-only)
+![Pipelines](pipeline-locations.excalidraw.svg)
 
 The flexible combination of location and type of pipeline type enables multiple
 use cases:

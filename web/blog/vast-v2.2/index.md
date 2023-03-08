@@ -95,4 +95,4 @@ summarize:
 
 In SQL, this would be the `AS` token: `SELECT min(ts) AS min_ts`.
 
-[summarize]: /docs/understand/query-language/operators/summarize
+[summarize]: /docs/understand/language/operators/summarize

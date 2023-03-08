@@ -45,9 +45,7 @@ using view = typename view_trait<T>::type;
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
   };                                                                           \
-  inline type_name materialize(view<type_name> x) {                            \
-    return x;                                                                  \
-  }
+  inline type_name materialize(view<type_name> x) { return x; }
 
 VAST_VIEW_TRAIT(bool)
 VAST_VIEW_TRAIT(int64_t)
@@ -76,30 +74,24 @@ struct view_trait<std::string> {
 /// @relates view_trait
 class pattern_view : detail::totally_ordered<pattern_view> {
 public:
-  static pattern glob(std::string_view x);
-
   explicit pattern_view(const pattern& x);
 
-  explicit pattern_view(std::string_view str);
-
-  [[nodiscard]] bool match(std::string_view x) const;
-  [[nodiscard]] bool search(std::string_view x) const;
   [[nodiscard]] std::string_view string() const;
+  [[nodiscard]] bool case_insensitive() const;
 
   template <class Hasher>
   friend void hash_append(Hasher& h, pattern_view x) {
-    hash_append(h, x.pattern_);
+    hash_append(h, x.pattern_, x.case_insensitive_);
   }
+
+  friend bool operator==(pattern_view lhs, pattern_view rhs) noexcept;
+  friend std::strong_ordering
+  operator<=>(pattern_view lhs, pattern_view rhs) noexcept;
 
 private:
   std::string_view pattern_;
+  bool case_insensitive_;
 };
-
-/// @relates pattern_view
-bool operator==(pattern_view x, pattern_view y) noexcept;
-
-/// @relates pattern_view
-bool operator<(pattern_view x, pattern_view y) noexcept;
 
 //// @relates view_trait
 template <>

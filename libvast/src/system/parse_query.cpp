@@ -8,7 +8,7 @@
 
 #include "vast/system/parse_query.hpp"
 
-#include "vast/detail/collect.hpp"
+#include "vast/collect.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -31,19 +31,18 @@ caf::expected<std::pair<expression, std::optional<pipeline>>>
 parse_query(const std::string& query) {
   // Get all query languages, but make sure that VAST is at the front.
   // TODO: let the user choose exactly one language instead.
-  auto query_languages = collect(plugins::get<query_language_plugin>());
-  if (const auto* vastql = plugins::find<query_language_plugin>("VASTQL")) {
-    const auto it
-      = std::find(query_languages.begin(), query_languages.end(), vastql);
-    VAST_ASSERT_CHEAP(it != query_languages.end());
-    std::rotate(query_languages.begin(), it, it + 1);
+  auto languages = collect(plugins::get<language_plugin>());
+  if (const auto* vast = plugins::find<language_plugin>("VAST")) {
+    const auto it = std::find(languages.begin(), languages.end(), vast);
+    VAST_ASSERT_CHEAP(it != languages.end());
+    std::rotate(languages.begin(), it, it + 1);
   }
-  for (const auto& query_language : query_languages) {
-    if (auto query_result = query_language->make_query(query))
+  for (const auto& language : languages) {
+    if (auto query_result = language->make_query(query))
       return query_result;
     else
-      VAST_DEBUG("failed to parse query as {} language: {}",
-                 query_language->name(), query_result.error());
+      VAST_DEBUG("failed to parse query as {} language: {}", language->name(),
+                 query_result.error());
   }
   return caf::make_error(ec::syntax_error,
                          fmt::format("invalid query: {}", query));

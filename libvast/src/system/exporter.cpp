@@ -73,15 +73,33 @@ void attach_stream(exporter_actor::stateful_pointer<exporter_state> self) {
         [continuous](const stream_state& state) {
           if (continuous)
             return false;
-          return state.self_ptr->state.query_status.received
-                   == state.self_ptr->state.query_status.expected
-                 && state.self_ptr->state.results.empty();
+          auto should_end = state.self_ptr->state.query_status.received
+                              == state.self_ptr->state.query_status.expected
+                            && state.self_ptr->state.results.empty();
+          if (should_end)
+            shutdown_stream(state.self_ptr->state.source);
+          return should_end;
         })
         .ptr();
 }
 
-void ship_results(exporter_actor::stateful_pointer<exporter_state> self,
-                  table_slice slice) {
+void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
+  auto transformed = self->state.pipeline.finish();
+  if (!transformed) {
+    VAST_ERROR("exporter failed to finish the transformation: {}",
+               transformed.error());
+    return;
+  }
+  if (transformed->empty())
+    return;
+  for (auto& t : *transformed)
+    self->state.results.push(std::move(t));
+  if (!self->state.source) [[unlikely]]
+    attach_stream(self);
+}
+
+void buffer_results(exporter_actor::stateful_pointer<exporter_state> self,
+                    table_slice slice) {
   VAST_TRACE_SCOPE("");
   auto& st = self->state;
   VAST_DEBUG("{} relays {} events", *self, slice.rows());
@@ -91,16 +109,8 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self,
     VAST_ERROR("exporter failed to apply the transformation: {}", err);
     return;
   }
-  auto transformed = self->state.pipeline.finish();
-  if (!transformed) {
-    VAST_ERROR("exporter failed to finish the transformation: {}",
-               transformed.error());
-    return;
-  }
-  if (!self->state.source) [[unlikely]]
-    attach_stream(self);
-  for (auto& t : *transformed)
-    self->state.results.push(std::move(t));
+  if (!self->state.pipeline.is_blocking())
+    ship_results(self);
 }
 
 void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
@@ -199,7 +209,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
     return;
   }
   for (auto&& selected : select(slice, expression{}, selection)) {
-    ship_results(self, std::move(selected));
+    buffer_results(self, std::move(selected));
   }
 }
 
@@ -207,16 +217,8 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, unsigned long export_max_events,
-         std::vector<pipeline>&& pipelines, index_actor index) {
-  if (!pipelines.empty() && export_max_events > 0) {
-    self->quit(caf::make_error(
-      ec::invalid_argument, fmt::format("{} is unable to use pipelines when "
-                                        "limiting events using "
-                                        "'vast.export.max-events' (set to {})",
-                                        *self, export_max_events)));
-    return exporter_actor::behavior_type::make_empty_behavior();
-  }
+         query_options options, std::vector<pipeline>&& pipelines,
+         index_actor index) {
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,
@@ -235,15 +237,18 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         : query_context::priority::normal;
   VAST_DEBUG("spawned exporter with {} pipelines", pipelines.size());
   self->state.pipeline = pipeline_executor{std::move(pipelines)};
-  if (auto err = self->state.pipeline.validate(
-        pipeline_executor::allow_aggregate_pipelines::yes)) {
-    self->quit(caf::make_error(
-      ec::invalid_argument,
-      fmt::format("{} received an invalid pipeline: {}", *self, err)));
-    return exporter_actor::behavior_type::make_empty_behavior();
-  }
+  // Always fetch all partitions for blocking pipelines.
+  if (self->state.pipeline.is_blocking())
+    self->state.query_context.taste = std::numeric_limits<uint32_t>::max();
   self->state.index = std::move(index);
   if (has_continuous_option(options)) {
+    if (self->state.pipeline.is_blocking()) {
+      self->quit(caf::make_error(ec::invalid_configuration,
+                                 fmt::format("{} cannot use blocking pipeline "
+                                             "in continuous mode",
+                                             *self)));
+      return exporter_actor::behavior_type::make_empty_behavior();
+    }
     VAST_DEBUG("{} has continuous query option", *self);
     self->monitor(self->state.index);
   }
@@ -353,15 +358,12 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
       self->state.query_status.processed += slice.rows();
       // Ship slices to connected SINKs.
-      ship_results(self, std::move(slice));
+      buffer_results(self, std::move(slice));
     },
     [self](atom::done) {
       using namespace std::string_literals;
       // Figure out if we're done by bumping the counter for `received`
       // and check whether it reaches `expected`.
-      caf::timespan runtime
-        = std::chrono::system_clock::now() - self->state.start;
-      self->state.query_status.runtime = runtime;
       self->state.query_status.received += self->state.query_status.scheduled;
       self->state.query_status.scheduled = 0u;
       if (self->state.query_status.received
@@ -369,8 +371,15 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         VAST_DEBUG("{} received hits from {}/{} partitions", *self,
                    self->state.query_status.received,
                    self->state.query_status.expected);
+        caf::timespan runtime
+          = std::chrono::system_clock::now() - self->state.start;
+        self->state.query_status.runtime = runtime;
         request_more_hits(self);
       } else {
+        ship_results(self);
+        caf::timespan runtime
+          = std::chrono::system_clock::now() - self->state.start;
+        self->state.query_status.runtime = runtime;
         VAST_DEBUG("{} received all hits from {} partition(s) in {}", *self,
                    self->state.query_status.expected, vast::to_string(runtime));
         VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);

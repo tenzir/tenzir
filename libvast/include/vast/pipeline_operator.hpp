@@ -23,9 +23,10 @@ class pipeline_operator {
 public:
   virtual ~pipeline_operator() = default;
 
-  /// Returns true for aggregate pipeline operators.
-  /// @note pipeline operators are not aggregate by default.
-  [[nodiscard]] virtual bool is_aggregate() const {
+  /// Returns true for pipeline operators for which are not incrementally
+  /// usable.
+  /// @note Operators are assumed to be non-blocking by default.
+  [[nodiscard]] virtual bool is_blocking() const {
     return false;
   }
 

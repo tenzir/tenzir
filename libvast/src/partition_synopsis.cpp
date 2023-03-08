@@ -8,7 +8,7 @@
 
 #include "vast/partition_synopsis.hpp"
 
-#include "vast/detail/collect.hpp"
+#include "vast/collect.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/index_config.hpp"

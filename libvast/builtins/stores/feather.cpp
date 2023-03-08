@@ -8,13 +8,13 @@
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/chunk.hpp>
+#include <vast/collect.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/data.hpp>
-#include <vast/detail/collect.hpp>
-#include <vast/detail/generator.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/fwd.hpp>
+#include <vast/generator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/store.hpp>
 #include <vast/table_slice.hpp>
@@ -98,7 +98,7 @@ auto wrap_record_batch(const table_slice& slice)
 
 /// Decode an Arrow IPC stream incrementally.
 auto decode_ipc_stream(chunk_ptr chunk)
-  -> caf::expected<detail::generator<std::shared_ptr<arrow::RecordBatch>>> {
+  -> caf::expected<generator<std::shared_ptr<arrow::RecordBatch>>> {
   // See arrow::ipc::internal::kArrowMagicBytes in
   // arrow/ipc/metadata_internal.h.
   static constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
@@ -120,11 +120,11 @@ auto decode_ipc_stream(chunk_ptr chunk)
     return caf::make_error(
       ec::format_error, fmt::format("failed to get batch generator: {}",
                                     get_generator_result.status().ToString()));
-  auto generator = get_generator_result.MoveValueUnsafe();
-  return []([[maybe_unused]] auto reader, auto generator)
-           -> detail::generator<std::shared_ptr<arrow::RecordBatch>> {
+  auto gen = get_generator_result.MoveValueUnsafe();
+  return []([[maybe_unused]] auto reader,
+            auto gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
     while (true) {
-      auto next = generator();
+      auto next = gen();
       if (!next.is_finished())
         next.Wait();
       VAST_ASSERT(next.is_finished());
@@ -133,7 +133,7 @@ auto decode_ipc_stream(chunk_ptr chunk)
         co_return;
       co_yield std::move(result);
     }
-  }(std::move(reader), std::move(generator));
+  }(std::move(reader), std::move(gen));
 }
 
 class passive_feather_store final : public passive_store {
@@ -148,7 +148,7 @@ class passive_feather_store final : public passive_store {
     return {};
   }
 
-  [[nodiscard]] detail::generator<table_slice> slices() const override {
+  [[nodiscard]] generator<table_slice> slices() const override {
     auto offset = id{};
     auto i = size_t{};
     while (true) {
@@ -189,9 +189,9 @@ class passive_feather_store final : public passive_store {
   }
 
 private:
-  detail::generator<std::shared_ptr<arrow::RecordBatch>>
-    remaining_slices_generator_ = {};
-  mutable detail::generator<std::shared_ptr<arrow::RecordBatch>>::iterator
+  generator<std::shared_ptr<arrow::RecordBatch>> remaining_slices_generator_
+    = {};
+  mutable generator<std::shared_ptr<arrow::RecordBatch>>::iterator
     remaining_slices_iterator_
     = {};
   mutable uint64_t cached_num_events_ = {};
@@ -245,7 +245,7 @@ public:
     return chunk::make(buffer.MoveValueUnsafe());
   }
 
-  [[nodiscard]] detail::generator<table_slice> slices() const override {
+  [[nodiscard]] generator<table_slice> slices() const override {
     // We need to make a copy of the slices here because the slices_ vector
     // may get invalidated while we iterate over it.
     auto slices = slices_;
@@ -264,10 +264,10 @@ private:
 };
 
 class plugin final : public virtual store_plugin {
-  [[nodiscard]] caf::error initialize(data options) override {
-    if (caf::holds_alternative<caf::none_t>(options))
-      return caf::none;
-    return convert(options, feather_config_);
+  [[nodiscard]] caf::error
+  initialize(const record& plugin_config,
+             [[maybe_unused]] const record& global_config) override {
+    return convert(plugin_config, feather_config_);
   }
 
   [[nodiscard]] std::string name() const override {

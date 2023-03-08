@@ -2,7 +2,8 @@
 title: The New REST API
 authors: [lava, mavam]
 date: 2023-01-26
-image: /img/rest-api-deployment-single.light.png
+last_updated: 2023-02-08
+image: /img/blog/rest-api-deployment-single.excalidraw.svg
 tags: [frontend, rest, api, architecture]
 ---
 
@@ -49,8 +50,7 @@ distribution and scaling properties. Concretely, there exist two ways to run the
 REST API actor: either as a separate process or embedded inside a VAST server
 node:
 
-![REST API - Single Deployment](/img/rest-api-deployment-single.light.png#gh-light-mode-only)
-![REST API - Single Deployment](/img/rest-api-deployment-single.dark.png#gh-dark-mode-only)
+![REST API - Single Deployment](rest-api-deployment-single.excalidraw.svg)
 
 Running the REST API as dedicated process gives you more flexibility with
 respect to deployment, fault isolation, and scaling. An embedded setup offers
@@ -100,8 +100,7 @@ different use case.
 
 The developer mode bypasses encryption and authentication token verification.
 
-![REST API - Developer Mode](/img/rest-api-developer-mode.light.png#gh-light-mode-only)
-![REST API - Developer Mode](/img/rest-api-developer-mode.dark.png#gh-dark-mode-only)
+![REST API - Developer Mode](rest-api-mode-developer.excalidraw.svg)
 
 Pass `--mode=dev` to start the REST API in developer mode:
 
@@ -116,8 +115,7 @@ a network interface. This mode only accepts HTTPS connections and requires a
 valid authentication token for every request. This is the default mode of
 operation.
 
-![REST API - Server Mode](/img/rest-api-server-mode.light.png#gh-light-mode-only)
-![REST API - Server Mode](/img/rest-api-server-mode.dark.png#gh-dark-mode-only)
+![REST API - Server Mode](rest-api-mode-server.excalidraw.svg)
 
 Pass `--mode=server` to start the REST API in server mode:
 
@@ -131,8 +129,7 @@ The upstream TLS mode is suitable when VAST sits upstream of a separate
 TLS terminator that is running on the same machine. This kind of setup
 is commonly encountered when running nginx as a reverse proxy.
 
-![REST API - TLS Upstream Mode](/img/rest-api-tls-upstream-mode.light.png#gh-light-mode-only)
-![REST API - TLS Upstream Mode](/img/rest-api-tls-upstream-mode.dark.png#gh-dark-mode-only)
+![REST API - Developer Mode](rest-api-mode-developer.excalidraw.svg)
 
 VAST only listens on localhost addresses, accepts plain HTTP but still
 checks authentication tokens.
@@ -158,8 +155,7 @@ cannot be impersonated or bypassed.
 Typically self-signed certificates are used for that purpose, since both ends of
 the connection are configured together and not exposed to the public internet.
 
-![REST API - Mutual TLS Mode](/img/rest-api-mutual-tls-mode.light.png#gh-light-mode-only)
-![REST API - Mutual TLS Mode](/img/rest-api-mutual-tls-mode.dark.png#gh-dark-mode-only)
+![REST API - mTLS Mode](rest-api-mode-mtls.excalidraw.svg)
 
 Pass `--mode=mtls` to start the REST API in mutual TLS mode:
 
@@ -364,5 +360,5 @@ stability guarantees at the moment.
 :::
 
 As always, if you have any question on usage, swing by our [community
-Slack](http://slack.tenzir.com). Missing routes? Let us know so that we know
+chat](/discord). Missing routes? Let us know so that we know
 what to prioritize. Now happy curling! :curling_stone:

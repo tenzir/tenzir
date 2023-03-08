@@ -191,13 +191,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.has_sink = false;
   self->state.done = false;
   self->state.executor = pipeline_executor{std::move(pipelines)};
-  if (auto err = self->state.executor.validate(
-        pipeline_executor::allow_aggregate_pipelines::yes)) {
-    self->quit(caf::make_error(
-      ec::invalid_argument,
-      fmt::format("{} received an invalid pipeline: {}", *self, err)));
-    return {};
-  }
   // Register with the accountant.
   self->send(self->state.accountant, atom::announce_v, self->state.name);
   self->state.initialize(catalog, std::move(type_filter));

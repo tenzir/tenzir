@@ -248,7 +248,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: show schemas
+      - command: show schemas --expand
       - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
@@ -379,7 +379,7 @@ tests:
       - command: show concepts
         transformation: jq '.[] | select(.concept.name == "net.app") | .concept.fields | map(split(".")[0]) | unique'
       - command: show --yaml models
-      - command: show --yaml schemas
+      - command: show schemas
   Arrow Full Data Model:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
@@ -450,6 +450,15 @@ tests:
   #       prepend_vast: false
   #     - command: -N export json '#import_time < 5 seconds ago'
   #       transformation: jq -ec '.'
+
+  Extractor Predicates:
+    tags: [import, export, suricata]
+    steps:
+      - command: -N import suricata
+        input: data/suricata/eve.json
+      - command: -N count "timestamp && :ip"
+      - command: -N count does_not_exist
+      - command: -N export json flow.alerted
 
   # Nesting Records in Lists is not currently fully supported, but its presence
   # should also not crash the JSON reader.
@@ -524,35 +533,35 @@ tests:
     steps:
       - command: import -b suricata
         input: data/suricata/eve.json
-      - command: "export json 'identity'"
-      - command: "export json 'identity
+      - command: "export json 'pass'"
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port'"
-      - command: "export json 'identity
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp'"
-      - command: "export json 'identity
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id'"
-      - command: "export json 'identity
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id'"
-      - command: "export json 'identity
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip'"
-      - command: "export json 'identity
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]'"
-      - command: "export json 'identity
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -560,7 +569,7 @@ tests:
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
                                | rename new_list=abc_list'"
-      - command: "export json 'identity
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -569,7 +578,7 @@ tests:
                                | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
                                | rename new_list=abc_list
                                | replace new_list=2'"
-      - command: "export json 'identity
+      - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -583,7 +592,7 @@ tests:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
     steps:
-      - command: "import -b suricata 'identity
+      - command: "import -b suricata 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -619,34 +628,34 @@ tests:
         input: data/suricata/eve.json
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity'"
+                               | pass'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -654,7 +663,7 @@ tests:
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -663,7 +672,7 @@ tests:
                                | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
                                | rename new_list=abc_list'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -673,7 +682,7 @@ tests:
                                | rename new_list=abc_list
                                | replace new_list=2'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -688,7 +697,7 @@ tests:
     fixture: ServerTester
     steps:
       - command: "import -b suricata 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -721,7 +730,7 @@ tests:
     fixture: ServerTester
     steps:
       - command: "spawn source -r @./data/suricata/eve.json suricata
-                               'identity
+                               'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -738,7 +747,7 @@ tests:
     steps:
       - command: "spawn source -r @./data/suricata/eve.json suricata
                                'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | identity
+                               | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
@@ -827,3 +836,40 @@ tests:
       - command: export json
       - command: export arrow
         transformation: python @./misc/scripts/print-arrow-batch-size.py
+
+  Export shutdown behavior:
+    fixture: ServerTester
+    tags: [import, export]
+    steps:
+      - command: export json
+      - command: import --blocking suricata
+        input: data/suricata/eve.json
+      - command: export --max-events=2 json 'head 1'
+        transformation: jq -ers 'length'
+      - command: export json 'head 1'
+        transformation: jq -ers 'length'
+      - command: export --max-events=1 json 'head 0'
+      - command: export json 'head 0'
+
+  CEF:
+    tags: [server, import-export, cef]
+    fixture: ServerTester
+    steps:
+      - command: import -b cef
+        input: data/cef/cynet.log
+      - command: import -b cef
+        input: data/cef/checkpoint.log
+      - command: import -b cef
+        input: data/cef/forcepoint.log
+      - command: export json 'cef_version >= 0 && device_vendor == "Cynet"'
+      - command: export json '172.31.5.93'
+      - command: export json 'act == /Accept|Bypass/'
+
+  Patterns:
+    fixture: ServerTester
+    tags: [import, export]
+    steps:
+      - command: import -b suricata
+        input: data/suricata/eve.json
+      - command: export json 'event_type == /.*flow$/'
+      - command: export json 'event_type == /.*FLOW$/i'

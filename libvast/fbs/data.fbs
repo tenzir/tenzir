@@ -28,8 +28,13 @@ table String {
   value: string;
 }
 
+table PatternOptions {
+  case_insensitive: bool;
+}
+
 table Pattern {
   value: string;
+  options: PatternOptions;
 }
 
 struct IP {

@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
     };
   }
   for (auto& plugin : vast::plugins::get_mutable()) {
-    if (auto err = plugin->initialize({})) {
+    if (auto err = plugin->initialize({}, {})) {
       fmt::print(stderr, "failed to initialize plugin {}: {}", plugin->name(),
                  err);
       return EXIT_FAILURE;

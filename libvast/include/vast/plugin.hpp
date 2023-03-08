@@ -16,6 +16,7 @@
 #include "vast/detail/pp.hpp"
 #include "vast/detail/weak_handle.hpp"
 #include "vast/http_api.hpp"
+#include "vast/operator_control_plane.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
 
@@ -63,7 +64,7 @@ const std::vector<plugin_ptr>& get() noexcept;
 
 /// Retrieves all plugins of a given plugin type.
 template <class Plugin>
-detail::generator<const Plugin*> get() noexcept;
+generator<const Plugin*> get() noexcept;
 
 /// Retrieves the plugin of type `Plugin` with the given name
 /// (case-insensitive), or nullptr if it doesn't exist.
@@ -112,8 +113,12 @@ public:
 
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
-  /// @param config The relevant subsection of the configuration.
-  [[nodiscard]] virtual caf::error initialize(data config) = 0;
+  /// @param plugin_config The relevant subsection of the configuration.
+  /// @param global_config The entire VAST configuration for potential access to
+  /// global options.
+  [[nodiscard]] virtual caf::error
+  initialize(const record& plugin_config, const record& global_config)
+    = 0;
 
   /// Returns the unique name of the plugin.
   [[nodiscard]] virtual std::string name() const = 0;
@@ -349,11 +354,11 @@ private:
              std::span<const std::byte> header) const final;
 };
 
-// -- query language plugin ---------------------------------------------------
+// -- language plugin ---------------------------------------------------
 
-/// A query language parser to pass query in a custom language to VAST.
+/// A language parser to pass query in a custom language to VAST.
 /// @relates plugin
-class query_language_plugin : public virtual plugin {
+class language_plugin : public virtual plugin {
 public:
   /// Parses a query expression string into a VAST expression.
   /// @param The string representing the custom query.
@@ -395,6 +400,32 @@ public:
   //  the component can be used to answer requests directly.
   [[nodiscard]] virtual system::rest_handler_actor
   handler(caf::actor_system& system, system::node_actor node) const
+    = 0;
+};
+
+// -- loader plugin -----------------------------------------------------
+
+/// A loader plugin transfers input data into a stream of chunks.
+/// @relates plugin
+class loader_plugin : public virtual plugin {
+public:
+  // Alias for the byte chunk generation function.
+  using loader = std::function<auto()->generator<chunk_ptr>>;
+
+  // Alias for the byte chunk -> table_slice transformation function.
+  using parser
+    = std::function<auto(generator<chunk_ptr>)->generator<table_slice>>;
+
+  /// Returns the loader.
+  [[nodiscard]] virtual auto
+  make_loader(const record&, operator_control_plane&) const
+    -> caf::expected<loader>
+    = 0;
+
+  /// Returns the default parser for this loader.
+  [[nodiscard]] virtual auto
+  make_default_parser(const record&, operator_control_plane&) const
+    -> caf::expected<parser>
     = 0;
 };
 
@@ -497,7 +528,7 @@ private:
   void* library_ = {};
   plugin* instance_ = {};
   void (*deleter_)(plugin*) = {};
-  const char* version_ = {};
+  const char* version_ = nullptr;
   enum type type_ = {};
 };
 
@@ -517,7 +548,7 @@ const Plugin* find(std::string_view name) noexcept {
 }
 
 template <class Plugin>
-detail::generator<const Plugin*> get() noexcept {
+generator<const Plugin*> get() noexcept {
   for (auto const& plugin : get())
     if (auto const* specific_plugin = plugin.as<Plugin>())
       co_yield specific_plugin;

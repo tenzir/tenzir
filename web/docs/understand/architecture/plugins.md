@@ -13,8 +13,7 @@ spawns queries, or implements integrations with third-party libraries.
 There exist **dynamic plugins** that come in the form shared libraries, and
 **static plugins** that are compiled into libvast or VAST itself:
 
-![Plugins](/img/plugins.light.png#gh-light-mode-only)
-![Plugins](/img/plugins.dark.png#gh-dark-mode-only)
+![Plugins](plugins.excalidraw.svg)
 
 Plugins do not only exist for extensions by third parties, but VAST also
 implements core functionality through the plugin API. Such plugins compile as
@@ -25,8 +24,7 @@ static plugins. Because they are always built, we call them *builtins*.
 VAST offers several customization points to exchange or enhance functionality
 selectively. Here is a list of available plugin categories and plugin types:
 
-![Plugin types](/img/plugin-types.light.png#gh-light-mode-only)
-![Plugin types](/img/plugin-types.dark.png#gh-dark-mode-only)
+![Plugin Types](plugin-types.excalidraw.svg)
 
 ### Command
 
@@ -36,9 +34,8 @@ and allow for flexible structuring of the provided functionality.
 
 ### Component
 
-The component plugin spawns a [component](components) inside the VAST node. A
-component is an [actor](actor-model) and runs in parallel with all other
-components.
+The component plugin spawns a component inside the VAST node. A component is an
+[actor](actor-model) and runs in parallel with all other components.
 
 This plugin is the most generic mechanism to introduce new functionality.
 
@@ -62,9 +59,9 @@ The writer plugin adds a new format to print data, such as JSON (ASCII) or PCAP
 
 Writer plugins automatically add the subcommand `vast export <plugin name>`.
 
-### Query Language
+### Language
 
-A query language plugin adds an alternative parser for a query expression. This
+A language plugin adds an alternative parser for a query expression. This
 plugin allows for replacing the query *frontend* while using VAST as *backend*
 execution engine.
 
@@ -75,14 +72,14 @@ historical data or runs it as live query.
 ### Pipeline Operator
 
 The pipeline operator plugin adds a new [pipeline
-operator](/docs/understand/query-language/operators) that users can
+operator](/docs/understand/language/operators) that users can
 reference in a [pipeline
-definition](/docs/understand/query-language/pipelines).
+definition](/docs/understand/language/pipelines).
 
 ### Aggregation Function
 
 The aggregation function plugin adds a new [aggregation
-function](/docs/understand/query-language/operators/summarize#aggregate-functions)
+function](/docs/understand/language/operators/summarize#aggregate-functions)
 for the `summarize` pipeline operator that performs an incremental aggregation
 over a set of grouped input values of a single type.
 

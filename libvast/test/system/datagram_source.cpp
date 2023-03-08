@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE datagram_source
-
 #include "vast/system/datagram_source.hpp"
 
 #include "vast/format/zeek.hpp"

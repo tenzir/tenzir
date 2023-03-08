@@ -36,7 +36,7 @@ caf::expected<server_config> convert_and_validate(configuration config) {
       result.require_clientcerts = false;
       result.require_authentication = false;
       result.require_localhost = false;
-      result.response_headers["Access-Control-Allow-Origin"] = "*";
+      result.cors_allowed_origin = "*";
       break;
     case configuration::server_mode::upstream:
       result.require_tls = false;
@@ -58,7 +58,6 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   }
   result.certfile = config.certfile;
   result.keyfile = config.keyfile;
-  auto default_webroot = detail::install_datadir() / "plugin" / "web" / "www";
   auto ec = std::error_code{};
   if (!config.web_root.empty()) {
     result.webroot = config.web_root;
@@ -68,10 +67,9 @@ caf::expected<server_config> convert_and_validate(configuration config) {
       return caf::make_error(ec::invalid_argument, fmt::format("directory not "
                                                                "found: {}",
                                                                result.webroot));
-  } else if (is_directory(default_webroot, ec))
-    result.webroot = default_webroot;
-  else
+  } else {
     result.webroot = std::nullopt;
+  }
   if (!result.certfile.empty() && !exists(result.certfile))
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.certfile));

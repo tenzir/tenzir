@@ -6,12 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE partition
-
 #include "vast/fwd.hpp"
 
+#include "vast/collect.hpp"
 #include "vast/config.hpp"
-#include "vast/detail/collect.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/string_synopsis.hpp"

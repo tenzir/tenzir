@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
 
 project(
   parquet
-  VERSION 1.0.0
   DESCRIPTION "Parquet store plugin for VAST"
   LANGUAGES CXX)
 

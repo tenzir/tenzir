@@ -30,15 +30,15 @@ list(
   COMPARE NATURAL
   ORDER DESCENDING)
 list(REMOVE_ITEM releases "legacy.md")
-if ("unreleased" IN_LIST releases)
-  list(REMOVE_ITEM releases "unreleased")
-  list(PREPEND releases "unreleased")
+if ("next" IN_LIST releases)
+  list(REMOVE_ITEM releases "next")
+  list(PREPEND releases "next")
 endif ()
 
 foreach (release IN LISTS releases)
   # Write the section header.
-  if (release STREQUAL "unreleased")
-    string(APPEND changelog "## Unreleased\n\n")
+  if (release STREQUAL "next")
+    string(APPEND changelog "## Next\n\n")
   else ()
     string(APPEND changelog "## [${release}][${release}]\n\n")
     string(

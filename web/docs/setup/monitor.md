@@ -13,11 +13,10 @@ performance needs to be made available to other components of VAST.
 VAST keeps detailed track of system metrics that reflect runtime state, such
 as ingestion performance, query latencies, and resource usage.
 
-[Components](/docs/understand/architecture/components) send their metrics
-to a central *accountant* that relays the telemetry to a configured sink. The
-accountant is disabled by default and waits for metrics reports from other
-components. It represents telemetry as regular `vast.metrics` events with the
-following schema:
+Components send their metrics to a central *accountant* that relays the
+telemetry to a configured sink. The accountant is disabled by default and waits
+for metrics reports from other components. It represents telemetry as regular
+`vast.metrics` events with the following schema:
 
 ```yaml
 metrics:
@@ -71,13 +70,49 @@ vast:
       real-time: false
       path: /tmp/vast-metrics.sock
       type: datagram # possible values are "stream" or "datagram"
+    # Configures if and where metrics should be written to VAST itself.
+    self-sink:
+      enable: false
 ```
 
-Both sinks write metrics as NDJSON and inlines the `metadata` key-value pairs
-into the top-level object. VAST buffers metrics for these sinks in order to
-batch I/O operations. To enable real-time metrics reporting, set the options
+Both the file and UDS sinks write metrics as NDJSON and inline the `metadata`
+key-value pairs into the top-level object. VAST buffers metrics for these sinks
+to batch I/O operations. To enable real-time metrics reporting, set the options
 `vast.metrics.file-sink.real-time` or `vast.metrics.uds-sink.real-time`
 respectively in your configuration file.
+
+:::tip Self Sink ❤️ Pipelines
+The self-sink routes metrics as events into VAST's internal storage engine,
+allowing you to work with metrics using VAST's pipelines. The schema for the
+self-sink is slightly different, with the key being embedded in the schema name:
+
+```yaml
+vast.metrics.<key>:
+  record:
+    - ts: timestamp
+    - version: string
+    - actor: string
+    - key: string
+    - value: string
+    - <metadata...>
+```
+
+Here's an example that shows the start up latency of VAST's stores,
+grouped into 10 second buckets and looking at the minimum and the maximum
+latency, respectively, for all buckets.
+
+```bash
+vast export json '#type == "vast.metrics.passive-store.init.runtime"
+  | select ts, value
+  | summarize min(value), max(value) by ts resolution 10s'
+```
+
+```json
+{"ts": "2023-02-28T17:21:50.000000", "min(value)": 0.218875, "max(value)": 107.280125}
+{"ts": "2023-02-28T17:20:00.000000", "min(value)": 0.549292, "max(value)": 0.991235}
+// ...
+```
+:::
 
 ## Reference
 

@@ -1,0 +1,56 @@
+- name: Info message
+  ansible.builtin.debug:
+    msg: "Using static binary install"
+
+- name: Create vast group
+  ansible.builtin.group:
+    name: vast
+    state: present
+
+- name: Create vast user
+  ansible.builtin.user:
+    name: vast
+    groups: vast
+    shell: /sbin/nologin
+    append: yes
+    state: present
+    create_home: no
+
+- name: Copy service definition file
+  ansible.builtin.copy:
+    src: vast.service
+    dest: /etc/systemd/system
+    mode: preserve
+    owner: root
+    group: root
+
+- name: Copy the tarball to the target host
+  ansible.builtin.copy:
+    src: "{{ vast_archive }}"
+    dest: /tmp/vast.tar.gz
+    mode: '0640'
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
+  register: download
+
+- name: Create /var/lib/vast
+  ansible.builtin.file:
+    path: "/var/lib/vast"
+    state: directory
+    mode: '0755'
+    owner: vast
+    group: vast
+
+- name: Create /var/log/vast
+  ansible.builtin.file:
+    path: "/var/log/vast"
+    state: directory
+    mode: '0755'
+    owner: vast
+    group: vast
+
+- name: Unarchive VAST release tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/vast.tar.gz"
+    dest: /
+    remote_src: yes

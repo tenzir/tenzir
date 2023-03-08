@@ -1,0 +1,6 @@
+[Service]
+{% if read_write_paths is defined %}
+{% for item in read_write_paths %}
+ReadWritePaths = {{ item }}
+{% endfor %}
+{% endif %}

@@ -68,7 +68,7 @@ struct pattern_view_printer : printer_base<pattern_view_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const attribute& pat) const {
-    auto p = '/' << printers::str << '/';
+    auto p = '/' << printers::str << ((pat.case_insensitive()) ? "/i" : "/");
     return p.print(out, pat.string());
   }
 };

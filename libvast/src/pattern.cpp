@@ -6,126 +6,68 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/printable/vast/pattern.hpp"
-
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/data.hpp"
 #include "vast/pattern.hpp"
 
-#include <regex>
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/pattern.hpp"
+#include "vast/data.hpp"
+#include "vast/error.hpp"
+#include "vast/view.hpp"
+
+#include <re2/re2.h>
 
 namespace vast {
 
-pattern pattern::glob(std::string_view str) {
-  std::string rx;
-  std::regex_replace(std::back_inserter(rx), str.begin(), str.end(),
-                     std::regex("\\."), "\\.");
-  rx = std::regex_replace(rx, std::regex("\\*"), ".*");
-  return pattern{std::regex_replace(rx, std::regex("\\?"), ".")};
-}
+struct regex_impl : re2::RE2 {
+  using RE2::RE2;
+};
 
-pattern::pattern(std::string str) : str_(std::move(str)) {
+auto pattern::make(std::string str, pattern_options options) noexcept
+  -> caf::expected<pattern> {
+  auto opts = re2::RE2::Options(re2::RE2::CannedOptions::Quiet);
+  opts.set_case_sensitive(!options.case_insensitive);
+  auto regex = re2::RE2(str, opts);
+  auto result = pattern{};
+  result.str_ = std::move(str);
+  result.options_ = options;
+  result.regex_ = std::make_shared<regex_impl>(result.str_, opts);
+  if (!result.regex_->ok())
+    return caf::make_error(
+      ec::syntax_error, fmt::format("failed to create regex from '{}'", str));
+  return result;
 }
 
 bool pattern::match(std::string_view str) const {
-  return std::regex_match(str.begin(), str.end(), std::regex{str_});
+  if (!regex_)
+    return false;
+  return re2::RE2::FullMatch(str, *regex_);
 }
 
 bool pattern::search(std::string_view str) const {
-  return std::regex_search(str.begin(), str.end(), std::regex{str_});
+  if (!regex_)
+    return false;
+  return re2::RE2::PartialMatch(str, *regex_);
 }
 
 const std::string& pattern::string() const {
   return str_;
 }
 
-pattern& pattern::operator+=(const pattern& other) {
-  return *this += std::string_view{other.str_};
+const pattern_options& pattern::options() const {
+  return options_;
 }
 
-pattern& pattern::operator+=(std::string_view other) {
-  str_ += other;
-  return *this;
+bool operator==(const pattern& lhs, const pattern& rhs) noexcept {
+  return pattern_view{lhs} == pattern_view{rhs};
 }
 
-pattern& pattern::operator|=(const pattern& other) {
-  return *this |= std::string_view{other.str_};
+std::strong_ordering
+operator<=>(const pattern& lhs, const pattern& rhs) noexcept {
+  return pattern_view{lhs} <=> pattern_view{rhs};
 }
 
-pattern& pattern::operator|=(std::string_view other) {
-  str_.insert(str_.begin(), '(');
-  str_ += ")|(";
-  str_.append(other.begin(), other.end());
-  str_ += ')';
-  return *this;
-}
-
-pattern& pattern::operator&=(const pattern& other) {
-  return *this &= std::string_view{other.str_};
-}
-
-pattern& pattern::operator&=(std::string_view other) {
-  str_.insert(str_.begin(), '(');
-  str_ += ")(";
-  str_.append(other.begin(), other.end());
-  str_ += ')';
-  return *this;
-}
-
-pattern operator+(const pattern& x, std::string_view y) {
-  return pattern{x.string() + std::string{y}};
-}
-
-pattern operator+(std::string_view x, const pattern& y) {
-  return pattern{std::string{x} + y.string()};
-}
-
-pattern operator|(const pattern& x, std::string_view y) {
-  pattern result{x};
-  result |= y;
-  return result;
-}
-
-pattern operator|(std::string_view x, const pattern& y) {
-  pattern result{std::string{x}};
-  result |= y;
-  return result;
-}
-
-pattern operator&(const pattern& x, std::string_view y) {
-  pattern result{x};
-  result &= y;
-  return result;
-}
-
-pattern operator&(std::string_view x, const pattern& y) {
-  pattern result{std::string{x}};
-  result &= y;
-  return result;
-}
-
-bool operator==(const pattern& lhs, const pattern& rhs) {
-  return lhs.str_ == rhs.str_;
-}
-
-bool operator<(const pattern& lhs, const pattern& rhs) {
-  return lhs.str_ < rhs.str_;
-}
-
-bool operator==(const pattern& lhs, std::string_view rhs) {
+bool operator==(const pattern& lhs, std::string_view rhs) noexcept {
   return lhs.match(rhs);
-}
-
-bool operator!=(const pattern& lhs, std::string_view rhs) {
-  return !(lhs == rhs);
-}
-
-bool operator==(std::string_view lhs, const pattern& rhs) {
-  return rhs.match(lhs);
-}
-
-bool operator!=(std::string_view lhs, const pattern& rhs) {
-  return !(lhs == rhs);
 }
 
 bool convert(const pattern& p, data& d) {

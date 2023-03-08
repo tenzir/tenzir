@@ -10,8 +10,6 @@
 
 #include "vast/error.hpp"
 #include "vast/format/zeek.hpp"
-
-#define SUITE system
 #include "vast/test/data.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"

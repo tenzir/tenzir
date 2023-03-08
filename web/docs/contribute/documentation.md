@@ -48,26 +48,34 @@ of architectural diagrams. It is open source and has a neat collaboration
 feature: the ability to *embed the source code* of the sketch into the exported
 PNG or SVG images.
 
-This means the editing workflow looks as follows:
+Our editing workflow looks as follows:
 
 1. Open <https://excalidraw.com> and click *Upload* in the top left
-2. Select the PNG or SVG you would like to edit
+2. Select the SVG you would like to edit
 3. Make your edits in Excalidraw
-4. Re-export the drawing in size **2x** and **check the box "Embed scene"**
+4. Uncheck the box "Background" to ensure a transparent background.
+5. Re-export the drawing as **SVG** and **check the box "Embed scene"**
 
-The last part is crucial: If you don't check "Embed scene" it will no longer be
+The last part is crucial: If you don't check "Embed scene" we will no longer be
 able to recover the original diagram source.
 
-:::tip Transparent Background
-If possible, *uncheck* the box "Background" to generate a transparent
-background, as it makes images fit in more seamlessly.
+:::tip Filename Convention
+By convention, we export all SVGs with embedded Excalidraw source with the
+filename extension `*.excalidraw.svg`.
 :::
 
 ## Cater to dark mode
 
-Our setup makes it easy to render different images whether light or dark mode is
-toggled. We use the same CSS that GitHub supports, i.e., `#gh-dark-mode-only`
-and `#gh-light-mode-only`.
+The Excalidraw workflow above already respects dark mode. You only need to
+include the generated SVG as follows:
+
+```markdown
+![Image Description](/path/to/diagram.excalidraw.svg)
+```
+
+For non-Excalidraw images, you must provide two versions, one for light and one
+for dark mode. We use the same CSS that GitHub supports to render them
+conditionally, i.e., `#gh-dark-mode-only` and `#gh-light-mode-only`.
 
 Here's an example to include one image that exists in two variants:
 
@@ -88,7 +96,7 @@ CSS3 features to specify a maximum width:
 The suffix `#width500` gets picked up by the following CSS:
 
 ```css
-img[alt$="#width500"]{
+img[alt$="#width500"] {
   max-width: 500px;
   display: block;
 }

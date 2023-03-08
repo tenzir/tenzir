@@ -10,7 +10,6 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
-#include <vast/detail/fanout_counter.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/fwd.hpp>
@@ -33,6 +32,7 @@
 
 #include <arrow/table.h>
 #include <caf/expected.hpp>
+#include <caf/policy/select_all.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/type_id.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -321,14 +321,6 @@ struct rebuilder_state {
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
           }
-          auto counter = detail::make_fanout_counter(
-            run->options.parallel,
-            [finish]() mutable {
-              finish({});
-            },
-            [finish](caf::error error) mutable {
-              finish(std::move(error));
-            });
           if (run->options.automatic)
             VAST_VERBOSE("{} triggered an automatic run for {} candidate "
                          "partitions with {} threads",
@@ -338,18 +330,17 @@ struct rebuilder_state {
             VAST_INFO("{} triggered a run for {} candidate partitions with {} "
                       "threads",
                       *self, run->statistics.num_total, run->options.parallel);
-          for (size_t i = 0; i < run->options.parallel; ++i) {
-            self
-              ->request(static_cast<rebuilder_actor>(self), caf::infinite,
-                        atom::internal_v, atom::rebuild_v)
-              .then(
-                [counter]() {
-                  counter->receive_success();
-                },
-                [counter](caf::error& error) {
-                  counter->receive_error(std::move(error));
-                });
-          }
+          self
+            ->fan_out_request<caf::policy::select_all>(
+              std::vector<rebuilder_actor>(run->options.parallel, self),
+              caf::infinite, atom::internal_v, atom::rebuild_v)
+            .then(
+              [finish]() mutable {
+                finish({});
+              },
+              [finish](caf::error& error) mutable {
+                finish(std::move(error));
+              });
         },
         [finish](caf::error& error) mutable {
           finish(std::move(error));
@@ -402,22 +393,21 @@ struct rebuilder_state {
     // transformed partition back to the list of remaining partitions if it
     // is less than some percentage of the desired size.
     const auto schema = run->remaining_partitions[0].schema;
-    const auto first_removed
-      = std::remove_if(
-        run->remaining_partitions.begin(), run->remaining_partitions.end(),
-        [&](const partition_info& partition) {
-          if (schema == partition.schema
-              && current_run_events < max_partition_size) {
-            current_run_events += partition.events;
-            current_run_partitions.push_back(partition);
-            VAST_TRACE("{} selects partition {} (v{}, {}) with "
-                       "{} events (total: {})",
-                       *self, partition.uuid, partition.version,
-                       partition.schema, partition.events, current_run_events);
-            return true;
-          }
-          return false;
-        });
+    const auto first_removed = std::remove_if(
+      run->remaining_partitions.begin(), run->remaining_partitions.end(),
+      [&](const partition_info& partition) {
+        if (schema == partition.schema
+            && current_run_events < max_partition_size) {
+          current_run_events += partition.events;
+          current_run_partitions.push_back(partition);
+          VAST_TRACE("{} selects partition {} (v{}, {}) with "
+                     "{} events (total: {})",
+                     *self, partition.uuid, partition.version, partition.schema,
+                     partition.events, current_run_events);
+          return true;
+        }
+        return false;
+      });
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
     is_oversized = current_run_events > max_partition_size;
@@ -446,9 +436,9 @@ struct rebuilder_state {
     auto rp = self->make_response_promise<void>();
     auto pipeline
       = std::make_shared<vast::pipeline>("rebuild", std::vector<std::string>{});
-      pipeline->add_operator(std::make_unique<class rebatch_operator>(
-        current_run_partitions[0].schema,
-        detail::narrow_cast<int64_t>(desired_batch_size)));
+    pipeline->add_operator(std::make_unique<class rebatch_operator>(
+      current_run_partitions[0].schema,
+      detail::narrow_cast<int64_t>(desired_batch_size)));
     emit_telemetry();
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents
@@ -585,7 +575,6 @@ private:
     };
     self->send(accountant, atom::metrics_v, std::move(report));
   }
-
 };
 
 /// Defines the behavior of the REBUILDER actor.
@@ -767,7 +756,8 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param config The relevant subsection of the configuration.
-  caf::error initialize(data) override {
+  caf::error initialize([[maybe_unused]] const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     return caf::none;
   }
 

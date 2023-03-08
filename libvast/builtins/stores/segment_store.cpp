@@ -277,7 +277,8 @@ public:
   using store_actor_plugin::builder_and_header;
 
   // plugin API
-  caf::error initialize(data) override {
+  caf::error initialize([[maybe_unused]] const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     return {};
   }
 

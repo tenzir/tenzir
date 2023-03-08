@@ -16,38 +16,32 @@ components:
       in: header
       name: X-VAST-Token
 paths:
-  /export:
-    get:
-      summary: Export data
-      description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
+  /query/new:
+    post:
+      summary: Create new query
+      description: Create a new export query in VAST
       parameters:
         - in: query
-          name: expression
+          name: query
           schema:
             type: string
-            default: A query matching every event.
+          example: :ip in 10.42.0.0/16 | head 100
           required: true
-          description: The query expression to execute.
-          example: :ip in 10.42.0.0/16
+          description: "The query used, optionally including an open pipeline.\n"
         - in: query
-          name: limit
+          name: ttl
           schema:
-            type: int64
-            default: 50
+            type: string
+          example: 5.0m
           required: false
-          description: Maximum number of returned events.
-          example: 3
+          description: "The time after which a query is cancelled. Use the /query/:id/next\nendpoint to refresh the TTL. To refresh the TTL without requesting\nfurther events, request zero events.\n"
         - in: query
-          name: pipeline
+          name: expand
           schema:
-            type: object
-            properties:
-              steps:
-                type: array
-                items:
-                  type: object
+            type: boolean
+          example: false
           required: false
-          description: A JSON description of a pipeline to be applied to the exported data.
+          description: "Whether to use the expanded output schema.\n"
         - in: query
           name: flatten
           schema:
@@ -72,220 +66,6 @@ paths:
           required: false
           description: Render durations as numeric values.
           example: false
-      responses:
-        200:
-          description: The result data.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  num-events:
-                    type: int64
-                  version:
-                    type: string
-                  events:
-                    type: array
-                    items:
-                      type: object
-                example:
-                  num-events: 3
-                  events:
-                    - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-                    - "{\"timestamp\": \"2011-08-12T13:00:36.378914\", \"flow_id\": 269421754201300, \"pcap_cnt\": 22569, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 1027, \"dest_ip\": \"74.125.232.202\", \"dest_port\": 80, \"proto\": \"TCP\", \"event_type\": \"http\", \"community_id\": null, \"http\": {\"hostname\": \"cr-tools.clients.google.com\", \"url\": \"/service/check2?appid=%7B430FD4D0-B729-4F61-AA34-91526481799D%7D&appversion=1.3.21.65&applang=&machine=0&version=1.3.21.65&osversion=5.1&servicepack=Service%20Pack%202\", \"http_port\": null, \"http_user_agent\": \"Google Update/1.3.21.65;winhttp\", \"http_content_type\": null, \"http_method\": \"GET\", \"http_refer\": null, \"protocol\": \"HTTP/1.1\", \"status\": null, \"redirect\": null, \"length\": 0}, \"tx_id\": 0}"
-                    - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-        401:
-          description: Not authenticated.
-        422:
-          description: Invalid query string or invalid limit.
-    post:
-      summary: Export data
-      description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
-      requestBody:
-        description: Request parameters
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - expression
-              properties:
-                expression:
-                  type: string
-                  description: The query expression to execute.
-                  example: :ip in 10.42.0.0/16
-                  default: A query matching every event.
-                limit:
-                  type: int64
-                  default: 50
-                  description: Maximum number of returned events
-                  example: 3
-                pipeline:
-                  type: object
-                  properties:
-                    steps:
-                      type: array
-                      items:
-                        type: object
-                  description: A JSON object describing a pipeline to be applied on the exported data.
-                omit-nulls:
-                  type: boolean
-                  description: Omit null elements in the response data.
-                  default: false
-                  example: false
-                numeric-durations:
-                  type: boolean
-                  default: false
-                  description: Render durations as numeric values.
-                  example: false
-                flatten:
-                  type: boolean
-                  default: true
-                  description: Flatten nested elements in the response data.
-                  example: false
-      responses:
-        200:
-          description: The result data.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  num-events:
-                    type: int64
-                  version:
-                    type: string
-                  events:
-                    type: array
-                    items:
-                      type: object
-                example:
-                  events:
-                    - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-                    - "{\"timestamp\": \"2011-08-12T13:00:36.378914\", \"flow_id\": 269421754201300, \"pcap_cnt\": 22569, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 1027, \"dest_ip\": \"74.125.232.202\", \"dest_port\": 80, \"proto\": \"TCP\", \"event_type\": \"http\", \"community_id\": null, \"http\": {\"hostname\": \"cr-tools.clients.google.com\", \"url\": \"/service/check2?appid=%7B430FD4D0-B729-4F61-AA34-91526481799D%7D&appversion=1.3.21.65&applang=&machine=0&version=1.3.21.65&osversion=5.1&servicepack=Service%20Pack%202\", \"http_port\": null, \"http_user_agent\": \"Google Update/1.3.21.65;winhttp\", \"http_content_type\": null, \"http_method\": \"GET\", \"http_refer\": null, \"protocol\": \"HTTP/1.1\", \"status\": null, \"redirect\": null, \"length\": 0}, \"tx_id\": 0}"
-                    - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-                  num-events: 3
-        401:
-          description: Not authenticated.
-        422:
-          description: Invalid query string or invalid limit.
-  /export/with-schemas:
-    post:
-      summary: Export data with schema information
-      description: "Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language) The data is returned grouped by schema.\n"
-      requestBody:
-        description: Request parameters
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - expression
-              properties:
-                expression:
-                  type: string
-                  description: The query expression to execute.
-                  example: :ip in 10.42.0.0/16
-                  default: A query matching every event.
-                limit:
-                  type: int64
-                  default: 50
-                  description: Maximum number of returned events
-                  example: 3
-                pipeline:
-                  type: object
-                  required:
-                    - steps
-                  properties:
-                    steps:
-                      type: array
-                      items:
-                        type: object
-                  description: A JSON object describing a pipeline to be applied on the exported data.
-                omit-nulls:
-                  type: boolean
-                  description: Omit null elements in the response data.
-                  default: false
-                  example: false
-                numeric-durations:
-                  type: boolean
-                  default: false
-                  description: Render durations as numeric values.
-                  example: false
-                flatten:
-                  type: boolean
-                  default: true
-                  description: Flatten nested elements in the response data.
-                  example: false
-      responses:
-        200:
-          description: The result data.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  num-events:
-                    type: int64
-                  events:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        schema:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              name:
-                                type: string
-                              type:
-                                type: string
-                        data:
-                          type: array
-                          items:
-                            type: object
-                example:
-                  num-events: 3
-                  events:
-                    - name: suricata.netflow
-                      schema:
-                        - name: timestamp
-                          type: timestamp
-                        - name: pcap_cnt
-                          type: uint64
-                        - name: src_ip
-                          type: ip
-                        - name: src_port
-                          type: uint64
-                        - name: pkts
-                          type: uint64
-                        - name: bytes
-                          type: uint64
-                        - name: action
-                          type: "enum {allowed: 0, blocked: 1}"
-                      data:
-                        - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"pcap_cnt\": null,  \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"netflow.pkts\": 2, \"netflow.bytes\": 486, \"alert.action\": \"allowed\"}"
-        401:
-          description: Not authenticated.
-        422:
-          description: Invalid query string or invalid limit.
-  /query/new:
-    post:
-      summary: Create new query
-      description: Create a new export query in VAST
-      parameters:
-        - in: query
-          name: expression
-          schema:
-            type: string
-            example: :ip in 10.42.0.0/16
-          required: true
-          description: Query string.
       responses:
         200:
           description: Success.
@@ -317,7 +97,7 @@ paths:
         - in: query
           name: n
           schema:
-            type: int64
+            type: integer
           required: false
           example: 10
           description: Maximum number of returned events
@@ -329,23 +109,33 @@ paths:
               schema:
                 type: object
                 properties:
-                  position:
-                    type: int64
-                    description: The total number of events that has been returned by previous calls to this endpoint.
                   events:
                     type: array
                     items:
                       type: object
-                    description: The returned events.
+                    description: "The returned events, including a schema-ref that uniquely\nidentifies the schema for each row.\n"
+                  schemas:
+                    type: array
+                    items:
+                      type: object
+                    description: "The schemas referenced in the events section of the same\nreply, using the same format as the `vast show schemas`\ncommand.\n"
                 example:
-                  position: 20
                   events:
-                    - ts: 2009-11-18T22:11:04.011822
-                      uid: iKxhjl8i1n3
-                      id.orig_h: 192.168.1.103
-                    - ts: 2009-11-18T22:13:38.992072
-                      uid: wsB2v2jcIXa
-                      id.orig_h: 192.168.1.103
+                    - schema-ref: foobarbaz
+                      data:
+                        ts: 2009-11-18T22:11:04.011822
+                        uid: iKxhjl8i1n3
+                        id:
+                          orig_h: 192.168.1.103
+                    - schema-ref: foobarbaz
+                      data:
+                        ts: 2009-11-18T22:11:04.011822
+                        uid: iKxhjl8i1n3
+                        id:
+                          orig_h: 192.168.1.103
+                  schemas:
+                    - schema-ref: foobarbaz
+                      definition: <type-definition>
         401:
           description: Not authenticated.
         422:

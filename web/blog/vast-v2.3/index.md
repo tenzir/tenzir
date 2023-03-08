@@ -18,8 +18,7 @@ data defragmentation capability.
 VAST server processes now continuously rebuild partitions in the background. The
 following diagram visualizes what happens under the hood:
 
-![Rebuild](/img/rebuild-light.png#gh-light-mode-only)
-![Rebuild](/img/rebuild-dark.png#gh-dark-mode-only)
+![Rebuild](rebuild.excalidraw.svg)
 
 Rebuilding kicks in when a partition has the following properties:
 

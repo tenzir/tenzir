@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE exporter
-
 #include "vast/system/exporter.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -87,9 +85,8 @@ struct fixture : fixture_base {
   }
 
   void spawn_exporter(query_options opts) {
-    exporter
-      = self->spawn(system::exporter, expr, opts, defaults::export_::max_events,
-                    std::vector<vast::pipeline>{}, index);
+    exporter = self->spawn(system::exporter, expr, opts,
+                           std::vector<vast::pipeline>{}, index);
   }
 
   void spawn_sink() {

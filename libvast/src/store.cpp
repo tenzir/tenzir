@@ -40,13 +40,21 @@ namespace {
 template <class Actor>
 caf::result<uint64_t>
 handle_query(const auto& self, const query_context& query_context) {
+  VAST_TRACE("{} got a query: {}", *self, query_context);
   const auto start = std::chrono::steady_clock::now();
   const auto schema = self->state.store->schema();
   const auto tailored_expr = tailor(query_context.expr, schema);
-  if (!tailored_expr)
+  if (!tailored_expr) {
+    // In case the query was delegated from an active partition the
+    // taxonomy resolution is not guaranteed to have worked (whenever the
+    // type in this store did not exist in the catalog when the partition
+    // was created). In that case we simply discard the query.
+    if constexpr (std::is_same_v<system::default_active_store_actor, Actor>)
+      return 0ull;
     return caf::make_error(ec::invalid_query,
                            fmt::format("{} failed to tailor '{}' to '{}'",
                                        *self, query_context.expr, schema));
+  }
   auto rp = self->template make_response_promise<uint64_t>();
   auto f = detail::overload{
     [&](const count_query_context& count) -> void {
@@ -66,9 +74,9 @@ handle_query(const auto& self, const query_context& query_context) {
         return;
       }
       // set up query state
-      state->second.generator
+      state->second.result_generator
         = self->state.store->count(*tailored_expr, query_context.ids);
-      state->second.result_iterator = state->second.generator.begin();
+      state->second.result_iterator = state->second.result_generator.begin();
       state->second.sink = count.sink;
       state->second.start = start;
       self // schedule query processing beginning at the first table slice
@@ -129,9 +137,9 @@ handle_query(const auto& self, const query_context& query_context) {
                                        *self, query_context.id)));
         return;
       }
-      state->second.generator
+      state->second.result_generator
         = self->state.store->extract(*tailored_expr, query_context.ids);
-      state->second.result_iterator = state->second.generator.begin();
+      state->second.result_iterator = state->second.result_generator.begin();
       state->second.sink = extract.sink;
       state->second.start = start;
       self
@@ -212,14 +220,13 @@ type base_store::schema() const {
   return {};
 }
 
-detail::generator<uint64_t>
-base_store::count(expression expr, ids selection) const {
+generator<uint64_t> base_store::count(expression expr, ids selection) const {
   for (const auto& slice : slices()) {
     co_yield count_matching(slice, expr, selection);
   }
 }
 
-detail::generator<table_slice>
+generator<table_slice>
 base_store::extract(expression expr, ids selection) const {
   for (const auto& slice : slices()) {
     if (auto filtered_slice = filter(slice, expr, selection))
@@ -300,7 +307,7 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       if (it == self->state.running_extractions.end())
         return {};
       auto& [_, state] = *it;
-      if (state.result_iterator == state.generator.end()) {
+      if (state.result_iterator == state.result_generator.end()) {
         VAST_DEBUG("{} ignores extract continuation request for query {} after "
                    "query already finished",
                    *self, query_id);
@@ -309,7 +316,7 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       auto slice = *state.result_iterator;
       state.num_hits += slice.rows();
       self->send(state.sink, std::move(slice));
-      if (++state.result_iterator == state.generator.end()) {
+      if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
       return self->delegate(
@@ -323,14 +330,14 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       if (it == self->state.running_counts.end())
         return {};
       auto& [_, state] = *it;
-      if (state.result_iterator == state.generator.end()) {
+      if (state.result_iterator == state.result_generator.end()) {
         VAST_DEBUG("{} ignores count continuation request for query {} after "
                    "query already finished",
                    *self, query_id);
         return {};
       }
       state.num_hits += *state.result_iterator;
-      if (++state.result_iterator == state.generator.end()) {
+      if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
       return self->delegate(
@@ -360,6 +367,8 @@ system::default_active_store_actor::behavior_type default_active_store(
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
       VAST_DEBUG("{} starts working on query {}", *self, query_context.id);
+      if (self->state.store->num_events() == 0)
+        return 0ull;
       return handle_query<system::default_active_store_actor>(self,
                                                               query_context);
     },
@@ -446,7 +455,7 @@ system::default_active_store_actor::behavior_type default_active_store(
       if (it == self->state.running_extractions.end())
         return {};
       auto& [_, state] = *it;
-      if (state.result_iterator == state.generator.end()) {
+      if (state.result_iterator == state.result_generator.end()) {
         VAST_DEBUG("{} ignores extract continuation request for query {} after "
                    "query already finished",
                    *self, query_id);
@@ -455,7 +464,7 @@ system::default_active_store_actor::behavior_type default_active_store(
       auto slice = *state.result_iterator;
       state.num_hits += slice.rows();
       self->send(state.sink, std::move(slice));
-      if (++state.result_iterator == state.generator.end()) {
+      if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
       return self->delegate(
@@ -469,14 +478,14 @@ system::default_active_store_actor::behavior_type default_active_store(
       if (it == self->state.running_counts.end())
         return {};
       auto& [_, state] = *it;
-      if (state.result_iterator == state.generator.end()) {
+      if (state.result_iterator == state.result_generator.end()) {
         VAST_DEBUG("{} ignores count continuation request for query {} after "
                    "query already finished",
                    *self, query_id);
         return {};
       }
       state.num_hits += *state.result_iterator;
-      if (++state.result_iterator == state.generator.end()) {
+      if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
       return self->delegate(

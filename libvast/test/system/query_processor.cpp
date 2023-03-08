@@ -6,8 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <caf/fwd.hpp>
-#define SUITE query_processor
+#include "vast/system/query_processor.hpp"
 
 #include "vast/fwd.hpp"
 
@@ -18,10 +17,10 @@
 #include "vast/query_context.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/query_cursor.hpp"
-#include "vast/system/query_processor.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
+#include <caf/fwd.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 using namespace vast;

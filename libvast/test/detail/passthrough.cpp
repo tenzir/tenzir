@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE passthrough
-
 #include "vast/detail/passthrough.hpp"
 
 #include "vast/test/test.hpp"

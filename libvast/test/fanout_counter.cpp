@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE fanout_counter
-
 #include <vast/atoms.hpp>
 #include <vast/detail/fanout_counter.hpp>
 #include <vast/error.hpp>

@@ -43,7 +43,8 @@ private:
 };
 
 class plugin : public virtual aggregation_function_plugin {
-  caf::error initialize([[maybe_unused]] data config) override {
+  caf::error initialize([[maybe_unused]] const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     return {};
   }
 

@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE eraser
-
 #include "vast/system/eraser.hpp"
 
 #include "vast/fwd.hpp"

@@ -19,8 +19,7 @@ falls under strict regulations that prohibit unfettered use. There exists a
 strict upper bound on storing specific security event data for retrospective
 detection.
 
-![Data Constraints](/img/data-constraints.light.png#gh-light-mode-only)
-![Data Constraints](/img/data-constraints.dark.png#gh-dark-mode-only)
+![Data Constraints](data-constraints.excalidraw.svg)
 
 How can we implement a successful detection and response strategy in
 this spectrum? By making the spectrum transparent and fully controllable. In

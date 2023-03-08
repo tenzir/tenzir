@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE rest_api
-
 #include <vast/plugin.hpp>
 #include <vast/system/node.hpp>
 #include <vast/test/fixtures/node.hpp>
@@ -125,161 +123,111 @@ TEST(status endpoint) {
   REQUIRE(!error);
 }
 
-TEST(export endpoint) {
-  auto const* plugin
-    = vast::plugins::find<vast::rest_endpoint_plugin>("api-export");
-  REQUIRE(plugin);
-  auto endpoints = plugin->rest_endpoints();
-  REQUIRE_EQUAL(endpoints.size(), 3ull);
-  { // GET /export
-    auto const& export_endpoint = endpoints[0];
-    auto handler = plugin->handler(self->system(), test_node);
+FIXTURE_SCOPE_END()
+
+namespace {
+
+struct query_fixture : public fixture {
+  query_fixture() {
+    auto const* plugin
+      = vast::plugins::find<vast::rest_endpoint_plugin>("api-query");
+    REQUIRE(plugin);
+    auto endpoints = plugin->rest_endpoints();
+    REQUIRE_EQUAL(endpoints.size(), 2ull);
+
+    new_query_endpoint = endpoints[0];
+    query_next_endpoint = endpoints[1];
+    handler = plugin->handler(self->system(), test_node);
+  }
+
+  simdjson::dom::element parse(std::string response_body) {
+    auto padded_string = simdjson::padded_string{response_body};
+    simdjson::dom::element doc;
+    // Parser must live as long as doc lives. Reusing the same parser seems to
+    // not work. Just create a new parser and keep it in a std::list so it
+    // doesn't get invalidated on emplace_back()
+    auto& parser = parsers_.emplace_back();
+    auto error = parser.parse(padded_string).get(doc);
+    if (error)
+      FAIL("failed to parse '" << response_body << "'");
+    return doc;
+  }
+
+  auto send_new_query(std::string query) {
     auto response = std::make_shared<test_response>();
     auto request = vast::http_request{
-      .params = {
-        {"expression", ":ip in 192.168.0.0/16"},
-        {"limit", uint64_t{16}},
-      },
-      .response = response,
-    };
-    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
-               std::move(request));
+      .params
+      = {{"query", query}, {"flatten", true}, {"ttl", vast::duration::zero()}},
+      .response = response};
+    self->send(handler, vast::atom::http_request_v,
+               new_query_endpoint.endpoint_id, std::move(request));
     run();
     CHECK_EQUAL(response->error_, caf::error{});
-    CHECK(!response->body_.empty());
-    auto padded_string = simdjson::padded_string{response->body_};
-    simdjson::dom::parser parser;
-    simdjson::dom::element doc;
-    auto error = parser.parse(padded_string).get(doc);
-    REQUIRE(!error);
-    CHECK_EQUAL(int64_t{doc["num-events"]}, 16);
-    CHECK_EQUAL(doc["events"].get_array().size(), 16ull);
+    return parse(response->body_);
   }
-  //
-  { // GET with unnormalized expression
-    auto const& export_endpoint = endpoints[0];
-    auto handler = plugin->handler(self->system(), test_node);
+
+  auto send_query_next(std::string query_id, uint64_t events_count) {
     auto response = std::make_shared<test_response>();
-    auto request = vast::http_request{
-      .params = {
-        // The expression is syntactically valid but semantically
-        // invalid (field_extractor in field_extractor)
-        {"expression", "net.src.ip in asdf"},
-        {"limit", uint64_t{16}},
-      },
-      .response = response,
-    };
-    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
-               std::move(request));
-    run();
-    CHECK_NOT_EQUAL(response->error_, caf::error{});
-    CHECK(
-      to_string(response->error_).starts_with("unspecified(\"http error 400"));
-  }
-  { // POST /export
-    auto const& export_endpoint = endpoints[1];
-    auto handler = plugin->handler(self->system(), test_node);
-    auto response = std::make_shared<test_response>();
-    auto request = vast::http_request{
-      .params = {
-        {"expression", ":ip in 192.168.0.0/16"},
-        {"limit", uint64_t{16}},
-      },
-      .response = response,
-    };
-    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
-               std::move(request));
+    auto request = vast::http_request{.params = {{"id", std::string{query_id}},
+                                                 {"n", events_count}},
+                                      .response = response};
+    self->send(handler, vast::atom::http_request_v,
+               query_next_endpoint.endpoint_id, std::move(request));
     run();
     CHECK_EQUAL(response->error_, caf::error{});
-    CHECK(!response->body_.empty());
-    auto padded_string = simdjson::padded_string{response->body_};
-    simdjson::dom::parser parser;
-    simdjson::dom::element doc;
-    auto error = parser.parse(padded_string).get(doc);
-    REQUIRE(!error);
-    CHECK_EQUAL(int64_t{doc["num-events"]}, 16);
-    CHECK_EQUAL(doc["events"].get_array().size(), 16ull);
+    return parse(response->body_);
   }
-  { // POST /export/with-schema
-    auto const& export_endpoint = endpoints[2];
-    auto handler = plugin->handler(self->system(), test_node);
-    auto response = std::make_shared<test_response>();
-    auto request = vast::http_request{
-      .params = {
-        {"expression", ":ip in 192.168.0.0/16"},
-        {"limit", uint64_t{16}},
-      },
-      .response = response,
-    };
-    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
-               std::move(request));
-    run();
-    CHECK_EQUAL(response->error_, caf::error{});
-    CHECK(!response->body_.empty());
-    auto padded_string = simdjson::padded_string{response->body_};
-    simdjson::dom::parser parser;
-    simdjson::dom::element doc;
-    auto error = parser.parse(padded_string).get(doc);
-    REQUIRE(!error);
-    CHECK_EQUAL(int64_t{doc["num-events"]}, 16);
-    auto first = doc["events"].get_array().at(0);
-    CHECK(!first.error());
-    CHECK_EQUAL(std::string_view{first["name"]}, "zeek.conn");
-    CHECK_EQUAL(first["data"].get_array().size(), 16ull);
-  }
-}
+
+  vast::rest_endpoint new_query_endpoint;
+  vast::rest_endpoint query_next_endpoint;
+  vast::system::rest_handler_actor handler;
+
+private:
+  std::list<simdjson::dom::parser> parsers_;
+};
+
+} // namespace
+
+FIXTURE_SCOPE(query_rest_api_tests, query_fixture)
 
 TEST(query endpoint) {
-  auto const* plugin
-    = vast::plugins::find<vast::rest_endpoint_plugin>("api-query");
-  REQUIRE(plugin);
-  auto endpoints = plugin->rest_endpoints();
-  REQUIRE_EQUAL(endpoints.size(), 2ull);
-  auto const& query_new_endpoint = endpoints[0];
-  auto const& query_next_endpoint = endpoints[1];
-  auto handler = plugin->handler(self->system(), test_node);
-  auto response_new = std::make_shared<test_response>();
-  auto request_new = vast::http_request{
-    .params = {
-      {"expression", "#type == \"zeek.conn\""},
-    },
-    .response = response_new,
-  };
-  self->send(handler, vast::atom::http_request_v,
-             query_new_endpoint.endpoint_id, std::move(request_new));
-  run();
-  CHECK_EQUAL(response_new->error_, caf::error{});
-  CHECK(!response_new->body_.empty());
-  auto padded_string = simdjson::padded_string{response_new->body_};
-  simdjson::dom::parser parser;
-  simdjson::dom::element doc;
-  auto error = parser.parse(padded_string).get(doc);
-  CHECK(!error);
-  CHECK(!doc.is_null());
-  CHECK(!doc["id"].is_null());
-  auto const* id = doc["id"].get<const char*>().value();
-  auto response_next = std::make_shared<test_response>();
-  const auto NUM_EVENTS = uint64_t{16};
-  auto request_next = vast::http_request{
-    .params = {
-      {"id", std::string{id}},
-      {"n", NUM_EVENTS},
-    },
-    .response = response_next,
-  };
-  self->send(handler, vast::atom::http_request_v,
-             query_next_endpoint.endpoint_id, std::move(request_next));
-  run();
-  CHECK_EQUAL(response_next->error_, caf::error{});
-  CHECK(!response_next->body_.empty());
-  VAST_INFO("{}", response_next->body_);
-  auto padded_string2 = simdjson::padded_string{response_next->body_};
-  simdjson::dom::parser parser2;
-  simdjson::dom::element doc2;
-  auto error2 = parser2.parse(padded_string2).get(doc2);
-  CHECK(!error2);
-  CHECK(!doc2.is_null());
-  CHECK(!doc2["events"].is_null());
+  auto response = send_new_query("#type == \"zeek.conn\"");
+  REQUIRE(!response.is_null());
+  REQUIRE(!response["id"].is_null());
+  auto const* id = response["id"].get<const char*>().value();
+  constexpr auto NUM_EVENTS = uint64_t{16};
+  auto next_response = send_query_next(id, NUM_EVENTS);
+  REQUIRE(!next_response.is_null());
+  REQUIRE(!next_response["events"].is_null());
+  CHECK_EQUAL(next_response["events"].get_array().size(), NUM_EVENTS);
+}
+
+TEST(query endpoint outputs 0 events after all were already shipped) {
+  auto response = send_new_query("#type == \"zeek.conn\"");
+  REQUIRE(!response.is_null());
+  REQUIRE(!response["id"].is_null());
+  auto const* id = response["id"].get<const char*>().value();
+  auto next_response
+    = send_query_next(id, std::numeric_limits<uint64_t>::max());
+  REQUIRE(!next_response.is_null());
+  REQUIRE(!next_response["events"].is_null());
+  CHECK(next_response["events"].get_array().size() > 0);
+  // After requesting uint64_t max events we expect to have 0 events.
+  auto next_response2 = send_query_next(id, 1);
+  REQUIRE(!next_response2.is_null());
+  REQUIRE(!next_response2["events"].is_null());
+  CHECK_EQUAL(next_response2["events"].get_array().size(), 0u);
+}
+
+TEST(query endpoint with pipeline) {
+  auto response = send_new_query("#type == \"zeek.conn\" | head 1");
+  REQUIRE(!response.is_null());
+  REQUIRE(!response["id"].is_null());
+  auto const* id = response["id"].get<const char*>().value();
+  auto next_response = send_query_next(id, 20);
+  REQUIRE(!next_response.is_null());
+  REQUIRE(!next_response["events"].is_null());
+  CHECK_EQUAL(next_response["events"].get_array().size(), 1u);
 }
 
 FIXTURE_SCOPE_END()

@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE expression
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
@@ -88,8 +86,8 @@ TEST(evaluation - field extractor - service + orig_h) {
   REQUIRE_EQUAL(rank(ids), 2u);
 }
 
-TEST(evaluation - field extractor - nonexistent field) {
-  auto expr = make_conn_expr("devnull != nil");
+TEST(evaluation - empty expression) {
+  auto expr = expression{};
   auto ids = evaluate(expr, zeek_conn_log_slice, {});
   CHECK(all<0>(ids));
 }

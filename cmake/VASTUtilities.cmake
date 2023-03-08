@@ -8,6 +8,16 @@ function (join values separator output)
       PARENT_SCOPE)
 endfunction ()
 
+# Treats target as a system dependency.
+function (VASTSystemizeTarget tgt)
+  message(STATUS "Treating ${tgt} as a system dependency")
+  get_target_property(_includes ${tgt} INTERFACE_INCLUDE_DIRECTORIES)
+  set_property(
+    TARGET ${tgt}
+    APPEND
+    PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_includes}")
+endfunction ()
+
 # Retrives a textual representation of the current month.
 macro (month result)
   cmake_policy(SET CMP0007 NEW)

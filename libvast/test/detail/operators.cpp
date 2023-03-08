@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE operators
 #include "vast/detail/operators.hpp"
 
 #include "vast/test/test.hpp"

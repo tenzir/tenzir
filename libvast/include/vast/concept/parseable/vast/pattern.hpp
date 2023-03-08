@@ -15,7 +15,7 @@
 
 namespace vast {
 
-using pattern_parser = quoted_string_parser<'/', '\\'>;
+using slash_delimited_string = quoted_string_parser<'/', '\\'>;
 
 template <>
 struct access::parser_base<pattern>
@@ -24,12 +24,20 @@ struct access::parser_base<pattern>
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    return pattern_parser{}(f, l, unused);
+    return slash_delimited_string{}(f, l, unused);
   }
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, pattern& a) const {
-    return pattern_parser{}(f, l, a.str_);
+    auto str = std::string{};
+    if (!slash_delimited_string{}(f, l, str))
+      return false;
+    auto case_insensitive = parsers::chr{pattern::case_insensitive_flag}(f, l);
+    auto result = pattern::make(std::move(str), {case_insensitive});
+    if (!result)
+      return false;
+    a = std::move(*result);
+    return true;
   }
 };
 

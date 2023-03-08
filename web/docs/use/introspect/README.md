@@ -83,9 +83,8 @@ vast status
 }
 ```
 
-The returned top-level JSON object has one key per
-[component](/docs/understand/architecture/components), plus the two "global" keys
-`system` and `version`.
+The returned top-level JSON object has one key per component, plus the two
+"global" keys `system` and `version`.
 
 There exist two variations that add more detailed output:
 

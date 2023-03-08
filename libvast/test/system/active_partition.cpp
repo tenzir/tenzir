@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE active_partition
-
 #include "vast/system/active_partition.hpp"
 
 #include "vast/fwd.hpp"
@@ -130,7 +128,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   const auto* store_plugin = vast::plugins::find<vast::store_actor_plugin>(
     vast::defaults::system::store_backend);
   REQUIRE(store_plugin);
-  auto sut = sys.spawn(vast::system::active_partition, partition_id,
+  auto sut = sys.spawn(vast::system::active_partition, schema_, partition_id,
                        vast::system::accountant_actor{}, filesystem,
                        caf::settings{}, index_config_, store_plugin,
                        std::make_shared<vast::taxonomies>());
@@ -207,17 +205,16 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(unbox(result), make_ids({0, 0}));
 }
 
-TEST(delegate query to store with all possible ids in partition when query is to
-       be done without dense indexer) {
+TEST(delegate query to the store) {
   // FIXME: We should implement a mock store plugin and use that for this test.
   const auto* store_plugin = vast::plugins::find<vast::store_actor_plugin>(
     vast::defaults::system::store_backend);
   std::map<std::filesystem::path, std::vector<vast::chunk_ptr>>
     last_written_chunks;
   auto filesystem = sys.spawn(dummy_filesystem, std::ref(last_written_chunks));
-  auto sut = sys.spawn(vast::system::active_partition, vast::uuid::random(),
-                       vast::system::accountant_actor{}, filesystem,
-                       caf::settings{}, index_config_, store_plugin,
+  auto sut = sys.spawn(vast::system::active_partition, schema_,
+                       vast::uuid::random(), vast::system::accountant_actor{},
+                       filesystem, caf::settings{}, index_config_, store_plugin,
                        std::make_shared<vast::taxonomies>());
   REQUIRE(sut);
   run();
@@ -255,9 +252,6 @@ TEST(delegate query to store with all possible ids in partition when query is to
       FAIL(err);
     });
   REQUIRE_EQUAL(last_query_contexts.size(), 1u);
-  vast::ids expected_ids;
-  expected_ids.append_bits(true, 2);
-  CHECK_EQUAL(last_query_contexts.back().ids, expected_ids);
 }
 
 FIXTURE_SCOPE_END()

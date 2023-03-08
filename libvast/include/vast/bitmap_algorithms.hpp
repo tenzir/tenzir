@@ -11,9 +11,9 @@
 #include "vast/aliases.hpp"
 #include "vast/bits.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/generator.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/generator.hpp"
 #include "vast/id_range.hpp"
 
 #include <caf/error.hpp>
@@ -512,7 +512,7 @@ auto select(const IDs& ids) {
 /// @param bitmap The bitmap.
 /// @returns A generator id ranges.
 template <bool Bit = true, class Bitmap>
-auto select_runs(const Bitmap& bitmap) -> detail::generator<id_range> {
+auto select_runs(const Bitmap& bitmap) -> generator<id_range> {
   auto rng = each(bitmap);
   if (rng.value() != Bit)
     rng.template select<Bit>();

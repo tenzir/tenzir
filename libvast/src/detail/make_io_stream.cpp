@@ -113,7 +113,8 @@ make_output_stream(const std::string& output, socket_type st) {
 
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output,
-                   std::filesystem::file_type file_type) {
+                   std::filesystem::file_type file_type,
+                   std::ios_base::openmode mode) {
   switch (file_type) {
     default:
       return caf::make_error(ec::filesystem_error, "unsupported path type",
@@ -126,7 +127,7 @@ make_output_stream(const std::string& output,
     case std::filesystem::file_type::regular: {
       if (output == "-")
         return std::make_unique<fdostream>(1); // stdout
-      return std::make_unique<std::ofstream>(output);
+      return std::make_unique<std::ofstream>(output, mode);
     }
   }
 }

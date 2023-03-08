@@ -7,7 +7,7 @@ description: Raw network traffic in PCAP form
 VAST supports reading and writing [PCAP](http://www.tcpdump.org) traces via
 `libpcap`.
 
-## Input
+## Parser
 
 On the read path, VAST can either acquire packets from a trace file or in *live
 mode* from a network interface.
@@ -83,7 +83,7 @@ the corresponding state expires. The option `--max-flow-age`/`-a` controls this
 timeout value. Finally, the frequency of when the flow table expires entries
 can be controlled via `--flow-expiry`/`-e`.
 
-## Output
+## Printer
 
 On the write path, VAST can write packets to a trace file.
 

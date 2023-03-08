@@ -5,8 +5,8 @@ Threat Bus is in maintenance mode. We are no longer adding features, as we are
 about to integrate the core concepts into a new version of VAST's Python
 bindings.
 
-We're happy to answer any question about the upcoming relaunch in our [Community
-Slack](http://slack.tenzir.com).
+We're happy to answer any question about the upcoming relaunch in our [community
+chat](/discord).
 :::
 
 Threat Bus is a

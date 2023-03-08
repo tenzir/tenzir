@@ -120,25 +120,26 @@ caf::error validate_(const vast::data& data, const vast::type& type,
             return error;
           prefixes.insert(nested_prefix);
         }
-        // In 'exhaustive' mode, additionally go through the schema and verify
-        // that all fields exist in the data.
-        if (mode == validate::exhaustive) {
-          for (const auto& field : record_type.fields()) {
-            auto nested_prefix = fmt::format("{}.{}", prefix, field.name);
-            if (prefixes.contains(nested_prefix))
-              continue;
-            auto it = record->find(field.name);
-            if (it == record->end())
-              return caf::make_error(ec::invalid_configuration,
-                                     fmt::format("missing field {}.{}", prefix,
-                                                 field.name));
-            auto type = field.type;
-            auto data = it->second;
-            if (auto error = validate_(data, field.type, mode,
-                                       fmt::format("{}.{}", prefix, field.name),
-                                       depth + 1))
-              return error;
-          }
+        // Verify that all required fields exist in the data.
+        for (const auto& field : record_type.fields()) {
+          bool required
+            = field.type.attribute("required") || mode == validate::exhaustive;
+          if (!required)
+            continue;
+          auto nested_prefix = fmt::format("{}.{}", prefix, field.name);
+          if (prefixes.contains(nested_prefix))
+            continue;
+          auto it = record->find(field.name);
+          if (it == record->end())
+            return caf::make_error(ec::invalid_configuration,
+                                   fmt::format("missing field {}.{}", prefix,
+                                               field.name));
+          auto type = field.type;
+          auto data = it->second;
+          if (auto error
+              = validate_(data, field.type, mode,
+                          fmt::format("{}.{}", prefix, field.name), depth + 1))
+            return error;
         }
         return caf::error{};
       },

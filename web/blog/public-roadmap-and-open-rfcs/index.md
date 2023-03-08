@@ -3,6 +3,7 @@ title: Public Roadmap and Open RFCs
 description: Open Source needs Open Governance
 authors: mavam
 date: 2022-09-07
+last_updated: 2023-02-08
 tags: [roadmap, github, rfc, open-source]
 ---
 
@@ -112,6 +113,6 @@ enthusiastic about supporting external projects that we can support within our
 capacities.
 
 These are our "growing pains" that we can hopefully overcome together while
-building a thriving community. We still have our [community
-Slack](http://slack.tenzir.com) where we are looking forward to interact with
-everyone with questions or feedback. See you there!
+building a thriving community. We still have our [community chat](/discord)
+where we are looking forward to interact with everyone with questions or
+feedback. See you there!

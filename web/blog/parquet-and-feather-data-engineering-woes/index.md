@@ -87,8 +87,7 @@ unsigned 8-bit integers. On read, Arrow turns these 8-bit index values into
 32-bit values, which is not compatible with our extension type definition, so
 the extension type wrapping is lost. The diagram below illustrates this issue.
 
-![Arrow Schema Conversion #width500](arrow-schema-conversion.light.png#gh-light-mode-only)
-![Arrow Schema Conversion #width500](arrow-schema-conversion.dark.png#gh-dark-mode-only)
+![Arrow Schema Conversion](arrow-schema-conversion.excalidraw.svg)
 
 ### Extension Types inside Maps
 

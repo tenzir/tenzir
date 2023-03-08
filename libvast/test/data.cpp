@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE data
-
 #include "vast/data.hpp"
 
 #include "vast/concept/convertible/to.hpp"
@@ -132,7 +130,7 @@ TEST(construction) {
   CHECK(caf::holds_alternative<double>(data{4.2}));
   CHECK(caf::holds_alternative<std::string>(data{"foo"}));
   CHECK(caf::holds_alternative<std::string>(data{std::string{"foo"}}));
-  CHECK(caf::holds_alternative<pattern>(data{pattern{"foo"}}));
+  CHECK(caf::holds_alternative<pattern>(data{pattern{}}));
   CHECK(caf::holds_alternative<ip>(data{ip{}}));
   CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
   CHECK(caf::holds_alternative<list>(data{list{}}));
@@ -201,8 +199,14 @@ TEST(evaluation) {
 }
 
 TEST(evaluation - pattern matching) {
-  CHECK(evaluate(pattern{"f.*o"}, relational_operator::equal, "foo"));
-  CHECK(evaluate("foo", relational_operator::equal, pattern{"f.*o"}));
+  CHECK(
+    evaluate(unbox(to<pattern>("/f.*o/")), relational_operator::equal, "foo"));
+  CHECK(
+    evaluate("foo", relational_operator::equal, unbox(to<pattern>("/f.*o/"))));
+  CHECK(
+    evaluate(unbox(to<pattern>("/f.*o/i")), relational_operator::equal, "FOO"));
+  CHECK(
+    evaluate("FOO", relational_operator::equal, unbox(to<pattern>("/f.*o/i"))));
 }
 
 TEST(serialization) {
@@ -268,7 +272,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == pattern{"foo"});
+  CHECK(d == unbox(to<pattern>("/foo/")));
   MESSAGE("address");
   str = "10.0.0.1"s;
   f = str.begin();
@@ -377,7 +381,7 @@ TEST(pack / unpack) {
     {"duration", duration{5}},
     {"time", vast::time{} + duration{6}},
     {"string", std::string{"7"}},
-    {"pattern", pattern{"7"}},
+    {"pattern", unbox(to<pattern>("/7/"))},
     {"address", unbox(to<ip>("0.0.0.8"))},
     {"subnet", unbox(to<subnet>("0.0.0.9/24"))},
     {"enumeration", enumeration{10}},
@@ -399,4 +403,46 @@ TEST(pack / unpack) {
   auto x2 = data{};
   REQUIRE_EQUAL(unpack(*flatbuffer, x2), caf::none);
   CHECK_EQUAL(x, x2);
+}
+
+TEST(get_if) {
+  // clang-format off
+  auto x = record{
+    {"foo", "bar"},
+    {"baz", record{
+      {"qux", int64_t{42}},
+      {"quux", record{
+        {"quuux", 3.14}
+      }},
+    }},
+  };
+  // clang-format on
+  auto foo = get_if<std::string>(&x, "foo");
+  REQUIRE(foo);
+  CHECK_EQUAL(*foo, "bar");
+  auto invalid = get_if<ip>(&x, "foo");
+  CHECK(!invalid);
+  auto baz = get_if<record>(&x, "baz");
+  CHECK(baz);
+  auto qux = get_if<int64_t>(&x, "baz.qux");
+  REQUIRE(qux);
+  CHECK_EQUAL(*qux, 42);
+  auto quux = get_if<record>(&x, "baz.quux");
+  CHECK(quux);
+  auto quuux = get_if<double>(&x, "baz.quux.quuux");
+  REQUIRE(quuux);
+  CHECK_EQUAL(*quuux, 3.14);
+  auto unknown = get_if<ip>(&x, "foo.baz");
+  CHECK(!unknown);
+}
+
+TEST(get_or) {
+  auto x = record{{"foo", "bar"}};
+  auto fallback = std::string{"fallback"};
+  auto foo = get_or(x, "foo", fallback);
+  CHECK_EQUAL(foo, "bar");
+  auto bar = get_or(x, "bar", fallback);
+  CHECK_EQUAL(bar, "fallback");
+  auto qux = get_or(x, "qux", "literal");
+  CHECK_EQUAL(qux, "literal");
 }

@@ -70,8 +70,8 @@ struct accountant_state_impl {
   /// Stores the names of known actors to fill into the actor_name column.
   std::unordered_map<caf::actor_id, std::string> actor_map;
 
-  /// Stores the builder instance.
-  table_slice_builder_ptr builder;
+  /// Stores the builder instance per type name.
+  std::unordered_map<std::string, table_slice_builder_ptr> builders;
 
   /// Buffers table_slices, acting as a adaptor between the push based
   /// ACCOUNTANT interface and the pull based stream to the IMPORTER.
@@ -102,7 +102,7 @@ struct accountant_state_impl {
 
   // -- utility functions ------------------------------------------------------
 
-  void finish_slice() {
+  void finish_slice(table_slice_builder_ptr& builder) {
     // Do nothing if builder has not been created or no rows have been added yet.
     if (!builder || builder->rows() == 0)
       return;
@@ -122,32 +122,41 @@ struct accountant_state_impl {
       VAST_DEBUG("{} cannot record a non-finite metric", *self);
       return;
     }
+    auto& builder = builders[key];
     if (!builder) {
+      auto schema_fields = std::vector<record_type::field_view>{
+        {"ts", type{"timestamp", time_type{}}},
+        {"version", string_type{}},
+        {"actor", string_type{}},
+        {"value", double_type{}},
+      };
+      schema_fields.reserve(schema_fields.size() + meta1.size() + meta2.size());
+      for (const auto& [key, _] : meta1)
+        schema_fields.emplace_back(key, string_type{});
+      for (const auto& [key, _] : meta2)
+        schema_fields.emplace_back(key, string_type{});
       auto schema = type{
-        "vast.metrics",
-        record_type{{"ts", type{"timestamp", time_type{}}},
-                    {"version", string_type{}},
-                    {"actor", string_type{}},
-                    {"key", string_type{}},
-                    {"value", double_type{}},
-                    {"metadata", map_type{string_type{}, string_type{}}}},
+        fmt::format("vast.metrics.{}", key),
+        record_type{schema_fields},
       };
       builder = std::make_shared<table_slice_builder>(schema);
       VAST_DEBUG("{} obtained a table slice builder", *self);
     }
-    map meta = {};
-    meta.reserve(meta1.size() + meta2.size());
-    for (const auto& [meta_key, meta_value] : meta1) {
-      meta.insert({meta_key, meta_value});
+    {
+      const auto added = builder->add(ts, std::string_view{version::version},
+                                      actor_map[actor_id], x);
+      VAST_ASSERT(added);
     }
-    for (const auto& [meta_key, meta_value] : meta2) {
-      meta.insert({meta_key, meta_value});
+    for (const auto& [_, value] : meta1) {
+      const auto added = builder->add(value);
+      VAST_ASSERT(added);
     }
-    const auto added = builder->add(ts, std::string_view{version::version},
-                                    actor_map[actor_id], key, x, meta);
-    VAST_ASSERT(added);
+    for (const auto& [_, value] : meta2) {
+      const auto added = builder->add(value);
+      VAST_ASSERT(added);
+    }
     if (builder->rows() == static_cast<size_t>(cfg.self_sink.slice_size))
-      finish_slice();
+      finish_slice(builder);
   }
 
   std::vector<char>
@@ -263,7 +272,8 @@ struct accountant_state_impl {
     }
     if (start_file_sink) {
       auto s = detail::make_output_stream(root / cfg.file_sink.path,
-                                          std::filesystem::file_type::regular);
+                                          std::filesystem::file_type::regular,
+                                          std::ios_base::app);
       if (s) {
         VAST_INFO("{} writing metrics to {}", *self, cfg.file_sink.path);
         file_sink = std::move(*s);
@@ -314,7 +324,8 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     new accountant_state_impl{self, std::move(cfg), std::move(root)});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
-    self->state->finish_slice();
+    for (auto& [_, builder] : self->state->builders)
+      self->state->finish_slice(builder);
     self->state->record(self->id(), "shutdown", 0, {}, {});
     self->quit(msg.reason);
   });

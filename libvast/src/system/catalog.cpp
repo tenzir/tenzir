@@ -778,10 +778,6 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
 
       return result;
     },
-    [self](atom::resolve,
-           const expression& e) -> caf::result<vast::expression> {
-      return resolve(self->state.taxonomies, e, self->state.type_data);
-    },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
       for (const auto& [type, synopses] : self->state.synopses_per_type) {
         if (auto it = synopses.find(uuid); it != synopses.end()) {

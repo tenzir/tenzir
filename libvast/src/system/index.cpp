@@ -117,7 +117,7 @@
 //
 // # Partition Transforms
 //
-// 
+//
 //
 //   atom::apply, transform              spawn()
 // ---------------------------> index  -----------> partition_transformer
@@ -131,7 +131,7 @@
 //                            |     | -----|
 //                                         | write index/markers/{transform_id}.marker
 //                                         | (contains list of input and output partitions)
-//                            |     | <----/                                         
+//                            |     | <----/
 //                            |     | ~~~~~|
 //                                         | atom::rename (move output partitions from index/markers/ to index/ )
 //                                         | update index statistics
@@ -141,7 +141,7 @@
 //                                  |------|
 //                                         |
 //                                         | erase index/markers/{transform_id}.marker
-//                                    <----/                                         
+//                                    <----/
 //
 // On index startup in `index::load_from_disk()` we first go through the `index/markers/` directory
 // and finish up the work recorded in any existing marker files.
@@ -541,10 +541,10 @@ caf::error index_state::load_from_disk() {
     VAST_INFO("{} recovers corrupted partition {}", *self, id);
     auto pipeline
       = std::make_shared<vast::pipeline>("recover", std::vector<std::string>{});
-    auto identity_operator = make_pipeline_operator("identity", {});
-    if (!identity_operator)
-      return identity_operator.error();
-    pipeline->add_operator(std::move(*identity_operator));
+    auto pass_operator = make_pipeline_operator("pass", {});
+    if (!pass_operator)
+      return pass_operator.error();
+    pipeline->add_operator(std::move(*pass_operator));
     auto store_id = std::string{store_actor_plugin->name()};
     // For this recovery we don't use the 'markers' mechanism
     // and store the output directly in the index directory.
@@ -714,8 +714,9 @@ index_state::create_active_partition(const type& schema) {
   VAST_ASSERT(active_partition != active_partitions.end());
   active_partition->second.spawn_time = std::chrono::steady_clock::now();
   active_partition->second.actor
-    = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
-                  index_opts, synopsis_opts, store_actor_plugin, taxonomies);
+    = self->spawn(::vast::system::active_partition, schema, id, accountant,
+                  filesystem, index_opts, synopsis_opts, store_actor_plugin,
+                  taxonomies);
   active_partition->second.stream_slot
     = stage->add_outbound_path(active_partition->second.actor);
   stage->out().set_filter(active_partition->second.stream_slot, schema);

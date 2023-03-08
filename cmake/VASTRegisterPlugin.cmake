@@ -272,11 +272,7 @@ macro (VASTInstallExampleConfiguration target source prefix destination)
 
   # Set a temporary variable for the example dir location. Because we're in a
   # macro we're unsetting the variable again later on.
-  if (VAST_CMAKE_INSTALL_DOCDIR)
-    set(_example_dir "${VAST_CMAKE_INSTALL_DOCDIR}/examples")
-  else ()
-    set(_example_dir "${CMAKE_INSTALL_DOCDIR}/examples")
-  endif ()
+  set(_example_dir "${CMAKE_INSTALL_DOCDIR}/examples")
 
   # Write a CMake file that does the desired text transformations.
   file(
@@ -448,11 +444,6 @@ function (VASTRegisterPlugin)
     list(REMOVE_ITEM PLUGIN_SOURCES "${PLUGIN_ENTRYPOINT}")
   endif ()
 
-  # Set a fallback for the docdir.
-  if (NOT VAST_CMAKE_INSTALL_DOCDIR)
-    set(VAST_CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
-  endif ()
-
   # Create an object library target for our plugin _without_ the entrypoint.
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.h" "")
   list(APPEND PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.h")
@@ -473,73 +464,73 @@ function (VASTRegisterPlugin)
                                PUBLIC $<BUILD_INTERFACE:${include_directories}>)
   endif ()
 
-  # Require that the CMake project version is set and has the appropriate
-  # format.
-  if (NOT PROJECT_VERSION)
-    message(
-      FATAL_ERROR
-        "PROJECT_VERSION must be specified before call to VASTRegisterPlugin")
-  endif ()
-  if (NOT PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
-    message(
-      FATAL_ERROR
-        "PROJECT_VERSION does not match expected format: <major>.<minor>.<patch>"
-    )
-  endif ()
-
-  # Determine the plugin version. We use the CMake project version, and then
-  # optionally append the Git revision that last touched the project,
-  # essentially reconstructing git-describe except for the revision count.
   string(MAKE_C_IDENTIFIER "vast_plugin_${PLUGIN_TARGET}_version"
                            PLUGIN_TARGET_IDENTIFIER)
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
-       "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@VAST_PLUGIN_VERSION@\";\n")
-  string(TOUPPER "VAST_PLUGIN_${PLUGIN_TARGET}_REVISION"
-                 VAST_PLUGIN_REVISION_VAR)
-  if (DEFINED "${VAST_PLUGIN_REVISION_VAR}")
-    set(VAST_PLUGIN_REVISION_FALLBACK "${${VAST_PLUGIN_REVISION_VAR}}")
-  endif ()
-  file(
-    WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
-    "\
-    find_package(Git QUIET)
-    if (Git_FOUND)
-      execute_process(
-        COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" rev-list
-                --abbrev-commit --abbrev=10 -1 HEAD -- \"${PROJECT_SOURCE_DIR}\"
-        OUTPUT_VARIABLE PLUGIN_REVISION
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE PLUGIN_REVISION_RESULT
-	ERROR_QUIET)
-      if (PLUGIN_REVISION_RESULT EQUAL 0)
-        string(PREPEND PLUGIN_REVISION \"g\")
+  if (NOT PROJECT_VERSION)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp"
+         "const char* ${PLUGIN_TARGET_IDENTIFIER} = nullptr;\n")
+  else ()
+    # Require that the CMake project version has the appropriate format.
+    if (NOT PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+      message(
+        FATAL_ERROR
+          "PROJECT_VERSION does not match expected format: <major>.<minor>.<patch>"
+      )
+    endif ()
+
+    # Determine the plugin version. We use the CMake project version, and then
+    # optionally append the Git revision that last touched the project,
+    # essentially reconstructing git-describe except for the revision count.
+    file(
+      WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
+      "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@VAST_PLUGIN_VERSION@\";\n")
+    string(TOUPPER "VAST_PLUGIN_${PLUGIN_TARGET}_REVISION"
+                   VAST_PLUGIN_REVISION_VAR)
+    if (DEFINED "${VAST_PLUGIN_REVISION_VAR}")
+      set(VAST_PLUGIN_REVISION_FALLBACK "${${VAST_PLUGIN_REVISION_VAR}}")
+    endif ()
+    file(
+      WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
+      "\
+      find_package(Git QUIET)
+      if (Git_FOUND)
         execute_process(
-          COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" diff-index
-                  --quiet HEAD -- \"${PROJECT_SOURCE_DIR}\"
-          RESULT_VARIABLE PLUGIN_DIRTY_RESULT)
-        if (NOT PLUGIN_DIRTY_RESULT EQUAL 0)
-          string(APPEND PLUGIN_REVISION \"-dirty\")
+          COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" rev-list
+                  --abbrev-commit --abbrev=10 -1 HEAD -- \"${PROJECT_SOURCE_DIR}\"
+          OUTPUT_VARIABLE PLUGIN_REVISION
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+          RESULT_VARIABLE PLUGIN_REVISION_RESULT
+	  ERROR_QUIET)
+        if (PLUGIN_REVISION_RESULT EQUAL 0)
+          string(PREPEND PLUGIN_REVISION \"g\")
+          execute_process(
+            COMMAND \"\${GIT_EXECUTABLE}\" -C \"${PROJECT_SOURCE_DIR}\" diff-index
+                    --quiet HEAD -- \"${PROJECT_SOURCE_DIR}\"
+            RESULT_VARIABLE PLUGIN_DIRTY_RESULT)
+          if (NOT PLUGIN_DIRTY_RESULT EQUAL 0)
+            string(APPEND PLUGIN_REVISION \"-dirty\")
+          endif ()
         endif ()
       endif ()
-    endif ()
-    if (NOT PLUGIN_REVISION)
-      set(PLUGIN_REVISION \"${VAST_PLUGIN_REVISION_FALLBACK}\")
-    endif ()
-    set(VAST_PLUGIN_VERSION \"v${PROJECT_VERSION}\")
-    if (PLUGIN_REVISION)
-      string(APPEND VAST_PLUGIN_VERSION \"-\${PLUGIN_REVISION}\")
-    endif ()
-    configure_file(\"${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in\"
-                  \"${CMAKE_CURRENT_BINARY_DIR}/config.cpp\" @ONLY)")
+      if (NOT PLUGIN_REVISION)
+        set(PLUGIN_REVISION \"${VAST_PLUGIN_REVISION_FALLBACK}\")
+      endif ()
+      set(VAST_PLUGIN_VERSION \"v${PROJECT_VERSION}\")
+      if (PLUGIN_REVISION)
+        string(APPEND VAST_PLUGIN_VERSION \"-\${PLUGIN_REVISION}\")
+      endif ()
+      configure_file(\"${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in\"
+                     \"${CMAKE_CURRENT_BINARY_DIR}/config.cpp\" @ONLY)")
+    add_custom_target(
+      ${PLUGIN_TARGET}-update-config
+      BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/config.cpp"
+      COMMAND ${CMAKE_COMMAND} -P
+              "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
+  endif ()
   set_source_files_properties(
     "${PLUGIN_ENTRYPOINT}"
     PROPERTIES COMPILE_DEFINITIONS
                "VAST_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}")
-  add_custom_target(
-    ${PLUGIN_TARGET}-update-config
-    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/config.cpp"
-    COMMAND ${CMAKE_COMMAND} -P
-            "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
   list(APPEND PLUGIN_ENTRYPOINT "${CMAKE_CURRENT_BINARY_DIR}/config.cpp")
 
   # Create a static library target for our plugin with the entrypoint, and use
@@ -605,7 +596,7 @@ function (VASTRegisterPlugin)
     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${doc}")
       install(
         FILES "${CMAKE_CURRENT_SOURCE_DIR}/${doc}"
-        DESTINATION "${VAST_CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}"
+        DESTINATION "${CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}"
         COMPONENT Runtime)
     endif ()
   endforeach ()
@@ -650,6 +641,16 @@ function (VASTRegisterPlugin)
 
   # Setup unit tests.
   if (VAST_ENABLE_UNIT_TESTS AND PLUGIN_TEST_SOURCES)
+    set(VAST_UNIT_TEST_TIMEOUT
+        "60"
+        CACHE STRING "The per-test timeout in unit tests" FORCE)
+    unset(suites)
+    foreach (test_source IN LISTS PLUGIN_TEST_SOURCES)
+      get_filename_component(suite "${test_source}" NAME_WE)
+      set_property(SOURCE "${test_source}" PROPERTY COMPILE_DEFINITIONS
+                                                    "SUITE=${suite}")
+      list(APPEND suites "${suite}")
+    endforeach ()
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
     VASTTargetEnableTooling(${PLUGIN_TARGET}-test)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
@@ -665,10 +666,15 @@ function (VASTRegisterPlugin)
       build-${PLUGIN_TARGET}-test
       PROPERTIES FIXTURES_SETUP vast_${PLUGIN_TARGET}_unit_test_fixture
                  FIXTURES_REQUIRED vast_unit_test_fixture)
-    add_test(NAME ${PLUGIN_TARGET} COMMAND ${PLUGIN_TARGET}-test -v 4 -r 60)
-    set_tests_properties(
-      ${PLUGIN_TARGET} PROPERTIES FIXTURES_REQUIRED
-                                  vast_${PLUGIN_TARGET}_unit_test_fixture)
+    foreach (suite IN LISTS suites)
+      string(REPLACE " " "_" test_name ${suite})
+      add_test(NAME "plugin/${PLUGIN_TARGET}/${test_name}"
+               COMMAND ${PLUGIN_TARGET}-test -v 4 -r
+                       "${VAST_UNIT_TEST_TIMEOUT}" -s "${suite}")
+      set_tests_properties(
+        "plugin/${PLUGIN_TARGET}/${test_name}"
+        PROPERTIES FIXTURES_REQUIRED vast_${PLUGIN_TARGET}_unit_test_fixture)
+    endforeach ()
   endif ()
 
   # Ensure that a target integration always exists, even if a plugin does not

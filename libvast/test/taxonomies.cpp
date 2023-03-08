@@ -1,7 +1,5 @@
 // Copyright Tenzir GmbH. All rights reserved.
 
-#define SUITE taxonomies
-
 #include "vast/taxonomies.hpp"
 
 #include "vast/concept/convertible/data.hpp"

@@ -11,10 +11,8 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/system/catalog.hpp"
-#include "vast/uuid.hpp"
-
-#define SUITE query_queue
 #include "vast/test/test.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/test/dsl.hpp>
 

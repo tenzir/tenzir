@@ -8,7 +8,11 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/logger.hpp"
+
+#include <caf/expected.hpp>
 
 #include <string>
 
@@ -16,32 +20,31 @@ namespace vast {
 
 struct access;
 class data;
+struct regex_impl;
+
+// options that modify pattern behavior.
+struct pattern_options {
+  bool case_insensitive{false};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, pattern_options& o) -> bool {
+    return detail::apply_all(f, o.case_insensitive);
+  }
+};
 
 /// A regular expression.
-class pattern : detail::totally_ordered<pattern>,
-                detail::addable<pattern>,
-                detail::orable<pattern>,
-                detail::andable<pattern> {
+class pattern {
   friend access;
 
 public:
-  /// Constructs a pattern from a glob expression. A glob expression consists
-  /// of the following elements:
-  ///
-  ///     - `*`   Equivalent to `.*` in a regex
-  ///     - `?`    Equivalent to `.` in a regex
-  ///     - `[ab]` Equivalent to the character class `[ab]` in a regex.
-  ///
-  /// @param str The glob expression.
-  /// @returns A pattern for the glob expression *str*.
-  static pattern glob(std::string_view str);
+  /// optional flag to make a pattern string case-insensitive.
+  static inline auto constexpr case_insensitive_flag = 'i';
 
   /// Default-constructs an empty pattern.
-  pattern() = default;
+  pattern() noexcept = default;
 
-  /// Constructs a pattern from a string.
-  /// @param str The string containing the pattern.
-  explicit pattern(std::string str);
+  static auto make(std::string str, pattern_options options = {false}) noexcept
+    -> caf::expected<pattern>;
 
   /// Matches a string against the pattern.
   /// @param str The string to match.
@@ -55,41 +58,33 @@ public:
 
   [[nodiscard]] const std::string& string() const;
 
+  [[nodiscard]] const pattern_options& options() const;
+
   // -- concepts // ------------------------------------------------------------
 
-  pattern& operator+=(const pattern& other);
-  pattern& operator+=(std::string_view other);
-  pattern& operator|=(const pattern& other);
-  pattern& operator|=(std::string_view other);
-  pattern& operator&=(const pattern& other);
-  pattern& operator&=(std::string_view other);
+  friend bool operator==(const pattern& lhs, const pattern& rhs) noexcept;
+  friend std::strong_ordering
+  operator<=>(const pattern& lhs, const pattern& rhs) noexcept;
 
-  friend pattern operator+(const pattern& x, std::string_view y);
-  friend pattern operator+(std::string_view x, const pattern& y);
-  friend pattern operator|(const pattern& x, std::string_view y);
-  friend pattern operator|(std::string_view x, const pattern& y);
-  friend pattern operator&(const pattern& x, std::string_view y);
-  friend pattern operator&(std::string_view x, const pattern& y);
-
-  friend bool operator==(const pattern& lhs, const pattern& rhs);
-  friend bool operator<(const pattern& lhs, const pattern& rhs);
-
-  // We are not using detail::equality_comparable here because it takes both
-  // arguments by const reference. Here, string_view is taken by value.
-  friend bool operator==(const pattern& lhs, std::string_view rhs);
-  friend bool operator!=(const pattern& lhs, std::string_view rhs);
-  friend bool operator==(std::string_view lhs, const pattern& rhs);
-  friend bool operator!=(std::string_view lhs, const pattern& rhs);
+  friend bool operator==(const pattern& lhs, std::string_view rhs) noexcept;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, pattern& p) {
-    return f.apply(p.str_);
+  friend auto inspect(Inspector& f, pattern& p) -> bool {
+    auto ok = detail::apply_all(f, p.str_, p.options_);
+    if constexpr (Inspector::is_loading) {
+      auto result = pattern::make(std::move(p.str_), p.options_);
+      VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
+      p = std::move(*result);
+    }
+    return ok;
   }
 
   friend bool convert(const pattern& p, data& d);
 
 private:
-  std::string str_;
+  std::string str_ = {};
+  pattern_options options_ = {};
+  std::shared_ptr<regex_impl> regex_ = {};
 };
 
 } // namespace vast

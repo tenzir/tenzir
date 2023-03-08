@@ -67,10 +67,10 @@ jobs:
       cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
       docker-build-args: ${{ steps.configure.outputs.docker-build-args }}
       vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
+      run-policy-enforcement: ${{ steps.configure.outputs.run-policy-enforcement }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
       run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
-      run-docker-vast-slim: ${{ steps.configure.outputs.run-docker-vast-slim }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
@@ -160,6 +160,8 @@ jobs:
           if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
             run_example_notebooks=false
           fi
+          # Policy checks are not constrained.
+          echo "run-policy-enforcement=true" >> $GITHUB_OUTPUT
           echo "run-example-notebooks=${run_example_notebooks}" >> $GITHUB_OUTPUT
           echo "run-python-package=${run_python_package}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]] || ! is_unchanged .github/workflows/vast.yaml; then
@@ -167,7 +169,6 @@ jobs:
             echo "run-python=true" >> $GITHUB_OUTPUT
             echo "run-vast-io=true" >> $GITHUB_OUTPUT
             echo "run-docker-vast=true" >> $GITHUB_OUTPUT
-            echo "run-docker-vast-slim=true" >> $GITHUB_OUTPUT
             echo "run-docker-compose=true" >> $GITHUB_OUTPUT
             echo "run-vast-nix=true" >> $GITHUB_OUTPUT
             echo "run-vast=true" >> $GITHUB_OUTPUT
@@ -195,6 +196,9 @@ jobs:
           fi
           run_vast_plugins=${run_vast}
           if ! is_unchanged plugins/; then
+            run_vast_plugins=true
+          fi
+          if ! is_unchanged contrib/vast-plugins/; then
             run_vast_plugins=true
           fi
           echo "run-vast-plugins=${run_vast_plugins}" >> $GITHUB_OUTPUT
@@ -234,11 +238,41 @@ jobs:
             run_vast_nix=true
           fi
           echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
-          run_docker_vast_slim="${run_vast_nix}"
-          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_docker_vast_slim='false'
-          fi
-          echo "run-docker-vast-slim=${run_docker_vast_slim}" >> $GITHUB_OUTPUT
+
+  policy-enforcement:
+    name: Policy Enforcement
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-policy-enforcement == 'true' }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
+      - name: Require contrib/vast-plugins to be on a main branch commit
+        run: |
+          git submodule update --init contrib/vast-plugins
+          git -C contrib/vast-plugins fetch origin main
+          git -C contrib/vast-plugins merge-base --is-ancestor \
+            $(git -C contrib/vast-plugins rev-parse HEAD) \
+            $(git -C contrib/vast-plugins rev-parse origin/main)
+      - name: Install Nix
+        uses: cachix/install-nix-action@v20
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Verify Nix sources are synchronized
+        run: |
+          nix/update.sh
+          git diff --quiet --exit-code || {
+            echo "Some Nix source references are not aligned with the git submodules."
+            echo "Please run `nix/update.sh` or apply the following diff directly:"
+            git diff --exit-code
+          }
 
   changelog:
     name: Changelog
@@ -256,7 +290,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          submodules: true
       - name: Install Dependencies
         run: ./scripts/debian/install-dev-dependencies.sh
       - name: Configure Build
@@ -286,8 +319,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          submodules: recursive
+      - name: Checkout dotgithub submodule
+        run: |
+          git submodule update --init web/.github
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -329,14 +363,46 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
-    name: Docker (tenzir/vast)
+    name: ${{ matrix.docker-vast.job-name }} (Docker)
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        docker-vast:
+          - name: vast
+            job-name: VAST
+            upload-dev-images: true
+          - name: vast-ce
+            job-name: VAST CE
+            upload-dev-images: false
+            plugins:
+              - matcher
+              - netflow
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          submodules: recursive
+      - name: Update submodules
+        run: |
+          git submodule update --init --recursive libvast plugins
+      - name: Configure ssh-agent
+        if: ${{ matrix.docker-vast.name == 'vast-ce' }}
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
+      - name: Initialize Community Edition plugins
+        if: ${{ matrix.docker-vast.name == 'vast-ce' }}
+        run: |
+          git submodule update --init --recursive contrib/vast-plugins
+          # Remove plugins that are not in matrix.docker-vast.plugins
+          # We move everything out first and then only move the wanted plugins
+          # back in.
+          mv contrib/vast-plugins _plugtmp
+          mkdir contrib/vast-plugins
+          for plugin in ${{ join(matrix.docker-vast.plugins, ' ') }}; do
+            mv "_plugtmp/$plugin" contrib/vast-plugins/
+          done
+          rm -rf _plugtmp
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -366,31 +432,36 @@ jobs:
           # prefer an existing cache for the current trigger over the cache that
           # we attempt to restore from, which is the before sha for pushes and
           # the merge-base for pull requests.
-          docker buildx build . -t tenzir/vast:latest --target production --load \
+          docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}:latest --target production --load \
             --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:build-cache" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
-          docker buildx build . -t tenzir/vast-dev:latest --target development --load \
-            --platform linux/amd64 \
-            --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
-            --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
-          docker buildx build . -t tenzir/vast-deps:latest --target dependencies --load \
-            --platform linux/amd64 \
-            --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
-            --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
+            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
+          if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
+            docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-dev:latest --target development --load \
+              --platform linux/amd64 \
+              --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
+              --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
+              --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
+            docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-deps:latest --target dependencies --load \
+              --platform linux/amd64 \
+              --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
+              --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
+              --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
+          fi
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            docker tag tenzir/vast:latest "ghcr.io/tenzir/vast:${ref_tag}"
-            docker push "ghcr.io/tenzir/vast:${ref_tag}"
+            docker tag tenzir/${{ matrix.docker-vast.name }}:latest "ghcr.io/tenzir/${{ matrix.docker-vast.name }}:${ref_tag}"
+            docker push "ghcr.io/tenzir/${{ matrix.docker-vast.name }}:${ref_tag}"
           fi
       - name: Publish Docker Images
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
           registries=('' 'ghcr.io/')
-          images=('tenzir/vast' 'tenzir/vast-dev' 'tenzir/vast-deps')
+          images=('tenzir/${{ matrix.docker-vast.name }}')
+          if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
+            images+=('tenzir/${{ matrix.docker-vast.name }}-dev' 'tenzir/${{ matrix.docker-vast.name }}-deps')
+          fi
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
           else
@@ -422,7 +493,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          submodules: recursive
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to GitHub Container Registry
@@ -452,7 +522,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          submodules: recursive
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to GitHub Container Registry
@@ -500,8 +569,25 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-vast-nix == 'true' }}
-    name: VAST (Nix)
+    name: ${{ matrix.vast-nix.job-name }} (Nix)
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        # The values for `package` and `image-basename` should correspond to
+        # so that `-static` in the former is `-slim` in the latter. This way
+        # the binary artifacts built in one job are resused by the other.
+        # Both names are defined in `flake.nix`.
+        vast-nix:
+          - job-name: VAST
+            name: vast
+            package: vast-static
+            release-asset-name: vast-linux-static
+            image-basename: vast-slim
+          - job-name: VAST CE
+            name: vast-ce
+            package: vast-ce-static
+            release-asset-name: vast-ce-linux-static
+            image-basename: vast-ce-slim
     env:
       BUILD_DIR: build
     steps:
@@ -510,9 +596,13 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Nix
-        uses: cachix/install-nix-action@v19
+        uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-unstable
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Setup Cachix
         uses: cachix/cachix-action@v12
         with:
@@ -520,25 +610,25 @@ jobs:
           signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
       - name: Build Static Packages
         id: build_static_packages
-        env:
-          STATIC_BINARY_TARGET: vast
-          VAST_BUILD_VERSION: ${{ needs.configure.outputs.build-version }}
-          VAST_BUILD_VERSION_SHORT: ${{ needs.configure.outputs.build-version-short }}
         run: |
-          STORE_PATH=$(nix develop .#static-shell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
-            -DCPACK_PACKAGE_FILE_NAME:STRING="vast-${VAST_BUILD_VERSION}")
-          echo "store_path=${STORE_PATH}" >> $GITHUB_OUTPUT
-      - name: Get Artifact Names
-        id: get_artifact_names
-        run: |
-          TAR_GZ=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "vast.*.tar.gz")
-          DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "vast.*.deb")
+          STORE_PATH=$(nix --print-build-logs build .#${{ matrix.vast-nix.package }}.package --print-out-paths)
+          TAR_GZ=$(find "$STORE_PATH" -type f -name '*.tar.gz')
+          echo "TARBALL is at: $TAR_GZ"
           echo "tar_gz=${TAR_GZ}" >> $GITHUB_OUTPUT
+          DEB="$(find "$STORE_PATH" -type f -name '*.deb')"
+          echo "DEB is at: $DEB"
           echo "deb=${DEB}" >> $GITHUB_OUTPUT
+          # The debian package filename contains a colon (:), but GitHub does
+          # not allow this character in attached assets, so we create an extra
+          # copy.
+          DEB_GITHUB="$PWD/$(basename "$DEB" | tr ':' '_')"
+          echo "DEB_GITHUB is at: $DEB_GITHUB"
+          cp "$DEB" "$DEB_GITHUB"
+          echo "deb_github=${DEB_GITHUB}" >> $GITHUB_OUTPUT
       - name: Run Integration Tests
         run: |
           mkdir -p vast-integration-test
-          tar xf ./result-package/${{ steps.get_artifact_names.outputs.tar_gz }} --directory vast-integration-test
+          tar xf ${{ steps.build_static_packages.outputs.tar_gz }} --directory vast-integration-test
           nix develop .#vast-integration-test-shell --command python vast/integration/integration.py --app \
             vast-integration-test/opt/vast/bin/vast
       - name: Upload Integration Test Logs on Failure
@@ -551,14 +641,14 @@ jobs:
       - name: Upload Tarball to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "vast.tar.gz"
-          path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
+          name: "${{ matrix.vast-nix.name }}.tar.gz"
+          path: "${{ steps.build_static_packages.outputs.tar_gz }}"
           if-no-files-found: error
       - name: Upload Debian Package to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "vast.deb"
-          path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
+          name: "${{ matrix.vast-nix.name }}.deb"
+          path: "${{ steps.build_static_packages.outputs.deb_github }}"
           if-no-files-found: error
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -579,18 +669,20 @@ jobs:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.deb"
+          TAR_GZ_BASENAME="$(basename "${{ steps.build_static_packages.outputs.tar_gz }}")"
+          gsutil cp "${{ steps.build_static_packages.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${TAR_GZ_BASENAME}"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${TAR_GZ_BASENAME}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.vast-nix.package }}-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_packages.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.vast-nix.package }}-latest.deb"
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
         env:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
-          VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_gz }}" | cut -d"-" -f2)
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.deb"
+          TAR_GZ_BASENAME="$(basename "${{ steps.build_static_packages.outputs.tar_gz }}" .tar.gz)"
+          DEB_BASENAME="$(basename "${{ steps.build_static_packages.outputs.deb }}" .deb)"
+          gsutil cp "${{ steps.build_static_packages.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${TAR_GZ_BASENAME}-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_packages.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}${DEB_BASENAME}-latest.deb"
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete Release Assets
@@ -603,7 +695,9 @@ jobs:
           fail-if-no-assets: false
           # only delete assets when `tag` refers to a release
           fail-if-no-release: true
-          assets: "vast-linux-static.tar.gz"
+          assets: |
+            "${{ matrix.vast-nix.release-asset-name }}.tar.gz"
+            "${{ matrix.vast-nix.release-asset-name }}.deb"
       - name: Upload Release Tarball
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
@@ -611,11 +705,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
+          asset_path: "${{ steps.build_static_packages.outputs.tar_gz }}"
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
           # for a build of the latest release.
-          asset_name: "vast-linux-static.tar.gz"
+          asset_name: "${{ matrix.vast-nix.release-asset-name }}.tar.gz"
           asset_content_type: application/gzip
       - name: Upload Debian Release Package
         if: github.event_name == 'release'
@@ -624,35 +718,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
+          asset_path: "${{ steps.build_static_packages.outputs.deb_github }}"
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb
           # for a build of the latest release.
-          asset_name: "vast-linux-static.deb"
+          asset_name: "${{ matrix.vast-nix.release-asset-name }}.deb"
           asset_content_type: application/vnd.debian.binary-package
-
-  docker-vast-slim:
-    needs:
-      - configure
-    if: needs.configure.outputs.run-docker-vast-slim == 'true'
-    name: Docker (tenzir/vast-slim)
-    runs-on: ubuntu-20.04
-    env:
-      BUILD_DIR: build
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Install Nix
-        uses: cachix/install-nix-action@v19
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - name: Setup Cachix
-        uses: cachix/cachix-action@v12
-        with:
-          name: vast
-          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v2
@@ -668,11 +739,11 @@ jobs:
       - name: Build Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |
-          nix run .#stream-static-image | docker load
+          nix run .#stream-${{ matrix.vast-nix.image-basename }}-image | docker load
       - name: Upload Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |
-          images=('tenzir/vast-slim')
+          image="tenzir/${{ matrix.vast-nix.image-basename }}"
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             registries=('ghcr.io/')
             tags=("${{ needs.configure.outputs.head-ref-slug }}")
@@ -687,11 +758,9 @@ jobs:
             exit 1
           fi
           for registry in "${registries[@]}"; do
-            for image in "${images[@]}"; do
-              for tag in "${tags[@]}"; do
-                docker tag "${image}:latest" "${registry}${image}:${tag}"
-                docker push "${registry}${image}:${tag}"
-              done
+            for tag in "${tags[@]}"; do
+              docker tag "${image}:latest-nix" "${registry}${image}:${tag}"
+              docker push "${registry}${image}:${tag}"
             done
           done
 
@@ -749,8 +818,11 @@ jobs:
           apt-get -y install git
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          submodules: recursive
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive libvast
+          git submodule update --init --recursive plugins
       - name: Install Dependencies
         run: ./${{ matrix.vast.dependencies-script-path }}
       - name: Setup Python
@@ -802,7 +874,6 @@ jobs:
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
-            -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
             -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
             ${{ needs.configure.outputs.cmake-version-args }} \
             ${{ matrix.vast.cmake-extra-flags }}
@@ -940,9 +1011,6 @@ jobs:
           - name: PCAP
             target: pcap
             path: plugins/pcap
-          - name: CEF
-            target: cef
-            path: plugins/cef
           - name: Web
             target: web
             path: plugins/web
@@ -952,20 +1020,36 @@ jobs:
             mac-dependencies:
               - asio
               - http-parser
-            post-install:
-              run: |
-                cd plugins/web/ui
-                yarn install --frozen-lockfile
-                yarn playwright install --with-deps
-                yarn playwright test
-              upload:
-                name: Playwright Report
-                path: plugins/web/ui/playwright-report
+          - name: Compaction
+            target: compaction
+            path: plugins/compaction
+          # TODO: Enable once this builds without warnings
+          # - name: Fleet
+          #   target: fleet
+          #   path: plugins/fleet
+          - name: Inventory
+            target: inventory
+            path: plugins/inventory
+          - name: Matcher
+            target: matcher
+            path: plugins/matcher
+          - name: Netflow
+            target: netflow
+            path: plugins/netflow
         exclude:
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
           # instruction as of Arrow 10.0.0.
           - {setup: {os: macos-latest}, plugin: {name: Parquet}}
+          # Disable proprietary and example plugins on macOS to shorten CI turnaround.
+          # GitHub does not run more than 5 jobs in parallel on macOS.
+          - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
+          - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
+          - {setup: {os: macos-latest}, plugin: {name: Compaction}}
+          - {setup: {os: macos-latest}, plugin: {name: Fleet}}
+          - {setup: {os: macos-latest}, plugin: {name: Inventory}}
+          - {setup: {os: macos-latest}, plugin: {name: Matcher}}
+          - {setup: {os: macos-latest}, plugin: {name: Netflow}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
@@ -987,10 +1071,14 @@ jobs:
         run: |
           apt-get update
           apt-get -y install git
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          submodules: true
+          submodules: recursive
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -1088,17 +1176,6 @@ jobs:
         run: |
           cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
           echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
-      - name: Post-Install
-        if: ${{ matrix.plugin.post-install.run != '' }}
-        run: |
-          ${{ matrix.plugin.post-install.run }}
-      - name: Post-Install Upload
-        if: ${{ always() && matrix.plugin.post-install.upload != '' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ matrix.plugin.post-install.upload.name }}
-          path: ${{ matrix.plugin.post-install.upload.path }}
-          if-no-files-found: error
 
   python:
     needs:
@@ -1120,7 +1197,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.2.0
+        uses: abatilo/actions-poetry@v2.3.0
         with:
           poetry-version: 1.3.0
       - name: Run poetry install
@@ -1159,7 +1236,7 @@ jobs:
         with:
           python-version: "3.10"
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.2.0
+        uses: abatilo/actions-poetry@v2.3.0
         with:
           poetry-version: 1.3.0
       - name: Configure PyPI
@@ -1173,11 +1250,11 @@ jobs:
 
   pass-branch-protections:
     needs:
+      - policy-enforcement
       - configure
       - changelog
       - vast-io
       - docker-vast
-      - docker-vast-slim
       # We currently have a transient error on TheHive init script (sc-39576)
       # - docker-compose
       - example-notebooks

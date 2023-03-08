@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE bloom_filter
-
 #include "vast/bloom_filter.hpp"
 
 #include "vast/bloom_filter_parameters.hpp"

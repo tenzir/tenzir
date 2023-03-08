@@ -6,9 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/expression.hpp"
-#define SUITE expression
-
 #include "vast/fwd.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -17,6 +14,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/expression.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/sum_type.hpp>
@@ -167,11 +165,48 @@ TEST(parseable - value predicate) {
   expression expr;
   CHECK(parsers::expr("42"s, expr));
   auto pred = caf::get_if<predicate>(&expr);
-  REQUIRE(pred != nullptr);
+  REQUIRE(pred);
   auto extractor = caf::get_if<type_extractor>(&pred->lhs);
-  REQUIRE(extractor != nullptr);
+  REQUIRE(extractor);
   CHECK(caf::holds_alternative<uint64_type>(extractor->type));
   CHECK(caf::holds_alternative<data>(pred->rhs));
   CHECK_EQUAL(pred->op, relational_operator::equal);
   CHECK(caf::get<data>(pred->rhs) == data{42u});
+}
+
+TEST(parseable - field extractor predicate) {
+  expression expr;
+  CHECK(parsers::expr("foo.bar"s, expr));
+  auto pred = caf::get_if<predicate>(&expr);
+  REQUIRE(pred);
+  auto extractor = caf::get_if<field_extractor>(&pred->lhs);
+  REQUIRE(extractor);
+  CHECK_EQUAL(extractor->field, "foo.bar");
+  CHECK_EQUAL(pred->op, relational_operator::not_equal);
+  CHECK_EQUAL(pred->rhs, predicate::operand{data{}});
+}
+
+TEST(parseable - type extractor predicate) {
+  expression expr;
+  CHECK(parsers::expr(":ip"s, expr));
+  auto pred = caf::get_if<predicate>(&expr);
+  REQUIRE(pred);
+  auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+  REQUIRE(extractor);
+  CHECK_EQUAL(extractor->type, ip_type{});
+  CHECK_EQUAL(pred->op, relational_operator::not_equal);
+  CHECK_EQUAL(pred->rhs, predicate::operand{data{}});
+}
+
+TEST(parseable - custom type extractor predicate) {
+  expression expr;
+  CHECK(parsers::expr(":foo.bar"s, expr));
+  auto pred = caf::get_if<predicate>(&expr);
+  REQUIRE(pred);
+  auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+  REQUIRE(extractor);
+  auto expected = type{"foo.bar", type{}};
+  CHECK_EQUAL(extractor->type, expected);
+  CHECK_EQUAL(pred->op, relational_operator::not_equal);
+  CHECK_EQUAL(pred->rhs, predicate::operand{data{}});
 }

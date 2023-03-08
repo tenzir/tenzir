@@ -19,8 +19,7 @@ Running VAST on AWS relies on two serverless building blocks:
 For storage, VAST uses [EFS](https://aws.amazon.com/efs/). The sketch below
 illustrates the high-level architecture:
 
-![AWS
-Architecture](https://user-images.githubusercontent.com/53797/157068659-41d7c9fe-8403-40d0-9cdd-dae66f0bf62e.png)
+![AWS Architecture](aws-architecture.excalidraw.svg)
 
 ## Create an environment file
 

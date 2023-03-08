@@ -25,3 +25,10 @@ dispanser:
   url: https://github.com/dispanser
   image_url: https://github.com/dispanser.png
   email: thomas@tenzir.com
+
+dakostu:
+  name: Daniel Kostuj
+  title: Software Engineer
+  url: https://github.com/dakostu
+  image_url: https://github.com/dakostu.png
+  email: daniel@tenzir.com

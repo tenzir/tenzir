@@ -1,4 +1,3 @@
-
 //    _   _____   __________
 //   | | / / _ | / __/_  __/     Visibility
 //   | |/ / __ |_\ \  / /          Across
@@ -7,13 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE sigma
-
 #include "sigma/parse.hpp"
 
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/printable/stream.hpp>
+#include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/expression.hpp>
 #include <vast/detail/base64.hpp>
 #include <vast/expression.hpp>
@@ -43,16 +41,23 @@ expression to_expr(std::string_view expr) {
 } // namespace
 
 TEST(wildcard unescaping) {
-  CHECK_EQUAL(to_search_id("x: '*'"), to_expr("x == /.*/"));
-  CHECK_EQUAL(to_search_id("x: '?'"), to_expr("x == /./"));
-  CHECK_EQUAL(to_search_id("x: 'f*'"), to_expr("x == /f.*/"));
-  CHECK_EQUAL(to_search_id("x: 'f?'"), to_expr("x == /f./"));
-  CHECK_EQUAL(to_search_id("x: 'f*bar'"), to_expr("x == /f.*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f?bar'"), to_expr("x == /f.bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\*bar'"), to_expr("x == /f*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\?bar'"), to_expr("x == /f?bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\\\*bar'"), to_expr("x == /f\\.*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\\\?bar'"), to_expr("x == /f\\.bar/"));
+  auto check_pattern_equality
+    = [](std::string_view sigma, std::string_view pattern) {
+        // Patterns generated from Sigma glob strings are case-insensitive.
+        auto case_insensitive_pattern = fmt::format("{}i", pattern);
+        CHECK_EQUAL(to_search_id(sigma), to_expr(case_insensitive_pattern));
+        CHECK_NOT_EQUAL(to_search_id(sigma), to_expr(pattern));
+      };
+  check_pattern_equality("x: '*'", "x == /.*/");
+  check_pattern_equality("x: '?'", "x == /./");
+  check_pattern_equality("x: 'f*'", "x == /f.*/");
+  check_pattern_equality("x: 'f?'", "x == /f./");
+  check_pattern_equality("x: 'f*bar'", "x == /f.*bar/");
+  check_pattern_equality("x: 'f?bar'", "x == /f.bar/");
+  check_pattern_equality("x: 'f\\*bar'", "x == /f*bar/");
+  check_pattern_equality("x: 'f\\?bar'", "x == /f?bar/");
+  check_pattern_equality("x: 'f\\\\*bar'", "x == /f\\.*bar/");
+  check_pattern_equality("x: 'f\\\\?bar'", "x == /f\\.bar/");
 }
 
 TEST(maps - single value) {
@@ -65,7 +70,7 @@ TEST(maps - single value) {
 TEST(maps - empty value) {
   auto yaml = "foo: ''";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == \"\"");
+  auto expected = to_expr("foo == //i");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -158,25 +163,79 @@ TEST(modifier - re) {
   CHECK_EQUAL(search_id, expected);
 }
 
+TEST(modifier - re 2) {
+  auto yaml = R"__(
+    foo|re: '.*foobar.*'
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo == /.*foobar.*/");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - re - no wildcards) {
+  auto yaml = R"__(
+    foo|re: 'foobar'
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo == /foobar/");
+  CHECK_EQUAL(search_id, expected);
+}
+
 TEST(modifier - startswith) {
   auto yaml = R"__(
     foo|startswith: "x"
   )__";
   auto search_id = to_search_id(yaml);
-  // TODO: blocked by VAST has pattern matching capability
-  // auto expected = to_expr("foo == /^x/");
-  auto expected = to_expr("foo ni \"x\"");
+  auto expected = to_expr("foo == /^x.*/i");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - startswith - proper backslash escaping) {
+  auto yaml = R"__(
+    foo|startswith: "C:\rundll32"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr(R"(foo == /^C:\rundll32.*/i)");
+  CHECK_EQUAL(search_id, expected);
+  auto str = to_string(expected);
+  CHECK_EQUAL(str, R"(foo == /^C:\rundll32.*/i)");
+}
+
+TEST(modifier - startswith - wildcards) {
+  auto yaml = R"__(
+    foo|startswith: "f*b?r"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo == /^f.*b.r.*/i");
   CHECK_EQUAL(search_id, expected);
 }
 
 TEST(modifier - endswith) {
   auto yaml = R"__(
-    foo|startswith: "x"
+    foo|endswith: "x"
   )__";
   auto search_id = to_search_id(yaml);
-  // TODO: blocked by VAST has pattern matching capability
-  // auto expected = to_expr("foo == /x$/");
-  auto expected = to_expr("foo ni \"x\"");
+  auto expected = to_expr("foo == /.*x$/i");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - endswith - proper backslash escaping) {
+  auto yaml = R"__(
+    foo|endswith: "\rundll32.exe"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr(R"(foo == /.*\rundll32.exe$/i)");
+  CHECK_EQUAL(search_id, expected);
+  auto str = to_string(expected);
+  CHECK_EQUAL(str, R"(foo == /.*\rundll32.exe$/i)");
+}
+
+TEST(modifier - endswith - wildcards) {
+  auto yaml = R"__(
+    foo|endswith: "f*b?r"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo == /.*f.*b.r$/i");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -223,7 +282,7 @@ TEST(modifier - base64) {
   auto search_id = to_search_id(yaml);
   auto base64_value = detail::base64::encode("value"sv);
   REQUIRE_EQUAL(base64_value, "dmFsdWU="); // echo -n value | base64
-  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
+  auto expected = to_expr(fmt::format("foo == /{}/i", base64_value));
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -235,7 +294,7 @@ TEST(modifier - double base64) {
   auto base64_value = detail::base64::encode("value"sv);
   base64_value = detail::base64::encode(base64_value);
   REQUIRE_EQUAL(base64_value, "ZG1Gc2RXVT0="); // echo -n dmFsdWU= | base64
-  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
+  auto expected = to_expr(fmt::format("foo == /{}/i", base64_value));
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -458,13 +517,13 @@ level: critical
 TEST(real example) {
   auto expr = to_rule(unc2452);
   // clang-format off
-  auto selection1 = R"__(CommandLine ni "7z.exe a -v500m -mx9 -r0 -p")__"s;
-  auto selection2a = R"__(ParentCommandLine ni "wscript.exe" && ParentCommandLine ni ".vbs")__"s;
-  auto selection2b = R"__(CommandLine ni "rundll32.exe" && CommandLine ni "C:\Windows" && CommandLine ni ".dll,Tk_")__"s;
-  auto selection3 = R"__(ParentImage ni "\rundll32.exe" && ParentCommandLine ni "C:\Windows" && CommandLine ni "cmd.exe /C ")__"s;
-  auto selection4 = R"__(CommandLine ni "rundll32 c:\windows\\" && CommandLine ni ".dll ")__"s;
-  auto specific1 = R"__(ParentImage ni "\rundll32.exe" && Image ni "\dllhost.exe")__"s;
-  auto filter1 = R"__(CommandLine == " " || CommandLine == "")__"s;
+  auto selection1 = R"__(CommandLine == /7z.exe a -v500m -mx9 -r0 -p/i)__"s;
+  auto selection2a = R"__(ParentCommandLine == /wscript.exe/i && ParentCommandLine == /.vbs/i)__"s;
+  auto selection2b = R"__(CommandLine == /rundll32.exe/i && CommandLine == /C:\Windows/i && CommandLine == /.dll,Tk_/i)__"s;
+  auto selection3 = R"__(ParentImage == /.*\rundll32.exe$/i && ParentCommandLine == /C:\Windows/i && CommandLine == /cmd.exe \/C /i)__"s;
+  auto selection4 = R"__(CommandLine == /rundll32 c:\windows\\/i && CommandLine == /.dll /i)__"s;
+  auto specific1 = R"__(ParentImage == /.*\rundll32.exe$/i && Image == /.*\dllhost.exe$/i)__"s;
+  auto filter1 = R"__(CommandLine == / /i || CommandLine == //i)__"s;
   // clang-format on
   conjunction selection2;
   selection2.emplace_back(to_expr(selection2a));

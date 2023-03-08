@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE importer
-
 #include "vast/system/importer.hpp"
 
 #include "vast/concept/printable/stream.hpp"

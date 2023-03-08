@@ -1,22 +1,29 @@
-{ lib, pkgs, config, vast, ... }:
-let
+{
+  lib,
+  pkgs,
+  config,
+  vast,
+  ...
+}: let
   name = "vast";
   inherit (lib) mkIf mkOption mkEnableOption;
   cfg = config.services.vast;
-  format = pkgs.formats.yaml { };
+  format = pkgs.formats.yaml {};
   #The settings and extraConfigFile of yaml will be merged in the final configFile
-  configFile =
-    let
-      #needs convert yaml to json to be able to use importJson
-      toJsonFile = pkgs.runCommand "extraConfigFile.json" { preferLocalBuild = true; } ''
-        ${pkgs.remarshal}/bin/yaml2json  -i ${cfg.extraConfigFile} -o $out
-      '';
-    in
-    format.generate "vast.yaml" (if cfg.extraConfigFile == null then cfg.settings else (lib.recursiveUpdate cfg.settings (lib.importJSON toJsonFile)));
+  configFile = let
+    #needs convert yaml to json to be able to use importJson
+    toJsonFile = pkgs.runCommand "extraConfigFile.json" {preferLocalBuild = true;} ''
+      ${pkgs.remarshal}/bin/yaml2json  -i ${cfg.extraConfigFile} -o $out
+    '';
+  in
+    format.generate "vast.yaml" (
+      if cfg.extraConfigFile == null
+      then cfg.settings
+      else (lib.recursiveUpdate cfg.settings (lib.importJSON toJsonFile))
+    );
 
   port = lib.toInt (lib.last (lib.splitString ":" cfg.settings.vast.endpoint));
-in
-{
+in {
   options.services.vast = {
     enable = mkEnableOption "enable VAST";
 
@@ -48,13 +55,13 @@ in
         freeformType = format.type;
         options = {
           vast = mkOption {
-            default = { };
+            default = {};
             type = lib.types.submodule {
               freeformType = format.type;
               options = {
                 plugins = mkOption {
                   type = lib.types.listOf lib.types.str;
-                  default = [ "all" ];
+                  default = ["all"];
                   description = "The names of plugins to enable";
                 };
                 db-directory = mkOption {
@@ -74,7 +81,7 @@ in
           };
         };
       };
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           vast = {
@@ -88,15 +95,14 @@ in
         options.
       '';
     };
-
   };
 
   config = mkIf cfg.enable {
     # This is needed so we will have 'lsvast' in our PATH
-    environment.systemPackages = [ cfg.package ];
+    environment.systemPackages = [cfg.package];
 
     systemd.services.vast = {
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = ["multi-user.target"];
       serviceConfig = {
         Type = "notify";
         ExecStart = "${cfg.package}/bin/vast --config=${configFile} start";
@@ -117,7 +123,7 @@ in
     };
 
     networking.firewall = mkIf cfg.openFirewall {
-      allowedTCPPorts = [ port ];
+      allowedTCPPorts = [port];
     };
   };
 }

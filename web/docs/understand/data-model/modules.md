@@ -1,12 +1,20 @@
 ---
-sidebar-position: 1
+sidebar_position: 2
 ---
 
 # Modules
 
-import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+A **module** creates a namespace for [type
+definitions#type-construction](type-system),
+[pipelines](/docs/understand/language/pipelines), and [taxonomy](taxonomies)
+elements in single YAML file.
 
-<MissingDocumentation/>
+:::warning Work in Progress
+While you can already [read type definitions](/docs/use/introspect), it is
+unfortunately not yet possible write them in the same syntax. We are working
+towards closing this gap, as tracked by [the corresponding roadmap
+item](https://github.com/tenzir/public-roadmap/issues/15).
+:::
 
 ## Type Definition Rules
 

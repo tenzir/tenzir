@@ -37,16 +37,19 @@ jobs:
           pip install --upgrade black
           # Note: black fails when it doesn't have to do anything.
           git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
-            grep -v '\(\.json\|\.csv\|\.ipynb\|\.hpp\.in\|\.ref\|\.example\|\.txt\|\.lock\|\.js\)$' |
-            grep -v '\(\.Renviron\)' |
-            grep -v 'plugins/web/ui' |
-            2>/dev/null xargs black || true
+            grep '\.py$' |
+            xargs --no-run-if-empty black || true
           git diff --exit-code
 
       - name: yamllint
         run: |
           pip install --upgrade yamllint
           git ls-files '*.yaml' '.yml' | xargs yamllint
+
+      - name: Ansible Lint
+        run: |
+          pip install --upgrade ansible-lint
+          ansible-lint --strict --profile production ansible
 
       - name: Terraform fmt
         run: |

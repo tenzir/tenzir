@@ -20,7 +20,7 @@ Zeek can also render its logs as JSON. There are two ways to do that:
    [json-streaming-logs](https://github.com/corelight/json-streaming-logs)
    package. This mode adds a `_path` field to disambiguate the log type.
 
-## Input
+## Parser
 
 The `import zeek` command consumes TSV logs, whereas `import zeek-json` consumes
 JSON logs.
@@ -78,7 +78,7 @@ gunzip -c *.gz | vast import zeek
 
 [zeek-log-rotation]: https://docs.zeek.org/en/stable/frameworks/logging.html#rotation
 
-## Output
+## Printer
 
 Zeek's TSV model represents effectively a transposed record, with nested record
 fields being dot-separated. This makes it feasible to re-export a subset of data

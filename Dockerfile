@@ -15,13 +15,13 @@ RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 # VAST
 COPY changelog ./changelog
 COPY cmake ./cmake
+COPY contrib ./contrib
 COPY examples ./examples
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
 COPY plugins ./plugins
 COPY python ./python
 COPY schema ./schema
-COPY tools ./tools
 COPY vast ./vast
 COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
      vast.yaml.example version.json ./
@@ -31,11 +31,10 @@ COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
 # well with repository-internal symlinks. The the integration test symlinks we
 # can get rid of by copying the integration test directory to the build
 # directory when building VAST.
-RUN ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
-    ln -sf ../../vast/integration/data/ plugins/sigma/integration/data/ && \
-    ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py && \
-    ln -sf ../../../schema/types/base.schema libvast_test/artifacts/schemas/base.schema && \
-    ln -sf ../../../schema/types/suricata.schema libvast_test/artifacts/schemas/suricata.schema
+RUN for f in contrib/vast-plugins/*/CMakeLists.txt; do \
+      name="$(basename "$(dirname "$f")")"; \
+      ln -sf "../contrib/vast-plugins/$name" "plugins/$name"; \
+    done
 
 # -- development ---------------------------------------------------------------
 
@@ -58,6 +57,7 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_ENABLE_BUNDLED_CAF:BOOL="ON" \
+      -D VAST_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
@@ -96,20 +96,17 @@ RUN apt-get update && \
       ca-certificates \
       gnupg2 \
       libasan5 \
-      libcaf-core0.17 \
-      libcaf-io0.17 \
-      libcaf-openssl0.17 \
       libc++1 \
       libc++abi1 \
       libflatbuffers1 \
       libfmt7 \
       libhttp-parser2.9 \
       libpcap0.8 \
-      libsimdjson5 \
+      libre2-9 \
       libspdlog1 \
       libunwind8 \
-      libyaml-cpp0.6 \
       libxxhash-dev \
+      libyaml-cpp0.6 \
       lsb-release \
       openssl \
       robin-map-dev \

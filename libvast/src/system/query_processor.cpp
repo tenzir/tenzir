@@ -38,6 +38,9 @@ query_processor::query_processor(caf::event_based_actor* self)
     // Received from the INDEX after sending the query when leaving `idle`.
     [this](const query_cursor& cursor) {
       VAST_ASSERT(cursor.scheduled_partitions <= cursor.candidate_partitions);
+      if (cursor.candidate_partitions == 0u) {
+        process_done();
+      }
       query_id_ = cursor.id;
       partitions_.received = 0;
       partitions_.scheduled = cursor.scheduled_partitions;

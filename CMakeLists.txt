@@ -16,6 +16,10 @@ project(
   HOMEPAGE_URL "https://vast.io"
   LANGUAGES C CXX)
 
+set(VAST_EDITION_NAME
+    "VAST"
+    CACHE STRING "Set the edition name")
+
 # -- sanity checks -------------------------------------------------------------
 
 # Prohibit in-source builds.
@@ -697,15 +701,6 @@ endif ()
 # CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
 find_package(OpenSSL REQUIRED)
 
-function (VASTSystemizeTarget tgt)
-  message(STATUS "Treating ${tgt} as a system dependency")
-  get_target_property(_includes ${tgt} INTERFACE_INCLUDE_DIRECTORIES)
-  set_property(
-    TARGET ${tgt}
-    APPEND
-    PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_includes}")
-endfunction ()
-
 # TODO: Require CAF to be installed.
 
 if (VAST_ENABLE_DEVELOPER_MODE
@@ -734,6 +729,7 @@ if (NOT VAST_ENABLE_BUNDLED_CAF)
     VAST_FIND_DEPENDENCY_LIST
     "\nfind_package(CAF ${CAF_VERSION} COMPONENTS core io test openssl REQUIRED)"
   )
+  dependency_summary("CAF" CAF::core "Dependencies")
 else ()
   # Use bundled CAF.
   if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt")
@@ -795,6 +791,9 @@ else ()
   # Make bundled CAF available for component-based CPack installations.
   install(TARGETS libcaf_core libcaf_openssl libcaf_io COMPONENT Runtime)
   install(TARGETS libcaf_test COMPONENT Development)
+  # Figure out whether we point to a build directory or a prefix.
+  dependency_summary("CAF" "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf"
+                     "Dependencies")
 endif ()
 
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
@@ -813,7 +812,7 @@ endif ()
 
 add_subdirectory(libvast)
 add_subdirectory(libvast_test)
-add_subdirectory(tools)
+add_subdirectory(contrib/tools)
 add_subdirectory(vast)
 
 # -- cmake export/config installations -----------------------------------------
@@ -995,6 +994,7 @@ if (NOT VAST_IS_SUBPROJECT)
                   INCLUDE_QUIET_PACKAGES)
   unset(build_summary)
   list(APPEND build_summary "Build summary:\n")
+  list(APPEND build_summary " * Edition: ${VAST_EDITION_NAME}")
   list(APPEND build_summary " * Version: ${VAST_VERSION_TAG}")
   list(APPEND build_summary " * Build Tree Hash: ${VAST_BUILD_TREE_HASH}")
   list(APPEND build_summary "")
