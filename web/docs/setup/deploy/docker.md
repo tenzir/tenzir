@@ -60,7 +60,7 @@ Now you are ready to interact with a running VAST node.
 Configuration in the Docker ecosystem typically entails setting environment
 variables. VAST supports this paradigm with a one-to-one [mapping from
 configuration file entries to environment
-variables](/docs/setup/configure#environment-variables).
+variables](../configure.md#environment-variables).
 
 When starting the container, `docker run` accepts variables either one by one
 via `-e KEY=VALUE` or via `--env-file FILE`. You can also pass down an existing

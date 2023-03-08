@@ -27,7 +27,7 @@ However, writing and managing schemas can quickly escalate: they evolve
 continuously and induce required changes in downstream analytics. VAST aims to
 minimize the needed effort to maintain schemas by tracking their lineage, and by
 making data sources infer a basic schema that serves as reasonable starting
-point. For example, the [JSON](/docs/understand/formats/json) reader attempts to
+point. For example, the [JSON](../formats/json.md) reader attempts to
 parse strings as timestamps, IP address, or subnets, to gather a deeper semantic
 meaning than "just a string." The idea is to make it easy to get started but
 still allow for later refinements. You would provide a schema when you would
@@ -38,12 +38,12 @@ attributes.
 :::note Why factor types?
 Many data sources emit more than one event in the form of a record, and often
 contain nested records shared across multiple event types. For example, the
-majority of [Zeek](/docs/understand/formats/zeek) logs have the connection
+majority of [Zeek](../formats/zeek.md) logs have the connection
 record in common. Factoring this shared record into its own type, and then
 reusing across all other occurrences makes it easy to perform cross-event
 connection analysis later on.
 :::
 
-You can write schemas manually by providing a [module](modules). To find out
+You can write schemas manually by providing a [module](modules.md). To find out
 existing schemas, consult the documentation on
-[introspection](/docs/use/introspect).
+[introspection](../../use/introspect/README.md).

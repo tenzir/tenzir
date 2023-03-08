@@ -2,7 +2,7 @@
 
 Ingesting data to VAST (aka *importing*) involves spinning up a VAST client
 that parses and ships the data to a VAST server. In the following, we assume
-that you [set up a server](/docs/use/run) listening at `localhost:5158`.
+that you [set up a server](../run/README.md) listening at `localhost:5158`.
 
 ## Choose an import format
 
@@ -12,12 +12,12 @@ Use the `import` command to ingest data from standard input or file:
 vast import [options] <format> [options] [expr]
 ```
 
-The [format](/docs/understand/formats) defines the encoding of data. Text
-formats include [JSON](/docs/understand/formats/json),
-[CSV](/docs/understand/formats/csv), or tool-specific data encodings like
-[Zeek](/docs/understand/formats/zeek). Examples for binary formats are
-[PCAP](/docs/understand/formats/pcap) and
-[NetFlow](/docs/understand/formats/netflow).
+The [format](../../understand/formats/README.md) defines the encoding of data.
+Text formats include [JSON](../../understand/formats/json.md),
+[CSV](../../understand/formats/csv.md), or tool-specific data encodings like
+[Zeek](../../understand/formats/zeek.md). Examples for binary formats are
+[PCAP](../../understand/formats/pcap.md) and
+[NetFlow](../../understand/formats/netflow.md).
 
 For example, to import a file in JSON, use the `json` format:
 
@@ -27,9 +27,9 @@ vast import json < data.json
 
 ## Apply a pipeline during import
 
-You can apply a [pipeline](/docs/understand/language/pipelines) before sending
-data to VAST. This comes in handy to reduce data volume, perform reshaping, or
-apply some early aggregations.
+You can apply a [pipeline](../../understand/language/pipelines.md) before
+sending data to VAST. This comes in handy to reduce data volume, perform
+reshaping, or apply some early aggregations.
 
 For example, you could reduce a Suricata EVE JSON feed to just flow records:
 
@@ -38,8 +38,8 @@ vast import -r eve.json suricata 'src_ip in 10.0.0.0/8
   | select timestamp, flow_id, src_ip, dest_ip, src_port'
 ````
 
-See the [language documentation](/docs/understand/language/) to learn more about
-writing pipelines.
+See the [language documentation](../../understand/language/README.md) to learn
+more about writing pipelines.
 
 ## Infer a schema automatically
 
@@ -78,8 +78,8 @@ type json = record {timestamp: time, src_ip: ip, src_port: int64, dest_ip: ip, d
 
 :::caution YAML Modules coming soon
 We are currently reworking VAST's schema language. The available
-[introspection capabilities](/docs/use/introspect) already show the new schema
-style. Track the [corresponding roadmap
+[introspection capabilities](../../use/introspect/README.md) already show the
+new schema style. Track the [corresponding roadmap
 item](https://github.com/tenzir/public-roadmap/issues/15) to see when this
 rewrite lands.
 :::
@@ -203,6 +203,6 @@ There exist two ways to tell VAST how to map events to schemas:
    field `event_type` and prefixes it with `suricata.` to look for a
    corresponding schema.
 
-[types]: /docs/understand/data-model/type-system
-[concepts]: /docs/understand/data-model/taxonomies#concepts
-[modules]: /docs/understand/data-model/modules
+[types]: ../../understand/data-model/type-system.md
+[concepts]: ../../understand/data-model/taxonomies.md#concepts
+[modules]: ../../understand/data-model/modules.md

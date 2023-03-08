@@ -7,8 +7,8 @@ description: Open Source flow monitor
 [Argus](https://qosient.com/argus/index.shtml) is an open-source flow monitor
 that computes a variety of connection statistics.
 
-The UNIX tool `argus` processes either [PCAP](/docs/understand/formats/pcap) or
-[NetFlow](/docs/understand/formats/netflow) data and generates binary output.
+The UNIX tool `argus` processes either [PCAP](../understand/formats/pcap.md) or
+[NetFlow](../understand/formats/netflow.md) data and generates binary output.
 The companion utility `ra` transforms this binary output into a textual form
 that VAST can parse.
 
@@ -74,7 +74,7 @@ StartTime,Flgs,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,TotPkts,TotBytes,State,SrcP
 
 ## Ingest Argus CSV output
 
-Since VAST has [CSV support](/docs/understand/formats/csv), ingesting Argus CSV
+Since VAST has [CSV support](../understand/formats/csv.md), ingesting Argus CSV
 output only requires an adequate schema. VAST already ships with an argus schema
 containing a type `argus.record` that covers all fields from the `ra` man page.
 

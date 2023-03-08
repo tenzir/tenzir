@@ -5,14 +5,14 @@ sidebar_position: 2
 # Modules
 
 A **module** creates a namespace for [type
-definitions#type-construction](type-system),
-[pipelines](/docs/understand/language/pipelines), and [taxonomy](taxonomies)
+definitions#type-construction](type-system.md),
+[pipelines](../language/pipelines.md), and [taxonomy](taxonomies.md)
 elements in single YAML file.
 
 :::warning Work in Progress
-While you can already [read type definitions](/docs/use/introspect), it is
-unfortunately not yet possible write them in the same syntax. We are working
-towards closing this gap, as tracked by [the corresponding roadmap
+While you can already [read type definitions](../../use/introspect/README.md),
+it is unfortunately not yet possible write them in the same syntax. We are
+working towards closing this gap, as tracked by [the corresponding roadmap
 item](https://github.com/tenzir/public-roadmap/issues/15).
 :::
 

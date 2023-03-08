@@ -1,9 +1,9 @@
 # Sigma
 
 The Sigma query frontend makes it possible to execute [Sigma
-rules](https://github.com/SigmaHQ/sigma) in VAST. This means you can
-provide a Sigma rule instead of a
-[VAST expression](/docs/understand/language/expressions) when querying data.
+rules](https://github.com/SigmaHQ/sigma) in VAST. This means you can provide a
+Sigma rule instead of a [VAST expression](../expressions.md) when querying data.
+
 For example:
 
 ```bash
@@ -24,7 +24,7 @@ system of VAST. The translation process looks as follows:
 ## Usage
 
 To use the Sigma frontend, [install the `sigma`
-plugin](/docs/setup/configure#plugins). Then use the `vast export` command
+plugin](../../../setup/configure.md#plugins). Then use the `vast export` command
 to provide a Sigma rule on standard input:
 
 ```bash

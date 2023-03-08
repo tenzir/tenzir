@@ -39,11 +39,10 @@ numerous dataflow languages out there, and drew inspiration from others to
 achieve:
 
 - the *familiarity* of [splunk](https://splunk.com)
-- the *capability* of [jq](https://stedolan.github.io/jq/)
-- the *elegance* of [Zed](https://zed.brimdata.io/)
-- the *fluidity* of [Nu](https://www.nushell.sh/)
-- the *ambition* of [PRQL](https://prql-lang.org/)
 - the *ease* of [Kusto](https://github.com/microsoft/Kusto-Query-Language)
+- the *power* of [dplyr](https://dplyr.tidyverse.org/)
+- the *flexibility* of [jq](https://stedolan.github.io/jq/)
+- the *ambition* of [Zed](https://zed.brimdata.io/)
 
 :::tip Why yet another language?
 You may sigh and ask "why are you creating yet another language?" We hear you.
@@ -114,7 +113,7 @@ publicly.
 
 Until then, it is only possible to run an open pipelines. When using the `vast`
 binary, source and sink operators are implicit. You can [run an open
-pipeline](/docs/use/export) with the `export` command as follows:
+pipeline](../../use/export/README.md) with the `export` command as follows:
 
 ```bash
 vast export json 'where ... | ... | head 20'

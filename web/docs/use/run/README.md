@@ -11,7 +11,7 @@ can operate in two modes:
 :::info VAST Node
 A server contains a special component called the *node* that acts as container
 for pluggable components implemented as
-[actors](/docs/understand/architecture/actor-model). In the future, VAST
+[actors](../../understand/architecture/actor-model.md). In the future, VAST
 will be able to connect multiple nodes together to create a distributed system.
 :::
 
@@ -33,7 +33,7 @@ By default, a VAST server listens on localhost and TCP port 5158.
 
 Usually you would invoke `vast start` only for testing purposes in a terminal.
 In production you would typically use a service manager, e.g., [systemd on
-Linux](/docs/setup/install/linux#systemd).
+Linux](../../setup/install/linux.md#systemd).
 
 ## Stop a server
 
@@ -52,7 +52,7 @@ Every command except for `start` is a client command that interacts with a
 server. Run `vast help` for a list of available commands.
 
 To select a specific VAST server to connect to,
-[configure](/docs/setup/configure) the endpoint, e.g., by providing
+[configure](../../setup/configure.md) the endpoint, e.g., by providing
 `--endpoint=host:port` on the command line, exporting the environment variable
 `VAST_ENDPOINT=host:port`, or setting the configuration option
 `vast.endpoint: host:port` in your `vast.yaml`.

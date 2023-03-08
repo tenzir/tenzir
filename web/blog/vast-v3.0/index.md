@@ -1,27 +1,23 @@
 ---
 draft: true
 title: VAST v3.0
-description: The VAST Language Evolution — Dataflow Pipelines
+description: VAST Language Evolution — Dataflow Pipelines
 authors: [dominiklohmann, dakostu]
+image: /img/blog/building-blocks.excalidraw.svg
 date: 2023-02-15
-image: /path/to/image.png
 tags: [release, language, cef, performance, introspection, regex]
 ---
 
-<!--
-TODO: Outstanding tasks for the blog post before we can publish
-- Remove this comment
-- Create an image for the blog post
---->
-
 [VAST v3.0][github-vast-release] is out. This release brings some major updates
-to the syntax of the VAST language, making it easy to write down dataflow
-pipelines. In particular, the various pipeline operators allow you to reshape
-outputs on demand. Oh, and regular expressions search is now possible, too!
+to the the VAST language, making it easy to write down dataflow pipelines that
+filter, reshape, aggregate, and enrich security event data. Think of VAST as
+security data pipelines plus open storage engine.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v3.0.0
 
 <!--truncate-->
+
+![Pipelines and Storage](/img/blog/building-blocks.excalidraw.svg)
 
 ## The VAST Language: Dataflow Pipelines
 

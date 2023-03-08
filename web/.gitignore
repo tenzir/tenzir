@@ -20,7 +20,6 @@
 
 # Generated notebooks
 /blog/parquet-and-feather-writing-security-telemetry/index.md
-/docs/try/*.md
 
 # Docs
 /docs/contribute/code-of-conduct.md

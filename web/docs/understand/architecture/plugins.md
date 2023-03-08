@@ -72,16 +72,15 @@ historical data or runs it as live query.
 ### Pipeline Operator
 
 The pipeline operator plugin adds a new [pipeline
-operator](/docs/understand/language/operators) that users can
-reference in a [pipeline
-definition](/docs/understand/language/pipelines).
+operator](../language/operators/README.md) that users can reference in a
+[pipeline definition](../language/pipelines.md).
 
 ### Aggregation Function
 
 The aggregation function plugin adds a new [aggregation
-function](/docs/understand/language/operators/summarize#aggregate-functions)
-for the `summarize` pipeline operator that performs an incremental aggregation
-over a set of grouped input values of a single type.
+function](../language/operators/summarize.md#aggregate-functions) for the
+`summarize` pipeline operator that performs an incremental aggregation over a
+set of grouped input values of a single type.
 
 ### Store
 

@@ -4,55 +4,25 @@ sidebar_position: 0
 
 # Download
 
-You can obtain various artifacts of VAST along the CD pipeline.
-
-## Source Code
-
-Get the source code by cloning our Git repository or downloading an archive.
-
-### Git
-
-Use `git` to clone our repository hosted on GitHub:
-
-```bash
-git clone --recursive https://github.com/tenzir/vast
-```
-
-You can check out the `stable` branch to get the latest released version:
-
-```bash
-cd vast
-git checkout stable
-```
-
-### Archive
-
-Download a zip Archive of the [latest release][latest-release] or the current
-development version:
-
-<div align="center">
-  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/vast/archive/refs/heads/stable.zip">Source Code (Release)</a>
-  <a class="button button--md button--info margin-left--md" href="https://github.com/tenzir/vast/archive/refs/heads/master.zip">Source Code (Development)</a>
-</div>
+We provide various downloadable artifacts of VAST as output of our CD pipeline.
 
 ## Packages
 
-We offer pre-built versions of VAST containing a statically linked binary, for
-the [latest release][latest-release-build] and the [current development
-version][development-version-build].
+Our pre-built VAST packages contain a statically linked binary, for the latest
+release and the current development version.
 
 ### Generic Linux
 
 <div align="center" class="padding-bottom--md">
-  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Static Build (Release)</a>
-  <a class="button button--md button--info margin-left--md" href="https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz">Static Build (Development)</a>
+  <a class="button button--md button--primary margin-right--md" href="/download/vast-linux-static.tar.gz">Static Build (Release)</a>
+  <a class="button button--md button--info margin-left--md" href="/download/vast-linux-static-latest.tar.gz">Static Build (Development)</a>
 </div>
 
 ### Debian
 
 <div align="center" class="padding-bottom--md">
-  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb">Static Build (Release)</a>
-  <a class="button button--md button--info margin-left--md" href="https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.deb">Static Build (Development)</a>
+  <a class="button button--md button--primary margin-right--md" href="/download/vast-linux-static.deb">Static Build (Release)</a>
+  <a class="button button--md button--info margin-left--md" href="/download/vast-linux-static-latest.deb">Static Build (Development)</a>
 </div>
 
 We also offer prebuilt statically linked binaries for every Git commit to the
@@ -83,9 +53,35 @@ version.
 You can download pre-built Docker images from
 [Docker Hub](https://hub.docker.com/repository/docker/tenzir/vast).
 
-Read our [Docker instructions](/docs/setup/deploy/docker) for more details
-on using Docker.
+Read our [Docker instructions](deploy/docker.md) for more details on using Docker.
+
+## Source Code
+
+Get the source code by cloning our Git repository or downloading an archive.
+
+### Git
+
+Use `git` to clone our repository hosted on GitHub:
+
+```bash
+git clone --recursive https://github.com/tenzir/vast
+```
+
+Check out the `stable` branch to get the latest released version:
+
+```bash
+cd vast
+git checkout stable
+```
+
+### Archive
+
+Download a zip Archive of the [latest release][latest-release] or the current
+development version:
+
+<div align="center">
+  <a class="button button--md button--primary margin-right--md" href="/download/vast.zip">Source Code (Release)</a>
+  <a class="button button--md button--info margin-left--md" href="/download/vast-latest.zip">Source Code (Development)</a>
+</div>
 
 [latest-release]: https://github.com/tenzir/vast/releases/latest
-[latest-release-build]: https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
-[development-version-build]: https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz

@@ -274,7 +274,7 @@ vast show schemas --yaml
 
 Semantically, `vast show schemas` is to VAST data what [JSON
 Schema](https://json-schema.org/) is to JSON. In VAST's [type
-system](/docs/understand/data-model/type-system) value constraints (e.g.,
+system](../../understand/data-model/type-system.md) value constraints (e.g.,
 minimum value, maximum string length) correspond to type attributes, which are
 free-form key-value pairs. To date, VAST does not actively support enforcing
 type constraints via attributes, but will rely on this mechanism for this
@@ -344,4 +344,4 @@ vast show models --yaml
       - net.proto
 ```
 
-[taxonomies]: /docs/understand/data-model/taxonomies
+[taxonomies]: ../../understand/data-model/taxonomies.md

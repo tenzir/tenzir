@@ -18,7 +18,7 @@ compromise (IoCs)* that reflect malicious activity.
 
 VAST can live-match threat intelligence against the incoming stream of events,
 producing an alert feed of sightings. This feature fits into the bigger theme
-of a [unified detection](/docs/about/use-cases/unified-detection) strategy
+of a [unified detection](../../about/use-cases/unified-detection.md) strategy
 with a security-content-driven workflow.
 
 VAST features *matchers* that check whether specific field values exist in
@@ -255,7 +255,7 @@ argument. We are also telling VAST via `-t pulsedive` that the data matches the
 VAST forwards the parsed indicators to the matcher `ips`.
 
 An additional [concepts
-definition](/docs/understand/data-model/taxonomies#concepts) for the
+definition](../../understand/data-model/taxonomies.md#concepts) for the
 `matcher.indicator.value` and `matcher.indicator.context` fields for the
 `pulsedive` type lets the command know which fields to treat as *value* and
 optional *context*.
@@ -467,7 +467,7 @@ head -n 15 ipblocklist.csv
 ```
 
 Before VAST can read this data, we need to tell VAST what type to use for it. We
-write an `abuse` [module](/docs/understand/data-model/modules) for this:
+write an `abuse` [module](../../understand/data-model/modules.md) for this:
 
 ```yaml
 module: abuse
@@ -487,7 +487,7 @@ types:
 
 In addition, you need to tell VAST what fields have the indicator data,
 consisting of value and an optional context. To this end, you need to provide a
-[concept](/docs/understand/data-model/taxonomies#concepts) definition:
+[concept](../../understand/data-model/taxonomies.md#concepts) definition:
 
 ```yaml
 concepts:

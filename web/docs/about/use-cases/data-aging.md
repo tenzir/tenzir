@@ -24,7 +24,7 @@ detection.
 How can we implement a successful detection and response strategy in
 this spectrum? By making the spectrum transparent and fully controllable. In
 VAST, we developed a declarative compaction approach to perform [fine-grained
-transformation](/docs/use/transform) of historical data to control
+transformation](../../use/transform/README.md) of historical data to control
 retention span and manage finite storage. Compaction operates in two dimensions:
 
 1. **Temporal**: temporal compaction defines what to do with data as a function

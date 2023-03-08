@@ -8,7 +8,7 @@ VAST is an engine for telemetry storage and security content execution,
 embeddable at the edge and specifically catering to use cases of larger SOCs at
 service providers, network operators, and managed detection and response (MDR)
 vendors. Ultimately, [we strive for a federated
-architecture](/docs/about/vision) that pushes workloads deep into the edge.
+architecture](../vision.md) that pushes workloads deep into the edge.
 Today, we consider "edge" the constituency that a SOC oversees from a detection
 and response perspective.
 
@@ -19,7 +19,7 @@ architecture more generally. The diagram below shows an example environment:
 
 The core idea is to keep the bulk of the data decentralized at their respective
 origin, and disseminate security content via a [security data
-fabric](/docs/about/vision#security-data-fabric) to the VAST
+fabric](../vision.md#security-data-fabric) to the VAST
 nodes—effectively shipping compute to the data. The SOC will always need central
 management and collaboration, and selective backhauling of data. The
 architecture does not exclude this, but the focus is on offloading as much

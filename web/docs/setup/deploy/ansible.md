@@ -37,7 +37,7 @@ This example playbook shows how to run a VAST service on the machine
 
 ### `config_file` (required)
 
-A path to a [`vast.yaml`](/docs/setup/configure#configuration-files) relative to
+A path to a [`vast.yaml`](../configure.md#configuration-files) relative to
 the playbook.
 
 ### `read_write_paths`

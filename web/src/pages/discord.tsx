@@ -1,9 +1,12 @@
-import React from 'react';
+import ExternalLink from "@site/src/components/ExternalLink";
+import React from "react";
 
-export default function Home(): JSX.Element {
-  const url = 'https://discord.gg/xEyaRSMCPQ';
-  React.useEffect(() => {
-    window.location.replace(url)
-  }, [])
-  return <></>;
-}
+const Element = () => {
+  return (
+    <ExternalLink
+      url={"https://discord.gg/xEyaRSMCPQ"}
+    />
+  );
+};
+
+export default Element;
