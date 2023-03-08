@@ -72,7 +72,7 @@ struct passive_partition_state {
   std::unordered_map<std::string, ids> type_ids_ = {};
 
   /// A readable name for this partition.
-  std::string name = {};
+  static constexpr auto name = "passive-partition";
 
   /// The number of events in the partition.
   size_t events = {};

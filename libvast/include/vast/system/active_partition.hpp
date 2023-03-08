@@ -115,7 +115,7 @@ struct active_partition_state {
   index_config synopsis_index_config = {};
 
   /// A readable name for this partition.
-  std::string name = {};
+  static constexpr auto name = "active-partition";
 
   /// Actor handle of the accountant.
   accountant_actor accountant = {};

@@ -97,7 +97,7 @@ void serialize(
     if (chunk_it == self->state.chunks.end()) {
       auto error = caf::make_error(ec::logic_error, "no chunk for for actor id "
                                                       + to_string(actor_id));
-      VAST_ERROR("{} failed to serialize: {}", self->state.name, render(error));
+      VAST_ERROR("{} failed to serialize: {}", *self, render(error));
       self->state.persistence_promise.deliver(error);
       return;
     }
@@ -114,15 +114,14 @@ void serialize(
   if (!combined_schema) {
     auto err = caf::make_error(ec::logic_error, "unable to create "
                                                 "combined schema");
-    VAST_ERROR("{} failed to serialize {} with error: {}", *self,
-               self->state.name, err);
+    VAST_ERROR("{} failed to serialize {} with error: {}", *self, *self, err);
     self->state.persistence_promise.deliver(err);
     return;
   }
   auto partition = pack_full(self->state.data, *combined_schema);
   if (!partition) {
-    VAST_ERROR("{} failed to serialize {} with error: {}", *self,
-               self->state.name, partition.error());
+    VAST_ERROR("{} failed to serialize {} with error: {}", *self, *self,
+               partition.error());
     self->state.persistence_promise.deliver(partition.error());
     return;
   }
@@ -325,7 +324,6 @@ active_partition_actor::behavior_type active_partition(
   VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
                    VAST_ARG(id));
   self->state.self = self;
-  self->state.name = fmt::format("partition-{}", id);
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.streaming_initiated = false;
