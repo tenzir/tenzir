@@ -168,7 +168,6 @@ auto make_run(std::span<const logical_operator_ptr> ops,
           // 3. Push the input element into the buffer.
           state.push(std::move(input));
           state.current = state.gen.begin();
-
         } else {
           // 3. Push the input element into the buffer.
           gen_it->second.push(std::move(input));

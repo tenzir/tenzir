@@ -14,8 +14,8 @@
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/expression.hpp>
-#include <vast/logger.hpp>
 #include <vast/legacy_pipeline.hpp>
+#include <vast/logger.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 
@@ -89,7 +89,53 @@ private:
   std::vector<table_slice> transformed_ = {};
 };
 
-class plugin final : public virtual pipeline_operator_plugin {
+// Selects matching rows from the input.
+struct where_operator2 final : public logical_operator<events, events> {
+  /// Constructs a *where* pipeline operator.
+  /// @pre *expr* must be normalized and validated
+  explicit where_operator2(expression expr) : expr_(std::move(expr)) {
+#if VAST_ENABLE_ASSERTIONS
+    const auto normalized_and_validated_expr = normalize_and_validate(expr_);
+    VAST_ASSERT(normalized_and_validated_expr,
+                fmt::to_string(normalized_and_validated_expr.error()).c_str());
+    VAST_ASSERT(*normalized_and_validated_expr == expr_);
+#endif // VAST_ENABLE_ASSERTIONS
+  }
+
+  caf::expected<physical_operator<events, events>> instantiate(
+    const type& input_schema,
+    [[maybe_unused]] operator_control_plane* ctrl) const noexcept override {
+    auto expr = tailor(expr_, input_schema);
+    if (!expr) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("failed to instantiate where "
+                                         "operator: {}",
+                                         expr.error()));
+    }
+    return [expr = std::move(*expr)](
+             generator<table_slice> input) mutable -> generator<table_slice> {
+      for (auto&& slice : input) {
+        // TODO: adjust filter function return type
+        // TODO: Replace this with an Arrow-native filter function as soon as we
+        // are able to directly evaluate expressions on a record batch.
+        if (auto result = filter(slice, expr)) {
+          co_yield *result;
+        } else {
+          co_yield {};
+        }
+      }
+    };
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return fmt::format("where {}", expr_);
+  }
+
+  expression expr_;
+};
+
+class plugin final : public virtual pipeline_operator_plugin,
+                     public virtual logical_operator_plugin {
 public:
   [[nodiscard]] caf::error
   initialize([[maybe_unused]] const record& plugin_config,
@@ -160,6 +206,40 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<where_operator>(
+        std::move(*normalized_and_validated_expr)),
+    };
+  }
+
+  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const override {
+    using parsers::optional_ws, parsers::required_ws,
+      parsers::end_of_pipeline_operator, parsers::expr;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p
+      = required_ws >> expr >> optional_ws >> end_of_pipeline_operator;
+    auto parse_result = expression{};
+    if (!p(f, l, parse_result)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse where "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto normalized_and_validated_expr = normalize_and_validate(parse_result);
+    if (!normalized_and_validated_expr) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(
+          ec::invalid_configuration,
+          fmt::format("failed to normalized and validate expression '{}': {}",
+                      parse_result, normalized_and_validated_expr.error())),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<where_operator2>(
         std::move(*normalized_and_validated_expr)),
     };
   }

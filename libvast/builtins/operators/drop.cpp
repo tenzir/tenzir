@@ -100,7 +100,66 @@ private:
   configuration config_;
 };
 
-class plugin final : public virtual pipeline_operator_plugin {
+/// Drops the specifed fields from the input.
+class drop_operator2 : public logical_operator<events, events> {
+public:
+  explicit drop_operator2(configuration config) noexcept
+    : config_{std::move(config)} {
+    // nop
+  }
+
+  [[nodiscard]] auto
+  instantiate(const type& input_schema,
+              [[maybe_unused]] operator_control_plane* ctrl) const noexcept
+    -> caf::expected<physical_operator<events, events>> override {
+    // Determine whether we want to drop the entire batch first.
+    const auto drop_schema
+      = std::any_of(config_.schemas.begin(), config_.schemas.end(),
+                    [&](const auto& dropped_schema) {
+                      return dropped_schema == input_schema.name();
+                    });
+    if (drop_schema)
+      return [](generator<table_slice> input) -> generator<table_slice> {
+        (void)input;
+        co_return;
+      };
+    // Apply the transformation.
+    auto transform_fn
+      = [&](struct record_type::field, std::shared_ptr<arrow::Array>) noexcept
+      -> std::vector<
+        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+      return {};
+    };
+    auto transformations = std::vector<indexed_transformation>{};
+    for (const auto& field : config_.fields)
+      for (auto&& index : caf::get<record_type>(input_schema)
+                            .resolve_key_suffix(field, input_schema.name()))
+        transformations.push_back({std::move(index), transform_fn});
+    // transform_columns requires the transformations to be sorted, and that may
+    // not necessarily be true if we have multiple fields configured, so we sort
+    // again in that case.
+    if (config_.fields.size() > 1)
+      std::sort(transformations.begin(), transformations.end());
+
+    return [transformations = std::move(transformations)](
+             generator<table_slice> input) -> generator<table_slice> {
+      for (auto&& slice : input) {
+        co_yield transform_columns(slice, transformations);
+      }
+    };
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return fmt::format("drop");
+  }
+
+private:
+  /// The underlying configuration of the transformation.
+  configuration config_;
+};
+
+class plugin final : public virtual pipeline_operator_plugin,
+                     public virtual logical_operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -146,6 +205,29 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<drop_operator>(std::move(config)),
+    };
+  }
+
+  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> extractor_list >> optional_ws
+                   >> end_of_pipeline_operator;
+    auto config = configuration{};
+    if (!p(f, l, config.fields)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse drop "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<drop_operator2>(std::move(config)),
     };
   }
 };
