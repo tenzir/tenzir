@@ -13,7 +13,7 @@ you have a `vast` binary in your path.
 Let's spin up a VAST node:
 
 ```bash
-❯ vast start
+vast start
 ```
 
 ```
@@ -26,7 +26,7 @@ example, the `status` command shows information about the current state of a
 node. Let's check the remote version:
 
 ```bash
-❯ vast status version
+vast status version
 ```
 
 ```json
@@ -61,9 +61,9 @@ get structured log data.
 First download the logs:
 
 ``` bash
-❯ cd /tmp
-❯ curl -L -O https://storage.googleapis.com/vast-datasets/M57/suricata.tar.gz
-❯ curl -L -O https://storage.googleapis.com/vast-datasets/M57/zeek.tar.gz
+cd /tmp
+curl -L -O https://storage.googleapis.com/vast-datasets/M57/suricata.tar.gz
+curl -L -O https://storage.googleapis.com/vast-datasets/M57/zeek.tar.gz
 ```
 
 Then ingest them via `vast import`, which spawns a dedicated process that
@@ -71,10 +71,10 @@ handles the parsing, followed by sending batches of data to our VAST node:
 
 ```bash
 # The 'O' flag in tar dumps the archive contents to stdout.
-❯ tar xOzf zeek.tar.gz | vast import zeek
+tar xOzf zeek.tar.gz | vast import zeek
 [20:35:58.434] client connected to VAST node at 127.0.0.1:42000
 [20:36:00.923] zeek-reader source produced 954189 events at a rate of 383606 events/sec in 2.49s
-❯ tar xOzf suricata.tar.gz | vast import suricata '#type == "suricata.alert"'
+tar xOzf suricata.tar.gz | vast import suricata '#type == "suricata.alert"'
 ```
 
 We've added the import filter
@@ -86,7 +86,7 @@ While the Suricata tarball contains just a single `eve.json` file, the Zeek
 tarball includes numerous logs:
 
 ```bash
-❯ tar tf zeek.tar.gz
+tar tf zeek.tar.gz
 Zeek/
 Zeek/ntlm.log
 Zeek/loaded_scripts.log
@@ -166,7 +166,7 @@ expressions. But you can also take a step back and inspect the schema metadata
 VAST keeps using the `show` command.
 
 ```bash
-❯ vast show schemas --yaml
+vast show schemas --yaml
 ```
 
 ```yaml
@@ -213,7 +213,7 @@ taste of actual events. The [`taste`](/docs/understand/language/operators/taste)
 operator returns a random number of events per unique schema:
 
 ```bash
-❯ vast export json '#type == /(zeek|suricata).*/ | taste 1'
+vast export json '#type == /(zeek|suricata).*/ | taste 1'
 ```
 
 ```json
@@ -261,7 +261,7 @@ There are many other ways to slice and dice the data. For example, we could pick
 a single schema:
 
 ```bash
-❯ vast export json '#type == "suricata.alert" | head 3'
+vast export json '#type == "suricata.alert" | head 3'
 ```
 
 ```json
@@ -274,7 +274,7 @@ There are a lot of `null` values in there. We can filter them out by passing
 `--omit-nulls` to the `json` printer:
 
 ```bash
-❯ vast export json --omit-nulls '#type == "suricata.alert" | head 3'
+vast export json --omit-nulls '#type == "suricata.alert" | head 3'
 ```
 
 ```json
@@ -287,7 +287,7 @@ Certainly less noisy. The [`select`](/docs/understand/language/operators/select)
 operator helps selecting fields of interest:
 
 ```bash
-❯ vast export json '#type == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
+vast export json '#type == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
 ```
 
 ```json
@@ -302,7 +302,7 @@ Looking at the output, we see multiple alert severities. Let's understand their
 distribution:
 
 ```bash
-❯ vast export json '#type == "suricata.alert" | summarize count=count(src_ip) by severity'
+vast export json '#type == "suricata.alert" | summarize count=count(src_ip) by severity'
 ```
 
 ```json
@@ -326,7 +326,7 @@ highest. We could further slice by signature type and check for some that
 contain the string `SHELLCODE`:
 
 ```bash
-❯ vast export json 'severity == 1 | summarize count=count(src_ip) by signature | where /.*SHELLCODE.*/'
+vast export json 'severity == 1 | summarize count=count(src_ip) by signature | where /.*SHELLCODE.*/'
 ```
 
 ```json
@@ -362,7 +362,7 @@ JSON output, to showcase that VAST it's not hard to change the last step of
 rendering data:
 
 ```bash
-❯ vast export ascii '172.17.2.163 | head 10'
+vast export ascii '172.17.2.163 | head 10'
 ```
 
 ```
@@ -389,7 +389,7 @@ for IP addresses, subnets, timestamps, and durations. These come in handy
 to succinctly describe what you want:
 
 ```bash
-❯ vast export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | select orig_h, resp_h, orig_bytes'
+vast export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | select orig_h, resp_h, orig_bytes'
 ```
 
 ```json
