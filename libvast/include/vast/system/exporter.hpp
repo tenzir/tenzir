@@ -12,7 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
-#include "vast/legacy_pipeline.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/query_context.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
@@ -47,7 +47,9 @@ struct exporter_state {
   index_actor index = {};
 
   /// Stores a pipeline_executor for transforming the results.
-  pipeline_executor pipeline = {};
+  vast::pipeline pipeline;
+  generator<caf::expected<void>> pipeline_gen;
+  generator<caf::expected<void>>::iterator pipeline_current;
 
   /// Stores a handle to the SINK that processes results.
   caf::actor sink = {};
@@ -63,7 +65,9 @@ struct exporter_state {
   std::unordered_map<type, expression> checkers = {};
 
   /// Caches results for the SINK.
-  std::queue<table_slice> results = {};
+  bool done = false;
+  std::queue<table_slice> before_pipeline = {};
+  std::queue<table_slice> after_pipeline = {};
 
   /// Stores the time point for when this actor got started via 'run'.
   std::chrono::system_clock::time_point start = {};
@@ -89,11 +93,10 @@ struct exporter_state {
 /// @param self The actor handle of the exporter.
 /// @param expr The AST of the query.
 /// @param options The query options.
-/// @param pipelines The applied pipelines.
+/// @param pipeline The applied pipeline.
 /// @param index The index actor.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<legacy_pipeline>&& pipelines,
-         index_actor index);
+         query_options options, pipeline pipeline, index_actor index);
 
 } // namespace vast::system

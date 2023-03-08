@@ -8,6 +8,9 @@
 
 #include "vast/pipeline.hpp"
 
+#include "vast/concept/parseable/vast/pipeline.hpp"
+#include "vast/plugin.hpp"
+
 #include <queue>
 #include <unordered_map>
 
@@ -214,37 +217,80 @@ auto make_run(std::span<const logical_operator_ptr> ops,
 
 } // namespace
 
-auto pipeline::execute() const noexcept -> caf::expected<void> {
+auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
+  auto ops = std::vector<logical_operator_ptr>{};
+  // plugin name parser
+  using parsers::alnum, parsers::chr, parsers::space, parsers::optional_ws;
+  const auto plugin_name_char_parser = alnum | chr{'-'};
+  const auto plugin_name_parser = optional_ws >> +plugin_name_char_parser;
+  while (!repr.empty()) {
+    // 1. parse a single word as operator plugin name
+    const auto* f = repr.begin();
+    const auto* const l = repr.end();
+    auto plugin_name = std::string{};
+    if (!plugin_name_parser(f, l, plugin_name)) {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("failed to parse pipeline '{}': "
+                                         "operator name is invalid",
+                                         repr));
+    }
+    // 2. find plugin using operator name
+    const auto* plugin = plugins::find<logical_operator_plugin>(plugin_name);
+    if (!plugin) {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("failed to parse pipeline '{}': "
+                                         "operator '{}' does not exist",
+                                         repr, plugin_name));
+    }
+    // 3. ask the plugin to parse itself from the remainder
+    auto [remaining_repr, op]
+      = plugin->make_logical_operator(std::string_view{f, l});
+    if (!op)
+      return caf::make_error(ec::unspecified, fmt::format("failed to parse "
+                                                          "pipeline '{}': {}",
+                                                          repr, op.error()));
+    ops.push_back(std::move(*op));
+    repr = remaining_repr;
+  }
+  return make(std::move(ops));
+}
+
+auto pipeline::execute() const noexcept -> generator<caf::expected<void>> {
   if (ops_.empty())
-    return {}; // no-op
+    co_return; // no-op
   if (ops_.front()->input_element_type().id != element_type_id<void>) {
-    return caf::make_error(
+    co_yield caf::make_error(
       ec::invalid_argument,
       fmt::format("unable to execute pipeline: expected "
                   "input type {}, got {}",
                   element_type_traits<void>::name,
                   ops_.front()->input_element_type().name));
+    co_return;
   }
   if (ops_.back()->output_element_type().id != element_type_id<void>) {
-    return caf::make_error(
+    co_yield caf::make_error(
       ec::invalid_argument,
       fmt::format("unable to execute pipeline: expected "
                   "output type {}, got {}",
                   element_type_traits<void>::name,
                   ops_.back()->output_element_type().name));
+    co_return;
   }
   auto ctrl = execute_ctrl{};
   for (auto&& elem : make_run(ops_, &ctrl)) {
     if (ctrl.error()) {
       VAST_INFO("got error: {}", ctrl.error());
-      return ctrl.error();
+      co_yield ctrl.error();
+      co_return;
     }
     VAST_ASSERT(std::holds_alternative<std::monostate>(elem));
+    co_yield {};
   }
   if (ctrl.error()) {
     VAST_INFO("got error: {}", ctrl.error());
-    return ctrl.error();
+    co_yield ctrl.error();
+    co_return;
   }
-  return {};
 }
+
 } // namespace vast

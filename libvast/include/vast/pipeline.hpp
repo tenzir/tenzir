@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#pragma once
+
 #include "vast/logical_operator.hpp"
 
 #include <caf/error.hpp>
@@ -13,6 +15,9 @@
 namespace vast {
 class pipeline final : public runtime_logical_operator {
 public:
+  pipeline() noexcept = default;
+
+  static auto parse(std::string_view repr) -> caf::expected<pipeline>;
   static auto make(std::vector<logical_operator_ptr> ops)
     -> caf::expected<pipeline> {
     auto mismatch
@@ -71,14 +76,18 @@ public:
     return ops_;
   }
 
-  [[nodiscard]] auto execute() const noexcept -> caf::expected<void>;
+  [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr> {
+    return std::exchange(ops_, {});
+  }
+
+  [[nodiscard]] auto execute() const noexcept -> generator<caf::expected<void>>;
 
 private:
   explicit pipeline(std::vector<logical_operator_ptr> ops)
     : ops_(std::move(ops)) {
   }
 
-  std::vector<logical_operator_ptr> ops_;
+  std::vector<logical_operator_ptr> ops_ = {};
 };
 } // namespace vast
 

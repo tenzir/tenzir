@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#pragma once
+
 #include "vast/element_type.hpp"
 #include "vast/operator_control_plane.hpp"
 

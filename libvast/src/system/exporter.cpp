@@ -63,39 +63,41 @@ void attach_stream(exporter_actor::stateful_pointer<exporter_state> self) {
         },
         [](stream_state& state, caf::downstream<table_slice>& out,
            size_t hint) mutable {
-          auto& results = state.self_ptr->state.results;
-          for (size_t pushed = 0; pushed < hint && !results.empty(); ++pushed) {
+          auto& gen = state.self_ptr->state.pipeline_gen;
+          auto& current = state.self_ptr->state.pipeline_current;
+          auto& results = state.self_ptr->state.after_pipeline;
+          VAST_INFO("stream requested {} batches", hint);
+          for (size_t pushed = 0; pushed < hint; ++pushed) {
+            if (results.empty() && current == gen.end())
+              return;
+            if (results.empty()) {
+              VAST_INFO("stream advances pipeline");
+              ++current;
+            }
+            if (results.empty())
+              return; // TODO: is this sufficient?
+            VAST_INFO("stream push");
             auto& top = results.front();
             out.push(std::move(top));
             results.pop();
           }
+          VAST_INFO("stream request end");
         },
         [continuous](const stream_state& state) {
           if (continuous)
             return false;
-          auto should_end = state.self_ptr->state.query_status.received
-                              == state.self_ptr->state.query_status.expected
-                            && state.self_ptr->state.results.empty();
+          auto& gen = state.self_ptr->state.pipeline_gen;
+          auto& current = state.self_ptr->state.pipeline_current;
+          auto should_end = current == gen.end();
+          // auto should_end = state.self_ptr->state.query_status.received
+          //                     == state.self_ptr->state.query_status.expected
+          //                   && state.self_ptr->state.after_pipeline.empty()
+          //                   && state.self_ptr->state.before_pipeline.empty();
           if (should_end)
             shutdown_stream(state.self_ptr->state.source);
           return should_end;
         })
         .ptr();
-}
-
-void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
-  auto transformed = self->state.pipeline.finish();
-  if (!transformed) {
-    VAST_ERROR("exporter failed to finish the transformation: {}",
-               transformed.error());
-    return;
-  }
-  if (transformed->empty())
-    return;
-  for (auto& t : *transformed)
-    self->state.results.push(std::move(t));
-  if (!self->state.source) [[unlikely]]
-    attach_stream(self);
 }
 
 void buffer_results(exporter_actor::stateful_pointer<exporter_state> self,
@@ -105,12 +107,7 @@ void buffer_results(exporter_actor::stateful_pointer<exporter_state> self,
   VAST_DEBUG("{} relays {} events", *self, slice.rows());
   // Ship the slice and update state.
   st.query_status.shipped += slice.rows();
-  if (auto err = self->state.pipeline.add(std::move(slice))) {
-    VAST_ERROR("exporter failed to apply the transformation: {}", err);
-    return;
-  }
-  if (!self->state.pipeline.is_blocking())
-    ship_results(self);
+  st.before_pipeline.push(std::move(slice));
 }
 
 void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
@@ -118,26 +115,27 @@ void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
   if (st.statistics_subscriber)
     self->anon_send(st.statistics_subscriber, st.name, st.query_status);
   if (st.accountant) {
-    auto processed = st.query_status.processed;
-    auto shipped = st.query_status.shipped;
-    auto results = shipped + st.results.size();
-    auto selectivity = processed != 0
-                         ? detail::narrow_cast<double>(results)
-                             / detail::narrow_cast<double>(processed)
-                         : 1.0;
-    auto msg = report{
-      .data = {
-        {"exporter.processed", processed},
-        {"exporter.results", results},
-        {"exporter.shipped", shipped},
-        {"exporter.selectivity", selectivity},
-        {"exporter.runtime", st.query_status.runtime},
-      },
-      .metadata = {
-        {"query", fmt::to_string(self->state.query_context.id)},
-      },
-    };
-    self->send(st.accountant, atom::metrics_v, std::move(msg));
+    // TODO: restore metrics
+    // auto processed = st.query_status.processed;
+    // auto shipped = st.query_status.shipped;
+    // auto results = shipped + st.results.size();
+    // auto selectivity = processed != 0
+    //                      ? detail::narrow_cast<double>(results)
+    //                          / detail::narrow_cast<double>(processed)
+    //                      : 1.0;
+    // auto msg = report{
+    //   .data = {
+    //     {"exporter.processed", processed},
+    //     {"exporter.results", results},
+    //     {"exporter.shipped", shipped},
+    //     {"exporter.selectivity", selectivity},
+    //     {"exporter.runtime", st.query_status.runtime},
+    //   },
+    //   .metadata = {
+    //     {"query", fmt::to_string(self->state.query_context.id)},
+    //   },
+    // };
+    // self->send(st.accountant, atom::metrics_v, std::move(msg));
   }
 }
 
@@ -213,12 +211,68 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   }
 }
 
+struct query final : logical_operator<void, events> {
+  explicit query(exporter_actor::stateful_pointer<exporter_state> self)
+    : self{self} {
+  }
+  auto instantiate(const type&, operator_control_plane*) const noexcept
+    -> caf::expected<physical_operator<void, events>> override {
+    return [=]() -> generator<table_slice> {
+      while (not self->state.done || not self->state.before_pipeline.empty()) {
+        if (self->state.before_pipeline.empty()) {
+          VAST_INFO("query stalled");
+          co_yield {};
+          continue;
+        }
+        VAST_INFO("query pushed");
+        auto next = std::move(self->state.before_pipeline.front());
+        self->state.before_pipeline.pop();
+        co_yield std::move(next);
+      }
+      VAST_INFO("query done");
+    };
+  }
+
+  auto to_string() const noexcept -> std::string override {
+    return "query";
+  }
+
+  exporter_actor::stateful_pointer<exporter_state> self;
+};
+
+struct ship_results final : logical_operator<events, void> {
+  explicit ship_results(exporter_actor::stateful_pointer<exporter_state> self)
+    : self{self} {
+  }
+  auto instantiate(const type&, operator_control_plane*) const noexcept
+    -> caf::expected<physical_operator<events, void>> override {
+    return [=](generator<table_slice> input) -> generator<std::monostate> {
+      for (auto&& slice : input) {
+        if (slice.rows() == 0) {
+          VAST_INFO("ship-results stalled");
+          co_yield {};
+          continue;
+        }
+        VAST_INFO("ship-results pushed");
+        self->state.after_pipeline.push(std::move(slice));
+        co_yield {};
+      }
+      VAST_INFO("ship-results done");
+    };
+  }
+
+  auto to_string() const noexcept -> std::string override {
+    return "ship-results";
+  }
+
+  exporter_actor::stateful_pointer<exporter_state> self;
+};
+
 } // namespace
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<legacy_pipeline>&& pipelines,
-         index_actor index) {
+         query_options options, pipeline pipeline, index_actor index) {
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,
@@ -235,20 +289,16 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     = has_low_priority_option(self->state.options)
         ? query_context::priority::low
         : query_context::priority::normal;
-  VAST_DEBUG("spawned exporter with {} pipelines", pipelines.size());
-  self->state.pipeline = pipeline_executor{std::move(pipelines)};
-  // Always fetch all partitions for blocking pipelines.
-  if (self->state.pipeline.is_blocking())
-    self->state.query_context.taste = std::numeric_limits<uint32_t>::max();
+  auto ops = std::move(pipeline).unwrap();
+  ops.insert(ops.begin(), std::make_unique<query>(self));
+  ops.push_back(std::make_unique<ship_results>(self));
+  auto closed_pipeline = pipeline::make(std::move(ops));
+  VAST_ASSERT(closed_pipeline);
+  self->state.pipeline = std::move(*closed_pipeline);
+  self->state.pipeline_gen = self->state.pipeline.execute();
+  self->state.pipeline_current = self->state.pipeline_gen.begin();
   self->state.index = std::move(index);
   if (has_continuous_option(options)) {
-    if (self->state.pipeline.is_blocking()) {
-      self->quit(caf::make_error(ec::invalid_configuration,
-                                 fmt::format("{} cannot use blocking pipeline "
-                                             "in continuous mode",
-                                             *self)));
-      return exporter_actor::behavior_type::make_empty_behavior();
-    }
     VAST_DEBUG("{} has continuous query option", *self);
     self->monitor(self->state.index);
   }
@@ -304,6 +354,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
             self->state.query_status.scheduled = cursor.scheduled_partitions;
             if (cursor.scheduled_partitions == 0)
               request_more_hits(self);
+            VAST_ASSERT(!self->state.source);
+            attach_stream(self);
           },
           [=](const caf::error& e) {
             shutdown(self, e);
@@ -332,24 +384,24 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         .inbound_slot();
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity v) {
+    [](atom::status, status_verbosity) {
       auto result = record{};
-      if (v >= status_verbosity::info) {
-        record exp;
-        exp["expression"] = to_string(self->state.query_context.expr);
-        if (v >= status_verbosity::detailed) {
-          exp["start"] = caf::deep_to_string(self->state.start);
-          auto pipeline_names = list{};
-          for (const auto& t : self->state.pipeline.pipelines())
-            pipeline_names.emplace_back(t.name());
-          exp["pipelines"] = std::move(pipeline_names);
-          if (v >= status_verbosity::debug)
-            detail::fill_status_map(exp, self);
-        }
-        auto xs = list{};
-        xs.emplace_back(std::move(exp));
-        result["queries"] = std::move(xs);
-      }
+      // if (v >= status_verbosity::info) {
+      //   record exp;
+      //   exp["expression"] = to_string(self->state.query_context.expr);
+      //   if (v >= status_verbosity::detailed) {
+      //     exp["start"] = caf::deep_to_string(self->state.start);
+      //     auto pipeline_names = list{};
+      //     for (const auto& t : self->state.pipeline.pipelines())
+      //       pipeline_names.emplace_back(t.name());
+      //     exp["pipelines"] = std::move(pipeline_names);
+      //     if (v >= status_verbosity::debug)
+      //       detail::fill_status_map(exp, self);
+      //   }
+      //   auto xs = list{};
+      //   xs.emplace_back(std::move(exp));
+      //   result["queries"] = std::move(xs);
+      // }
       return result;
     },
     // -- receiver_actor<table_slice> ------------------------------------------
@@ -376,21 +428,22 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         self->state.query_status.runtime = runtime;
         request_more_hits(self);
       } else {
-        ship_results(self);
+        // ship_results(self);
         caf::timespan runtime
           = std::chrono::system_clock::now() - self->state.start;
         self->state.query_status.runtime = runtime;
         VAST_DEBUG("{} received all hits from {} partition(s) in {}", *self,
                    self->state.query_status.expected, vast::to_string(runtime));
         VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
-        if (self->state.accountant)
-          self->send(
-            self->state.accountant, atom::metrics_v, "exporter.hits.runtime",
-            runtime,
-            metrics_metadata{
-              {"query", fmt::to_string(self->state.query_context.id)}});
-        if (!self->state.source)
-          self->send_exit(self->state.sink, caf::exit_reason::user_shutdown);
+        self->state.done = true;
+        // if (self->state.accountant)
+        //   self->send(
+        //     self->state.accountant, atom::metrics_v, "exporter.hits.runtime",
+        //     runtime,
+        //     metrics_metadata{
+        //       {"query", fmt::to_string(self->state.query_context.id)}});
+        // if (!self->state.source)
+        //   self->send_exit(self->state.sink, caf::exit_reason::user_shutdown);
       }
     },
   };
