@@ -40,7 +40,7 @@ We recommend starting the VAST server detached in the background:
 
 ```bash
 mkdir -p /path/to/db
-docker run -dt --name=vast --rm -p 42000:42000 -v /path/to/db:/var/lib/vast \
+docker run -dt --name=vast --rm -p 5158:5158 -v /path/to/db:/var/lib/vast \
   tenzir/vast start
 ```
 

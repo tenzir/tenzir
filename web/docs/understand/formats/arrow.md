@@ -24,7 +24,7 @@ The `import arrow` command imports [`Arrow IPC`][arrow-ipc] data. This allows
 for efficiently transferring data between VAST nodes:
 
 ```bash
-VAST_SOURCE_HOST=localhost:42000
+VAST_SOURCE_HOST=localhost:5158
 VAST_DESTINATION_HOST=localhost:42001
 
 # Transfer all Zeek events from the VAST node at VAST_SOURCE_HOST to the VAST

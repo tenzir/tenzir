@@ -7,7 +7,7 @@ VAST_CONTAINER_REGISTRY=docker.io
 VAST_CONTAINER_REF=latest
 
 # The port at which VAST can be accessed outside of Docker Compose.
-VAST_PORT=42000
+VAST_PORT=5158
 
 # The port at which the VAST web interface can be accessed outside of Docker
 # Compose.

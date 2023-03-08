@@ -1,7 +1,10 @@
 *.md
 */*/.git*
 .clangd/
-/libvast/aux/robin-map
+/libvast/aux/*
+!/libvast/aux/caf/
+!/libvast/aux/fast_float/
+!/libvast/aux/simdjson/
 CMakeUserPresets.json
 build/
 compile_commands.json

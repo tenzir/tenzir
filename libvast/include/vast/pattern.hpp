@@ -14,13 +14,13 @@
 
 #include <caf/expected.hpp>
 
-#include <regex>
 #include <string>
 
 namespace vast {
 
 struct access;
 class data;
+struct regex_impl;
 
 // options that modify pattern behavior.
 struct pattern_options {
@@ -29,7 +29,6 @@ struct pattern_options {
   template <class Inspector>
   friend auto inspect(Inspector& f, pattern_options& o) -> bool {
     return detail::apply_all(f, o.case_insensitive);
-    ;
   }
 };
 
@@ -42,7 +41,7 @@ public:
   static inline auto constexpr case_insensitive_flag = 'i';
 
   /// Default-constructs an empty pattern.
-  pattern() = default;
+  pattern() noexcept = default;
 
   static auto make(std::string str, pattern_options options = {false}) noexcept
     -> caf::expected<pattern>;
@@ -83,17 +82,9 @@ public:
   friend bool convert(const pattern& p, data& d);
 
 private:
-  /// Constructs a pattern from a string.
-  /// @param str The string containing the pattern.
-  /// @param case_insensitive The pattern case insensitivity modifier flag.
-  /// @param regex The regular expression object that will be used for searching
-  /// and matching.
-  explicit pattern(std::string str, pattern_options pattern_options,
-                   std::regex regex);
-
   std::string str_ = {};
   pattern_options options_ = {};
-  std::regex regex_ = {};
+  std::shared_ptr<regex_impl> regex_ = {};
 };
 
 } // namespace vast

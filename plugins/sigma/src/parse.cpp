@@ -181,15 +181,17 @@ struct detection_parser : parser_base<detection_parser> {
   search_id_symbol_table search_id;
 };
 
-// The following invariants apply according to the Sigma spec:
-// - All values are treated as case-insensitive strings
-// - You can use wildcard characters '*' and '?' in strings
-// - Wildcards can be escaped with \, e.g. \*. If some wildcard after a
-//   backslash should be searched, the backslash has to be escaped: \\*.
-// - Regular expressions are case-sensitive by default
-// - You don't have to escape characters except the string quotation
-//   marks '
-std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
+/// Transforms a string that may contain Sigma glob wildcards into a string with
+/// respective regular expression metacharacters.
+std::string transform_sigma_string(std::string_view str) {
+  // The following invariants apply according to the Sigma spec:
+  // - All values are treated as case-insensitive strings
+  // - You can use wildcard characters '*' and '?' in strings
+  // - Wildcards can be escaped with \, e.g. \*. If some wildcard after a
+  //   backslash should be searched, the backslash has to be escaped: \\*.
+  // - Regular expressions are case-sensitive by default
+  // - You don't have to escape characters except the string quotation
+  //   marks '
   auto f = str.begin();
   auto l = str.end();
   std::string rx;
@@ -231,11 +233,14 @@ std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
       rx += c;
     }
   };
-  // It's only a pattern if it differs from a regular string.
-  // TODO: check whether we need ^ and $ anchors.
-  if (str == rx)
-    return {};
-  return pattern::make(std::move(rx));
+  return rx;
+}
+
+/// Make a pattern out of a Sigma string. The generated patterns are
+/// case-insensitive to reflect Sigma's string case-insensitivity.
+caf::expected<pattern> make_pattern(std::string_view str) {
+  auto rx = transform_sigma_string(str);
+  return pattern::make(std::move(rx), {.case_insensitive = true});
 }
 
 } // namespace
@@ -263,11 +268,6 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "gte") {
           op = relational_operator::greater_equal;
         } else if (*i == "contains") {
-          op = relational_operator::ni;
-        } else if (*i == "endswith" || *i == "startswith") {
-          // Once we have regex support we should transform a lot of these
-          // modifier in pattern qualifiers, e.g., `endswith` for a value X
-          // should become /X$/.
           op = relational_operator::ni;
         } else if (*i == "base64") {
           auto encode = [](const data& x) -> caf::expected<data> {
@@ -321,18 +321,49 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "utf16") {
           return caf::make_error(ec::unimplemented, //
                                  "utf16 not yet implemented");
+        } else if (*i == "startswith") {
+          auto to_re = [](const data& d) -> caf::expected<data> {
+            auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
+              auto str = detail::control_char_escape(to_string(x));
+              str = transform_sigma_string(str);
+              str = fmt::format("^{}.*", str);
+              auto result = pattern::make(str, {.case_insensitive = true});
+              if (!result)
+                return std::move(result.error());
+              return std::move(*result);
+            }};
+            return caf::visit(f, d);
+          };
+          transforms.emplace_back(to_re);
+        } else if (*i == "endswith") {
+          op = relational_operator::equal;
+          auto to_re = [](const data& d) -> caf::expected<data> {
+            auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
+              auto str = detail::control_char_escape(to_string(x));
+              str = transform_sigma_string(str);
+              str = fmt::format(".*{}$", str);
+              auto result = pattern::make(str, {.case_insensitive = true});
+              if (!result)
+                return std::move(result.error());
+              return std::move(*result);
+            }};
+            return caf::visit(f, d);
+          };
+          transforms.emplace_back(to_re);
         } else if (*i == "re") {
           op = relational_operator::equal;
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{
               [](const auto& x) -> caf::expected<data> {
                 auto str = to_string(x);
-                if (auto result = make_pattern(str)) {
-                  if (!result)
-                    return std::move(result->error());
-                  return std::move(**result);
+                auto transformed = transform_sigma_string(str);
+                if (str == transformed) {
+                  return str;
                 }
-                return str;
+                auto result = pattern::make(transformed);
+                if (!result)
+                  return std::move(result.error());
+                return std::move(*result);
               },
               [](const std::string& x) -> caf::expected<data> {
                 auto result = pattern::make(x);
@@ -360,7 +391,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       // Helper to apply all modifiers over a value.
       auto modify = [&](const data& x) -> caf::expected<data> {
         auto result = x;
-        for (auto f : transforms)
+        for (const auto& f : transforms)
           if (auto x = f(result))
             result = std::move(*x);
           else
@@ -369,12 +400,11 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       };
       // Helper to create an expression from a (transformed) value.
       auto make_predicate_expr = [&](const data& value) -> expression {
-        // Convert strings to patterns if wildcarding is present.
+        // Convert strings to case-insensitive patterns.
         if (auto str = caf::get_if<std::string>(&value))
-          if (!str->empty())
-            if (auto pat = make_pattern(*str); pat && *pat)
-              return predicate{extractor, relational_operator::equal,
-                               data{std::move(**pat)}};
+          if (auto pat = make_pattern(*str))
+            return predicate{extractor, relational_operator::equal,
+                             data{std::move(*pat)}};
         // The modifier 'base64offset' is unique in that it creates
         // multiple values represented as list. If followed by 'contains', then
         // we have substring search on each value; otherwise we can use equality

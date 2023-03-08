@@ -1,9 +1,14 @@
 # Python
 
-VAST ships with Python bindings to enable interaction with VAST in the Python
-ecosystem. We distribute the bindings as [PyPI
-package](https://pypi.org/project/pyvast/) called
-[PyVAST](https://github.com/tenzir/vast/tree/master/pyvast).
+VAST ships with Python bindings to enable interaction with VAST with primitives
+that integrate well with the Python ecosystem. We distribute the bindings as
+PyPI package called [pyvast][pypi-page].
+
+[pypi-page]: https://pypi.org/project/pyvast/
+
+:::warning Experimental
+PyVAST is considered experimental and subject to change without notice.
+:::
 
 ## Install the PyPI package
 
@@ -15,107 +20,126 @@ pip install pyvast
 
 ## Use PyVAST
 
-PyVAST has a [asyncio](https://docs.python.org/3/library/asyncio.html)-based
-wrapper around VAST's command line interface that uses fluent method chaining.
-PyVAST supports all VAST commands by passing arguments to the `vast` exectuable.
+### Quickstart
 
-Every command line invocation has an equivalent Python-native
-invocation of chained (sub-)commands via the `.`-notation. You can pass
-arguments as via Python's `*args` and parameters as `**kwargs`. When you are
-done chaining methods, finalize the command invocation with a call to `.exec()`.
-
-Here are two examples.
-
-### Import a log file
-  
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
-<Tabs>
-<TabItem value="Python" label="Python" default>
-
-```py
-proc = await vast.import_().zeek(read="/path/to/file").exec()
-stdout, stderr = await proc.communicate()
-print(stdout)
-```
-
-NB: since `import` is a reserved keyword, we add `_` as suffix.
-
-</TabItem>
-<TabItem value="CLI" label="CLI">
-
-```bash
-vast import --read=/path/to/file zeek
-```
-
-</TabItem>
-</Tabs>
-
-### Run a query
-
-<Tabs>
-<TabItem value="Python" label="Python" default>
-
-```py
-proc = await vast.export(max_events=10).json("192.167.1.102").exec()
-stdout, stderr = await proc.communicate()
-print(stdout)
-```
-
-</TabItem>
-<TabItem value="CLI" label="CLI">
-
-```bash
-vast export --max-events=10 json 192.168.1.104
-```
-
-</TabItem>
-</Tabs>
-
-## Use PyVAST as module
-
-You can use PyVAST as Python module:
-
-```py
-from pyvast import VAST
-```
-
-Once imported, there are three optional keyword arguments to instruct PyVAST
-with:
-
-- `binary` (default: `vast`): the path to the VAST executable. In case the
-  VAST binary is not in your `$PATH`, set this to the actual path to the VAST
-  binary.
-
-- `endpoint` (default: `localhost:42000`): the endpoint of the VAST node.
-
-- `logger` (optional): a custom [logging.logger][logger] object for your
-  application.
-
-[logger]: https://docs.python.org/3/library/logging.html#logger-objects
-
-The following example shows a minimalistic working example with all required
-import statements.
+The following snippet illustrates a small script to query VAST.
 
 ```py
 #!/usr/bin/env python3
 
 import asyncio
-from pyvast import VAST
+from pyvast import VAST, to_json_rows
 
 async def example():
-  vast = VAST(binary="/opt/vast/bin/vast")
-  await vast.test_connection()
+    vast = VAST()
 
-  proc = await vast.export(max_events=10).json("192.168.1.103").exec()
-  stdout, stderr = await proc.communicate()
-  print(stdout)
+    generator = vast.export("192.168.1.103", limit=10)
+    async for row in to_json_rows(generator):
+        print(row)
 
 asyncio.run(example())
 ```
 
-The [PyVAST example directory][example] illustrates another use case involving
-reading data via Arrow and running a continuous query.
+### Overview
 
-[example]: https://github.com/tenzir/vast/tree/master/pyvast/example
+PyVAST is meant to expose all the VAST features that are relevant in a Python
+environment. For now though, it is still in active development and only the
+following interfaces are exposed:
+- `export`
+- `count`
+- `status`
+
+Many options that exist on the CLI are not mapped to PyVAST. The idea here is to
+avoid overwhelming the API with options that are actually not needed when
+interacting with VAST from Python.
+
+### class VAST
+
+```py
+    class VAST(
+        endpoint: Optional[str]
+    )
+```
+
+Create a connection to a VAST node that is listening at the specified endpoint.
+If no enpdoint is given the `VAST_ENDPOINT` environment variable is used, if
+that is also not present the `vast.endpoint` value from a local `vast.yaml`
+configuration file is used. In case that value is also not present the default
+connection endpoint of `127.0.0.1:5158` is used.
+
+#### export
+
+```py
+    coroutine export(
+        expression: str,
+        mode: ExportMode = ExportMode.HISTORICAL,
+        limit: int = 100
+    ) -> AsyncIterable[TableSlice]
+```
+
+Evaluate an expression in a VAST node and receive the resulting events in an
+asynchronous stream of `TableSlices`.
+
+The `mode` argument can be set to one of `HISTORICAL`, `CONTINUOUS`, or
+`UNIFIED`. A historical export evaluates the expression against data
+that is stored in the VAST database, the resulting output stream ends
+when all eligible data has been evaluated. A `CONTINUOUS` one looks at data
+as it flows into the node, it will continue to run until the event limit is
+reached, it gets discarded, or the node terminates.
+
+The `limit` argument sets an upper bound on the number of events that should
+be produced. The special value `0` indicates that the number of results is
+unbounded.
+
+#### count
+
+```py
+    coroutine count(
+        expression: str
+    ) -> int
+```
+
+Evaluate the sum of all events in the database that match the given expression.
+
+#### status
+
+```py
+    coroutine status() -> dict
+```
+
+Retrieve the current status from VAST.
+
+```py
+>>> st = await vast.status()
+>>> pprint.pprint(st["system"])
+{'current-memory-usage': 729628672,
+ 'database-path': '/var/lib/vast',
+ 'in-memory-table-slices': 0,
+ 'peak-memory-usage': 729628672,
+ 'swap-space-usage': 0}
+```
+
+### class TableSlice
+
+```py
+    coroutine collect_pyarrow(
+        stream: AsyncIterable[TableSlice],
+    ) -> dict[str, list[pyarrow.Table]]
+```
+
+Collect a stream of `TableSlice` and return a dictionary of [Arrow
+tables][pyarrow] indexed by schema name.
+[pyarrow]: https://arrow.apache.org/docs/python/index.html
+
+### class VastRow
+
+A `VastRow` is a Python native representation of an "event" from VAST. It
+consists of a `name` and a `data` dictionary.
+
+```py
+    coroutine to_json_rows(
+        stream: AsyncIterable[TableSlice],
+    ) -> AsyncIterable[VastRow]
+```
+
+Convert a stream of `TableSlice`s to a stream of `VastRow`s.

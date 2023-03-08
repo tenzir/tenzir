@@ -57,6 +57,7 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_ENABLE_BUNDLED_CAF:BOOL="ON" \
+      -D VAST_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
@@ -66,7 +67,7 @@ RUN cmake -B build -G Ninja \
 
 RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
 
-EXPOSE 42000/tcp
+EXPOSE 5158/tcp
 
 WORKDIR /var/lib/vast
 VOLUME ["/var/lib/vast"]
@@ -95,20 +96,17 @@ RUN apt-get update && \
       ca-certificates \
       gnupg2 \
       libasan5 \
-      libcaf-core0.17 \
-      libcaf-io0.17 \
-      libcaf-openssl0.17 \
       libc++1 \
       libc++abi1 \
       libflatbuffers1 \
       libfmt7 \
       libhttp-parser2.9 \
       libpcap0.8 \
-      libsimdjson5 \
+      libre2-9 \
       libspdlog1 \
       libunwind8 \
-      libyaml-cpp0.6 \
       libxxhash-dev \
+      libyaml-cpp0.6 \
       lsb-release \
       openssl \
       robin-map-dev \
@@ -122,7 +120,7 @@ RUN apt-get update && \
 
 USER vast:vast
 
-EXPOSE 42000/tcp
+EXPOSE 5158/tcp
 WORKDIR /var/lib/vast
 VOLUME ["/var/lib/vast"]
 

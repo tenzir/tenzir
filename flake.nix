@@ -72,12 +72,12 @@
               Env = [
                 # When changing these, make sure to also update the entries in the
                 # Dockerfile.
-                "VAST_ENDPOINT=0.0.0.0:42000"
+                "VAST_ENDPOINT=0.0.0.0:5158"
                 "VAST_DB_DIRECTORY=${vast-dir}"
                 "VAST_LOG_FILE=/var/log/vast/server.log"
               ];
               ExposedPorts = {
-                "42000/tcp" = {};
+                "5158/tcp" = {};
               };
               WorkingDir = "${vast-dir}";
               Volumes = {

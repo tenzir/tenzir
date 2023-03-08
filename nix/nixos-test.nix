@@ -31,7 +31,7 @@
           package = pkgs.vast;
           settings = {
             vast = {
-              endpoint = "127.0.0.1:42000";
+              endpoint = "127.0.0.1:5158";
             };
           };
           # extraConfigFile = ./vast.yaml;
@@ -42,7 +42,7 @@
         machine.wait_for_unit("network-online.target")
         machine.wait_for_unit("vast.service")
         print(machine.succeed("systemctl status vast.service"))
-        machine.wait_for_open_port(42000)
+        machine.wait_for_open_port(5158)
       '';
     }
     {

@@ -2,7 +2,7 @@
 
 Querying data from VAST (aka *exporting*) involves spinning up a VAST client
 that executes a query expression. In the following, we assume that you [set up a
-server](../run/README.md) listening at `localhost:42000`.
+server](../run/README.md) listening at `localhost:5158`.
 
 To run a query, you need to:
 

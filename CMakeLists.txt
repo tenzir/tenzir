@@ -701,15 +701,6 @@ endif ()
 # CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
 find_package(OpenSSL REQUIRED)
 
-function (VASTSystemizeTarget tgt)
-  message(STATUS "Treating ${tgt} as a system dependency")
-  get_target_property(_includes ${tgt} INTERFACE_INCLUDE_DIRECTORIES)
-  set_property(
-    TARGET ${tgt}
-    APPEND
-    PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_includes}")
-endfunction ()
-
 # TODO: Require CAF to be installed.
 
 if (VAST_ENABLE_DEVELOPER_MODE
@@ -738,6 +729,7 @@ if (NOT VAST_ENABLE_BUNDLED_CAF)
     VAST_FIND_DEPENDENCY_LIST
     "\nfind_package(CAF ${CAF_VERSION} COMPONENTS core io test openssl REQUIRED)"
   )
+  dependency_summary("CAF" CAF::core "Dependencies")
 else ()
   # Use bundled CAF.
   if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt")
@@ -799,6 +791,9 @@ else ()
   # Make bundled CAF available for component-based CPack installations.
   install(TARGETS libcaf_core libcaf_openssl libcaf_io COMPONENT Runtime)
   install(TARGETS libcaf_test COMPONENT Development)
+  # Figure out whether we point to a build directory or a prefix.
+  dependency_summary("CAF" "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf"
+                     "Dependencies")
 endif ()
 
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS

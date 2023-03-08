@@ -56,6 +56,34 @@ inline auto byte_unescaper = [](auto& f, auto l, auto out) {
   return hex_unescaper(++f, l, out);
 };
 
+inline auto control_character_escaper = [](auto& f, auto out) {
+  auto escape_char = [](char c, auto out) {
+    *out++ = '\\';
+    *out++ = c;
+  };
+  switch (*f) {
+    default:
+      *out++ = *f++;
+      return;
+    case '\b':
+      escape_char('b', out);
+      break;
+    case '\f':
+      escape_char('f', out);
+      break;
+    case '\r':
+      escape_char('r', out);
+      break;
+    case '\n':
+      escape_char('n', out);
+      break;
+    case '\t':
+      escape_char('t', out);
+      break;
+  }
+  ++f;
+};
+
 // The JSON RFC (http://www.ietf.org/rfc/rfc4627.txt) specifies the escaping
 // rules in section 2.5:
 //

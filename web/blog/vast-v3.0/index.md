@@ -399,3 +399,9 @@ VAST installations now include Python bindings to VAST as a site package. The
 package is called `vast` and also available [separately on PyPI][vast-pypi].
 
 [vast-pypi]: https://pypi.org/project/pyvast
+
+### Extractor Predicates
+
+Extractors can now be used where predicates are expected to test for the
+existance of a field or type. For example, `x` and `:T` expand to `x != nil`
+and `:T != nil`, respectively.

@@ -166,8 +166,8 @@ inline constexpr const size_t rotate_files = 3;
 // -- constants for the various builtin REST endpoints -------------------------
 namespace rest {
 
-/// Settings related to the `/export` endpoint.
-namespace export_ {
+/// Settings related to the `/query` endpoint.
+namespace query {
 
 /// The maximum number of results
 inline constexpr const size_t limit = 50;
@@ -181,7 +181,7 @@ inline constexpr const bool numeric_durations = false;
 /// Whether to omit null fields.
 inline constexpr const bool omit_nulls = false;
 
-} // namespace export_
+} // namespace query
 
 } // namespace rest
 
@@ -193,13 +193,13 @@ namespace system {
 /// Hostname or IP address and port of a remote node.
 //  (explicitly use IPv4 here to get predictable behavior even on
 //   weird dual-stack setups)
-inline constexpr std::string_view endpoint = "127.0.0.1:42000/tcp";
+inline constexpr std::string_view endpoint = "127.0.0.1:5158/tcp";
 
 /// Default port of a remote node.
 inline constexpr std::string_view endpoint_host = "127.0.0.1";
 
 /// Default port of a remote node.
-inline constexpr uint16_t endpoint_port = 42000;
+inline constexpr uint16_t endpoint_port = 5158;
 
 /// The unique ID of this node.
 inline constexpr std::string_view node_id = "node";

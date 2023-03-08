@@ -382,16 +382,16 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Checkout submodules
+      - name: Update submodules
         run: |
-          git submodule update --init --recursive libvast
-          git submodule update --init --recursive plugins
+          git submodule update --init --recursive libvast plugins
       - name: Configure ssh-agent
+        if: ${{ matrix.docker-vast.name == 'vast-ce' }}
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
-      - if: ${{ matrix.docker-vast.name == 'vast-ce' }}
-        name: Initialize Community Edition plugins
+      - name: Initialize Community Edition plugins
+        if: ${{ matrix.docker-vast.name == 'vast-ce' }}
         run: |
           git submodule update --init --recursive contrib/vast-plugins
           # Remove plugins that are not in matrix.docker-vast.plugins

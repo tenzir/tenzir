@@ -2,7 +2,7 @@
 
 Ingesting data to VAST (aka *importing*) involves spinning up a VAST client
 that parses and ships the data to a VAST server. In the following, we assume
-that you [set up a server](../run/README.md) listening at `localhost:42000`.
+that you [set up a server](../run/README.md) listening at `localhost:5158`.
 
 ## Choose an import format
 

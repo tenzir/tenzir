@@ -78,7 +78,7 @@ For a container deployment, use our official Docker image:
 ```bash
 docker pull tenzir/vast
 mkdir -p /tmp/db # persistent state
-docker run -dt --name=vast --rm -p 42000:42000 -v /tmp/db:/var/lib/vast \
+docker run -dt --name=vast --rm -p 5158:5158 -v /tmp/db:/var/lib/vast \
   tenzir/vast start
 ```
 </TabItem>
