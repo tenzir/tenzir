@@ -16,14 +16,7 @@ Let's spin up a VAST node:
 vast start
 ```
 
-```
-[20:05:54.138] VAST (v3.0.0-rc1-2-gcc393580f1) is listening on 127.0.0.1:42000
-[20:05:54.144] index-11 finished initializing and is ready to accept queries
-```
-
-All other commands aside from `start` initiate a connection to a VAST node. For
-example, the `status` command shows information about the current state of a
-node. Let's check the remote version:
+Let's connect to the node and check its version via the `status` command:
 
 ```bash
 vast status version
@@ -72,9 +65,21 @@ handles the parsing, followed by sending batches of data to our VAST node:
 ```bash
 # The 'O' flag in tar dumps the archive contents to stdout.
 tar xOzf zeek.tar.gz | vast import zeek
-[20:35:58.434] client connected to VAST node at 127.0.0.1:42000
+```
+
+```
+[20:35:58.434] client connected to VAST node at 127.0.0.1:5158
 [20:36:00.923] zeek-reader source produced 954189 events at a rate of 383606 events/sec in 2.49s
+```
+
+```bash
 tar xOzf suricata.tar.gz | vast import suricata '#type == "suricata.alert"'
+```
+
+```
+[20:36:42.380] client connected to VAST node at 127.0.0.1:5158
+[20:36:52.420] suricata-reader source produced 1398847 events at a rate of 139397 events/sec in 10.03s
+[20:36:58.075] suricata-reader source produced 750510 events at a rate of 132718 events/sec in 5.65s
 ```
 
 We've added the import filter
@@ -344,7 +349,7 @@ vast export json 'severity == 1 | summarize count=count(src_ip) by signature | w
 
 Observe that we started the query with `severity == 1` and didn't include a type
 filter. This is because VAST performs *suffix matching* on fields to make it
-easy to specify fields in nested records. The full qualified field name is
+easy to specify fields in nested records. The fully qualified field name is
 `suricata.alert.severity`, which is a bit unwieldy to type.
 
 :::info Extractors
@@ -364,10 +369,10 @@ Similarly, you can write simply `:ip` to construct a query that returns any
 record that has a field of type `ip`.
 :::
 
-We used a value predicate earlier when searching via `where /.*SHELLCODE.*/`.
-Let's do this for IP addresses. And let's also pick something different from
-JSON output, to showcase that VAST it's not hard to change the last step of
-rendering data:
+We used a short form of a type extractor earlier when searching via `where
+/.*SHELLCODE.*/`. Let's do this for IP addresses. And let's also pick something
+different from JSON output, to showcase that it's not hard to change the last
+step of rendering data:
 
 ```bash
 vast export ascii '172.17.2.163 | head 10'
@@ -407,8 +412,8 @@ vast export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | sel
 ```
 
 The above example extracts connections that either have sent more than 1 MiB or
-lasted longer than 30 minutes. The value predicate `10.10.5.0/25` actually
-expands to `:ip in 10.10.5.0/25 || :subnet == 10.10.5.0/25` under the hood,
+lasted longer than 30 minutes. The value `10.10.5.0/25` actually expands to the
+expression `:ip in 10.10.5.0/25 || :subnet == 10.10.5.0/25` under the hood,
 meaning, VAST looks for any IP address field and performs a top-k prefix search
 (by masking the top 25 bits IP address bits), or any subnet field where the value
 matches exactly.
