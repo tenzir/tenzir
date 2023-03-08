@@ -2,11 +2,9 @@
 
 VAST ships with Python bindings to enable interaction with VAST with primitives
 that integrate well with the Python ecosystem. We distribute the bindings as
-PyPI package called [pyvast][pypi-page]. The sources can be found
-[here](pyvast-source).
+PyPI package called [pyvast][pypi-page].
 
 [pypi-page]: https://pypi.org/project/pyvast/
-[pyvast-source]: https://github.com/tenzir/vast/tree/master/python
 
 :::warning Experimental
 PyVAST is considered experimental and subject to change without notice.
