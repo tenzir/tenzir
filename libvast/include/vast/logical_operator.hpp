@@ -101,6 +101,11 @@ class logical_operator : public runtime_logical_operator {
     return element_type_traits<Output>{};
   }
 
+  // TODO: check documentation
+  /// Creates a `physical_operator` for a given schema.
+  ///
+  /// The implementation may assume that `*this` and the returned closure
+  /// outlive all generators (?) returned by the closure.
   [[nodiscard]] virtual auto
   instantiate(const type& input_schema,
               operator_control_plane* ctrl) const noexcept

@@ -18,33 +18,10 @@ public:
   pipeline() noexcept = default;
 
   static auto parse(std::string_view repr) -> caf::expected<pipeline>;
+
+  /// @pre The pipeline defined by `ops` must not be ill-typed.
   static auto make(std::vector<logical_operator_ptr> ops)
-    -> caf::expected<pipeline> {
-    auto mismatch
-      = std::adjacent_find(ops.begin(), ops.end(), [](auto& a, auto& b) {
-          return a->output_element_type() != b->input_element_type()
-                 && a->output_element_type().id != element_type_id<void>;
-        });
-    if (mismatch != ops.end()) {
-      return caf::make_error(
-        ec::invalid_argument,
-        fmt::format("element type mismatch: cannot connect {} -> {}",
-                    (*mismatch)->output_element_type().name,
-                    (*(mismatch + 1))->input_element_type().name));
-    }
-    auto flattened = std::vector<logical_operator_ptr>{};
-    flattened.reserve(ops.size());
-    for (auto& op : ops) {
-      if (auto* p = dynamic_cast<pipeline*>(op.get())) {
-        flattened.insert(flattened.end(),
-                         std::make_move_iterator(p->ops_.begin()),
-                         std::make_move_iterator(p->ops_.end()));
-      } else {
-        flattened.push_back(std::move(op));
-      }
-    }
-    return pipeline{std::move(flattened)};
-  }
+    -> caf::expected<pipeline>;
 
   [[nodiscard]] auto input_element_type() const noexcept
     -> runtime_element_type override {
