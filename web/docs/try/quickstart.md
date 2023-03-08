@@ -85,8 +85,14 @@ because we're want the alerts from Suricata and the metadata from Zeek.
 While the Suricata tarball contains just a single `eve.json` file, the Zeek
 tarball includes numerous logs:
 
+<details>
+<summary>Zeek tarball contents</summary>
+
 ```bash
 tar tf zeek.tar.gz
+```
+
+```
 Zeek/
 Zeek/ntlm.log
 Zeek/loaded_scripts.log
@@ -121,6 +127,8 @@ Zeek/kerberos.log
 Zeek/ocsp.log
 Zeek/dce_rpc.log
 ```
+
+</details>
 
 VAST's Zeek TSV parser auto-detects schema changes in the same stream of input
 and resets itself whenever it encounters a new log header. This is why piping a
@@ -253,7 +261,7 @@ vast export json '#type == /(zeek|suricata).*/ | taste 1'
 [20:39:12.647] json-writer processed 33 events at a rate of 2675 events/sec in 12.34ms
 ```
 
-Here we see all the variety of our data. This can be a bit overwhelming. 
+Here we see all the variety of our data. This can be a bit overwhelming.
 
 ### Filter and reshape data
 
