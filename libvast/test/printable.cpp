@@ -490,14 +490,6 @@ TEST(JSON - remove trailing zeroes) {
 
 // -- API ---------------------------------------------------------------------
 
-TEST(stream) {
-  using namespace std::chrono;
-  std::ostringstream ss;
-  auto x = nanoseconds(42);
-  ss << x;
-  CHECK_EQUAL(ss.str(), "42.0ns");
-}
-
 TEST(to) {
   auto t = to<std::string>(true);
   REQUIRE(t);
