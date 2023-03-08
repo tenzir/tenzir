@@ -1574,8 +1574,6 @@ index(index_actor::stateful_pointer<index_state> self,
           [self, partition_id, path, synopsis_path, rp](atom::ok) mutable {
             VAST_DEBUG("{} erased partition {} from catalog", *self,
                        partition_id);
-            auto partition_actor
-              = self->state.inmem_partitions.eject(partition_id);
             self->state.persisted_partitions.erase(partition_id);
             // We don't remove the partition from the queue directly because the
             // query API requires clients to keep track of the number of
@@ -1584,101 +1582,117 @@ index(index_actor::stateful_pointer<index_state> self,
             // states and the client would go out of sync. That would require
             // the index to deal with a few complicated corner cases.
             self->state.pending_queries.mark_partition_erased(partition_id);
+            // Remove the synopsis file. We can already safely do so because
+            // the catalog acked the erase.
             self
-              ->request<caf::message_priority::high>(
-                self->state.filesystem, caf::infinite, atom::mmap_v, path)
+              ->request<caf::message_priority::high>(self->state.filesystem,
+                                                     caf::infinite,
+                                                     atom::erase_v,
+                                                     synopsis_path)
               .then(
-                [=](const chunk_ptr& chunk) mutable {
-                  VAST_DEBUG("{} erased partition {} from filesystem", *self,
-                             partition_id);
-                  if (!chunk) {
-                    rp.deliver(caf::make_error( //
-                      ec::filesystem_error,
-                      fmt::format("failed to load the state for partition {}",
-                                  path)));
-                    return;
-                  }
-                  if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
-                      && flatbuffers::BufferHasIdentifier(
-                        chunk->data(), fbs::PartitionIdentifier())) {
-                    VAST_WARN("failed to load partition for deletion at {} "
+                [self, partition_id](atom::done) {
+                  VAST_DEBUG("{} erased partition synopsis {} from "
+                             "filesystem",
+                             *self, partition_id);
+                },
+                [self, partition_id, synopsis_path](const caf::error& err) {
+                  VAST_WARN("{} failed to erase partition "
+                            "synopsis {} at {}: {}",
+                            *self, partition_id, synopsis_path, err);
+                });
+            // A helper function to erase the dense index file with some
+            // logging.
+            auto erase_dense_index_file = [=] {
+              self
+                ->request<caf::message_priority::high>(
+                  self->state.filesystem, caf::infinite, atom::erase_v, path)
+                .then(
+                  [self, partition_id](atom::done) {
+                    VAST_DEBUG("{} erased partition {} from filesystem", *self,
+                               partition_id);
+                  },
+                  [self, partition_id, path](const caf::error& err) {
+                    VAST_WARN("{} failed to erase partition {} at {}: {}",
+                              *self, partition_id, path, err);
+                  });
+            };
+            auto store_path = store_path_for_partition(partition_id);
+            self
+              ->request<caf::message_priority::high>(self->state.filesystem,
+                                                     caf::infinite,
+                                                     atom::erase_v, store_path)
+              .then(
+                [self, partition_id, store_path, erase_dense_index_file,
+                 rp](atom::done) mutable {
+                  VAST_DEBUG("{} erased partition store {} from "
+                             "filesystem",
+                             *self, partition_id);
+                  erase_dense_index_file();
+                  rp.deliver(atom::done_v);
+                },
+                [self, partition_id, path, store_path, erase_dense_index_file,
+                 rp](const caf::error& err) mutable {
+                  if (err == ec::no_such_file) {
+                    // Fallback path: In case the store file is not found
+                    // at the expected path we need to load the partition
+                    // and retrieve the correct path from the store header.
+                    VAST_DEBUG("{} did not find a store for partition {} at "
+                               "{}, inspecting the store header",
+                               *self, partition_id, store_path);
+                    self
+                      ->request<caf::message_priority::high>(
+                        self->state.filesystem, caf::infinite, atom::mmap_v,
+                        path)
+                      .then(
+                        [=](const chunk_ptr& chunk) mutable {
+                          VAST_DEBUG("{} erased partition {} from filesystem",
+                                     *self, partition_id);
+                          if (!chunk) {
+                            erase_dense_index_file();
+                            rp.deliver(caf::make_error( //
+                              ec::filesystem_error,
+                              fmt::format("failed to load the state for "
+                                          "partition {}",
+                                          path)));
+                            return;
+                          }
+                          if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
+                              && flatbuffers::BufferHasIdentifier(
+                                chunk->data(), fbs::PartitionIdentifier())) {
+                            VAST_WARN(
+                              "failed to load partition for deletion at {} "
                               "because its size of {} exceeds the maximum "
                               "allowed size of {}. The index statistics will "
                               "be incorrect until the database has been "
                               "rebuilt and restarted",
                               path, chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
-                    // !!! Fallback path. We try to erase the corresponding
-                    // segment store file if it exists.
-                    // TODO: Also attempt to erase parquet / feather stores.
-                    auto store_path = store_path_for_partition(partition_id);
-                    self
-                      ->request<caf::message_priority::high>(
-                        self->state.filesystem, caf::infinite, atom::erase_v,
-                        path)
-                      .then(
-                        [self, partition_id](atom::done) {
-                          VAST_DEBUG("{} erased partition {} from filesystem",
-                                     *self, partition_id);
+                            erase_dense_index_file();
+                            rp.deliver(caf::make_error(
+                              ec::filesystem_error, "aborting erasure due to "
+                                                    "encountering a legacy "
+                                                    "oversized partition"));
+                            return;
+                          }
+                          // TODO: We could send `all_ids` as the second
+                          // argument here, which doesn't really make sense
+                          // from an interface perspective but would save the
+                          // partition from recomputing the same bitmap.
+                          auto partition_actor
+                            = self->state.inmem_partitions.eject(partition_id);
+                          rp.delegate(partition_actor, atom::erase_v);
                         },
-                        [self, partition_id, path](const caf::error& err) {
-                          VAST_WARN("{} failed to erase partition {} at {}: {}",
-                                    *self, partition_id, path, err);
+                        [=](caf::error& err) mutable {
+                          VAST_WARN("{} failed to erase partition {} from "
+                                    "filesystem: "
+                                    "{}",
+                                    *self, partition_id, err);
+                          rp.deliver(std::move(err));
                         });
-                    self
-                      ->request<caf::message_priority::high>(
-                        self->state.filesystem, caf::infinite, atom::erase_v,
-                        store_path)
-                      .then(
-                        [self, partition_id, store_path](atom::done) {
-                          VAST_DEBUG("{} erased partition store {} from "
-                                     "filesystem",
-                                     *self, partition_id);
-                        },
-                        [self, partition_id,
-                         store_path](const caf::error& err) {
-                          if (err == ec::no_such_file)
-                            VAST_DEBUG("{} failed to erase store {} at {}: {} ",
-                                       *self, partition_id, store_path, err);
-                          else
-                            VAST_WARN("{} failed to erase store {} at {}: {}",
-                                      *self, partition_id, store_path, err);
-                        });
-                    rp.deliver(caf::make_error(ec::filesystem_error,
-                                               "aborting erasure due to "
-                                               "encountering a legacy "
-                                               "oversized partition"));
-                  } else {
-                    // TODO: We could send `all_ids` as the second argument
-                    // here, which doesn't really make sense from an interface
-                    // perspective but would save the partition from recomputing
-                    // the same bitmap.
-                    rp.delegate(partition_actor, atom::erase_v);
-                  }
-                  // Note that mmap's will increase the reference count of a
-                  // file, so unlinking should not affect indexers that are
-                  // currently loaded and answering a query.
-                  self
-                    ->request<caf::message_priority::high>(
-                      self->state.filesystem, caf::infinite, atom::erase_v,
-                      synopsis_path)
-                    .then(
-                      [self, partition_id](atom::done) {
-                        VAST_DEBUG("{} erased partition synopsis {} from "
-                                   "filesystem",
-                                   *self, partition_id);
-                      },
-                      [self, partition_id,
-                       synopsis_path](const caf::error& err) {
-                        VAST_WARN("{} failed to erase partition "
-                                  "synopsis {} at {}: {}",
-                                  *self, partition_id, synopsis_path, err);
-                      });
-                },
-                [=](caf::error& err) mutable {
-                  VAST_WARN("{} failed to erase partition {} from filesystem: "
-                            "{}",
-                            *self, partition_id, err);
-                  rp.deliver(std::move(err));
+                  } else
+                    VAST_WARN("{} failed to erase store {} at {}: {}", *self,
+                              partition_id, store_path, err);
+                  erase_dense_index_file();
+                  rp.deliver(atom::done_v);
                 });
           },
           [self, partition_id, rp](caf::error& err) mutable {
