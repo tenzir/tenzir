@@ -99,7 +99,7 @@ auto make_run(std::span<const logical_operator_ptr> ops,
       } else {
         // gen lives throughout the iteration
         for (auto&& output : gen()) {
-          // MESSAGE("yield output");
+          VAST_INFO("yield output");
           co_yield std::move(output);
         }
       }
@@ -128,9 +128,8 @@ auto make_run(std::span<const logical_operator_ptr> ops,
       auto gens = std::unordered_map<type, gen_state>{};
       auto f = [&gens, &stop, op, ctrl]<class Batch>(
                  Batch input) mutable -> generator<runtime_batch> {
-        if (batch_traits<Batch>::size(input) == 0) {
-          co_return;
-        }
+        // TODO: check me
+        VAST_ASSERT(batch_traits<Batch>::size(input) != 0);
         // 1. Find the input schema.
         auto input_schema = batch_traits<Batch>::schema(input);
         // 2. Try to find an already existing generator, or create a new one
@@ -150,7 +149,7 @@ auto make_run(std::span<const logical_operator_ptr> ops,
             } else {
               // gen lives throughout the iteration
               for (auto&& output : gen(std::move(buffer))) {
-                // MESSAGE("yield 123");
+                VAST_INFO("yield inner");
                 co_yield std::move(output);
               }
             }
@@ -185,14 +184,19 @@ auto make_run(std::span<const logical_operator_ptr> ops,
           }
           auto output = std::move(*state.current);
           ++state.current;
-          // MESSAGE("yielded in generator");
+          VAST_INFO("yielded in generator");
           co_yield std::move(output);
         }
       };
       for (auto&& input : prev_run) {
+        if (input.size() == 0) {
+          VAST_INFO("inner stalled");
+          co_yield {};
+          continue;
+        }
         for (auto&& output : std::visit(f, std::move(input))) {
           auto const empty = output.size() == 0;
-          // MESSAGE("will yield in outer generator");
+          VAST_INFO("will yield in outer generator");
           co_yield std::move(output);
           if (empty) {
             // MESSAGE("empty break");

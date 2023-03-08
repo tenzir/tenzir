@@ -93,6 +93,7 @@ void attach_stream(exporter_actor::stateful_pointer<exporter_state> self) {
           //                     == state.self_ptr->state.query_status.expected
           //                   && state.self_ptr->state.after_pipeline.empty()
           //                   && state.self_ptr->state.before_pipeline.empty();
+          VAST_INFO("should_end = {}", should_end);
           if (should_end)
             shutdown_stream(state.self_ptr->state.source);
           return should_end;
@@ -296,7 +297,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   VAST_ASSERT(closed_pipeline);
   self->state.pipeline = std::move(*closed_pipeline);
   self->state.pipeline_gen = self->state.pipeline.execute();
+  VAST_INFO("pipeline.begin()");
   self->state.pipeline_current = self->state.pipeline_gen.begin();
+  VAST_INFO("pipeline.begin() done");
   self->state.index = std::move(index);
   if (has_continuous_option(options)) {
     VAST_DEBUG("{} has continuous query option", *self);
