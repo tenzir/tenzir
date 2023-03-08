@@ -27,8 +27,8 @@ data to_data(std::string_view str) {
 } // namespace
 
 TEST(data) {
-  MESSAGE("nil");
-  CHECK_EQUAL(to_data("nil"), caf::none);
+  MESSAGE("null");
+  CHECK_EQUAL(to_data("null"), caf::none);
   MESSAGE("bool");
   CHECK_EQUAL(to_data("true"), data{true});
   CHECK_EQUAL(to_data("false"), data{false});
@@ -51,7 +51,7 @@ TEST(data) {
   CHECK_EQUAL(to_data("10.0.0.1"), unbox(to<ip>("10.0.0.1")));
   MESSAGE("list");
   CHECK_EQUAL(to_data("[]"), list{});
-  CHECK_EQUAL(to_data("[42, 4.2, nil]"), (list{42u, 4.2, caf::none}));
+  CHECK_EQUAL(to_data("[42, 4.2, null]"), (list{42u, 4.2, caf::none}));
   MESSAGE("map");
   CHECK_EQUAL(to_data("{}"), map{});
   CHECK_EQUAL(to_data("{+1->true,+2->false}"),

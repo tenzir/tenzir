@@ -281,7 +281,7 @@ TEST(parseable) {
   CHECK(f == l);
   CHECK(d == *to<ip>("10.0.0.1"));
   MESSAGE("list");
-  str = "[42,4.2,nil]"s;
+  str = "[42,4.2,null]"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));

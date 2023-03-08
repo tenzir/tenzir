@@ -72,7 +72,7 @@ do for a long time. Here's a summary:
    previously supported `#type` meta extractor.
 
 4. We removed the `#field` meta extractor. That is, queries of the form `#field
-   == "some.field.name"` no longer work. Use `some.field.name != nil` to check
+   == "some.field.name"` no longer work. Use `some.field.name != null` to check
    for field existence moving forward.
 
 5. We renamed the boolean literal values `T` and `F` to `true` and `false`,
@@ -403,5 +403,5 @@ package is called `vast` and also available [separately on PyPI][vast-pypi].
 ### Extractor Predicates
 
 Extractors can now be used where predicates are expected to test for the
-existance of a field or type. For example, `x` and `:T` expand to `x != nil`
-and `:T != nil`, respectively.
+existance of a field or type. For example, `x` and `:T` expand to `x != null`
+and `:T != null`, respectively.

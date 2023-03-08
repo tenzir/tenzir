@@ -33,9 +33,9 @@ namespace vast {
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// An index for a ::value that supports appending and looking up values.
-/// @warning A lookup result does *not include* `nil` values, regardless of the
+/// @warning A lookup result does *not include* `null` values, regardless of the
 /// relational operator. Include them requires performing an OR of the result
-/// and an explit query for nil, e.g., `x != 42 || x == nil`.
+/// and an explit query for null, e.g., `x != 42 || x == null`.
 class value_index {
 public:
   using supported_inspectors
@@ -61,7 +61,7 @@ public:
   caf::expected<void> append(data_view x, id pos);
 
   /// Looks up data under a relational operator. If the value to look up is
-  /// `nil`, only `==` and `!=` are valid operations. The concrete index
+  /// `null`, only `==` and `!=` are valid operations. The concrete index
   /// type determines validity of other values.
   /// @param op The relation operator.
   /// @param x The value to lookup.
@@ -114,8 +114,8 @@ private:
 
   [[nodiscard]] virtual caf::error unpack_impl(const fbs::ValueIndex& from) = 0;
 
-  ewah_bitmap mask_;         ///< The position of all values excluding nil.
-  ewah_bitmap none_;         ///< The positions of nil values.
+  ewah_bitmap mask_;         ///< The position of all values excluding null.
+  ewah_bitmap none_;         ///< The positions of null values.
   const vast::type type_;    ///< The type of this index.
   const caf::settings opts_; ///< Runtime context with additional parameters.
 };

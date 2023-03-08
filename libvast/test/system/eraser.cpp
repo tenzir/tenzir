@@ -78,7 +78,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
     [=](atom::apply, pipeline_ptr, std::vector<partition_info>,
         system::keep_original_partition) -> std::vector<partition_info> {
       return std::vector<partition_info>{partition_info{
-        vast::uuid::nil(),
+        vast::uuid::null(),
         0ull,
         vast::time::min(),
         vast::type{},

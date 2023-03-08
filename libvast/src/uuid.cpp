@@ -62,7 +62,7 @@ uuid uuid::random() {
   return random_generator{}();
 }
 
-uuid uuid::nil() {
+uuid uuid::null() {
   uuid u;
   u.id_.fill(std::byte{0});
   return u;

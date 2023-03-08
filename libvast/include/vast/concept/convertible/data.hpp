@@ -491,7 +491,7 @@ public:
   caf::error apply(const record_type::field_view& field, To& dst) {
     auto f = detail::overload{
       [&]<concrete_type Type>(const caf::none_t&, const Type&) -> caf::error {
-        // If the data is nil then we leave the value untouched.
+        // If the data is null then we leave the value untouched.
         return caf::none;
       },
       [&]<class Data, concrete_type Type>(const Data& d,

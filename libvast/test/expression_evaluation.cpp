@@ -80,7 +80,7 @@ TEST(evaluation - field extractor - orig_h + proto) {
 }
 
 TEST(evaluation - field extractor - service + orig_h) {
-  auto str = "service == nil && orig_h == fe80::219:e3ff:fee7:5d23";
+  auto str = "service == null && orig_h == fe80::219:e3ff:fee7:5d23";
   auto expr = make_conn_expr(str);
   auto ids = evaluate(expr, zeek_conn_log_slice, {});
   REQUIRE_EQUAL(rank(ids), 2u);

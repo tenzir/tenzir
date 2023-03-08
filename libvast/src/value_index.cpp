@@ -49,7 +49,7 @@ caf::expected<void> value_index::append(data_view x, id pos) {
 
 caf::expected<ids>
 value_index::lookup(relational_operator op, data_view x) const {
-  // When x is nil, we can answer the query right here.
+  // When x is null, we can answer the query right here.
   if (caf::holds_alternative<caf::none_t>(x)) {
     if (!(op == relational_operator::equal
           || op == relational_operator::not_equal))
@@ -60,22 +60,22 @@ value_index::lookup(relational_operator op, data_view x) const {
       result.append_bits(!is_equal, mask_.size() - result.size());
     return result;
   }
-  // If x is not nil, we dispatch to the concrete implementation.
+  // If x is not null, we dispatch to the concrete implementation.
   auto result = lookup_impl(op, x);
   if (!result)
     return result;
   // The result can only have mass (i.e., 1-bits) where actual IDs exist.
   *result &= mask_;
-  // Because the value index implementations never see nil values, they need
-  // to be handled here. If we have a predicate with a non-nil RHS and `!=` as
-  // operator, then we need to add the nils to the result, because the
-  // expression `nil != RHS` is true when RHS is not nil.
+  // Because the value index implementations never see null values, they need
+  // to be handled here. If we have a predicate with a non-null RHS and `!=` as
+  // operator, then we need to add the null to the result, because the
+  // expression `null != RHS` is true when RHS is not null.
   auto is_negation = op == relational_operator::not_equal;
   if (is_negation)
     *result |= none_;
   // Finally, the concrete result may be too short, e.g., when the last values
-  // have been nils. In this case we need to fill it up. For any operator other
-  // than !=, the result of comparing with nil is undefined.
+  // have been nulls. In this case we need to fill it up. For any operator other
+  // than !=, the result of comparing with null is undefined.
   if (result->size() < offset())
     result->append_bits(is_negation, offset() - result->size());
   return std::move(*result);

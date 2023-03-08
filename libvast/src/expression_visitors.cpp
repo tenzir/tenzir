@@ -253,7 +253,7 @@ std::vector<predicate> predicatizer::operator()(const predicate& pred) const {
 }
 
 caf::expected<void> validator::operator()(caf::none_t) {
-  return caf::make_error(ec::syntax_error, "nil expression is invalid");
+  return caf::make_error(ec::syntax_error, "null expression is invalid");
 }
 
 caf::expected<void> validator::operator()(const conjunction& c) {

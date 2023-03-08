@@ -2,8 +2,8 @@
 <1, 4, 1, 2020-03-02T18:44:47.389392, "parallels-Parallels-Virtual-Platform", "gnome-software", "2156", "", " no mapping for commit">
 <10, 5, 1, 2020-03-02T18:37:57.847427, "parallels-Parallels-Virtual-Platform", "polkitd(authority=local)", "", "", " Unregistered Authentication Agent for unix-process:20115:498098 (system bus name :1.4543, object path /org/freedesktop/PolicyKit1/AuthenticationAgent, locale en_US.UTF-8) (disconnected from bus)">
 <20, 5, 8, 2003-10-11T22:14:15.003000, "mymachineexamplecom", "evntslog", "", "ID47", "BOMAn application event log entry...">
-<20, 5, 8, 2003-10-11T22:14:15.003000, "mymachineexamplecom", "evntslog", "", "ID47", nil>
-<20, 5, 8, nil, "192.0.2.1", "myproc", "8710", "", "%% It's time to make the do-nuts.">
+<20, 5, 8, 2003-10-11T22:14:15.003000, "mymachineexamplecom", "evntslog", "", "ID47", null>
+<20, 5, 8, null, "192.0.2.1", "myproc", "8710", "", "%% It's time to make the do-nuts.">
 <3, 6, 1, 2020-03-02T18:44:46.396974, "parallels-Parallels-Virtual-Platform", "packagekitd", "1370", "", " PARENT process running...">
 <3, 6, 1, 2020-03-02T18:44:50.224835, "parallels-Parallels-Virtual-Platform", "packagekitd", "1370", "", " Parent finished...">
 <3, 7, 1, 2020-03-02T18:44:50.240150, "parallels-Parallels-Virtual-Platform", "PackageKit", "", "", " in /59_ceedcdaa for remove-packages package aisleriot;1:3.22.5-1;amd64;installed:ubuntu-bionic-main was removing for uid 1000">

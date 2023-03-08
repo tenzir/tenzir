@@ -20,7 +20,7 @@ struct none_printer : printer_base<none_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, caf::none_t) const {
-    return printers::str.print(out, "nil");
+    return printers::str.print(out, "null");
   }
 };
 

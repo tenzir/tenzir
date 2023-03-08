@@ -38,7 +38,7 @@ public:
   using size_type = size_t;
 
   static uuid random();
-  static uuid nil();
+  static uuid null();
   static uuid from_flatbuffer(const fbs::UUID&);
 
   /// Constructs an uninitialized UUID.

@@ -226,7 +226,7 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
         // (2) Try to unwrap list into records.
         if (const auto* rt = caf::get_if<record_type>(&t)) {
           // This special case handles the situation where we have a record
-          // inside a list or a map, for which we do not add nil values for
+          // inside a list or a map, for which we do not add null values for
           // missing fields.
           if (caf::holds_alternative<caf::none_t>(x))
             return caf::none;
