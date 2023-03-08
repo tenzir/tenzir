@@ -10,8 +10,6 @@
 </h1>
 <h4 align="center">
 
-VAST is an open-source pipeline and storage engine for security event data.
-
 [![Build Status][ci-badge]][ci-url]
 [![Static Build Status][ci-static-badge]][ci-static-url]
 [![CII Best Practices][cii-best-practices-badge]][cii-best-practices-url]
@@ -39,15 +37,24 @@ VAST is an open-source pipeline and storage engine for security event data.
 
 <!-- Keep in sync with https://vast.io/about -->
 
-VAST is the open-source processing and storage engine for security event data.
+VAST is the open-source pipeline and storage engine for security event data.
 
-<img src="./web/static/img/building-blocks.excalidraw.svg#gh-dark-mode-only" width="75%" alt="VAST">
-<img src="./web/static/img/building-blocks.excalidraw.svg#gh-light-mode-only" width="75%" alt="VAST">
+![Building Blocks](./web/static/img/readme/building-blocks.excalidraw.light.png#gh-light-mode-only)
+![Building Blocks](./web/static/img/readme/building-blocks.excalidraw.dark.png#gh-dark-mode-only)
 
-VAST uses [dataflow pipelines](/docs/understand/language/pipelines) as unified
-abstraction for data acquisition, reshaping, routing, integration with
-third-party tools, and both live and historical query execution powered by a
-builtin indexed storage engine optimized for detection and response workloads.
+VAST offers dataflow **pipelines** for data acquisition, reshaping, routing, and
+integration of security tools. Pipelines transport richly typed data frames to
+enable efficient analytical high-bandwidth streaming workloads. VAST's open
+**storage engine** uses the same dataflow language to deliver a unified
+abstraction for batch and stream processing to drive a wide variety of security
+use cases.
+
+A **VAST node** provides managed pipelines and storage as a continuously running
+service. You can run pipelines across multiple nodes to create a distributed
+security data architecture.
+
+![Building Blocks](./web/static/img/readme/architecture-nodes.excalidraw.light.png#gh-light-mode-only)
+![Building Blocks](./web/static/img/readme/architecture-nodes.excalidraw.dark.png#gh-dark-mode-only)
 
 Consider VAST if you want to:
 
@@ -62,76 +69,21 @@ Consider VAST if you want to:
 - Operationalize threat intelligence for live and retrospective detection
 - Build your own security data lake or federated XDR architecture
 
-## Get VAST
+## Get Started
 
-Use our packages or Docker to get up and running. For Debian, use:
+Our [quickstart guide](https://vast.io/docs/try/quickstart) showcases how you
+can start exploring Zeek and Suricata data with VAST. Start here to get a first
+impression of VAST.
 
-```bash
-curl -L -O https://vast.io/download/vast-linux-static.deb
-dpkg -i vast-linux-static.deb
-```
+To get hands-on with VAST, follow these steps:
 
-For non-Debian Linux, use our static binary:
+1. [Download](https://vast.io/docs/setup/download) VAST
+2. [Start](https://vast.io/docs/setup/deploy) a VAST node
+3. [Run](https://vast.io/docs/setup/use) pipelines to import/export data
 
-```bash
-mkdir -p /opt/vast/ && cd /opt/vast
-curl -L -O https://vast.io/download/vast-linux-static.tar.gz
-tar xzf -C /opt/vast vast-linux-static.tar.gz
-export "PATH:/opt/vast/bin:$PATH"
-bin/vast --help
-```
-
-Or pull our official Docker image and [take it from
-there](https://vast.io/docs/setup/deploy/docker):
-
-```bash
-docker pull tenzir/vast
-```
-
-Once you have local VAST installation, follow the [quick start
-guide](https://vast.io/docs/try) or read a TL;DR below on how to get started.
-
-## Try VAST
-
-VAST consists of two pieces: pipelines and storage.
-
-Once you have a VAST executable, you would typically start a VAST node and
-interact with it like a service. , which is
-basically a container for storage and piplines.
-
-**Start a VAST node**:
-
-```bash
-vast start
-```
-
-**Ingest [Zeek](http://www.zeek.org) logs of various kinds**:
-
-```bash
-zcat *.log.gz | vast import zeek
-```
-
-**Run a query over the last hour, rendered as JSON**:
-
-```bash
-vast export json ':timestamp > 1 hour ago && (6.6.6.6 || :port == 5353)'
-```
-
-**Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
-flow cutoff**:
-
-```bash
-vast import pcap -c 1024 < trace.pcap
-```
-
-**Run a query over PCAP data, sort the packets by time, and feed them into**
-`tcpdump`:
-
-```bash
-vast export pcap "sport > 60000 && src !in 10.0.0.0/8" \
-  | ipsumdump --collate -w - \
-  | tcpdump -r - -nl
-```
+If you have any questions when reading our [docs](https://vast.io/docs), feel
+free to start a [GitHub discussion](https://github.com/tenzir/vast/discussions)
+or swing by our [Discord chat](https://vast.io/discord)—we're here to help!
 
 ## License
 
@@ -156,7 +108,7 @@ citation:
 ```
 
 You can [download the paper][vast-paper] from the [NSDI'16
-proceedings][nsdi-proceedings].
+proceedings website][nsdi-proceedings].
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
