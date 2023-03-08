@@ -480,10 +480,18 @@ partition_actor::behavior_type passive_partition(
         .then(
           [self, rp, start,
            query_context = std::move(query_context)](const ids& hits) mutable {
-            if (!hits.empty() && hits.size() != self->state.events)
-              VAST_WARN("{} received evaluator results with wrong length: "
-                        "expected {}, got {}",
-                        *self, self->state.events, hits.size());
+            if (!hits.empty() && hits.size() != self->state.events) {
+              // FIXME: We run into this for at least the IP index following the
+              // quickstart guide in the documentation, indicating that the IP
+              // index returns an undersized bitmap whose length does not match
+              // the number of events in this partition. This _can_ cause subtle
+              // issues downstream because you need to very carefully handle
+              // this scenario, which is easy to overlook as a developer. We
+              // should fix this issue.
+              VAST_DEBUG("{} received evaluator results with wrong length: "
+                         "expected {}, got {}",
+                         *self, self->state.events, hits.size());
+            }
             VAST_DEBUG("{} received results from the evaluator", *self);
             duration runtime = std::chrono::steady_clock::now() - start;
             auto id_str = fmt::to_string(query_context.id);
