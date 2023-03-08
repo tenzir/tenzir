@@ -147,9 +147,9 @@ We're going to show the data in [JSON format](/docs/understand/formats/json),
 but you could display it in [other formats](/docs/understand/formats) as well.
 
 :::info Pipelines
-As of [VAST v3.0](/blog/vast-v3.0), the VAST language supports ad-hoc
-[pipelines](/docs/understand/language/pipelines) for flexible transformation
-in addition to plain search. A pipeline consists of a chain of
+As of VAST v3.0, the VAST language supports ad-hoc
+[pipelines](/docs/understand/language/pipelines) for flexible transformation in
+addition to plain search. A pipeline consists of a chain of
 [operators](/docs/understand/language/operators) and must begin with *source*
 operator, the producer emitting data, and end with a *sink* operator, the
 consumer receiving data. If a pipeline has source and sink, we call it *closed*.
