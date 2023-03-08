@@ -73,7 +73,7 @@ in {
                 };
                 endpoint = mkOption {
                   type = lib.types.str;
-                  default = "localhost:42000";
+                  default = "localhost:5158";
                   description = "The endpoint at which the VAST node is listening.";
                 };
               };

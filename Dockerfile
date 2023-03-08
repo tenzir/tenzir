@@ -67,7 +67,7 @@ RUN cmake -B build -G Ninja \
 
 RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
 
-EXPOSE 42000/tcp
+EXPOSE 5158/tcp
 
 WORKDIR /var/lib/vast
 VOLUME ["/var/lib/vast"]
@@ -120,7 +120,7 @@ RUN apt-get update && \
 
 USER vast:vast
 
-EXPOSE 42000/tcp
+EXPOSE 5158/tcp
 WORKDIR /var/lib/vast
 VOLUME ["/var/lib/vast"]
 

@@ -99,9 +99,9 @@ Example output:
 
 ```sh
 Test: Zeek conn log
-Waiting for port 42000 to be available
+Waiting for port 5158 to be available
 Starting server
-Waiting for server to listen on port 42000
+Waiting for server to listen on port 5158
 Running step ['import', 'zeek']
 Running step ['export', 'ascii', 'resp_h == 192.168.1.104']
 Shutting down server

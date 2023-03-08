@@ -8,14 +8,14 @@ services:
     image: ${VAST_CONTAINER_REGISTRY:-docker.io}/tenzir/vast:${VAST_CONTAINER_REF:-latest}
     container_name: ${VAST_CONTAINER_NAME:-vast-server}
     environment:
-      - VAST_ENDPOINT=vast:42000
+      - VAST_ENDPOINT=vast:5158
       - VAST_START__COMMANDS=web server
       - VAST_PLUGINS__WEB__MODE=dev
       - VAST_PLUGINS__WEB__BIND=0.0.0.0
       - VAST_PLUGINS__WEB__PORT=42001
     ports:
       - ${VAST_WEB_PORT:-42001}:42001
-      - ${VAST_PORT:-42000}:42000
+      - ${VAST_PORT:-5158}:5158
     command:
       - start
     networks:

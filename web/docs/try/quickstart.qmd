@@ -35,10 +35,10 @@ Begin with starting a VAST node:
 vast start
 ```
 ```
-[14:12:09.207] VAST v2.1.0 is listening on localhost:42000
+[14:12:09.207] VAST v2.1.0 is listening on localhost:5158
 ```
 
-This command creates a listening socket at `localhost:42000` that you can now
+This command creates a listening socket at `localhost:5158` that you can now
 interact with client commands from other terminals.
 
 Test the connection with a new command:

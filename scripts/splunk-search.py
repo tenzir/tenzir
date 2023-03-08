@@ -34,7 +34,7 @@ Example queries:
 -       | vast ":ip==10.0.0.53" -r
 -       | vast "&type == 'zeek::intel'" -sr
 -       | vaststats "'Evil' in :string"
--       | vaststats "&time < now" -e 5000 -n 127.0.0.1:42000
+-       | vaststats "&time < now" -e 5000 -n 127.0.0.1:5158
   
 Note: Splunk "eats" double quotes when parsing input, so the VAST query
 requires replacing double with single quotes and vice versa.

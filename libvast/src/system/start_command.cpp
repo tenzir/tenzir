@@ -78,7 +78,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
       caf::make_error(ec::parse_error, "invalid endpoint", str));
-  // Default to port 42000/tcp if none is set.
+  // Default to port 5158/tcp if none is set.
   if (!node_endpoint.port)
     node_endpoint.port = port{defaults::system::endpoint_port, port_type::tcp};
   // Get a convenient and blocking way to interact with actors.

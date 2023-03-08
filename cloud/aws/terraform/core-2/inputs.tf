@@ -41,7 +41,7 @@ locals {
   # this namespace will be specific to this region
   service_discov_domain = "${local.id}.vast.local"
   vast_server_name      = "vast-server"
-  vast_port             = 42000
+  vast_port             = 5158
   vast_server_hostname  = "${local.vast_server_name}.${local.service_discov_domain}:${local.vast_port}"
 
 }

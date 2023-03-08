@@ -29,7 +29,7 @@ The `start` command spins up a VAST server that blocks until told to
 vast start
 ```
 
-By default, a VAST server listens on localhost and TCP port 42000.
+By default, a VAST server listens on localhost and TCP port 5158.
 
 Usually you would invoke `vast start` only for testing purposes in a terminal.
 In production you would typically use a service manager, e.g., [systemd on

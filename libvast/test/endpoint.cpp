@@ -37,9 +37,9 @@ TEST(parseable - host only) {
 
 TEST(parseable - port only) {
   x.host = "foo";
-  CHECK(parsers::endpoint(":42000", x));
+  CHECK(parsers::endpoint(":5158", x));
   CHECK_EQUAL(x.host, "foo");
-  CHECK_EQUAL(*x.port, 42000);
+  CHECK_EQUAL(*x.port, 5158);
   CHECK(parsers::endpoint(":12345/tcp", x));
   CHECK_EQUAL(x.host, "foo");
   CHECK_EQUAL(*x.port, (vast::port{12345, port_type::tcp}));

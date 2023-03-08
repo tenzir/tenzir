@@ -48,7 +48,7 @@ docker compose up ${build_policy} --detach
 # waiting for the VAST server to be reachable, but it doesn't work when
 # executing this script in GitHub Actions for yet undetermined reasons. We're
 # just using a sleep instead as a workaround for now.
-# while ! lsof -i :42000; do
+# while ! lsof -i :5158; do
 #   sleep 1
 # done
 sleep 3

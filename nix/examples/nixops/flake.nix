@@ -35,7 +35,7 @@
             settings = {
               vast = {
                 # Ensure the service is reachable from the network.
-                endpoint = "0.0.0.0:42000";
+                endpoint = "0.0.0.0:5158";
 
                 # Limit the amount of disk space occupation.
                 start = {

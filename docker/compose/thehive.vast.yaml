@@ -13,4 +13,4 @@ services:
 
   thehive:
     environment:
-      - VAST_ENDPOINT=vast:42000
+      - VAST_ENDPOINT=vast:5158

@@ -55,7 +55,7 @@ docker compose run --no-TTY vast import suricata < path/to/eve.json
 docker compose run --interactive=false vast export json '#type == "suricata.alert"'
 ```
 
-The Docker Compose network by default exposes VAST on port 42000, allowing for
+The Docker Compose network by default exposes VAST on port 5158, allowing for
 users to connect to it from outside, e.g., with a local VAST binary.
 
 ## Override Files
