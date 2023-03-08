@@ -4,7 +4,7 @@ caf:
       excluded-components: []
       verbosity: trace
 vast:
-  endpoint: '127.0.0.1:42000'
+  endpoint: '127.0.0.1:5158'
   plugins: []
   export:
     zeek:

@@ -223,7 +223,7 @@ std::string_view builtin_module = R"__(
   type test.full = record{
     n: list<int>,
     b: bool #default="uniform(0,1)",
-    i: int64 #default="uniform(-42000,1337)",
+    i: int64 #default="uniform(-5158,1337)",
     c: uint64 #default="pareto(0,1)",
     r: double #default="normal(0,1)",
     s: string #default="uniform(0,100)",

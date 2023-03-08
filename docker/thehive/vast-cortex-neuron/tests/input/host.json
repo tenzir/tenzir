@@ -15,7 +15,7 @@
         "jobCache": 10,
         "check_pap": false,
         "max_pap": 2,
-        "endpoint": "localhost:42000",
+        "endpoint": "localhost:5158",
         "jobTimeout": 30,
         "service": "get",
         "proxy_http": null

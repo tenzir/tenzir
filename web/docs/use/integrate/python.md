@@ -65,7 +65,7 @@ Create a connection to a VAST node that is listening at the specified endpoint.
 If no enpdoint is given the `VAST_ENDPOINT` environment variable is used, if
 that is also not present the `vast.endpoint` value from a local `vast.yaml`
 configuration file is used. In case that value is also not present the default
-connection endpoint of `127.0.0.1:42000` is used.
+connection endpoint of `127.0.0.1:5158` is used.
 
 #### export
 

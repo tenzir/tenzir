@@ -113,7 +113,7 @@ To extract packets matching a combination of the connection 4-tuple, you can
 use the `src`, `dst`, `sport`, and `dport` fields. For example:
 
 ```bash
-vast export pcap '6.6.6.6 && dport == 42000' | tcpdump -r - -nl
+vast export pcap '6.6.6.6 && dport == 5158' | tcpdump -r - -nl
 ```
 
 ### Extract packets matching VLAN IDs

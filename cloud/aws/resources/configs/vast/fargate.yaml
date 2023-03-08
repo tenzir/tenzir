@@ -1,5 +1,5 @@
 vast:
-  endpoint: "0.0.0.0:42000"
+  endpoint: "0.0.0.0:5158"
   console-verbosity: verbose
   file-verbosity: quiet
   db-directory: /var/lib/vast

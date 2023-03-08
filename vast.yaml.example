@@ -6,7 +6,7 @@
 vast:
 
   # The host and port to listen at and connect to.
-  endpoint: "localhost:42000"
+  endpoint: "localhost:5158"
 
   # The timeout for connecting to a VAST server. Set to 0 seconds to wait
   # indefinitely.
