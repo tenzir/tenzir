@@ -12,8 +12,8 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
-#include "vast/logger.hpp"
 #include "vast/legacy_pipeline.hpp"
+#include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/system/spawn_arguments.hpp"
 

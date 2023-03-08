@@ -11,8 +11,8 @@
 #include "vast/concept/convertible/to.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
-#include "vast/logger.hpp"
 #include "vast/legacy_pipeline.hpp"
+#include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/si_literals.hpp"
 

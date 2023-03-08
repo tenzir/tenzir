@@ -25,7 +25,8 @@ class plugin final : public virtual language_plugin {
     return "VAST";
   }
 
-  [[nodiscard]] caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
+  [[nodiscard]] caf::expected<
+    std::pair<expression, std::optional<legacy_pipeline>>>
   make_query(std::string_view query) const override {
     static const auto match_everything = expression{predicate{
       meta_extractor{meta_extractor::kind::type},

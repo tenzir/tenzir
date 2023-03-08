@@ -22,9 +22,9 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 

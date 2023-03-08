@@ -12,8 +12,8 @@
 
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
-#include "vast/module.hpp"
 #include "vast/legacy_pipeline.hpp"
+#include "vast/module.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"

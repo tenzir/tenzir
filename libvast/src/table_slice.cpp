@@ -223,7 +223,7 @@ enum table_slice_encoding table_slice::encoding() const noexcept {
 const type& table_slice::schema() const noexcept {
   auto f = detail::overload{
     []() noexcept {
-      static const auto schema = type {};
+      static const auto schema = type{};
       return &schema;
     },
     [&](const auto& encoded) noexcept {

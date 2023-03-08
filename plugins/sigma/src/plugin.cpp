@@ -29,7 +29,8 @@ class plugin final : public virtual language_plugin {
     return "sigma";
   }
 
-  [[nodiscard]] caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
+  [[nodiscard]] caf::expected<
+    std::pair<expression, std::optional<legacy_pipeline>>>
   make_query(std::string_view query) const override {
     if (auto yaml = from_yaml(query)) {
       auto parsed = parse_rule(*yaml);

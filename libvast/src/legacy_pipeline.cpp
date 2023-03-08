@@ -23,8 +23,9 @@
 
 namespace vast {
 
-caf::expected<legacy_pipeline> legacy_pipeline::parse(std::string name, std::string_view repr,
-                                        std::vector<std::string> schema_names) {
+caf::expected<legacy_pipeline>
+legacy_pipeline::parse(std::string name, std::string_view repr,
+                       std::vector<std::string> schema_names) {
   auto result = legacy_pipeline{std::move(name), std::move(schema_names)};
   // plugin name parser
   using parsers::alnum, parsers::chr, parsers::space;
@@ -63,7 +64,8 @@ caf::expected<legacy_pipeline> legacy_pipeline::parse(std::string name, std::str
   return result;
 }
 
-legacy_pipeline::legacy_pipeline(std::string name, std::vector<std::string>&& schema_names)
+legacy_pipeline::legacy_pipeline(std::string name,
+                                 std::vector<std::string>&& schema_names)
   : name_(std::move(name)), schema_names_(std::move(schema_names)) {
 }
 
@@ -144,9 +146,9 @@ caf::error legacy_pipeline::add_slice(table_slice slice) {
   return caf::none;
 }
 
-caf::error
-legacy_pipeline::process_queue(pipeline_operator& op, std::vector<table_slice>& result,
-                        bool check_schema) {
+caf::error legacy_pipeline::process_queue(pipeline_operator& op,
+                                          std::vector<table_slice>& result,
+                                          bool check_schema) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {

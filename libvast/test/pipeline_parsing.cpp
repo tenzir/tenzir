@@ -16,63 +16,72 @@
 TEST(pipeline string parsing - extractor - space after comma) {
   std::string pipeline_str = "select field1, field2, field3";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - extractor - space before comma) {
   std::string pipeline_str = "select field1 ,field2 ,field3";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - extractor - missing comma) {
   std::string pipeline_str = "select field1 ,field2 field3";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
 TEST(pipeline string parsing - extractor - no extractor between commas) {
   std::string pipeline_str = "drop field1,  ,field3";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
 TEST(pipeline string parsing - extractor - no spaces) {
   std::string pipeline_str = "select field1,field2,field3";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - extractor - random spaces) {
   std::string pipeline_str = "select field1     ,field2 ,   field3";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - extractor - single field) {
   std::string pipeline_str = "select   field3   ";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - extractor - comma at end) {
   std::string pipeline_str = "select   field3,";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
 TEST(pipeline string parsing - extractor - pipeline delimiter) {
   std::string pipeline_str = "select field3 | drop field1";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("select", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("select", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -81,7 +90,8 @@ TEST(pipeline string parsing - aggregators - single group
   std::string pipeline_str
     = "summarize min(connections), max(timeouts) by timestamp";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -90,7 +100,8 @@ TEST(pipeline string parsing - aggregators - single group
   std::string pipeline_str
     = "summarize min(connections, timeouts) by timestamp";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -99,7 +110,8 @@ TEST(pipeline string parsing - aggregators - single group
   std::string pipeline_str
     = "summarize min( net.src.ip ), max( net.dest.port ) by timestamp";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -107,7 +119,8 @@ TEST(pipeline string parsing - aggregators - single group - time resolution) {
   std::string pipeline_str = "summarize min(net.src.ip), max(net.dest.port) by "
                              "timestamp resolution 1 hour";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -116,7 +129,8 @@ TEST(pipeline string parsing - aggregators - multiple groups
   std::string pipeline_str = "summarize min(net.src.ip), max(net.dest.port) by "
                              "timestamp, proto, event_type";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -125,7 +139,8 @@ TEST(pipeline string parsing - aggregators - multiple groups
   std::string pipeline_str = "summarize min(net.src.ip), max(net.dest.port) by "
                              ", timestamp, proto, event_type";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -134,7 +149,8 @@ TEST(pipeline string parsing - aggregators - multiple groups
   std::string pipeline_str = "summarize min(net.src.ip), max(net.dest.port) by "
                              "timestamp, event_type resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -142,7 +158,8 @@ TEST(pipeline string parsing - aggregators - multiple groups - missing 'by') {
   std::string pipeline_str = "summarize min(net.src.ip), max(net.dest.port) "
                              "timestamp resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -151,7 +168,8 @@ TEST(pipeline string parsing - aggregators - multiple groups
   std::string pipeline_str = "summarize min(net.src.ip) max(net.dest.port) by "
                              "timestamp resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -161,7 +179,8 @@ TEST(pipeline string parsing - aggregators
     = "summarize min(net.src.ip), max(min(net.dest.port)) by timestamp "
       "resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -169,7 +188,8 @@ TEST(pipeline string parsing - aggregators - missing opening bracket) {
   std::string pipeline_str = "summarize minnet.src.ip), max(net.dest.port) by "
                              "timestamp resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -177,14 +197,16 @@ TEST(pipeline string parsing - aggregators - missing closing bracket) {
   std::string pipeline_str = "summarize min(net.src.ip), max(net.dest.port by "
                              "timestamp resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
 TEST(pipeline string parsing - aggregators - missing aggregator) {
   std::string pipeline_str = "summarize  by timestamp resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -192,7 +214,8 @@ TEST(pipeline string parsing - aggregators - starting with comma) {
   std::string pipeline_str
     = "summarize  , distinct() by timestamp resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -200,7 +223,8 @@ TEST(pipeline string parsing - aggregators - no grouping extractor) {
   std::string pipeline_str
     = "summarize distinct() by timestamp resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -209,7 +233,8 @@ TEST(pipeline string parsing - aggregators
   std::string pipeline_str
     = "summarize distinct by timestamp resolution 5 hours";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -217,7 +242,8 @@ TEST(pipeline string parsing - aggregators - multiple time resolution values) {
   std::string pipeline_str
     = "summarize distinct() by timestamp resolution 5 minutes 10 seconds";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("summarize", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -341,7 +367,8 @@ TEST(pipeline string parsing - options - operator with wrong long form option) {
 TEST(pipeline string parsing - value assignment - simple renaming) {
   std::string pipeline_str = R"(rename secret=xxx)";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("rename", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("rename", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -349,14 +376,16 @@ TEST(pipeline string parsing - value assignment - simple assignments) {
   std::string pipeline_str
     = R"(extend abc_str ="123", abc= 123, abc = ["a","b", "c"])";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("extend", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - value assignment - list assignment) {
   std::string pipeline_str = R"(extend strs = ["a", "b", "c"])";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("extend", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
@@ -364,7 +393,8 @@ TEST(pipeline string parsing - value assignment - no comma) {
   std::string pipeline_str
     = R"(extend abc_str ="123", abc= 123, int = 2 abc = ["a","b", "c"] )";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("replace", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("replace", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -372,7 +402,8 @@ TEST(pipeline string parsing - value assignment - comma at end) {
   std::string pipeline_str
     = R"(rename secret="xxx", my.connection =suricata.flow, int= 2, strs = ["a", "b", "c"], )";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("rename", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("rename", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -381,7 +412,8 @@ TEST(pipeline string parsing - value assignment
   std::string pipeline_str
     = R"(extend abc_str ="123", abc= 123, abc = ["a","b", "c")";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("extend", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -390,7 +422,8 @@ TEST(pipeline string parsing - value assignment
   std::string pipeline_str
     = R"(extend abc_str ="123", abc= 123, abc = "a","b", "c"], int= 2, )";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("extend", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -398,28 +431,33 @@ TEST(pipeline string parsing - value assignment - double assignment) {
   std::string pipeline_str
     = R"(extend abc_str ="123", abc= 123 = 2, abc = ["a","b", "c"])";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("extend", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
 TEST(pipeline string parsing - legacy_pipeline - pass) {
   std::string pipeline_str = "pass";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - legacy_pipeline - pass with extra input) {
   std::string pipeline_str = "pass haha";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
-TEST(pipeline string parsing - legacy_pipeline - string with superfluous delimiter) {
+TEST(pipeline string parsing - legacy_pipeline
+     - string with superfluous delimiter) {
   std::string pipeline_str = "pass | ";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -427,42 +465,50 @@ TEST(pipeline string parsing - legacy_pipeline
      - string with two superfluous delimiters) {
   std::string pipeline_str = "pass | | ";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
 TEST(pipeline string parsing - legacy_pipeline - invalid operator syntax) {
   std::string pipeline_str = "iden,tity";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
 TEST(pipeline string parsing - legacy_pipeline - pass twice - no space) {
   std::string pipeline_str = "pass|pass";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
-TEST(pipeline string parsing - legacy_pipeline - pass twice - space after delimiter) {
+TEST(pipeline string parsing - legacy_pipeline - pass twice
+     - space after delimiter) {
   std::string pipeline_str = "pass| pass";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
-TEST(pipeline string parsing - legacy_pipeline - pass twice - space before delimiter) {
+TEST(pipeline string parsing - legacy_pipeline - pass twice
+     - space before delimiter) {
   std::string pipeline_str = "pass |pass";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }
 
 TEST(pipeline string parsing - pipeline - invalid operator) {
   std::string pipeline_str = "pass | invalid --test=test";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
@@ -470,6 +516,7 @@ TEST(pipeline string parsing - pipeline - pass->select->where) {
   std::string pipeline_str
     = "pass | select ip, timestamp | where ip !=127.0.0.1";
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline = vast::legacy_pipeline::parse("export", pipeline_str_view);
+  auto parsed_pipeline
+    = vast::legacy_pipeline::parse("export", pipeline_str_view);
   REQUIRE(parsed_pipeline);
 }

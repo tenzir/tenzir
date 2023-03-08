@@ -11,9 +11,9 @@
 #include "vast/detail/fanout_counter.hpp"
 #include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/value_index_factory.hpp"
 
