@@ -71,7 +71,7 @@ async function createConfig() {
   /// END CUSTOM CODE ///
   return {
     title: 'VAST',
-    tagline: 'The open-source security pipelines and storage engine.',
+    tagline: 'The open-source pipeline and storage engine for security.',
     url: 'https://vast.io',
     baseUrl: '/',
     onBrokenLinks: 'throw',
