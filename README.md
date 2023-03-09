@@ -10,17 +10,6 @@
 </h1>
 <h4 align="center">
 
-[![Build Status][ci-badge]][ci-url]
-[![Static Build Status][ci-static-badge]][ci-static-url]
-[![CII Best Practices][cii-best-practices-badge]][cii-best-practices-url]
-
-[ci-badge]: https://github.com/tenzir/vast/workflows/VAST/badge.svg?branch=master
-[ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AVAST
-[ci-static-badge]: https://github.com/tenzir/vast/workflows/VAST%20Static/badge.svg?branch=master&event=push
-[ci-static-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST+Static%22
-[cii-best-practices-badge]: https://bestpractices.coreinfrastructure.org/projects/6366/badge
-[cii-best-practices-url]: https://bestpractices.coreinfrastructure.org/projects/6366
-
 [About](https://vast.io/docs/about) &mdash;
 [Try](https://vast.io/docs/try) &mdash;
 [Use](https://vast.io/docs/use) &mdash;
