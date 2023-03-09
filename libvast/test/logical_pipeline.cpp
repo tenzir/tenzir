@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/pipeline.hpp"
+#include "vast/logical_pipeline.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
@@ -143,10 +143,10 @@ struct where final : public logical_operator<events, events> {
 // - co_yield empty if the input yields empty (because we have to stall?)
 
 template <class... Ts>
-auto make_pipeline(Ts&&... ts) -> pipeline {
+auto make_pipeline(Ts&&... ts) -> logical_pipeline {
   auto ops = std::vector<logical_operator_ptr>{};
   (ops.push_back(std::make_unique<Ts>(ts)), ...);
-  return unbox(pipeline::make(std::move(ops)));
+  return unbox(logical_pipeline::make(std::move(ops)));
 }
 
 struct fixture : fixtures::events {};

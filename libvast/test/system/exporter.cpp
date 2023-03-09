@@ -86,8 +86,8 @@ struct fixture : fixture_base {
 
   void spawn_exporter(query_options opts) {
     // TODO: Is the empty pipeline correct here?
-    exporter
-      = self->spawn(system::exporter, expr, opts, vast::pipeline{}, index);
+    exporter = self->spawn(system::exporter, expr, opts,
+                           vast::logical_pipeline{}, index);
   }
 
   void spawn_sink() {

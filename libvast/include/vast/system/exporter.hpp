@@ -12,7 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/logical_pipeline.hpp"
 #include "vast/query_context.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
@@ -96,6 +96,6 @@ struct exporter_state {
 /// @param index The index actor.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, pipeline pipeline, index_actor index);
+         query_options options, logical_pipeline pipeline, index_actor index);
 
 } // namespace vast::system

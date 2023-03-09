@@ -16,19 +16,19 @@ namespace vast {
 
 /// A type-erased, logical representation of a pipeline consisting of a sequence
 /// of logical operators with matching input and output element types.
-class pipeline final : public runtime_logical_operator {
+class logical_pipeline final : public runtime_logical_operator {
 public:
   /// Default-constructs an empty logical pipeline.
-  pipeline() noexcept = default;
+  logical_pipeline() noexcept = default;
 
   /// Parses a logical pipeline from its textual representation.
-  static auto parse(std::string_view repr) -> caf::expected<pipeline>;
+  static auto parse(std::string_view repr) -> caf::expected<logical_pipeline>;
 
   /// Creates a logical pipeline from a set of logical operators. Flattenes
   /// nested pipelines to ensure that none of the operators are themselves a
   /// pipeline.
   static auto make(std::vector<logical_operator_ptr> ops)
-    -> caf::expected<pipeline>;
+    -> caf::expected<logical_pipeline>;
 
   /// Returns the input element type of the logical pipeline's first operator,
   /// or the *void* element type if the logical pipeline is empty.
@@ -68,7 +68,7 @@ public:
     -> generator<caf::expected<void>>;
 
 private:
-  explicit pipeline(std::vector<logical_operator_ptr> ops)
+  explicit logical_pipeline(std::vector<logical_operator_ptr> ops)
     : ops_(std::move(ops)) {
   }
 
@@ -78,9 +78,10 @@ private:
 } // namespace vast
 
 template <>
-struct fmt::formatter<vast::pipeline> : fmt::formatter<std::string_view> {
+struct fmt::formatter<vast::logical_pipeline>
+  : fmt::formatter<std::string_view> {
   template <class FormatContext>
-  auto format(const vast::pipeline& value, FormatContext& ctx) const {
+  auto format(const vast::logical_pipeline& value, FormatContext& ctx) const {
     return fmt::formatter<std::string_view>::format(value.to_string(), ctx);
   }
 };

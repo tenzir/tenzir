@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/pipeline.hpp"
+#include "vast/logical_pipeline.hpp"
 
 #include "vast/concept/parseable/vast/pipeline.hpp"
 #include "vast/element_type.hpp"
@@ -281,7 +281,8 @@ auto make_local_producer(std::span<logical_operator_ptr> ops,
 
 } // namespace
 
-auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
+auto logical_pipeline::parse(std::string_view repr)
+  -> caf::expected<logical_pipeline> {
   auto ops = std::vector<logical_operator_ptr>{};
   // plugin name parser
   using parsers::alnum, parsers::chr, parsers::space, parsers::optional_ws;
@@ -319,8 +320,8 @@ auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
   return make(std::move(ops));
 }
 
-auto pipeline::make(std::vector<logical_operator_ptr> ops)
-  -> caf::expected<pipeline> {
+auto logical_pipeline::make(std::vector<logical_operator_ptr> ops)
+  -> caf::expected<logical_pipeline> {
   const auto invalid = std::find(ops.begin(), ops.end(), nullptr);
   if (invalid != ops.end())
     return caf::make_error(ec::invalid_argument,
@@ -341,7 +342,7 @@ auto pipeline::make(std::vector<logical_operator_ptr> ops)
   auto flattened = std::vector<logical_operator_ptr>{};
   flattened.reserve(ops.size());
   for (auto& op : ops) {
-    if (auto* p = dynamic_cast<pipeline*>(op.get())) {
+    if (auto* p = dynamic_cast<logical_pipeline*>(op.get())) {
       flattened.insert(flattened.end(),
                        std::make_move_iterator(p->ops_.begin()),
                        std::make_move_iterator(p->ops_.end()));
@@ -349,42 +350,44 @@ auto pipeline::make(std::vector<logical_operator_ptr> ops)
       flattened.push_back(std::move(op));
     }
   }
-  return pipeline{std::move(flattened)};
+  return logical_pipeline{std::move(flattened)};
 }
 
-auto pipeline::input_element_type() const noexcept -> runtime_element_type {
+auto logical_pipeline::input_element_type() const noexcept
+  -> runtime_element_type {
   if (ops_.empty())
     return element_type_traits<void>{};
   return ops_.front()->input_element_type();
 }
 
-auto pipeline::output_element_type() const noexcept -> runtime_element_type {
+auto logical_pipeline::output_element_type() const noexcept
+  -> runtime_element_type {
   if (ops_.empty())
     return element_type_traits<void>{};
   return ops_.back()->output_element_type();
 }
 
-auto pipeline::make_runtime_physical_operator(
+auto logical_pipeline::make_runtime_physical_operator(
   [[maybe_unused]] const type& input_schema,
   [[maybe_unused]] operator_control_plane* ctrl) noexcept
   -> caf::expected<runtime_physical_operator> {
   return caf::make_error(ec::logic_error, "instantiated pipeline");
 }
 
-auto pipeline::to_string() const noexcept -> std::string {
+auto logical_pipeline::to_string() const noexcept -> std::string {
   return fmt::to_string(fmt::join(ops_, " | "));
 }
 
-auto pipeline::closed() const noexcept -> bool {
+auto logical_pipeline::closed() const noexcept -> bool {
   return input_element_type().id == element_type_id<void>
          && output_element_type().id == element_type_id<void>;
 }
 
-auto pipeline::unwrap() && -> std::vector<logical_operator_ptr> {
+auto logical_pipeline::unwrap() && -> std::vector<logical_operator_ptr> {
   return std::exchange(ops_, {});
 }
 
-auto pipeline::make_local_executor() && noexcept
+auto logical_pipeline::make_local_executor() && noexcept
   -> generator<caf::expected<void>> {
   auto ops = std::move(*this).unwrap();
   if (ops.empty())

@@ -16,7 +16,7 @@
 #include "vast/expression.hpp"
 #include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/logical_pipeline.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/exporter.hpp"
@@ -59,7 +59,7 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   }};
   auto pipeline_repr
     = args.inv.arguments.empty() ? std::string{"pass"} : args.inv.arguments[0];
-  auto pipeline = pipeline::parse(pipeline_repr);
+  auto pipeline = logical_pipeline::parse(pipeline_repr);
   if (!pipeline)
     return caf::make_error(ec::invalid_argument,
                            fmt::format("failed to parse pipeline '{}': {}",

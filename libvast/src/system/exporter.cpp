@@ -273,7 +273,7 @@ struct ship_results final : logical_operator<events, void> {
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, pipeline pipeline, index_actor index) {
+         query_options options, logical_pipeline pipeline, index_actor index) {
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,
@@ -293,7 +293,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   auto ops = std::move(pipeline).unwrap();
   ops.insert(ops.begin(), std::make_unique<query>(self));
   ops.push_back(std::make_unique<ship_results>(self));
-  auto closed_pipeline = pipeline::make(std::move(ops));
+  auto closed_pipeline = logical_pipeline::make(std::move(ops));
   VAST_ASSERT(closed_pipeline);
   self->state.pipeline_gen = std::move(*closed_pipeline).make_local_executor();
   VAST_INFO("pipeline.begin()");
