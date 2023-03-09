@@ -26,6 +26,11 @@ struct physical_operator_traits<void, Output> {
 
 /// A physical operator for a given input and output element type. The signature
 /// of this function is defined by the *physical_operator_traits*.
+///
+/// TODO: This should probably be a unique function instead to guarantee pointer
+/// stability. We tried using fu2's unique function, but that does not handle
+/// copy construction correctly apparently, and CAF's unique function is not
+/// implicitly constructible from a lambda which makes for a bad API.
 template <element_type Input, element_type Output>
 struct physical_operator : physical_operator_traits<Input, Output>::type {
   using super = typename physical_operator_traits<Input, Output>::type;

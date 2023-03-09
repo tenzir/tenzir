@@ -126,12 +126,12 @@ auto erase_producer(generator<Batch> producer) -> generator<runtime_batch> {
 
 template <class InputBatch>
 auto make_producer_from_queue(std::queue<runtime_batch>& queue, bool& stop,
-                              runtime_physical_operator const& physical_op)
+                              runtime_physical_operator& physical_op)
   -> generator<runtime_batch> {
   auto input_generator = generator_for_queue<InputBatch>(queue, stop);
   auto make_generator
     = [&]<element_type Input, element_type Output>(
-        physical_operator<Input, Output> const& physical_op) noexcept
+        physical_operator<Input, Output>& physical_op) noexcept
     -> generator<runtime_batch> {
     if constexpr (std::is_void_v<Input>) {
       die("input type of operator must not be void here");
