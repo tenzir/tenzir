@@ -12,6 +12,7 @@
 #include "vast/element_type.hpp"
 #include "vast/logical_operator.hpp"
 #include "vast/operator_control_plane.hpp"
+#include "vast/physical_operator.hpp"
 #include "vast/plugin.hpp"
 
 #include <queue>
@@ -64,25 +65,22 @@ private:
 };
 
 template <class Batch>
-auto make_batch_bridge(bool& stop)
-  -> std::pair<std::shared_ptr<std::queue<Batch>>, generator<Batch>> {
-  auto queue = std::make_shared<std::queue<Batch>>();
-  auto gen = [](std::shared_ptr<std::queue<Batch>> queue,
-                bool& stop) -> generator<Batch> {
-    while (!stop) {
-      if (queue->empty()) {
-        // MESSAGE("yield empty");
-        co_yield Batch{};
-        continue;
-      }
-      auto element = std::move(queue->front());
-      VAST_ASSERT(batch_traits<Batch>::size(element) != 0);
-      queue->pop();
-      // MESSAGE("yield element");
-      co_yield std::move(element);
+auto generator_for_queue(std::queue<runtime_batch>& queue, bool& stop)
+  -> generator<Batch> {
+  while (!stop) {
+    if (queue.empty()) {
+      // MESSAGE("yield empty");
+      co_yield Batch{};
+      continue;
     }
-  }(queue, stop);
-  return std::pair{std::move(queue), std::move(gen)};
+    auto batch_ptr = std::get_if<Batch>(&queue.front());
+    VAST_ASSERT(batch_ptr);
+    auto batch = std::move(*batch_ptr);
+    queue.pop();
+    VAST_ASSERT(batch_traits<Batch>::size(batch) != 0);
+    // MESSAGE("yield element");
+    co_yield std::move(batch);
+  }
 }
 
 /// Creates a generator from a source operator.
@@ -100,22 +98,22 @@ auto make_pipeline_source(runtime_logical_operator* op,
     if constexpr (not std::is_void_v<Input>) {
       die("tried to instantiate pipeline that does not begin with void");
     } else {
+      // This coroutine captures keeps the physical operator alive.
       for (auto&& output : gen()) {
         VAST_INFO("yield output");
-        // This converts `Output -> runtime_batch`.
+        // This performs a conversion to `runtime_batch`.
         co_yield std::move(output);
       }
     }
   };
-  return std::visit(std::move(f), std::move(*gen));
+  return std::visit(f, std::move(*gen));
 }
 
 struct instance_state {
   generator<runtime_batch> gen;
   generator<runtime_batch>::iterator it;
-
-  /// This is a type-erased `push` on the input queue.
-  std::function<void(runtime_batch)> push;
+  std::queue<runtime_batch> queue;
+  runtime_physical_operator physical_op;
 };
 
 auto exhaust_on_stall(instance_state& instance) -> generator<runtime_batch> {
@@ -140,6 +138,35 @@ auto exhaust_on_stall(instance_state& instance) -> generator<runtime_batch> {
   }
 };
 
+template <class Batch>
+  requires(!std::same_as<Batch, runtime_batch>)
+auto erase_producer(generator<Batch> producer) -> generator<runtime_batch> {
+  for (auto&& output : producer) {
+    co_yield std::move(output);
+  }
+}
+
+template <class InputBatch>
+auto make_producer_from_queue(std::queue<runtime_batch>& queue, bool& stop,
+                              runtime_physical_operator const& physical_op)
+  -> generator<runtime_batch> {
+  auto input_generator = generator_for_queue<InputBatch>(queue, stop);
+  auto make_generator
+    = [&]<element_type Input, element_type Output>(
+        physical_operator<Input, Output> const& physical_op) noexcept
+    -> generator<runtime_batch> {
+    if constexpr (std::is_void_v<Input>) {
+      die("input type of operator must not be void here");
+    } else if constexpr (!std::is_same_v<element_type_to_batch_t<Input>,
+                                         InputBatch>) {
+      die("input generator did not yield operator input type");
+    } else {
+      return erase_producer(physical_op(std::move(input_generator)));
+    }
+  };
+  return std::visit(make_generator, physical_op);
+} // namespace
+
 /// Appends an operator to an existing generator.
 /// @pre `previous` may only yield batches for `op->input_element_type()`
 /// @pre `op->input_element_type()` must not be `void`
@@ -161,17 +188,18 @@ auto append_operator(generator<runtime_batch> previous,
   // instances. They will notice that their input is exhausted, which means
   // that they will become exhausted themselves eventually.
 
-  auto stop = false;
+  // We can capture references to `instance_state` due to pointer stability.
   auto instances = std::unordered_map<type, instance_state>{};
+  auto stop = false;
 
   /// Dispatches an input batch, creating physical operators on demand.
-  auto dispatch = [&]<class Batch>(Batch input) mutable
+  auto dispatch = [&]<class InputBatch>(InputBatch input)
     -> caf::expected<std::reference_wrapper<instance_state>> {
     // Empty batches should be handled before calling this.
-    VAST_ASSERT(batch_traits<Batch>::size(input) != 0);
+    VAST_ASSERT(batch_traits<InputBatch>::size(input) != 0);
     // For every input batch, we take the following steps:
     // 1. Find the input schema.
-    auto input_schema = batch_traits<Batch>::schema(input);
+    auto input_schema = batch_traits<InputBatch>::schema(input);
     // 2. Try to find an already existing generator, or create a new one
     // if it doesn't exist yet for the given input schema.
     auto lookup = instances.find(input_schema);
@@ -182,38 +210,17 @@ auto append_operator(generator<runtime_batch> previous,
       }
       lookup = instances.emplace_hint(lookup, input_schema, instance_state{});
       auto& instance = lookup->second;
-      auto [buffer_queue, buffer] = make_batch_bridge<Batch>(stop);
-
-      auto make_generator
-        = [buffer = std::move(buffer)]<element_type Input, element_type Output>(
-            physical_operator<Input, Output> physical_op) mutable noexcept
-        -> generator<runtime_batch> {
-        if constexpr (std::is_void_v<Input>) {
-          die("input type of operator must not be void here");
-        } else if constexpr (!std::is_same_v<element_type_to_batch_t<Input>,
-                                             Batch>) {
-          die("input generator did not yield operator input type");
-        } else {
-          // gen lives throughout the iteration
-          for (auto&& output : physical_op(std::move(buffer))) {
-            VAST_INFO("yield inner");
-            co_yield std::move(output);
-          }
-        }
-      };
-      instance.gen
-        = std::visit(std::move(make_generator), std::move(*physical_op));
-      instance.push = [queue = std::move(buffer_queue)](runtime_batch batch) {
-        queue->push(std::get<Batch>(std::move(batch)));
-      };
+      instance.physical_op = std::move(*physical_op);
+      instance.gen = make_producer_from_queue<InputBatch>(instance.queue, stop,
+                                                          instance.physical_op);
       // 3. Push the input element into the buffer.
-      instance.push(std::move(input));
+      instance.queue.push(std::move(input));
       instance.it = instance.gen.begin();
     } else {
       // 3. Push the input element into the buffer.
       auto& instance = lookup->second;
       if (instance.it != instance.gen.end()) {
-        instance.push(std::move(input));
+        instance.queue.push(std::move(input));
       }
     }
     return std::ref(lookup->second);

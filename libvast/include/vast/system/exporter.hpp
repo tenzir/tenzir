@@ -47,7 +47,6 @@ struct exporter_state {
   index_actor index = {};
 
   /// Stores a pipeline_executor for transforming the results.
-  vast::pipeline pipeline;
   generator<caf::expected<void>> pipeline_gen;
   generator<caf::expected<void>>::iterator pipeline_current;
 

@@ -155,7 +155,7 @@ struct fixture : fixtures::events {};
 
 TEST(command) {
   auto put = make_pipeline(command{});
-  for (auto&& x : put.realize()) {
+  for (auto&& x : std::move(put).realize()) {
     REQUIRE_NOERROR(x);
   }
 }
@@ -175,7 +175,7 @@ TEST(source | where #type == "zeek.conn" | sink) {
       MESSAGE("---- sink ----");
       return;
     }});
-  for (auto&& x : put.realize()) {
+  for (auto&& x : std::move(put).realize()) {
     REQUIRE_NOERROR(x);
   }
 }
