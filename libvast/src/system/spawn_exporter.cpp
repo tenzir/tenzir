@@ -16,10 +16,10 @@
 #include "vast/expression.hpp"
 #include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
-#include "vast/logical_pipeline.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/exporter.hpp"
+#include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/parse_query.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -39,31 +39,17 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
                spawn_arguments& args) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
   // Pipelines from configuration.
-  // auto pipelines
-  //   = make_pipelines(pipelines_location::server_export, args.inv.options);
-  // if (!pipelines)
-  //   return pipelines.error();
+  auto pipelines
+    = make_pipelines(pipelines_location::server_export, args.inv.options);
+  if (!pipelines)
+    return pipelines.error();
   // Parse given query.
-  // auto parse_result = system::parse_query(args.inv.arguments);
-  // if (!parse_result)
-  //   return parse_result.error();
-  // auto [expr, pipeline] = std::move(*parse_result);
-  // if (pipeline)
-  //   pipelines->push_back(std::move(*pipeline));
-  if (args.inv.arguments.size() > 1)
-    return caf::make_error(ec::logic_error, "expected at most 1 argument");
-  static const auto expr = expression{predicate{
-    meta_extractor{meta_extractor::kind::type},
-    relational_operator::not_equal,
-    data{"this expression matches everything"},
-  }};
-  auto pipeline_repr
-    = args.inv.arguments.empty() ? std::string{"pass"} : args.inv.arguments[0];
-  auto pipeline = logical_pipeline::parse(pipeline_repr);
-  if (!pipeline)
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("failed to parse pipeline '{}': {}",
-                                       pipeline_repr, pipeline.error()));
+  auto parse_result = system::parse_query(args.inv.arguments);
+  if (!parse_result)
+    return parse_result.error();
+  auto [expr, pipeline] = std::move(*parse_result);
+  if (pipeline)
+    pipelines->push_back(std::move(*pipeline));
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))
@@ -78,7 +64,7 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     query_opts = query_opts + low_priority;
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
-  auto handle = self->spawn(exporter, expr, query_opts, std::move(*pipeline),
+  auto handle = self->spawn(exporter, expr, query_opts, std::move(*pipelines),
                             std::move(index));
   VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
   // Wire the exporter to all components.
