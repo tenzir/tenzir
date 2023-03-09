@@ -25,7 +25,7 @@ namespace {
 struct command final : public logical_operator<void, void> {
   caf::expected<physical_operator<void, void>>
   instantiate(const type& input_schema,
-              operator_control_plane* ctrl) const noexcept override {
+              operator_control_plane*) noexcept override {
     REQUIRE(!input_schema);
     return [=]() -> generator<std::monostate> {
       MESSAGE("hello, world!");
@@ -45,7 +45,7 @@ struct source final : public logical_operator<void, events> {
 
   caf::expected<physical_operator<void, events>>
   instantiate(const type& input_schema,
-              operator_control_plane*) const noexcept override {
+              operator_control_plane*) noexcept override {
     REQUIRE(!input_schema);
     return [*this]() -> generator<table_slice> {
       auto guard = caf::detail::scope_guard{[] {
@@ -73,7 +73,7 @@ struct sink final : public logical_operator<events, void> {
 
   caf::expected<physical_operator<events, void>>
   instantiate(const type& input_schema,
-              operator_control_plane*) const noexcept override {
+              operator_control_plane*) noexcept override {
     return [=](generator<table_slice> input) -> generator<std::monostate> {
       auto guard = caf::detail::scope_guard{[] {
         MESSAGE("sink destroy");
@@ -104,7 +104,7 @@ struct where final : public logical_operator<events, events> {
 
   caf::expected<physical_operator<events, events>>
   instantiate(const type& input_schema,
-              operator_control_plane* ctrl) const noexcept override {
+              operator_control_plane*) noexcept override {
     auto expr = tailor(expr_, input_schema);
     if (!expr) {
       return caf::make_error(ec::invalid_argument,
@@ -155,7 +155,9 @@ struct fixture : fixtures::events {};
 
 TEST(command) {
   auto put = make_pipeline(command{});
-  REQUIRE_NOERROR(put.realize());
+  for (auto&& x : put.realize()) {
+    REQUIRE_NOERROR(x);
+  }
 }
 
 FIXTURE_SCOPE(pipeline_fixture, fixture);
@@ -173,7 +175,9 @@ TEST(source | where #type == "zeek.conn" | sink) {
       MESSAGE("---- sink ----");
       return;
     }});
-  REQUIRE_NOERROR(put.realize());
+  for (auto&& x : put.realize()) {
+    REQUIRE_NOERROR(x);
+  }
 }
 
 FIXTURE_SCOPE_END()

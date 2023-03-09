@@ -117,20 +117,20 @@ auto make_pipeline_source(runtime_logical_operator* op,
 auto append_operator(generator<runtime_batch> previous,
                      runtime_logical_operator* op, operator_control_plane* ctrl)
   -> generator<runtime_batch> {
-  // For every unique schema returned by `previous`, we want to instantiate `op`
-  // once. Thus, we return a generator that, when advanced, advances `previous`
-  // and looks at the schema of the input batch. If we have not seen that schema
-  // yet, we instantiate `op` and a schema-specific queue. The instantiated
-  // operator is provided a generator that tries to pull new elements from the
-  // queue, and the input batch we are dispatching is pushed to this queue.
-  // Because this provides additional input to to the corresponding
-  // instantiation, we iterate over it in order to stream its results if
-  // possible. This does not necessarily already yield results, due to operators
-  // such as `summarize`. Hence, when the input generator is exhausted, we
-  // signal the generators that pull from the queue that they should stop as
-  // well. Finally, we iterate once more over all operator instantiations. They
-  // will notice that their input is exhausted, which means that they will
-  // become exhausted themselves eventually.
+  // For every unique schema retrieved from `previous`, we want to instantiate
+  // `op` once. Thus, we return a generator that, when advanced, advances
+  // `previous` and looks at the schema of the input batch. If we have not seen
+  // that schema yet, we instantiate `op` and a schema-specific queue. The
+  // instantiated operator is provided a generator that tries to pull new
+  // elements from the queue, and the input batch we are dispatching is pushed
+  // to this queue. Because this provides additional input to to the
+  // corresponding instantiation, we iterate over it in order to stream its
+  // results if possible. This does not necessarily already yield results, due
+  // to operators such as `summarize`. Hence, when the input generator is
+  // exhausted, we signal the generators that pull from the queue that they
+  // should stop as well. Finally, we iterate once more over all operator
+  // instantiations. They will notice that their input is exhausted, which means
+  // that they will become exhausted themselves eventually.
 
   struct gen_state {
     generator<runtime_batch> gen;
