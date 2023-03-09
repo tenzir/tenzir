@@ -1557,7 +1557,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto rp = self->make_response_promise<atom::done>();
       auto path = self->state.partition_path(partition_id);
       auto synopsis_path = self->state.partition_synopsis_path(partition_id);
-      if (self->state.persisted_partitions.count(partition_id) == 0u) {
+      if (!self->state.persisted_partitions.contains(partition_id)) {
         std::error_code err{};
         const auto file_exists = std::filesystem::exists(path, err);
         if (!file_exists) {
