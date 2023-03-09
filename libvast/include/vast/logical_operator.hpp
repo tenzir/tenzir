@@ -61,7 +61,7 @@ public:
   /// that they require no more input and will become exhausted eventually. This
   /// is in particular useful for the `head` operator. Returning `false` here is
   /// always sound, but can be a pessimization.
-  [[nodiscard]] virtual auto done() noexcept -> bool {
+  [[nodiscard]] virtual auto done() const noexcept -> bool {
     return false;
   }
 

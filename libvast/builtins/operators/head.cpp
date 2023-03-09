@@ -70,7 +70,7 @@ public:
     };
   }
 
-  [[nodiscard]] auto all_instantiations_are_done() noexcept -> bool override {
+  [[nodiscard]] auto done() const noexcept -> bool override {
     return remaining_ == 0;
   }
 
