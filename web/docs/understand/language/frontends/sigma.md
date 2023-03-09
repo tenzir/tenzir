@@ -23,9 +23,7 @@ system of VAST. The translation process looks as follows:
 
 ## Usage
 
-To use the Sigma frontend, [install the `sigma`
-plugin](../../../setup/configure.md#plugins). Then use the `vast export` command
-to provide a Sigma rule on standard input:
+Use the `vast export` command to provide a Sigma rule on standard input:
 
 ```bash
 vast export <format> < sigma-rule.yaml
