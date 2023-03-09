@@ -17,17 +17,101 @@
 
 namespace vast {
 
-/// Element type tag types.
+/// The element type describes how logical operators in a pipeline can be
+/// connected. Every logical operator has an input and an output element type.
+///
+/// A pipeline is an ordered list of logical operators where the output element
+/// type of an operator always matches the input element type of the next
+/// operator.
+///
+/// Every element type has a corresponding batch type, which is the unit that is
+/// transferred between operators.
+///
+/// The following element types are currently supported:
+/// - *void*:   Denotes the start of end of a pipeline, and cannot be connected
+///             over. Its batch type is *std::monostate*.
+/// - *bytes*:  Denotes a stream of opaque bytes. Its batch type is *chunk_ptr*.
+/// - *events*: Denotes a stream of records. Its batch type is *table_slice*.
+///
+/// To register a new element type *T*, add it to the *element_types* list and
+/// specialize both *element_type_traits<T>* and *batch_traits<U>* for its
+/// corresponding batch type *U*.
 struct bytes;
 struct events;
 
+/// The list of supported element types.
 using element_types = caf::detail::type_list<void, bytes, events>;
 
+/// A concept that matches all registered element types.
 template <class T>
 concept element_type = caf::detail::tl_contains<element_types, T>::value;
 
+template <element_type ElementType>
+struct element_type_traits;
+
+template <>
+struct element_type_traits<void> {
+  static constexpr std::string_view name = "void";
+
+  using batch = std::monostate;
+};
+
+template <>
+struct element_type_traits<bytes> {
+  static constexpr std::string_view name = "bytes";
+  using batch = chunk_ptr;
+};
+
+template <>
+struct element_type_traits<events> {
+  static constexpr std::string_view name = "events";
+  using batch = table_slice;
+};
+
+template <element_type ElementType>
+constexpr int element_type_id
+  = caf::detail::tl_index_of<element_types, ElementType>::value;
+
+/// A type-erased element type.
+struct runtime_element_type {
+  template <element_type ElementType>
+  constexpr explicit(false)
+    runtime_element_type(element_type_traits<ElementType>)
+    : id{element_type_id<ElementType>},
+      name{element_type_traits<ElementType>::name} {
+  }
+
+  /// The unique identifier of the element type, corresponding to
+  /// *element_type_id<T>* for the element type *T*.
+  const int id;
+
+  /// The name of the element type for use in logs.
+  const std::string_view name;
+
+  friend auto
+  operator<=>(runtime_element_type lhs, runtime_element_type rhs) noexcept {
+    return lhs.id <=> rhs.id;
+  }
+
+  friend bool
+  operator==(runtime_element_type lhs, runtime_element_type rhs) noexcept {
+    return lhs.id == rhs.id;
+  }
+};
+
+template <element_type T>
+struct element_type_to_batch {
+  using type = typename element_type_traits<T>::batch;
+};
+
+template <element_type T>
+using element_type_to_batch_t = typename element_type_to_batch<T>::type;
+
 template <class T>
 struct batch_traits;
+
+template <element_type T>
+struct batch_traits<T> : batch_traits<element_type_to_batch_t<T>> {};
 
 template <>
 struct batch_traits<std::monostate> {
@@ -75,61 +159,7 @@ struct batch_traits<table_slice> {
   }
 };
 
-template <element_type ElementType>
-struct element_type_traits;
-
-template <>
-struct element_type_traits<void> {
-  static constexpr std::string_view name = "void";
-
-  using batch = std::monostate;
-};
-
-template <>
-struct element_type_traits<bytes> {
-  static constexpr std::string_view name = "bytes";
-  using batch = chunk_ptr;
-};
-
-template <>
-struct element_type_traits<events> {
-  static constexpr std::string_view name = "events";
-  using batch = table_slice;
-};
-
-template <element_type ElementType>
-constexpr int element_type_id
-  = caf::detail::tl_index_of<element_types, ElementType>::value;
-
-struct runtime_element_type {
-  template <element_type ElementType>
-  explicit(false) runtime_element_type(element_type_traits<ElementType>)
-    : id{element_type_id<ElementType>},
-      name{element_type_traits<ElementType>::name} {
-  }
-
-  int id;
-  std::string_view name;
-
-  friend auto
-  operator<=>(runtime_element_type lhs, runtime_element_type rhs) noexcept {
-    return lhs.id <=> rhs.id;
-  }
-
-  friend bool
-  operator==(runtime_element_type lhs, runtime_element_type rhs) noexcept {
-    return lhs.id == rhs.id;
-  }
-};
-
-template <element_type T>
-struct element_type_to_batch {
-  using type = typename element_type_traits<T>::batch;
-};
-
-template <element_type T>
-using element_type_to_batch_t = typename element_type_to_batch<T>::type;
-
+/// A type-erased batch.
 struct runtime_batch
   : caf::detail::tl_apply_t<
       caf::detail::tl_map_t<element_types, element_type_to_batch>, std::variant> {

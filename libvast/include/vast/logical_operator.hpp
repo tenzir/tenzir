@@ -8,78 +8,49 @@
 
 #pragma once
 
-#include "vast/element_type.hpp"
+#include "vast/physical_operator.hpp"
 #include "vast/operator_control_plane.hpp"
 
 #include <string_view>
 
 namespace vast {
 
-template <element_type Input, element_type Output>
-struct physical_operator_traits {
-  using type
-    = std::function<auto(generator<typename element_type_traits<Input>::batch>)
-                      ->generator<typename element_type_traits<Output>::batch>>;
-};
-
-template <element_type Output>
-struct physical_operator_traits<void, Output> {
-  using type = std::function<
-    auto()->generator<typename element_type_traits<Output>::batch>>;
-};
-
-template <element_type Input, element_type Output>
-struct physical_operator : physical_operator_traits<Input, Output>::type {
-  using super = typename physical_operator_traits<Input, Output>::type;
-  using super::super;
-};
-
-using runtime_physical_operator = caf::detail::tl_apply_t<
-  decltype([]<int... Indices>(std::integer_sequence<int, Indices...>) {
-    return caf::detail::type_list<physical_operator<
-      caf::detail::tl_at_t<
-        element_types, Indices / caf::detail::tl_size<element_types>::value>,
-      caf::detail::tl_at_t<
-        element_types,
-        Indices % caf::detail::tl_size<element_types>::value>>...>{};
-  }(std::make_integer_sequence<
-    int, caf::detail::tl_size<element_types>::value
-           * caf::detail::tl_size<element_types>::value>())),
-  std::variant>;
-
-static_assert(
-  std::is_same_v<
-    runtime_physical_operator,
-    std::variant<
-      physical_operator<void, void>, physical_operator<void, bytes>,
-      physical_operator<void, events>, physical_operator<bytes, void>,
-      physical_operator<bytes, bytes>, physical_operator<bytes, events>,
-      physical_operator<events, void>, physical_operator<events, bytes>,
-      physical_operator<events, events>>>);
-
+/// A type-erased version of a logical operator, and the base class of all
+/// logical operators. Commonly used as *logical_operator_ptr*.
 class runtime_logical_operator {
 public:
+  /// Destroys the logical operator.
   virtual ~runtime_logical_operator() noexcept = default;
 
+  /// Returns the logical operator's input element type.
   [[nodiscard]] virtual auto input_element_type() const noexcept
     -> runtime_element_type
     = 0;
 
+  /// Returns the logical operator's output element type.
   [[nodiscard]] virtual auto output_element_type() const noexcept
     -> runtime_element_type
     = 0;
 
-  /// Optional: Does this operator participate in cooperative scheduling?
+  /// Returns whether this logical operator prefers to be run on its own thread,
+  /// if the executor supports it.
   [[nodiscard]] virtual auto detached() const noexcept -> bool {
     return false;
   }
 
-  /// Optional: Given an input schema, what is this operator's output schema?
-  [[nodiscard]] virtual auto
-  output_schema([[maybe_unused]] const type& input_schema) -> type {
-    return {};
-  }
-
+  /// Creates a physical operator from this logical operator for a given input
+  /// schema.
+  ///
+  /// Involved objects are destroyed in the following order during pipeline
+  /// execution (first to last):
+  /// - The generator coroutines returned from each physical operator.
+  /// - The physical operators (per schema).
+  /// - The logical operator.
+  /// - The operator control plane.
+  ///
+  /// When returning a lambda as a physical operator, capture by value only to
+  /// ensure that captures can be accessed safely after the first resumption of
+  /// the generator coroutine.
   [[nodiscard]] virtual auto
   runtime_instantiate(const type& input_schema,
                       operator_control_plane* ctrl) noexcept
@@ -94,31 +65,36 @@ public:
     return false;
   }
 
+  /// Returns the textual representation of this operator.
   [[nodiscard]] virtual auto to_string() const noexcept -> std::string = 0;
 };
 
+/// A short-hand form for a uniquely owned logical operator.
+using logical_operator_ptr = std::unique_ptr<runtime_logical_operator>;
+
+/// A logical operator with known input and output element types.
 template <element_type Input, element_type Output>
 class logical_operator : public runtime_logical_operator {
-  [[nodiscard]] auto input_element_type() const noexcept
-    -> runtime_element_type final {
-    return element_type_traits<Input>{};
-  }
-
-  [[nodiscard]] auto output_element_type() const noexcept
-    -> runtime_element_type final {
-    return element_type_traits<Output>{};
-  }
-
-  // TODO: check documentation
-  /// Creates a `physical_operator` for a given schema.
-  ///
-  /// The implementation may assume that `*this` and the returned closure
-  /// outlive all generators (?) returned by the closure.
+protected:
+  /// See *runtime_logical_operator::runtime_instantiate(input_schema, ctrl)*.
   [[nodiscard]] virtual auto
   instantiate(const type& input_schema, operator_control_plane* ctrl) noexcept
     -> caf::expected<physical_operator<Input, Output>>
     = 0;
 
+  /// See *runtime_logical_operator::input_element_type()*
+  [[nodiscard]] auto input_element_type() const noexcept
+    -> runtime_element_type final {
+    return element_type_traits<Input>{};
+  }
+
+  /// See *runtime_logical_operator::output_element_type()*
+  [[nodiscard]] auto output_element_type() const noexcept
+    -> runtime_element_type final {
+    return element_type_traits<Output>{};
+  }
+
+  /// See *runtime_logical_operator::runtime_instantiate(input_schema, ctrl)*
   [[nodiscard]] auto runtime_instantiate(const type& input_schema,
                                          operator_control_plane* ctrl) noexcept
     -> caf::expected<runtime_physical_operator> final {
@@ -129,7 +105,6 @@ class logical_operator : public runtime_logical_operator {
   }
 };
 
-using logical_operator_ptr = std::unique_ptr<runtime_logical_operator>;
 } // namespace vast
 
 template <>
