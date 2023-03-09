@@ -216,7 +216,7 @@ struct query final : logical_operator<void, events> {
   explicit query(exporter_actor::stateful_pointer<exporter_state> self)
     : self{self} {
   }
-  auto instantiate(const type&, operator_control_plane*) noexcept
+  auto make_physical_operator(const type&, operator_control_plane*) noexcept
     -> caf::expected<physical_operator<void, events>> override {
     return [=]() -> generator<table_slice> {
       while (not self->state.done || not self->state.before_pipeline.empty()) {
@@ -245,7 +245,7 @@ struct ship_results final : logical_operator<events, void> {
   explicit ship_results(exporter_actor::stateful_pointer<exporter_state> self)
     : self{self} {
   }
-  auto instantiate(const type&, operator_control_plane*) noexcept
+  auto make_physical_operator(const type&, operator_control_plane*) noexcept
     -> caf::expected<physical_operator<events, void>> override {
     return [=](generator<table_slice> input) -> generator<std::monostate> {
       for (auto&& slice : input) {
@@ -295,7 +295,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   ops.push_back(std::make_unique<ship_results>(self));
   auto closed_pipeline = pipeline::make(std::move(ops));
   VAST_ASSERT(closed_pipeline);
-  self->state.pipeline_gen = std::move(*closed_pipeline).realize();
+  self->state.pipeline_gen = std::move(*closed_pipeline).make_local_executor();
   VAST_INFO("pipeline.begin()");
   self->state.pipeline_current = self->state.pipeline_gen.begin();
   VAST_INFO("pipeline.begin() done");

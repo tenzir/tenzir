@@ -102,9 +102,9 @@ struct where_operator2 final : public logical_operator<events, events> {
 #endif // VAST_ENABLE_ASSERTIONS
   }
 
-  caf::expected<physical_operator<events, events>>
-  instantiate(const type& input_schema,
-              [[maybe_unused]] operator_control_plane* ctrl) noexcept override {
+  caf::expected<physical_operator<events, events>> make_physical_operator(
+    const type& input_schema,
+    [[maybe_unused]] operator_control_plane* ctrl) noexcept override {
     auto expr = tailor(expr_, input_schema);
     if (!expr) {
       return caf::make_error(ec::invalid_argument,

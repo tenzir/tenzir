@@ -44,8 +44,8 @@ private:
 class pass_operator2 : public logical_operator<events, events> {
 public:
   [[nodiscard]] auto
-  instantiate([[maybe_unused]] const type& input_schema,
-              [[maybe_unused]] operator_control_plane* ctrl) noexcept
+  make_physical_operator([[maybe_unused]] const type& input_schema,
+                         [[maybe_unused]] operator_control_plane* ctrl) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     return [](generator<table_slice> input) -> generator<table_slice> {
       for (auto&& slice : input) {

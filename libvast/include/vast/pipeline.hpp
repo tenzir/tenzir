@@ -44,13 +44,15 @@ public:
   /// element types are *void*.
   [[nodiscard]] auto closed() const noexcept -> bool;
 
-  /// See *runtime_logical_operator::runtime_instantiate(input_schema, ctrl)*
+  /// See *runtime_logical_operator::make_runtime_physical_operatorinput_schema,
+  /// ctrl)*
   ///
   /// NOTE: A logical pipeline has no single corresponding physical operator.
   /// Calling this function always returns a logic error. To run a pipeline,
   /// create an executor instead, e.g., by calling *make_local_executor()*.
-  [[nodiscard]] auto runtime_instantiate(const type& input_schema,
-                                         operator_control_plane* ctrl) noexcept
+  [[nodiscard]] auto
+  make_runtime_physical_operator(const type& input_schema,
+                                 operator_control_plane* ctrl) noexcept
     -> caf::expected<runtime_physical_operator> override;
 
   /// Returns a textual representation of the logical pipeline.

@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "vast/physical_operator.hpp"
 #include "vast/operator_control_plane.hpp"
+#include "vast/physical_operator.hpp"
 
 #include <string_view>
 
@@ -49,8 +49,8 @@ public:
   /// - The logical operator.
   /// - The operator control plane.
   [[nodiscard]] virtual auto
-  runtime_instantiate(const type& input_schema,
-                      operator_control_plane* ctrl) noexcept
+  make_runtime_physical_operator(const type& input_schema,
+                                 operator_control_plane* ctrl) noexcept
     -> caf::expected<runtime_physical_operator>
     = 0;
 
@@ -73,9 +73,11 @@ using logical_operator_ptr = std::unique_ptr<runtime_logical_operator>;
 template <element_type Input, element_type Output>
 class logical_operator : public runtime_logical_operator {
 protected:
-  /// See *runtime_logical_operator::runtime_instantiate(input_schema, ctrl)*.
+  /// See *runtime_logical_operator::make_runtime_physical_operator(input_schema,
+  /// ctrl)*.
   [[nodiscard]] virtual auto
-  instantiate(const type& input_schema, operator_control_plane* ctrl) noexcept
+  make_physical_operator(const type& input_schema,
+                         operator_control_plane* ctrl) noexcept
     -> caf::expected<physical_operator<Input, Output>>
     = 0;
 
@@ -91,11 +93,13 @@ protected:
     return element_type_traits<Output>{};
   }
 
-  /// See *runtime_logical_operator::runtime_instantiate(input_schema, ctrl)*
-  [[nodiscard]] auto runtime_instantiate(const type& input_schema,
-                                         operator_control_plane* ctrl) noexcept
+  /// See *runtime_logical_operator::make_runtime_physical_operator(input_schema,
+  /// ctrl)*
+  [[nodiscard]] auto
+  make_runtime_physical_operator(const type& input_schema,
+                                 operator_control_plane* ctrl) noexcept
     -> caf::expected<runtime_physical_operator> final {
-    auto op = instantiate(input_schema, ctrl);
+    auto op = make_physical_operator(input_schema, ctrl);
     if (not op)
       return std::move(op.error());
     return runtime_physical_operator{std::move(*op)};
