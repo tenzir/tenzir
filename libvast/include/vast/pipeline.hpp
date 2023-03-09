@@ -57,7 +57,9 @@ public:
     return std::exchange(ops_, {});
   }
 
-  [[nodiscard]] auto execute() noexcept -> generator<caf::expected<void>>;
+  /// @pre The pipeline is closed.
+  /// @pre `*this` outlives the returned generator.
+  [[nodiscard]] auto realize() noexcept -> generator<caf::expected<void>>;
 
 private:
   explicit pipeline(std::vector<logical_operator_ptr> ops)

@@ -155,7 +155,7 @@ struct fixture : fixtures::events {};
 
 TEST(command) {
   auto put = make_pipeline(command{});
-  REQUIRE_NOERROR(put.execute());
+  REQUIRE_NOERROR(put.realize());
 }
 
 FIXTURE_SCOPE(pipeline_fixture, fixture);
@@ -173,7 +173,7 @@ TEST(source | where #type == "zeek.conn" | sink) {
       MESSAGE("---- sink ----");
       return;
     }});
-  REQUIRE_NOERROR(put.execute());
+  REQUIRE_NOERROR(put.realize());
 }
 
 FIXTURE_SCOPE_END()

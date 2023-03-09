@@ -296,7 +296,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   auto closed_pipeline = pipeline::make(std::move(ops));
   VAST_ASSERT(closed_pipeline);
   self->state.pipeline = std::move(*closed_pipeline);
-  self->state.pipeline_gen = self->state.pipeline.execute();
+  self->state.pipeline_gen = self->state.pipeline.realize();
   VAST_INFO("pipeline.begin()");
   self->state.pipeline_current = self->state.pipeline_gen.begin();
   VAST_INFO("pipeline.begin() done");

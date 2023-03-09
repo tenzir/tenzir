@@ -65,12 +65,11 @@ private:
 };
 
 template <class Batch>
-auto make_batch_buffer(std::shared_ptr<bool> stop)
+auto make_batch_bridge(std::shared_ptr<bool> stop)
   -> std::pair<std::shared_ptr<std::queue<Batch>>, generator<Batch>> {
   auto queue = std::make_shared<std::queue<Batch>>();
   auto gen = [](std::shared_ptr<std::queue<Batch>> queue,
                 std::shared_ptr<bool> stop) -> generator<Batch> {
-    // This generator never co_returns...
     while (!*stop) {
       if (queue->empty()) {
         // MESSAGE("yield empty");
@@ -104,6 +103,7 @@ auto make_pipeline_source(runtime_logical_operator* op,
     } else {
       for (auto&& output : gen()) {
         VAST_INFO("yield output");
+        // This converts `Output -> runtime_batch`.
         co_yield std::move(output);
       }
     }
@@ -117,6 +117,21 @@ auto make_pipeline_source(runtime_logical_operator* op,
 auto append_operator(generator<runtime_batch> previous,
                      runtime_logical_operator* op, operator_control_plane* ctrl)
   -> generator<runtime_batch> {
+  // For every unique schema returned by `previous`, we want to instantiate `op`
+  // once. Thus, we return a generator that, when advanced, advances `previous`
+  // and looks at the schema of the input batch. If we have not seen that schema
+  // yet, we instantiate `op` and a schema-specific queue. The instantiated
+  // operator is provided a generator that tries to pull new elements from the
+  // queue, and the input batch we are dispatching is pushed to this queue.
+  // Because this provides additional input to to the corresponding
+  // instantiation, we iterate over it in order to stream its results if
+  // possible. This does not necessarily already yield results, due to operators
+  // such as `summarize`. Hence, when the input generator is exhausted, we
+  // signal the generators that pull from the queue that they should stop as
+  // well. Finally, we iterate once more over all operator instantiations. They
+  // will notice that their input is exhausted, which means that they will
+  // become exhausted themselves eventually.
+
   struct gen_state {
     generator<runtime_batch> gen;
     generator<runtime_batch>::iterator current;
@@ -125,8 +140,9 @@ auto append_operator(generator<runtime_batch> previous,
   // For every input element, we take the following steps:
   auto stop = std::make_shared<bool>(false);
   auto gens = std::unordered_map<type, gen_state>{};
-  auto f = [&gens, &stop, op, ctrl]<class Batch>(
-             Batch input) mutable -> generator<runtime_batch> {
+  auto dispatch_and_get_generator
+    = [&gens, &stop, op,
+       ctrl]<class Batch>(Batch input) mutable -> generator<runtime_batch> {
     // TODO: check me
     VAST_ASSERT(batch_traits<Batch>::size(input) != 0);
     // 1. Find the input schema.
@@ -135,7 +151,6 @@ auto append_operator(generator<runtime_batch> previous,
     // if it doesn't exist yet for the given input schema.
     auto gen_it = gens.find(input_schema);
     if (gen_it == gens.end()) {
-      auto [buffer_queue, buffer] = make_batch_buffer<Batch>(stop);
       auto gen = op->runtime_instantiate(input_schema, ctrl);
       if (not gen) {
         ctrl->abort(std::move(gen.error()));
@@ -143,6 +158,7 @@ auto append_operator(generator<runtime_batch> previous,
       }
       gen_it = gens.emplace_hint(gen_it, input_schema, gen_state{});
       auto& state = gen_it->second;
+      auto [buffer_queue, buffer] = make_batch_bridge<Batch>(stop);
 
       auto f
         = [buffer = std::move(buffer)]<element_type Input, element_type Output>(
@@ -173,13 +189,12 @@ auto append_operator(generator<runtime_batch> previous,
       gen_it->second.push(std::move(input));
     }
     // 4. Pull from the buffer
+
+    // This effectively "returns" the underlying generator.
     auto& state = gen_it->second;
     while (true) {
-      // TODO: never happens
-      if (state.current == state.gen.end()) {
-        // MESSAGE("at end of generator");
-        co_return;
-      }
+      // The inner generators can only end after `stop` is set.
+      VAST_ASSERT(state.current != state.gen.end());
       auto output = std::move(*state.current);
       ++state.current;
       VAST_INFO("yielded in generator");
@@ -192,7 +207,8 @@ auto append_operator(generator<runtime_batch> previous,
       co_yield {};
       continue;
     }
-    for (auto&& output : std::visit(f, std::move(input))) {
+    for (auto&& output :
+         std::visit(dispatch_and_get_generator, std::move(input))) {
       auto const empty = output.size() == 0;
       VAST_INFO("will yield in outer generator");
       co_yield std::move(output);
@@ -296,7 +312,7 @@ auto pipeline::make(std::vector<logical_operator_ptr> ops)
   return pipeline{std::move(flattened)};
 }
 
-auto pipeline::execute() noexcept -> generator<caf::expected<void>> {
+auto pipeline::realize() noexcept -> generator<caf::expected<void>> {
   if (ops_.empty())
     co_return; // no-op
   if (ops_.front()->input_element_type().id != element_type_id<void>) {
