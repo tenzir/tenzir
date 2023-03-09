@@ -79,7 +79,10 @@ do for a long time. Here's a summary:
    respectively. For example the query `suricata.alert.alerted == T` is no
    longer valid; use `suricata.alert.alerted == true` instead.
 
-6. The `map` type no longer exists: Instead of `map<T, U>`, use the equivalent
+6. We renamed the non-value literal value `nil` to `null`. For example the
+   query `x != nil` is no longer valid; use `x != null` instead.
+
+7. The `map` type no longer exists: Instead of `map<T, U>`, use the equivalent
    `list<record{ key: T, value: U }>`.
 
 Our goal is for these changes to make the query language feel more natural to
