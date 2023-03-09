@@ -429,6 +429,38 @@ public:
     = 0;
 };
 
+// -- printer plugin -----------------------------------------------------
+
+/// A printer plugin formats and transfers output data into a stream of chunks.
+/// @relates plugin
+class printer_plugin : public virtual plugin {
+public:
+  // Alias for the byte chunk generation function.
+  using printer
+    = std::function<auto(generator<table_slice>)->generator<chunk_ptr>>;
+
+  // Alias for the byte chunk -> table_slice transformation function.
+  using dumper
+    = std::function<auto(generator<chunk_ptr>)->generator<std::monostate>>;
+
+  // Returns a printer for a specified schema.
+  [[nodiscard]] virtual auto make_printer(const record&, type input_schema,
+                                          const operator_control_plane&) const
+    -> caf::expected<printer>
+    = 0;
+
+  /// Returns the default dumper for this printer.
+  [[nodiscard]] virtual auto
+  make_default_dumper(const record&, type input_schema,
+                      const operator_control_plane&) const
+    -> caf::expected<dumper>
+    = 0;
+
+  /// Returns whether the printer allows for joining output streams into a
+  /// single dumper.
+  [[nodiscard]] virtual auto printer_allows_joining() const -> bool = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
