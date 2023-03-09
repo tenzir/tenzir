@@ -443,7 +443,7 @@ public:
   using dumper
     = std::function<auto(generator<chunk_ptr>)->generator<std::monostate>>;
 
-  // Returns a printer for a specified schema.
+  /// Returns a printer for a specified schema.
   [[nodiscard]] virtual auto make_printer(const record&, type input_schema,
                                           const operator_control_plane&) const
     -> caf::expected<printer>

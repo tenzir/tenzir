@@ -6,17 +6,41 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/arrow_table_slice.hpp>
+#include <vast/concept/printable/vast/json.hpp>
 #include <vast/plugin.hpp>
+
+#include <arrow/record_batch.h>
 
 namespace vast::plugins::json_printer {
 
 class plugin : public virtual printer_plugin {
 public:
   [[nodiscard]] auto
-  make_printer(const record&, [[maybe_unused]] type input_schema,
+  make_printer(const record& options, [[maybe_unused]] type input_schema,
                const operator_control_plane&) const
     -> caf::expected<printer_plugin::printer> override {
-    return [](generator<table_slice>) -> generator<chunk_ptr> {
+    auto input_type = caf::get<record_type>(input_schema);
+    return [input_type, plugin_options = options](
+             generator<table_slice> slices) -> generator<chunk_ptr> {
+      // JSON printer should output NDJSON, see:
+      // https://github.com/ndjson/ndjson-spec
+      auto printer = vast::json_printer{{.oneline = true}};
+      for (const auto& slice : slices) {
+        auto result = std::string{};
+        auto resolved_slice = resolve_enumerations(slice);
+        auto array
+          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto out_iter = std::back_inserter(result);
+        for (const auto& row : values(input_type, *array)) {
+          VAST_ASSERT_CHEAP(row);
+          const auto ok = printer.print(out_iter, *row);
+          VAST_ASSERT_CHEAP(ok);
+          out_iter = fmt::format_to(out_iter, "\n");
+          auto chunk = chunk::make(std::exchange(result, {}));
+          co_yield std::move(chunk);
+        }
+      }
       co_return;
     };
   }
