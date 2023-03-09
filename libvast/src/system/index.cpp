@@ -177,7 +177,7 @@ store_path_for_partition(const std::filesystem::path& base_path,
                          const uuid& id) {
   std::error_code err{};
   for (const char* ext : {"store", "feather", "parquet"}) {
-    auto store_filename = fmt::format("{:u}.{}", id, ext);
+    auto store_filename = fmt::format("{}.{}", id, ext);
     auto candidate = base_path / "archive" / store_filename;
     if (std::filesystem::exists(candidate, err))
       return candidate;
