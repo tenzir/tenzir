@@ -70,12 +70,16 @@ public:
     };
   }
 
+  [[nodiscard]] auto all_instantiations_are_done() noexcept -> bool override {
+    return remaining_ == 0;
+  }
+
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
     return fmt::format("head ({} remaining)", remaining_);
   }
 
 private:
-  mutable uint64_t remaining_;
+  uint64_t remaining_;
 };
 
 class plugin final : public virtual pipeline_operator_plugin,

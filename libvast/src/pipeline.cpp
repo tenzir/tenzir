@@ -140,7 +140,7 @@ auto append_operator(generator<runtime_batch> previous,
   // For every input element, we take the following steps:
   auto stop = std::make_shared<bool>(false);
   auto gens = std::unordered_map<type, gen_state>{};
-  auto dispatch_and_iterate_until_stall
+  auto dispatch_and_exhaust_on_stall
     = [&gens, &stop, op,
        ctrl]<class Batch>(Batch input) mutable -> generator<runtime_batch> {
     // TODO: check me
@@ -217,9 +217,15 @@ auto append_operator(generator<runtime_batch> previous,
     // The generator returned by `dispatch_and_iterate_until_stall` will become
     // exhausted once instantiation stalls, which happens when the queue is empty.
     for (auto&& output :
-         std::visit(dispatch_and_iterate_until_stall, std::move(input))) {
+         std::visit(dispatch_and_exhaust_on_stall, std::move(input))) {
       VAST_INFO("will yield in outer generator");
       co_yield std::move(output);
+    }
+    if (op->all_instantiations_are_done()) {
+      // If all instantations require no more input, then we can abort the
+      // iteration over `previous` and process the instantiations until they
+      // become exhausted.
+      break;
     }
   }
   *stop = true;

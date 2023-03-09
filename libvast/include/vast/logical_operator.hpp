@@ -86,6 +86,13 @@ public:
     -> caf::expected<runtime_physical_operator>
     = 0;
 
+  /// Returns `true` if all instantiations are done in the sense that they
+  /// require no more input and will become exhausted eventually. Returning
+  /// `false` here is always sound, but can be a pessimization.
+  [[nodiscard]] virtual auto all_instantiations_are_done() noexcept -> bool {
+    return false;
+  }
+
   [[nodiscard]] virtual auto to_string() const noexcept -> std::string = 0;
 };
 
