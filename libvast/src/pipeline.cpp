@@ -350,7 +350,43 @@ auto pipeline::make(std::vector<logical_operator_ptr> ops)
   return pipeline{std::move(flattened)};
 }
 
-auto pipeline::realize() && noexcept -> generator<caf::expected<void>> {
+
+auto pipeline::input_element_type() const noexcept
+  -> runtime_element_type {
+  if (ops_.empty())
+    return element_type_traits<void>{};
+  return ops_.front()->input_element_type();
+}
+
+auto pipeline::output_element_type() const noexcept
+  -> runtime_element_type {
+  if (ops_.empty())
+    return element_type_traits<void>{};
+  return ops_.back()->output_element_type();
+}
+
+auto pipeline::runtime_instantiate(
+  [[maybe_unused]] const type& input_schema,
+  [[maybe_unused]] operator_control_plane* ctrl) noexcept
+  -> caf::expected<runtime_physical_operator> {
+  return caf::make_error(ec::logic_error, "instantiated pipeline");
+}
+
+auto pipeline::to_string() const noexcept -> std::string override {
+return fmt::to_string(fmt::join(ops_, " | "));
+}
+
+auto pipeline::closed() const noexcept -> bool {
+  return input_element_type().id == element_type_id<void>
+         && output_element_type().id == element_type_id<void>;
+}
+
+auto pipeline::unwrap() && -> std::vector<logical_operator_ptr> {
+  return std::exchange(ops_, {});
+}
+
+auto pipeline::make_local_executor() && noexcept
+  -> generator<caf::expected<void>> {
   auto ops = std::move(*this).unwrap();
   if (ops.empty())
     co_return; // no-op

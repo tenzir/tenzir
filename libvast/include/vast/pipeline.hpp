@@ -14,48 +14,56 @@
 
 namespace vast {
 
+/// A type-erased, logical representation of a pipeline consisting of a sequence
+/// of logical operators with matching input and output element types.
 class pipeline final : public runtime_logical_operator {
 public:
+  /// Default-constructs an empty logical pipeline.
   pipeline() noexcept = default;
 
+  /// Parses a logical pipeline from its textual representation.
   static auto parse(std::string_view repr) -> caf::expected<pipeline>;
 
-  /// @pre The pipeline defined by `ops` must not be ill-typed.
+  /// Creates a logical pipeline from a set of logical operators. Flattenes
+  /// nested pipelines to ensure that none of the operators are themselves a
+  /// pipeline.
   static auto make(std::vector<logical_operator_ptr> ops)
     -> caf::expected<pipeline>;
 
+  /// Returns the input element type of the logical pipeline's first operator,
+  /// or the *void* element type if the logical pipeline is empty.
   [[nodiscard]] auto input_element_type() const noexcept
-    -> runtime_element_type override {
-    if (ops_.empty())
-      return element_type_traits<void>{};
-    return ops_.front()->input_element_type();
-  }
+    -> runtime_element_type override;
 
+  /// Returns the output element type of the logical pipeline's last operator,
+  /// or the *void* element type if the logical pipeline is empty.
   [[nodiscard]] auto output_element_type() const noexcept
-    -> runtime_element_type override {
-    if (ops_.empty())
-      return element_type_traits<void>{};
-    return ops_.back()->output_element_type();
-  }
+    -> runtime_element_type override;
 
-  [[nodiscard]] auto runtime_instantiate(
-    [[maybe_unused]] const type& input_schema,
-    [[maybe_unused]] operator_control_plane* ctrl) noexcept
-    -> caf::expected<runtime_physical_operator> override {
-    return caf::make_error(ec::logic_error, "instantiated pipeline");
-  }
+  /// Returns whether the pipeline is closed, i.e., both the input and output
+  /// element types are *void*.
+  [[nodiscard]] auto closed() const noexcept -> bool;
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::to_string(fmt::join(ops_, " | "));
-  }
+  /// See *runtime_logical_operator::runtime_instantiate(input_schema, ctrl)*
+  ///
+  /// NOTE: A logical pipeline has no single corresponding physical operator.
+  /// Calling this function always returns a logic error. To run a pipeline,
+  /// create an executor instead, e.g., by calling *make_local_executor()*.
+  [[nodiscard]] auto runtime_instantiate(const type& input_schema,
+                                         operator_control_plane* ctrl) noexcept
+    -> caf::expected<runtime_physical_operator> override;
 
-  [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr> {
-    return std::exchange(ops_, {});
-  }
+  /// Returns a textual representation of the logical pipeline.
+  [[nodiscard]] auto to_string() const noexcept -> std::string override;
 
-  /// @pre The pipeline is closed.
-  /// @pre `*this` outlives the returned generator.
-  [[nodiscard]] auto realize() && noexcept -> generator<caf::expected<void>>;
+  /// Unwraps the logical pipeline, converting it into its logical operators.
+  [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr>;
+
+  /// Creates a local executor from the current logical pipeline that allows for
+  /// running the pipeline in the current thread incrementally.
+  /// @pre closed()
+  [[nodiscard]] auto make_local_executor() && noexcept
+    -> generator<caf::expected<void>>;
 
 private:
   explicit pipeline(std::vector<logical_operator_ptr> ops)
