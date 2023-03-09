@@ -43,14 +43,11 @@ public:
   ///
   /// Involved objects are destroyed in the following order during pipeline
   /// execution (first to last):
-  /// - The generator coroutines returned from each physical operator.
-  /// - The physical operators (per schema).
+  /// - Producers (i.e., the generator coroutines created by passing the
+  ///   previous producer to a physical operator)
+  /// - Physical operators (created per schema from the logical operator).
   /// - The logical operator.
   /// - The operator control plane.
-  ///
-  /// When returning a lambda as a physical operator, capture by value only to
-  /// ensure that captures can be accessed safely after the first resumption of
-  /// the generator coroutine.
   [[nodiscard]] virtual auto
   runtime_instantiate(const type& input_schema,
                       operator_control_plane* ctrl) noexcept

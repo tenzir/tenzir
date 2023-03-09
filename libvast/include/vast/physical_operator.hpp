@@ -26,13 +26,6 @@ struct physical_operator_traits<void, Output> {
 
 /// A physical operator for a given input and output element type. The signature
 /// of this function is defined by the *physical_operator_traits*.
-///
-/// The physical operator is created by any given logical operator from a
-/// pipeline executor. The following invariants apply during pipeline execution:
-/// - The physical operator is instantiated exactly once per input schema.
-/// - The physical operator is kept alive for the lifetime of the logical
-///    operator it was created from.
-/// - The physical operator is called exactly once.
 template <element_type Input, element_type Output>
 struct physical_operator : physical_operator_traits<Input, Output>::type {
   using super = typename physical_operator_traits<Input, Output>::type;
