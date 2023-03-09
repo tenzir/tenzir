@@ -312,7 +312,12 @@ auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
 
 auto pipeline::make(std::vector<logical_operator_ptr> ops)
   -> caf::expected<pipeline> {
-  auto mismatch
+  const auto invalid = std::find(ops.begin(), ops.end(), nullptr);
+  if (invalid != ops.end())
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("invalid operator at index {}",
+                                       std::distance(ops.begin(), invalid)));
+  const auto mismatch
     = std::adjacent_find(ops.begin(), ops.end(), [](auto& a, auto& b) {
         return a->output_element_type() != b->input_element_type()
                && a->output_element_type().id != element_type_id<void>;
