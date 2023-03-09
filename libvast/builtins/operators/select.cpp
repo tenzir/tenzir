@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/logical_operator.hpp"
+
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -80,7 +82,42 @@ private:
   configuration config_ = {};
 };
 
-class plugin final : public virtual pipeline_operator_plugin {
+class select_operator2 : public logical_operator<events, events> {
+public:
+  explicit select_operator2(configuration config) noexcept
+    : config_{std::move(config)} {
+    // nop
+  }
+
+  [[nodiscard]] auto make_physical_operator(const type& input_schema,
+                                            operator_control_plane*) noexcept
+    -> caf::expected<physical_operator<events, events>> override {
+    auto indices = std::vector<offset>{};
+    for (const auto& field : config_.fields)
+      for (auto&& index : caf::get<record_type>(input_schema)
+                            .resolve_key_suffix(field, input_schema.name()))
+        indices.push_back(std::move(index));
+    std::sort(indices.begin(), indices.end());
+
+    return [indices = std::move(indices)](
+             generator<table_slice> input) -> generator<table_slice> {
+      for (auto&& slice : input) {
+        co_yield select_columns(slice, indices);
+      }
+    };
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return fmt::format("select");
+  }
+
+private:
+  /// The underlying configuration of the transformation.
+  configuration config_ = {};
+};
+
+class plugin final : public virtual pipeline_operator_plugin,
+                     public virtual logical_operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -127,6 +164,30 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<select_operator>(std::move(config)),
+    };
+  }
+
+  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor, parsers::extractor_char,
+      parsers::extractor_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> extractor_list >> optional_ws
+                   >> end_of_pipeline_operator;
+    auto config = configuration{};
+    if (!p(f, l, config.fields)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse select "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<select_operator2>(std::move(config)),
     };
   }
 };

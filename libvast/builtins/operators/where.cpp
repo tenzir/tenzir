@@ -90,7 +90,8 @@ private:
 };
 
 // Selects matching rows from the input.
-struct where_operator2 final : public logical_operator<events, events> {
+class where_operator2 final : public logical_operator<events, events> {
+public:
   /// Constructs a *where* pipeline operator.
   /// @pre *expr* must be normalized and validated
   explicit where_operator2(expression expr) : expr_(std::move(expr)) {
@@ -115,7 +116,7 @@ struct where_operator2 final : public logical_operator<events, events> {
     return [expr = std::move(*expr)](
              generator<table_slice> input) mutable -> generator<table_slice> {
       for (auto&& slice : input) {
-        // TODO: adjust filter function return type
+        // TODO: Adjust filter function return type.
         // TODO: Replace this with an Arrow-native filter function as soon as we
         // are able to directly evaluate expressions on a record batch.
         if (auto result = filter(slice, expr)) {
@@ -131,6 +132,7 @@ struct where_operator2 final : public logical_operator<events, events> {
     return fmt::format("where {}", expr_);
   }
 
+private:
   expression expr_;
 };
 

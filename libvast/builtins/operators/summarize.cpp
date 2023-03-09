@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/logical_operator.hpp"
+
 #include <vast/aggregation_function.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
@@ -729,6 +731,54 @@ private:
   std::unordered_map<type, std::vector<table_slice>> blacklist_ = {};
 };
 
+/// The summarize pipeline operator implementation.
+class summarize_operator2 : public logical_operator<events, events> {
+public:
+  /// Creates a pipeline operator from its configuration.
+  /// @param config The parsed configuration of the summarize operator.
+  explicit summarize_operator2(configuration config) noexcept
+    : config_{std::move(config)} {
+    // nop
+  }
+
+  [[nodiscard]] auto
+  make_physical_operator(const type& input_schema,
+                         operator_control_plane* ctrl) noexcept
+    -> caf::expected<physical_operator<events, events>> override {
+    if (auto aggregation = aggregation::make(input_schema, config_)) {
+      return [aggregation = std::move(*aggregation), ctrl](
+               generator<table_slice> input) mutable -> generator<table_slice> {
+        for (auto&& slice : input) {
+          aggregation.add(to_record_batch(slice));
+        }
+        if (auto batch = aggregation.finish()) {
+          co_yield std::move(*batch);
+        } else {
+          ctrl->abort(batch.error());
+          co_return;
+        }
+      };
+    } else {
+      VAST_WARN("summarize operator does not apply to schema {} and leaves "
+                "events unchanged: {}",
+                input_schema, aggregation.error());
+      return [](generator<table_slice> input) -> generator<table_slice> {
+        for (auto&& slice : input) {
+          co_yield std::move(slice);
+        }
+      };
+    }
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return fmt::format("summarize");
+  }
+
+private:
+  /// The underlying configuration of the summary transformation.
+  configuration config_ = {};
+};
+
 caf::expected<std::unique_ptr<pipeline_operator>>
 make_summarize_operator(const record& config) {
   auto parsed_config = configuration::make(config);
@@ -778,7 +828,8 @@ try_handle_deprecations(const record& config,
 }
 
 /// The summarize pipeline operator plugin.
-class plugin final : public virtual pipeline_operator_plugin {
+class plugin final : public virtual pipeline_operator_plugin,
+                     public virtual logical_operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -865,6 +916,59 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<summarize_operator>(std::move(config)),
+    };
+  }
+
+  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::duration, parsers::extractor_list,
+      parsers::aggregation_function_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> aggregation_function_list >> required_ws
+                   >> ("by") >> required_ws >> extractor_list
+                   >> -(required_ws >> "resolution" >> required_ws >> duration)
+                   >> optional_ws >> end_of_pipeline_operator;
+    std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
+                                      std::vector<std::string>>>,
+               std::vector<std::string>, std::optional<vast::duration>>
+      parsed_aggregations{};
+    if (!p(f, l, parsed_aggregations)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "summarize "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto config = configuration{};
+    for (const auto& [output, function_name, arguments] :
+         std::get<0>(parsed_aggregations)) {
+      configuration::aggregation new_aggregation{};
+      if (!plugins::find<aggregation_function_plugin>(function_name)) {
+        return {
+          std::string_view{f, l},
+          caf::make_error(ec::syntax_error, fmt::format("invalid aggregation "
+                                                        "name: '{}'",
+                                                        function_name)),
+        };
+      }
+      new_aggregation.function_name = function_name;
+      new_aggregation.input_extractors = arguments;
+      new_aggregation.output
+        = (output)
+            ? *output
+            : fmt::format("{}({})", function_name, fmt::join(arguments, ","));
+      config.aggregations.push_back(std::move(new_aggregation));
+    }
+    config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
+    config.time_resolution = std::move(std::get<2>(parsed_aggregations));
+
+    return {
+      std::string_view{f, l},
+      std::make_unique<summarize_operator2>(std::move(config)),
     };
   }
 };
