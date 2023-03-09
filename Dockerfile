@@ -26,16 +26,6 @@ COPY vast ./vast
 COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
      vast.yaml.example version.json ./
 
-# Resolve repository-internal symlinks.
-# TODO: We should try to get rid of these long-term, as Docker does not work
-# well with repository-internal symlinks. The the integration test symlinks we
-# can get rid of by copying the integration test directory to the build
-# directory when building VAST.
-RUN for f in contrib/vast-plugins/*/CMakeLists.txt; do \
-      name="$(basename "$(dirname "$f")")"; \
-      ln -sf "../contrib/vast-plugins/$name" "plugins/$name"; \
-    done
-
 # -- development ---------------------------------------------------------------
 
 FROM dependencies AS development
@@ -60,7 +50,7 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-      -D VAST_PLUGINS:STRING="plugins/*" && \
+      -D VAST_PLUGINS:STRING="plugins/web;contrib/vast-plugins/fleet" && \
     cmake --build build --parallel && \
     cmake --install build --strip && \
     rm -rf build
