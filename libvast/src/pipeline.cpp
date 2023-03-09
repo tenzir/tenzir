@@ -65,12 +65,12 @@ private:
 };
 
 template <class Batch>
-auto make_batch_bridge(std::shared_ptr<bool> stop)
+auto make_batch_bridge(bool& stop)
   -> std::pair<std::shared_ptr<std::queue<Batch>>, generator<Batch>> {
   auto queue = std::make_shared<std::queue<Batch>>();
   auto gen = [](std::shared_ptr<std::queue<Batch>> queue,
-                std::shared_ptr<bool> stop) -> generator<Batch> {
-    while (!*stop) {
+                bool& stop) -> generator<Batch> {
+    while (!stop) {
       if (queue->empty()) {
         // MESSAGE("yield empty");
         co_yield Batch{};
@@ -111,6 +111,36 @@ auto make_pipeline_source(runtime_logical_operator* op,
   return std::visit(std::move(f), std::move(*gen));
 }
 
+struct instance_state {
+  generator<runtime_batch> gen;
+  generator<runtime_batch>::iterator it;
+
+  /// This is a type-erased `push` on the input queue.
+  std::function<void(runtime_batch)> push;
+};
+
+auto exhaust_on_stall(instance_state& instance) -> generator<runtime_batch> {
+  // This effectively returns a generator that pulls from the instantiation,
+  // which pulls from the queue. A stall is requested when the queue is empty.
+  // In this case, the generator returned here becomes exhausted, which will
+  // request the next batch from `previous`.
+  while (true) {
+    // The inner generators can only end after `stop` is set, but the operator
+    // instantiation can end before that.
+    if (instance.it == instance.gen.end()) {
+      break;
+    }
+    auto output = std::move(*instance.it);
+    auto empty = output.size() == 0;
+    ++instance.it;
+    VAST_INFO("yielded in generator");
+    co_yield std::move(output);
+    if (empty) {
+      break;
+    }
+  }
+};
+
 /// Appends an operator to an existing generator.
 /// @pre `previous` may only yield batches for `op->input_element_type()`
 /// @pre `op->input_element_type()` must not be `void`
@@ -132,40 +162,32 @@ auto append_operator(generator<runtime_batch> previous,
   // instances. They will notice that their input is exhausted, which means
   // that they will become exhausted themselves eventually.
 
-  struct instance_state {
-    generator<runtime_batch> gen;
-    generator<runtime_batch>::iterator it;
-
-    /// This is a type-erased `push` on the input queue.
-    std::function<void(runtime_batch)> push;
-  };
-  auto stop = std::make_shared<bool>(false);
+  auto stop = false;
   auto instances = std::unordered_map<type, instance_state>{};
 
-  // For every input batch, we take the following steps:
-  auto dispatch_and_exhaust_on_stall
-    = [&instances, &stop, op,
-       ctrl]<class Batch>(Batch input) mutable -> generator<runtime_batch> {
+  /// Dispatches an input batch, creating physical operators on demand.
+  auto dispatch = [&]<class Batch>(Batch input) mutable
+    -> caf::expected<std::reference_wrapper<instance_state>> {
     // Empty batches should be handled before calling this.
     VAST_ASSERT(batch_traits<Batch>::size(input) != 0);
+    // For every input batch, we take the following steps:
     // 1. Find the input schema.
     auto input_schema = batch_traits<Batch>::schema(input);
     // 2. Try to find an already existing generator, or create a new one
     // if it doesn't exist yet for the given input schema.
     auto lookup = instances.find(input_schema);
     if (lookup == instances.end()) {
-      auto gen = op->runtime_instantiate(input_schema, ctrl);
-      if (not gen) {
-        ctrl->abort(std::move(gen.error()));
-        co_return;
+      auto physical_op = op->runtime_instantiate(input_schema, ctrl);
+      if (not physical_op) {
+        return std::move(physical_op.error());
       }
       lookup = instances.emplace_hint(lookup, input_schema, instance_state{});
       auto& instance = lookup->second;
       auto [buffer_queue, buffer] = make_batch_bridge<Batch>(stop);
 
-      auto f
+      auto make_generator
         = [buffer = std::move(buffer)]<element_type Input, element_type Output>(
-            physical_operator<Input, Output> gen) mutable noexcept
+            physical_operator<Input, Output> physical_op) mutable noexcept
         -> generator<runtime_batch> {
         if constexpr (std::is_void_v<Input>) {
           die("input type of operator must not be void here");
@@ -174,13 +196,14 @@ auto append_operator(generator<runtime_batch> previous,
           die("input generator did not yield operator input type");
         } else {
           // gen lives throughout the iteration
-          for (auto&& output : gen(std::move(buffer))) {
+          for (auto&& output : physical_op(std::move(buffer))) {
             VAST_INFO("yield inner");
             co_yield std::move(output);
           }
         }
       };
-      instance.gen = std::visit(std::move(f), std::move(*gen));
+      instance.gen
+        = std::visit(std::move(make_generator), std::move(*physical_op));
       instance.push = [queue = std::move(buffer_queue)](runtime_batch batch) {
         queue->push(std::get<Batch>(std::move(batch)));
       };
@@ -194,54 +217,38 @@ auto append_operator(generator<runtime_batch> previous,
         instance.push(std::move(input));
       }
     }
-    // This effectively returns a generator that pulls from the instantiation,
-    // which pulls from the queue. A stall is requested when the queue is empty.
-    // In this case, the generator returned here becomes exhausted, which will
-    // request the next batch from `previous`.
-    auto& instance = lookup->second;
-    while (true) {
-      // The inner generators can only end after `stop` is set, but the operator
-      // instantiation can end before that.
-      if (instance.it == instance.gen.end()) {
-        break;
-      }
-      auto output = std::move(*instance.it);
-      auto empty = output.size() == 0;
-      ++instance.it;
-      VAST_INFO("yielded in generator");
-      co_yield std::move(output);
-      if (empty) {
-        break;
-      }
-    }
+    return std::ref(lookup->second);
   };
+
   for (auto&& input : previous) {
     if (input.size() == 0) {
       VAST_INFO("inner stalled");
       co_yield {};
       continue;
     }
-    // The generator returned by `dispatch_and_iterate_until_stall` will become
-    // exhausted once instantiation stalls, which happens when the queue is empty.
-    for (auto&& output :
-         std::visit(dispatch_and_exhaust_on_stall, std::move(input))) {
+    auto instance = std::visit(dispatch, std::move(input));
+    if (!instance) {
+      ctrl->abort(std::move(instance.error()));
+    }
+    // Iterate until the queue is empty.
+    for (auto&& output : exhaust_on_stall(*instance)) {
       VAST_INFO("will yield in outer generator");
       co_yield std::move(output);
     }
-    if (op->all_instantiations_are_done()) {
-      // If all instantations require no more input, then we can abort the
-      // iteration over `previous` and process the instantiations until they
+    if (op->done()) {
+      // If all instances require no more input, then we can abort the
+      // iteration over `previous` and process the instances until they
       // become exhausted.
       break;
     }
   }
-  *stop = true;
-  for (auto& gen : instances) {
+  stop = true;
+  for (auto& [_, instance] : instances) {
     // The input to `gen` will now become exhausted when the queue is empty.
     // Thus, the instantiation must also become exhausted eventually. This also
     // implies that we can just ignore empty batches.
-    for (; gen.second.it != gen.second.gen.end(); ++gen.second.it) {
-      auto output = std::move(*gen.second.it);
+    for (; instance.it != instance.gen.end(); ++instance.it) {
+      auto output = std::move(*instance.it);
       if (output.size() != 0) {
         co_yield std::move(output);
       }

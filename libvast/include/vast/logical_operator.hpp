@@ -86,11 +86,11 @@ public:
     -> caf::expected<runtime_physical_operator>
     = 0;
 
-  /// Returns `true` if all instantiations are done in the sense that they
-  /// require no more input and will become exhausted eventually. This is in
-  /// particular useful for the `head` operator. Returning `false` here is
+  /// Returns `true` if all current and future instances are done in the sense
+  /// that they require no more input and will become exhausted eventually. This
+  /// is in particular useful for the `head` operator. Returning `false` here is
   /// always sound, but can be a pessimization.
-  [[nodiscard]] virtual auto all_instantiations_are_done() noexcept -> bool {
+  [[nodiscard]] virtual auto done() noexcept -> bool {
     return false;
   }
 
