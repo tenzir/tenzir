@@ -124,40 +124,43 @@ auto append_operator(generator<runtime_batch> previous,
   // instantiated operator is provided a generator that tries to pull new
   // elements from the queue, and the input batch we are dispatching is pushed
   // to this queue. Because this provides additional input to to the
-  // corresponding instantiation, we iterate over it in order to stream its
+  // corresponding instance, we iterate over it in order to stream its
   // results if possible. This does not necessarily already yield results, due
   // to operators such as `summarize`. Hence, when the input generator is
   // exhausted, we signal the generators that pull from the queue that they
   // should stop as well. Finally, we iterate once more over all operator
-  // instantiations. They will notice that their input is exhausted, which means
+  // instances. They will notice that their input is exhausted, which means
   // that they will become exhausted themselves eventually.
 
-  struct gen_state {
+  struct instance_state {
     generator<runtime_batch> gen;
-    generator<runtime_batch>::iterator current;
+    generator<runtime_batch>::iterator it;
+
+    /// This is a type-erased `push` on the input queue.
     std::function<void(runtime_batch)> push;
   };
-  // For every input element, we take the following steps:
   auto stop = std::make_shared<bool>(false);
-  auto gens = std::unordered_map<type, gen_state>{};
+  auto instances = std::unordered_map<type, instance_state>{};
+
+  // For every input batch, we take the following steps:
   auto dispatch_and_exhaust_on_stall
-    = [&gens, &stop, op,
+    = [&instances, &stop, op,
        ctrl]<class Batch>(Batch input) mutable -> generator<runtime_batch> {
-    // TODO: check me
+    // Empty batches should be handled before calling this.
     VAST_ASSERT(batch_traits<Batch>::size(input) != 0);
     // 1. Find the input schema.
     auto input_schema = batch_traits<Batch>::schema(input);
     // 2. Try to find an already existing generator, or create a new one
     // if it doesn't exist yet for the given input schema.
-    auto gen_it = gens.find(input_schema);
-    if (gen_it == gens.end()) {
+    auto lookup = instances.find(input_schema);
+    if (lookup == instances.end()) {
       auto gen = op->runtime_instantiate(input_schema, ctrl);
       if (not gen) {
         ctrl->abort(std::move(gen.error()));
         co_return;
       }
-      gen_it = gens.emplace_hint(gen_it, input_schema, gen_state{});
-      auto& state = gen_it->second;
+      lookup = instances.emplace_hint(lookup, input_schema, instance_state{});
+      auto& instance = lookup->second;
       auto [buffer_queue, buffer] = make_batch_bridge<Batch>(stop);
 
       auto f
@@ -177,30 +180,34 @@ auto append_operator(generator<runtime_batch> previous,
           }
         }
       };
-      state.gen = std::visit(std::move(f), std::move(*gen));
-      state.push = [queue = std::move(buffer_queue)](runtime_batch batch) {
+      instance.gen = std::visit(std::move(f), std::move(*gen));
+      instance.push = [queue = std::move(buffer_queue)](runtime_batch batch) {
         queue->push(std::get<Batch>(std::move(batch)));
       };
       // 3. Push the input element into the buffer.
-      state.push(std::move(input));
-      state.current = state.gen.begin();
+      instance.push(std::move(input));
+      instance.it = instance.gen.begin();
     } else {
       // 3. Push the input element into the buffer.
-      gen_it->second.push(std::move(input));
+      auto& instance = lookup->second;
+      if (instance.it != instance.gen.end()) {
+        instance.push(std::move(input));
+      }
     }
     // This effectively returns a generator that pulls from the instantiation,
     // which pulls from the queue. A stall is requested when the queue is empty.
     // In this case, the generator returned here becomes exhausted, which will
     // request the next batch from `previous`.
-    auto& state = gen_it->second;
+    auto& instance = lookup->second;
     while (true) {
       // The inner generators can only end after `stop` is set, but the operator
       // instantiation can end before that.
-      if (state.current == state.gen.end()) {
+      if (instance.it == instance.gen.end()) {
+        break;
       }
-      auto output = std::move(*state.current);
+      auto output = std::move(*instance.it);
       auto empty = output.size() == 0;
-      ++state.current;
+      ++instance.it;
       VAST_INFO("yielded in generator");
       co_yield std::move(output);
       if (empty) {
@@ -229,12 +236,12 @@ auto append_operator(generator<runtime_batch> previous,
     }
   }
   *stop = true;
-  for (auto& gen : gens) {
+  for (auto& gen : instances) {
     // The input to `gen` will now become exhausted when the queue is empty.
     // Thus, the instantiation must also become exhausted eventually. This also
     // implies that we can just ignore empty batches.
-    for (; gen.second.current != gen.second.gen.end(); ++gen.second.current) {
-      auto output = std::move(*gen.second.current);
+    for (; gen.second.it != gen.second.gen.end(); ++gen.second.it) {
+      auto output = std::move(*gen.second.it);
       if (output.size() != 0) {
         co_yield std::move(output);
       }

@@ -87,8 +87,9 @@ public:
     = 0;
 
   /// Returns `true` if all instantiations are done in the sense that they
-  /// require no more input and will become exhausted eventually. Returning
-  /// `false` here is always sound, but can be a pessimization.
+  /// require no more input and will become exhausted eventually. This is in
+  /// particular useful for the `head` operator. Returning `false` here is
+  /// always sound, but can be a pessimization.
   [[nodiscard]] virtual auto all_instantiations_are_done() noexcept -> bool {
     return false;
   }
