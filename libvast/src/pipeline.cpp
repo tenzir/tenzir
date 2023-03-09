@@ -140,7 +140,7 @@ auto append_operator(generator<runtime_batch> previous,
   // For every input element, we take the following steps:
   auto stop = std::make_shared<bool>(false);
   auto gens = std::unordered_map<type, gen_state>{};
-  auto dispatch_and_get_generator
+  auto dispatch_and_iterate_until_stall
     = [&gens, &stop, op,
        ctrl]<class Batch>(Batch input) mutable -> generator<runtime_batch> {
     // TODO: check me
@@ -188,13 +188,16 @@ auto append_operator(generator<runtime_batch> previous,
       // 3. Push the input element into the buffer.
       gen_it->second.push(std::move(input));
     }
-    // 4. Pull from the buffer
-
-    // This effectively "returns" the underlying generator.
+    // This effectively returns a generator that pulls from the instantiation,
+    // which pulls from the queue. A stall is requested when the queue is empty.
+    // In this case, the generator returned here becomes exhausted, which will
+    // request the next batch from `previous`.
     auto& state = gen_it->second;
     while (true) {
-      // The inner generators can only end after `stop` is set.
-      VAST_ASSERT(state.current != state.gen.end());
+      // The inner generators can only end after `stop` is set, but the operator
+      // instantiation can end before that.
+      if (state.current == state.gen.end()) {
+      }
       auto output = std::move(*state.current);
       auto empty = output.size() == 0;
       ++state.current;
@@ -211,14 +214,19 @@ auto append_operator(generator<runtime_batch> previous,
       co_yield {};
       continue;
     }
+    // The generator returned by `dispatch_and_iterate_until_stall` will become
+    // exhausted once instantiation stalls, which happens when the queue is empty.
     for (auto&& output :
-         std::visit(dispatch_and_get_generator, std::move(input))) {
+         std::visit(dispatch_and_iterate_until_stall, std::move(input))) {
       VAST_INFO("will yield in outer generator");
       co_yield std::move(output);
     }
   }
   *stop = true;
   for (auto& gen : gens) {
+    // The input to `gen` will now become exhausted when the queue is empty.
+    // Thus, the instantiation must also become exhausted eventually. This also
+    // implies that we can just ignore empty batches.
     for (; gen.second.current != gen.second.gen.end(); ++gen.second.current) {
       auto output = std::move(*gen.second.current);
       if (output.size() != 0) {
