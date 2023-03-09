@@ -89,7 +89,7 @@ auto make_batch_buffer(std::shared_ptr<bool> stop)
 
 /// Creates a generator from a source operator.
 /// @pre `op->input_element_type()` must be `void`
-auto make_pipeline_source(const runtime_logical_operator* op,
+auto make_pipeline_source(runtime_logical_operator* op,
                           operator_control_plane* ctrl)
   -> generator<runtime_batch> {
   auto gen = op->runtime_instantiate({}, ctrl);
@@ -115,8 +115,8 @@ auto make_pipeline_source(const runtime_logical_operator* op,
 /// @pre `previous` may only yield batches for `op->input_element_type()`
 /// @pre `op->input_element_type()` must not be `void`
 auto append_operator(generator<runtime_batch> previous,
-                     const runtime_logical_operator* op,
-                     operator_control_plane* ctrl) -> generator<runtime_batch> {
+                     runtime_logical_operator* op, operator_control_plane* ctrl)
+  -> generator<runtime_batch> {
   struct gen_state {
     generator<runtime_batch> gen;
     generator<runtime_batch>::iterator current;
@@ -217,8 +217,8 @@ auto append_operator(generator<runtime_batch> previous,
 /// @pre `!ops.empty()`
 /// @pre `ops[0]->input_element_type()` must be `void`
 /// @pre The pipeline defined by `ops` must not be ill-typed.
-auto make_run(std::span<const logical_operator_ptr> ops,
-              operator_control_plane* ctrl) -> generator<runtime_batch> {
+auto make_run(std::span<logical_operator_ptr> ops, operator_control_plane* ctrl)
+  -> generator<runtime_batch> {
   auto it = ops.begin();
   VAST_ASSERT(it != ops.end());
   auto run = make_pipeline_source((it++)->get(), ctrl);
@@ -296,7 +296,7 @@ auto pipeline::make(std::vector<logical_operator_ptr> ops)
   return pipeline{std::move(flattened)};
 }
 
-auto pipeline::execute() const noexcept -> generator<caf::expected<void>> {
+auto pipeline::execute() noexcept -> generator<caf::expected<void>> {
   if (ops_.empty())
     co_return; // no-op
   if (ops_.front()->input_element_type().id != element_type_id<void>) {

@@ -82,7 +82,7 @@ public:
 
   [[nodiscard]] virtual auto
   runtime_instantiate(const type& input_schema,
-                      operator_control_plane* ctrl) const noexcept
+                      operator_control_plane* ctrl) noexcept
     -> caf::expected<runtime_physical_operator>
     = 0;
 
@@ -107,14 +107,12 @@ class logical_operator : public runtime_logical_operator {
   /// The implementation may assume that `*this` and the returned closure
   /// outlive all generators (?) returned by the closure.
   [[nodiscard]] virtual auto
-  instantiate(const type& input_schema,
-              operator_control_plane* ctrl) const noexcept
+  instantiate(const type& input_schema, operator_control_plane* ctrl) noexcept
     -> caf::expected<physical_operator<Input, Output>>
     = 0;
 
-  [[nodiscard]] auto
-  runtime_instantiate(const type& input_schema,
-                      operator_control_plane* ctrl) const noexcept
+  [[nodiscard]] auto runtime_instantiate(const type& input_schema,
+                                         operator_control_plane* ctrl) noexcept
     -> caf::expected<runtime_physical_operator> final {
     auto op = instantiate(input_schema, ctrl);
     if (not op)

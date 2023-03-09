@@ -56,7 +56,7 @@ public:
 
   [[nodiscard]] auto
   instantiate([[maybe_unused]] const type& input_schema,
-              [[maybe_unused]] operator_control_plane* ctrl) const noexcept
+              [[maybe_unused]] operator_control_plane* ctrl) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     return [this](generator<table_slice> input) -> generator<table_slice> {
       for (auto&& slice : input) {

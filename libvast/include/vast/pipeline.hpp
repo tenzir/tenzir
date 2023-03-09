@@ -39,7 +39,7 @@ public:
 
   [[nodiscard]] auto runtime_instantiate(
     [[maybe_unused]] const type& input_schema,
-    [[maybe_unused]] operator_control_plane* ctrl) const noexcept
+    [[maybe_unused]] operator_control_plane* ctrl) noexcept
     -> caf::expected<runtime_physical_operator> override {
     return caf::make_error(ec::logic_error, "instantiated pipeline");
   }
@@ -57,7 +57,7 @@ public:
     return std::exchange(ops_, {});
   }
 
-  [[nodiscard]] auto execute() const noexcept -> generator<caf::expected<void>>;
+  [[nodiscard]] auto execute() noexcept -> generator<caf::expected<void>>;
 
 private:
   explicit pipeline(std::vector<logical_operator_ptr> ops)

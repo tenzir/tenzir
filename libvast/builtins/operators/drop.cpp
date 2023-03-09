@@ -110,7 +110,7 @@ public:
 
   [[nodiscard]] auto
   instantiate(const type& input_schema,
-              [[maybe_unused]] operator_control_plane* ctrl) const noexcept
+              [[maybe_unused]] operator_control_plane* ctrl) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
