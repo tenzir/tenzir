@@ -13,6 +13,7 @@
 #include <caf/error.hpp>
 
 namespace vast {
+
 class pipeline final : public runtime_logical_operator {
 public:
   pipeline() noexcept = default;
@@ -48,18 +49,13 @@ public:
     return fmt::to_string(fmt::join(ops_, " | "));
   }
 
-  [[nodiscard]] auto operators() const
-    -> std::span<const logical_operator_ptr> {
-    return ops_;
-  }
-
   [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr> {
     return std::exchange(ops_, {});
   }
 
   /// @pre The pipeline is closed.
   /// @pre `*this` outlives the returned generator.
-  [[nodiscard]] auto realize() noexcept -> generator<caf::expected<void>>;
+  [[nodiscard]] auto realize() && noexcept -> generator<caf::expected<void>>;
 
 private:
   explicit pipeline(std::vector<logical_operator_ptr> ops)
@@ -68,6 +64,7 @@ private:
 
   std::vector<logical_operator_ptr> ops_ = {};
 };
+
 } // namespace vast
 
 template <>

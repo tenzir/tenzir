@@ -23,8 +23,7 @@ namespace {
 
 class execute_ctrl final : public operator_control_plane {
 public:
-  explicit execute_ctrl() {
-  }
+  explicit execute_ctrl() noexcept = default;
 
   [[nodiscard]] auto error() const noexcept -> const caf::error& {
     return error_;
@@ -302,9 +301,9 @@ auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
     auto [remaining_repr, op]
       = plugin->make_logical_operator(std::string_view{f, l});
     if (!op)
-      return caf::make_error(ec::unspecified, fmt::format("failed to parse "
-                                                          "pipeline '{}': {}",
-                                                          repr, op.error()));
+      return caf::make_error(ec::unspecified,
+                             fmt::format("failed to parse pipeline '{}': {}",
+                                         repr, op.error()));
     ops.push_back(std::move(*op));
     repr = remaining_repr;
   }
@@ -339,29 +338,30 @@ auto pipeline::make(std::vector<logical_operator_ptr> ops)
   return pipeline{std::move(flattened)};
 }
 
-auto pipeline::realize() noexcept -> generator<caf::expected<void>> {
-  if (ops_.empty())
+auto pipeline::realize() && noexcept -> generator<caf::expected<void>> {
+  auto ops = std::move(*this).unwrap();
+  if (ops.empty())
     co_return; // no-op
-  if (ops_.front()->input_element_type().id != element_type_id<void>) {
+  if (ops.front()->input_element_type().id != element_type_id<void>) {
     co_yield caf::make_error(
       ec::invalid_argument,
       fmt::format("unable to execute pipeline: expected "
                   "input type {}, got {}",
                   element_type_traits<void>::name,
-                  ops_.front()->input_element_type().name));
+                  ops.front()->input_element_type().name));
     co_return;
   }
-  if (ops_.back()->output_element_type().id != element_type_id<void>) {
+  if (ops.back()->output_element_type().id != element_type_id<void>) {
     co_yield caf::make_error(
       ec::invalid_argument,
       fmt::format("unable to execute pipeline: expected "
                   "output type {}, got {}",
                   element_type_traits<void>::name,
-                  ops_.back()->output_element_type().name));
+                  ops.back()->output_element_type().name));
     co_return;
   }
   auto ctrl = execute_ctrl{};
-  for (auto&& elem : make_run(ops_, &ctrl)) {
+  for (auto&& elem : make_run(ops, &ctrl)) {
     if (ctrl.error()) {
       VAST_INFO("got error: {}", ctrl.error());
       co_yield ctrl.error();
