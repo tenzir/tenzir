@@ -49,7 +49,7 @@ public:
     -> caf::expected<physical_operator<events, events>> override {
     return [](generator<table_slice> input) -> generator<table_slice> {
       for (auto&& slice : input) {
-        co_yield slice;
+        co_yield std::move(slice);
       }
     };
   }
