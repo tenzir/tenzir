@@ -196,9 +196,13 @@ auto append_operator(generator<runtime_batch> previous,
       // The inner generators can only end after `stop` is set.
       VAST_ASSERT(state.current != state.gen.end());
       auto output = std::move(*state.current);
+      auto empty = output.size() == 0;
       ++state.current;
       VAST_INFO("yielded in generator");
       co_yield std::move(output);
+      if (empty) {
+        break;
+      }
     }
   };
   for (auto&& input : previous) {
@@ -209,13 +213,8 @@ auto append_operator(generator<runtime_batch> previous,
     }
     for (auto&& output :
          std::visit(dispatch_and_get_generator, std::move(input))) {
-      auto const empty = output.size() == 0;
       VAST_INFO("will yield in outer generator");
       co_yield std::move(output);
-      if (empty) {
-        // MESSAGE("empty break");
-        break;
-      }
     }
   }
   *stop = true;
