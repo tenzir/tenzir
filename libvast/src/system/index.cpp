@@ -1643,8 +1643,9 @@ index(index_actor::stateful_pointer<index_state> self,
                 self->state.filesystem, caf::infinite, atom::mmap_v, path)
               .then(
                 [=](const chunk_ptr& chunk) mutable {
-                  VAST_DEBUG("{} erased partition {} from filesystem", *self,
-                             partition_id);
+                  VAST_DEBUG("{} mmapped partition {} to extract store path "
+                             "for erasure",
+                             *self, partition_id);
                   if (!chunk) {
                     erase_dense_index_file();
                     rp.deliver(caf::make_error( //
@@ -1679,9 +1680,8 @@ index(index_actor::stateful_pointer<index_state> self,
                   rp.delegate(partition_actor, atom::erase_v);
                 },
                 [=](caf::error& err) mutable {
-                  VAST_WARN("{} failed to erase partition {} from "
-                            "filesystem: "
-                            "{}",
+                  VAST_WARN("{} failed to load partition {} for erase fallback "
+                            "path: {}",
                             *self, partition_id, err);
                   erase_dense_index_file();
                   rp.deliver(std::move(err));
