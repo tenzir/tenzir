@@ -52,6 +52,13 @@
     name: vast
     state: restarted
 
+- name: Start if not running
+  # In case the service was stopped before it would still be at this point, but
+  # we want it to run in any case.
+  ansible.builtin.systemd:
+    name: vast
+    state: started
+
 - name: Propagate variables to the calling context
   ansible.builtin.set_fact:
     vast_package_status: "{{ package }}"
