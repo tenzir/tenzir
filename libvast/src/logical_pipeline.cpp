@@ -165,7 +165,7 @@ auto exhaust_on_stall(instance_state& instance) -> generator<runtime_batch> {
       break;
     }
   }
-};
+}
 
 /// Appends an operator to an existing generator.
 /// @pre `previous` may only yield batches for `op->input_element_type()`
