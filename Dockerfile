@@ -41,7 +41,6 @@ ENV PREFIX="/opt/tenzir/vast" \
 ARG VAST_BUILD_OPTIONS
 
 RUN cmake -B build -G Ninja \
-      ${VAST_BUILD_OPTIONS} \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
@@ -52,7 +51,8 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-      -D VAST_PLUGINS:STRING="plugins/*" && \
+      -D VAST_PLUGINS:STRING="plugins/*" \
+      ${VAST_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
     cmake --install build --strip && \
     rm -rf build
