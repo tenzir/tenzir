@@ -10,6 +10,7 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
@@ -40,7 +41,7 @@ struct basic_table_slice_generator {
   type schema;
 };
 
-struct fixture {
+struct fixture : fixtures::events {
   struct mock_control_plane : operator_control_plane {
     [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor& {
       FAIL("no mock implementation available");
@@ -263,13 +264,11 @@ TEST(json printer - uint64 type) {
     = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
   auto strs = std::vector<std::string>{
     R"({"foo": 0}
-)",
-    R"({"foo": 1}
-)",
-    R"({"foo": 2}
+{"foo": 1}
+{"foo": 2}
 )"};
   auto chunks = collect(current_printer(slice_generator()));
-  REQUIRE_EQUAL(chunks.size(), size_t{3});
+  REQUIRE_EQUAL(chunks.size(), size_t{1});
   for (auto i = size_t{0}; i < chunks.size(); ++i) {
     auto str_chunk = chunk::copy(strs[i]);
     auto chunk = chunks[i];
@@ -325,6 +324,70 @@ TEST(json printer - list of structs) {
 )"};
   auto chunks = collect(current_printer(slice_generator()));
   REQUIRE_EQUAL(chunks.size(), size_t{2});
+  for (auto i = size_t{0}; i < chunks.size(); ++i) {
+    auto str_chunk = chunk::copy(strs[i]);
+    auto chunk = chunks[i];
+    REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
+                       str_chunk->end()));
+  }
+}
+
+TEST(json printer - suricata netflow) {
+  auto slice_type = type{"rec", suricata_netflow_log.front().schema()};
+  auto builder = std::make_shared<table_slice_builder>(slice_type);
+  auto slice_generator = []() -> generator<table_slice> {
+    co_yield suricata_netflow_log.front();
+    co_return;
+  };
+  auto current_printer
+    = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
+  auto str = std::string{
+    R"({"timestamp": "2011-08-14T05:38:55.549713", "flow_id": 929669869939483, "pcap_cnt": null, "vlan": null, "in_iface": null, "src_ip": "147.32.84.165", "src_port": 138, "dest_ip": "147.32.84.255", "dest_port": 138, "proto": "UDP", "event_type": "netflow", "community_id": null, "netflow": {"pkts": 2, "bytes": 486, "start": "2011-08-12T12:53:47.928539", "end": "2011-08-12T12:53:47.928552", "age": 0}, "app_proto": "failed"}
+)"};
+  auto chunks = collect(current_printer(slice_generator()));
+  REQUIRE_EQUAL(chunks.size(), size_t{1});
+  auto str_chunk = chunk::copy(str);
+  REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
+                     str_chunk->begin(), str_chunk->end()));
+}
+
+TEST(json printer - zeek conn log) {
+  auto slice_type = type{"rec", zeek_conn_log.front().schema()};
+  auto builder = std::make_shared<table_slice_builder>(slice_type);
+  auto slice_generator = []() -> generator<table_slice> {
+    for (const auto& slice : zeek_conn_log) {
+      co_yield slice;
+    }
+    co_return;
+  };
+  auto current_printer
+    = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
+  auto strs = std::vector<std::string>{
+    R"({"ts": "2009-11-18T08:00:21.486539", "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": "163.82ms", "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []}
+{"ts": "2009-11-18T08:08:00.237253", "uid": "nkCxlvNN8pi", "id.orig_h": "192.168.1.103", "id.orig_p": 137, "id.resp_h": "192.168.1.255", "id.resp_p": 137, "proto": "udp", "service": "dns", "duration": "3.78s", "orig_bytes": 350, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 7, "orig_ip_bytes": 546, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:08:13.816224", "uid": "9VdICMMnxQ7", "id.orig_h": "192.168.1.102", "id.orig_p": 137, "id.resp_h": "192.168.1.255", "id.resp_p": 137, "proto": "udp", "service": "dns", "duration": "3.75s", "orig_bytes": 350, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 7, "orig_ip_bytes": 546, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:07:15.800932", "uid": "bEgBnkI31Vf", "id.orig_h": "192.168.1.103", "id.orig_p": 138, "id.resp_h": "192.168.1.255", "id.resp_p": 138, "proto": "udp", "service": null, "duration": "46.73s", "orig_bytes": 560, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 3, "orig_ip_bytes": 644, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:08:13.825211", "uid": "Ol4qkvXOksc", "id.orig_h": "192.168.1.102", "id.orig_p": 138, "id.resp_h": "192.168.1.255", "id.resp_p": 138, "proto": "udp", "service": null, "duration": "2.25s", "orig_bytes": 348, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 2, "orig_ip_bytes": 404, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:10:03.872834", "uid": "kmnBNBtl96d", "id.orig_h": "192.168.1.104", "id.orig_p": 137, "id.resp_h": "192.168.1.255", "id.resp_p": 137, "proto": "udp", "service": "dns", "duration": "3.75s", "orig_bytes": 350, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 7, "orig_ip_bytes": 546, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:09:07.077011", "uid": "CFIX6YVTFp2", "id.orig_h": "192.168.1.104", "id.orig_p": 138, "id.resp_h": "192.168.1.255", "id.resp_p": 138, "proto": "udp", "service": null, "duration": "59.05s", "orig_bytes": 549, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 3, "orig_ip_bytes": 633, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:12:04.321413", "uid": "KlF6tbPUSQ1", "id.orig_h": "192.168.1.103", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": "44.78ms", "orig_bytes": 303, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 331, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []}
+)",
+    R"({"ts": "2009-11-18T08:12:19.613070", "uid": "tP3DM6npTdj", "id.orig_h": "192.168.1.102", "id.orig_p": 138, "id.resp_h": "192.168.1.255", "id.resp_p": 138, "proto": "udp", "service": null, "duration": null, "orig_bytes": null, "resp_bytes": null, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 1, "orig_ip_bytes": 229, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:14:06.693816", "uid": "Jb4jIDToo77", "id.orig_h": "192.168.1.104", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": "2.1ms", "orig_bytes": 311, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 339, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []}
+{"ts": "2009-11-18T08:15:43.457078", "uid": "xvWLhxgUmj5", "id.orig_h": "192.168.1.102", "id.orig_p": 1170, "id.resp_h": "192.168.1.1", "id.resp_p": 53, "proto": "udp", "service": "dns", "duration": "68.51ms", "orig_bytes": 36, "resp_bytes": 215, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 64, "resp_pkts": 1, "resp_ip_bytes": 243, "tunnel_parents": []}
+{"ts": "2009-11-18T08:16:43.657267", "uid": "feNcvrZfDbf", "id.orig_h": "192.168.1.104", "id.orig_p": 1174, "id.resp_h": "192.168.1.1", "id.resp_p": 53, "proto": "udp", "service": "dns", "duration": "170.96ms", "orig_bytes": 36, "resp_bytes": 215, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 64, "resp_pkts": 1, "resp_ip_bytes": 243, "tunnel_parents": []}
+{"ts": "2009-11-18T08:18:51.365294", "uid": "aLsTcZJHAwa", "id.orig_h": "192.168.1.1", "id.orig_p": 5353, "id.resp_h": "224.0.0.251", "id.resp_p": 5353, "proto": "udp", "service": "dns", "duration": "100.38ms", "orig_bytes": 273, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 2, "orig_ip_bytes": 329, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:18:51.365329", "uid": "EK79I6iD5gl", "id.orig_h": "fe80::219:e3ff:fee7:5d23", "id.orig_p": 5353, "id.resp_h": "ff02::fb", "id.resp_p": 5353, "proto": "udp", "service": "dns", "duration": "100.37ms", "orig_bytes": 273, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 2, "orig_ip_bytes": 369, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:20:04.734263", "uid": "vLsf6ZHtak9", "id.orig_h": "192.168.1.103", "id.orig_p": 137, "id.resp_h": "192.168.1.255", "id.resp_p": 137, "proto": "udp", "service": "dns", "duration": "3.87s", "orig_bytes": 350, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 7, "orig_ip_bytes": 546, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:20:18.272516", "uid": "Su3RwTCaHL3", "id.orig_h": "192.168.1.102", "id.orig_p": 137, "id.resp_h": "192.168.1.255", "id.resp_p": 137, "proto": "udp", "service": "dns", "duration": "3.75s", "orig_bytes": 350, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 7, "orig_ip_bytes": 546, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+)",
+    R"({"ts": "2009-11-18T08:20:04.859430", "uid": "rPM1dfJKPmj", "id.orig_h": "192.168.1.103", "id.orig_p": 138, "id.resp_h": "192.168.1.255", "id.resp_p": 138, "proto": "udp", "service": null, "duration": "2.26s", "orig_bytes": 348, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 2, "orig_ip_bytes": 404, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:20:56.089023", "uid": "4x5ezf34Rkh", "id.orig_h": "192.168.1.102", "id.orig_p": 1173, "id.resp_h": "192.168.1.1", "id.resp_p": 53, "proto": "udp", "service": "dns", "duration": "267.0us", "orig_bytes": 33, "resp_bytes": 497, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 61, "resp_pkts": 1, "resp_ip_bytes": 525, "tunnel_parents": []}
+{"ts": "2009-11-18T08:20:18.281001", "uid": "mymcd8Veike", "id.orig_h": "192.168.1.102", "id.orig_p": 138, "id.resp_h": "192.168.1.255", "id.resp_p": 138, "proto": "udp", "service": null, "duration": "2.25s", "orig_bytes": 348, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 2, "orig_ip_bytes": 404, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+{"ts": "2009-11-18T08:22:05.592454", "uid": "07mJRfg5RU5", "id.orig_h": "192.168.1.1", "id.orig_p": 5353, "id.resp_h": "224.0.0.251", "id.resp_p": 5353, "proto": "udp", "service": "dns", "duration": "99.82ms", "orig_bytes": 273, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 2, "orig_ip_bytes": 329, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
+)"};
+  auto chunks = collect(current_printer(slice_generator()));
+  REQUIRE_EQUAL(chunks.size(), size_t{3});
   for (auto i = size_t{0}; i < chunks.size(); ++i) {
     auto str_chunk = chunk::copy(strs[i]);
     auto chunk = chunks[i];
