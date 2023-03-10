@@ -157,7 +157,7 @@ auto exhaust_on_stall(instance_state& instance) -> generator<runtime_batch> {
       break;
     }
     auto output = std::move(*instance.it);
-    auto empty = output.size() == 0;
+    auto empty = size(output) == 0;
     ++instance.it;
     VAST_INFO("yielded in generator");
     co_yield std::move(output);
@@ -228,7 +228,7 @@ auto append_logical_operator(generator<runtime_batch> previous,
   };
 
   for (auto&& input : previous) {
-    if (input.size() == 0) {
+    if (size(input) == 0) {
       VAST_INFO("inner stalled");
       co_yield {};
       continue;
@@ -256,7 +256,7 @@ auto append_logical_operator(generator<runtime_batch> previous,
     // implies that we can just ignore empty batches.
     for (; instance.it != instance.gen.end(); ++instance.it) {
       auto output = std::move(*instance.it);
-      if (output.size() != 0) {
+      if (size(output) != 0) {
         co_yield std::move(output);
       }
     }

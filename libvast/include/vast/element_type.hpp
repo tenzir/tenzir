@@ -160,34 +160,31 @@ struct batch_traits<table_slice> {
 };
 
 /// A type-erased batch.
-struct runtime_batch
-  : caf::detail::tl_apply_t<
-      caf::detail::tl_map_t<element_types, element_type_to_batch>, std::variant> {
-  using variant::variant;
+using runtime_batch = caf::detail::tl_apply_t<
+  caf::detail::tl_map_t<element_types, element_type_to_batch>, std::variant>;
 
-  [[nodiscard]] auto size() const noexcept -> size_t {
-    return std::visit(
-      []<class Batch>(const Batch& batch) noexcept {
-        return batch_traits<Batch>::size(batch);
-      },
-      *this);
-  }
+[[nodiscard]] inline auto size(const runtime_batch& batch) noexcept -> size_t {
+  return std::visit(
+    []<class Batch>(const Batch& batch) noexcept {
+      return batch_traits<Batch>::size(batch);
+    },
+    batch);
+}
 
-  [[nodiscard]] auto bytes() const noexcept -> size_t {
-    return std::visit(
-      []<class Batch>(const Batch& batch) noexcept {
-        return batch_traits<Batch>::bytes(batch);
-      },
-      *this);
-  }
+[[nodiscard]] inline auto bytes(const runtime_batch& batch) noexcept -> size_t {
+  return std::visit(
+    []<class Batch>(const Batch& batch) noexcept {
+      return batch_traits<Batch>::bytes(batch);
+    },
+    batch);
+}
 
-  [[nodiscard]] auto schema() const noexcept -> type {
-    return std::visit(
-      []<class Batch>(const Batch& batch) noexcept {
-        return batch_traits<Batch>::schema(batch);
-      },
-      *this);
-  }
-};
+[[nodiscard]] inline auto schema(const runtime_batch& batch) noexcept -> type {
+  return std::visit(
+    []<class Batch>(const Batch& batch) noexcept {
+      return batch_traits<Batch>::schema(batch);
+    },
+    batch);
+}
 
 } // namespace vast
