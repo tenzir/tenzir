@@ -74,7 +74,8 @@ struct sink final : public logical_operator<events, void> {
   caf::expected<physical_operator<events, void>>
   make_physical_operator(const type& input_schema,
                          operator_control_plane*) noexcept override {
-    return [=](generator<table_slice> input) -> generator<std::monostate> {
+    return [this, input_schema](
+             generator<table_slice> input) -> generator<std::monostate> {
       auto guard = caf::detail::scope_guard{[] {
         MESSAGE("sink destroy");
       }};
@@ -160,7 +161,7 @@ TEST(command) {
   }
 }
 
-FIXTURE_SCOPE(pipeline_fixture, fixture);
+FIXTURE_SCOPE(pipeline_fixture, fixture)
 
 TEST(source | where #type == "zeek.conn" | sink) {
   auto put = make_pipeline(
