@@ -1425,7 +1425,7 @@ index(index_actor::stateful_pointer<index_state> self,
         return rp;
       }
       // Allows the client to query further results after initial taste.
-      if (query_context.id != uuid::nil())
+      if (query_context.id != uuid::null())
         return caf::make_error(ec::logic_error, "query must not have an ID "
                                                 "when arriving at the index");
       query_context.id = self->state.pending_queries.create_query_id();

@@ -77,7 +77,7 @@ TEST(maps - empty value) {
 TEST(maps - null value) {
   auto yaml = "foo: null";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == nil");
+  auto expected = to_expr("foo == null");
   CHECK_EQUAL(search_id, expected);
 }
 

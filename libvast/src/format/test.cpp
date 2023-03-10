@@ -87,8 +87,8 @@ caf::expected<blueprint> make_blueprint(const type& t) {
           // probably need to make bp.distributions a list of optional
           // distributions so we can add a nullopt in this case, and then handle
           // that case when visiting the distributions by printing a warning and
-          // just adding nil. As-is, we just skip the field, which may result in
-          // errors for schemas that such fields anywhere but at the end.
+          // just adding null. As-is, we just skip the field, which may result
+          // in errors for schemas that such fields anywhere but at the end.
           if (!dist.error())
             continue;
           return dist.error();

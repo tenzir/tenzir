@@ -232,7 +232,7 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
       // - Given a field x, if x is present as a a field inside our JSON object,
       //   we just add all its fields and extract recursively.
       // - If the extraction fails for any nested field at any nesting level, we
-      //   must add nil to the builder because it expects a value to be added
+      //   must add null to the builder because it expects a value to be added
       //   for all leaves in the record type.
       // - If a field x is not present, but it contains a nested field x.y that
       //   is present in the JSON object in a flattened representation, we add
@@ -250,8 +250,8 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
           auto x = value.at_key(key);
           if (x.error() != ::simdjson::error_code::SUCCESS) {
             // (1) The field does not directly exist in the record. We try to
-            // find flattened representations, or add nil values as required for
-            // the given field's type.
+            // find flattened representations, or add null values as required
+            // for the given field's type.
             auto recurse = [&]<concrete_type T>(const T& type) -> data {
               if constexpr (std::is_same_v<T, record_type>) {
                 return self(self, type, next_prefix);

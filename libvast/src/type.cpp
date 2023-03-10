@@ -1463,7 +1463,7 @@ bool is_subset(const type& x, const type& y) noexcept {
 bool type_check(const type& x, const data& y) noexcept {
   auto f = detail::overload{
     [&](const auto&, const caf::none_t&) {
-      // Every type can be assigned nil.
+      // Every type can be assigned null.
       return true;
     },
     [&](const enumeration_type& t, const enumeration& u) {

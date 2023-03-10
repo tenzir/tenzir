@@ -72,14 +72,17 @@ do for a long time. Here's a summary:
    previously supported `#type` meta extractor.
 
 4. We removed the `#field` meta extractor. That is, queries of the form `#field
-   == "some.field.name"` no longer work. Use `some.field.name != nil` to check
+   == "some.field.name"` no longer work. Use `some.field.name != null` to check
    for field existence moving forward.
 
 5. We renamed the boolean literal values `T` and `F` to `true` and `false`,
    respectively. For example the query `suricata.alert.alerted == T` is no
    longer valid; use `suricata.alert.alerted == true` instead.
 
-6. The `map` type no longer exists: Instead of `map<T, U>`, use the equivalent
+6. We renamed the non-value literal value `nil` to `null`. For example the
+   query `x != nil` is no longer valid; use `x != null` instead.
+
+7. The `map` type no longer exists: Instead of `map<T, U>`, use the equivalent
    `list<record{ key: T, value: U }>`.
 
 Our goal is for these changes to make the query language feel more natural to
@@ -403,5 +406,5 @@ package is called `vast` and also available [separately on PyPI][vast-pypi].
 ### Extractor Predicates
 
 Extractors can now be used where predicates are expected to test for the
-existance of a field or type. For example, `x` and `:T` expand to `x != nil`
-and `:T != nil`, respectively.
+existance of a field or type. For example, `x` and `:T` expand to `x != null`
+and `:T != null`, respectively.

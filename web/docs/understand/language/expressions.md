@@ -176,8 +176,8 @@ table shows how values, field extractors and type extractors are expanded.
 | Short Form | Expansion        | Example
 | ---------- | ---------------- | --------------------------------
 | `value`    | `:type == value` | `"needle"` → `:string == "needle"`
-| `field`    | `field != nil`   | `header.req` → `header.req != nil`
-| `:type`    | `:type != nil`   | `:ip` → `:ip != nil`
+| `field`    | `field != null`   | `header.req` → `header.req != null`
+| `:type`    | `:type != null`   | `:ip` → `:ip != null`
 
 The first form requires the event to contain a field with the given
 value. This allows for quick type-based point queries, such as
@@ -203,7 +203,7 @@ value syntax in the expression language.
 
 | Literal    | Example
 | ---------- | -------
-| `none`     | `nil`
+| `none`     | `null`
 | `bool`     | `true`, `false`
 | `int64`    | `-42`, `+3`
 | `uint64`   | `0`, `42`

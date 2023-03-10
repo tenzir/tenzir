@@ -122,7 +122,7 @@ TEST(models - simple) {
     auto exp = unbox(to<expression>("x == <bar: 2>"));
     // clang-format off
     auto ref = unbox(to<expression>(
-          "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
+          "(a.fo0 != null || b.foO != null || c.foe != null)"
           " && (a.bar == 2 || b.baR == 2)"));
     // clang-format on
     auto result = resolve(t, exp);
@@ -133,7 +133,7 @@ TEST(models - simple) {
     auto exp = unbox(to<expression>("y == <bar: 2, baz: false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
-          "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
+          "(a.fo0 != null || b.foO != null || c.foe != null)"
           " && (    (a.bar == 2 || b.baR == 2)"
                " && (a.BAZ == false || c.baz == false))"));
     // clang-format on
@@ -154,7 +154,7 @@ TEST(models - simple) {
     auto exp = unbox(to<expression>("y == <_, 2, false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
-          "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
+          "(a.fo0 != null || b.foO != null || c.foe != null)"
           " && (   (a.bar == 2 || b.baR == 2)"
               " && (a.BAZ == false || c.baz == false))"));
     // clang-format on
@@ -167,7 +167,7 @@ TEST(models - simple) {
     auto unnamed = unbox(to<expression>("z == <_, 2, false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
-          "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
+          "(a.fo0 != null || b.foO != null || c.foe != null)"
           " && (   (a.bar == 2 || b.baR == 2)"
               " && (a.BAZ == false || c.baz == false))"));
     // clang-format on

@@ -94,7 +94,7 @@ TEST(pass pipeline / done before persist) {
   auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
   run();
   auto synopsis = vast::partition_synopsis_ptr{nullptr};
-  auto uuid = vast::uuid::nil();
+  auto uuid = vast::uuid::null();
   rp.receive(
     [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       REQUIRE_EQUAL(apsv.size(), 1ull);
@@ -177,7 +177,7 @@ TEST(delete pipeline / persist before done) {
   self->send(transformer, vast::atom::done_v);
   run();
   auto synopsis = vast::partition_synopsis_ptr{nullptr};
-  auto uuid = vast::uuid::nil();
+  auto uuid = vast::uuid::null();
   rp.receive(
     [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       REQUIRE_EQUAL(apsv.size(), 1ull);

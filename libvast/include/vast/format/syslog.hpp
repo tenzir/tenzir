@@ -38,12 +38,12 @@ namespace vast::format::syslog {
 
 /// A parser that parses an optional value whose nullopt is presented as a dash.
 template <class Parser>
-struct maybe_nil_parser : parser_base<maybe_nil_parser<Parser>> {
+struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
   using value_type = typename std::decay_t<Parser>::attribute;
   using attribute = std::conditional_t<concepts::container<value_type>,
                                        value_type, std::optional<value_type>>;
 
-  explicit maybe_nil_parser(Parser parser) : parser_{std::move(parser)} {
+  explicit maybe_null_parser(Parser parser) : parser_{std::move(parser)} {
   }
 
   template <class Iterator, class Attribute>
@@ -59,11 +59,11 @@ struct maybe_nil_parser : parser_base<maybe_nil_parser<Parser>> {
   Parser parser_;
 };
 
-/// Wraps a parser and allows it to be nil.
-/// @relates maybe_nil_parser
+/// Wraps a parser and allows it to be null.
+/// @relates maybe_null_parser
 template <class Parser>
-auto maybe_nil(Parser&& parser) {
-  return maybe_nil_parser<Parser>{std::forward<Parser>(parser)};
+auto maybe_null(Parser&& parser) {
+  return maybe_null_parser<Parser>{std::forward<Parser>(parser)};
 }
 
 /// A Syslog message header.
@@ -99,11 +99,11 @@ struct header_parser : parser_base<header_parser> {
     auto pri = '<' >> prival >> '>';
     auto is_version = [](uint16_t in) { return in > 0; };
     auto version = integral_parser<uint16_t, 3>{}.with(is_version);
-    auto hostname = maybe_nil(rep(printable - ' ', 1, 255));
-    auto app_name = maybe_nil(rep(printable - ' ', 1, 48));
-    auto process_id = maybe_nil(rep(printable - ' ', 1, 128));
-    auto msg_id = maybe_nil(rep(printable - ' ', 1, 32));
-    auto timestamp = maybe_nil(parsers::time);
+    auto hostname = maybe_null(rep(printable - ' ', 1, 255));
+    auto app_name = maybe_null(rep(printable - ' ', 1, 48));
+    auto process_id = maybe_null(rep(printable - ' ', 1, 128));
+    auto msg_id = maybe_null(rep(printable - ' ', 1, 32));
+    auto timestamp = maybe_null(parsers::time);
     auto p = pri >> version >> ' ' >> timestamp >> ' ' >> hostname >> ' '
              >> app_name >> ' ' >> process_id >> ' ' >> msg_id;
     if constexpr (std::is_same_v<Attribute, unused_type>)
@@ -205,7 +205,7 @@ struct structured_data_parser : parser_base<structured_data_parser> {
             x[key] = value;
           }
         };
-    auto p = maybe_nil(+sd);
+    auto p = maybe_null(+sd);
     return p(f, l, unused);
   }
 };

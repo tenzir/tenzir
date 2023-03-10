@@ -129,7 +129,7 @@ struct query_context {
   // -- data members -----------------------------------------------------------
 
   /// The query id.
-  uuid id = uuid::nil();
+  uuid id = uuid::null();
 
   /// The query command.
   command cmd;

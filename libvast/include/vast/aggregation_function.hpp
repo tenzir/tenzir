@@ -30,7 +30,7 @@ public:
 
   /// Add data to the aggregation function.
   /// @param view The value to add.
-  /// @pre *view* is either *nil* or matches the input type.
+  /// @pre *view* is either *null* or matches the input type.
   virtual void add(const data_view& view) = 0;
 
   /// Bulk-add data to the aggregation function.

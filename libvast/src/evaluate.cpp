@@ -237,7 +237,7 @@ struct column_evaluator {
   }
 };
 
-// Special-case equal operations with nil.
+// Special-case equal operations with null.
 template <concrete_type LhsType>
 struct column_evaluator<relational_operator::equal, LhsType, caf::none_t> {
   static ids
@@ -260,7 +260,7 @@ struct column_evaluator<relational_operator::equal, LhsType, caf::none_t> {
   }
 };
 
-// Special-case not-equal operations with nil.
+// Special-case not-equal operations with null.
 template <concrete_type LhsType>
 struct column_evaluator<relational_operator::not_equal, LhsType, caf::none_t> {
   static ids
@@ -283,8 +283,8 @@ struct column_evaluator<relational_operator::not_equal, LhsType, caf::none_t> {
   }
 };
 
-// All operations comparing with nil except for equal and not-equal always yield
-// no results.
+// All operations comparing with null except for equal and not-equal always
+// yield no results.
 template <relational_operator Op, concrete_type LhsType>
 struct column_evaluator<Op, LhsType, caf::none_t> {
   static ids

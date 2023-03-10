@@ -44,9 +44,9 @@ public:
       default:
         return {};
       case relational_operator::equal:
-        // TODO: We should treat 'nil' as a normal value and
+        // TODO: We should treat 'null' as a normal value and
         // hash it, so we can exclude synopsis where all values
-        // are non-nil.
+        // are non-null.
         if (caf::holds_alternative<view<caf::none_t>>(rhs))
           return {};
         if constexpr (std::is_same_v<T, std::string>) {

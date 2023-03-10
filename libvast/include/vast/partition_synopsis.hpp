@@ -117,7 +117,7 @@ struct partition_info {
   }
 
   /// The partition id.
-  vast::uuid uuid = vast::uuid::nil();
+  vast::uuid uuid = vast::uuid::null();
 
   /// Total number of events in the partition. The sum of all
   /// values in `stats`.

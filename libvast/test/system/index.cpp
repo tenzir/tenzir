@@ -183,7 +183,7 @@ TEST(iterable integer query result) {
   run();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int64 == +1");
-  CHECK_NOT_EQUAL(query_id, uuid::nil());
+  CHECK_NOT_EQUAL(query_id, uuid::null());
   CHECK_EQUAL(hits, partitions);
   CHECK_EQUAL(scheduled, taste_count);
   size_t expected_result = slice_size * partitions / 2;
