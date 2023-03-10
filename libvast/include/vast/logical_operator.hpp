@@ -109,11 +109,15 @@ protected:
 } // namespace vast
 
 template <>
-struct fmt::formatter<vast::logical_operator_ptr>
-  : fmt::formatter<std::string_view> {
+struct fmt::formatter<vast::logical_operator_ptr> {
+  constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
   template <class FormatContext>
   auto
   format(const vast::logical_operator_ptr& value, FormatContext& ctx) const {
-    return fmt::formatter<std::string_view>::format(value->to_string(), ctx);
+    auto str = value->to_string();
+    return std::copy(str.begin(), str.end(), ctx.out());
   }
 };
