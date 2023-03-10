@@ -151,6 +151,16 @@ int main(int argc, char** argv) {
                export_transforms.error());
     return EXIT_FAILURE;
   }
+  // Warn if vast.pipeline-triggers are defined, as the functionality will be
+  // superseded by the new pipeline executor in a future release. The model
+  // doesn't make much sense when switching from a client-server to a multi-node
+  // architecture, so we plan to replace them with node ingress/egress pipelines
+  // in the near future.
+  if (caf::get_if<caf::settings>(&cfg, "vast.pipeline-triggers")) {
+    VAST_WARN("the 'vast.pipeline-triggers' option is deprecated and will be "
+              "removed in the next release; use inline import and export "
+              "pipelines instead");
+  }
   // Set up the event types singleton.
   if (auto module = load_module(cfg)) {
     event_types::init(*std::move(module));
