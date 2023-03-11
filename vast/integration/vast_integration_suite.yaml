@@ -533,9 +533,16 @@ tests:
     steps:
       - command: import -b suricata
         input: data/suricata/eve.json
-      - command: "export json 'pass'"
-      - command: "export json 'pass
-                               | select timestamp, flow_id, src_ip, dest_ip, src_port'"
+      - command: |
+          export json
+            'pass'
+      - command: |
+          export json
+            ' pass
+            /* a comment here */
+            | select /* and a comemnt there /**/ timestamp, flow_id, src_ip, dest_ip, src_port
+            /**/ /*foo*/
+            '
       - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp'"
@@ -592,16 +599,22 @@ tests:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
     steps:
-      - command: "import -b suricata 'pass
-                               | select timestamp, flow_id, src_ip, dest_ip, src_port
-                               | drop timestamp
-                               | hash --salt=\"abcdefghij12\" flow_id
-                               | drop flow_id
-                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list
-                               | replace new_list=2
-                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+      - command: |
+          import -b suricata
+            ' pass
+            | select timestamp, flow_id, src_ip, dest_ip, src_port
+            | drop timestamp
+            | hash --salt="abcdefghij12" flow_id
+            | drop flow_id
+            | pseudonymize -m "crypto-pan" -s "123456abcdef" src_ip, dest_ip
+            | extend abc=123,abc_str="123", abc_list=[1,2,3]
+            | rename new_list=abc_list
+            | replace new_list=2
+            | where #type == "suricata.alert" /*comments can also be in the
+                 middle of an expression*/
+                /* also match fileinfo */
+                || #type == /*foo*/ "suricata.fileinfo"
+            '
         input: data/suricata/eve.json
       - command: export json
   Export pipeline operator parsing only summarize:

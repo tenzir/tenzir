@@ -210,3 +210,33 @@ TEST(parseable - custom type extractor predicate) {
   CHECK_EQUAL(pred->op, relational_operator::not_equal);
   CHECK_EQUAL(pred->rhs, predicate::operand{data{}});
 }
+
+TEST(parseable - comments in expressions) {
+  expression expected_expr;
+  CHECK(parsers::expr(
+    R"(#type == "foo" && (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
+    expected_expr));
+  expression expr;
+  CHECK(parsers::expr(
+    R"(#type == "foo" && (foo.bar != [1, 2, 3] /*/*fo* /*/|| baz != <_, 3.0>))"s,
+    expr));
+  CHECK_EQUAL(expr, expected_expr);
+  CHECK(parsers::expr(
+    R"(#type/**/==/******/"foo" && (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
+    expr));
+  CHECK_EQUAL(expr, expected_expr);
+  CHECK(parsers::expr(
+    R"(#type == "foo"/* && x != null */&& (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
+    expr));
+  // TODO: Comments within list and record literals are not currently allowed
+  // because that parser is used in quite a few places that do not parse just an
+  // expression or a pipeline.
+  // CHECK(parsers::expr(
+  //   R"(#type ==/**/"foo" && (foo.bar != [1, 2,/*0,*/ 3] || baz !=
+  //   <_, 3.0>))"s, expr));
+  // CHECK_EQUAL(expr, expected_expr);
+  // CHECK(parsers::expr(
+  //   R"(#type ==/**/"foo" && (foo.bar != [1, 2,/*0,*/ 3] || baz != </**/_,
+  //   /**/3.0>))"s, expr));
+  // CHECK_EQUAL(expr, expected_expr);
+}

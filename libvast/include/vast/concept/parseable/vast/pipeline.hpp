@@ -19,8 +19,13 @@
 
 namespace vast::parsers {
 
-constexpr inline auto required_ws = ignore(+space);
-constexpr inline auto optional_ws = ignore(*space);
+/// Parses a '/* ... */' style comment. The attribute of the parser is the
+/// comment between the '/*' and '*/' delimiters.
+const inline auto comment = "/*" >> *(any - (chr{'*'} >> &chr{'/'})) >> "*/";
+
+const inline auto required_ws_or_comment = ignore(+(space | comment));
+const inline auto optional_ws_or_comment = ignore(*(space | comment));
+
 constexpr inline auto end_of_pipeline_operator = ('|' | eoi);
 constexpr inline auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
 // An extractor cannot start with:
@@ -31,21 +36,26 @@ const inline auto extractor
         return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
       });
 const inline auto extractor_list
-  = (extractor % (optional_ws >> ',' >> optional_ws));
+  = (extractor % (optional_ws_or_comment >> ',' >> optional_ws_or_comment));
 const inline auto extractor_assignment
-  = (extractor >> optional_ws >> '=' >> optional_ws >> extractor);
+  = (extractor >> optional_ws_or_comment >> '=' >> optional_ws_or_comment
+     >> extractor);
 const inline auto extractor_assignment_list
-  = (extractor_assignment % (optional_ws >> ',' >> optional_ws));
+  = (extractor_assignment
+     % (optional_ws_or_comment >> ',' >> optional_ws_or_comment));
 const inline auto extractor_value_assignment
-  = (extractor >> optional_ws >> '=' >> optional_ws >> data);
+  = (extractor >> optional_ws_or_comment >> '=' >> optional_ws_or_comment
+     >> data);
 const inline auto extractor_value_assignment_list
-  = (extractor_value_assignment % (optional_ws >> ',' >> optional_ws));
+  = (extractor_value_assignment
+     % (optional_ws_or_comment >> ',' >> optional_ws_or_comment));
 constexpr inline auto aggregation_func_char = alnum | chr{'-'};
 const inline auto aggregation_function
-  = -(extractor >> optional_ws >> '=' >> optional_ws)
-    >> (+aggregation_func_char) >> optional_ws >> '(' >> optional_ws
-    >> extractor_list >> optional_ws >> ')';
+  = -(extractor >> optional_ws_or_comment >> '=' >> optional_ws_or_comment)
+    >> (+aggregation_func_char) >> optional_ws_or_comment >> '('
+    >> optional_ws_or_comment >> extractor_list >> optional_ws_or_comment
+    >> ')';
 const inline auto aggregation_function_list
-  = (aggregation_function % (',' >> optional_ws));
+  = (aggregation_function % (',' >> optional_ws_or_comment));
 
 } // namespace vast::parsers

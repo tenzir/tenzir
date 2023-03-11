@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
@@ -38,7 +38,8 @@ class plugin final : public virtual language_plugin {
         std::optional<pipeline>{},
       };
     }
-    using parsers::space, parsers::expr, parsers::eoi;
+    using parsers::space, parsers::expr, parsers::eoi,
+      parsers::optional_ws_or_comment;
     // Try to parse pipline first, because e.g. `head` is both a valid
     // expression and a valid pipeline.
     auto parsed_pipeline = pipeline::parse("export", query);
@@ -48,9 +49,8 @@ class plugin final : public virtual language_plugin {
     auto f = query.begin();
     const auto l = query.end();
     auto parsed_expr = expression{};
-    const auto optional_ws = ignore(*space);
     bool has_expr = true;
-    const auto expr_parser = optional_ws >> expr;
+    const auto expr_parser = optional_ws_or_comment >> expr;
     if (!expr_parser(f, l, parsed_expr)) {
       VAST_DEBUG("failed to parse expr from '{}'", query);
       parsed_expr = match_everything;
@@ -59,7 +59,7 @@ class plugin final : public virtual language_plugin {
     VAST_DEBUG("parsed expr = {}", parsed_expr);
     // <expr> | <pipeline>
     //       ^ we start here
-    const auto has_no_pipeline_parser = optional_ws >> eoi;
+    const auto has_no_pipeline_parser = optional_ws_or_comment >> eoi;
     if (has_no_pipeline_parser(f, l, unused)) {
       return std::pair{
         std::move(parsed_expr),
@@ -67,7 +67,7 @@ class plugin final : public virtual language_plugin {
       };
     }
     if (has_expr) {
-      const auto has_pipeline_parser = optional_ws >> '|';
+      const auto has_pipeline_parser = optional_ws_or_comment >> '|';
       if (!has_pipeline_parser(f, l, unused)) {
         return caf::make_error(ec::syntax_error,
                                fmt::format("failed to parse "
