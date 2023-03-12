@@ -1,0 +1,58 @@
+# -- plugins -------------------------------------------------------------------
+
+FROM development AS plugins
+
+WORKDIR /tmp/vast
+
+RUN cmake -S contrib/vast-plugins/compaction -B build-compaction -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-compaction --parallel && \
+      cmake --install build-compaction --strip && \
+      rm -rf build-compaction
+
+RUN cmake -S contrib/vast-plugins/fleet -B build-fleet -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-fleet --parallel && \
+      cmake --install build-fleet --strip && \
+      rm -rf build-fleet
+
+RUN cmake -S contrib/vast-plugins/inventory -B build-inventory -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-inventory --parallel && \
+      cmake --install build-inventory --strip && \
+      rm -rf build-inventory
+
+RUN cmake -S contrib/vast-plugins/matcher -B build-matcher -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-matcher --parallel && \
+      cmake --install build-matcher --strip && \
+      rm -rf build-matcher
+
+RUN cmake -S contrib/vast-plugins/netflow -B build-netflow -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-netflow --parallel && \
+      cmake --install build-netflow --strip && \
+      rm -rf build-netflow
+
+# -- vast-ce -------------------------------------------------------------------
+
+FROM production AS vast-ce
+
+COPY --from=plugins --chown=vast:vast $PREFIX/lib/vast/plugins/libvast-plugin-matcher.so $PREFIX/lib/vast/plugins/
+COPY --from=plugins --chown=vast:vast $PREFIX/share/doc/matcher $PREFIX/share/doc/matcher
+COPY --from=plugins --chown=vast:vast $PREFIX/lib/vast/plugins/libvast-plugin-netflow.so $PREFIX/lib/vast/plugins/
+COPY --from=plugins --chown=vast:vast $PREFIX/share/doc/netflow $PREFIX/share/doc/netflow
+
+# -- vast-ee -------------------------------------------------------------------
+
+FROM vast-ce AS vast-ee
+
+COPY --from=plugins --chown=vast:vast $PREFIX/lib/vast/plugins/libvast-plugin-compaction.so $PREFIX/lib/vast/plugins/
+COPY --from=plugins --chown=vast:vast $PREFIX/share/doc/compaction $PREFIX/share/doc/compaction
+
+# -- vast-manager --------------------------------------------------------------
+
+FROM production AS vast-manager
+
+COPY --from=plugins --chown=vast:vast $PREFIX/lib/vast/plugins/libvast-plugin-fleet.so $PREFIX/lib/vast/plugins/
+COPY --from=plugins --chown=vast:vast $PREFIX/share/doc/fleet $PREFIX/share/doc/fleet
