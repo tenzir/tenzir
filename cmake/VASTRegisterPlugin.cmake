@@ -124,7 +124,7 @@ function (VASTCompileFlatBuffers)
     # <options>
     ""
     # <one_value_keywords>
-    "TARGET;INCLUDE_DIRECTORY"
+    "TARGET;INCLUDE_DIRECTORY;EXPORT"
     # <multi_value_keywords>
     "SCHEMAS"
     # <args>...
@@ -253,7 +253,7 @@ function (VASTCompileFlatBuffers)
 
   install(
     TARGETS ${FBS_TARGET}
-    EXPORT VASTTargets
+    EXPORT ${FBS_EXPORT}
     PUBLIC_HEADER
       DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FBS_INCLUDE_DIRECTORY}"
       COMPONENT Development)
@@ -669,8 +669,8 @@ function (VASTRegisterPlugin)
                                                         vast::internal)
     VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                ${PLUGIN_TARGET}-static)
-    VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
-                               vast::libvast_builtins)
+    # VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
+    #                            vast::libvast_builtins)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)

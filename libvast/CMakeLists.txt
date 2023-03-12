@@ -1,14 +1,55 @@
-if (VAST_PREBUILT_LIBVAST)
-  find_package(
-    VAST "${PROJECT_VERSION}" EXACT
-    COMPONENTS dev
-    REQUIRED)
-  string(APPEND VAST_FIND_DEPENDENCY_LIST
-         "\nfind_package(VAST "${PROJECT_VERSION}" EXACT REQUIRED)")
-  dependency_summary("libvast" vast::libvast "Dependencies")
-  return()
+cmake_minimum_required(VERSION 3.19...3.25 FATAL_ERROR)
+
+# -- project setup -------------------------------------------------------------
+
+# Semicolon-separated list of directories specifying a search path for CMake.
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+set(VAST_VERSION_TAG_BACKUP "${VAST_VERSION_TAG}")
+include(VASTVersion)
+
+# Create the VAST project.
+project(
+  libVAST
+  VERSION
+    ${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}.${VAST_VERSION_TWEAK}
+  DESCRIPTION "Visibility Across Space and Time"
+  HOMEPAGE_URL "https://vast.io"
+  LANGUAGES C CXX)
+
+# -- includes ------------------------------------------------------------------
+
+include(CMakeDependentOption)
+include(CMakePackageConfigHelpers)
+include(CMakePrintHelpers)
+include(CTest)
+include(CheckCXXSourceCompiles)
+include(CheckLibraryExists)
+include(GNUInstallDirs)
+include(VASTCheckCompilerVersion)
+include(VASTFeatureSummary)
+include(VASTMacDependencyPaths)
+include(VASTProvideFindModule)
+include(VASTRegisterPlugin)
+include(VASTUtilities)
+include(internal)
+
+# -- project configuration -----------------------------------------------------
+
+# Determine whether we're building VAST a subproject. This is used to determine
+# good default values for many options. VAST should not modify global CMake if
+# built as a subproject, unless explicitly requested to do so with options.
+get_directory_property(_parent_directory PARENT_DIRECTORY)
+if (_parent_directory)
+  set(LIBVAST_IS_SUBPROJECT ON)
+else ()
+  set(LIBVAST_IS_SUBPROJECT OFF)
 endif ()
+unset(_parent_directory)
+
 # -- bundled dependencies ------------------------------------------------------
+
+VASTTargetEnableTooling(libvast_internal INTERFACE)
+include(SetupCAF)
 
 # TODO: VAST bundles robin-map in its aux directory, because we need at least
 # 0.6.2, which is not widely available on package managers. We should
@@ -64,6 +105,7 @@ list(SORT flatbuffers_schemas)
 
 VASTCompileFlatBuffers(
   TARGET libvast-fbs
+  EXPORT libVASTTargets
   SCHEMAS ${flatbuffers_schemas}
   INCLUDE_DIRECTORY "vast/fbs/")
 
@@ -459,10 +501,21 @@ endif ()
 # the plugin unit test binaries need to be able to link against it.
 install(
   TARGETS libvast libvast_builtins ${_vast_bundled_simdjson}
-  EXPORT VASTTargets
+  EXPORT libVASTTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
+
+export(
+  EXPORT libVASTTargets
+  FILE libVASTTargets.cmake
+  NAMESPACE vast::)
+
+install(
+  EXPORT libVASTTargets
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
+  NAMESPACE vast::
+  COMPONENT Development)
 
 install(
   DIRECTORY include/vast
@@ -481,9 +534,29 @@ install(
 
 add_subdirectory(test)
 
-set(VAST_FIND_DEPENDENCY_LIST
-    "${VAST_FIND_DEPENDENCY_LIST}"
-    PARENT_SCOPE)
-set(VAST_EXTRA_TARGETS_FILES
-    "${VAST_EXTRA_TARGETS_FILES}"
-    PARENT_SCOPE)
+function (_get_all_cmake_targets out_var current_dir)
+    get_property(targets DIRECTORY ${current_dir} PROPERTY BUILDSYSTEM_TARGETS)
+    get_property(subdirs DIRECTORY ${current_dir} PROPERTY SUBDIRECTORIES)
+
+    foreach(subdir ${subdirs})
+        _get_all_cmake_targets(subdir_targets ${subdir})
+        list(APPEND targets ${subdir_targets})
+    endforeach()
+
+    set(${out_var} ${targets} PARENT_SCOPE)
+endfunction()
+
+# Run at end of top-level CMakeLists
+_get_all_cmake_targets(all_targets ${CMAKE_CURRENT_LIST_DIR})
+message(STATUS "${all_targets}")
+
+if (LIBVAST_IS_SUBPROJECT)
+  set(VAST_FIND_DEPENDENCY_LIST
+      "${VAST_FIND_DEPENDENCY_LIST}"
+      PARENT_SCOPE)
+  set(VAST_EXTRA_TARGETS_FILES
+      "${VAST_EXTRA_TARGETS_FILES}"
+      PARENT_SCOPE)
+else ()
+  vast_feature_summary()
+endif ()

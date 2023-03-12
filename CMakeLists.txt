@@ -699,124 +699,20 @@ if (VAST_ENABLE_MANPAGES)
   find_package(Pandoc REQUIRED)
 endif ()
 
-# -- caf -----------------------------------------------------------------------
-
-# The CAF dependency is loaded project-wide because both libvast and
-# libvast_test need it.
-
-# CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
-find_package(OpenSSL REQUIRED)
-
-# TODO: Require CAF to be installed.
-
-if (VAST_ENABLE_DEVELOPER_MODE
-    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt"
-    AND NOT CAF_ROOT_DIR)
-  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT ON)
-else ()
-  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT OFF)
-endif ()
-option(VAST_ENABLE_BUNDLED_CAF "Use the CAF submodule"
-       "${VAST_ENABLE_BUNDLED_CAF_DEFAULT}")
-add_feature_info("VAST_ENABLE_BUNDLED_CAF" VAST_ENABLE_BUNDLED_CAF
-                 "use the CAF submodule.")
-if (NOT VAST_ENABLE_BUNDLED_CAF)
-  # Try to find the required CAF components first...
-  find_package(
-    CAF
-    COMPONENTS core io test openssl
-    REQUIRED)
-  if (NOT ${CAF_VERSION} VERSION_GREATER_EQUAL 0.18.6)
-    message(
-      FATAL_ERROR "Failed to find CAF >= 0.18.6 version (found ${CAF_VERSION})")
-  endif ()
-  string(
-    APPEND
-    VAST_FIND_DEPENDENCY_LIST
-    "\nfind_package(CAF ${CAF_VERSION} COMPONENTS core io test openssl REQUIRED)"
-  )
-  dependency_summary("CAF" CAF::core "Dependencies")
-else ()
-  # Use bundled CAF.
-  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt")
-    message(
-      FATAL_ERROR
-        "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the libvast/aux/caf submodule"
-    )
-  else ()
-    set(VAST_ENABLE_BUNDLED_CAF ON)
-    set(CAF_LOG_LEVEL ${VAST_CAF_LOG_LEVEL})
-    set(CAF_ENABLE_EXAMPLES OFF)
-    set(CAF_ENABLE_TESTING OFF)
-    set(CAF_ENABLE_TOOLS OFF)
-    set(CAF_ENABLE_OPENSSL ON)
-    # add_subdirectory libvast/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
-    # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
-    set(ORIGINAL_CXX_STANDARD ${CMAKE_CXX_STANDARD})
-    set(CMAKE_CXX_STANDARD 17)
-    add_subdirectory(libvast/aux/caf)
-    set(CMAKE_CXX_STANDARD ${ORIGINAL_CXX_STANDARD})
-    VASTSystemizeTarget(libcaf_core)
-    set_target_properties(libcaf_core PROPERTIES EXPORT_NAME core)
-    target_compile_features(libcaf_core INTERFACE cxx_std_17)
-    target_compile_options(
-      libcaf_core
-      PRIVATE
-        -Wno-maybe-uninitialized
-        -Wno-unqualified-std-cast-call
-        -Wno-unknown-warning-option
-        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
-        $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
-    VASTSystemizeTarget(libcaf_io)
-    set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
-    target_compile_options(
-      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-                        -Wno-unknown-warning-option)
-    if (NOT TARGET libcaf_openssl)
-      string(
-        JOIN " " err_message
-        "Unable to find the bundled CAF's OpenSSL module; consider setting "
-        "OPENSSL_ROOT_DIR to the install prefix of your OpenSSL installation.")
-      message(FATAL_ERROR "${err_message}")
-    endif ()
-    target_include_directories(
-      libcaf_openssl
-      PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/libcaf_openssl>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-    VASTSystemizeTarget(libcaf_openssl)
-    set_target_properties(libcaf_openssl PROPERTIES EXPORT_NAME openssl)
-    VASTSystemizeTarget(libcaf_test)
-    set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
-    mark_as_advanced(caf_build_header_path)
-    string(APPEND VAST_EXTRA_TARGETS_FILES
-           "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/../CAF/CAFTargets.cmake\")"
-           "\nmark_as_advanced(caf_build_header_path)")
-    set(CAF_FOUND true)
-  endif ()
-  # Make bundled CAF available for component-based CPack installations.
-  install(TARGETS libcaf_core libcaf_openssl libcaf_io COMPONENT Runtime)
-  install(TARGETS libcaf_test COMPONENT Development)
-  # Figure out whether we point to a build directory or a prefix.
-  dependency_summary("CAF" "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf"
-                     "Dependencies")
-endif ()
-
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-    AND BUILD_SHARED_LIBS
-    AND CAF_LIBRARY_CORE)
-  # Copy CAF libraries to installation directory
-  get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
-  file(GLOB CAF_INSTALLED_LIBRARIES "${CAF_LIBDIR}/libcaf*.so")
-  install(
-    FILES ${CAF_INSTALLED_LIBRARIES}
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    COMPONENT Runtime)
-endif ()
-
 # -- add subdirectories --------------------------------------------------------
 
-add_subdirectory(libvast)
+if (VAST_PREBUILT_LIBVAST)
+  cmake_print_variables(VAST_PREBUILT_LIBVAST)
+  set(CMAKE_FIND_DEBUG_MODE TRUE)
+  find_package(VAST REQUIRED PATHS "${VAST_PREBUILT_LIBVAST}" NO_DEFAULT_PATH)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+         "\nfind_package(VAST ${PROJECT_VERSION} EXACT REQUIRED)")
+  dependency_summary("libvast" vast::libvast "Dependencies")
+  set(CMAKE_FIND_DEBUG_MODE FALSE)
+else ()
+  add_subdirectory(libvast)
+endif ()
+
 add_subdirectory(contrib/tools)
 add_subdirectory(vast)
 
@@ -834,13 +730,13 @@ install(
   COMPONENT Development)
 
 write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/libVASTConfigVersion.cmake"
   VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}"
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTConfig.cmake.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/libVASTConfig.cmake"
   INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
 configure_file("${PROJECT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
@@ -851,8 +747,8 @@ configure_file("${PROJECT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
 install(
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/libVASTConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/libVASTConfigVersion.cmake"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
   COMPONENT Development)
 
@@ -992,70 +888,4 @@ include(VASTPackage)
 
 # -- feature summary -----------------------------------------------------------
 
-# Append the feature summary to summary.log.
-feature_summary(
-  WHAT ALL
-  FILENAME "${CMAKE_CURRENT_BINARY_DIR}/summary.log"
-  APPEND)
-
-# Print the feature and build summary if we're not a subproject.
-if (NOT VAST_IS_SUBPROJECT)
-  feature_summary(WHAT ENABLED_FEATURES DISABLED_FEATURES
-                  INCLUDE_QUIET_PACKAGES)
-  unset(build_summary)
-  list(APPEND build_summary "Build summary:\n")
-  list(APPEND build_summary " * Edition: ${TENZIR_EDITION_NAME}")
-  list(APPEND build_summary " * Version: ${VAST_VERSION_TAG}")
-  list(APPEND build_summary " * Build Tree Hash: ${VAST_BUILD_TREE_HASH}")
-  list(APPEND build_summary "")
-  if (CMAKE_CONFIGURATION_TYPES)
-    list(APPEND build_summary
-         " * Configuration Types: ${CMAKE_CONFIGURATION_TYPES}")
-  else ()
-    list(APPEND build_summary " * Build Type: ${CMAKE_BUILD_TYPE}")
-  endif ()
-  list(APPEND build_summary " * Source Directory: ${CMAKE_SOURCE_DIR}")
-  list(APPEND build_summary " * Binary Directory: ${CMAKE_BINARY_DIR}\n")
-  list(APPEND build_summary " * System Name: ${CMAKE_SYSTEM_NAME}")
-  list(APPEND build_summary " * CPU: ${CMAKE_SYSTEM_PROCESSOR}")
-  foreach (lang IN ITEMS C CXX)
-    set(_lang_compiler "${CMAKE_${lang}_COMPILER}")
-    set(_lang_compiler_info
-        "${CMAKE_${lang}_COMPILER_ID} ${CMAKE_${lang}_COMPILER_VERSION}")
-    set(_lang_flags
-        "${CMAKE_${lang}_FLAGS} ${CMAKE_${lang}_FLAGS_${CMAKE_BUILD_TYPE}}
-      ${CMAKE_CPP_FLAGS} ${CMAKE_CPP_FLAGS_${CMAKE_BUILD_TYPE}}")
-    string(STRIP "${_lang_flags}" _lang_flags)
-    if (_lang_flags)
-      list(
-        APPEND
-        build_summary
-        " * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info} with ${_lang_flags})"
-      )
-    else ()
-      list(APPEND build_summary
-           " * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info})")
-    endif ()
-  endforeach ()
-  list(APPEND build_summary " * Linker: ${CMAKE_LINKER}")
-  list(APPEND build_summary " * Archiver: ${CMAKE_AR}")
-  list(APPEND build_summary "")
-  list(JOIN build_summary "\n" build_summary_joined)
-  message(STATUS "${build_summary_joined}")
-  get_property(VAST_DEPENDENCY_SUMMARY_CATEGORIES GLOBAL
-               PROPERTY "VAST_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY")
-  foreach (category IN LISTS VAST_DEPENDENCY_SUMMARY_CATEGORIES)
-    get_property(VAST_DEPENDENCY_SUMMARY GLOBAL
-                 PROPERTY "VAST_DEPENDENCY_SUMMARY_${category}_PROPERTY")
-    if (VAST_DEPENDENCY_SUMMARY)
-      unset(build_summary)
-      list(APPEND build_summary "${category}:")
-      foreach (summary IN LISTS VAST_DEPENDENCY_SUMMARY)
-        list(APPEND build_summary "${summary}")
-      endforeach ()
-      list(APPEND build_summary "")
-      list(JOIN build_summary "\n" build_summary_joined)
-      message(STATUS "${build_summary_joined}")
-    endif ()
-  endforeach ()
-endif ()
+vast_feature_summary()
