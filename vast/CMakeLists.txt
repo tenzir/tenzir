@@ -145,8 +145,13 @@ install(
 
 # -- add plugins ---------------------------------------------------------------
 
+set(plugins_default "plugins/*")
+if (EXISTS contrib/vast-plugins/.git)
+  list(APPEND plugins_default "contrib/vast-plugins/*")
+endif ()
+
 set(VAST_PLUGINS
-    ""
+    ${plugins_default}
     CACHE STRING "Specify a list of plugins to build with VAST (supports
     globbing)")
 cmake_dependent_option(
