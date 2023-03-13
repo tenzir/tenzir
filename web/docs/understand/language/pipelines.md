@@ -88,22 +88,19 @@ example:
 Here is how you write this pipeline in the VAST language:
 
 ```cpp
+/* 1. Get data from VAST */
 from vast
+/* 2. Filter out a subset of events */
 | where #type == "zeek.weird" && note == "SSL::Invalid_Server_Cert"
+/* 3. Aggregate them by destination IP */
 | summarize count(num) by id.resp_h
+/* 4. Sort by frequency */
 | sort
+/* 5. Take the top-20 items */
 | head 20
+/* 6. Write the output as JSON to standard output */
 | write json to stdout
 ```
-
-The pipeline performs the following steps:
-
-1. Get data from VAST
-2. Filters out a subset of events
-3. Aggregate them by destination IP
-4. Sort by frequency
-5. Take the top-20 items
-6. Write the output as JSON to standard output
 
 :::caution Running closed pipelines
 We do not support running closed pipelines yet, but aim to ship this ability
