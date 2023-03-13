@@ -94,10 +94,11 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     = caf::get_or(inv.options, "vast.fleet.is-manager-node", false);
   VAST_INFO("{}", is_fleet_manager);
   // FIXME: Encapsulate this logic into a `fleet-client` plugin
-  if (!sys.has_openssl_manager()) {
-    return caf::make_message(caf::make_error(
-      ec::invalid_argument, "need valid tls credentials to connect to fleet"));
-  }
+  // if (!sys.has_openssl_manager()) {
+  //   return caf::make_message(caf::make_error(
+  //     ec::invalid_argument, "need valid tls credentials to connect to
+  //     fleet"));
+  // }
   // Publish our node.
   auto const* host = node_endpoint.host.empty()
                        ? defaults::system::endpoint_host.data()
@@ -108,6 +109,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     // non-manager nodes always publish the non-TLS endpoints (so that
     // client commands can connect normally) and use TLS only when
     // connecting to the manager.
+    // FIXME: Publish a separate listening port in the `fleet` plugin instead
     if (is_fleet_manager) {
       return caf::openssl::publish(node, node_endpoint.port->number(), host,
                                    reuse_address);
@@ -140,6 +142,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   // ---
   auto node2 = caf::expected<node_actor>{caf::none};
   if (!is_fleet_manager) {
+    VAST_INFO("attempting to connect");
     auto const* manager_url
       = caf::get_if<std::string>(&inv.options, "vast.fleet.manager-url");
     if (manager_url == nullptr)

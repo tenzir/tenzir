@@ -80,6 +80,10 @@ using termination_handler_actor = typed_actor_fwd<
   // Receive a signal from the reflector.
   auto(atom::signal, int)->caf::result<void>>::unwrap;
 
+// using fleet_manager_actor = typed_actor_fwd<
+//   auto(atom::add, std::string,
+//   system::node_actor)->caf::result<void>::unwrap; // register
+
 /// The SIGNAL REFLECTOR actor interface.
 using signal_reflector_actor = typed_actor_fwd<
   // Receive a signal from the listener.

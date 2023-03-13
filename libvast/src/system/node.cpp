@@ -642,22 +642,26 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       if (!foo)
         return caf::make_error(ec::invalid_argument, "unknown plugin");
       auto handler = foo->handler(self->system(), self);
+      auto rp = self->make_response_promise<std::string>();
+      auto response = std::make_shared<detail::internal_http_response>(rp);
       auto request = http_request{
         .params = desc.params,
-        .response = std::make_shared<detail::internal_http_response>(),
+        .response = response,
       };
-      auto rp = self->make_response_promise<std::string>();
       self
         ->request(handler, caf::infinite, atom::http_request_v,
                   desc.endpoint_id, std::move(request))
         .then(
-          [rp, rsp = request.response]() mutable {
-            auto* downcast
-              = static_cast<detail::internal_http_response*>(rsp.get());
-            rp.deliver(std::exchange(*downcast, {}).release());
+          []() mutable {
+            /* nop */
           },
-          [rp](const caf::error& e) mutable {
-            rp.deliver(e);
+          [response](const caf::error& e) mutable {
+            // TODO: Should we switch to a request/response pattern for the
+            // handlers so they can just return strings or errors? On the other
+            // hand, the downside will be extra copies and we will not be able
+            // to use chunked or streaming transfers that way.
+            VAST_WARN("proxy request returned error: {}", e);
+            response->abort(500, fmt::format("internal server error"));
           });
       return rp;
     },

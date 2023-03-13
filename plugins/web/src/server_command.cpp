@@ -229,6 +229,8 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         .params = std::move(params),
         .response = std::move(response),
       };
+      // TODO: Use `request()` here and convert returned errors into
+      //       5xx responses.
       self->send(handler, atom::http_request_v, endpoint.endpoint_id,
                  std::move(vast_request));
     },
