@@ -1,11 +1,10 @@
 ---
-draft: true
 title: VAST v3.0
 description: VAST Language Evolution — Dataflow Pipelines
 authors: [dominiklohmann, dakostu]
 image: /img/blog/building-blocks.excalidraw.svg
-date: 2023-02-15
-tags: [release, language, cef, performance, introspection, regex]
+date: 2023-03-14
+tags: [release, pipelines, language, cef, performance, introspection, regex]
 ---
 
 [VAST v3.0][github-vast-release] is out. This release brings some major updates
@@ -72,8 +71,8 @@ do for a long time. Here's a summary:
    previously supported `#type` meta extractor.
 
 4. We removed the `#field` meta extractor. That is, queries of the form `#field
-   == "some.field.name"` no longer work. Use `some.field.name != null` to check
-   for field existence moving forward.
+   == "some.field.name"` no longer work. Use `some.field.name != null` or the
+   new short form `some.field.name` to check for field existence moving forward.
 
 5. We renamed the boolean literal values `T` and `F` to `true` and `false`,
    respectively. For example the query `suricata.alert.alerted == T` is no
@@ -403,8 +402,9 @@ package is called `vast` and also available [separately on PyPI][vast-pypi].
 
 [vast-pypi]: https://pypi.org/project/pyvast
 
-### Extractor Predicates
+### Expression Short Forms
 
 Extractors can now be used where predicates are expected to test for the
 existance of a field or type. For example, `x` and `:T` expand to `x != null`
-and `:T != null`, respectively.
+and `:T != null`, respectively. This pairs nicely with the already existing
+short forms for values, e.g., `"foo"` expands to `:string == "foo`.
