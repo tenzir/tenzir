@@ -759,13 +759,11 @@ public:
         }
       };
     } else {
-      VAST_WARN("summarize operator does not apply to schema {} and leaves "
-                "events unchanged: {}",
+      VAST_WARN("summarize operator does not apply to schema {} and discards "
+                "events: {}",
                 input_schema, aggregation.error());
-      return [](generator<table_slice> input) -> generator<table_slice> {
-        for (auto&& slice : input) {
-          co_yield std::move(slice);
-        }
+      return [](generator<table_slice>) -> generator<table_slice> {
+        co_return;
       };
     }
   }
