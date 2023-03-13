@@ -886,3 +886,15 @@ tests:
         input: data/suricata/eve.json
       - command: export json 'event_type == /.*flow$/'
       - command: export json 'event_type == /.*FLOW$/i'
+
+  Comments:
+    fixture: ServerTester
+    tags: [pipelines, comments]
+    steps:
+      - command: import --blocking suricata
+        input: data/suricata/eve.json
+      - command: export json 'select timestamp /*double beginning /* is valid */'
+      - command: export json 'select timestamp | /**/'
+        expected_result: error
+      - command: export json 'select timestamp /*double ending*/ slash*/'
+        expected_result: error
