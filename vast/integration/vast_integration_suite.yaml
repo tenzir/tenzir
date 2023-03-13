@@ -540,7 +540,7 @@ tests:
           export json
             ' pass
             /* a comment here */
-            | select /* and a comemnt there /**/ timestamp, flow_id, src_ip, dest_ip, src_port
+            | select /* and a comment there /**/ timestamp, flow_id, src_ip, dest_ip, src_port
             /**/ /*foo*/
             '
       - command: "export json 'pass
