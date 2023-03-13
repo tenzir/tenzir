@@ -152,10 +152,32 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     caf::put(node2_opts, "vast.endpoint", *manager_url);
     caf::put(node2_opts, "vast.fleet.manager-url", *manager_url);
     node2 = connect_to_node(self, node2_opts);
-    if (node2)
-      VAST_INFO("connected to node {}", *node2);
-    else
+    if (!node2) {
       VAST_ERROR("failed to connect: {}", node2.error());
+      return {};
+    }
+    VAST_INFO("connected to node {}", *node2);
+    self
+      ->request(*node2, caf::infinite, atom::get_v, atom::label_v,
+                std::vector<std::string>{"fleet-manager"})
+      .receive(
+        [&](std::vector<caf::actor>& components) {
+          VAST_ASSERT(components.size() == 1);
+          auto fleet_manager
+            = caf::actor_cast<fleet_manager_interface_actor>(components[0]);
+          VAST_INFO("got fleet manager {}", fleet_manager);
+          auto node_id
+            = caf::get_or(inv.options, "vast.node-id", "unconfigured_node_id");
+          self
+            ->request(fleet_manager, caf::infinite, atom::add_v, node_id, node)
+            .receive([] {},
+                     [](const caf::error& e) {
+                       VAST_ERROR("couldn't add :( {}", e);
+                     });
+        },
+        [](const caf::error& e) {
+          VAST_ERROR("got error instead of fleet-manager: {}", e);
+        });
   }
   // ---
   std::vector<command_runner_actor> command_runners;

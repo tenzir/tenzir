@@ -109,9 +109,7 @@ std::vector<std::string> get_tls_destinations(const caf::settings& settings) {
   // to be TLS. This should only be relevant for the manager node.
   // TODO: The condition here should probably be `if (VAST is expecting incoming
   // TLS)`
-  if (auto const* is_manager
-      = caf::get_if<bool>(&settings, "vast.fleet.is-manager-node");
-      *is_manager) {
+  if (caf::get_or<bool>(settings, "vast.fleet.is-manager-node", false)) {
     auto endpoint = get_node_endpoint(settings);
     VAST_ASSERT_CHEAP(endpoint); // Already checked in `connect_to_node()`.
     VAST_ASSERT_CHEAP(

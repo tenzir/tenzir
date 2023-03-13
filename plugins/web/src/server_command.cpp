@@ -229,10 +229,17 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         .params = std::move(params),
         .response = std::move(response),
       };
-      // TODO: Use `request()` here and convert returned errors into
-      //       5xx responses.
-      self->send(handler, atom::http_request_v, endpoint.endpoint_id,
-                 std::move(vast_request));
+      // Note that the handler should abort the response by itself if
+      // possible (ie. invalid arguments), the error handler is to catch
+      // timeouts and real internal errors.
+      self
+        ->request(handler, caf::infinite, atom::http_request_v,
+                  endpoint.endpoint_id, std::move(vast_request))
+        .then([]() { /*nop*/ },
+              [](const caf::error& e) {
+                VAST_WARN("internal server error while handling request: {}",
+                          e);
+              });
     },
   };
 }
@@ -371,6 +378,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       setup_route(self, router, rest_plugin->prefix(), dispatcher,
                   *server_config, std::move(endpoint), handler);
     }
+    // TODO: Monitor the handlers and re-spawn them if they go down.
   }
   // Set up implicit CORS preflight handlers for all endpoints if desired
   if (server_config->cors_allowed_origin)
