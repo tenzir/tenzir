@@ -149,7 +149,7 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("drop");
+    return fmt::format("drop {}", fmt::join(config_.fields, ", "));
   }
 
 private:

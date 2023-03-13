@@ -50,7 +50,8 @@ private:
 
 class head_operator2 final : public logical_operator<events, events> {
 public:
-  explicit head_operator2(uint64_t limit) noexcept : remaining_{limit} {
+  explicit head_operator2(uint64_t limit) noexcept
+    : remaining_{limit}, limit_{limit} {
     // nop
   }
 
@@ -74,11 +75,12 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("head ({} remaining)", remaining_);
+    return fmt::format("head {}", limit_);
   }
 
 private:
   uint64_t remaining_;
+  uint64_t limit_;
 };
 
 class plugin final : public virtual pipeline_operator_plugin,

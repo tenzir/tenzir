@@ -78,7 +78,7 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("taste");
+    return fmt::format("taste {}", limit_);
   }
 
 private:

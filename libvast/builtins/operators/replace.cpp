@@ -177,7 +177,6 @@ public:
     auto bound_config = bound_configuration::make(input_schema, config_);
     if (!bound_config)
       return bound_config.error();
-    ;
     return [transformations = std::move(bound_config->transformations)](
              generator<table_slice> input) -> generator<table_slice> {
       for (auto&& slice : input) {
@@ -187,7 +186,20 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("replace");
+    auto map = std::vector<std::pair<std::string, data>>{
+      config_.extractor_to_value.begin(), config_.extractor_to_value.end()};
+    std::sort(map.begin(), map.end());
+    auto result = std::string{"replace"};
+    bool first = true;
+    for (auto& [key, value] : map) {
+      if (first) {
+        first = false;
+      } else {
+        result += ',';
+      }
+      result += fmt::format(" {}={}", key, value);
+    }
+    return result;
   }
 
 private:

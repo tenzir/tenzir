@@ -771,7 +771,29 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("summarize");
+    auto result = fmt::format("summarize");
+    bool first = true;
+    for (auto& aggr : config_.aggregations) {
+      auto rhs = fmt::format("{}({})", aggr.function_name,
+                             fmt::join(aggr.input_extractors, ","));
+      if (first) {
+        first = false;
+        result += ' ';
+      } else {
+        result += ", ";
+      }
+      if (rhs == aggr.output) {
+        result += fmt::format("{}", aggr.output, rhs);
+      } else {
+        result += fmt::format("{}={}", aggr.output, rhs);
+      }
+    }
+    result
+      += fmt::format(" by {}", fmt::join(config_.group_by_extractors, ", "));
+    if (config_.time_resolution) {
+      result += fmt::format(" resolution {}", *config_.time_resolution);
+    }
+    return result;
   }
 
 private:

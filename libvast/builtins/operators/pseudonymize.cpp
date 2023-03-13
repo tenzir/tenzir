@@ -196,7 +196,14 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("pseudonymize");
+    auto result
+      = fmt::format("pseudonymize --method=\"{}\" ",
+                    config_.method.empty() ? "crypto-pan" : config_.method);
+    if (!config_.seed.empty()) {
+      result += fmt::format("--seed=\"{}\" ", config_.seed);
+    }
+    result += fmt::to_string(fmt::join(config_.fields, ", "));
+    return result;
   }
 
 private:

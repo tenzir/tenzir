@@ -185,7 +185,13 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("hash");
+    // TODO: ignores `config_.out`
+    auto result = std::string{"hash "};
+    if (config_.salt) {
+      result += fmt::format("--salt=\"{}\" ", *config_.salt);
+    }
+    result += config_.field;
+    return result;
   }
 
 private:
@@ -255,6 +261,7 @@ public:
       };
     }
     auto config = configuration{};
+    // TODO: ignores rest of parsed_extractors
     config.field = parsed_extractors.front();
     config.out = parsed_extractors.front() + "_hashed";
     for (const auto& [key, value] : parsed_options) {

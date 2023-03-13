@@ -108,7 +108,7 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("select");
+    return fmt::format("select {}", fmt::join(config_.fields, ", "));
   }
 
 private:

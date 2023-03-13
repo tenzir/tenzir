@@ -198,7 +198,25 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("rename");
+    auto result = std::string{"rename"};
+    auto first = true;
+    for (auto& mapping : config_.schemas) {
+      if (first) {
+        first = false;
+      } else {
+        result += ',';
+      }
+      result += fmt::format(" {}=:{}", mapping.to, mapping.from);
+    }
+    for (auto& mapping : config_.fields) {
+      if (first) {
+        first = false;
+      } else {
+        result += ',';
+      }
+      result += fmt::format(" {}={}", mapping.to, mapping.from);
+    }
+    return result;
   }
 
 private:

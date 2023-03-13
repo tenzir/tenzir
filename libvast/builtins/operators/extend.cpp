@@ -38,9 +38,8 @@ struct configuration {
                                                         "extend configuration "
                                                         "must be a record");
     auto result = configuration{};
-    result.fields.reserve(fields->size());
-    for (const auto& [key, _] : *fields)
-      result.fields.emplace_back(key);
+    for (const auto& [key, value] : *fields)
+      result.field_to_value.emplace_back(key, value);
     result.transformation = [fields = *fields, reparse_values](
                               struct record_type::field field,
                               std::shared_ptr<arrow::Array> array) noexcept {
@@ -96,7 +95,8 @@ struct configuration {
     return result;
   }
 
-  std::vector<std::string> fields = {};
+  // Note: `data` is only available when using pipeline syntax.
+  std::vector<std::pair<std::string, data>> field_to_value = {};
   indexed_transformation::function_type transformation = {};
 };
 
@@ -109,7 +109,7 @@ public:
 
   caf::error add(table_slice slice) override {
     const auto& schema_rt = caf::get<record_type>(slice.schema());
-    for (const auto& field : config_.fields)
+    for (const auto& [field, _] : config_.field_to_value)
       if (schema_rt.resolve_key(field).has_value())
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("cannot extend {} with field {} "
@@ -144,7 +144,7 @@ public:
                                             operator_control_plane*) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     auto& schema_rt = caf::get<record_type>(input_schema);
-    for (const auto& field : config_.fields)
+    for (const auto& [field, _] : config_.field_to_value)
       if (schema_rt.resolve_key(field).has_value())
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("cannot extend {} with field {} "
@@ -161,7 +161,17 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("extend");
+    auto result = std::string{"extend"};
+    bool first = true;
+    for (auto& [key, value] : config_.field_to_value) {
+      if (first) {
+        first = false;
+      } else {
+        result += ',';
+      }
+      result += fmt::format(" {}={}", key, value);
+    }
+    return result;
   }
 
 private:
