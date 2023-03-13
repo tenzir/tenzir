@@ -185,7 +185,7 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    // TODO: ignores `config_.out`
+    VAST_ASSERT(config_.out == fmt::format("{}_hashed", config_.field));
     auto result = std::string{"hash "};
     if (config_.salt) {
       result += fmt::format("--salt=\"{}\" ", *config_.salt);

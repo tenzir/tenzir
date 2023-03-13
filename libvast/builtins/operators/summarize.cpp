@@ -750,12 +750,12 @@ public:
                generator<table_slice> input) mutable -> generator<table_slice> {
         for (auto&& slice : input) {
           aggregation.add(to_record_batch(slice));
+          co_yield {};
         }
         if (auto batch = aggregation.finish()) {
           co_yield std::move(*batch);
         } else {
           ctrl->abort(batch.error());
-          co_return;
         }
       };
     } else {
