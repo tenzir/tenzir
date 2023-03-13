@@ -18,6 +18,7 @@
 #include "vast/expression.hpp"
 #include "vast/http_api.hpp"
 #include "vast/ip.hpp"
+#include "vast/logical_pipeline.hpp"
 #include "vast/module.hpp"
 #include "vast/operator.hpp"
 #include "vast/partition_synopsis.hpp"

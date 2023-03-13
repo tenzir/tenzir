@@ -112,33 +112,35 @@ class stringification_inspector;
 namespace vast {
 
 class active_store;
-class ip;
-class ip_type;
 class aggregation_function;
 class bitmap;
 class bool_type;
 class chunk;
 class command;
-class uint64_type;
 class data;
+class double_type;
 class duration_type;
 class enumeration_type;
-class expression;
 class ewah_bitmap;
+class expression;
 class http_request;
 class int64_type;
+class ip;
+class ip_type;
 class legacy_abstract_type;
+class legacy_pipeline;
 class legacy_type;
 class list_type;
+class logical_pipeline;
 class map_type;
 class module;
 class null_bitmap;
 class passive_store;
 class pattern;
+class pipeline_operator;
 class plugin;
 class plugin_ptr;
 class port;
-class double_type;
 class record_type;
 class segment;
 class string_type;
@@ -149,9 +151,8 @@ class table_slice;
 class table_slice_builder;
 class table_slice_column;
 class time_type;
-class legacy_pipeline;
-class pipeline_operator;
 class type;
+class uint64_type;
 class uuid;
 class value_index;
 class wah_bitmap;
@@ -367,9 +368,6 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
-  VAST_ADD_TYPE_ID((vast::ip))
-  VAST_ADD_TYPE_ID((vast::rest_endpoint))
-  VAST_ADD_TYPE_ID((vast::meta_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
   VAST_ADD_TYPE_ID((vast::chunk_ptr))
   VAST_ADD_TYPE_ID((vast::conjunction))
@@ -379,15 +377,23 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::data_extractor))
   VAST_ADD_TYPE_ID((vast::disjunction))
   VAST_ADD_TYPE_ID((vast::ec))
+  VAST_ADD_TYPE_ID((vast::ewah_bitmap))
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
   VAST_ADD_TYPE_ID((vast::http_request))
   VAST_ADD_TYPE_ID((vast::invocation))
+  VAST_ADD_TYPE_ID((vast::ip))
+  VAST_ADD_TYPE_ID((vast::logical_pipeline))
+  VAST_ADD_TYPE_ID((vast::meta_extractor))
+  VAST_ADD_TYPE_ID((vast::module))
   VAST_ADD_TYPE_ID((vast::negation))
+  VAST_ADD_TYPE_ID((vast::null_bitmap))
   VAST_ADD_TYPE_ID((vast::partition_info))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_pair))
+  VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::pattern))
+  VAST_ADD_TYPE_ID((vast::pipeline_ptr))
   VAST_ADD_TYPE_ID((vast::port))
   VAST_ADD_TYPE_ID((vast::port_type))
   VAST_ADD_TYPE_ID((vast::predicate))
@@ -395,20 +401,16 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::query_context))
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
-  VAST_ADD_TYPE_ID((vast::module))
+  VAST_ADD_TYPE_ID((vast::rest_endpoint))
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
+  VAST_ADD_TYPE_ID((vast::table_slice_column))
   VAST_ADD_TYPE_ID((vast::taxonomies))
   VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))
-  VAST_ADD_TYPE_ID((vast::table_slice_column))
-  VAST_ADD_TYPE_ID((vast::pipeline_ptr))
-  VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::wah_bitmap))
-  VAST_ADD_TYPE_ID((vast::ewah_bitmap))
-  VAST_ADD_TYPE_ID((vast::null_bitmap))
 
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See vast/aliases.hpp for their definitions.

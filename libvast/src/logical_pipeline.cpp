@@ -347,6 +347,34 @@ auto make_local_producer(std::span<logical_operator_ptr> ops,
 
 } // namespace
 
+logical_pipeline::logical_pipeline(const logical_pipeline& other) {
+  if (this != &other) {
+    ops_.clear();
+    ops_.reserve(other.ops_.size());
+    for (const auto& op : ops_)
+      ops_.push_back(op ? op->copy() : nullptr);
+  }
+}
+
+logical_pipeline& logical_pipeline::operator=(const logical_pipeline& rhs) {
+  if (this != &rhs) {
+    ops_.clear();
+    ops_.reserve(rhs.ops_.size());
+    for (const auto& op : ops_)
+      ops_.push_back(op ? op->copy() : nullptr);
+  }
+  return *this;
+}
+
+logical_pipeline::logical_pipeline(logical_pipeline&& rhs) noexcept
+  : ops_{std::exchange(rhs.ops_, {})} {
+}
+
+logical_pipeline& logical_pipeline::operator=(logical_pipeline&& rhs) noexcept {
+  ops_ = std::exchange(rhs.ops_, {});
+  return *this;
+}
+
 auto logical_pipeline::parse(std::string_view repr)
   -> caf::expected<logical_pipeline> {
   auto ops = std::vector<logical_operator_ptr>{};
@@ -433,6 +461,13 @@ auto logical_pipeline::output_element_type() const noexcept
   if (ops_.empty())
     return element_type_traits<void>{};
   return ops_.back()->output_element_type();
+}
+
+auto logical_pipeline::detached() const noexcept
+  -> bool {
+  return std::any_of(ops_.begin(), ops_.end(), [](const auto& op) noexcept {
+    return op ? op->detached() : false;
+  });
 }
 
 auto logical_pipeline::make_runtime_physical_operator(

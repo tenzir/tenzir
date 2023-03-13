@@ -15,6 +15,11 @@
 
 namespace vast {
 
+class runtime_logical_operator;
+
+/// A short-hand form for a uniquely owned logical operator.
+using logical_operator_ptr = std::unique_ptr<runtime_logical_operator>;
+
 /// A type-erased version of a logical operator, and the base class of all
 /// logical operators. Commonly used as *logical_operator_ptr*.
 class runtime_logical_operator {
@@ -34,9 +39,7 @@ public:
 
   /// Returns whether this logical operator prefers to be run on its own thread,
   /// if the executor supports it. This can be useful for I/O.
-  [[nodiscard]] virtual auto detached() const noexcept -> bool {
-    return false;
-  }
+  [[nodiscard]] virtual auto detached() const noexcept -> bool;
 
   /// Creates a physical operator from this logical operator for a given input
   /// schema.
@@ -67,16 +70,18 @@ public:
   /// that they require no more input and will become exhausted eventually. This
   /// is in particular useful for the `head` operator. Returning `false` here is
   /// always sound, but can be a pessimization.
-  [[nodiscard]] virtual auto done() const noexcept -> bool {
-    return false;
-  }
+  [[nodiscard]] virtual auto done() const noexcept -> bool;
 
   /// Returns the textual representation of this operator.
   [[nodiscard]] virtual auto to_string() const noexcept -> std::string = 0;
-};
 
-/// A short-hand form for a uniquely owned logical operator.
-using logical_operator_ptr = std::unique_ptr<runtime_logical_operator>;
+  /// Creates a deep copy of the operator.
+  /// @note The default implementation does a to_string -> parse roundtrip,
+  /// which requires the operator to be constructed from logical operator
+  /// plugins. For other operators, a custom implementation of this must be
+  /// provided.
+  [[nodiscard]] virtual auto copy() const noexcept -> logical_operator_ptr;
+};
 
 /// A logical operator with known input and output element types.
 template <element_type Input, element_type Output>

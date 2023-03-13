@@ -371,6 +371,11 @@ using analyzer_plugin_actor = typed_actor_fwd<>
   // Conform to the protocol of the COMPONENT PLUGIN actor.
   ::extend_with<component_plugin_actor>::unwrap;
 
+/// The interface of a PIPELINE EXECUTOR actor.
+using pipeline_executor_actor = typed_actor_fwd<
+  // Execute a logical pipeline, returning the result asynchronously.
+  auto(atom::run, logical_pipeline)->caf::result<void>>::unwrap;
+
 /// The interface of a SOURCE actor.
 using source_actor = typed_actor_fwd<
   // Retrieve the currently used module of the SOURCE.

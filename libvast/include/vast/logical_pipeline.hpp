@@ -21,6 +21,21 @@ public:
   /// Default-constructs an empty logical pipeline.
   logical_pipeline() noexcept = default;
 
+  /// Destroys a logical pipeline.
+  ~logical_pipeline() noexcept override = default;
+
+  /// Copy-constructs a logical pipeline.
+  explicit logical_pipeline(const logical_pipeline& other);
+
+  /// Copy-assigns a logical pipeline.
+  logical_pipeline& operator=(const logical_pipeline& rhs);
+
+  /// Move-constructs a logical pipeline.
+  logical_pipeline(logical_pipeline&& rhs) noexcept;
+
+  /// Move-assigns a logical pipeline.
+  logical_pipeline& operator=(logical_pipeline&& rhs) noexcept;
+
   /// Parses a logical pipeline from its textual representation.
   static auto parse(std::string_view repr) -> caf::expected<logical_pipeline>;
 
@@ -39,6 +54,9 @@ public:
   /// or the *void* element type if the logical pipeline is empty.
   [[nodiscard]] auto output_element_type() const noexcept
     -> runtime_element_type override;
+
+  /// Returns whether any of the logical pipeline's operators are detached.
+  [[nodiscard]] auto detached() const noexcept -> bool override;
 
   /// Returns whether the pipeline is closed, i.e., both the input and output
   /// element types are *void*.
@@ -60,6 +78,30 @@ public:
 
   /// Unwraps the logical pipeline, converting it into its logical operators.
   [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr>;
+
+  /// Support the CAF type inspection API.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, logical_pipeline& x) -> bool {
+    if constexpr (Inspector::is_loading) {
+      auto repr = std::string{};
+      if (not f.object(x)
+                .pretty_name("vast.logical-pipeline")
+                .fields(f.field("repr", repr)))
+        return false;
+      auto result = logical_pipeline::parse(repr);
+      if (not result) {
+        VAST_WARN("failed to parse pipeline '{}': {}", repr, result.error());
+        return false;
+      }
+      x = std::move(*result);
+      return true;
+    } else {
+      auto repr = x.to_string();
+      return f.object(x)
+        .pretty_name("vast.logical-pipeline")
+        .fields(f.field("repr", repr));
+    }
+  }
 
 private:
   explicit logical_pipeline(std::vector<logical_operator_ptr> ops)
