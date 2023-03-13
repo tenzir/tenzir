@@ -117,8 +117,8 @@ void partition_synopsis::add(const table_slice& slice,
     auto add_column = [&](const synopsis_ptr& syn) {
       for (size_t row = 0; row < slice.rows(); ++row) {
         auto view = slice.at(row, col, leaf.field.type);
-        // TODO: It would probably make sense to allow `nil` in the
-        // synopsis API, so we can treat queries like `x == nil` just
+        // TODO: It would probably make sense to allow `null` in the
+        // synopsis API, so we can treat queries like `x == null` just
         // like normal queries.
         if (!caf::holds_alternative<caf::none_t>(view))
           syn->add(std::move(view));

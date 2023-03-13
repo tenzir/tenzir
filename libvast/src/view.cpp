@@ -205,7 +205,7 @@ data materialize(data_view x) {
 bool type_check(const type& x, const data_view& y) {
   auto f = detail::overload{
     [&](const auto&, const view<caf::none_t>&) {
-      // Every type can be assigned nil.
+      // Every type can be assigned null.
       return true;
     },
     [&](const enumeration_type& t, const view<enumeration>& u) {

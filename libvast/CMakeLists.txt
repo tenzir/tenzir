@@ -286,21 +286,6 @@ if (NOT simdjson_FOUND)
   set(SIMDJSON_ENABLE_DEVELOPER_MODE
       OFF
       CACHE BOOL "")
-  # <workaround>
-  # A combination of two bugs leads to us having to do this horrible mess:
-  # 1. CPACK_COMPONENTS_ALL does not register components only used within export
-  #    commands, but rather only references components used in install commands.
-  # 2. simdjson 3.1.3 mislabels this simdjsonTargets.cmake export file
-  #    installation into the example_Development rather than the
-  #    simdjson_Development component.
-  # As a workaround, we simply install a stub file in the wrong component. This
-  # must happen before we add simdjson as a subdirectory for whatever reason.
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/installed-via-vast" "")
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/installed-via-vast"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/simdjson/"
-    COMPONENT example_Development)
-  # </end workaround>
   add_subdirectory(aux/simdjson)
   set(_vast_bundled_simdjson "simdjson")
   add_custom_target(

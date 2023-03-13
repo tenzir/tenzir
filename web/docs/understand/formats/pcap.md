@@ -127,7 +127,7 @@ vast export pcap 'vlan.outer > 0 || vlan.inner in [1, 2, 3]' | tcpdump -r - -nl
 
 Special IDs include `0x000` (frame does not carry a VLAN ID) and `0xFFF`
 (reserved value; sometimes wildcard match). If you would like to check the
-presence of a header, check whether it null, e.g., `vlan.outer != nil`.
+presence of a header, check whether it is null, e.g., `vlan.outer != null`.
 
 ### Extract packet matching a Community ID
 

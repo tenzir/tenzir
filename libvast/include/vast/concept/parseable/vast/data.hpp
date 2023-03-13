@@ -78,7 +78,7 @@ private:
       | '[' >> ~(x % ',') >> trailing_comma >> ']'
       | '{' >> ~as<map>(kvp % ',') >> trailing_comma >> '}'
       | record_parser
-      | as<caf::none_t>("nil"_p)
+      | as<caf::none_t>("null"_p)
       | as<caf::none_t>(parsers::ch<'_'>)
       ;
     // clang-format on

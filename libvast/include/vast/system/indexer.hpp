@@ -22,7 +22,7 @@ namespace vast::system {
 // TODO: Create a separate `passive_indexer_state`, similar to how partitions
 // are handled.
 struct indexer_state {
-  constexpr static inline auto name = "index";
+  constexpr static inline auto name = "indexer";
 
   /// The index holding the data.
   value_index_ptr idx;
