@@ -80,10 +80,6 @@ using termination_handler_actor = typed_actor_fwd<
   // Receive a signal from the reflector.
   auto(atom::signal, int)->caf::result<void>>::unwrap;
 
-// using fleet_manager_actor = typed_actor_fwd<
-//   auto(atom::add, std::string,
-//   system::node_actor)->caf::result<void>::unwrap; // register
-
 /// The SIGNAL REFLECTOR actor interface.
 using signal_reflector_actor = typed_actor_fwd<
   // Receive a signal from the listener.
@@ -431,6 +427,10 @@ using terminator_actor = typed_actor_fwd<
 using connector_actor = typed_actor_fwd<
   // Retrieve the handle to a remote node actor.
   auto(atom::connect, connect_request)->caf::result<node_actor>>::unwrap;
+
+using fleet_manager_interface_actor
+  = typed_actor_fwd<auto(atom::add, std::string, node_actor)
+                      ->caf::result<void>>::unwrap; // register
 
 } // namespace vast::system
 
