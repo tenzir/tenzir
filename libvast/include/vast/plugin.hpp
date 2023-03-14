@@ -444,16 +444,15 @@ public:
     = std::function<auto(generator<chunk_ptr>)->generator<std::monostate>>;
 
   /// Returns a printer for a specified schema.
-  [[nodiscard]] virtual auto make_printer(const record&, type input_schema,
-                                          const operator_control_plane&) const
+  [[nodiscard]] virtual auto
+  make_printer(const record&, type input_schema, operator_control_plane&) const
     -> caf::expected<printer>
     = 0;
 
   /// Returns the default dumper for this printer.
   [[nodiscard]] virtual auto
   make_default_dumper(const record&, type input_schema,
-                      const operator_control_plane&) const
-    -> caf::expected<dumper>
+                      operator_control_plane&) const -> caf::expected<dumper>
     = 0;
 
   /// Returns whether the printer allows for joining output streams into a

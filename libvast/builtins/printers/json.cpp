@@ -16,8 +16,8 @@ namespace vast::plugins::json_printer {
 
 class plugin : public virtual printer_plugin {
 public:
-  [[nodiscard]] auto make_printer(const record&, type input_schema,
-                                  const operator_control_plane&) const
+  [[nodiscard]] auto
+  make_printer(const record&, type input_schema, operator_control_plane&) const
     -> caf::expected<printer_plugin::printer> override {
     auto input_type = caf::get<record_type>(input_schema);
     return [input_type](generator<table_slice> slices) -> generator<chunk_ptr> {
@@ -48,7 +48,7 @@ public:
 
   [[nodiscard]] auto
   make_default_dumper(const record&, [[maybe_unused]] type input_schema,
-                      const operator_control_plane&) const
+                      operator_control_plane&) const
     -> caf::expected<printer_plugin::dumper> override {
     return caf::make_error(ec::unimplemented,
                            "dumper currently not implemented");
