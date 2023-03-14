@@ -18,7 +18,7 @@ class plugin : public virtual printer_plugin {
 public:
   [[nodiscard]] auto
   make_printer(const record&, type input_schema, operator_control_plane&) const
-    -> caf::expected<printer_plugin::printer> override {
+    -> caf::expected<printer> override {
     auto input_type = caf::get<record_type>(input_schema);
     return [input_type](generator<table_slice> slices) -> generator<chunk_ptr> {
       // JSON printer should output NDJSON, see:
@@ -47,11 +47,11 @@ public:
   }
 
   [[nodiscard]] auto
-  make_default_dumper(const record&, [[maybe_unused]] type input_schema,
-                      operator_control_plane&) const
-    -> caf::expected<printer_plugin::dumper> override {
-    return caf::make_error(ec::unimplemented,
-                           "dumper currently not implemented");
+  make_default_dumper(const record& options, type input_schema,
+                      operator_control_plane& ctrl) const
+    -> caf::expected<dumper> override {
+    auto default_dumper = vast::plugins::find<vast::dumper_plugin>("stdout");
+    return default_dumper->make_dumper(options, input_schema, ctrl);
   }
 
   [[nodiscard]] auto printer_allows_joining() const -> bool override {
