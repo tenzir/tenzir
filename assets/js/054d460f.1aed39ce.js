@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[8798],{61218:(e,c,s)=>{s.d(c,{Z:()=>t});var l=s(67294);const t=({url:e})=>(l.useEffect((()=>{window.location.replace(e)}),[]),null)},81081:(e,c,s)=>{s.r(c),s.d(c,{default:()=>u});var l=s(61218),t=s(67294);const u=()=>t.createElement(l.Z,{url:"docs/about"})}}]);
