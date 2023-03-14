@@ -61,12 +61,6 @@ public:
   /// Unwraps the logical pipeline, converting it into its logical operators.
   [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr>;
 
-  /// Creates a local executor from the current logical pipeline that allows for
-  /// running the pipeline in the current thread incrementally.
-  /// @pre closed()
-  [[nodiscard]] auto make_local_executor() && noexcept
-    -> generator<caf::expected<void>>;
-
 private:
   explicit logical_pipeline(std::vector<logical_operator_ptr> ops)
     : ops_(std::move(ops)) {
@@ -74,6 +68,12 @@ private:
 
   std::vector<logical_operator_ptr> ops_ = {};
 };
+
+/// Creates a local executor from the current logical pipeline that allows for
+/// running the pipeline in the current thread incrementally.
+/// @pre `pipeline.closed()`
+auto make_local_executor(logical_pipeline pipeline) noexcept
+  -> generator<caf::expected<void>>;
 
 } // namespace vast
 

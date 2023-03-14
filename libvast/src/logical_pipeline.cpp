@@ -387,19 +387,18 @@ auto logical_pipeline::unwrap() && -> std::vector<logical_operator_ptr> {
   return std::exchange(ops_, {});
 }
 
-auto logical_pipeline::make_local_executor() && noexcept
+auto make_local_executor(logical_pipeline pipeline) noexcept
   -> generator<caf::expected<void>> {
-  auto ops = std::move(*this).unwrap();
-  if (ops.empty())
-    co_return; // no-op
-  if (!closed()) {
-    co_yield caf::make_error(
-      ec::invalid_argument,
-      fmt::format("pipeline is not closed: {} -> {}",
-                  ops.front()->input_element_type().name,
-                  ops.back()->output_element_type().name));
+  if (!pipeline.closed()) {
+    co_yield caf::make_error(ec::invalid_argument,
+                             fmt::format("pipeline is not closed: {} -> {}",
+                                         pipeline.input_element_type().name,
+                                         pipeline.output_element_type().name));
     co_return;
   }
+  auto ops = std::move(pipeline).unwrap();
+  if (ops.empty())
+    co_return; // no-op
   auto ctrl = execute_ctrl{};
   auto producer = make_local_producer(ops, &ctrl);
   for (auto&& output : producer) {

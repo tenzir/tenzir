@@ -156,7 +156,7 @@ struct fixture : fixtures::events {};
 
 TEST(command) {
   auto put = make_pipeline(command{});
-  for (auto&& x : std::move(put).make_local_executor()) {
+  for (auto&& x : make_local_executor(std::move(put))) {
     REQUIRE_NOERROR(x);
   }
 }
@@ -164,7 +164,7 @@ TEST(command) {
 FIXTURE_SCOPE(pipeline_fixture, fixture)
 
 TEST(source | where #type == "zeek.conn" | sink) {
-  auto put = make_pipeline(
+  auto put = make_local_executor(make_pipeline(
     source{{head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}},
     where{unbox(to<expression>(R"(#type == "zeek.conn")"))},
@@ -175,8 +175,8 @@ TEST(source | where #type == "zeek.conn" | sink) {
     sink{[](const table_slice&) {
       MESSAGE("---- sink ----");
       return;
-    }});
-  for (auto&& x : std::move(put).make_local_executor()) {
+    }}));
+  for (auto&& x : put) {
     REQUIRE_NOERROR(x);
   }
 }
