@@ -152,6 +152,11 @@ public:
     return fmt::format("drop {}", fmt::join(config_.fields, ", "));
   }
 
+  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+    return {};
+  }
+
 private:
   /// The underlying configuration of the transformation.
   configuration config_;

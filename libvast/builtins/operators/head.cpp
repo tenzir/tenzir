@@ -78,6 +78,11 @@ public:
     return fmt::format("head {}", limit_);
   }
 
+  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+    return {};
+  }
+
 private:
   uint64_t remaining_;
   uint64_t limit_;

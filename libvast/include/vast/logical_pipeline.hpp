@@ -61,6 +61,28 @@ public:
   /// Unwraps the logical pipeline, converting it into its logical operators.
   [[nodiscard]] auto unwrap() && -> std::vector<logical_operator_ptr>;
 
+  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override;
+
+  /// Same as `predicate_pushdown`, but returns a `logical_pipeline`.
+  [[nodiscard]] auto
+  predicate_pushdown_pipeline(expression const&) const noexcept
+    -> std::optional<std::pair<expression, logical_pipeline>>;
+
+  /// Returns a trivially-true expression. This is a workaround for having no
+  /// empty conjunction. It can also be used in a comparison to detect that an
+  /// expression is trivially-true.
+  static auto trivially_true_expression() -> const expression& {
+    static auto expr = expression{
+      predicate{
+        meta_extractor{meta_extractor::kind::type},
+        relational_operator::not_equal,
+        data{std::string{"this expression matches everything"}},
+      },
+    };
+    return expr;
+  }
+
 private:
   explicit logical_pipeline(std::vector<logical_operator_ptr> ops)
     : ops_(std::move(ops)) {

@@ -81,6 +81,11 @@ struct runtime_element_type {
       name{element_type_traits<ElementType>::name} {
   }
 
+  template <element_type ElementType>
+  constexpr auto is() -> bool {
+    return runtime_element_type{element_type_traits<ElementType>{}}.id == id;
+  }
+
   /// The unique identifier of the element type, corresponding to
   /// *element_type_id<T>* for the element type *T*.
   const int id;

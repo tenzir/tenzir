@@ -132,6 +132,11 @@ public:
     return fmt::format("where {}", expr_);
   }
 
+  [[nodiscard]] auto predicate_pushdown(expression const& expr) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+    return std::pair{conjunction{expr_, expr}, nullptr};
+  }
+
 private:
   expression expr_;
 };

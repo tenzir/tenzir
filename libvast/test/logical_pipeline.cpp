@@ -36,6 +36,11 @@ struct command final : public logical_operator<void, void> {
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
     return "command";
   }
+
+  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+    return {};
+  }
 };
 
 struct source final : public logical_operator<void, events> {
@@ -61,6 +66,11 @@ struct source final : public logical_operator<void, events> {
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
     return "source";
+  }
+
+  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+    return {};
   }
 
   std::vector<table_slice> events_;
@@ -94,6 +104,11 @@ struct sink final : public logical_operator<events, void> {
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
     return "sink";
+  }
+
+  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+    return {};
   }
 
   std::function<void(table_slice)> callback_;
@@ -136,6 +151,11 @@ struct where final : public logical_operator<events, events> {
     return fmt::format("where {}", expr_);
   }
 
+  [[nodiscard]] auto predicate_pushdown(expression const& expr) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+    return std::pair{conjunction{expr_, expr}, nullptr};
+  }
+
   expression expr_;
 };
 
@@ -171,6 +191,30 @@ TEST(roundtrip) {
     "| taste 123"};
   auto roundtrip = unbox(logical_pipeline::parse(original)).to_string();
   CHECK_EQUAL(roundtrip, original);
+}
+
+TEST(where pushdown into empty pipeline) {
+  auto pipeline = unbox(logical_pipeline::parse("where x == 1 | where y == 2"));
+  auto result = pipeline.predicate_pushdown(unbox(to<expression>("z == 3")));
+  REQUIRE(result);
+  auto [expr, op] = std::move(*result);
+  CHECK_EQUAL(op->to_string(), "pass");
+  CHECK_EQUAL(unbox(normalize_and_validate(expr)),
+              to<expression>("x == 1 && y == 2 && z == 3"));
+}
+
+TEST(where pushdown select conflict) {
+  auto pipeline = unbox(logical_pipeline::parse("where x == 0 | select x, z | "
+                                                "where y > 0 | where y < 5"));
+  auto result = pipeline.predicate_pushdown(unbox(to<expression>("z == 3")));
+  REQUIRE(result);
+  auto [expr, op] = std::move(*result);
+  CHECK_EQUAL(op->to_string(),
+              "select x, z | where (y > 0 && y < 5 && z == 3)");
+  auto expected_expr
+    = conjunction{unbox(to<expression>("x == 0")),
+                  logical_pipeline::trivially_true_expression()};
+  CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
 }
 
 FIXTURE_SCOPE(pipeline_fixture, fixture)

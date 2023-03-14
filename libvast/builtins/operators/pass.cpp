@@ -56,6 +56,11 @@ public:
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
     return fmt::format("pass");
   }
+
+  [[nodiscard]] auto predicate_pushdown(expression const& expr) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+    return std::pair{expr, std::make_unique<pass_operator2>(*this)};
+  }
 };
 
 class plugin final : public virtual pipeline_operator_plugin,

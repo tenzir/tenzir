@@ -8,12 +8,20 @@
 
 #pragma once
 
+#include "vast/expression.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/physical_operator.hpp"
+
+#include <caf/error.hpp>
 
 #include <string_view>
 
 namespace vast {
+
+class runtime_logical_operator;
+
+/// A short-hand form for a uniquely owned logical operator.
+using logical_operator_ptr = std::unique_ptr<runtime_logical_operator>;
 
 /// A type-erased version of a logical operator, and the base class of all
 /// logical operators. Commonly used as *logical_operator_ptr*.
@@ -37,6 +45,16 @@ public:
   [[nodiscard]] virtual auto detached() const noexcept -> bool {
     return false;
   }
+
+  /// Tries to perform predicate pushdown with the given expression.
+  ///
+  /// Returns `std::nullopt` if predicate pushdown can not be performed.
+  /// Otherwise, returns `std::pair{expr2, this2}` such that `this | where expr`
+  /// is equivalent to `where expr2 | this2`.
+  [[nodiscard]] virtual auto
+  predicate_pushdown(expression const& expr) const noexcept
+    -> std::optional<std::pair<expression, logical_operator_ptr>>
+    = 0;
 
   /// Creates a physical operator from this logical operator for a given input
   /// schema.
@@ -74,9 +92,6 @@ public:
   /// Returns the textual representation of this operator.
   [[nodiscard]] virtual auto to_string() const noexcept -> std::string = 0;
 };
-
-/// A short-hand form for a uniquely owned logical operator.
-using logical_operator_ptr = std::unique_ptr<runtime_logical_operator>;
 
 /// A logical operator with known input and output element types.
 template <element_type Input, element_type Output>

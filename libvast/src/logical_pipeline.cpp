@@ -455,6 +455,73 @@ auto logical_pipeline::unwrap() && -> std::vector<logical_operator_ptr> {
   return std::exchange(ops_, {});
 }
 
+auto logical_pipeline::predicate_pushdown(const expression& expr) const noexcept
+  -> std::optional<std::pair<expression, logical_operator_ptr>> {
+  if (auto result = predicate_pushdown_pipeline(expr)) {
+    return std::pair{
+      std::move(result->first),
+      std::make_unique<logical_pipeline>(std::move(result->second))};
+  }
+  return {};
+}
+
+auto logical_pipeline::predicate_pushdown_pipeline(const expression& expr)
+  const noexcept -> std::optional<std::pair<expression, logical_pipeline>> {
+  auto new_rev = std::vector<logical_operator_ptr>{};
+
+  auto current = expr;
+  for (auto it = ops_.rbegin(); it != ops_.rend(); ++it) {
+    if (auto result = (*it)->predicate_pushdown(current)) {
+      auto& [new_expr, replacement] = *result;
+      if (replacement) {
+        new_rev.push_back(std::move(replacement));
+      }
+      current = new_expr;
+    } else {
+      if (current != trivially_true_expression()) {
+        // TODO: We just want to create a `where current` operator. However, we
+        // currently only have the interface for parsing this from a string.
+        auto where_plugin = plugins::find<logical_operator_plugin>("where");
+        auto string = fmt::format(" {}", current);
+        auto [rest, op] = where_plugin->make_logical_operator(string);
+        VAST_ASSERT(rest.empty());
+        VAST_ASSERT(op);
+        new_rev.push_back(std::move(*op));
+        current = trivially_true_expression();
+      }
+      // TODO: We only want to copy `*it`. However, currently, the only way to
+      // this is to perfrom a `to_string -> parse` roundtrip.
+      auto copy = logical_pipeline::parse((*it)->to_string());
+      VAST_ASSERT(copy);
+      auto copy_ops = std::move(*copy).unwrap();
+      VAST_ASSERT(copy_ops.size() == 1);
+      new_rev.push_back(std::move(copy_ops[0]));
+    }
+  }
+
+  if (new_rev.empty()) {
+    // TODO: The empty pipeline would be malformed. We could make it work with
+    // some changes to the design.
+    auto pass_plugin = plugins::find<logical_operator_plugin>("pass");
+    VAST_ASSERT(pass_plugin);
+    auto [_, pass] = pass_plugin->make_logical_operator("");
+    VAST_ASSERT(pass);
+    new_rev.push_back(std::move(*pass));
+  }
+
+  std::reverse(new_rev.begin(), new_rev.end());
+  auto new_pipeline = make(std::move(new_rev));
+  if (!new_pipeline) {
+    // This can only happen if one of the operators has an unsound
+    // `predicate_pushdown` implementation.
+    VAST_WARN("expression pushdown on pipeline failed: {}",
+              new_pipeline.error());
+    return {};
+  }
+  return std::pair{std::move(current),
+                   logical_pipeline{std::move(*new_pipeline)}};
+}
+
 auto make_local_executor(logical_pipeline pipeline) noexcept
   -> generator<caf::expected<void>> {
   if (!pipeline.closed()) {
