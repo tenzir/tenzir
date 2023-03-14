@@ -20,11 +20,15 @@ auto runtime_logical_operator::done() const noexcept -> bool {
   return false;
 }
 
-auto runtime_logical_operator::copy() const noexcept -> logical_operator_ptr {
+auto runtime_logical_operator::copy() const noexcept
+  -> caf::expected<logical_operator_ptr> {
   const auto repr = to_string();
   auto result = logical_pipeline::parse(repr);
-  if (not result)
-    VAST_WARN("failed to copy logical pipeline '{}': {}", repr, result.error());
+  if (not result) {
+    return caf::make_error(
+      ec::logic_error, fmt::format("failed to copy logical pipeline '{}': {}",
+                                   repr, result.error()));
+  }
   return std::make_unique<logical_pipeline>(std::move(*result));
 }
 

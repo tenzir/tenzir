@@ -254,7 +254,7 @@ public:
   make_writer(const caf::settings& options) const = 0;
 };
 
-// -- transform plugin ---------------------------------------------------------
+// -- logical operator plugin -------------------------------------------------
 
 /// A base class for plugins that add new pipeline operators.
 class pipeline_operator_plugin : public virtual plugin {
@@ -276,8 +276,14 @@ public:
   make_pipeline_operator(std::string_view pipeline) const = 0;
 };
 
+/// A base class for plugins that add new logical pipeline operators.
 class logical_operator_plugin : public virtual plugin {
 public:
+  /// Creates a new logical operator.
+  /// @param pipeline The remaining pipeline representation, including
+  /// additional operators that come after this operator.
+  /// @returns The remaining pipeline representation, and the parsed logical
+  /// operator (or an error).
   [[nodiscard]] virtual std::pair<std::string_view,
                                   caf::expected<logical_operator_ptr>>
   make_logical_operator(std::string_view pipeline) const = 0;

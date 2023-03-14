@@ -351,8 +351,18 @@ logical_pipeline::logical_pipeline(const logical_pipeline& other) {
   if (this != &other) {
     ops_.clear();
     ops_.reserve(other.ops_.size());
-    for (const auto& op : ops_)
-      ops_.push_back(op ? op->copy() : nullptr);
+    for (const auto& op : ops_) {
+      auto copy = op->copy();
+      VAST_ASSERT(copy, fmt::to_string(copy.error()).c_str());
+      VAST_ASSERT(*copy != nullptr);
+      if (auto* pipeline = dynamic_cast<logical_pipeline*>(copy->get())) {
+        auto unwrapped_ops = std::move(*pipeline).unwrap();
+        ops_.insert(ops_.end(), std::make_move_iterator(unwrapped_ops.begin()),
+                    std::make_move_iterator(unwrapped_ops.end()));
+      } else {
+        ops_.push_back(std::move(*copy));
+      }
+    }
   }
 }
 
@@ -360,8 +370,18 @@ logical_pipeline& logical_pipeline::operator=(const logical_pipeline& rhs) {
   if (this != &rhs) {
     ops_.clear();
     ops_.reserve(rhs.ops_.size());
-    for (const auto& op : ops_)
-      ops_.push_back(op ? op->copy() : nullptr);
+    for (const auto& op : ops_) {
+      auto copy = op->copy();
+      VAST_ASSERT(copy, fmt::to_string(copy.error()).c_str());
+      VAST_ASSERT(*copy != nullptr);
+      if (auto* pipeline = dynamic_cast<logical_pipeline*>(copy->get())) {
+        auto unwrapped_ops = std::move(*pipeline).unwrap();
+        ops_.insert(ops_.end(), std::make_move_iterator(unwrapped_ops.begin()),
+                    std::make_move_iterator(unwrapped_ops.end()));
+      } else {
+        ops_.push_back(std::move(*copy));
+      }
+    }
   }
   return *this;
 }
@@ -466,7 +486,8 @@ auto logical_pipeline::output_element_type() const noexcept
 auto logical_pipeline::detached() const noexcept
   -> bool {
   return std::any_of(ops_.begin(), ops_.end(), [](const auto& op) noexcept {
-    return op ? op->detached() : false;
+    VAST_ASSERT(op);
+    return op->detached();
   });
 }
 

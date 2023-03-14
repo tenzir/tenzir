@@ -80,7 +80,8 @@ public:
   /// which requires the operator to be constructed from logical operator
   /// plugins. For other operators, a custom implementation of this must be
   /// provided.
-  [[nodiscard]] virtual auto copy() const noexcept -> logical_operator_ptr;
+  [[nodiscard]] virtual auto copy() const noexcept
+    -> caf::expected<logical_operator_ptr>;
 };
 
 /// A logical operator with known input and output element types.
