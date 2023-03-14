@@ -289,5 +289,19 @@ TEST(to - invalid inputs) {
   REQUIRE_ERROR(pipeline::parse("to json write stdout"));
 }
 
+TEST(from_read_parsing) {
+  auto definitions = {"from stdin", "from stdin read json",
+                      "read json from stdin", "read json"};
+  for (auto definition : definitions) {
+    auto source = unbox(pipeline::parse(definition));
+    auto ops = std::vector<operator_ptr>{};
+    ops.push_back(std::make_unique<pipeline>(std::move(source)));
+    ops.push_back(std::make_unique<sink>([](table_slice) {}));
+    auto executor = make_local_executor(pipeline{std::move(ops)});
+    // TODO: Cannot test behavior yet because JSON reader is missing.
+    (void)executor;
+  }
+}
+
 } // namespace
 } // namespace vast

@@ -184,9 +184,9 @@ public:
                       "ambiguous operator definition: callable with both "
                       "`op()` and `op(ctrl)`");
         if constexpr (source) {
-          return self()();
+          return convert_output(self()());
         } else if constexpr (source_ctrl) {
-          return self()(ctrl);
+          return convert_output(self()(ctrl));
         } else {
           return caf::make_error(ec::type_clash,
                                  fmt::format("'{}' cannot be used as a source",
@@ -212,9 +212,9 @@ public:
             },
             std::move(input));
         } else if constexpr (gen) {
-          return self()(std::move(input));
+          return convert_output(self()(std::move(input)));
         } else if constexpr (gen_ctrl) {
-          return self()(std::move(input), ctrl);
+          return convert_output(self()(std::move(input), ctrl));
         } else {
           return caf::make_error(ec::type_clash,
                                  fmt::format("'{}' does not accept {} as input",
@@ -235,6 +235,24 @@ private:
     static_assert(std::is_final_v<Self>);
     static_assert(std::is_base_of_v<crtp_operator, Self>);
     return static_cast<const Self&>(*this);
+  }
+
+  /// Converts the possible return types to `caf::expected<operator_output>`.
+  ///
+  /// This is mainly needed because `caf::expected` does not do implicit
+  /// conversions for us.
+  template <class T>
+  static auto convert_output(caf::expected<generator<T>> x)
+    -> caf::expected<operator_output> {
+    if (!x) {
+      return x.error();
+    }
+    return std::move(*x);
+  }
+
+  template <class T>
+  static auto convert_output(T x) -> caf::expected<operator_output> {
+    return x;
   }
 };
 
