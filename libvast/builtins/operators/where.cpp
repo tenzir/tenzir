@@ -178,12 +178,12 @@ public:
   [[nodiscard]] std::pair<std::string_view,
                           caf::expected<std::unique_ptr<pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
-    using parsers::optional_ws, parsers::required_ws,
+    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::end_of_pipeline_operator, parsers::expr;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p
-      = required_ws >> expr >> optional_ws >> end_of_pipeline_operator;
+    const auto p = required_ws_or_comment >> expr >> optional_ws_or_comment
+                   >> end_of_pipeline_operator;
     auto parse_result = expression{};
     if (!p(f, l, parse_result)) {
       return {
@@ -212,12 +212,12 @@ public:
 
   [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
   make_logical_operator(std::string_view pipeline) const override {
-    using parsers::optional_ws, parsers::required_ws,
+    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::end_of_pipeline_operator, parsers::expr;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p
-      = required_ws >> expr >> optional_ws >> end_of_pipeline_operator;
+    const auto p = required_ws_or_comment >> expr >> optional_ws_or_comment
+                   >> end_of_pipeline_operator;
     auto parse_result = expression{};
     if (!p(f, l, parse_result)) {
       return {

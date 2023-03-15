@@ -108,13 +108,13 @@ public:
   [[nodiscard]] std::pair<std::string_view,
                           caf::expected<std::unique_ptr<pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws,
-      parsers::optional_ws, parsers::extractor, parsers::extractor_char,
-      parsers::extractor_list;
+    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
+      parsers::optional_ws_or_comment, parsers::extractor,
+      parsers::extractor_char, parsers::extractor_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = required_ws >> extractor_list >> optional_ws
-                   >> end_of_pipeline_operator;
+    const auto p = required_ws_or_comment >> extractor_list
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto config = configuration{};
     if (!p(f, l, config.fields)) {
       return {

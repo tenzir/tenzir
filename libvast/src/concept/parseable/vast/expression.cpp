@@ -11,6 +11,7 @@
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/legacy_type.hpp"
+#include "vast/concept/parseable/vast/pipeline.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
@@ -148,6 +149,7 @@ auto make_extractor_parser() {
 static auto make_predicate_parser() {
   using parsers::alnum;
   using parsers::chr;
+  using parsers::optional_ws_or_comment;
   using namespace parser_literals;
   // clang-format off
   auto operand
@@ -172,9 +174,8 @@ static auto make_predicate_parser() {
     | "+]"_p  ->* [] { return relational_operator::ni; }
     | "-]"_p  ->* [] { return relational_operator::not_ni; }
     ;
-  auto ws = ignore(*parsers::space);
   auto pred
-    = (operand >> ws >> operation >> ws >> operand) ->* to_predicate
+    = (operand >> optional_ws_or_comment >> operation >> optional_ws_or_comment >> operand) ->* to_predicate
     ;
   return pred;
   // clang-format on
@@ -221,6 +222,7 @@ namespace {
 template <class Iterator>
 static auto make_expression_parser() {
   using namespace parser_literals;
+  using parsers::optional_ws_or_comment;
   using chain = std::vector<std::tuple<bool_operator, expression>>;
   using raw_expr = std::tuple<expression, chain>;
   // Converts a "raw" chain of sub-expressions and pipelines it into an
@@ -252,7 +254,6 @@ static auto make_expression_parser() {
       dis.emplace_back(std::move(con));
     return dis.size() == 1 ? std::move(dis[0]) : expression{dis};
   };
-  auto ws = ignore(*parsers::space);
   auto negate_expr = [](expression expr) {
     return negation{std::move(expr)};
   };
@@ -265,9 +266,9 @@ static auto make_expression_parser() {
     | make_extractor_parser() ->* expand_extractor
     ;
   group
-    = '(' >> ws >> ref(expr) >> ws >> ')'
-    | '!' >> ws >> pred_expr ->* negate_expr
-    | '!' >> ws >> '(' >> ws >> (ref(expr) ->* negate_expr) >> ws >> ')'
+    = '(' >> optional_ws_or_comment >> ref(expr) >> optional_ws_or_comment >> ')'
+    | '!' >> optional_ws_or_comment >> pred_expr ->* negate_expr
+    | '!' >> optional_ws_or_comment >> '(' >> optional_ws_or_comment >> (ref(expr) ->* negate_expr) >> optional_ws_or_comment >> ')'
     | pred_expr
     ;
   auto and_or
@@ -280,7 +281,7 @@ static auto make_expression_parser() {
     // shared_ptr would go to 0 at end of scope. We don't need this
     // precaution for the expr rule because that is part of the return
     // expression.
-    = (group >> *(ws >> and_or >> ws >> ref(group)) >> ws) ->* to_expr
+    = (group >> *(optional_ws_or_comment >> and_or >> optional_ws_or_comment >> ref(group)) >> optional_ws_or_comment) ->* to_expr
     ;
   // clang-format on
   return expr;

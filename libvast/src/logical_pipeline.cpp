@@ -37,7 +37,7 @@ public:
   }
 
 private:
-  [[nodiscard]] auto self() noexcept -> caf::event_based_actor* override {
+  [[nodiscard]] auto self() noexcept -> caf::event_based_actor& override {
     die("not implemented");
   }
 
@@ -331,9 +331,11 @@ auto logical_pipeline::parse(std::string_view repr)
   -> caf::expected<logical_pipeline> {
   auto ops = std::vector<logical_operator_ptr>{};
   // plugin name parser
-  using parsers::alnum, parsers::chr, parsers::space, parsers::optional_ws;
+  using parsers::alnum, parsers::chr, parsers::space,
+    parsers::optional_ws_or_comment;
   const auto plugin_name_char_parser = alnum | chr{'-'};
-  const auto plugin_name_parser = optional_ws >> +plugin_name_char_parser;
+  const auto plugin_name_parser
+    = optional_ws_or_comment >> +plugin_name_char_parser;
   while (!repr.empty()) {
     // 1. parse a single word as operator plugin name
     const auto* f = repr.begin();

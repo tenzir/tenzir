@@ -8,7 +8,7 @@
 
 #include "vast/legacy_pipeline.hpp"
 
-#include "vast/concept/parseable/string/char_class.hpp"
+#include "vast/concept/parseable/vast/pipeline.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -28,10 +28,11 @@ legacy_pipeline::parse(std::string name, std::string_view repr,
                        std::vector<std::string> schema_names) {
   auto result = legacy_pipeline{std::move(name), std::move(schema_names)};
   // plugin name parser
-  using parsers::alnum, parsers::chr, parsers::space;
-  const auto optional_ws = ignore(*space);
+  using parsers::alnum, parsers::chr, parsers::space,
+    parsers::optional_ws_or_comment;
   const auto plugin_name_char_parser = alnum | chr{'-'};
-  const auto plugin_name_parser = optional_ws >> +plugin_name_char_parser;
+  const auto plugin_name_parser
+    = optional_ws_or_comment >> +plugin_name_char_parser;
   while (!repr.empty()) {
     // 1. parse a single word as operator plugin name
     const auto* f = repr.begin();
