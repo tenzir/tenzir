@@ -174,7 +174,6 @@
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/vast
         '';
-        allowedRequisites = lib.optionals isStatic ["out"];
 
         fixupPhase = lib.optionalString isStatic ''
           rm -rf $out/nix-support
@@ -250,6 +249,7 @@
           install -m 644 -Dt $package package/*.deb package/*.tar.gz
           runHook postInstall
         '';
+        allowedRequisites = ["out"];
       });
   self = callPackage pkgFun ({self = self;} // args);
 in
