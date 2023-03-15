@@ -102,6 +102,9 @@ auto producer_from_logical_source(runtime_logical_operator* op,
 
 struct instance_state {
   generator<runtime_batch> gen;
+  /// This iterator should always be left in a state where it points to a
+  /// batch that was already consumed by `co_yield`. This is to prevent
+  /// unnecessary buffering.
   generator<runtime_batch>::iterator it;
   std::optional<runtime_batch> input_batch;
   runtime_physical_operator physical_op;
@@ -179,8 +182,9 @@ auto exhaust_on_stall_after_consume(instance_state& instance)
     if (instance.it == instance.gen.end()) {
       break;
     }
-    auto output = std::move(*instance.it);
+    // The iterator points to an already consumed output batch.
     ++instance.it;
+    auto output = std::move(*instance.it);
     if (!instance.input_batch && size(output) == 0) {
       break;
     }
@@ -214,9 +218,12 @@ auto append_logical_operator(generator<runtime_batch> previous,
   auto instances = std::unordered_map<type, instance_state>{};
   auto stop = false;
 
-  /// Dispatches an input batch, creating physical operators on demand.
+  /// Dispatches an input batch, creating physical operators for each schema
+  /// on-demand. Returns the instance associated with this schema, and whether
+  /// it has been freshly inserted (because the initial suspension point could
+  /// theoretically already provide an element, which we will have to consume).
   auto dispatch = [&]<class InputBatch>(InputBatch input)
-    -> caf::expected<std::reference_wrapper<instance_state>> {
+    -> caf::expected<std::pair<std::reference_wrapper<instance_state>, bool>> {
     // Empty batches should be handled before calling this.
     VAST_ASSERT(batch_traits<InputBatch>::size(input) != 0);
     // For every input batch, we take the following steps:
@@ -224,6 +231,7 @@ auto append_logical_operator(generator<runtime_batch> previous,
     auto input_schema = batch_traits<InputBatch>::schema(input);
     // 2. Try to find an already existing generator, or create a new one
     // if it doesn't exist yet for the given input schema.
+    bool newly_inserted = false;
     auto lookup = instances.find(input_schema);
     if (lookup == instances.end()) {
       VAST_PIPELINE_LOG("instantiating logical operator for new schema: {}",
@@ -241,6 +249,7 @@ auto append_logical_operator(generator<runtime_batch> previous,
       instance.gen = make_producer_from_optional<InputBatch>(
         instance.input_batch, stop, instance.physical_op);
       instance.it = instance.gen.begin();
+      newly_inserted = true;
     }
     // 3. Push the input element into the buffer.
     auto& instance = lookup->second;
@@ -255,7 +264,7 @@ auto append_logical_operator(generator<runtime_batch> previous,
       }
       instance.input_batch = std::move(input);
     }
-    return std::ref(lookup->second);
+    return std::pair{std::ref(lookup->second), newly_inserted};
   };
 
   for (auto&& input : previous) {
@@ -267,19 +276,33 @@ auto append_logical_operator(generator<runtime_batch> previous,
     }
     VAST_PIPELINE_LOG("inner generator for {} received non-empty input batch",
                       op->to_string());
-    auto instance = std::visit(dispatch, std::move(input));
-    if (!instance) {
-      ctrl->abort(std::move(instance.error()));
+    auto dispatched = std::visit(dispatch, std::move(input));
+    if (!dispatched) {
+      ctrl->abort(std::move(dispatched.error()));
       break;
     }
-    bool yielded = false;
-    for (auto&& output : exhaust_on_stall_after_consume(*instance)) {
+    auto& instance = dispatched->first.get();
+    auto inserted = dispatched->second;
+    bool yielded = false; // We have to yield at least once for every input.
+    if (inserted) {
+      // If this instance was newly inserted, then its iterator can point to a
+      // batch that we did not consume yet. However, we want the iterator to
+      // always point to an already consumed element.
+      if (instance.it != instance.gen.end()) {
+        auto output = std::move(*instance.it);
+        if (size(output) != 0) {
+          co_yield std::move(output);
+          yielded = true;
+        }
+      }
+    }
+    for (auto&& output : exhaust_on_stall_after_consume(instance)) {
       VAST_PIPELINE_LOG("inner generator for {} produced output of size {}",
                         op->to_string(), size(output));
       co_yield std::move(output);
       yielded = true;
     }
-    if (yielded) {
+    if (!yielded) {
       // We have to yield at least once for every input batch.
       co_yield {};
     }
