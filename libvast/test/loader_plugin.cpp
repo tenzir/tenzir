@@ -62,9 +62,6 @@ struct fixture {
     current_loader = unbox(loader_plugin->make_loader({}, control_plane));
   }
 
-  ~fixture() {
-  }
-
   const vast::loader_plugin* loader_plugin;
   vast::loader_plugin::loader current_loader;
   mock_control_plane control_plane;

@@ -61,9 +61,6 @@ struct fixture {
     current_dumper = unbox(dumper_plugin->make_dumper({}, {}, control_plane));
   }
 
-  ~fixture() {
-  }
-
   // Helper struct that, as long as it is alive, captures stdout.
   struct stdout_capture {
     stdout_capture() {
