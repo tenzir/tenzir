@@ -25,7 +25,7 @@ namespace {
 struct command final : public logical_operator<void, void> {
   caf::expected<physical_operator<void, void>>
   make_physical_operator(const type& input_schema,
-                         operator_control_plane*) noexcept override {
+                         operator_control_plane&) noexcept override {
     REQUIRE(!input_schema);
     return [=]() -> generator<std::monostate> {
       MESSAGE("hello, world!");
@@ -45,7 +45,7 @@ struct source final : public logical_operator<void, events> {
 
   caf::expected<physical_operator<void, events>>
   make_physical_operator(const type& input_schema,
-                         operator_control_plane*) noexcept override {
+                         operator_control_plane&) noexcept override {
     REQUIRE(!input_schema);
     return [*this]() -> generator<table_slice> {
       auto guard = caf::detail::scope_guard{[] {
@@ -73,7 +73,7 @@ struct sink final : public logical_operator<events, void> {
 
   caf::expected<physical_operator<events, void>>
   make_physical_operator(const type& input_schema,
-                         operator_control_plane*) noexcept override {
+                         operator_control_plane&) noexcept override {
     return [this, input_schema](
              generator<table_slice> input) -> generator<std::monostate> {
       auto guard = caf::detail::scope_guard{[] {
@@ -105,7 +105,7 @@ struct where final : public logical_operator<events, events> {
 
   caf::expected<physical_operator<events, events>>
   make_physical_operator(const type& input_schema,
-                         operator_control_plane*) noexcept override {
+                         operator_control_plane&) noexcept override {
     auto expr = tailor(expr_, input_schema);
     if (!expr) {
       return caf::make_error(ec::invalid_argument,
@@ -119,7 +119,7 @@ struct where final : public logical_operator<events, events> {
         MESSAGE("where destroy");
       }};
       for (auto&& slice : input) {
-        // TODO: adjust filter
+        // TODO: Adjust `filter` to make this check unnecessary.
         if (auto result = filter(slice, expr)) {
           MESSAGE("where yield result");
           co_yield *result;
@@ -138,10 +138,6 @@ struct where final : public logical_operator<events, events> {
 
   expression expr_;
 };
-
-// All generators must ...
-// - co_return if the input is exhausted
-// - co_yield empty if the input yields empty (because we have to stall?)
 
 template <class... Ts>
 auto make_pipeline(Ts&&... ts) -> logical_pipeline {

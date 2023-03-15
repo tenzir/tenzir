@@ -10,7 +10,7 @@
 
 #include "vast/defaults.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/system/make_pipelines.hpp"
+#include "vast/system/make_legacy_pipelines.hpp"
 #include "vast/system/sink.hpp"
 
 #include <caf/actor.hpp>

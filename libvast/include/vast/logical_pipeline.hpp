@@ -52,7 +52,7 @@ public:
   /// create an executor instead, e.g., by calling *make_local_executor()*.
   [[nodiscard]] auto
   make_runtime_physical_operator(const type& input_schema,
-                                 operator_control_plane* ctrl) noexcept
+                                 operator_control_plane& ctrl) noexcept
     -> caf::expected<runtime_physical_operator> override;
 
   /// Returns a textual representation of the logical pipeline.

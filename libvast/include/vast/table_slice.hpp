@@ -125,6 +125,7 @@ public:
   [[nodiscard]] enum table_slice_encoding encoding() const noexcept;
 
   /// @returns The table schema.
+  /// @note If default-constructed, returns a default-constructed `type`.
   [[nodiscard]] const type& schema() const noexcept;
 
   /// @returns The number of rows in the slice.

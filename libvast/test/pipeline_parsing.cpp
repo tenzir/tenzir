@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/make_pipelines.hpp"
+#include "vast/system/make_legacy_pipelines.hpp"
 
 #include <vast/legacy_pipeline.hpp>
 #include <vast/pipeline_operator.hpp>

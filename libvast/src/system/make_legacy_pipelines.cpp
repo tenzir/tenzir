@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/make_pipelines.hpp"
-
 #include "vast/concept/convertible/to.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
@@ -15,6 +13,7 @@
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/system/make_legacy_pipelines.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>

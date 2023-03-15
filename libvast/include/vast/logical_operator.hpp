@@ -33,7 +33,7 @@ public:
     = 0;
 
   /// Returns whether this logical operator prefers to be run on its own thread,
-  /// if the executor supports it.
+  /// if the executor supports it. This can be useful for I/O.
   [[nodiscard]] virtual auto detached() const noexcept -> bool {
     return false;
   }
@@ -48,9 +48,18 @@ public:
   /// - Physical operators (created per schema from the logical operator).
   /// - The logical operator.
   /// - The operator control plane.
+  ///
+  /// Implementations are required to satisfy the following properties:
+  /// - The output generator must always eventually advance the input generator
+  ///   or terminate (this implies that it eventually becomes exhausted after
+  ///   the input generator becomes exhausted).
+  /// - If the input generator yields, then the output generator must yield
+  ///   before advancing the input again.
+  /// These requirements do not apply if there is no input generator (i.e., the
+  /// input element type is `void`).
   [[nodiscard]] virtual auto
   make_runtime_physical_operator(const type& input_schema,
-                                 operator_control_plane* ctrl) noexcept
+                                 operator_control_plane& ctrl) noexcept
     -> caf::expected<runtime_physical_operator>
     = 0;
 
@@ -77,7 +86,7 @@ protected:
   /// ctrl)*.
   [[nodiscard]] virtual auto
   make_physical_operator(const type& input_schema,
-                         operator_control_plane* ctrl) noexcept
+                         operator_control_plane& ctrl) noexcept
     -> caf::expected<physical_operator<Input, Output>>
     = 0;
 
@@ -97,7 +106,7 @@ protected:
   /// ctrl)*
   [[nodiscard]] auto
   make_runtime_physical_operator(const type& input_schema,
-                                 operator_control_plane* ctrl) noexcept
+                                 operator_control_plane& ctrl) noexcept
     -> caf::expected<runtime_physical_operator> final {
     auto op = make_physical_operator(input_schema, ctrl);
     if (not op)

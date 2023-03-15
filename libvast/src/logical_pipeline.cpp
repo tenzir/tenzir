@@ -18,6 +18,12 @@
 #include <queue>
 #include <unordered_map>
 
+#if 1
+#  define VAST_PIPELINE_LOG(...) VAST_TRACE(__VA_ARGS__)
+#else
+#  define VAST_PIPELINE_LOG(...)
+#endif
+
 namespace vast {
 
 namespace {
@@ -69,7 +75,8 @@ private:
 auto producer_from_logical_source(runtime_logical_operator* op,
                                   operator_control_plane* ctrl)
   -> generator<runtime_batch> {
-  auto gen = op->make_runtime_physical_operator({}, ctrl);
+  VAST_PIPELINE_LOG("instantiating logical source: {}", op->to_string());
+  auto gen = op->make_runtime_physical_operator({}, *ctrl);
   if (not gen) {
     ctrl->abort(gen.error());
     return {};
@@ -77,11 +84,14 @@ auto producer_from_logical_source(runtime_logical_operator* op,
   auto f = []<element_type Input, element_type Output>(
              physical_operator<Input, Output> gen) -> generator<runtime_batch> {
     if constexpr (not std::is_void_v<Input>) {
+      // This was already checked by `make_local_executor`.
       die("tried to instantiate pipeline that does not begin with void");
     } else {
-      // This coroutine captures keeps the physical operator alive.
+      VAST_PIPELINE_LOG("calling physical source operator");
+      // This coroutine captures the physical operator and thereby keeps it alive.
       for (auto&& output : gen()) {
-        VAST_INFO("yield output");
+        VAST_PIPELINE_LOG("pipeline source provided element (size = {})",
+                          batch_traits<Output>::size(output));
         // This performs a conversion to `runtime_batch`.
         co_yield std::move(output);
       }
@@ -93,27 +103,29 @@ auto producer_from_logical_source(runtime_logical_operator* op,
 struct instance_state {
   generator<runtime_batch> gen;
   generator<runtime_batch>::iterator it;
-  std::queue<runtime_batch> queue;
+  std::optional<runtime_batch> input_batch;
   runtime_physical_operator physical_op;
 };
 
 template <class Batch>
-auto generator_for_queue(std::queue<runtime_batch>& queue, bool& stop)
+auto generator_for_optional(std::optional<runtime_batch>& optional, bool& stop)
   -> generator<Batch> {
   while (!stop) {
-    if (queue.empty()) {
-      // MESSAGE("yield empty");
+    if (!optional) {
+      VAST_PIPELINE_LOG("optional generator stalled due to empty optional");
       co_yield Batch{};
       continue;
     }
-    auto batch_ptr = std::get_if<Batch>(&queue.front());
+    VAST_PIPELINE_LOG("queue generator found batch in queue");
+    auto batch_ptr = std::get_if<Batch>(&*optional);
     VAST_ASSERT(batch_ptr);
     auto batch = std::move(*batch_ptr);
-    queue.pop();
+    optional.reset();
+    // Empty batches should not be put in any queue, but handled directly.
     VAST_ASSERT(batch_traits<Batch>::size(batch) != 0);
-    // MESSAGE("yield element");
     co_yield std::move(batch);
   }
+  VAST_PIPELINE_LOG("queue generator received stop signal");
 }
 
 template <class Batch>
@@ -125,45 +137,54 @@ auto erase_producer(generator<Batch> producer) -> generator<runtime_batch> {
 }
 
 template <class InputBatch>
-auto make_producer_from_queue(std::queue<runtime_batch>& queue, bool& stop,
-                              runtime_physical_operator& physical_op)
+auto make_producer_from_optional(std::optional<runtime_batch>& optional,
+                                 bool& stop,
+                                 runtime_physical_operator& physical_op)
   -> generator<runtime_batch> {
-  auto input_generator = generator_for_queue<InputBatch>(queue, stop);
+  auto input_generator = generator_for_optional<InputBatch>(optional, stop);
   auto make_generator
     = [&]<element_type Input, element_type Output>(
         physical_operator<Input, Output>& physical_op) noexcept
     -> generator<runtime_batch> {
     if constexpr (std::is_void_v<Input>) {
+      // This was already checked by `logical_pipeline::make`.
       die("input type of operator must not be void here");
     } else if constexpr (!std::is_same_v<element_type_to_batch_t<Input>,
                                          InputBatch>) {
+      // This could happen if a generator yields a `runtime_batch` inconsistent
+      // with its output type. This is only possible when inheriting from
+      // `runtime_logical_operator` instead of `logical_operator`.
       die("input generator did not yield operator input type");
     } else {
+      VAST_PIPELINE_LOG("calling inner physical operator");
       return erase_producer(physical_op(std::move(input_generator)));
     }
   };
   return std::visit(make_generator, physical_op);
 }
 
-auto exhaust_on_stall(instance_state& instance) -> generator<runtime_batch> {
+auto exhaust_on_stall_after_consume(instance_state& instance)
+  -> generator<runtime_batch> {
   // This effectively returns a generator that pulls from the instantiation,
-  // which pulls from the queue. A stall is requested when the queue is empty.
-  // In this case, the generator returned here becomes exhausted, which will
-  // request the next batch from `previous`.
+  // which pulls from the queue. We wait until the queue is empty, and then
+  // exhaust on the first stall. This is because the generator is technically
+  // allowed to stall inbetween, but we know that it must eventually terminate
+  // or pull an element from the queue. When the queue becomes empty, the
+  // generator pulling from it will stall, which will stall the actual generator
+  // for this instance. Thus, we will always make progress.
   while (true) {
-    // The inner generators can only end after `stop` is set, but the operator
-    // instantiation can end before that.
+    // The generators pulling from the queue only become exhausted after `stop`
+    // is set. However, the operator instantiation can become exhausted before,
+    // which means that it will never pull from the queue.
     if (instance.it == instance.gen.end()) {
       break;
     }
     auto output = std::move(*instance.it);
-    auto empty = size(output) == 0;
     ++instance.it;
-    VAST_INFO("yielded in generator");
-    co_yield std::move(output);
-    if (empty) {
+    if (!instance.input_batch && size(output) == 0) {
       break;
     }
+    co_yield std::move(output);
   }
 }
 
@@ -205,43 +226,65 @@ auto append_logical_operator(generator<runtime_batch> previous,
     // if it doesn't exist yet for the given input schema.
     auto lookup = instances.find(input_schema);
     if (lookup == instances.end()) {
-      auto physical_op = op->make_runtime_physical_operator(input_schema, ctrl);
+      VAST_PIPELINE_LOG("instantiating logical operator for new schema: {}",
+                        op->to_string());
+      auto physical_op
+        = op->make_runtime_physical_operator(input_schema, *ctrl);
       if (not physical_op) {
+        VAST_PIPELINE_LOG("failed to instantiate physical operator: {}",
+                          physical_op.error());
         return std::move(physical_op.error());
       }
       lookup = instances.emplace_hint(lookup, input_schema, instance_state{});
       auto& instance = lookup->second;
       instance.physical_op = std::move(*physical_op);
-      instance.gen = make_producer_from_queue<InputBatch>(instance.queue, stop,
-                                                          instance.physical_op);
-      // 3. Push the input element into the buffer.
-      instance.queue.push(std::move(input));
+      instance.gen = make_producer_from_optional<InputBatch>(
+        instance.input_batch, stop, instance.physical_op);
       instance.it = instance.gen.begin();
-    } else {
-      // 3. Push the input element into the buffer.
-      auto& instance = lookup->second;
-      if (instance.it != instance.gen.end()) {
-        instance.queue.push(std::move(input));
+    }
+    // 3. Push the input element into the buffer.
+    auto& instance = lookup->second;
+    if (instance.it != instance.gen.end()) {
+      // We only do this if the instance is not already done, as we might
+      // otherwise overflow the queue.
+      if (instance.input_batch) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("dispatching into non-empty "
+                                           "optional for {}",
+                                           op->to_string()));
       }
+      instance.input_batch = std::move(input);
     }
     return std::ref(lookup->second);
   };
 
   for (auto&& input : previous) {
     if (size(input) == 0) {
-      VAST_INFO("inner stalled");
+      VAST_PIPELINE_LOG("inner generator for {} stalled due to input stall",
+                        op->to_string());
       co_yield {};
       continue;
     }
+    VAST_PIPELINE_LOG("inner generator for {} received non-empty input batch",
+                      op->to_string());
     auto instance = std::visit(dispatch, std::move(input));
     if (!instance) {
       ctrl->abort(std::move(instance.error()));
+      break;
     }
-    // Iterate until the queue is empty.
-    for (auto&& output : exhaust_on_stall(*instance)) {
-      VAST_INFO("will yield in outer generator");
+    bool yielded = false;
+    for (auto&& output : exhaust_on_stall_after_consume(*instance)) {
+      VAST_PIPELINE_LOG("inner generator for {} produced output of size {}",
+                        op->to_string(), size(output));
       co_yield std::move(output);
+      yielded = true;
     }
+    if (yielded) {
+      // We have to yield at least once for every input batch.
+      co_yield {};
+    }
+    VAST_PIPELINE_LOG("inner generator for {} handled input batch completely",
+                      op->to_string());
     if (op->done()) {
       // If all instances require no more input, then we can abort the
       // iteration over `previous` and process the instances until they
@@ -249,6 +292,8 @@ auto append_logical_operator(generator<runtime_batch> previous,
       break;
     }
   }
+  VAST_PIPELINE_LOG("previous pipeline generator exhausted, waiting for {}",
+                    op->to_string());
   stop = true;
   for (auto& [_, instance] : instances) {
     // The input to `gen` will now become exhausted when the queue is empty.
@@ -261,6 +306,7 @@ auto append_logical_operator(generator<runtime_batch> previous,
       }
     }
   }
+  VAST_PIPELINE_LOG("pipeline operator {} is now exhausted", op->to_string());
 }
 
 /// Creates a generator from a pipeline that is closed from the left.
@@ -327,17 +373,17 @@ auto logical_pipeline::make(std::vector<logical_operator_ptr> ops)
     return caf::make_error(ec::invalid_argument,
                            fmt::format("invalid operator at index {}",
                                        std::distance(ops.begin(), invalid)));
-  const auto mismatch
+  const auto violation
     = std::adjacent_find(ops.begin(), ops.end(), [](auto& a, auto& b) {
         return a->output_element_type() != b->input_element_type()
-               && a->output_element_type().id != element_type_id<void>;
+               || a->output_element_type().id == element_type_id<void>;
       });
-  if (mismatch != ops.end()) {
+  if (violation != ops.end()) {
     return caf::make_error(
       ec::invalid_argument,
-      fmt::format("element type mismatch: cannot connect {} -> {}",
-                  (*mismatch)->output_element_type().name,
-                  (*(mismatch + 1))->input_element_type().name));
+      fmt::format("pipeline type violation: cannot connect {} -> {}",
+                  (*violation)->output_element_type().name,
+                  (*(violation + 1))->input_element_type().name));
   }
   auto flattened = std::vector<logical_operator_ptr>{};
   flattened.reserve(ops.size());
@@ -369,7 +415,7 @@ auto logical_pipeline::output_element_type() const noexcept
 
 auto logical_pipeline::make_runtime_physical_operator(
   [[maybe_unused]] const type& input_schema,
-  [[maybe_unused]] operator_control_plane* ctrl) noexcept
+  [[maybe_unused]] operator_control_plane& ctrl) noexcept
   -> caf::expected<runtime_physical_operator> {
   return caf::make_error(ec::logic_error, "instantiated pipeline");
 }
@@ -403,7 +449,7 @@ auto make_local_executor(logical_pipeline pipeline) noexcept
   auto producer = make_local_producer(ops, &ctrl);
   for (auto&& output : producer) {
     if (ctrl.error()) {
-      VAST_INFO("got error: {}", ctrl.error());
+      VAST_PIPELINE_LOG("error during pipeline execution: {}", ctrl.error());
       co_yield ctrl.error();
       co_return;
     }
@@ -411,7 +457,7 @@ auto make_local_executor(logical_pipeline pipeline) noexcept
     co_yield {};
   }
   if (ctrl.error()) {
-    VAST_INFO("got error: {}", ctrl.error());
+    VAST_PIPELINE_LOG("error after pipeline exhaustion: {}", ctrl.error());
     co_yield ctrl.error();
     co_return;
   }
