@@ -277,28 +277,18 @@ struct rebuilder_state {
       .then(
         [this, finish](system::catalog_lookup_result& lookup_result) mutable {
           for (auto& [type, result] : lookup_result.candidate_infos) {
-            if (!run->options.all) {
-              std::erase_if(result.partition_infos,
-                            [&](const partition_info& partition) {
-                              return partition.version
-                                     >= version::current_partition_version;
-                            });
-              if (result.partition_infos.empty()) {
-                lookup_result.candidate_infos.erase(type);
-                if (lookup_result.candidate_infos.empty()) {
-                  return finish({}, true);
-                }
-              }
-            }
-            if (run->options.undersized) {
-              std::erase_if(
-                result.partition_infos, [&](const partition_info& partition) {
-                  return static_cast<bool>(partition.schema)
-                         && partition.events > detail::narrow_cast<size_t>(
-                              detail::narrow_cast<double>(max_partition_size)
-                              * undersized_threshold);
-                });
-            }
+            std::erase_if(
+              result.partition_infos, [&](const partition_info& partition) {
+                const auto not_undersized
+                  = run->options.undersized
+                    && partition.events > detail::narrow_cast<size_t>(
+                         detail::narrow_cast<double>(max_partition_size)
+                         * undersized_threshold);
+                const auto not_outdated
+                  = not run->options.all
+                    && partition.version >= version::current_partition_version;
+                return not_undersized && not_outdated;
+              });
             if (run->options.max_partitions < result.partition_infos.size()) {
               std::stable_sort(result.partition_infos.begin(),
                                result.partition_infos.end(),
@@ -321,6 +311,14 @@ struct rebuilder_state {
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
           }
+          const auto all_empty = std::all_of(
+            lookup_result.candidate_infos.begin(),
+            lookup_result.candidate_infos.end(),
+            [](const auto& candidate_info) {
+              return candidate_info.second.partition_infos.empty();
+            });
+          if (all_empty)
+            return finish({}, true);
           if (run->options.automatic)
             VAST_VERBOSE("{} triggered an automatic run for {} candidate "
                          "partitions with {} threads",
