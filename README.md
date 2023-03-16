@@ -78,7 +78,7 @@ or swing by our [Discord chat](https://vast.io/discord)—we're here to help!
 
 VAST comes with a [3-clause BSD license][license-url].
 
-[license-url]: https://raw.github.com/vast-io/vast/master/LICENSE
+[license-url]: https://raw.github.com/vast-io/vast/main/LICENSE
 
 ## Scientific Use
 

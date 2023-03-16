@@ -8,7 +8,7 @@ on:
         default: ""
   push:
     branches:
-      - master
+      - main
       - v*
   pull_request:
     types:
@@ -111,7 +111,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             before_sha="${{ github.event.before }}"
           else
-            before_sha="$(git merge-base origin/master HEAD)"
+            before_sha="$(git merge-base origin/main HEAD)"
           fi
           before_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "${before_sha}")"
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
@@ -350,7 +350,7 @@ jobs:
           export VAST_CONTAINER_REGISTRY=ghcr.io
           yarn build
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -851,7 +851,7 @@ jobs:
           restore-keys: |
             ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.head-ref-slug }}
             ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
-            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-master
+            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-main
             ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}
       - name: Configure
         run: |
