@@ -104,14 +104,14 @@ void sink_state::send_report() {
 
 caf::behavior sink(caf::stateful_actor<sink_state>* self,
                    format::writer_ptr&& writer, uint64_t max_events) {
-  return transforming_sink(self, std::move(writer), std::vector<pipeline>{},
-                           max_events);
+  return transforming_sink(self, std::move(writer),
+                           std::vector<legacy_pipeline>{}, max_events);
 }
 
-caf::behavior
-transforming_sink(caf::stateful_actor<sink_state>* self,
-                  format::writer_ptr&& writer,
-                  std::vector<pipeline>&& pipelines, uint64_t max_events) {
+caf::behavior transforming_sink(caf::stateful_actor<sink_state>* self,
+                                format::writer_ptr&& writer,
+                                std::vector<legacy_pipeline>&& pipelines,
+                                uint64_t max_events) {
   VAST_DEBUG("{} spawned ({}, {})", *self, writer->name(),
              VAST_ARG(max_events));
   using namespace std::chrono;

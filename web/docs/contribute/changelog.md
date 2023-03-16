@@ -10,7 +10,7 @@ noteworthy *user-facing* changes.
 The procedure for adding a changelog entry looks as follows.
 
 1. Open your pull request with your proposed changes
-2. Go to the [`changelog`](https://github.com/tenzir/vast/tree/master/changelog)
+2. Go to the [`changelog`](https://github.com/tenzir/vast/tree/main/changelog)
    directory in the top-level repository directory and navigate to the
    `next` sub-directory.
 3. Choose a category for your changes and go to the corresponding sub-directory:

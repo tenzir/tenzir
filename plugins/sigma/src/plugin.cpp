@@ -10,7 +10,7 @@
 
 #include <vast/data.hpp>
 #include <vast/error.hpp>
-#include <vast/pipeline.hpp>
+#include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
 
 #include <caf/error.hpp>
@@ -29,12 +29,13 @@ class plugin final : public virtual language_plugin {
     return "sigma";
   }
 
-  [[nodiscard]] caf::expected<std::pair<expression, std::optional<pipeline>>>
+  [[nodiscard]] caf::expected<
+    std::pair<expression, std::optional<legacy_pipeline>>>
   make_query(std::string_view query) const override {
     if (auto yaml = from_yaml(query)) {
       auto parsed = parse_rule(*yaml);
       if (parsed) {
-        return std::pair{std::move(*parsed), std::optional<pipeline>{}};
+        return std::pair{std::move(*parsed), std::optional<legacy_pipeline>{}};
       }
       return std::move(parsed.error());
     } else {

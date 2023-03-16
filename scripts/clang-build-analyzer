@@ -42,11 +42,11 @@ on_exit=('popd' "${on_exit[@]}")
 cmake "${@}" -B "${WORKING_DIR}/build" \
   -DVAST_ENABLE_TIME_TRACE:BOOL=ON
 
-# When not on master, build first, then touch the changed files
-if [ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]; then
+# When not on main, build first, then touch the changed files
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then
   cmake --build "${WORKING_DIR}/build" -j \
     | grep -v "Time trace\|tracing"
-  git diff --name-only "$(git merge-base origin/master "${CBA_BASE:-HEAD}")" \
+  git diff --name-only "$(git merge-base origin/main "${CBA_BASE:-HEAD}")" \
     | xargs touch
 fi
 

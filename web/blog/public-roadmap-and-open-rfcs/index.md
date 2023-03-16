@@ -88,7 +88,7 @@ establishing a formal [Request for Comments (RFC) process][rfc].
 
 To get an idea, how an RFC looks like, here's the [RFC template][rfc-template]:
 
-[rfc-template]: https://github.com/tenzir/vast/blob/master/rfc/000-template/README.md
+[rfc-template]: https://github.com/tenzir/vast/blob/main/rfc/000-template/README.md
 
 import CodeBlock from '@theme/CodeBlock';
 import Template from '!!raw-loader!@site/../rfc/000-template/README.md';

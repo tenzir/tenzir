@@ -16,7 +16,7 @@
 #include "vast/query_context.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/make_pipelines.hpp"
+#include "vast/system/make_legacy_pipelines.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -77,8 +77,8 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
         {{"expression", fmt::to_string(expression{negation{*expr}})}});
       if (!where_operator)
         return where_operator.error();
-      auto transform
-        = std::make_shared<vast::pipeline>("aging", std::vector<std::string>{});
+      auto transform = std::make_shared<vast::legacy_pipeline>(
+        "aging", std::vector<std::string>{});
       transform->add_operator(std::move(*where_operator));
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)

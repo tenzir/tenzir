@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 
 #include "vast/concept/parseable/vast/pipeline.hpp"
 #include "vast/logger.hpp"
@@ -23,9 +23,10 @@
 
 namespace vast {
 
-caf::expected<pipeline> pipeline::parse(std::string name, std::string_view repr,
-                                        std::vector<std::string> schema_names) {
-  auto result = pipeline{std::move(name), std::move(schema_names)};
+caf::expected<legacy_pipeline>
+legacy_pipeline::parse(std::string name, std::string_view repr,
+                       std::vector<std::string> schema_names) {
+  auto result = legacy_pipeline{std::move(name), std::move(schema_names)};
   // plugin name parser
   using parsers::alnum, parsers::chr, parsers::space,
     parsers::optional_ws_or_comment;
@@ -64,41 +65,42 @@ caf::expected<pipeline> pipeline::parse(std::string name, std::string_view repr,
   return result;
 }
 
-pipeline::pipeline(std::string name, std::vector<std::string>&& schema_names)
+legacy_pipeline::legacy_pipeline(std::string name,
+                                 std::vector<std::string>&& schema_names)
   : name_(std::move(name)), schema_names_(std::move(schema_names)) {
 }
 
-void pipeline::add_operator(std::unique_ptr<pipeline_operator> op) {
+void legacy_pipeline::add_operator(std::unique_ptr<pipeline_operator> op) {
   operators_.emplace_back(std::move(op));
 }
 
-const std::string& pipeline::name() const {
+const std::string& legacy_pipeline::name() const {
   return name_;
 }
 
-const std::vector<std::string>& pipeline::schema_names() const {
+const std::vector<std::string>& legacy_pipeline::schema_names() const {
   return schema_names_;
 }
 
-bool pipeline::is_blocking() const {
+bool legacy_pipeline::is_blocking() const {
   return std::any_of(operators_.begin(), operators_.end(), [](const auto& op) {
     return op->is_blocking();
   });
 }
 
-bool pipeline::applies_to(std::string_view event_name) const {
+bool legacy_pipeline::applies_to(std::string_view event_name) const {
   return schema_names_.empty()
          || std::find(schema_names_.begin(), schema_names_.end(), event_name)
               != schema_names_.end();
 }
 
-caf::error pipeline::add(table_slice&& x) {
+caf::error legacy_pipeline::add(table_slice&& x) {
   VAST_DEBUG("transform {} adds a slice", name_);
   import_timestamps_.push_back(x.import_time());
   return add_slice(std::move(x));
 }
 
-caf::expected<std::vector<table_slice>> pipeline::finish() {
+caf::expected<std::vector<table_slice>> legacy_pipeline::finish() {
   VAST_DEBUG("transform {} retrieves results from {} steps", name_,
              operators_.size());
   auto guard = caf::detail::make_scope_guard([this]() {
@@ -139,15 +141,15 @@ caf::expected<std::vector<table_slice>> pipeline::finish() {
   return result;
 }
 
-caf::error pipeline::add_slice(table_slice slice) {
+caf::error legacy_pipeline::add_slice(table_slice slice) {
   VAST_TRACE("add arrow data to transform {}", name_);
   to_transform_.emplace_back(std::move(slice));
   return caf::none;
 }
 
-caf::error
-pipeline::process_queue(pipeline_operator& op, std::vector<table_slice>& result,
-                        bool check_schema) {
+caf::error legacy_pipeline::process_queue(pipeline_operator& op,
+                                          std::vector<table_slice>& result,
+                                          bool check_schema) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {
@@ -183,7 +185,7 @@ pipeline::process_queue(pipeline_operator& op, std::vector<table_slice>& result,
   return caf::none;
 }
 
-caf::expected<std::vector<table_slice>> pipeline::finish_batch() {
+caf::expected<std::vector<table_slice>> legacy_pipeline::finish_batch() {
   VAST_DEBUG("applying {} pipeline {}", operators_.size(), name_);
   bool first_run = true;
   std::vector<table_slice> result{};
@@ -203,7 +205,7 @@ caf::expected<std::vector<table_slice>> pipeline::finish_batch() {
   return result;
 }
 
-pipeline_executor::pipeline_executor(std::vector<pipeline>&& pipelines)
+pipeline_executor::pipeline_executor(std::vector<legacy_pipeline>&& pipelines)
   : pipelines_(std::move(pipelines)) {
   for (size_t i = 0; i < pipelines_.size(); ++i) {
     auto const& schema_names = pipelines_[i].schema_names();
@@ -223,7 +225,7 @@ caf::error pipeline_executor::add(table_slice&& x) {
   return caf::none;
 }
 
-caf::error pipeline_executor::process_queue(pipeline& pipeline,
+caf::error pipeline_executor::process_queue(legacy_pipeline& pipeline,
                                             std::deque<table_slice>& queue) {
   caf::error failed{};
   const auto size = queue.size();
@@ -302,7 +304,7 @@ caf::expected<std::vector<table_slice>> pipeline_executor::finish() {
   return result;
 }
 
-const std::vector<pipeline>& pipeline_executor::pipelines() const {
+const std::vector<legacy_pipeline>& pipeline_executor::pipelines() const {
   return pipelines_;
 }
 

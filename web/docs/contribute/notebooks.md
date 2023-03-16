@@ -43,7 +43,7 @@ features within a Quarto notebook.
 
 Other services can be added to the context of the Quarto notebook execution by
 extending the Docker Compose setup with [extra
-overlays](https://github.com/tenzir/vast/tree/master/docker/).
+overlays](https://github.com/tenzir/vast/tree/main/docker/).
 
 The website build harness uses this Docker Compose environment to run Quarto
 notebooks that represent more elaborate user guides or blog posts that. For
