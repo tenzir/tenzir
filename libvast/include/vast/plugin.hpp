@@ -19,6 +19,7 @@
 #include "vast/logical_operator.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/transformer.hpp"
 #include "vast/type.hpp"
 
 #include <caf/error.hpp>
@@ -281,6 +282,13 @@ public:
   [[nodiscard]] virtual std::pair<std::string_view,
                                   caf::expected<logical_operator_ptr>>
   make_logical_operator(std::string_view pipeline) const = 0;
+};
+
+class transformer_plugin : public virtual plugin {
+public:
+  virtual auto make_transformer(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<transformer_ptr>>
+    = 0;
 };
 
 // -- aggregation function plugin ---------------------------------------------

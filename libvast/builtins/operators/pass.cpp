@@ -12,6 +12,7 @@
 #include <vast/legacy_pipeline.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
+#include <vast/transformer2.hpp>
 
 #include <arrow/type.h>
 
@@ -58,8 +59,17 @@ public:
   }
 };
 
+class pass final : public crtp_transformer<pass> {
+public:
+  template <class T>
+  auto operator()(T x) const -> T {
+    return std::move(x);
+  }
+};
+
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual logical_operator_plugin,
+                     public virtual transformer_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -115,6 +125,26 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<pass_operator2>(),
+    };
+  }
+
+  auto make_transformer(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<transformer_ptr>> override {
+    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = optional_ws_or_comment >> end_of_pipeline_operator;
+    if (!p(f, l, unused)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "pass operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<pass>(),
     };
   }
 };

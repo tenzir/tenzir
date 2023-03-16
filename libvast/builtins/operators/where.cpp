@@ -18,6 +18,7 @@
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
+#include <vast/transformer2.hpp>
 
 #include <arrow/type.h>
 #include <caf/expected.hpp>
@@ -136,8 +137,230 @@ private:
   expression expr_;
 };
 
+class where final : public schematic_transformer<expression> {
+public:
+  explicit where(expression expr) : expr_{std::move(expr)} {
+  }
+
+  auto initialize(const type& schema) const -> caf::expected<State> override {
+    return tailor(expr_, schema);
+  }
+
+  auto process(table_slice slice, State& expr) const -> table_slice override {
+    return filter(slice, expr).value_or(table_slice{});
+  }
+
+private:
+  expression expr_;
+};
+
+class where2 final : public crtp_transformer<where2> {
+public:
+  explicit where2(expression expr) : expr_{std::move(expr)} {
+  }
+
+  auto
+  operator()(generator<table_slice> input, transformer_control& control) const
+    -> generator<table_slice> {
+    auto state = std::unordered_map<type, expression>{};
+    for (auto&& slice : input) {
+      // auto it = state.find(slice.schema());
+      // if (it == state.end()) {
+      //   auto expr = tailor(expr_, slice.schema());
+      //   if (!expr) {
+      //     control.abort(expr.error());
+      //     break;
+      //   }
+      //   it = state.try_emplace(it, slice.schema(), *expr);
+      // }
+      // co_yield filter(slice, it->second).value_or(table_slice{});
+    }
+  }
+
+private:
+  expression expr_;
+};
+
+// class where2 final : public crtp_transformer<where2> {
+// public:
+//   explicit where2(expression expr) : expr_{std::move(expr)} {
+//   }
+
+//   auto
+//   operator()(type const& schema,
+//              transformer_control& control) /* -> table_slice -> table_slice
+//              */ {
+//     return [expr = tailor(expr_, schema),
+//             &control](table_slice slice) -> table_slice {
+//       if (!expr) {
+//         control.abort(expr.error());
+//         return {};
+//       }
+//       return filter(slice, *expr).value_or(table_slice{});
+//     };
+//   }
+
+//   auto operator()(
+//     type const& schema) /* -> (table_slice, control&) -> table_slice */ {
+//     return [expr = tailor(expr_, schema)](
+//              table_slice slice, transformer_control& control) -> table_slice {
+//       if (!expr) {
+//         control.abort(expr.error());
+//         return {};
+//       }
+//       return filter(slice, *expr).value_or(table_slice{});
+//     };
+//   }
+
+// private:
+//   expression expr_;
+// };
+
+// class where3 final : public schematic_transformer<expression> {
+// public:
+//   explicit where3(expression expr) : expr_{std::move(expr)} {
+//   }
+
+//   // TODO: adjust filter function return type
+//   // TODO: Replace this with an Arrow-native filter function as soon as
+//   // are able to directly evaluate expressions on a record batch.
+
+//   auto foo(
+//     generator<std::pair<table_slice, std::reference_wrapper<expression>>>
+//     input)
+//     -> generator<table_slice> {
+//     for (auto&& [slice, expr] : input) {
+//       co_yield filter(slice, expr).value_or(table_slice{});
+//     }
+//   }
+
+//   // ------------------------
+
+//   auto bar(const type& schema)
+//     -> caf::expected<std::function<auto(table_slice)->table_slice>> {
+//     auto expr = tailor(expr_, schema);
+//     if (!expr) {
+//       return expr.error();
+//     }
+//     return [expr = std::move(*expr)](table_slice slice) {
+//       return filter(slice, expr).value_or(table_slice{});
+//     };
+//   }
+
+//   auto bar2(const type& schema, transformer_control& control)
+//     -> std::function<auto(table_slice)->table_slice> {
+//     auto expr = tailor(expr_, schema);
+//     if (!expr) {
+//       control.abort(expr.error());
+//       return {};
+//     }
+//     return [expr = std::move(*expr)](table_slice slice) {
+//       return filter(slice, expr).value_or(table_slice{});
+//     };
+//   }
+
+//   auto bar3(const type& schema)
+//     -> caf::expected<std::function<auto(table_slice)->table_slice>> {
+//     return tailor(expr_, schema).map([](expression expr) {
+//       return [expr = std::move(expr)](table_slice slice) {
+//         return filter(slice, expr).value_or(table_slice{});
+//       };
+//     });
+//   }
+
+//   // ------------
+
+//   auto baz(generator<table_slice> input, transformer_control& control)
+//     -> generator<table_slice> {
+//     auto state = std::unordered_map<type, expression>{};
+//     for (auto&& slice : input) {
+//       auto it = state.find(slice.schema());
+//       if (it == state.end()) {
+//         auto expr = tailor(expr_, slice.schema());
+//         if (!expr) {
+//           control.abort(caf::make_error(
+//             ec::invalid_argument,
+//             fmt::format("failed to tailor expression for where operator: {}",
+//                         expr_)));
+//           co_yield {};
+//           break;
+//         }
+//         it = state.try_emplace(it, slice.schema(), *expr);
+//       }
+//       co_yield filter(slice, it->second).value_or(table_slice{});
+//     }
+//   }
+
+//   // ---------------------
+
+//   auto initialize(const type& schema) -> caf::expected<expression> override {
+//     return tailor(expr_, schema);
+//   }
+//   auto process(table_slice slice, expression& expr) -> table_slice override {
+//     return filter(slice, expr).value_or(table_slice{});
+//   }
+//   auto finish(std::unordered_map<type, expression> state)
+//     -> generator<table_slice> override {
+//   }
+
+// private:
+//   expression expr_;
+// };
+
+// class where0 final : public transformer<where0> {
+// public:
+//   explicit where0(expression expr) : expr_{std::move(expr)} {
+//   }
+
+//   auto
+//   instantiate(generator<table_slice> input, transformer_control& control)
+//   const
+//     -> generator<table_slice> {
+//     // TODO: We can probably make this better. See below for one version.
+//     auto state = std::unordered_map<type, expression>{};
+//     for (auto&& slice : input) {
+//       auto it = state.find(slice.schema());
+//       if (it == state.end()) {
+//         auto expr = tailor(expr_, slice.schema());
+//         if (!expr) {
+//           control.abort(caf::make_error(
+//             ec::invalid_argument,
+//             fmt::format("failed to tailor expression for where operator: {}",
+//                         expr_)));
+//           co_yield {};
+//           continue;
+//         }
+//         it = state.try_emplace(it, slice.schema(), *expr);
+//       }
+//       // TODO: adjust filter function return type
+//       // TODO: Replace this with an Arrow-native filter function as soon as
+//       // are able to directly evaluate expressions on a record batch.
+//       if (auto result = filter(slice, it->second)) {
+//         co_yield *result;
+//       } else {
+//         co_yield {};
+//       }
+//     }
+
+//     // auto data = state_map<type, expression>{[&](const type& schema) {
+//     //   return tailor(expr_, slice.schema());
+//     // }};
+//     // for (auto&& slice : input) {
+//     //   if (auto expr = data[slice.schema()]) {
+//     //     co_yield filter(slice, *expr));
+//     //   } else {
+//     //     break;
+//     //   }
+//     // }
+//   }
+
+// private:
+//   expression expr_;
+// };
+
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual logical_operator_plugin,
+                     public virtual transformer_plugin {
 public:
   [[nodiscard]] caf::error
   initialize([[maybe_unused]] const record& plugin_config,
@@ -243,6 +466,39 @@ public:
       std::string_view{f, l},
       std::make_unique<where_operator2>(
         std::move(*normalized_and_validated_expr)),
+    };
+  }
+
+  auto make_transformer(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<transformer_ptr>> override {
+    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
+      parsers::end_of_pipeline_operator, parsers::expr;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws_or_comment >> expr >> optional_ws_or_comment
+                   >> end_of_pipeline_operator;
+    auto parse_result = expression{};
+    if (!p(f, l, parse_result)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse where "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto normalized_and_validated_expr = normalize_and_validate(parse_result);
+    if (!normalized_and_validated_expr) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(
+          ec::invalid_configuration,
+          fmt::format("failed to normalized and validate expression '{}': {}",
+                      parse_result, normalized_and_validated_expr.error())),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<where>(std::move(*normalized_and_validated_expr)),
     };
   }
 };

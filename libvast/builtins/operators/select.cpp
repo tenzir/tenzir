@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/logical_operator.hpp"
+#include "vast/transformer2.hpp"
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
@@ -116,8 +117,32 @@ private:
   configuration config_ = {};
 };
 
+class select final : public schematic_transformer<std::vector<offset>> {
+public:
+  explicit select(configuration config) : config_{std::move(config)} {
+  }
+
+  auto initialize(const type& schema) const -> caf::expected<State> override {
+    auto indices = State{};
+    for (const auto& field : config_.fields)
+      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
+             field, schema.name()))
+        indices.push_back(std::move(index));
+    std::sort(indices.begin(), indices.end());
+    return indices;
+  }
+
+  auto process(table_slice slice, State& state) const -> Output override {
+    return select_columns(slice, state);
+  }
+
+private:
+  configuration config_ = {};
+};
+
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual logical_operator_plugin,
+                     public virtual transformer_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -188,6 +213,30 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<select_operator2>(std::move(config)),
+    };
+  }
+
+  auto make_transformer(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<transformer_ptr>> override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
+      parsers::optional_ws_or_comment, parsers::extractor,
+      parsers::extractor_char, parsers::extractor_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws_or_comment >> extractor_list
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
+    auto config = configuration{};
+    if (!p(f, l, config.fields)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse select "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<select>(std::move(config)),
     };
   }
 };

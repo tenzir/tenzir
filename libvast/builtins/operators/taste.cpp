@@ -13,8 +13,10 @@
 #include <vast/error.hpp>
 #include <vast/legacy_pipeline.hpp>
 #include <vast/logger.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice.hpp>
+#include <vast/transformer2.hpp>
 
 #include <arrow/type.h>
 
@@ -85,8 +87,29 @@ private:
   const uint64_t limit_ = {};
 };
 
+class taste final : public schematic_transformer<uint32_t> {
+public:
+  explicit taste(uint32_t limit) : limit_{limit} {
+  }
+
+  auto initialize(const type&) const -> caf::expected<State> override {
+    return limit_;
+  }
+
+  auto process(table_slice slice, State& remaining) const
+    -> table_slice override {
+    auto result = tail(slice, remaining);
+    remaining -= result.rows();
+    return result;
+  }
+
+private:
+  uint32_t limit_;
+};
+
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual logical_operator_plugin,
+                     public virtual transformer_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -150,6 +173,29 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<taste_operator2>(limit.value_or(10)),
+    };
+  }
+
+  auto make_transformer(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<transformer_ptr>> override {
+    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
+      parsers::end_of_pipeline_operator, parsers::u64;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = -(required_ws_or_comment >> u64) >> optional_ws_or_comment
+                   >> end_of_pipeline_operator;
+    auto limit = std::optional<uint64_t>{};
+    if (!p(f, l, limit)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "taste operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<taste>(limit.value_or(10)),
     };
   }
 };

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/logical_operator.hpp"
+#include "vast/transformer2.hpp"
 
 #include <vast/aggregation_function.hpp>
 #include <vast/arrow_table_slice.hpp>
