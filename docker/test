@@ -31,7 +31,7 @@ if (( "${build}" == 1 )); then
 else
   export VAST_CONTAINER_REGISTRY="${VAST_CONTAINER_REGISTRY:-ghcr.io}"
   export VAST_CONTAINER_REF="${VAST_CONTAINER_REF:-$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')}"
-  if [[ "${VAST_CONTAINER_REF}" == "master" ]]; then
+  if [[ "${VAST_CONTAINER_REF}" == "main" ]]; then
     export VAST_CONTAINER_REF="$(git rev-parse HEAD)"
   fi
   build_policy='--pull=always'

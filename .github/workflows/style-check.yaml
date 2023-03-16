@@ -21,14 +21,14 @@ jobs:
           pip install --upgrade clang-format
           which clang-format
           clang-format --version
-          git diff -U0 --no-color $(git merge-base origin/master HEAD) -- \
+          git diff -U0 --no-color $(git merge-base origin/main HEAD) -- \
               '*.cpp' '*.cpp.in' '*.hpp' '*.hpp.in' |
             scripts/clang-format-diff.py -p1
 
       - name: CMake Format
         run: |
           pip install --upgrade cmake_format
-          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakeLists.txt" "**.cmake" |
+          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) -- "**CMakeLists.txt" "**.cmake" |
             xargs cmake-format --in-place
           git diff --exit-code
 
@@ -36,7 +36,7 @@ jobs:
         run: |
           pip install --upgrade black
           # Note: black fails when it doesn't have to do anything.
-          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
+          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
             grep '\.py$' |
             xargs --no-run-if-empty black || true
           git diff --exit-code

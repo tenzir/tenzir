@@ -7,7 +7,7 @@ For this reason, we include RFCs in the VAST repository in the top-level
 [rfc][rfc-dir] directory. Engaging with an open RFC centers around the
 discussion in pull requests, which we describe below.
 
-[rfc-dir]: https://github.com/tenzir/vast/tree/master/rfc
+[rfc-dir]: https://github.com/tenzir/vast/tree/main/rfc
 
 For all RFCs, we aim for an acceptance period of **30 days**.
 
