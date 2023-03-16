@@ -79,9 +79,8 @@ auto producer_from_logical_source(runtime_logical_operator* op,
   auto gen = op->make_runtime_physical_operator({}, *ctrl);
   if (not gen) {
     ctrl->abort(gen.error());
-    return []() -> generator<runtime_batch> {
-      co_return;
-    }();
+    // The default-constructed generator is equivalent to a direct `co_return`.
+    return {};
   }
   auto f = []<element_type Input, element_type Output>(
              physical_operator<Input, Output> gen) -> generator<runtime_batch> {
