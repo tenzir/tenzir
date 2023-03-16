@@ -16,25 +16,25 @@
 
 namespace vast {
 
-class pipeline {
+class legacy_pipeline {
 public:
   /// Parse a pipeline from its textual representation.
   /// @param name the pipeline name
   /// @param repr the textual representation of the pipeline itself
   /// @param schema_names the schemas to restrict the pipeline to
-  static caf::expected<pipeline>
+  static caf::expected<legacy_pipeline>
   parse(std::string name, std::string_view repr,
         std::vector<std::string> schema_names = {});
 
-  pipeline(std::string name, std::vector<std::string>&& schema_names);
+  legacy_pipeline(std::string name, std::vector<std::string>&& schema_names);
 
-  ~pipeline() = default;
+  ~legacy_pipeline() = default;
 
-  pipeline(const pipeline&) = delete;
-  pipeline(pipeline&&) = default;
+  legacy_pipeline(const legacy_pipeline&) = delete;
+  legacy_pipeline(legacy_pipeline&&) = default;
 
-  pipeline& operator=(const pipeline&) = delete;
-  pipeline& operator=(pipeline&&) = default;
+  legacy_pipeline& operator=(const legacy_pipeline&) = delete;
+  legacy_pipeline& operator=(legacy_pipeline&&) = default;
 
   void add_operator(std::unique_ptr<pipeline_operator> op);
 
@@ -93,7 +93,7 @@ class pipeline_executor {
 public:
   /// Constructor.
   pipeline_executor() = default;
-  explicit pipeline_executor(std::vector<pipeline>&&);
+  explicit pipeline_executor(std::vector<legacy_pipeline>&&);
 
   /// Starts applying relevant pipelines to the table.
   caf::error add(table_slice&&);
@@ -103,20 +103,20 @@ public:
   caf::expected<std::vector<table_slice>> finish();
 
   /// Get a list of the pipelines.
-  const std::vector<pipeline>& pipelines() const;
+  const std::vector<legacy_pipeline>& pipelines() const;
 
   /// Returns whether any of the contained pipelines is blocking.
   bool is_blocking() const;
 
 private:
   static caf::error
-  process_queue(pipeline& transform, std::deque<table_slice>& queue);
+  process_queue(legacy_pipeline& transform, std::deque<table_slice>& queue);
 
   /// Apply relevant pipelines to the table slice.
   caf::expected<table_slice> transform_slice(table_slice&& x);
 
   /// The set of pipelines.
-  std::vector<pipeline> pipelines_;
+  std::vector<legacy_pipeline> pipelines_;
 
   /// Mapping from event type to applicable pipelines.
   std::unordered_map<std::string, std::vector<size_t>> schema_mapping_;

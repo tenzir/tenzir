@@ -10,7 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 
@@ -45,9 +45,9 @@ struct sink_state {
 caf::behavior sink(caf::stateful_actor<sink_state>* self,
                    format::writer_ptr&& writer, uint64_t max_events);
 
-caf::behavior
-transforming_sink(caf::stateful_actor<sink_state>* self,
-                  format::writer_ptr&& writer,
-                  std::vector<pipeline>&& pipelines, uint64_t max_events);
+caf::behavior transforming_sink(caf::stateful_actor<sink_state>* self,
+                                format::writer_ptr&& writer,
+                                std::vector<legacy_pipeline>&& pipelines,
+                                uint64_t max_events);
 
 } // namespace vast::system

@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/ip.hpp"
@@ -515,7 +515,7 @@ TEST(pseudonymize - IPv6 address batch pseudonymizing) {
 }
 
 TEST(pipeline with multiple steps) {
-  pipeline pipeline("test_pipeline", {{"testdata"}});
+  legacy_pipeline pipeline("test_pipeline", {{"testdata"}});
   pipeline.add_operator(unbox(
     make_pipeline_operator("replace", {{"fields", record{{"uid", "xxx"}}}})));
   pipeline.add_operator(
@@ -558,7 +558,7 @@ TEST(pipeline with multiple steps) {
 }
 
 TEST(pipeline rename schema) {
-  pipeline pipeline("test_pipeline", {{"testdata"}});
+  legacy_pipeline pipeline("test_pipeline", {{"testdata"}});
   auto rename_settings = record{
     {"schemas", list{record{
                   {"from", std::string{"testdata"}},
@@ -579,7 +579,7 @@ TEST(pipeline rename schema) {
 }
 
 TEST(Pipeline executor - single matching pipeline) {
-  std::vector<pipeline> pipelines;
+  std::vector<legacy_pipeline> pipelines;
   pipelines.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
   pipelines.emplace_back("t2", std::vector<std::string>{"foo"});
   auto& pipeline1 = pipelines.at(0);
@@ -605,7 +605,7 @@ TEST(Pipeline executor - single matching pipeline) {
 }
 
 TEST(pipeline executor - multiple matching pipelines) {
-  std::vector<pipeline> pipelines;
+  std::vector<legacy_pipeline> pipelines;
   pipelines.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
   pipelines.emplace_back("t2", std::vector<std::string>{"testdata"});
   auto& pipeline1 = pipelines.at(0);

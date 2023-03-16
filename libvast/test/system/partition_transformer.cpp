@@ -17,9 +17,9 @@
 #include "vast/fbs/flatbuffer_container.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/partition_synopsis.hpp"
-#include "vast/pipeline.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
 #include "vast/table_slice.hpp"
@@ -72,7 +72,7 @@ TEST(pass pipeline / done before persist) {
   auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
-  auto pipeline = std::make_shared<vast::pipeline>(
+  auto pipeline = std::make_shared<vast::legacy_pipeline>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto pass_operator = vast::make_pipeline_operator("pass", vast::record{});
   REQUIRE_NOERROR(pass_operator);
@@ -153,7 +153,7 @@ TEST(delete pipeline / persist before done) {
   auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
-  auto pipeline = std::make_shared<vast::pipeline>(
+  auto pipeline = std::make_shared<vast::legacy_pipeline>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto delete_operator_config = vast::record{{"fields", vast::list{"uid"}}};
   auto delete_operator
@@ -246,8 +246,8 @@ TEST(partition with multiple types) {
   auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
-  auto pipeline = std::make_shared<vast::pipeline>("partition_transform"s,
-                                                   std::vector<std::string>{});
+  auto pipeline = std::make_shared<vast::legacy_pipeline>(
+    "partition_transform"s, std::vector<std::string>{});
   auto pass_operator = vast::make_pipeline_operator("pass", vast::record{});
   REQUIRE_NOERROR(pass_operator);
   pipeline->add_operator(std::move(*pass_operator));
@@ -379,7 +379,7 @@ TEST(pass partition pipeline via the index) {
       REQUIRE_SUCCESS(e);
     });
   // Run a partition transformation.
-  auto pipeline = std::make_shared<vast::pipeline>(
+  auto pipeline = std::make_shared<vast::legacy_pipeline>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto pass_operator = vast::make_pipeline_operator("pass", vast::record{});
   REQUIRE_NOERROR(pass_operator);
@@ -470,7 +470,7 @@ TEST(query after transform) {
       FAIL("unexpected error " << e);
     });
   // Run a partition transformation.
-  auto pipeline = std::make_shared<vast::pipeline>(
+  auto pipeline = std::make_shared<vast::legacy_pipeline>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto rename_settings = vast::record{
     {"schemas", vast::list{vast::record{
@@ -580,7 +580,7 @@ TEST(select pipeline with an empty result set) {
       FAIL("unexpected error" << e);
     });
   // Run a partition transformation.
-  auto pipeline = std::make_shared<vast::pipeline>(
+  auto pipeline = std::make_shared<vast::legacy_pipeline>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
   auto where_operator_config
     = vast::record{{"expression", "#type == \"does_not_exist\""}};
@@ -614,8 +614,8 @@ TEST(exceeded partition size) {
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   index_opts["cardinality"] = 4;
-  auto pipeline = std::make_shared<vast::pipeline>("partition_transform"s,
-                                                   std::vector<std::string>{});
+  auto pipeline = std::make_shared<vast::legacy_pipeline>(
+    "partition_transform"s, std::vector<std::string>{});
   auto pass_operator = vast::make_pipeline_operator("pass", vast::record{});
   REQUIRE_NOERROR(pass_operator);
   pipeline->add_operator(std::move(*pass_operator));

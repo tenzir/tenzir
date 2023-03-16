@@ -15,7 +15,7 @@
 #include <vast/concept/printable/vast/json.hpp>
 #include <vast/detail/weak_run_delayed.hpp>
 #include <vast/format/json.hpp>
-#include <vast/pipeline.hpp>
+#include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
@@ -479,7 +479,7 @@ request_multiplexer_actor::behavior_type request_multiplexer(
                                                      normalized_expr.error()));
         auto pipeline_executor = std::optional<vast::pipeline_executor>{};
         if (pipeline) {
-          auto pipelines = std::vector<vast::pipeline>{};
+          auto pipelines = std::vector<vast::legacy_pipeline>{};
           pipelines.emplace_back(std::move(*pipeline));
           pipeline_executor.emplace(std::move(pipelines));
         }

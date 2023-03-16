@@ -10,7 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/pipeline.hpp"
+#include "vast/legacy_pipeline.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/typed_actor.hpp>
@@ -30,7 +30,7 @@ enum class pipelines_location {
 /// that were configured for the desired location.
 /// @param location Selects which part of the config file should be parsed.
 /// @param settings The VAST settings objects including transform configuration.
-caf::expected<std::vector<pipeline>>
+caf::expected<std::vector<legacy_pipeline>>
 make_pipelines(pipelines_location location, const caf::settings& settings);
 
 /// Validates the passed `caf::settings` and creates the named pipeline defined
@@ -47,7 +47,7 @@ make_pipeline(const std::string& name,
 
 /// Parse and validate a series of pipeline operators, and add them to the given
 /// pipeline.
-caf::error parse_pipeline_operators(pipeline& pipeline,
+caf::error parse_pipeline_operators(legacy_pipeline& pipeline,
                                     const caf::config_value::list& operators);
 
 } // namespace vast::system

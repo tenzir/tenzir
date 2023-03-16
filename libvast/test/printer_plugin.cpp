@@ -42,34 +42,35 @@ struct basic_table_slice_generator {
 };
 
 struct fixture : fixtures::events {
-  struct mock_control_plane : operator_control_plane {
-    [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor& {
-      FAIL("no mock implementation available");
-    }
-    virtual auto stop([[maybe_unused]] caf::error error = {}) noexcept -> void {
+  struct mock_control_plane final : operator_control_plane {
+    [[nodiscard]] auto self() noexcept -> caf::event_based_actor& override {
       FAIL("no mock implementation available");
     }
 
-    virtual auto warn([[maybe_unused]] caf::error warning) noexcept -> void {
+    auto abort(caf::error) noexcept -> void override {
       FAIL("no mock implementation available");
     }
 
-    virtual auto emit([[maybe_unused]] table_slice metrics) noexcept -> void {
+    auto warn([[maybe_unused]] caf::error warning) noexcept -> void override {
       FAIL("no mock implementation available");
     }
 
-    [[nodiscard]] virtual auto
-    demand([[maybe_unused]] type schema = {}) const noexcept -> size_t {
+    auto emit([[maybe_unused]] table_slice metrics) noexcept -> void override {
       FAIL("no mock implementation available");
     }
 
-    [[nodiscard]] virtual auto schemas() const noexcept
-      -> const std::vector<type>& {
+    [[nodiscard]] auto demand([[maybe_unused]] type schema = {}) const noexcept
+      -> size_t override {
       FAIL("no mock implementation available");
     }
 
-    [[nodiscard]] virtual auto concepts() const noexcept
-      -> const concepts_map& {
+    [[nodiscard]] auto schemas() const noexcept
+      -> const std::vector<type>& override {
+      FAIL("no mock implementation available");
+    }
+
+    [[nodiscard]] auto concepts() const noexcept
+      -> const concepts_map& override {
       FAIL("no mock implementation available");
     }
   };

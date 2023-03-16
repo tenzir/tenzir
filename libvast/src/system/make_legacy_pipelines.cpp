@@ -6,13 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/make_pipelines.hpp"
+#include "vast/system/make_legacy_pipelines.hpp"
 
 #include "vast/concept/convertible/to.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
+#include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
-#include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/si_literals.hpp"
 
@@ -37,7 +37,7 @@ namespace vast::system {
 //       field: dns.rrname
 //       value: "foobar.net"
 //
-caf::error parse_pipeline_operators(pipeline& pipeline,
+caf::error parse_pipeline_operators(legacy_pipeline& pipeline,
                                     const caf::config_value::list& operators) {
   for (auto config_operator : operators) {
     auto* dict = caf::get_if<caf::config_value::dictionary>(&config_operator);
@@ -64,9 +64,9 @@ caf::error parse_pipeline_operators(pipeline& pipeline,
   return caf::none;
 }
 
-caf::expected<std::vector<pipeline>>
+caf::expected<std::vector<legacy_pipeline>>
 make_pipelines(pipelines_location location, const caf::settings& settings) {
-  std::vector<pipeline> result;
+  std::vector<legacy_pipeline> result;
   std::string key;
   bool server = true;
   switch (location) {
@@ -169,7 +169,7 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
     if (const auto* pipeline_def
         = caf::get_if<std::string>(&pipelines.at(name))) {
       auto pipeline
-        = pipeline::parse(name, *pipeline_def, std::move(event_types));
+        = legacy_pipeline::parse(name, *pipeline_def, std::move(event_types));
       if (!pipeline)
         return std::move(pipeline.error());
       result.push_back(std::move(*pipeline));
@@ -190,10 +190,10 @@ make_pipeline(const std::string& name,
   if (!pipelines.contains(name))
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("unknown pipeline '{}'", name));
-  auto result = std::make_shared<vast::pipeline>(
+  auto result = std::make_shared<vast::legacy_pipeline>(
     name, std::vector<std::string>{event_types});
   if (const auto* pipeline_def = caf::get_if<std::string>(&pipelines, name)) {
-    auto pipeline = pipeline::parse(name, *pipeline_def, event_types);
+    auto pipeline = legacy_pipeline::parse(name, *pipeline_def, event_types);
     if (!pipeline)
       return std::move(pipeline.error());
     *result = std::move(*pipeline);
