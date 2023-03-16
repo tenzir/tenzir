@@ -23,9 +23,9 @@ builds.
 
 VAST ships with an example plugin that showcases how a typical scaffold looks
 like. Have a look at the the [example
-plugins](https://github.com/tenzir/vast/tree/master/examples/plugins) directory,
+plugins](https://github.com/tenzir/vast/tree/main/examples/plugins) directory,
 and an [example `CMakeLists.txt` file for
-plugins](https://github.com/tenzir/vast/blob/master/examples/plugins/analyzer/CMakeLists.txt).
+plugins](https://github.com/tenzir/vast/blob/main/examples/plugins/analyzer/CMakeLists.txt).
 
 We highly urge calling the provided `VASTRegisterPlugin` CMake in your plugin's
 `CMakeLists.txt` file instead of handrolling your CMake build scaffolding
@@ -61,7 +61,7 @@ diamond](https://isocpp.org/wiki/faq/multiple-inheritance#mi-diamond).
 :::
 
 Please also consult the [example-analyzer
-plugin](https://github.com/tenzir/vast/tree/master/examples/plugins/analyzer)
+plugin](https://github.com/tenzir/vast/tree/main/examples/plugins/analyzer)
 for a complete end-to-end code example.
 
 ## Implement the plugin interface

@@ -26,7 +26,7 @@ release and the current development version.
 </div>
 
 We also offer prebuilt statically linked binaries for every Git commit to the
-`master` branch.
+`main` branch.
 
 ```bash
 version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"

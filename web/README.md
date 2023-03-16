@@ -55,4 +55,4 @@ yarn build
 The resulting `build` directory can be served using any static hosting service.
 
 For the main site, we use a GitHub Actions workflow to deploy with every push to
-master.
+main.

@@ -132,7 +132,7 @@ async function createConfig() {
         ({
           docs: {
             sidebarPath: require.resolve('./sidebars.js'),
-            editUrl: 'https://github.com/tenzir/vast/tree/master/web',
+            editUrl: 'https://github.com/tenzir/vast/tree/main/web',
             // TODO: The last update author and time is always the person that
             // triggered the last deployment and the time of that deployment.
             // Ideally we'd show this information, but as-is it's unnecessary.
