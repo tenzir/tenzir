@@ -10,11 +10,11 @@
 </h1>
 <h4 align="center">
 
-[About](https://vast.io/docs/about) &mdash;
-[Try](https://vast.io/docs/try) &mdash;
-[Use](https://vast.io/docs/use) &mdash;
-[Understand](https://vast.io/docs/understand) &mdash;
-[Contribute](https://vast.io/docs/contribute) &mdash;
+[About](https://vast.io/docs/about) |
+[Try](https://vast.io/docs/try) |
+[Use](https://vast.io/docs/use) |
+[Understand](https://vast.io/docs/understand) |
+[Contribute](https://vast.io/docs/contribute) |
 [Develop](https://vast.io/docs/develop)
 </h4>
 <div align="center">
