@@ -79,7 +79,9 @@ auto producer_from_logical_source(runtime_logical_operator* op,
   auto gen = op->make_runtime_physical_operator({}, *ctrl);
   if (not gen) {
     ctrl->abort(gen.error());
-    return {};
+    return []() -> generator<runtime_batch> {
+      co_return;
+    }();
   }
   auto f = []<element_type Input, element_type Output>(
              physical_operator<Input, Output> gen) -> generator<runtime_batch> {
@@ -131,14 +133,19 @@ auto generator_for_optional(std::optional<runtime_batch>& optional, bool& stop)
   VAST_PIPELINE_LOG("queue generator received stop signal");
 }
 
+/// Type-erases a batch generator. Guarantees that the first output is empty.
 template <class Batch>
   requires(!std::same_as<Batch, runtime_batch>)
 auto erase_producer(generator<Batch> producer) -> generator<runtime_batch> {
+  // The following yield implies that we can always assume that the first
+  // produced output batch is empty.
+  co_yield {};
   for (auto&& output : producer) {
     co_yield std::move(output);
   }
 }
 
+/// Guarantees that the first output batch is empty.
 template <class InputBatch>
 auto make_producer_from_optional(std::optional<runtime_batch>& optional,
                                  bool& stop,
@@ -166,32 +173,6 @@ auto make_producer_from_optional(std::optional<runtime_batch>& optional,
   return std::visit(make_generator, physical_op);
 }
 
-auto exhaust_on_stall_after_consume(instance_state& instance)
-  -> generator<runtime_batch> {
-  // This effectively returns a generator that pulls from the instantiation,
-  // which pulls from the queue. We wait until the queue is empty, and then
-  // exhaust on the first stall. This is because the generator is technically
-  // allowed to stall inbetween, but we know that it must eventually terminate
-  // or pull an element from the queue. When the queue becomes empty, the
-  // generator pulling from it will stall, which will stall the actual generator
-  // for this instance. Thus, we will always make progress.
-  while (true) {
-    // The generators pulling from the queue only become exhausted after `stop`
-    // is set. However, the operator instantiation can become exhausted before,
-    // which means that it will never pull from the queue.
-    if (instance.it == instance.gen.end()) {
-      break;
-    }
-    // The iterator points to an already consumed output batch.
-    ++instance.it;
-    auto output = std::move(*instance.it);
-    if (!instance.input_batch && size(output) == 0) {
-      break;
-    }
-    co_yield std::move(output);
-  }
-}
-
 /// Appends an operator to an existing generator.
 /// @pre `previous` may only yield batches for `op->input_element_type()`
 /// @pre `op->input_element_type()` must not be `void`
@@ -202,14 +183,14 @@ auto append_logical_operator(generator<runtime_batch> previous,
   // For every unique schema retrieved from `previous`, we want to instantiate
   // `op` once. Thus, we return a generator that, when advanced, advances
   // `previous` and looks at the schema of the input batch. If we have not seen
-  // that schema yet, we instantiate `op` and a schema-specific queue. The
+  // that schema yet, we instantiate `op` and a schema-specific optional. The
   // instantiated operator is provided a generator that tries to pull new
-  // elements from the queue, and the input batch we are dispatching is pushed
-  // to this queue. Because this provides additional input to to the
+  // elements from the optional, and the input batch we are dispatching is
+  // pushed to this optional. Because this provides additional input to to the
   // corresponding instance, we iterate over it in order to stream its
   // results if possible. This does not necessarily already yield results, due
   // to operators such as `summarize`. Hence, when the input generator is
-  // exhausted, we signal the generators that pull from the queue that they
+  // exhausted, we signal the generators that pull from the optional that they
   // should stop as well. Finally, we iterate once more over all operator
   // instances. They will notice that their input is exhausted, which means
   // that they will become exhausted themselves eventually.
@@ -223,7 +204,7 @@ auto append_logical_operator(generator<runtime_batch> previous,
   /// it has been freshly inserted (because the initial suspension point could
   /// theoretically already provide an element, which we will have to consume).
   auto dispatch = [&]<class InputBatch>(InputBatch input)
-    -> caf::expected<std::pair<std::reference_wrapper<instance_state>, bool>> {
+    -> caf::expected<std::reference_wrapper<instance_state>> {
     // Empty batches should be handled before calling this.
     VAST_ASSERT(batch_traits<InputBatch>::size(input) != 0);
     // For every input batch, we take the following steps:
@@ -231,7 +212,6 @@ auto append_logical_operator(generator<runtime_batch> previous,
     auto input_schema = batch_traits<InputBatch>::schema(input);
     // 2. Try to find an already existing generator, or create a new one
     // if it doesn't exist yet for the given input schema.
-    bool newly_inserted = false;
     auto lookup = instances.find(input_schema);
     if (lookup == instances.end()) {
       VAST_PIPELINE_LOG("instantiating logical operator for new schema: {}",
@@ -249,13 +229,17 @@ auto append_logical_operator(generator<runtime_batch> previous,
       instance.gen = make_producer_from_optional<InputBatch>(
         instance.input_batch, stop, instance.physical_op);
       instance.it = instance.gen.begin();
-      newly_inserted = true;
+      // We know that the first output is empty (see `erase_producer`). We want
+      // this because we can then assume that the iterator always points to an
+      // already consumed output batch.
+      VAST_ASSERT(instance.it != instance.gen.end());
+      VAST_ASSERT(size(*instance.it) == 0);
     }
     // 3. Push the input element into the buffer.
     auto& instance = lookup->second;
     if (instance.it != instance.gen.end()) {
-      // We only do this if the instance is not already done, as we might
-      // otherwise overflow the queue.
+      // We only do this if the instance is not already done, as it will
+      // otherwise never be able to consume the optional.
       if (instance.input_batch) {
         return caf::make_error(ec::logic_error,
                                fmt::format("dispatching into non-empty "
@@ -264,7 +248,7 @@ auto append_logical_operator(generator<runtime_batch> previous,
       }
       instance.input_batch = std::move(input);
     }
-    return std::pair{std::ref(lookup->second), newly_inserted};
+    return std::ref(lookup->second);
   };
 
   for (auto&& input : previous) {
@@ -281,22 +265,36 @@ auto append_logical_operator(generator<runtime_batch> previous,
       ctrl->abort(std::move(dispatched.error()));
       break;
     }
-    auto& instance = dispatched->first.get();
-    auto inserted = dispatched->second;
-    bool yielded = false; // We have to yield at least once for every input.
-    if (inserted) {
-      // If this instance was newly inserted, then its iterator can point to a
-      // batch that we did not consume yet. However, we want the iterator to
-      // always point to an already consumed element.
-      if (instance.it != instance.gen.end()) {
-        auto output = std::move(*instance.it);
-        if (size(output) != 0) {
-          co_yield std::move(output);
-          yielded = true;
-        }
-      }
+    auto& instance = dispatched->get();
+    // If the instance is already done, we still yield an empty batch because of
+    // the invariant that we must yield before advancing the input again.
+    if (instance.it == instance.gen.end()) {
+      co_yield {};
+      continue;
     }
-    for (auto&& output : exhaust_on_stall_after_consume(instance)) {
+    // We have to yield at least once for every input.
+    bool yielded = false;
+    // We pull from the instance, which pulls from the optional. We do this
+    // until the generator stalls and the input from the optional is consumed.
+    // This will eventually be the case, because although the generator is
+    // technically allowed to stall inbetween, but we know that it must
+    // eventually terminate or pull the element from the optional. And when the
+    // optional becomes empty, the generator pulling from it will stall, which
+    // will stall the actual generator for this instance. Thus, we will always
+    // make progress.
+    while (true) {
+      // The iterator points to an already consumed output batch.
+      ++instance.it;
+      // The generators pulling from the optional only become exhausted after
+      // `stop` is set. However, the operator instantiation can become exhausted
+      // before, which means that it will never pull from the optional.
+      if (instance.it == instance.gen.end()) {
+        break;
+      }
+      auto output = std::move(*instance.it);
+      if (!instance.input_batch && size(output) == 0) {
+        break;
+      }
       VAST_PIPELINE_LOG("inner generator for {} produced output of size {}",
                         op->to_string(), size(output));
       co_yield std::move(output);

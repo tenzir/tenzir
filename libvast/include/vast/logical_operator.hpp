@@ -53,7 +53,7 @@ public:
   /// - The output generator must always eventually advance the input generator
   ///   or terminate (this implies that it eventually becomes exhausted after
   ///   the input generator becomes exhausted).
-  /// - If the input generator yields, then the output generator must yield
+  /// - If the input generator is advanced, then the output generator must yield
   ///   before advancing the input again.
   /// These requirements do not apply if there is no input generator (i.e., the
   /// input element type is `void`).
