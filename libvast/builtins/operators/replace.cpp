@@ -172,7 +172,7 @@ public:
   }
 
   [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane*) noexcept
+                                            operator_control_plane&) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     auto bound_config = bound_configuration::make(input_schema, config_);
     if (!bound_config)
@@ -272,13 +272,13 @@ public:
 
   [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
   make_logical_operator(std::string_view pipeline) const override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws,
-      parsers::optional_ws, parsers::extractor_value_assignment_list,
+    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
+      parsers::optional_ws_or_comment, parsers::extractor_value_assignment_list,
       parsers::data;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = required_ws >> extractor_value_assignment_list >> optional_ws
-                   >> end_of_pipeline_operator;
+    const auto p = required_ws_or_comment >> extractor_value_assignment_list
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
     std::vector<std::tuple<std::string, vast::data>> parsed_assignments;
     if (!p(f, l, parsed_assignments)) {
       return {

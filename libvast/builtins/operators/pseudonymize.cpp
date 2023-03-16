@@ -141,7 +141,7 @@ public:
   }
 
   [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane*) noexcept
+                                            operator_control_plane&) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     std::vector<indexed_transformation> transformations;
     auto transformation = [&](struct record_type::field field,
@@ -337,12 +337,13 @@ public:
 
   [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
   make_logical_operator(std::string_view pipeline) const override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws,
-      parsers::optional_ws, parsers::extractor, parsers::extractor_list;
+    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
+      parsers::optional_ws_or_comment, parsers::extractor,
+      parsers::extractor_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     const auto options = option_set_parser{{{"method", 'm'}, {"seed", 's'}}};
-    const auto option_parser = required_ws >> options;
+    const auto option_parser = required_ws_or_comment >> options;
     auto parsed_options = std::unordered_map<std::string, data>{};
     if (!option_parser(f, l, parsed_options)) {
       return {
@@ -354,7 +355,7 @@ public:
       };
     }
     const auto extractor_parser
-      = extractor_list >> optional_ws >> end_of_pipeline_operator;
+      = extractor_list >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto parsed_extractors = std::vector<std::string>{};
     if (!extractor_parser(f, l, parsed_extractors)) {
       return {

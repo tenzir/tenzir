@@ -743,10 +743,10 @@ public:
 
   [[nodiscard]] auto
   make_physical_operator(const type& input_schema,
-                         operator_control_plane* ctrl) noexcept
+                         operator_control_plane& ctrl) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     if (auto aggregation = aggregation::make(input_schema, config_)) {
-      return [aggregation = std::move(*aggregation), ctrl](
+      return [aggregation = std::move(*aggregation), &ctrl](
                generator<table_slice> input) mutable -> generator<table_slice> {
         for (auto&& slice : input) {
           aggregation.add(to_record_batch(slice));
@@ -755,7 +755,7 @@ public:
         if (auto batch = aggregation.finish()) {
           co_yield std::move(*batch);
         } else {
-          ctrl->abort(batch.error());
+          ctrl.abort(batch.error());
         }
       };
     } else {
@@ -941,15 +941,16 @@ public:
 
   [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
   make_logical_operator(std::string_view pipeline) const override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws,
-      parsers::optional_ws, parsers::duration, parsers::extractor_list,
-      parsers::aggregation_function_list;
+    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
+      parsers::optional_ws_or_comment, parsers::duration,
+      parsers::extractor_list, parsers::aggregation_function_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = required_ws >> aggregation_function_list >> required_ws
-                   >> ("by") >> required_ws >> extractor_list
-                   >> -(required_ws >> "resolution" >> required_ws >> duration)
-                   >> optional_ws >> end_of_pipeline_operator;
+    const auto p = required_ws_or_comment >> aggregation_function_list
+                   >> required_ws_or_comment >> ("by") >> required_ws_or_comment
+                   >> extractor_list >> -(required_ws_or_comment >> "resolution"
+                                          >> required_ws_or_comment >> duration)
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
     std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
                                       std::vector<std::string>>>,
                std::vector<std::string>, std::optional<vast::duration>>
