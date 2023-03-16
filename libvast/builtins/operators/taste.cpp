@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/logical_operator.hpp"
+
 #include <vast/concept/parseable/numeric/integral.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
@@ -55,7 +57,36 @@ private:
   std::unordered_map<type, uint64_t> remaining_ = {};
 };
 
-class plugin final : public virtual pipeline_operator_plugin {
+class taste_operator2 : public logical_operator<events, events> {
+public:
+  explicit taste_operator2(uint64_t limit) noexcept : limit_{limit} {
+    // nop
+  }
+
+  [[nodiscard]] auto
+  make_physical_operator(const type&, operator_control_plane&) noexcept
+    -> caf::expected<physical_operator<events, events>> override {
+    return [remaining = limit_](
+             generator<table_slice> input) mutable -> generator<table_slice> {
+      for (auto&& slice : input) {
+        slice = vast::head(slice, remaining);
+        VAST_ASSERT(remaining >= slice.rows());
+        remaining -= slice.rows();
+        co_yield std::move(slice);
+      }
+    };
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return fmt::format("taste {}", limit_);
+  }
+
+private:
+  const uint64_t limit_ = {};
+};
+
+class plugin final : public virtual pipeline_operator_plugin,
+                     public virtual logical_operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -96,6 +127,29 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<taste_operator>(limit.value_or(10)),
+    };
+  }
+
+  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const override {
+    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
+      parsers::end_of_pipeline_operator, parsers::u64;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = -(required_ws_or_comment >> u64) >> optional_ws_or_comment
+                   >> end_of_pipeline_operator;
+    auto limit = std::optional<uint64_t>{};
+    if (!p(f, l, limit)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "taste operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<taste_operator2>(limit.value_or(10)),
     };
   }
 };

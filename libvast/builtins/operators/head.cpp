@@ -50,13 +50,13 @@ private:
 
 class head_operator2 final : public logical_operator<events, events> {
 public:
-  explicit head_operator2(uint64_t limit) noexcept : remaining_{limit} {
+  explicit head_operator2(uint64_t limit) noexcept
+    : remaining_{limit}, limit_{limit} {
     // nop
   }
 
   [[nodiscard]] auto
-  make_physical_operator([[maybe_unused]] const type& input_schema,
-                         [[maybe_unused]] operator_control_plane& ctrl) noexcept
+  make_physical_operator(const type&, operator_control_plane&) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     return [this](generator<table_slice> input) -> generator<table_slice> {
       for (auto&& slice : input) {
@@ -75,11 +75,12 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("head ({} remaining)", remaining_);
+    return fmt::format("head {}", limit_);
   }
 
 private:
   uint64_t remaining_;
+  uint64_t limit_;
 };
 
 class plugin final : public virtual pipeline_operator_plugin,

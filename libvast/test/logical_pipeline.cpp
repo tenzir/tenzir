@@ -157,6 +157,22 @@ TEST(command) {
   }
 }
 
+TEST(roundtrip) {
+  auto original = std::string{
+    "drop xyz, :ip "
+    "| hash --salt=\"eIudsnREd\" name "
+    "| head 42 "
+    "| pseudonymize --method=\"crypto-pan\" --seed=\"abcd1234\" a "
+    "| rename test=:suricata.flow, source_port=src_port "
+    "| replace a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
+    "| extend a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
+    "| select :ip, timestamp "
+    "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
+    "| taste 123"};
+  auto roundtrip = unbox(logical_pipeline::parse(original)).to_string();
+  CHECK_EQUAL(roundtrip, original);
+}
+
 FIXTURE_SCOPE(pipeline_fixture, fixture)
 
 TEST(source | where #type == "zeek.conn" | sink) {

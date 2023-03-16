@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/logical_operator.hpp"
+
 #include <vast/arrow_table_slice.hpp>
 #include <vast/cast.hpp>
 #include <vast/concept/convertible/data.hpp>
@@ -135,9 +137,97 @@ private:
   configuration config_ = {};
 };
 
+class rename_operator2 : public logical_operator<events, events> {
+public:
+  rename_operator2(configuration config) : config_{std::move(config)} {
+    // nop
+  }
+
+  [[nodiscard]] auto make_physical_operator(const type& input_schema,
+                                            operator_control_plane&) noexcept
+    -> caf::expected<physical_operator<events, events>> override {
+    // Step 1: Adjust field names.
+    auto field_transformations = std::vector<indexed_transformation>{};
+    if (!config_.fields.empty()) {
+      for (const auto& field : config_.fields) {
+        for (const auto& index :
+             caf::get<record_type>(input_schema)
+               .resolve_key_suffix(field.from, input_schema.name())) {
+          auto transformation
+            = [&](struct record_type::field old_field,
+                  std::shared_ptr<arrow::Array> array) noexcept
+            -> std::vector<std::pair<struct record_type::field,
+                                     std::shared_ptr<arrow::Array>>> {
+            return {
+              {{field.to, old_field.type}, array},
+            };
+          };
+          field_transformations.push_back({index, std::move(transformation)});
+        }
+      }
+      std::sort(field_transformations.begin(), field_transformations.end());
+    }
+    // Step 2: Adjust schema names.
+    std::optional<type> renamed_schema;
+    if (!config_.schemas.empty()) {
+      const auto schema_mapping
+        = std::find_if(config_.schemas.begin(), config_.schemas.end(),
+                       [&](const auto& name_mapping) noexcept {
+                         return name_mapping.from == input_schema.name();
+                       });
+      if (schema_mapping != config_.schemas.end()) {
+        auto rename_schema = [&](const concrete_type auto& pruned_schema) {
+          VAST_ASSERT(!input_schema.has_attributes());
+          return type{schema_mapping->to, pruned_schema};
+        };
+        renamed_schema = caf::visit(rename_schema, input_schema);
+      }
+    }
+
+    return [field_transformations = std::move(field_transformations),
+            renamed_schema = std::move(renamed_schema)](
+             generator<table_slice> input) -> generator<table_slice> {
+      for (auto&& slice : input) {
+        slice = transform_columns(slice, field_transformations);
+        if (renamed_schema) {
+          slice = cast(std::move(slice), *renamed_schema);
+        }
+        co_yield std::move(slice);
+      }
+    };
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    auto result = std::string{"rename"};
+    auto first = true;
+    for (auto& mapping : config_.schemas) {
+      if (first) {
+        first = false;
+      } else {
+        result += ',';
+      }
+      result += fmt::format(" {}=:{}", mapping.to, mapping.from);
+    }
+    for (auto& mapping : config_.fields) {
+      if (first) {
+        first = false;
+      } else {
+        result += ',';
+      }
+      result += fmt::format(" {}={}", mapping.to, mapping.from);
+    }
+    return result;
+  }
+
+private:
+  /// Step-specific configuration, including the schema name mapping.
+  configuration config_ = {};
+};
+
 // -- plugin ------------------------------------------------------------------
 
-class plugin final : public virtual pipeline_operator_plugin {
+class plugin final : public virtual pipeline_operator_plugin,
+                     public virtual logical_operator_plugin {
 public:
   caf::error initialize(const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -197,6 +287,37 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<rename_operator>(std::move(config)),
+    };
+  }
+
+  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
+      parsers::optional_ws_or_comment, parsers::extractor_assignment_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws_or_comment >> extractor_assignment_list
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
+    std::vector<std::tuple<std::string, std::string>> parsed_assignments;
+    if (!p(f, l, parsed_assignments)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto config = configuration{};
+    for (const auto& [to, from] : parsed_assignments) {
+      if (from.starts_with(':')) {
+        config.schemas.push_back({from.substr(1), to});
+      } else {
+        config.fields.push_back({from, to});
+      }
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<rename_operator2>(std::move(config)),
     };
   }
 };

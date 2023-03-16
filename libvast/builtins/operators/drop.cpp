@@ -108,9 +108,8 @@ public:
     // nop
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type& input_schema,
-                         [[maybe_unused]] operator_control_plane& ctrl) noexcept
+  [[nodiscard]] auto make_physical_operator(const type& input_schema,
+                                            operator_control_plane&) noexcept
     -> caf::expected<physical_operator<events, events>> override {
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
@@ -150,7 +149,7 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("drop");
+    return fmt::format("drop {}", fmt::join(config_.fields, ", "));
   }
 
 private:
