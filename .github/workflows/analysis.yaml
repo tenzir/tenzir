@@ -2,7 +2,7 @@ name: Analysis
 on:
   push:
     branches:
-      - master
+      - main
       - v*
   pull_request:
     types:

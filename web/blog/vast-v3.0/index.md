@@ -88,7 +88,7 @@ Our goal is for these changes to make the query language feel more natural to
 our users. We've got [big plans][rfc-001] on how to extend it—and this felt very
 much necessary as a preparatory step to making the language more useful.
 
-[rfc-001]: https://github.com/tenzir/vast/blob/master/rfc/001-composable-pipelines/README.md
+[rfc-001]: https://github.com/tenzir/vast/blob/main/rfc/001-composable-pipelines/README.md
 
 ## Regular Expression Evaluation
 

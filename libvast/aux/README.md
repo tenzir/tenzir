@@ -31,7 +31,7 @@ To add a new repository **foo** at location `REMOTE` (e.g.,
 ### subtrees
 2. Add the repository as a subtree:
 
-       git subtree add --prefix=aux/foo --squash REMOTE master
+       git subtree add --prefix=aux/foo --squash REMOTE main
 
 Synchronize an Existing Repository
 ----------------------------------
@@ -54,7 +54,7 @@ To update an existing repository **foo**, perform the following steps:
 2. Go to the top-level directory of the VAST repository
 3. Pull from the remote repository:
 
-       git subtree pull --prefix aux/foo REMOTE master --squash
+       git subtree pull --prefix aux/foo REMOTE main --squash
 
 4. Commit your changes:
 
