@@ -279,16 +279,15 @@ struct rebuilder_state {
           for (auto& [type, result] : lookup_result.candidate_infos) {
             std::erase_if(
               result.partition_infos, [&](const partition_info& partition) {
-                const auto erase_if_undersized
+                const auto not_undersized
                   = run->options.undersized
-                    && static_cast<bool>(partition.schema)
                     && partition.events > detail::narrow_cast<size_t>(
                          detail::narrow_cast<double>(max_partition_size)
                          * undersized_threshold);
-                const auto erase_if_not_outdated
+                const auto not_outdated
                   = not run->options.all
                     && partition.version >= version::current_partition_version;
-                return erase_if_undersized && erase_if_not_outdated;
+                return not_undersized && not_outdated;
               });
             if (run->options.max_partitions < result.partition_infos.size()) {
               std::stable_sort(result.partition_infos.begin(),
