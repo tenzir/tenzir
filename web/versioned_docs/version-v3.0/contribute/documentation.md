@@ -6,13 +6,13 @@ sidebar_position: 5
 
 The VAST documentation resides inside [our main GitHub
 repository](https://github.com/tenzir/vast) in
-[`/web/docs`](https://github.com/tenzir/vast/tree/master/web/docs).
+[`/web/docs`](https://github.com/tenzir/vast/tree/main/web/docs).
 We use [Docusaurus](https://docusaurus.io/) as website framework.
 
 ## Build and view locally
 
 To view the entire site (including the documentation) locally,
-change to the [`/web`](https://github.com/tenzir/vast/tree/master/web/)
+change to the [`/web`](https://github.com/tenzir/vast/tree/main/web/)
 directory and invoke [`yarn`](https://yarnpkg.com/), or to be on the safe side,
 `yarn install --frozen-lockfile` to avoid pollution from global dependencies.
 Then build and serve the site via:

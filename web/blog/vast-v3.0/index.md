@@ -12,7 +12,7 @@ to the the VAST language, making it easy to write down dataflow pipelines that
 filter, reshape, aggregate, and enrich security event data. Think of VAST as
 security data pipelines plus open storage engine.
 
-[github-vast-release]: https://github.com/tenzir/vast/releases/tag/v3.0.0
+[github-vast-release]: https://github.com/tenzir/vast/releases/tag/v3.0.1
 
 <!--truncate-->
 
@@ -325,7 +325,7 @@ user-facing changes since the last release.
 
 Here are some entries that we want to highlight:
 
-[changelog]: //vast.io/changelog#v300
+[changelog]: https://vast.io/changelog#v301
 
 ### Removing Empty Fields from JSON Output
 
