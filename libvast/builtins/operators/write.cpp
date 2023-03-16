@@ -12,9 +12,12 @@
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
+#include <vast/dump_operator.hpp>
 #include <vast/error.hpp>
 #include <vast/legacy_pipeline.hpp>
+#include <vast/logical_pipeline.hpp>
 #include <vast/plugin.hpp>
+#include <vast/print_operator.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/type.h>
@@ -26,60 +29,6 @@
 namespace vast::plugins::write {
 
 namespace {
-
-class write_operator : public logical_operator<events, void> {
-public:
-  explicit write_operator(const printer_plugin& printer,
-                          std::optional<const dumper_plugin*> dumper) noexcept
-    : printer_plugin_{printer}, dumper_plugin_{dumper} {
-  }
-
-  [[nodiscard]] auto
-  make_physical_operator(const type& input_schema,
-                         operator_control_plane* ctrl) noexcept
-    -> caf::expected<physical_operator<events, void>> override {
-    if (dumper_plugin_) {
-      if (not printer_plugin_.printer_allows_joining()
-          and (*dumper_plugin_)->dumper_requires_joining()) {
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("Output joining clash between {} "
-                                           "dumper and {} printer",
-                                           (*dumper_plugin_)->name(),
-                                           printer_plugin_.name()));
-      }
-    }
-    auto new_printer = printer_plugin_.make_printer({}, input_schema, *ctrl);
-    if (!new_printer) {
-      return new_printer.error();
-    }
-    printer_ = std::move(*new_printer);
-    auto new_dumper
-      = (dumper_plugin_)
-          ? (*dumper_plugin_)->make_dumper({}, input_schema, *ctrl)
-          : printer_plugin_.make_default_dumper({}, input_schema, *ctrl);
-    if (!new_dumper) {
-      return new_dumper.error();
-    }
-    dumper_ = std::move(*new_dumper);
-    return [this](generator<table_slice> input) -> generator<std::monostate> {
-      return dumper_(printer_(std::move(input)));
-    };
-  }
-
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    auto str = fmt::format("write {}", printer_plugin_.name());
-    if (dumper_plugin_) {
-      str.append(fmt::format(" to {}", (*dumper_plugin_)->name()));
-    }
-    return str;
-  }
-
-private:
-  const printer_plugin& printer_plugin_;
-  const std::optional<const dumper_plugin*> dumper_plugin_;
-  printer_plugin::printer printer_;
-  dumper_plugin::dumper dumper_;
-};
 
 class plugin final : public virtual logical_operator_plugin {
 public:
@@ -137,10 +86,18 @@ public:
                                             "found",
                                             dumper_name))};
       }
+    } else {
+      dumper.emplace(printer->make_default_dumper());
     }
+    auto write_op = std::make_unique<print_operator>(std::move(*printer));
+    auto dump_op = std::make_unique<dump_operator>(std::move(**dumper));
+    auto ops = std::vector<logical_operator_ptr>{};
+    ops.push_back(std::move(write_op));
+    ops.push_back(std::move(dump_op));
+    auto sub_pipeline = logical_pipeline::make(std::move(ops));
     return {
       std::string_view{f, l},
-      std::make_unique<write_operator>(*printer, std::move(dumper)),
+      std::make_unique<logical_pipeline>(std::move(*sub_pipeline)),
     };
   }
 };

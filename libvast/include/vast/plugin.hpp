@@ -52,7 +52,6 @@ auto inspect(Inspector& f, plugin_type_id_block& x) ->
 }
 
 // -- plugin singleton ---------------------------------------------------------
-
 namespace plugins {
 
 /// Retrieves the system-wide plugin singleton.
@@ -443,13 +442,10 @@ public:
 /// @relates plugin
 class printer_plugin : public virtual plugin {
 public:
+
   // Alias for the byte chunk generation function.
   using printer
     = std::function<auto(generator<table_slice>)->generator<chunk_ptr>>;
-
-  // Alias for the byte chunk dumping function.
-  using dumper
-    = std::function<auto(generator<chunk_ptr>)->generator<std::monostate>>;
 
   /// Returns a printer for a specified schema.
   [[nodiscard]] virtual auto
@@ -459,8 +455,7 @@ public:
 
   /// Returns the default dumper for this printer.
   [[nodiscard]] virtual auto
-  make_default_dumper(const record&, type input_schema,
-                      operator_control_plane&) const -> caf::expected<dumper>
+  make_default_dumper() const -> const dumper_plugin*
     = 0;
 
   /// Returns whether the printer allows for joining output streams into a
@@ -474,10 +469,6 @@ public:
 /// @relates plugin
 class dumper_plugin : public virtual plugin {
 public:
-  // Alias for the byte chunk generation function.
-  using printer
-    = std::function<auto(generator<table_slice>)->generator<chunk_ptr>>;
-
   // Alias for the byte chunk dumping function.
   using dumper
     = std::function<auto(generator<chunk_ptr>)->generator<std::monostate>>;
@@ -490,8 +481,7 @@ public:
 
   /// Returns the default printer for this dumper.
   [[nodiscard]] virtual auto
-  make_default_printer(const record&, type input_schema,
-                       operator_control_plane&) const -> caf::expected<printer>
+  make_default_printer() const -> const printer_plugin*
     = 0;
 
   /// Returns whether the dumper requires that the output from its preceding

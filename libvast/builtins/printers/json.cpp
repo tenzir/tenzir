@@ -47,11 +47,9 @@ public:
   }
 
   [[nodiscard]] auto
-  make_default_dumper(const record& options, type input_schema,
-                      operator_control_plane& ctrl) const
-    -> caf::expected<dumper> override {
-    auto default_dumper = vast::plugins::find<vast::dumper_plugin>("stdout");
-    return default_dumper->make_dumper(options, input_schema, ctrl);
+  make_default_dumper() const
+    -> const dumper_plugin* override {
+    return vast::plugins::find<vast::dumper_plugin>("stdout");
   }
 
   [[nodiscard]] auto printer_allows_joining() const -> bool override {

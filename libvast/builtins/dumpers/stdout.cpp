@@ -30,11 +30,9 @@ public:
   }
 
   [[nodiscard]] auto
-  make_default_printer(const record& options, type input_schema,
-                       operator_control_plane& ctrl) const
-    -> caf::expected<printer> override {
-    auto default_printer = vast::plugins::find<vast::printer_plugin>("json");
-    return default_printer->make_printer(options, input_schema, ctrl);
+  make_default_printer() const
+    -> const printer_plugin* override {
+    return vast::plugins::find<vast::printer_plugin>("json");
   }
 
   [[nodiscard]] auto initialize([[maybe_unused]] const record& plugin_config,

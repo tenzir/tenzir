@@ -36,11 +36,11 @@ namespace vast {
 /// To register a new element type *T*, add it to the *element_types* list and
 /// specialize both *element_type_traits<T>* and *batch_traits<U>* for its
 /// corresponding batch type *U*.
-struct bytes;
+struct chunks;
 struct events;
 
 /// The list of supported element types.
-using element_types = caf::detail::type_list<void, bytes, events>;
+using element_types = caf::detail::type_list<void, chunks, events>;
 
 /// A concept that matches all registered element types.
 template <class T>
@@ -57,7 +57,7 @@ struct element_type_traits<void> {
 };
 
 template <>
-struct element_type_traits<bytes> {
+struct element_type_traits<chunks> {
   static constexpr std::string_view name = "bytes";
   using batch = chunk_ptr;
 };
