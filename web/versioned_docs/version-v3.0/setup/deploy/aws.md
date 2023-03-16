@@ -26,7 +26,7 @@ illustrates the high-level architecture:
 :::info Source Code Required
 Make sure you have [downloaded the VAST source code](../download.md)
 and change into the directory
-[cloud/aws](https://github.com/tenzir/vast/tree/master/cloud/aws) that contains
+[cloud/aws](https://github.com/tenzir/vast/tree/main/cloud/aws) that contains
 all deployment scripts.
 :::
 
@@ -98,9 +98,9 @@ To tear everything down, use:
 ./vast-cloud destroy
 ```
 
-[vast-cloud-dockerfile]: https://github.com/tenzir/vast/blob/master/cloud/aws/docker/cli.Dockerfile
-[vast-cloud-script]: https://github.com/tenzir/vast/blob/master/cloud/aws/vast-cloud
-[core.py]: https://github.com/tenzir/vast/blob/master/cloud/aws/cli/core.py
+[vast-cloud-dockerfile]: https://github.com/tenzir/vast/blob/main/cloud/aws/docker/cli.Dockerfile
+[vast-cloud-script]: https://github.com/tenzir/vast/blob/main/cloud/aws/vast-cloud
+[core.py]: https://github.com/tenzir/vast/blob/main/cloud/aws/cli/core.py
 
 :::warning Caveats
 - Access to the VAST server is enforced by limiting inbound traffic to its local

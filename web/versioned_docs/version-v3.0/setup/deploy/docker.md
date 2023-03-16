@@ -77,7 +77,7 @@ docker run -e VAST_ENDPOINT -e VAST_IMPORT__BATCH_SIZE=42 --env-file .env \
 You can always build your own Docker image in case our prebuilt images don't fit
 your use case.
 
-Our official [Dockerfile](https://github.com/tenzir/vast/blob/master/Dockerfile)
+Our official [Dockerfile](https://github.com/tenzir/vast/blob/main/Dockerfile)
 offers two starting points: a *development* and *production* layer.
 
 Before building the image, make sure to fetch all submodules:

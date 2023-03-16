@@ -12,7 +12,7 @@ The role definition is in the [`ansible/roles/vast`][vast-repo-ansible]
 directory of the VAST repository. You need a local copy of this directory so you
 can use it in your playbook.
 
-[vast-repo-ansible]: https://github.com/tenzir/vast/tree/master/ansible/roles/vast
+[vast-repo-ansible]: https://github.com/tenzir/vast/tree/main/ansible/roles/vast
 
 ## Example
 
