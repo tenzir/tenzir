@@ -11,7 +11,7 @@
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/make_pipelines.hpp"
+#include "vast/system/make_legacy_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/parse_query.hpp"
 #include "vast/system/spawn_arguments.hpp"

@@ -222,18 +222,15 @@ enum table_slice_encoding table_slice::encoding() const noexcept {
 
 const type& table_slice::schema() const noexcept {
   auto f = detail::overload{
-    []() noexcept -> const type* {
-      die("unable to access schema of invalid table slice");
+    []() noexcept {
+      static const auto schema = type{};
+      return &schema;
     },
-    [&](const auto& encoded) noexcept -> const type* {
+    [&](const auto& encoded) noexcept {
       return &state(encoded, state_)->schema();
     },
   };
-  const auto* result = visit(f, as_flatbuffer(chunk_));
-  VAST_ASSERT(result);
-  VAST_ASSERT(caf::holds_alternative<record_type>(*result));
-  VAST_ASSERT(!result->name().empty());
-  return *result;
+  return *visit(f, as_flatbuffer(chunk_));
 }
 
 table_slice::size_type table_slice::rows() const noexcept {
@@ -612,7 +609,9 @@ uint64_t rows(const std::vector<table_slice>& slices) {
 
 std::optional<table_slice>
 filter(const table_slice& slice, expression expr, const ids& hints) {
-  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  if (slice.encoding() == table_slice_encoding::none) {
+    return {};
+  }
   auto selected = collect(select(slice, std::move(expr), hints));
   if (selected.empty())
     return {};

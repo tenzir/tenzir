@@ -41,9 +41,9 @@ if [ -d "${source_dir}/changelog/${new_version}" ]; then
   exit 1
 fi
 
-# Create a new branch that bases off of current origin/master.
-git fetch origin master
-git switch -C "topic/release-${new_version}" origin/master
+# Create a new branch that bases off of current origin/main.
+git fetch origin main
+git switch -C "topic/release-${new_version}" origin/main
 # Update the fallback version and its ancestor count.
 # We expect to make one change commit and one merge commit, which is then tagged
 # -> the tag's rev-count is that of HEAD + 2.

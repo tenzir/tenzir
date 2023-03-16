@@ -10,7 +10,7 @@
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/error.hpp>
-#include <vast/pipeline.hpp>
+#include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
 
 namespace vast::plugins::vast {
@@ -25,7 +25,8 @@ class plugin final : public virtual language_plugin {
     return "VAST";
   }
 
-  [[nodiscard]] caf::expected<std::pair<expression, std::optional<pipeline>>>
+  [[nodiscard]] caf::expected<
+    std::pair<expression, std::optional<legacy_pipeline>>>
   make_query(std::string_view query) const override {
     static const auto match_everything = expression{predicate{
       meta_extractor{meta_extractor::kind::type},
@@ -35,14 +36,14 @@ class plugin final : public virtual language_plugin {
     if (query.empty()) {
       return std::pair{
         match_everything,
-        std::optional<pipeline>{},
+        std::optional<legacy_pipeline>{},
       };
     }
     using parsers::space, parsers::expr, parsers::eoi,
       parsers::optional_ws_or_comment;
     // Try to parse pipline first, because e.g. `head` is both a valid
     // expression and a valid pipeline.
-    auto parsed_pipeline = pipeline::parse("export", query);
+    auto parsed_pipeline = legacy_pipeline::parse("export", query);
     if (parsed_pipeline) {
       return std::pair{match_everything, std::move(*parsed_pipeline)};
     }
@@ -63,7 +64,7 @@ class plugin final : public virtual language_plugin {
     if (has_no_pipeline_parser(f, l, unused)) {
       return std::pair{
         std::move(parsed_expr),
-        std::optional<pipeline>{},
+        std::optional<legacy_pipeline>{},
       };
     }
     if (has_expr) {
@@ -77,7 +78,7 @@ class plugin final : public virtual language_plugin {
       }
     }
     const auto pipeline_query = std::string_view{f, l};
-    parsed_pipeline = pipeline::parse("export", pipeline_query);
+    parsed_pipeline = legacy_pipeline::parse("export", pipeline_query);
     if (!parsed_pipeline) {
       return caf::make_error(ec::syntax_error,
                              fmt::format("failed to parse pipeline in query "

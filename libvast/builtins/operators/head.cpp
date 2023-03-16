@@ -9,8 +9,8 @@
 #include <vast/concept/parseable/numeric/integral.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
+#include <vast/legacy_pipeline.hpp>
 #include <vast/logger.hpp>
-#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice.hpp>
 
@@ -48,7 +48,42 @@ private:
   uint64_t remaining_ = {};
 };
 
-class plugin final : public virtual pipeline_operator_plugin {
+class head_operator2 final : public logical_operator<events, events> {
+public:
+  explicit head_operator2(uint64_t limit) noexcept : remaining_{limit} {
+    // nop
+  }
+
+  [[nodiscard]] auto
+  make_physical_operator([[maybe_unused]] const type& input_schema,
+                         [[maybe_unused]] operator_control_plane& ctrl) noexcept
+    -> caf::expected<physical_operator<events, events>> override {
+    return [this](generator<table_slice> input) -> generator<table_slice> {
+      for (auto&& slice : input) {
+        if (remaining_ == 0)
+          break;
+        slice = vast::head(slice, remaining_);
+        VAST_ASSERT(remaining_ >= slice.rows());
+        remaining_ -= slice.rows();
+        co_yield std::move(slice);
+      }
+    };
+  }
+
+  [[nodiscard]] auto done() const noexcept -> bool override {
+    return remaining_ == 0;
+  }
+
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return fmt::format("head ({} remaining)", remaining_);
+  }
+
+private:
+  uint64_t remaining_;
+};
+
+class plugin final : public virtual pipeline_operator_plugin,
+                     public virtual logical_operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -89,6 +124,29 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<head_operator>(limit.value_or(10)),
+    };
+  }
+
+  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const override {
+    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
+      parsers::end_of_pipeline_operator, parsers::u64;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = -(required_ws_or_comment >> u64) >> optional_ws_or_comment
+                   >> end_of_pipeline_operator;
+    auto limit = std::optional<uint64_t>{};
+    if (!p(f, l, limit)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "head operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<head_operator2>(limit.value_or(10)),
     };
   }
 };

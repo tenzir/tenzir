@@ -15,18 +15,18 @@
 namespace vast::system {
 
 /// Attempts to parse `query` as (::expression, ::pipeline).
-caf::expected<std::pair<expression, std::optional<pipeline>>>
+caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(const std::string& query);
 
 /// Attempts to parse `[begin, end)` as (::expression, ::pipeline).
-caf::expected<std::pair<expression, std::optional<pipeline>>>
+caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(std::vector<std::string>::const_iterator begin,
             std::vector<std::string>::const_iterator end);
 
-caf::expected<std::pair<expression, std::optional<pipeline>>>
+caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(const std::vector<std::string>& args);
 
-caf::expected<std::pair<expression, std::optional<pipeline>>>
+caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(const spawn_arguments& args);
 
 } // namespace vast::system

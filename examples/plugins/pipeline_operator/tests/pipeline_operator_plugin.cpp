@@ -12,7 +12,7 @@
 
 #include <vast/concept/convertible/to.hpp>
 #include <vast/data.hpp>
-#include <vast/system/make_pipelines.hpp>
+#include <vast/system/make_legacy_pipelines.hpp>
 #include <vast/test/test.hpp>
 
 #include <caf/settings.hpp>

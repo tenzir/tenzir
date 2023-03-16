@@ -16,6 +16,7 @@
 #include "vast/detail/pp.hpp"
 #include "vast/detail/weak_handle.hpp"
 #include "vast/http_api.hpp"
+#include "vast/logical_operator.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
@@ -275,6 +276,13 @@ public:
   make_pipeline_operator(std::string_view pipeline) const = 0;
 };
 
+class logical_operator_plugin : public virtual plugin {
+public:
+  [[nodiscard]] virtual std::pair<std::string_view,
+                                  caf::expected<logical_operator_ptr>>
+  make_logical_operator(std::string_view pipeline) const = 0;
+};
+
 // -- aggregation function plugin ---------------------------------------------
 
 /// A base class for plugins that add new aggregation functions.
@@ -365,7 +373,7 @@ public:
   /// In the future, we may want to let this plugin return a substrait query
   /// plan instead of a VAST expression.
   [[nodiscard]] virtual caf::expected<
-    std::pair<expression, std::optional<pipeline>>>
+    std::pair<expression, std::optional<legacy_pipeline>>>
   make_query(std::string_view query) const = 0;
 };
 
