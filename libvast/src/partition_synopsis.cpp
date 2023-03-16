@@ -268,7 +268,10 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
                   partition_synopsis& ps) {
   if (!x.id_range())
     return caf::make_error(ec::format_error, "missing id range");
-  VAST_ASSERT_CHEAP(x.id_range()->begin() == 0);
+  if (x.id_range()->begin() != 0)
+    return caf::make_error(ec::format_error,
+                           "partitions with an ID range not starting at zero "
+                           "are no longer supported");
   ps.events = x.id_range()->end();
   if (x.import_time_range()) {
     ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
