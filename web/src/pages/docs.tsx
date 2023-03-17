@@ -4,7 +4,7 @@ import React from "react";
 const Element = () => {
   return (
     <ExternalLink
-      url={"docs/about"}
+      url={"/docs/about"}
     />
   );
 };
