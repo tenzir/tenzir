@@ -12,7 +12,7 @@
 
 namespace vast {
 
-class dump_operator : public logical_operator<chunks, void> {
+class dump_operator : public logical_operator<chunk_ptr, void> {
 public:
   explicit dump_operator(const dumper_plugin& dumper) noexcept
     : dumper_plugin_{dumper} {
@@ -21,7 +21,7 @@ public:
   [[nodiscard]] auto
   make_physical_operator(const type& input_schema,
                          operator_control_plane& ctrl) noexcept
-    -> caf::expected<physical_operator<chunks, void>> override {
+    -> caf::expected<physical_operator<chunk_ptr, void>> override {
     auto new_dumper = dumper_plugin_.make_dumper({}, input_schema, ctrl);
     if (!new_dumper) {
       return new_dumper.error();

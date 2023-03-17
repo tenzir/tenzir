@@ -12,7 +12,7 @@
 
 namespace vast {
 
-class print_operator : public logical_operator<events, chunks> {
+class print_operator : public logical_operator<table_slice, chunk_ptr> {
 public:
   explicit print_operator(const printer_plugin& printer) noexcept
     : printer_plugin_{printer} {
@@ -21,7 +21,7 @@ public:
   [[nodiscard]] auto
   make_physical_operator(const type& input_schema,
                          operator_control_plane& ctrl) noexcept
-    -> caf::expected<physical_operator<events, chunks>> override {
+    -> caf::expected<physical_operator<table_slice, chunk_ptr>> override {
     auto new_printer = printer_plugin_.make_printer({}, input_schema, ctrl);
     if (!new_printer) {
       return new_printer.error();
