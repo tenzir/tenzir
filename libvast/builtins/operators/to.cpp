@@ -73,11 +73,11 @@ public:
                                           "found",
                                           dumper_name))};
     }
-    std::optional<const printer_plugin*> printer;
+    const printer_plugin* printer;
     auto printer_argument = std::get<1>(result);
     if (printer_argument) {
       auto printer_name = std::get<1>(*printer_argument);
-      printer.emplace(plugins::find<printer_plugin>(printer_name));
+      printer = plugins::find<printer_plugin>(printer_name);
       if (!printer) {
         return {std::string_view{f, l},
                 caf::make_error(ec::syntax_error,
@@ -87,9 +87,19 @@ public:
                                             printer_name))};
       }
     } else {
-      printer.emplace(dumper->make_default_printer());
+      printer = dumper->make_default_printer();
     }
-    auto write_op = std::make_unique<print_operator>(std::move(**printer));
+    if (dumper->dumper_requires_joining()
+        and not printer->printer_allows_joining()) {
+      return {std::string_view{f, l},
+              caf::make_error(ec::invalid_argument,
+                              fmt::format("failed to parse "
+                                          "to operator: printer '{}' does not "
+                                          "allow joining but dumper '{}' "
+                                          "requires joining",
+                                          printer->name(), dumper->name()))};
+    }
+    auto write_op = std::make_unique<print_operator>(std::move(*printer));
     auto dump_op = std::make_unique<dump_operator>(std::move(*dumper));
     auto ops = std::vector<logical_operator_ptr>{};
     ops.push_back(std::move(write_op));
