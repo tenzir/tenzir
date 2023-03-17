@@ -46,8 +46,7 @@ public:
     };
   }
 
-  [[nodiscard]] auto
-  make_default_dumper() const
+  [[nodiscard]] auto make_default_dumper() const
     -> const dumper_plugin* override {
     return vast::plugins::find<vast::dumper_plugin>("stdout");
   }

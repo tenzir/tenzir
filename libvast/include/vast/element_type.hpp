@@ -30,8 +30,10 @@ namespace vast {
 /// The following element types are currently supported:
 /// - *void*:   Denotes the start of end of a pipeline, and cannot be connected
 ///             over. Its batch type is *std::monostate*.
-/// - *chunk_ptr*:  Denotes a stream of opaque bytes. Its batch type is *chunk_ptr*.
-/// - *table_slice*: Denotes a stream of records. Its batch type is *table_slice*.
+/// - *chunk_ptr*:  Denotes a stream of opaque bytes. Its batch type is
+/// *chunk_ptr*.
+/// - *table_slice*: Denotes a stream of records. Its batch type is
+/// *table_slice*.
 ///
 /// To register a new element type *T*, add it to the *element_types* list and
 /// specialize both *element_type_traits<T>* and *batch_traits<U>* for its

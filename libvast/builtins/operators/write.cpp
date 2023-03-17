@@ -100,11 +100,11 @@ public:
                                           "requires joining",
                                           printer->name(), dumper->name()))};
     }
-    auto write_op = std::make_unique<print_operator>(std::move(*printer));
+    auto print_op = std::make_unique<print_operator>(std::move(*printer));
     auto dump_op = std::make_unique<dump_operator>(std::move(*dumper));
     auto ops = std::vector<logical_operator_ptr>{};
-    ops.push_back(std::move(write_op));
-    ops.push_back(std::move(dump_op));
+    ops.emplace_back(std::move(print_op));
+    ops.emplace_back(std::move(dump_op));
     auto sub_pipeline = logical_pipeline::make(std::move(ops));
     return {
       std::string_view{f, l},

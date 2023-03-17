@@ -29,8 +29,7 @@ public:
     };
   }
 
-  [[nodiscard]] auto
-  make_default_printer() const
+  [[nodiscard]] auto make_default_printer() const
     -> const printer_plugin* override {
     return vast::plugins::find<vast::printer_plugin>("json");
   }
