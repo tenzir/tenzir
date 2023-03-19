@@ -101,7 +101,7 @@ macro (VASTTargetEnableTooling _target)
       EXCLUDE
       "${PROJECT_SOURCE_DIR}/libvast/aux/*"
       "${PROJECT_SOURCE_DIR}/libvast/test/*"
-      "${PROJECT_SOURCE_DIR}/libvast_test/*"
+      "${PROJECT_SOURCE_DIR}/libvast/libvast_test/*"
       "${PROJECT_BINARY_DIR}/*"
       ${_absolute_plugin_test_sources})
   endif ()

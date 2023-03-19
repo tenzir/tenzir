@@ -160,7 +160,6 @@ in {
       (inputs.nix-filter.lib.inDirectory ../docs)
       (inputs.nix-filter.lib.inDirectory ../docs)
       (inputs.nix-filter.lib.inDirectory ../libvast)
-      (inputs.nix-filter.lib.inDirectory ../libvast_test)
       (inputs.nix-filter.lib.inDirectory ../plugins)
       (inputs.nix-filter.lib.inDirectory ../python)
       (inputs.nix-filter.lib.inDirectory ../schema)
