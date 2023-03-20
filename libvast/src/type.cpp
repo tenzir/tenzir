@@ -63,6 +63,7 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
   while (transparent == type::transparent::yes) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -76,7 +77,6 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         transparent = type::transparent::no;
         break;
@@ -98,6 +98,7 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -111,7 +112,6 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         return result;
       case fbs::type::Type::enriched_type: {
@@ -293,6 +293,7 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
   for (auto nesting_depth = 0; root != nullptr; ++nesting_depth) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -306,7 +307,6 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         root = nullptr;
         break;
@@ -379,6 +379,7 @@ type::type(std::string_view name, const type& nested,
          root != nullptr;) {
       switch (root->type_type()) {
         case fbs::type::Type::pattern_type:
+        case fbs::type::Type::map_type:
           __builtin_unreachable();
         case fbs::type::Type::NONE:
         case fbs::type::Type::bool_type:
@@ -392,7 +393,6 @@ type::type(std::string_view name, const type& nested,
         case fbs::type::Type::subnet_type:
         case fbs::type::Type::enumeration_type:
         case fbs::type::Type::list_type:
-        case fbs::type::Type::map_type:
         case fbs::type::Type::record_type:
           root = nullptr;
           break;
@@ -548,23 +548,8 @@ type type::infer(const data& value) noexcept {
                   "expected a homogenous list");
       return type{list_type{value_type}};
     },
-    [](const map& map) noexcept -> type {
-      // Map types cannot be inferred from empty maps.
-      if (map.empty())
-        return type{map_type{type{}, type{}}};
-      // Technically maps can contain heterogeneous data, but for optimization
-      // purposes we only check the first element when assertions are disabled.
-      auto key_type = infer(map.begin()->first);
-      auto value_type = infer(map.begin()->second);
-      VAST_ASSERT(std::all_of(map.begin() + 1, map.end(),
-                              [&](const auto& elem) noexcept {
-                                return key_type.type_index()
-                                         == infer(elem.first).type_index()
-                                       && value_type.type_index()
-                                            == infer(elem.second).type_index();
-                              }),
-                  "expected a homogenous map");
-      return type{map_type{key_type, value_type}};
+    [](const map&) noexcept -> type {
+      return type{string_type{}};
     },
     [](const record& record) noexcept -> type {
       // Record types cannot be inferred from empty records.
@@ -1018,6 +1003,7 @@ std::string_view type::name() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -1031,7 +1017,6 @@ std::string_view type::name() const& noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         return std::string_view{};
       case fbs::type::Type::enriched_type: {
@@ -1052,6 +1037,7 @@ generator<std::string_view> type::names() const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -1065,7 +1051,6 @@ generator<std::string_view> type::names() const& noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         co_return;
       case fbs::type::Type::enriched_type: {
@@ -1087,6 +1072,7 @@ type::attribute(const char* key) const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -1100,7 +1086,6 @@ type::attribute(const char* key) const& noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         return std::nullopt;
       case fbs::type::Type::enriched_type: {
@@ -1126,6 +1111,7 @@ bool type::has_attributes() const noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -1139,7 +1125,6 @@ bool type::has_attributes() const noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         return false;
       case fbs::type::Type::enriched_type: {
@@ -1163,6 +1148,7 @@ type::attributes(type::recurse recurse) const& noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -1176,7 +1162,6 @@ type::attributes(type::recurse recurse) const& noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         co_return;
       case fbs::type::Type::enriched_type: {
@@ -1207,6 +1192,7 @@ generator<type> type::aliases() const noexcept {
   while (true) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -1220,7 +1206,6 @@ generator<type> type::aliases() const noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type:
       case fbs::type::Type::record_type:
         co_return;
       case fbs::type::Type::enriched_type: {
@@ -1240,6 +1225,7 @@ bool is_container(const type& type) noexcept {
   const auto& root = type.table(type::transparent::yes);
   switch (root.type_type()) {
     case fbs::type::Type::pattern_type:
+    case fbs::type::Type::map_type:
       __builtin_unreachable();
     case fbs::type::Type::NONE:
     case fbs::type::Type::bool_type:
@@ -1254,7 +1240,6 @@ bool is_container(const type& type) noexcept {
     case fbs::type::Type::enumeration_type:
       return false;
     case fbs::type::Type::list_type:
-    case fbs::type::Type::map_type:
     case fbs::type::Type::record_type:
       return true;
     case fbs::type::Type::enriched_type:
@@ -1286,10 +1271,6 @@ bool congruent(const type& x, const type& y) noexcept {
     },
     [](const list_type& x, const list_type& y) noexcept {
       return congruent(x.value_type(), y.value_type());
-    },
-    [](const map_type& x, const map_type& y) noexcept {
-      return congruent(x.key_type(), y.key_type())
-             && congruent(x.value_type(), y.value_type());
     },
     [](const record_type& x, const record_type& y) noexcept {
       if (x.num_fields() != y.num_fields())
@@ -1351,9 +1332,6 @@ bool congruent(const type& x, const data& y) noexcept {
       return x.resolve(y).has_value();
     },
     [](const list_type&, const list&) noexcept {
-      return true;
-    },
-    [](const map_type&, const map&) noexcept {
       return true;
     },
     [](const record_type& x, const list& y) noexcept {
@@ -1483,25 +1461,6 @@ bool type_check(const type& x, const data& y) noexcept {
         // first element when assertions are disabled.
         VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
                     "expected a homogenous list");
-        return true;
-      }
-      return false;
-    },
-    [&](const map_type& t, const map& u) {
-      if (u.empty())
-        return true;
-      const auto kt = t.key_type();
-      const auto vt = t.value_type();
-      auto it = u.begin();
-      const auto check = [&](const auto& d) noexcept {
-        return type_check(kt, d.first) && type_check(vt, d.second);
-      };
-      if (check(*it)) {
-        // Technically maps can contain heterogeneous data,
-        // but for optimization purposes we only check the
-        // first element when assertions are disabled.
-        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
-                    "expected a homogenous map");
         return true;
       }
       return false;
@@ -2491,6 +2450,7 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -2504,18 +2464,6 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type: {
-        auto leaf = leaf_view{
-          {
-            field->name()->string_view(),
-            type{table_->slice(as_bytes(*field->type()))},
-          },
-          index,
-        };
-        co_yield std::move(leaf);
-        ++index.back();
-        break;
-      }
       case fbs::type::Type::record_type: {
         history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
@@ -2560,6 +2508,7 @@ size_t record_type::num_leaves() const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -2573,11 +2522,6 @@ size_t record_type::num_leaves() const noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type: {
-        ++index.back();
-        ++num_leaves;
-        break;
-      }
       case fbs::type::Type::record_type: {
         history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
@@ -2616,6 +2560,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -2629,13 +2574,6 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type: {
-        if (current_flat_index == flat_index)
-          return index;
-        ++current_flat_index;
-        ++index.back();
-        break;
-      }
       case fbs::type::Type::record_type: {
         history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
@@ -2678,6 +2616,7 @@ record_type::resolve_key(std::string_view key) const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -2691,12 +2630,6 @@ record_type::resolve_key(std::string_view key) const noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type: {
-        if (remaining_key == field_name->string_view())
-          return index;
-        ++index.back();
-        break;
-      }
       case fbs::type::Type::record_type: {
         auto [remaining_key_mismatch, field_name_mismatch]
           = std::mismatch(remaining_key.begin(), remaining_key.end(),
@@ -2771,6 +2704,7 @@ record_type::resolve_key_suffix(std::string_view key,
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -2784,23 +2718,6 @@ record_type::resolve_key_suffix(std::string_view key,
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type: {
-        for (const auto& remaining_key : remaining_keys) {
-          // TODO: Once we no longer support flattening types, we can switch to
-          // an equality comparison between field_name and remaining_key here.
-          const auto [field_name_mismatch, remaining_key_mismatch]
-            = std::mismatch(field_name->rbegin(), field_name->rend(),
-                            remaining_key.rbegin(), remaining_key.rend());
-          if (remaining_key_mismatch == remaining_key.rend()
-              && (field_name_mismatch == field_name->rend()
-                  || *field_name_mismatch == '.')) {
-            co_yield index;
-            break;
-          }
-        }
-        ++index.back();
-        break;
-      }
       case fbs::type::Type::record_type: {
         using history_entry = decltype(history)::value_type;
         auto next = history_entry{
@@ -2921,6 +2838,7 @@ size_t record_type::flat_index(const offset& index) const noexcept {
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
+      case fbs::type::Type::map_type:
         __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
@@ -2934,13 +2852,6 @@ size_t record_type::flat_index(const offset& index) const noexcept {
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
-      case fbs::type::Type::map_type: {
-        if (index == current_index)
-          return flat_index;
-        ++current_index.back();
-        ++flat_index;
-        break;
-      }
       case fbs::type::Type::record_type: {
         VAST_ASSERT(index != current_index);
         history.emplace_back(field_type->type_as_record_type());
