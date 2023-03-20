@@ -276,6 +276,7 @@ struct rebuilder_state {
                 std::move(query_context))
       .then(
         [this, finish](system::catalog_lookup_result& lookup_result) mutable {
+          VAST_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
             std::erase_if(
               result.partition_infos, [&](const partition_info& partition) {
@@ -306,7 +307,7 @@ struct rebuilder_state {
                 }
               }
             }
-            run->statistics.num_total = result.partition_infos.size();
+            run->statistics.num_total += result.partition_infos.size();
             run->remaining_partitions.insert(run->remaining_partitions.end(),
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
@@ -360,8 +361,8 @@ struct rebuilder_state {
     stopping = true;
     if (!run->remaining_partitions.empty()) {
       VAST_ASSERT(run->remaining_partitions.size()
-                  == run->statistics.num_total
-                       - run->statistics.num_rebuilding);
+                  == run->statistics.num_total - run->statistics.num_rebuilding
+                       - run->statistics.num_completed);
       VAST_INFO("{} schedules stop after rebuild of {} partitions currently "
                 "in rebuilding, and will not touch remaining {} partitions",
                 *self, run->statistics.num_rebuilding,
@@ -382,7 +383,6 @@ struct rebuilder_state {
       return {}; // We're done!
     auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
-    bool is_oversized = false;
     // Take the first partition and collect as many of the same
     // type as possible to create new paritions. The approach used may
     // collects too many partitions if there is no exact match, but that is
@@ -408,7 +408,7 @@ struct rebuilder_state {
       });
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
-    is_oversized = current_run_events > max_partition_size;
+    auto is_oversized = current_run_events > max_partition_size;
     run->statistics.num_rebuilding += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
@@ -446,13 +446,13 @@ struct rebuilder_state {
               [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time < rhs.max_import_time;
               });
+    const auto num_partitions = current_run_partitions.size();
     self
       ->request(index, caf::infinite, atom::apply_v, std::move(pipeline),
                 std::move(current_run_partitions),
                 system::keep_original_partition::no)
       .then(
-        [this, rp, current_run_events,
-         num_partitions = current_run_partitions.size(),
+        [this, rp, current_run_events, num_partitions,
          is_oversized](std::vector<partition_info>& result) mutable {
           if (result.empty()) {
             VAST_DEBUG("{} skipped {} partitions as they are already being "
