@@ -276,6 +276,7 @@ struct rebuilder_state {
                 std::move(query_context))
       .then(
         [this, finish](system::catalog_lookup_result& lookup_result) mutable {
+          VAST_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
             std::erase_if(
               result.partition_infos, [&](const partition_info& partition) {
@@ -306,7 +307,7 @@ struct rebuilder_state {
                 }
               }
             }
-            run->statistics.num_total = result.partition_infos.size();
+            run->statistics.num_total += result.partition_infos.size();
             run->remaining_partitions.insert(run->remaining_partitions.end(),
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
@@ -360,8 +361,8 @@ struct rebuilder_state {
     stopping = true;
     if (!run->remaining_partitions.empty()) {
       VAST_ASSERT(run->remaining_partitions.size()
-                  == run->statistics.num_total
-                       - run->statistics.num_rebuilding);
+                  == run->statistics.num_total - run->statistics.num_rebuilding
+                       - run->statistics.num_completed);
       VAST_INFO("{} schedules stop after rebuild of {} partitions currently "
                 "in rebuilding, and will not touch remaining {} partitions",
                 *self, run->statistics.num_rebuilding,
