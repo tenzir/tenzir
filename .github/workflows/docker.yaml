@@ -7,6 +7,8 @@ on:
         required: true
 
 permissions:
+  contents: read
+  id-token: write
   packages: write
 
 jobs:
