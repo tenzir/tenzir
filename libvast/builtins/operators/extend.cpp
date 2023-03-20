@@ -133,31 +133,30 @@ private:
   configuration config_ = {};
 };
 
-class extend_operator2 : public logical_operator<events, events> {
+class extend_operator2 final
+  : public schematic_operator<extend_operator2,
+                              std::vector<indexed_transformation>> {
 public:
   explicit extend_operator2(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
 
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    auto& schema_rt = caf::get<record_type>(input_schema);
+  auto initialize(const type& schema) const -> caf::expected<State> override {
+    auto& schema_rt = caf::get<record_type>(schema);
     for (const auto& [field, _] : config_.field_to_value)
       if (schema_rt.resolve_key(field).has_value())
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("cannot extend {} with field {} "
                                            "as it already has a field with "
                                            "this name",
-                                           input_schema, field));
-    return [transformations = std::vector<indexed_transformation>{
-              {offset{schema_rt.num_fields() - 1}, config_.transformation},
-            }](generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield transform_columns(slice, transformations);
-      }
-    };
+                                           schema, field));
+    return std::vector<indexed_transformation>{
+      {offset{schema_rt.num_fields() - 1}, config_.transformation}};
+  }
+
+  auto process(table_slice slice, State& state) const -> Output override {
+    return transform_columns(slice, state);
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
@@ -180,7 +179,7 @@ private:
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -241,8 +240,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::data, parsers::end_of_pipeline_operator,
       parsers::extractor_value_assignment_list;

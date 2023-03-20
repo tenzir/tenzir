@@ -125,6 +125,7 @@ class duration_type;
 class enumeration_type;
 class expression;
 class ewah_bitmap;
+class dynamic_operator;
 class http_request;
 class int64_type;
 class legacy_abstract_type;

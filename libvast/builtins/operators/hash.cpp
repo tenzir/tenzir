@@ -121,27 +121,23 @@ private:
   configuration config_ = {};
 };
 
-class hash_operator2 : public logical_operator<events, events> {
+class hash_operator2 final
+  : public schematic_operator<hash_operator2,
+                              std::vector<indexed_transformation>> {
 public:
   explicit hash_operator2(configuration configuration)
     : config_(std::move(configuration)) {
   }
 
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
+  auto initialize(const type& schema) const -> caf::expected<State> override {
     // Get the target field if it exists.
-    const auto& schema_rt = caf::get<record_type>(input_schema);
+    const auto& schema_rt = caf::get<record_type>(schema);
     auto column_index = schema_rt.resolve_key(config_.field);
     if (!column_index) {
-      return [](generator<table_slice> input) -> generator<table_slice> {
-        for (auto&& slice : input) {
-          co_yield std::move(slice);
-        }
-      };
+      return State{};
     }
-    auto transform_fn = [&](struct record_type::field field,
-                            std::shared_ptr<arrow::Array> array) noexcept
+    auto transform_fn = [this](struct record_type::field field,
+                               std::shared_ptr<arrow::Array> array) noexcept
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
       auto hashes_builder
@@ -175,16 +171,14 @@ public:
         },
       };
     };
-    return [transformations = std::vector<indexed_transformation>{
-              {*column_index, std::move(transform_fn)},
-            }](generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield transform_columns(slice, transformations);
-      }
-    };
+    return State{{*column_index, std::move(transform_fn)}};
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto process(table_slice slice, State& state) const -> Output override {
+    return transform_columns(slice, state);
+  };
+
+  auto to_string() const noexcept -> std::string override {
     VAST_ASSERT(config_.out == fmt::format("{}_hashed", config_.field));
     auto result = std::string{"hash "};
     if (config_.salt) {
@@ -200,7 +194,7 @@ private:
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -287,8 +281,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_list;
     const auto* f = pipeline.begin();

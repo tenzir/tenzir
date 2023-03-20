@@ -12,6 +12,7 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
+#include <vast/dynamic_operator.hpp>
 #include <vast/error.hpp>
 #include <vast/expression.hpp>
 #include <vast/legacy_pipeline.hpp>
@@ -90,54 +91,40 @@ private:
 };
 
 // Selects matching rows from the input.
-class where_operator2 final : public logical_operator<events, events> {
+class where_operator2 final
+  : public schematic_operator<where_operator2, expression> {
 public:
   /// Constructs a *where* pipeline operator.
   /// @pre *expr* must be normalized and validated
-  explicit where_operator2(expression expr) : expr_(std::move(expr)) {
+  explicit where_operator2(expression expr) : expr_{std::move(expr)} {
 #if VAST_ENABLE_ASSERTIONS
-    const auto normalized_and_validated_expr = normalize_and_validate(expr_);
-    VAST_ASSERT(normalized_and_validated_expr,
-                fmt::to_string(normalized_and_validated_expr.error()).c_str());
-    VAST_ASSERT(*normalized_and_validated_expr == expr_);
+    auto result = normalize_and_validate(expr_);
+    VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
+    VAST_ASSERT(*result == expr_);
 #endif // VAST_ENABLE_ASSERTIONS
   }
 
-  caf::expected<physical_operator<events, events>>
-  make_physical_operator(const type& input_schema,
-                         operator_control_plane&) noexcept override {
-    auto expr = tailor(expr_, input_schema);
-    if (!expr) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to instantiate where "
-                                         "operator: {}",
-                                         expr.error()));
-    }
-    return [expr = std::move(*expr)](
-             generator<table_slice> input) mutable -> generator<table_slice> {
-      for (auto&& slice : input) {
-        // TODO: Adjust filter function return type.
-        // TODO: Replace this with an Arrow-native filter function as soon as we
-        // are able to directly evaluate expressions on a record batch.
-        if (auto result = filter(slice, expr)) {
-          co_yield *result;
-        } else {
-          co_yield {};
-        }
-      }
-    };
+  auto initialize(const type& schema) const -> caf::expected<State> override {
+    return tailor(expr_, schema);
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("where {}", expr_);
+  auto process(table_slice slice, State& expr) const -> Output override {
+    // TODO: Adjust filter function return type.
+    // TODO: Replace this with an Arrow-native filter function as soon as we
+    // are able to directly evaluate expressions on a record batch.
+    return filter(slice, expr).value_or(table_slice{});
   }
+
+  auto to_string() const -> std::string override {
+    return fmt::format("where {}", expr_);
+  };
 
 private:
   expression expr_;
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   [[nodiscard]] caf::error
   initialize([[maybe_unused]] const record& plugin_config,
@@ -212,8 +199,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::end_of_pipeline_operator, parsers::expr;
     const auto* f = pipeline.begin();

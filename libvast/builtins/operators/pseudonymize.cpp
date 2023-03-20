@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/logical_operator.hpp"
-
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -134,15 +132,15 @@ private:
   }
 };
 
-class pseudonymize_operator2 : public logical_operator<events, events> {
+class pseudonymize_operator2 final
+  : public schematic_operator<pseudonymize_operator2,
+                              std::vector<indexed_transformation>> {
 public:
   pseudonymize_operator2(configuration config) : config_{std::move(config)} {
     parse_seed_string();
   }
 
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
+  auto initialize(const type& schema) const -> caf::expected<State> override {
     std::vector<indexed_transformation> transformations;
     auto transformation = [&](struct record_type::field field,
                               std::shared_ptr<arrow::Array> array) noexcept
@@ -169,10 +167,9 @@ public:
       };
     };
     for (const auto& field_name : config_.fields) {
-      for (const auto& index :
-           caf::get<record_type>(input_schema)
-             .resolve_key_suffix(field_name, input_schema.name())) {
-        auto index_type = caf::get<record_type>(input_schema).field(index).type;
+      for (const auto& index : caf::get<record_type>(schema).resolve_key_suffix(
+             field_name, schema.name())) {
+        auto index_type = caf::get<record_type>(schema).field(index).type;
         if (!caf::holds_alternative<ip_type>(index_type)) {
           VAST_DEBUG("pseudonymize operator skips field '{}' of unsupported "
                      "type '{}'",
@@ -186,16 +183,14 @@ public:
     transformations.erase(std::unique(transformations.begin(),
                                       transformations.end()),
                           transformations.end());
-
-    return [transformations = std::move(transformations)](
-             generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield transform_columns(slice, transformations);
-      }
-    };
+    return transformations;
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto process(table_slice slice, State& state) const -> Output override {
+    return transform_columns(slice, state);
+  }
+
+  auto to_string() const -> std::string override {
     auto result
       = fmt::format("pseudonymize --method=\"{}\" ",
                     config_.method.empty() ? "crypto-pan" : config_.method);
@@ -228,7 +223,7 @@ private:
 // -- plugin ------------------------------------------------------------------
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -335,8 +330,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor,
       parsers::extractor_list;

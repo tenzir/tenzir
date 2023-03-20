@@ -41,25 +41,20 @@ private:
 };
 
 // Does nothing with the input.
-class pass_operator2 : public logical_operator<events, events> {
+class pass_operator2 final : public crtp_operator<pass_operator2> {
 public:
-  [[nodiscard]] auto
-  make_physical_operator(const type&, operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    return [](generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield std::move(slice);
-      }
-    };
+  template <class T>
+  auto operator()(T x) const -> T {
+    return std::move(x);
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("pass");
+  auto to_string() const -> std::string override {
+    return "pass";
   }
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -98,8 +93,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();

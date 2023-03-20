@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/logical_operator.hpp"
-
 #include <vast/arrow_table_slice.hpp>
 #include <vast/cast.hpp>
 #include <vast/concept/convertible/data.hpp>
@@ -137,22 +135,26 @@ private:
   configuration config_ = {};
 };
 
-class rename_operator2 : public logical_operator<events, events> {
+struct state_t {
+  std::vector<indexed_transformation> field_transformations;
+  std::optional<type> renamed_schema;
+};
+
+class rename_operator2 final
+  : public schematic_operator<rename_operator2, state_t> {
 public:
   rename_operator2(configuration config) : config_{std::move(config)} {
     // nop
   }
 
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
+  auto initialize(const type& schema) const -> caf::expected<State> override {
     // Step 1: Adjust field names.
     auto field_transformations = std::vector<indexed_transformation>{};
     if (!config_.fields.empty()) {
       for (const auto& field : config_.fields) {
         for (const auto& index :
-             caf::get<record_type>(input_schema)
-               .resolve_key_suffix(field.from, input_schema.name())) {
+             caf::get<record_type>(schema).resolve_key_suffix(field.from,
+                                                              schema.name())) {
           auto transformation
             = [&](struct record_type::field old_field,
                   std::shared_ptr<arrow::Array> array) noexcept
@@ -173,31 +175,28 @@ public:
       const auto schema_mapping
         = std::find_if(config_.schemas.begin(), config_.schemas.end(),
                        [&](const auto& name_mapping) noexcept {
-                         return name_mapping.from == input_schema.name();
+                         return name_mapping.from == schema.name();
                        });
       if (schema_mapping != config_.schemas.end()) {
         auto rename_schema = [&](const concrete_type auto& pruned_schema) {
-          VAST_ASSERT(!input_schema.has_attributes());
+          VAST_ASSERT(!schema.has_attributes());
           return type{schema_mapping->to, pruned_schema};
         };
-        renamed_schema = caf::visit(rename_schema, input_schema);
+        renamed_schema = caf::visit(rename_schema, schema);
       }
     }
-
-    return [field_transformations = std::move(field_transformations),
-            renamed_schema = std::move(renamed_schema)](
-             generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        slice = transform_columns(slice, field_transformations);
-        if (renamed_schema) {
-          slice = cast(std::move(slice), *renamed_schema);
-        }
-        co_yield std::move(slice);
-      }
-    };
+    return state_t{std::move(field_transformations), std::move(renamed_schema)};
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto process(table_slice slice, State& state) const -> Output override {
+    slice = transform_columns(slice, state.field_transformations);
+    if (state.renamed_schema) {
+      slice = cast(std::move(slice), *state.renamed_schema);
+    }
+    return slice;
+  }
+
+  auto to_string() const noexcept -> std::string override {
     auto result = std::string{"rename"};
     auto first = true;
     for (auto& mapping : config_.schemas) {
@@ -227,7 +226,7 @@ private:
 // -- plugin ------------------------------------------------------------------
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   caf::error initialize(const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -290,8 +289,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_assignment_list;
     const auto* f = pipeline.begin();

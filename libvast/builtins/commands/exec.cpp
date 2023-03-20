@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/logger.hpp>
-#include <vast/logical_pipeline.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 
 namespace vast::plugins::exec {
@@ -19,7 +19,7 @@ caf::expected<void> exec_command(std::span<const std::string> args) {
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
-  auto pipeline = logical_pipeline::parse(args[0]);
+  auto pipeline = pipeline::parse(args[0]);
   if (not pipeline)
     return caf::make_error(ec::invalid_argument,
                            fmt::format("failed to parse pipeline: {}",

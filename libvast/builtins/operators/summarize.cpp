@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/logical_operator.hpp"
-
 #include <vast/aggregation_function.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
@@ -732,7 +730,8 @@ private:
 };
 
 /// The summarize pipeline operator implementation.
-class summarize_operator2 : public logical_operator<events, events> {
+class summarize_operator2 final
+  : public schematic_operator<summarize_operator2, std::optional<aggregation>> {
 public:
   /// Creates a pipeline operator from its configuration.
   /// @param config The parsed configuration of the summarize operator.
@@ -741,34 +740,40 @@ public:
     // nop
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type& input_schema,
-                         operator_control_plane& ctrl) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    if (auto aggregation = aggregation::make(input_schema, config_)) {
-      return [aggregation = std::move(*aggregation), &ctrl](
-               generator<table_slice> input) mutable -> generator<table_slice> {
-        for (auto&& slice : input) {
-          aggregation.add(to_record_batch(slice));
-          co_yield {};
-        }
-        if (auto batch = aggregation.finish()) {
+  auto initialize(const type& schema) const -> caf::expected<State> override {
+    auto result = aggregation::make(schema, config_);
+    if (!result) {
+      VAST_WARN("summarize operator does not apply to schema {} and discards "
+                "events: {}",
+                schema, result.error());
+      return std::nullopt;
+    }
+    return *result;
+  }
+
+  auto process(table_slice slice, State& state) const -> Output override {
+    if (state) {
+      state->add(to_record_batch(slice));
+    }
+    return {};
+  }
+
+  auto finish(std::unordered_map<type, State> states,
+              operator_control_plane& ctrl) const
+    -> generator<Output> override {
+    for (auto& [_, state] : states) {
+      if (state) {
+        if (auto batch = state->finish()) {
           co_yield std::move(*batch);
         } else {
           ctrl.abort(batch.error());
+          break;
         }
-      };
-    } else {
-      VAST_WARN("summarize operator does not apply to schema {} and discards "
-                "events: {}",
-                input_schema, aggregation.error());
-      return [](generator<table_slice>) -> generator<table_slice> {
-        co_return;
-      };
+      }
     }
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto to_string() const -> std::string override {
     auto result = fmt::format("summarize");
     bool first = true;
     for (auto& aggr : config_.aggregations) {
@@ -849,7 +854,7 @@ try_handle_deprecations(const record& config,
 
 /// The summarize pipeline operator plugin.
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -939,8 +944,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::duration,
       parsers::extractor_list, parsers::aggregation_function_list;
