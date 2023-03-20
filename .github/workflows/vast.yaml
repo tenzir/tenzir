@@ -220,7 +220,7 @@ jobs:
           fi
           run_if_changed python "python/"
           run_if_changed vast-io "web/" "python/"
-          run_if_changed changelog "CHANGELOG.md" "changelog/" "web/" "python/"
+          run_if_changed changelog "changelog/" "web/" "python/"
           VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json)
           run_if_changed vast "$VAST_SOURCES[@]"
           run_if_changed vast-plugins "plugins/" "contrib/vast-plugins/"
