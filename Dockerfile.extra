@@ -4,6 +4,8 @@ FROM development AS plugins
 
 WORKDIR /tmp/vast
 
+COPY contrib/vast-plugins ./contrib/vast-plugins
+
 RUN cmake -S contrib/vast-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-compaction --parallel && \

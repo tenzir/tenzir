@@ -15,7 +15,7 @@ RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 # VAST
 COPY changelog ./changelog
 COPY cmake ./cmake
-COPY contrib ./contrib
+COPY contrib/tools ./contrib/tools
 COPY examples ./examples
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
@@ -51,7 +51,6 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_BUNDLED_SIMDJSON:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
-      -D VAST_PLUGINS:STRING="plugins/*" \
       ${VAST_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
     cmake --install build --strip && \
