@@ -12,6 +12,8 @@
 
 namespace vast {
 
+/// The logical operator for printing data that will have to be joined later
+/// during pipeline execution.
 class print_operator : public logical_operator<table_slice, chunk_ptr> {
 public:
   explicit print_operator(const printer_plugin& printer) noexcept

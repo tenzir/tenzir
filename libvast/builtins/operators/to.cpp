@@ -17,6 +17,7 @@
 #include <vast/error.hpp>
 #include <vast/logical_pipeline.hpp>
 #include <vast/plugin.hpp>
+#include <vast/print_dump_operator.hpp>
 #include <vast/print_operator.hpp>
 #include <vast/type.hpp>
 
@@ -32,7 +33,6 @@ namespace {
 
 class plugin final : public virtual logical_operator_plugin {
 public:
-  // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
     return {};
@@ -107,6 +107,10 @@ public:
                                           "single input, and the format '{0}' "
                                           "has potentially multiple outputs",
                                           printer->name(), dumper->name()))};
+    } else if (not dumper->dumper_requires_joining()) {
+      auto op = std::make_unique<print_dump_operator>(std::move(*printer),
+                                                      std::move(*dumper));
+      return {std::string_view{f, l}, std::move(op)};
     }
     auto print_op = std::make_unique<print_operator>(std::move(*printer));
     auto dump_op = std::make_unique<dump_operator>(std::move(*dumper));

@@ -12,6 +12,8 @@
 
 namespace vast {
 
+/// The logical operator for dumping data that will have to be joined later
+/// during pipeline execution.
 class dump_operator : public logical_operator<chunk_ptr, void> {
 public:
   explicit dump_operator(const dumper_plugin& dumper) noexcept
