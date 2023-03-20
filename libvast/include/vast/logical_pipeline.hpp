@@ -100,10 +100,14 @@ auto make_local_executor(logical_pipeline pipeline) noexcept
 } // namespace vast
 
 template <>
-struct fmt::formatter<vast::logical_pipeline>
-  : fmt::formatter<std::string_view> {
+struct fmt::formatter<vast::logical_pipeline> {
+  constexpr auto parse(format_parse_context& ctx) {
+    return ctx.begin();
+  }
+
   template <class FormatContext>
   auto format(const vast::logical_pipeline& value, FormatContext& ctx) const {
-    return fmt::formatter<std::string_view>::format(value.to_string(), ctx);
+    auto str = value.to_string();
+    return std::copy(str.begin(), str.end(), ctx.out());
   }
 };
