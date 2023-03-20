@@ -102,11 +102,10 @@ public:
         and not printer->printer_allows_joining()) {
       return {std::string_view{f, l},
               caf::make_error(ec::invalid_argument,
-                              fmt::format("failed to parse "
-                                          "write operator: printer '{}' does "
-                                          "not "
-                                          "allow joining but dumper '{}' "
-                                          "requires joining",
+                              fmt::format("writing '{0}' to '{1}' is not "
+                                          "allowed; the sink '{1}' requires a "
+                                          "single input, and the format '{0}' "
+                                          "has potentially multiple outputs",
                                           printer->name(), dumper->name()))};
     }
     auto print_op = std::make_unique<print_operator>(std::move(*printer));
