@@ -969,20 +969,20 @@ jobs:
               - http-parser
           - name: Compaction
             target: compaction
-            path: plugins/compaction
+            path: contrib/vast-plugins/compaction
           # TODO: Enable once this builds without warnings
           # - name: Fleet
           #   target: fleet
-          #   path: plugins/fleet
+          #   path: contrib/vast-plugins/fleet
           - name: Inventory
             target: inventory
-            path: plugins/inventory
+            path: contrib/vast-plugins/inventory
           - name: Matcher
             target: matcher
-            path: plugins/matcher
+            path: contrib/vast-plugins/matcher
           - name: Netflow
             target: netflow
-            path: plugins/netflow
+            path: contrib/vast-plugins/netflow
         exclude:
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
