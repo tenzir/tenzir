@@ -820,12 +820,13 @@ jobs:
           # here is built specifically as input for the plugin CI jobs and not
           # suitable for general use.
           cmake -B "$BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
-            -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
+            -DVAST_PLUGINS:STRING="" \
             ${{ needs.configure.outputs.cmake-version-args }} \
             ${{ matrix.vast.cmake-extra-flags }}
       - name: Compile All Targets
