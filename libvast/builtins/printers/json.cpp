@@ -48,9 +48,7 @@ public:
 
   [[nodiscard]] auto make_default_dumper() const
     -> const dumper_plugin* override {
-    auto plugin = vast::plugins::find<vast::dumper_plugin>("stdout");
-    VAST_ASSERT(plugin);
-    return plugin;
+    return vast::plugins::find<vast::dumper_plugin>("stdout");
   }
 
   [[nodiscard]] auto printer_allows_joining() const -> bool override {

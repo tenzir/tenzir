@@ -88,6 +88,15 @@ public:
       }
     } else {
       printer = dumper->make_default_printer();
+      if (!printer) {
+        return {std::string_view{f, l},
+                caf::make_error(ec::invalid_configuration,
+                                fmt::format("failed to parse write operator: "
+                                            "no available default printer for "
+                                            "sink '{}' "
+                                            "found",
+                                            dumper->name()))};
+      }
     }
     if (dumper->dumper_requires_joining()
         and not printer->printer_allows_joining()) {
