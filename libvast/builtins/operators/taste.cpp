@@ -22,7 +22,7 @@ namespace vast::plugins::taste {
 
 namespace {
 
-class taste_operator : public pipeline_operator {
+class taste_operator : public legacy_pipeline_operator {
 public:
   explicit taste_operator(uint64_t limit) noexcept : limit_{limit} {
     // nop
@@ -99,15 +99,15 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record&) const override {
     return caf::make_error(ec::unimplemented,
                            "the taste operator is not available in the YAML "
                            "operator syntax");
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::end_of_pipeline_operator, parsers::u64;

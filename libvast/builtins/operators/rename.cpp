@@ -16,7 +16,7 @@
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/inspection_common.hpp>
-#include <vast/pipeline_operator.hpp>
+#include <vast/legacy_pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
@@ -70,7 +70,7 @@ struct configuration {
   }
 };
 
-class rename_operator : public pipeline_operator {
+class rename_operator : public legacy_pipeline_operator {
 public:
   rename_operator(configuration config) : config_{std::move(config)} {
     // nop
@@ -250,7 +250,7 @@ public:
   /// This is called once for every time this pipeline operator appears in a
   /// transform definition. The configuration for the step is opaquely
   /// passed as the first argument.
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
     auto config = to<configuration>(options);
     if (!config)
@@ -258,8 +258,8 @@ public:
     return std::make_unique<rename_operator>(std::move(*config));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_assignment_list;

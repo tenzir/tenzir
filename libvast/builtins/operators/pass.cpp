@@ -20,7 +20,7 @@ namespace vast::plugins::pass {
 namespace {
 
 // Does nothing with the input.
-class pass_operator : public pipeline_operator {
+class pass_operator : public legacy_pipeline_operator {
 public:
   pass_operator() noexcept = default;
 
@@ -72,13 +72,13 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record&) const override {
     return std::make_unique<pass_operator>();
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
     const auto* f = pipeline.begin();

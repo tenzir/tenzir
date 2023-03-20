@@ -17,7 +17,7 @@
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/ip.hpp>
-#include <vast/pipeline_operator.hpp>
+#include <vast/legacy_pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
@@ -50,7 +50,7 @@ struct configuration {
   }
 };
 
-class pseudonymize_operator : public pipeline_operator {
+class pseudonymize_operator : public legacy_pipeline_operator {
 public:
   pseudonymize_operator(configuration config) : config_{std::move(config)} {
     parse_seed_string();
@@ -239,7 +239,7 @@ public:
     return "pseudonymize";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
     if (options.size() != 3) {
       return caf::make_error(ec::invalid_configuration,
@@ -275,8 +275,8 @@ public:
     return std::make_unique<pseudonymize_operator>(std::move(*config));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor,

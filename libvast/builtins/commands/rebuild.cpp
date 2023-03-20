@@ -49,7 +49,7 @@ namespace {
 /// about its input, namely that an instance of the operator only takes input
 /// of a single schema. Rebatching is guaranteed not to change the order of
 /// events, just how they're grouped together.
-class rebatch_operator final : public pipeline_operator {
+class rebatch_operator final : public legacy_pipeline_operator {
 public:
   /// Constructs a rebatch pipeline operator with a given schema and desired
   /// batch size.

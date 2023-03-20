@@ -9,7 +9,7 @@
 #include "vast/system/make_legacy_pipelines.hpp"
 
 #include <vast/legacy_pipeline.hpp>
-#include <vast/pipeline_operator.hpp>
+#include <vast/legacy_pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/test/test.hpp>
 

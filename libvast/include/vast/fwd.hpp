@@ -150,7 +150,7 @@ class table_slice_builder;
 class table_slice_column;
 class time_type;
 class legacy_pipeline;
-class pipeline_operator;
+class legacy_pipeline_operator;
 class type;
 class uuid;
 class value_index;

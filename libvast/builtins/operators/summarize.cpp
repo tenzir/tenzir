@@ -652,7 +652,7 @@ private:
 };
 
 /// The summarize pipeline operator implementation.
-class summarize_operator : public pipeline_operator {
+class summarize_operator : public legacy_pipeline_operator {
 public:
   /// Creates a pipeline operator from its configuration.
   /// @param config The parsed configuration of the summarize operator.
@@ -799,7 +799,7 @@ private:
   configuration config_ = {};
 };
 
-caf::expected<std::unique_ptr<pipeline_operator>>
+caf::expected<std::unique_ptr<legacy_pipeline_operator>>
 make_summarize_operator(const record& config) {
   auto parsed_config = configuration::make(config);
   if (!parsed_config)
@@ -821,7 +821,7 @@ get_keys_from_legacy_sections(const data& legacy_section) {
 }
 
 /// change legacy config into newer format
-caf::expected<std::unique_ptr<pipeline_operator>>
+caf::expected<std::unique_ptr<legacy_pipeline_operator>>
 try_handle_deprecations(const record& config,
                         const std::vector<std::string>& sections_to_reformat) {
   auto new_config = config;
@@ -862,7 +862,7 @@ public:
     return "summarize";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& config) const override {
     std::vector<std::string> sections_to_reformat;
     for (const auto& key : {"min", "max", "any", "all", "sum"}) {
@@ -884,8 +884,8 @@ public:
     return try_handle_deprecations(config, sections_to_reformat);
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::duration,

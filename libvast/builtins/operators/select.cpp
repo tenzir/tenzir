@@ -47,7 +47,7 @@ struct configuration {
   }
 };
 
-class select_operator : public pipeline_operator {
+class select_operator : public legacy_pipeline_operator {
 public:
   explicit select_operator(configuration config) noexcept
     : config_{std::move(config)} {
@@ -130,7 +130,7 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
     if (!options.contains("fields"))
       return caf::make_error(ec::invalid_configuration,
@@ -142,8 +142,8 @@ public:
     return std::make_unique<select_operator>(std::move(*config));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor,

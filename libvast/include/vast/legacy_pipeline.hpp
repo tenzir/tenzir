@@ -9,7 +9,7 @@
 #pragma once
 
 #include "vast/ids.hpp"
-#include "vast/pipeline_operator.hpp"
+#include "vast/legacy_pipeline_operator.hpp"
 #include "vast/type.hpp"
 
 #include <queue>
@@ -36,7 +36,7 @@ public:
   legacy_pipeline& operator=(const legacy_pipeline&) = delete;
   legacy_pipeline& operator=(legacy_pipeline&&) = default;
 
-  void add_operator(std::unique_ptr<pipeline_operator> op);
+  void add_operator(std::unique_ptr<legacy_pipeline_operator> op);
 
   /// Returns true if any of the pipeline operators is blocking.
   [[nodiscard]] bool is_blocking() const;
@@ -66,7 +66,7 @@ private:
   [[nodiscard]] caf::expected<std::vector<table_slice>> finish_batch();
 
   /// Applies the pipeline operator to every batch in the queue.
-  caf::error process_queue(pipeline_operator& op,
+  caf::error process_queue(legacy_pipeline_operator& op,
                            std::vector<table_slice>& result, bool check_schema);
 
   /// Grant access to the pipelines engine so it can call
@@ -77,7 +77,7 @@ private:
   std::string name_;
 
   /// Sequence of pipelines steps
-  std::vector<std::unique_ptr<pipeline_operator>> operators_;
+  std::vector<std::unique_ptr<legacy_pipeline_operator>> operators_;
 
   /// Triggers for this transform
   std::vector<std::string> schema_names_;

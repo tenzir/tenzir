@@ -263,7 +263,7 @@ public:
   /// slices. This will be called when constructing pipelines from the
   /// VAST configuration.
   /// @param options The settings configured for this operator.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const vast::record& options) const = 0;
 
   /// Creates a new pipeline operator that maps input to output table
@@ -272,7 +272,7 @@ public:
   /// @param pipeline The entire remaining pipeline.
   /// @returns the remaining pipeline, and the parsed operator (or an error).
   [[nodiscard]] virtual std::pair<
-    std::string_view, caf::expected<std::unique_ptr<pipeline_operator>>>
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const = 0;
 };
 

@@ -47,7 +47,7 @@ struct configuration {
 };
 
 // Selects matching rows from the input.
-class where_operator : public pipeline_operator {
+class where_operator : public legacy_pipeline_operator {
 public:
   /// Constructs a *where* pipeline operator.
   /// @pre *expr* must be normalized and validated
@@ -149,7 +149,7 @@ public:
     return "where";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
     auto config = to<configuration>(options);
     if (!config)
@@ -177,8 +177,8 @@ public:
       std::move(*normalized_and_validated_expr));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::end_of_pipeline_operator, parsers::expr;

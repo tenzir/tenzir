@@ -9,7 +9,7 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast.hpp>
 #include <vast/legacy_pipeline.hpp>
-#include <vast/pipeline_operator.hpp>
+#include <vast/legacy_pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/test/fixtures/events.hpp>
