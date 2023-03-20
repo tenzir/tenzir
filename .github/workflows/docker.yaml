@@ -86,6 +86,7 @@ jobs:
         run: |
           cmake_version_args="-DVAST_VERSION_TAG:STRING=${{ fromJSON(inputs.config).version }}"
           echo "::info Building the Developer Edition Image"
+          cat Dockerfile.extra >> Dockerfile
           docker buildx build . \
             -t "tenzir/vast:latest" --target "production" \
             --load --platform linux/amd64 \
@@ -96,7 +97,7 @@ jobs:
             # We always build 'vast', so we can skip over here
             [[ "${name}" == "vast" ]] && continue
             echo "::info Building ${name}"
-            docker buildx build . -f <(cat Dockerfile Dockerfile.extra) \
+            docker buildx build . \
               -t "tenzir/${name}:latest" --target "${target}" \
               --load --platform linux/amd64 \
               --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}"
