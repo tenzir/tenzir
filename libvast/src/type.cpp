@@ -1236,6 +1236,10 @@ generator<type> type::aliases() const noexcept {
   __builtin_unreachable();
 }
 
+std::string type::make_fingerprint() const {
+  return fmt::format("{:x}", hash(*this));
+}
+
 bool is_container(const type& type) noexcept {
   const auto& root = type.table(type::transparent::yes);
   switch (root.type_type()) {

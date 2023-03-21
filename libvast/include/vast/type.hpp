@@ -352,6 +352,9 @@ public:
   /// Returns all aliases of this type, excluding this type itself.
   [[nodiscard]] generator<type> aliases() const noexcept;
 
+  /// Returns a string generated from hashing the contents of a type.
+  std::string make_fingerprint() const;
+
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
 
