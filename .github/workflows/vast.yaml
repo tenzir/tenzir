@@ -280,7 +280,7 @@ jobs:
       - configure
     if: ${{ needs.configure.outputs.run-changelog == 'true' }}
     runs-on: ubuntu-20.04
-    container: python:3.10-slim-bullseye
+    container: debian:bookworm-slim
     steps:
       - name: Install git
         run: |
@@ -294,8 +294,8 @@ jobs:
         run: ./scripts/debian/install-dev-dependencies.sh
       - name: Configure Build
         env:
-          CC: gcc-10
-          CXX: g++-10
+          CC: gcc-12
+          CXX: g++-12
         run: |
           cmake -B build -DVAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
       - name: Generate CHANGELOG.md
@@ -775,11 +775,11 @@ jobs:
       matrix:
         vast:
           - os: ubuntu-20.04
-            container: python:3.10-slim-bullseye
+            container: debian:bookworm-slim
             name: Debian
             compiler: GCC
-            cc: gcc-10
-            cxx: g++-10
+            cc: gcc-12
+            cxx: g++-12
             dependencies-script-path: scripts/debian/install-dev-dependencies.sh
             cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
           - os: macos-latest
@@ -984,9 +984,9 @@ jobs:
         setup:
           - os: ubuntu-20.04
             name: Debian
-            container: python:3.10-slim-bullseye
-            cc: gcc-10
-            cxx: g++-10
+            container: debian:bookworm-slim
+            cc: gcc-12
+            cxx: g++-12
             package-suffix: Release-GCC
           - os: macos-latest
             name: macOS

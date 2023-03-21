@@ -160,7 +160,15 @@ function (VASTCompileFlatBuffers)
   add_library(${FBS_TARGET} INTERFACE)
 
   # Link our target against FlatBuffers.
-  find_package(Flatbuffers REQUIRED CONFIG)
+  find_package(Flatbuffers CONFIG)
+  # Ugly workaround for Flatbuffers 2.0.8, which briefly changed the
+  # project name to "FlatBuffers".
+  if (NOT Flatbuffers_FOUND)
+    find_package(FlatBuffers CONFIG)
+    if (NOT FlatBuffers_FOUND)
+      message(FATAL_ERROR "Flatbuffers is required but can't be found.")
+    endif ()
+  endif ()
   if (TARGET flatbuffers::flatbuffers)
     set(flatbuffers_target flatbuffers::flatbuffers)
   elseif (NOT VAST_ENABLE_STATIC_EXECUTABLE AND TARGET
