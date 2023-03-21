@@ -11,9 +11,13 @@
 #include "vast/fwd.hpp"
 
 #include "vast/data.hpp"
+#include "vast/endpoint.hpp"
 #include "vast/system/actors.hpp"
 
 namespace vast::system {
+
+// TODO: Move to other header
+caf::expected<endpoint> get_node_endpoint(const caf::settings& opts);
 
 /// Connects to a remote VAST server.
 caf::expected<node_actor>
