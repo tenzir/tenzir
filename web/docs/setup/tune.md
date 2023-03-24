@@ -7,15 +7,13 @@ sidebar_position: 5
 This section describes tuning knobs that have a notable effect on system
 performance.
 
-## Batching: Table Slices
+## Batching
 
 VAST processes events in batches. Because the structured data has the shape of a
 table, we call these batches *table slices*. The following options control their
 shape and behavior.
 
-:::note Implementation Note
-Table slices are implemented as *Record Batches* in Apache Arrow.
-:::
+Internally, VAST implements a table slice as an Arrow *record batch*.
 
 ### Size
 
@@ -54,20 +52,138 @@ The `vast.import.read-timeout` option determines how long a call to read data
 from the input will block. After the read timeout elapses, VAST tries again at a
 later. The default value is 10 seconds.
 
-## Persistent Storage
+## Storage Engine
 
-VAST arranges data in horizontal _partitions_ for sharding. The persistent
-representation of partition is a single file consists containing a set table
-slices all having the same schema. The `store` plugin defines the on-disk
-format. VAST currently ships with three implementations:
+The central component of VAST's storage engine is the *catalog*. It owns the
+partitions, keeps meta data about them, and maintains a set of sparse secondary
+indexes to identify relevant partitions for a given query. In addition, a
+partition can have a set of dense secondary indexes in addition to the raw data
+stored.
+
+![Multi-Tier Indexing](multi-tier-indexing.excalidraw.svg)
+
+The catalog's secondary indexes are space-efficient sketch data structures
+(e.g., Bloom filters, min-max summaries) that have a low memory footprint but
+may yield false positives. VAST keeps all sketches in memory.
+
+The amount of memory that the storage engine can consume is not explicitly
+configurable, but there exist various options that have a direct impact.
+
+### Control the partition size
+
+VAST groups table slices with the same schema in a partition. There exist
+mutable *active partitions* that VAST writes to during ingestion, and immutable
+*passive partitions* that VAST reads from during query execution.
+
+When constructing a partition, the parameter `vast.max-partition-size` sets an
+upper bound on the number of records in a partition, across all table slices.
+The parameter `vast.active-partition-timeout` provides a time-based upper bound:
+once reached, VAST considers the partition as complete, regardless of the number
+of records.
+
+The two parameters are decoupled to allow for independent control of throughput
+and freshness.
+
+### Tune partition caching
+
+VAST maintains a LRU cache of partitions to accelerate queries involving recent
+partitions. The parameter `vast.max-resident-partitions` controls the number of
+partitions in the LRU cache.
+
+:::note
+Run `vast flush` to force VAST to write all active partitions to disk
+immediately. The command returns only after all active partitions were flushed
+to disk.
+:::
+
+### Tune number of sketches and their sizes
+
+The catalog's memory usage is a function of the stored data. The configuration
+option `max-partition-size` determines an upper bound of the number of records
+per partition, which is inversely linked to the number of sketches in the
+catalog. That means increasing the `max-partition-size` is an effective method
+to reduce the memory requirements for the catalog.
+
+### Tune sketch parameters
+
+A false positive during a sparse index lookup can have a noticeable impact on the
+query latency by materializing irrelevant partitions. Based on the cost of I/O,
+this penalty may be substantial. Conversely, reducing the false positive rate
+increases the memory consumption, leading to a higher resident set size and
+larger RAM requirements.
+
+You can control this space-time trade-off in the configuration section
+`vast.index` by specifying index *rules*. Each rule configures one sketch and
+consists of the following components:
+
+- `targets`: a list of extractors to describe the set of fields whose values to
+  add to the sketch.
+- `fp-rate`: an optional value to control the false-positive rate of the sketch.
+
+VAST does not create field-level sketches unless a dedicated rule with a
+matching target configuration exists.
+
+Here is an example configuration:
+
+```yaml
+vast:
+  index:
+    # Set the default false-positive rate for type-level synopses
+    default-fp-rate: 0.001
+    rules:
+      - targets:
+          # field synopses: need to specify fully qualified field name
+          - suricata.http.http.url
+        fp-rate: 0.005
+      - targets:
+          - :ip
+        fp-rate: 0.1
+```
+
+This configuration includes two rules (= two sketches) where the first rule
+includes a field extractor and the second a type extractor. The first rule
+applies to a single field, `suricata.http.http.url`, and has false-positive rate
+of 0.5%. The second rule creates one sketch for all fields of type `ip` that
+has a false-positive rate of 10%.
+
+### Configure partition indexes
+
+Every partition has an optional set of dense indexes to further accelerate
+specific workloads. These indexes only reside in memory if the corresponding
+partition is loaded. By default, VAST creates dense indexes for all fields.
+
+You can disable the index creation for specific fields or types in the
+configuration section `vast.index`. This reduces both the memory footprint of a
+loaded partition, as well as the size of the persisted partition.
+
+Here is an example that uses the option `partition-index` to disable dense
+indexes:
+
+```yaml
+vast:
+  index:
+    rules:
+        # Don't create partition indexes the suricata.http.http.url field.
+      - targets:
+          - suricata.http.http.url
+        partition-index: false
+        # Don't create partition indexes for fields of type ip.
+      - targets:
+          - :ip
+        partition-index: false
+```
+
+### Select the store format
+
+VAST arranges data in horizontal partitions for sharding. Each partition has a
+unique schema and is effectively a concatenation of batches. The *store* inside
+a partition holds this data and can have multiple formats:
 
 1. **Feather**: writes Apache Feather V2 files
 2. **Parquet**: writes [Apache Parquet](https://parquet.apache.org/) files
-3. **Segment**: writes Apache Arrow IPC with a thin wrapper (deprecated,
-   read-only)
 
-VAST defaults to the `feather` store. Enable the Parquet store by loading the
-plugin and adjusting `vast.store-backend`:
+VAST defaults to the `feather` store. To use the Parquet store, adjust
+`vast.store-backend`:
 
 ```yaml
 vast:
@@ -77,8 +193,8 @@ vast:
 ```
 
 There's an inherent space-time tradeoff between the stores that affects CPU,
-memory, and storage characteristics. Compared to the Feather and Segment stores,
-Parquet differs as follows:
+memory, and storage characteristics. Compared to the Feather store, Parquet
+differs as follows:
 
 1. Parquet files occupy ~40% less space, which also reduces I/O pressure during
    querying.
@@ -95,13 +211,16 @@ Use Parquet when:
 1. Storage is scarce, and you want to increase data retention
 2. Workloads are I/O-bound and you have available CPU
 3. Reading data with with off-the-shelf data science tools is a use case
+
+For an in-depth comparison, take a look at our [blog post on Feather and
+Parquet](/blog/parquet-and-feather-writing-security-telemetry).
 :::
 
 VAST supports [rebuilding the entire database](#rebuild-partitions) in case you
 want to switch to a different store format. However, VAST works perfectly fine
 with a mixed-storage configuration, so a full rebuild is not required.
 
-### Compression
+### Adjust the store compression
 
 VAST compresses partitions using Zstd for partitions at rest. To fine-tune
 the space-time trade-off, VAST offers a setting, `vast.zstd-compression-level`
@@ -121,114 +240,6 @@ comparison of various compression levels and storage formats.
 :::
 
 [parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
-
-## Memory usage and caching
-
-The amount of memory that a VAST server process is allowed to use can currently
-not be configured directly as a configuration file option. Instead of such a
-direct tuning knob, the memory usage can be influenced through the configuration
-of the caching, catalog and disk monitor features.
-
-### Caching
-
-VAST groups table slices with the same schema in a *partition*. When building a
-partition, the parameter `vast.max-partition-size` sets an upper bound on the
-number of records in a partition, across all table slices. The parameter
-`vast.active-partition-timeout` provides a time-based upper bound: once reached,
-VAST considers the partition as complete, regardless of the number of records.
-
-A LRU cache of partitions accelerates queries to recently used partitions. The
-parameter `vast.max-resident-partitions` controls the number of partitions in
-the LRU cache.
-
-:::note
-Run `vast flush` to force VAST to write all active partitions to disk
-immediately. The command returns only after all active partitions were flushed
-to disk.
-:::
-
-### Catalog
-
-The catalog manages partition meta data and is responsible for deciding whether
-a partition qualifies for a certain query. It does so by maintaining *sketch*
-data structures (e.g., Bloom filters, summary statistics) for each partition.
-Sketches are highly space-efficient at the cost of being probabilistic and
-yielding false positives.
-
-Due to this characteristic sketches can grow sub-linear, doubling the number of
-events in a sketch does not lead to a doubling of the memory requirement.
-Because the catalog must be traversed in full for a given query it needs to be
-maintained in active memory to provide high responsiveness.
-
-As a consequence, the overall amount of data in a VAST instance and the
-`max-partition-size` determine the memory requirements of the catalog. The
-option `max-partition-size` is inversely linked to the number of sketches in the
-catalog. That means increasing the `max-partition-size` is an effective method
-to reduce the memory requirements for the catalog.
-
-### Tune sketch parameters
-
-A false positive can have substantial impact on the query latency by
-materializing irrelevant partitions, which involves unnecessary I/O. Based on
-the cost of I/O, this penalty may be substantial. Conversely, reducing the false
-positive rate increases the memory consumption, leading to a higher resident set
-size and larger RAM requirements.
-
-You can control this space-time trade-off in the configuration section
-`vast.index` by specifying index *rules*. Each rule corresponds to one sketch
-and consists of the following components:
-
-- `targets`: a list of extractors to describe the set of fields whose values to
-  add to the sketch.
-- `fp-rate`: an optional value to control the false-positive rate of the sketch.
-
-VAST does not create field-level sketches unless a dedicated rule with a
-matching target configuration exists.
-
-#### Example
-
-```yaml
-vast:
-  index:
-    # Set the default false-positive rate for type-level synopses
-    default-fp-rate: 0.001
-    rules:
-      - targets:
-          # field synopses: need to specify fully qualified field name
-          - suricata.http.http.url
-        fp-rate: 0.005
-      - targets:
-          - :ip
-        fp-rate: 0.1
-```
-
-This configuration includes two rules (= two sketches), where the first rule
-includes a field extractor and the second a type extractor. The first rule
-applies to a single field, `suricata.http.http.url`, and has false-positive rate
-of 0.5%. The second rule creates one sketch for all fields of type `ip` that
-has a false-positive rate of 10%.
-
-### Skip partition index creation
-
-Partition indexes improve query performance at the cost of database size. Operators can
-disable the creation of partition indexes for specific fields or types in the
-configuration section `vast.index`. By default, VAST creates partition indexes for all fields.
-
-#### Example
-
-```yaml
-vast:
-  index:
-    rules:
-        # Don't create partition indexes the suricata.http.http.url field.
-      - targets:
-          - suricata.http.http.url
-        partition-index: false
-        # Don't create partition indexes for fields of type ip.
-      - targets:
-          - :ip
-        partition-index: false
-```
 
 ## Shutdown
 
@@ -306,7 +317,7 @@ vast rebuild start [--all] [--undersized] [--parallel=<number>] [--max-partition
 
 A rebuild is not only useful when upgrading outdated partitions, but also when
 changing parameters of up-to-date partitions. Use the `--all` flag to extend a
-rebuild operation to _all_ partitions. (Internally, VAST versions the partition
+rebuild operation to *all* partitions. (Internally, VAST versions the partition
 state via FlatBuffers. An outdated partition is one whose version number is not
 the newest.)
 
