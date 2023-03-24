@@ -241,45 +241,7 @@ comparison of various compression levels and storage formats.
 
 [parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
 
-## Shutdown
-
-The `stop` command gracefully brings down a VAST server that has been started
-with the `start` command.
-
-It is also possible to send a signal `SIGINT(2)` to the `vast` process instead
-of using `vast stop`, but in only works on the same machine that runs the
-server process. We recommend using `vast stop`, as it also works over the wire.
-
-The `stop` command blocks until the server process has terminated, and returns
-a zero exit code upon success, making it suitable for use in launch system
-scripts.
-
-:::note
-The server waits for ongoing import processes to terminate before shutting down
-itself. In case an import process is hanging, you can always terminate the
-hanging process manually to shutdown the server.
-:::
-
-## Logging
-
-The VAST server writes log files into a file named `server.log` in the database
-directory by default. Set the option `vast.log-file` to change the location of
-the log file.
-
-VAST client processes do not write logs by default. Set the option
-`vast.client-log-file` to enable logging. Note that relative paths are
-interpreted relative to the current working directory of the client process.
-
-Server log files rotate automatically after 10 MiB. The option
-`vast.disable-log-rotation` allows for disabling log rotation entirely, and the
-option `vast.log-rotation-threshold` sets the size limit when a log file should
-be rotated.
-
-VAST processes log messages in a dedicated thread, which by default buffers up
-to 1M messages for servers, and 100 for clients. The option
-`vast.log-queue-size` controls this setting.
-
-## Rebuild Partitions
+### Rebuild partitions
 
 The `rebuild` command re-ingests events from existing partitions and replaces
 them with new partitions. This makes it possible to upgrade persistent state to
@@ -344,3 +306,41 @@ vast rebuild start '#type == "suricata.flow" && #import_time < 2 weeks ago'
 ```
 
 To stop an ongoing rebuild, use the `vast rebuild stop` command.
+
+## Shutdown
+
+The `stop` command gracefully brings down a VAST server that has been started
+with the `start` command.
+
+It is also possible to send a signal `SIGINT(2)` to the `vast` process instead
+of using `vast stop`, but in only works on the same machine that runs the
+server process. We recommend using `vast stop`, as it also works over the wire.
+
+The `stop` command blocks until the server process has terminated, and returns
+a zero exit code upon success, making it suitable for use in launch system
+scripts.
+
+:::note
+The server waits for ongoing import processes to terminate before shutting down
+itself. In case an import process is hanging, you can always terminate the
+hanging process manually to shutdown the server.
+:::
+
+## Logging
+
+The VAST server writes log files into a file named `server.log` in the database
+directory by default. Set the option `vast.log-file` to change the location of
+the log file.
+
+VAST client processes do not write logs by default. Set the option
+`vast.client-log-file` to enable logging. Note that relative paths are
+interpreted relative to the current working directory of the client process.
+
+Server log files rotate automatically after 10 MiB. The option
+`vast.disable-log-rotation` allows for disabling log rotation entirely, and the
+option `vast.log-rotation-threshold` sets the size limit when a log file should
+be rotated.
+
+VAST processes log messages in a dedicated thread, which by default buffers up
+to 1M messages for servers, and 100 for clients. The option
+`vast.log-queue-size` controls this setting.
