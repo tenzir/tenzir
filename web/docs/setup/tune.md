@@ -106,7 +106,7 @@ to reduce the memory requirements for the catalog.
 
 ### Tune sketch parameters
 
-A false positive during a sparse index lookup can have a noticeable impact on the
+A false positive during a catalog index lookup can have a noticeable impact on the
 query latency by materializing irrelevant partitions. Based on the cost of I/O,
 this penalty may be substantial. Conversely, reducing the false positive rate
 increases the memory consumption, leading to a higher resident set size and
@@ -149,15 +149,15 @@ has a false-positive rate of 10%.
 ### Configure partition indexes
 
 Every partition has an optional set of dense indexes to further accelerate
-specific workloads. These indexes only reside in memory if the corresponding
-partition is loaded. By default, VAST creates dense indexes for all fields.
+specific query workloads. These indexes only reside in memory if the
+corresponding partition is loaded.
 
-You can disable the index creation for specific fields or types in the
-configuration section `vast.index`. This reduces both the memory footprint of a
-loaded partition, as well as the size of the persisted partition.
+By default, VAST creates indexes for all fields in a partition. You can disable
+the index creation for specific fields or types in the configuration section
+`vast.index`. This reduces both the memory footprint of a loaded partition, as
+well as the size of the persisted partition.
 
-Here is an example that uses the option `partition-index` to disable dense
-indexes:
+Here is an example that disables partition indexes:
 
 ```yaml
 vast:
