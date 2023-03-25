@@ -417,6 +417,8 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
 table_slice transform_columns(
   const table_slice& slice,
   const std::vector<indexed_transformation>& transformations) noexcept {
+  if (slice.encoding() == table_slice_encoding::none)
+    return {};
   auto [schema, batch] = transform_columns(
     slice.schema(), to_record_batch(slice), transformations);
   if (!schema)

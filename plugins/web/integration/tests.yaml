@@ -55,7 +55,7 @@ tests:
       - command: import -b zeek
         input: data/conn.log.gz
       - command: flush
-      - command: 'curl -XPOST -H"Content-Type: application/json" -d''{"query": "where 192.168.1.102"}'' http://127.0.0.1:42025/api/v0/query/new'
+      - command: 'curl -XPOST -H"Content-Type: application/json" -d''{"query": "where 192.168.1.102 | put foo=123, orig_h=10.0.0.1"}'' http://127.0.0.1:42025/api/v0/query/new'
         transformation: 'jq .id | xargs -I _ curl http://127.0.0.1:42025/api/v0/query/_/next?n=20 | jq .events'
         prepend_vast: false
   Query Endpoint With Formatters:
