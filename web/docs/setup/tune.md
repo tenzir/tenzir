@@ -73,11 +73,11 @@ VAST groups table slices with the same schema in a partition. There exist
 mutable *active partitions* that VAST writes to during ingestion, and immutable
 *passive partitions* that VAST reads from during query execution.
 
-When constructing a partition, the parameter `vast.max-partition-size` sets an
-upper bound on the number of records in a partition, across all table slices.
-The parameter `vast.active-partition-timeout` provides a time-based upper bound:
-once reached, VAST considers the partition as complete, regardless of the number
-of records.
+When constructing a partition, the parameter `vast.max-partition-size` (default:
+4Mi / 2^22) sets an upper bound on the number of records in a partition, across
+all table slices. The parameter `vast.active-partition-timeout` (default: 10
+seconds) provides a time-based upper bound: once reached, VAST considers the
+partition as complete, regardless of the number of records.
 
 The two parameters are decoupled to allow for independent control of throughput
 and freshness. VAST also merges undersized partitions asynchronously in the
