@@ -231,8 +231,7 @@ vast:
   zstd-compression-level: 1
 ```
 
-Currently, the default value is taken from Apache Arrow itself, using
-`arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)`
+Currently, the default value is taken from Apache Arrow itself.
 
 :::tip
 We have a [blog post][parquet-and-feather-2] that does an in-depth
