@@ -13,8 +13,6 @@ VAST processes events in batches. Because the structured data has the shape of a
 table, we call these batches *table slices*. The following options control their
 shape and behavior.
 
-Internally, VAST implements a table slice as an Arrow *record batch*.
-
 ### Size
 
 Most components in VAST operate on table slices, which makes the table slice
