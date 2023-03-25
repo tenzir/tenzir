@@ -94,43 +94,50 @@ immediately. The command returns only after all active partitions were flushed
 to disk.
 :::
 
-### Tune number of sketches and their sizes
+### Tune catalog fragmentation
 
-The catalog's memory usage is a function of the stored data. The configuration
-option `max-partition-size` determines an upper bound of the number of records
-per partition, which is inversely linked to the number of sketches in the
-catalog. That means increasing the `max-partition-size` is an effective method
-to reduce the memory requirements for the catalog.
+The catalog keeps state that grows linear in the number of partitions. The
+configuration option `max-partition-size` determines an upper bound of the
+number of records per partition, which is inversely linked to the number of
+partitions. For example, a large value yields fewer partitions whereas a small
+value creates more partitions.
 
-### Tune sketch parameters
+In other words, increasing `max-partition-size` is an effective method to reduce
+the memory footprint of the catalog, at the cost of creating larger partitions.
 
-A false positive during a catalog index lookup can have a noticeable impact on the
-query latency by materializing irrelevant partitions. Based on the cost of I/O,
-this penalty may be substantial. Conversely, reducing the false positive rate
-increases the memory consumption, leading to a higher resident set size and
-larger RAM requirements.
+### Configure catalog and partition indexes
 
-You can control this space-time trade-off in the configuration section
-`vast.index` by specifying index *rules*. Each rule configures one sketch and
-consists of the following components:
+You can configure catalog and partition indexes under the key `vast.index`.
+The configuration `vast.index.rules` is an array of indexing rules, each of
+which configures the indexing behavior of a set of extractors. A rule has the
+following keys:
 
 - `targets`: a list of extractors to describe the set of fields whose values to
   add to the sketch.
 - `fp-rate`: an optional value to control the false-positive rate of the sketch.
+- `partition-index`: a boolean flag to disable partition indexes
 
-VAST does not create field-level sketches unless a dedicated rule with a
-matching target configuration exists.
+#### Tune catalog index parameters
 
-Here is an example configuration:
+Catalog indexes may produce false positives that can have a noticeable impact on
+the query latency by materializing irrelevant partitions. Based on the cost of
+I/O, this penalty may be substantial. Conversely, reducing the false positive
+rate increases the memory consumption, leading to a higher resident set size and
+larger RAM requirements. You can control the false positive probability with the
+`fp-rate` key in an index rule.
+
+By default, VAST creates one sketch per type, but not additional field-level
+sketches unless a dedicated rule with a matching target configuration exists.
+Here is an example configuration that adds extra field-level sketches:
 
 ```yaml
 vast:
   index:
-    # Set the default false-positive rate for type-level synopses
+    # Set the default false-positive rate for type-level sketches
     default-fp-rate: 0.001
     rules:
       - targets:
-          # field synopses: need to specify fully qualified field name
+          # field sketches require a fully qualified field name
           - suricata.http.http.url
         fp-rate: 0.005
       - targets:
@@ -138,17 +145,17 @@ vast:
         fp-rate: 0.1
 ```
 
-This configuration includes two rules (= two sketches) where the first rule
-includes a field extractor and the second a type extractor. The first rule
+This configuration includes two rules (= two catalog indexes) where the first
+rule includes a field extractor and the second a type extractor. The first rule
 applies to a single field, `suricata.http.http.url`, and has false-positive rate
-of 0.5%. The second rule creates one sketch for all fields of type `ip` that
-has a false-positive rate of 10%.
+of 0.5%. The second rule creates one sketch for all fields of type `ip` that has
+a false-positive rate of 10%.
 
-### Configure partition indexes
+#### Disable partition indexes
 
 Every partition has an optional set of dense indexes to further accelerate
-specific query workloads. These indexes only reside in memory if the
-corresponding partition is loaded.
+specific queries. These indexes only reside in memory if the corresponding
+partition is loaded.
 
 By default, VAST creates indexes for all fields in a partition. You can disable
 the index creation for specific fields or types in the configuration section
