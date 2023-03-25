@@ -80,7 +80,9 @@ once reached, VAST considers the partition as complete, regardless of the number
 of records.
 
 The two parameters are decoupled to allow for independent control of throughput
-and freshness.
+and freshness. VAST also merges undersized partitions asynchronously in the
+background, which counter-acts the fragmentation effect from choosing a low
+partition timeout.
 
 ### Tune partition caching
 
