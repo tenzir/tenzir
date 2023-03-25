@@ -89,6 +89,7 @@ caf::expected<catalog_lookup_result>
 catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
   auto total_candidates = catalog_lookup_result{};
+  auto num_candidates = size_t{0};
   auto pruned = prune(expr, unprunable_fields);
   for (const auto& [type, _] : synopses_per_type) {
     auto resolved = resolve(taxonomies, pruned, type);
@@ -103,14 +104,14 @@ catalog_state::lookup(const expression& expr) const {
               [&](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time > rhs.max_import_time;
               });
-    auto num_candidates = candidates_per_type.partition_infos.size();
+    num_candidates += candidates_per_type.partition_infos.size();
     total_candidates.candidate_infos[type] = std::move(candidates_per_type);
-    auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-      system::stopwatch::now() - start);
-    VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",
-               num_candidates, delta.count());
-    VAST_TRACEPOINT(catalog_lookup, delta.count(), num_candidates);
   }
+  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
+    system::stopwatch::now() - start);
+  VAST_VERBOSE("catalog lookup found {} candidates in {} microseconds",
+               num_candidates, delta.count());
+  VAST_TRACEPOINT(catalog_lookup, delta.count(), num_candidates);
   return total_candidates;
 }
 
