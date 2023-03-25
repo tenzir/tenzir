@@ -99,13 +99,14 @@ to disk.
 ### Tune catalog fragmentation
 
 The catalog keeps state that grows linear in the number of partitions. The
-configuration option `max-partition-size` determines an upper bound of the
+configuration option `vast.max-partition-size` determines an upper bound of the
 number of records per partition, which is inversely linked to the number of
 partitions. For example, a large value yields fewer partitions whereas a small
 value creates more partitions.
 
-In other words, increasing `max-partition-size` is an effective method to reduce
-the memory footprint of the catalog, at the cost of creating larger partitions.
+In other words, increasing `vast.max-partition-size` is an effective method to
+reduce the memory footprint of the catalog, at the cost of creating larger
+partitions.
 
 ### Configure catalog and partition indexes
 
