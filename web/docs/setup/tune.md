@@ -219,6 +219,11 @@ Use Parquet when:
 
 For an in-depth comparison, take a look at our [blog post on Feather and
 Parquet](/blog/parquet-and-feather-writing-security-telemetry).
+
+One final word of caution: a query over a Parquet store is currently not
+interruptible and executes over the entire store. This is an deficiency in our
+implementation that we aim to fix in the future. We recommend Feather when tail
+latencies are an issue.
 :::
 
 VAST supports [rebuilding the entire database](#rebuild-partitions) in case you
