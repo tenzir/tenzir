@@ -55,7 +55,7 @@ later. The default value is 10 seconds.
 ## Storage Engine
 
 The central component of VAST's storage engine is the *catalog*. It owns the
-partitions, keeps meta data about them, and maintains a set of sparse secondary
+partitions, keeps metadata about them, and maintains a set of sparse secondary
 indexes to identify relevant partitions for a given query. In addition, a
 partition can have a set of dense secondary indexes in addition to the raw data
 stored.
