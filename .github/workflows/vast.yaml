@@ -251,7 +251,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.7.0
+        uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Require contrib/vast-plugins to be on a main branch commit
@@ -387,7 +387,7 @@ jobs:
           git submodule update --init --recursive libvast plugins
       - name: Configure ssh-agent
         if: ${{ matrix.docker-vast.name == 'vast-ce' }}
-        uses: webfactory/ssh-agent@v0.7.0
+        uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Initialize Community Edition plugins
@@ -600,7 +600,7 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.7.0
+        uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Setup Cachix
@@ -1072,7 +1072,7 @@ jobs:
           apt-get update
           apt-get -y install git
       - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.7.0
+        uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Checkout
