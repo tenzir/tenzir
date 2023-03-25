@@ -329,12 +329,6 @@ The `stop` command blocks until the server process has terminated, and returns
 a zero exit code upon success, making it suitable for use in launch system
 scripts.
 
-:::note
-The server waits for ongoing import processes to terminate before shutting down
-itself. In case an import process is hanging, you can always terminate the
-hanging process manually to shutdown the server.
-:::
-
 ## Logging
 
 The VAST server writes log files into a file named `server.log` in the database
