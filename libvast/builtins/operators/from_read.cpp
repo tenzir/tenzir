@@ -140,7 +140,7 @@ public:
                         >> required_ws_or_comment >> identifier)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto parsed = std::tuple{
-      std::string{}, std::optional<std::pair<std::string, std::string>>{}};
+      std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
     if (!p(f, l, parsed)) {
       return {
         std::string_view{f, l},
@@ -160,7 +160,7 @@ public:
     }
     auto parser = static_cast<const plugin*>(nullptr);
     if (auto read_opt = std::get<1>(parsed)) {
-      auto read = std::move(read_opt->second);
+      auto read = std::move(std::get<1>(*read_opt));
       parser = plugins::find<plugin>(read);
       if (!parser) {
         return {
@@ -205,7 +205,7 @@ public:
                         >> required_ws_or_comment >> identifier)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto parsed = std::tuple{
-      std::string{}, std::optional<std::pair<std::string, std::string>>{}};
+      std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
     if (!p(f, l, parsed)) {
       return {
         std::string_view{f, l},
@@ -225,7 +225,7 @@ public:
     }
     auto loader = static_cast<const loader_plugin*>(nullptr);
     if (auto& from_opt = std::get<1>(parsed)) {
-      auto& from = from_opt->second;
+      auto& from = std::get<1>(*from_opt);
       loader = plugins::find<loader_plugin>(from);
       if (!loader) {
         return {
