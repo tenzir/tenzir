@@ -148,7 +148,19 @@ void serialize(
     self
       ->request(self->state.filesystem, caf::infinite, atom::write_v,
                 *self->state.synopsis_path, std::move(ps_chunk))
-      .then([=](atom::ok) {}, [=](caf::error) {});
+      .then(
+        [=](atom::ok) {
+          VAST_DEBUG("{} persisted partition synopsis", *self);
+        },
+        [=](const caf::error& err) {
+          VAST_WARN("{} failed to persist partition synopsis to {} and will "
+                    "attempt to restore it on the next start: {}",
+                    *self, *self->state.synopsis_path, err);
+        });
+  } else {
+    VAST_WARN("{} failed to serialize partition synopsis and will attempt to "
+              "restore it on the next start",
+              *self);
   }
   VAST_DEBUG("{} persists partition with a total size of "
              "{} bytes",
