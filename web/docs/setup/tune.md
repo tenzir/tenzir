@@ -328,7 +328,7 @@ It is also possible to send a signal `SIGINT(2)` to the `vast` process instead
 of using `vast stop`, but in only works on the same machine that runs the
 server process. We recommend using `vast stop`, as it also works over the wire.
 
-The `stop` command blocks until the server process has terminated, and returns
+The `stop` command asks the server process to terminate gracefully, and returns
 a zero exit code upon success, making it suitable for use in launch system
 scripts.
 
