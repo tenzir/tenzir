@@ -40,22 +40,25 @@ struct view_trait;
 template <class T>
 using view = typename view_trait<T>::type;
 
-#define VAST_VIEW_TRAIT(type_name)                                             \
+#define VAST_VIEW_TRAIT(type_name, vast_type_name)                             \
   template <>                                                                  \
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
+    using vast_type = vast_type_name;                                          \
   };                                                                           \
-  inline type_name materialize(view<type_name> x) { return x; }
+  inline type_name materialize(view<type_name> x) {                            \
+    return x;                                                                  \
+  }
 
-VAST_VIEW_TRAIT(bool)
-VAST_VIEW_TRAIT(int64_t)
-VAST_VIEW_TRAIT(uint64_t)
-VAST_VIEW_TRAIT(double)
-VAST_VIEW_TRAIT(duration)
-VAST_VIEW_TRAIT(time)
-VAST_VIEW_TRAIT(enumeration)
-VAST_VIEW_TRAIT(ip)
-VAST_VIEW_TRAIT(subnet)
+VAST_VIEW_TRAIT(bool, bool_type)
+VAST_VIEW_TRAIT(int64_t, int64_type)
+VAST_VIEW_TRAIT(uint64_t, uint64_type)
+VAST_VIEW_TRAIT(double, double_type)
+VAST_VIEW_TRAIT(duration, duration_type)
+VAST_VIEW_TRAIT(time, time_type)
+VAST_VIEW_TRAIT(enumeration, enumeration_type)
+VAST_VIEW_TRAIT(ip, ip_type)
+VAST_VIEW_TRAIT(subnet, subnet_type)
 
 #undef VAST_VIEW_TRAIT
 
@@ -69,6 +72,7 @@ struct view_trait<caf::none_t> {
 template <>
 struct view_trait<std::string> {
   using type = std::string_view;
+  using vast_type = string_type;
 };
 
 /// @relates view_trait
@@ -109,6 +113,7 @@ using list_view_handle = container_view_handle<list_view_ptr>;
 template <>
 struct view_trait<list> {
   using type = list_view_handle;
+  using vast_type = list_type;
 };
 
 struct map_view_ptr;
@@ -118,6 +123,7 @@ using map_view_handle = container_view_handle<map_view_ptr>;
 template <>
 struct view_trait<map> {
   using type = map_view_handle;
+  using vast_type = map_type;
 };
 
 struct record_view_ptr;
@@ -127,6 +133,7 @@ using record_view_handle = container_view_handle<record_view_ptr>;
 template <>
 struct view_trait<record> {
   using type = record_view_handle;
+  using vast_type = record_type;
 };
 
 // clang-format off
