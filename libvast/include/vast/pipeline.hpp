@@ -11,6 +11,8 @@
 #include "vast/operator_control_plane.hpp"
 #include "vast/table_slice.hpp"
 
+#include <fmt/core.h>
+
 #include <memory>
 #include <type_traits>
 #include <variant>
