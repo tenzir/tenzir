@@ -112,7 +112,7 @@ auto pipeline::copy() const -> operator_ptr {
     copied->operators_.push_back(op->copy());
   }
   return copied;
-};
+}
 
 auto pipeline::to_string() const -> std::string {
   return fmt::to_string(fmt::join(operators_, " | "));
