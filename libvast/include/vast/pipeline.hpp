@@ -244,8 +244,8 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>>;
 } // namespace vast
 
 template <class T>
-  requires std::is_base_of_v<vast::operator_base, T>
-struct fmt::formatter<T> {
+struct fmt::formatter<
+  T, char, std::enable_if_t<std::is_base_of_v<vast::operator_base, T>>> {
   constexpr auto parse(format_parse_context& ctx) {
     return ctx.begin();
   }
