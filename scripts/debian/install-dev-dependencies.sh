@@ -24,6 +24,7 @@ apt-get -y --no-install-recommends install \
     libre2-dev \
     libspdlog-dev \
     libssl-dev \
+    libsqlite3-dev \
     libunwind-dev \
     libxxhash-dev \
     libyaml-cpp-dev \
@@ -32,6 +33,7 @@ apt-get -y --no-install-recommends install \
     pandoc \
     pkg-config \
     python3-dev \
+    python3-openssl \
     python3-pip \
     python3-venv \
     robin-map-dev \
