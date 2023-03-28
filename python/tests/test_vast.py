@@ -16,19 +16,19 @@ if "VAST_PYTHON_INTEGRATION" not in os.environ:
         allow_module_level=True,
     )
 
-TEST_DB_DIR = "/tmp/test-vast-db"
-if os.path.isdir(TEST_DB_DIR):
-    shutil.rmtree(TEST_DB_DIR)
-
 
 @pytest.fixture()
 async def endpoint():
+    test = os.environ.get("PYTEST_CURRENT_TEST").split(":")[-1].split(" ")[0]
+    test_db_dir = "/tmp/pyvast-test/" + test
+    if os.path.isdir(test_db_dir):
+        shutil.rmtree(test_db_dir)
     proc = await asyncio.create_subprocess_exec(
         "vast",
         "-e",
         ":0",
         "-d",
-        TEST_DB_DIR,
+        test_db_dir,
         "start",
         "--print-endpoint",
         stdout=asyncio.subprocess.PIPE,
@@ -39,9 +39,9 @@ async def endpoint():
     logger.debug(f"{endpoint = }")
     yield endpoint
     proc.terminate()
+    await proc.communicate()
     # TODO: kill if in case of timeout.
     await asyncio.wait_for(proc.wait(), 5)
-    await asyncio.to_thread(shutil.rmtree, TEST_DB_DIR)
 
 
 async def vast_import(endpoint, expression: list[str]):
