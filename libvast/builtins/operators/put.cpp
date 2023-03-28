@@ -64,9 +64,10 @@ struct bound_configuration {
           replacement->fun = make_replace(value);
         }
       }
-      // If the extractor did not resolve, we instead add one new field at the
-      // end.
-      if (not found) {
+      // If the extractor did not resolve and if it is not a type extractor, we
+      // instead add one new field at the end.
+      const auto is_type_extractor = extractor.starts_with(':');
+      if (not found && not is_type_extractor) {
         auto inferred_type = type::infer(value);
         if (not inferred_type)
           return caf::make_error(ec::logic_error,
