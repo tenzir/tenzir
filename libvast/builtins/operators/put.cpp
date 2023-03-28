@@ -34,8 +34,10 @@ struct bound_configuration {
   /// Bind a *configuration* to a given schema.
   /// @param schema The schema to bind to.
   /// @param config The parsed configuration.
+  /// @param ctrl The operator control plane.
   static caf::expected<bound_configuration>
-  make(const type& schema, const configuration& config) {
+  make(const type& schema, const configuration& config,
+       operator_control_plane& ctrl) {
     auto result = bound_configuration{};
     const auto& schema_rt = caf::get<record_type>(schema);
     auto extensions = std::vector<std::tuple<std::string, data, type>>{};
@@ -45,7 +47,22 @@ struct bound_configuration {
       for (const auto& index :
            schema_rt.resolve_key_suffix(extractor, schema.name())) {
         found = true;
-        result.replacements.push_back({index, make_replace(value)});
+        // If the extractor overrides, then we warn the user and prioritize the
+        // value that was specified last.
+        auto replacement
+          = std::find_if(result.replacements.begin(), result.replacements.end(),
+                         [&](const auto& replacement) {
+                           return replacement.index == index;
+                         });
+        if (replacement == result.replacements.end()) {
+          result.replacements.push_back({index, make_replace(value)});
+        } else {
+          ctrl.warn(caf::make_error(
+            ec::invalid_argument, fmt::format("put operator assignment {}={}' "
+                                              "overrides previous assignment",
+                                              extractor, value)));
+          replacement->fun = make_replace(value);
+        }
       }
       // If the extractor did not resolve, we instead add one new field at the
       // end.
@@ -66,9 +83,6 @@ struct bound_configuration {
       result.extensions.push_back(
         {{schema_rt.num_fields() - 1}, make_extend(std::move(extensions))});
     std::sort(result.replacements.begin(), result.replacements.end());
-    result.replacements.erase(std::unique(result.replacements.begin(),
-                                          result.replacements.end()),
-                              result.replacements.end());
     VAST_ASSERT_CHEAP(result.extensions.size() <= 1);
     return result;
   }
@@ -150,10 +164,11 @@ public:
     // nop
   }
 
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
+  [[nodiscard]] auto
+  make_physical_operator(const type& input_schema,
+                         operator_control_plane& ctrl) noexcept
     -> caf::expected<physical_operator<events, events>> override {
-    auto bound_config = bound_configuration::make(input_schema, config_);
+    auto bound_config = bound_configuration::make(input_schema, config_, ctrl);
     if (!bound_config)
       return bound_config.error();
     return [config = std::move(*bound_config)](
