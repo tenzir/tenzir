@@ -188,7 +188,7 @@ TEST(roundtrip) {
 
 FIXTURE_SCOPE(pipeline_fixture, fixture)
 
-TEST(abc) {
+TEST(taste 42) {
   {
     auto v = unbox(pipeline::parse("taste 42")).unwrap();
     v.insert(v.begin(),

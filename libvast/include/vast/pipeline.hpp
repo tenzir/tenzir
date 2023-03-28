@@ -124,13 +124,12 @@ public:
   auto instantiate(operator_input input, operator_control_plane& ctrl) const
     -> caf::expected<operator_output> final {
     // We intentionally check for invocability with `Self&` instead of `const
-    // Self&`, and `const operator_control_plane&` instead of
-    // `operator_control_plane&` to detect erroneous definitions.
+    // Self&` to produce an error if the `const` is missing.
     auto f = detail::overload{
       [&](std::monostate) -> caf::expected<operator_output> {
         constexpr auto source = std::is_invocable_v<Self&>;
         constexpr auto source_ctrl
-          = std::is_invocable_v<Self&, const operator_control_plane&>;
+          = std::is_invocable_v<Self&, operator_control_plane&>;
         static_assert(source + source_ctrl <= 1,
                       "ambiguous operator definition: callable with both "
                       "`op()` and `op(ctrl)`");
@@ -148,9 +147,8 @@ public:
         generator<Input> input) -> caf::expected<operator_output> {
         constexpr auto one = std::is_invocable_v<Self&, Input>;
         constexpr auto gen = std::is_invocable_v<Self&, generator<Input>>;
-        constexpr auto gen_ctrl
-          = std::is_invocable_v<Self&, generator<Input>,
-                                const operator_control_plane&>;
+        constexpr auto gen_ctrl = std::is_invocable_v<Self&, generator<Input>,
+                                                      operator_control_plane&>;
         static_assert(one + gen + gen_ctrl <= 1,
                       "ambiguous operator definition: callable with more than "
                       "one of `op(x)`, `op(gen)` and `op(gen, ctrl)`");
