@@ -68,7 +68,7 @@ public:
     }
   }
 
-  // TODO: Implement this (with newline semantics).
+  // TODO: We could implement this (with `head -n` or `head -c` semantics).
   // auto operator()(generator<chunk_ptr> input) const -> generator<chunk_ptr> {}
 
   auto to_string() const -> std::string override {

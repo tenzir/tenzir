@@ -142,7 +142,7 @@ public:
   }
 
   /// Processes a single slice with the corresponding schema-specific state.
-  virtual auto process(table_slice slice, state_type& state) const
+  auto process(table_slice slice, state_type& state) const
     -> output_type override {
     if (state) {
       return transform_columns(slice, *state);

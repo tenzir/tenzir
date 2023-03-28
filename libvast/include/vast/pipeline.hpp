@@ -30,29 +30,30 @@ using operator_output
 
 /// Concept for pipeline operator input element types.
 template <class T>
-concept operator_input_element
+concept operator_input_batch
   = std::is_same_v<T, table_slice> || std::is_same_v<T, chunk_ptr>;
 
 /// User-friendly name for the given pipeline batch type.
 template <class T>
-constexpr auto operator_element_name() -> std::string_view {
+constexpr auto operator_type_name() -> std::string_view {
   if constexpr (std::is_same_v<T, void> || std::is_same_v<T, std::monostate>) {
     return "void";
   } else if constexpr (std::is_same_v<T, table_slice>) {
     return "events";
-  } else {
-    static_assert(std::is_same_v<T, chunk_ptr>, "not a valid element type");
+  } else if constexpr (std::is_same_v<T, chunk_ptr>) {
     return "bytes";
+  } else {
+    static_assert(detail::always_false_v<T>, "not a valid element type");
   }
 }
 
 /// Uniquely owned pipeline operator.
-using operator_ptr = std::unique_ptr<dynamic_operator>;
+using operator_ptr = std::unique_ptr<operator_base>;
 
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
-class dynamic_operator {
+class operator_base {
 public:
-  virtual ~dynamic_operator() = default;
+  virtual ~operator_base() = default;
 
   /// Instantiates the pipeline operator for a given input.
   ///
@@ -78,7 +79,7 @@ public:
 };
 
 /// A pipeline is a sequence of pipeline operators.
-class pipeline final : public dynamic_operator {
+class pipeline final : public operator_base {
 public:
   /// Constructs an empty pipeline.
   pipeline() = default;
@@ -88,7 +89,7 @@ public:
   explicit pipeline(std::vector<operator_ptr> operators);
 
   /// Parses a logical pipeline from its textual representation. It is *not*
-  /// guaranteed that `parse(to_string())` is equivalent to `*this`.
+  /// guaranteed that `parse(to_string())` succeeds.
   static auto parse(std::string_view repr) -> caf::expected<pipeline>;
 
   /// Returns the sequence of operators that this pipeline was built from.
@@ -118,7 +119,7 @@ private:
 /// result can optionally be wrapped in `caf::expected`, and `operator_output`
 /// can be used in place of `generator<Output>`.
 template <class Self>
-class crtp_operator : public dynamic_operator {
+class crtp_operator : public operator_base {
 public:
   auto instantiate(operator_input input, operator_control_plane& ctrl) const
     -> caf::expected<operator_output> final {
@@ -170,7 +171,7 @@ public:
           return caf::make_error(ec::type_clash,
                                  fmt::format("'{}' does not accept {} as input",
                                              to_string(),
-                                             operator_element_name<Input>()));
+                                             operator_type_name<Input>()));
         }
       },
     };
@@ -243,14 +244,14 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>>;
 } // namespace vast
 
 template <class T>
-  requires std::is_base_of_v<vast::dynamic_operator, T>
+  requires std::is_base_of_v<vast::operator_base, T>
 struct fmt::formatter<T> {
   constexpr auto parse(format_parse_context& ctx) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto format(const vast::dynamic_operator& value, FormatContext& ctx) const {
+  auto format(const vast::operator_base& value, FormatContext& ctx) const {
     auto str = value.to_string();
     return std::copy(str.begin(), str.end(), ctx.out());
   }
@@ -265,7 +266,7 @@ struct fmt::formatter<vast::operator_ptr> {
   template <class FormatContext>
   auto format(const vast::operator_ptr& value, FormatContext& ctx) const {
     if (value) {
-      return fmt::formatter<vast::dynamic_operator>{}.format(*value, ctx);
+      return fmt::formatter<vast::operator_base>{}.format(*value, ctx);
     } else {
       auto str = std::string_view{"nullptr"};
       return std::copy(str.begin(), str.end(), ctx.out());

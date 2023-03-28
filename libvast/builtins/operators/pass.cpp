@@ -45,7 +45,7 @@ private:
 // Does nothing with the input.
 class pass_operator2 final : public crtp_operator<pass_operator2> {
 public:
-  template <operator_input_element T>
+  template <operator_input_batch T>
   auto operator()(T x) const -> T {
     return x;
   }

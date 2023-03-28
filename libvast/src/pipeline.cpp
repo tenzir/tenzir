@@ -108,7 +108,7 @@ auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
 auto pipeline::copy() const -> operator_ptr {
   auto copied = std::make_unique<pipeline>();
   copied->operators_.reserve(operators_.size());
-  for (auto& op : operators_) {
+  for (const auto& op : operators_) {
     copied->operators_.push_back(op->copy());
   }
   return copied;
