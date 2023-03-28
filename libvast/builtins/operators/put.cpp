@@ -45,7 +45,7 @@ struct bound_configuration {
       for (const auto& index :
            schema_rt.resolve_key_suffix(extractor, schema.name())) {
         found = true;
-        result.transformations.push_back({index, make_replace(value)});
+        result.replacements.push_back({index, make_replace(value)});
       }
       // If the extractor did not resolve, we instead add one new field at the
       // end.
@@ -58,13 +58,18 @@ struct bound_configuration {
         extensions.emplace_back(extractor, value, std::move(inferred_type));
       }
     }
+    // We maintain two separate lists of column transformations because we
+    // cannot both modify the last column and add additional columns in a single
+    // call to transform_columns, because that would modify a precondition of
+    // the function.
     if (not extensions.empty())
-      result.transformations.push_back(
+      result.extensions.push_back(
         {{schema_rt.num_fields() - 1}, make_extend(std::move(extensions))});
-    std::sort(result.transformations.begin(), result.transformations.end());
-    result.transformations.erase(std::unique(result.transformations.begin(),
-                                             result.transformations.end()),
-                                 result.transformations.end());
+    std::sort(result.replacements.begin(), result.replacements.end());
+    result.replacements.erase(std::unique(result.replacements.begin(),
+                                          result.replacements.end()),
+                              result.replacements.end());
+    VAST_ASSERT_CHEAP(result.extensions.size() <= 1);
     return result;
   }
 
@@ -134,7 +139,8 @@ struct bound_configuration {
   }
 
   /// The list of configured transformations.
-  std::vector<indexed_transformation> transformations = {};
+  std::vector<indexed_transformation> replacements = {};
+  std::vector<indexed_transformation> extensions = {};
 };
 
 class put_operator : public logical_operator<events, events> {
@@ -150,10 +156,14 @@ public:
     auto bound_config = bound_configuration::make(input_schema, config_);
     if (!bound_config)
       return bound_config.error();
-    return [transformations = std::move(bound_config->transformations)](
+    return [config = std::move(*bound_config)](
              generator<table_slice> input) -> generator<table_slice> {
       for (auto&& slice : input) {
-        co_yield transform_columns(slice, transformations);
+        if (!config.replacements.empty())
+          slice = transform_columns(slice, config.replacements);
+        if (!config.extensions.empty())
+          slice = transform_columns(slice, config.extensions);
+        co_yield std::move(slice);
       }
     };
   }
