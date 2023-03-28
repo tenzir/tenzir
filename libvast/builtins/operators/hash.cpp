@@ -129,12 +129,13 @@ public:
     : config_(std::move(configuration)) {
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     // Get the target field if it exists.
     const auto& schema_rt = caf::get<record_type>(schema);
     auto column_index = schema_rt.resolve_key(config_.field);
     if (!column_index) {
-      return State{};
+      return state_type{};
     }
     auto transform_fn = [this](struct record_type::field field,
                                std::shared_ptr<arrow::Array> array) noexcept
@@ -171,10 +172,11 @@ public:
         },
       };
     };
-    return State{{*column_index, std::move(transform_fn)}};
+    return state_type{{*column_index, std::move(transform_fn)}};
   }
 
-  auto process(table_slice slice, State& state) const -> Output override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     return transform_columns(slice, state);
   };
 

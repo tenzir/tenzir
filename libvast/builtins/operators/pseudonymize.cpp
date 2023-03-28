@@ -140,7 +140,8 @@ public:
     parse_seed_string();
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     std::vector<indexed_transformation> transformations;
     auto transformation = [&](struct record_type::field field,
                               std::shared_ptr<arrow::Array> array) noexcept
@@ -186,7 +187,8 @@ public:
     return transformations;
   }
 
-  auto process(table_slice slice, State& state) const -> Output override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     return transform_columns(slice, state);
   }
 

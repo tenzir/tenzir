@@ -104,11 +104,13 @@ public:
 #endif // VAST_ENABLE_ASSERTIONS
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     return tailor(expr_, schema);
   }
 
-  auto process(table_slice slice, State& expr) const -> Output override {
+  auto process(table_slice slice, state_type& expr) const
+    -> output_type override {
     // TODO: Adjust filter function return type.
     // TODO: Replace this with an Arrow-native filter function as soon as we
     // are able to directly evaluate expressions on a record batch.

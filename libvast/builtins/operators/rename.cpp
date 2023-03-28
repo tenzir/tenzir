@@ -147,7 +147,8 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     // Step 1: Adjust field names.
     auto field_transformations = std::vector<indexed_transformation>{};
     if (!config_.fields.empty()) {
@@ -188,7 +189,8 @@ public:
     return state_t{std::move(field_transformations), std::move(renamed_schema)};
   }
 
-  auto process(table_slice slice, State& state) const -> Output override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     slice = transform_columns(slice, state.field_transformations);
     if (state.renamed_schema) {
       slice = cast(std::move(slice), *state.renamed_schema);

@@ -110,7 +110,8 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
       = std::any_of(config_.schemas.begin(), config_.schemas.end(),
@@ -141,8 +142,8 @@ public:
   }
 
   /// Processes a single slice with the corresponding schema-specific state.
-  virtual auto process(table_slice slice, State& state) const
-    -> Output override {
+  virtual auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     if (state) {
       return transform_columns(slice, *state);
     }

@@ -26,6 +26,23 @@ using operator_output
   = std::variant<generator<std::monostate>, generator<table_slice>,
                  generator<chunk_ptr>>;
 
+template <class T>
+concept input_element
+  = std::is_same_v<T, table_slice> || std::is_same_v<T, chunk_ptr>;
+
+/// User-friendly name for the given element type.
+template <class T>
+constexpr auto operator_element_name() -> std::string_view {
+  if constexpr (std::is_same_v<T, void> || std::is_same_v<T, std::monostate>) {
+    return "void";
+  } else if constexpr (std::is_same_v<T, table_slice>) {
+    return "events";
+  } else {
+    static_assert(std::is_same_v<T, chunk_ptr>, "not a valid element type");
+    return "bytes";
+  }
+}
+
 /// Uniquely owned pipeline operator.
 using operator_ptr = std::unique_ptr<dynamic_operator>;
 
@@ -72,12 +89,21 @@ class crtp_operator : public dynamic_operator {
 public:
   auto instantiate(operator_input input, operator_control_plane& ctrl) const
     -> caf::expected<operator_output> final {
-    // We intentionally check with `Self&` instead of `const Self&`, such that a
-    // missing `const` will lead to a compile-time error.
+    // We intentionally check for invocability with `Self&` instead of `const
+    // Self&`, and `const operator_control_plane&` instead of
+    // `operator_control_plane&` to detect erroneous definitions.
     auto f = detail::overload{
       [&](std::monostate) -> caf::expected<operator_output> {
-        if constexpr (std::is_invocable_v<Self&>) {
+        constexpr auto source = std::is_invocable_v<Self&>;
+        constexpr auto source_ctrl
+          = std::is_invocable_v<Self&, const operator_control_plane&>;
+        static_assert(source + source_ctrl <= 1,
+                      "ambiguous operator definition: callable with both "
+                      "`op()` and `op(ctrl)`");
+        if constexpr (source) {
           return self()();
+        } else if constexpr (source_ctrl) {
+          return self()(ctrl);
         } else {
           return caf::make_error(ec::type_clash,
                                  fmt::format("'{}' cannot be used as a source",
@@ -86,7 +112,15 @@ public:
       },
       [&]<class Input>(
         generator<Input> input) -> caf::expected<operator_output> {
-        if constexpr (std::is_invocable_v<Self&, Input>) {
+        constexpr auto one = std::is_invocable_v<Self&, Input>;
+        constexpr auto gen = std::is_invocable_v<Self&, generator<Input>>;
+        constexpr auto gen_ctrl
+          = std::is_invocable_v<Self&, generator<Input>,
+                                const operator_control_plane&>;
+        static_assert(one + gen + gen_ctrl <= 1,
+                      "ambiguous operator definition: callable with more than "
+                      "one of `op(x)`, `op(gen)` and `op(gen, ctrl)`");
+        if constexpr (one) {
           return std::invoke(
             [this](generator<Input> input)
               -> generator<std::invoke_result_t<Self&, Input>> {
@@ -95,15 +129,15 @@ public:
               }
             },
             std::move(input));
-        } else if constexpr (std::is_invocable_v<Self&, generator<Input>>) {
+        } else if constexpr (gen) {
           return self()(std::move(input));
-        } else if constexpr (std::is_invocable_v<Self&, generator<Input>,
-                                                 operator_control_plane&>) {
+        } else if constexpr (gen_ctrl) {
           return self()(std::move(input), ctrl);
         } else {
-          return caf::make_error(
-            ec::type_clash, fmt::format("'{}' does not accept '{}' as input",
-                                        to_string(), typeid(Input).name()));
+          return caf::make_error(ec::type_clash,
+                                 fmt::format("'{}' does not accept {} as input",
+                                             to_string(),
+                                             operator_element_name<Input>()));
         }
       },
     };
@@ -125,28 +159,32 @@ private:
 /// Pipeline operator with a per-schema initialization.
 ///
 /// Usage: Override `initialize` and `process`.
-template <class Self, class State_, class Output_ = table_slice>
+template <class Self, class State, class Output = table_slice>
 class schematic_operator : public crtp_operator<Self> {
 public:
-  using State = State_;
-  using Output = Output_;
+  using state_type = State;
+  using output_type = Output;
 
   /// Returns the initial state for when a schema is first encountered.
-  virtual auto initialize(const type& schema) const -> caf::expected<State> = 0;
+  virtual auto initialize(const type& schema) const -> caf::expected<state_type>
+    = 0;
 
   /// Processes a single slice with the corresponding schema-specific state.
-  virtual auto process(table_slice slice, State& state) const -> Output = 0;
+  virtual auto process(table_slice slice, state_type& state) const
+    -> output_type
+    = 0;
 
   /// Called when the input is exhausted.
-  virtual auto finish(std::unordered_map<type, State> states,
-                      operator_control_plane& ctrl) const -> generator<Output> {
+  virtual auto finish(std::unordered_map<type, state_type> states,
+                      operator_control_plane&) const -> generator<output_type> {
     (void)states;
     co_return;
   }
 
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane& ctrl) const -> generator<Output> {
-    auto states = std::unordered_map<type, State>{};
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<output_type> {
+    auto states = std::unordered_map<type, state_type>{};
     for (auto&& slice : input) {
       auto it = states.find(slice.schema());
       if (it == states.end()) {

@@ -52,6 +52,19 @@ private:
   caf::error error_{};
 };
 
+pipeline::pipeline(std::vector<operator_ptr> operators) {
+  operators_.reserve(operators.size());
+  for (auto&& op : operators) {
+    if (auto sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
+      auto sub_ops = std::move(*sub_pipeline).unwrap();
+      operators_.insert(operators_.end(), std::move_iterator{sub_ops.begin()},
+                        std::move_iterator{sub_ops.end()});
+    } else {
+      operators_.push_back(std::move(op));
+    }
+  }
+}
+
 auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
   auto ops = std::vector<operator_ptr>{};
   // plugin name parser
@@ -150,7 +163,7 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
   local_control_plane ctrl;
   auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
   if (!dynamic_gen) {
-    co_yield dynamic_gen.error();
+    co_yield std::move(dynamic_gen.error());
     co_return;
   }
   auto gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
@@ -162,9 +175,12 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
   for (auto monostate : *gen) {
     (void)monostate;
     if (auto error = ctrl.get_error()) {
-      co_yield error;
+      co_yield std::move(error);
       co_return;
     }
+  }
+  if (auto error = ctrl.get_error()) {
+    co_yield std::move(error);
   }
 }
 

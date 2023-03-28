@@ -89,8 +89,9 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
-    auto indices = State{};
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
+    auto indices = state_type{};
     for (const auto& field : config_.fields)
       for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
              field, schema.name()))
@@ -99,7 +100,8 @@ public:
     return indices;
   }
 
-  auto process(table_slice slice, State& state) const -> Output override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     return select_columns(slice, state);
   }
 

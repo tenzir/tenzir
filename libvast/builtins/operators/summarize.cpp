@@ -740,7 +740,8 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     auto result = aggregation::make(schema, config_);
     if (!result) {
       VAST_WARN("summarize operator does not apply to schema {} and discards "
@@ -751,16 +752,17 @@ public:
     return *result;
   }
 
-  auto process(table_slice slice, State& state) const -> Output override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     if (state) {
       state->add(to_record_batch(slice));
     }
     return {};
   }
 
-  auto finish(std::unordered_map<type, State> states,
+  auto finish(std::unordered_map<type, state_type> states,
               operator_control_plane& ctrl) const
-    -> generator<Output> override {
+    -> generator<output_type> override {
     for (auto& [_, state] : states) {
       if (state) {
         if (auto batch = state->finish()) {

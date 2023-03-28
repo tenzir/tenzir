@@ -58,18 +58,18 @@ private:
 };
 
 class taste_operator2 final
-  : public schematic_operator<taste_operator2, uint32_t> {
+  : public schematic_operator<taste_operator2, uint64_t> {
 public:
-  explicit taste_operator2(uint32_t limit) : limit_{limit} {
+  explicit taste_operator2(uint64_t limit) : limit_{limit} {
   }
 
-  auto initialize(const type&) const -> caf::expected<State> override {
+  auto initialize(const type&) const -> caf::expected<state_type> override {
     return limit_;
   }
 
-  auto process(table_slice slice, State& remaining) const
+  auto process(table_slice slice, state_type& remaining) const
     -> table_slice override {
-    auto result = tail(slice, remaining);
+    auto result = head(slice, remaining);
     remaining -= result.rows();
     return result;
   }
@@ -79,7 +79,7 @@ public:
   }
 
 private:
-  uint32_t limit_;
+  uint64_t limit_;
 };
 
 class plugin final : public virtual pipeline_operator_plugin,

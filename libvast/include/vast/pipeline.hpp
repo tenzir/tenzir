@@ -19,11 +19,9 @@ public:
   /// Constructs an empty pipeline.
   pipeline() = default;
 
-  /// Constructs a pipeline from a sequence of operators.
-  // TODO: Flatten?
-  explicit pipeline(std::vector<operator_ptr> operators)
-    : operators_{std::move(operators)} {
-  }
+  /// Constructs a pipeline from a sequence of operators. Flattens nested
+  /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
+  explicit pipeline(std::vector<operator_ptr> operators);
 
   /// Parses a logical pipeline from its textual representation. It is *not*
   /// guaranteed that `parse(to_string())` is equivalent to `*this`.

@@ -142,7 +142,8 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     auto& schema_rt = caf::get<record_type>(schema);
     for (const auto& [field, _] : config_.field_to_value)
       if (schema_rt.resolve_key(field).has_value())
@@ -155,7 +156,8 @@ public:
       {offset{schema_rt.num_fields() - 1}, config_.transformation}};
   }
 
-  auto process(table_slice slice, State& state) const -> Output override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     return transform_columns(slice, state);
   }
 

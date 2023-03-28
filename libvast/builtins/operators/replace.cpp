@@ -173,7 +173,8 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const -> caf::expected<State> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     auto result = bound_configuration::make(schema, config_);
     if (!result) {
       return result.error();
@@ -181,7 +182,8 @@ public:
     return std::move(result->transformations);
   }
 
-  auto process(table_slice slice, State& state) const -> Output override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
     return transform_columns(slice, state);
   }
 

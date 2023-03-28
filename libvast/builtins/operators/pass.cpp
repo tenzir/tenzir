@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/dynamic_operator.hpp"
+
 #include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
@@ -43,9 +45,9 @@ private:
 // Does nothing with the input.
 class pass_operator2 final : public crtp_operator<pass_operator2> {
 public:
-  template <class T>
+  template <input_element T>
   auto operator()(T x) const -> T {
-    return std::move(x);
+    return x;
   }
 
   auto to_string() const -> std::string override {
