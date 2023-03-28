@@ -10,9 +10,9 @@
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
-#include <vast/dynamic_operator.hpp>
 #include <vast/error.hpp>
 #include <vast/legacy_pipeline.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/type.hpp>
 

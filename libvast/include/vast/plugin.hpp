@@ -15,9 +15,9 @@
 #include "vast/data.hpp"
 #include "vast/detail/pp.hpp"
 #include "vast/detail/weak_handle.hpp"
-#include "vast/dynamic_operator.hpp"
 #include "vast/http_api.hpp"
 #include "vast/operator_control_plane.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
 
@@ -651,7 +651,9 @@ extern const char* VAST_PLUGIN_VERSION;
     struct auto_register_plugin;                                               \
     template <>                                                                \
     struct auto_register_plugin<name> {                                        \
-      auto_register_plugin() { static_cast<void>(flag); }                      \
+      auto_register_plugin() {                                                 \
+        static_cast<void>(flag);                                               \
+      }                                                                        \
       static bool init() {                                                     \
         ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
           new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \
@@ -666,7 +668,9 @@ extern const char* VAST_PLUGIN_VERSION;
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     struct auto_register_type_id_##name {                                      \
-      auto_register_type_id_##name() { static_cast<void>(flag); }              \
+      auto_register_type_id_##name() {                                         \
+        static_cast<void>(flag);                                               \
+      }                                                                        \
       static bool init() {                                                     \
         ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name::begin,           \

@@ -8,7 +8,6 @@
 
 #include <vast/concept/parseable/numeric/integral.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
-#include <vast/dynamic_operator.hpp>
 #include <vast/error.hpp>
 #include <vast/legacy_pipeline.hpp>
 #include <vast/logger.hpp>

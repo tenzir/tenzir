@@ -12,11 +12,11 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
-#include <vast/dynamic_operator.hpp>
 #include <vast/error.hpp>
 #include <vast/expression.hpp>
 #include <vast/legacy_pipeline.hpp>
 #include <vast/logger.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 
