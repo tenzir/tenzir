@@ -1066,11 +1066,20 @@ jobs:
       HOMEBREW_NO_AUTO_UPDATE: 1
     name: VAST Plugins (${{ matrix.plugin.name }}, ${{ matrix.setup.name }})
     steps:
-      - name: Install Git (Debian)
+      - name: Install git, curl, jq (Debian)
         if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
         run: |
           apt-get update
-          apt-get -y install git
+          apt-get -y install git curl jq
+      - name: Add GitHub to the SSH known hosts file
+        if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
+        # See https://github.com/webfactory/ssh-agent/issues/174#issuecomment-1486300082.
+        run: |
+          mkdir -p -m 0700 /root/.ssh
+          curl --silent https://api.github.com/meta \
+            | jq --raw-output '"github.com "+.ssh_keys[]' \
+            >> /root/.ssh/known_hosts
+          chmod 600 /root/.ssh/known_hosts
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.8.0
         with:
