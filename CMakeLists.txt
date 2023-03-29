@@ -303,8 +303,9 @@ target_compile_options(
             -Werror=odr
             -Wundef
             $<$<CONFIG:CI>:-Werror
-            # Spurious warning when ASAN is combined with optimizations.
+            # Spurious warnings when ASAN is combined with optimizations.
             $<$<AND:$<CONFIG:CI>,${gcc12plus}>:-Wno-maybe-uninitialized>
+            $<$<AND:$<CONFIG:CI>,${gcc12plus}>:-Wno-restrict>
             # Never treat deprecation warnings as errors.
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>
