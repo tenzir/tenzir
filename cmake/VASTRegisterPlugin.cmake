@@ -275,6 +275,13 @@ macro (VASTInstallExampleConfiguration target source prefix destination)
     message(FATAL_ERROR "destination '${destination}' must be relative")
   endif ()
 
+  # Provides install directory variables as defined for GNU software:
+  # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
+  include(GNUInstallDirs)
+  if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+    VASTNormalizeInstallDirs()
+  endif ()
+
   # Set a temporary variable for the example dir location. Because we're in a
   # macro we're unsetting the variable again later on.
   set(_example_dir "${CMAKE_INSTALL_DOCDIR}/examples")
