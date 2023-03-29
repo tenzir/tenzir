@@ -623,11 +623,8 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
       return type{other.name(), list_type{from_legacy_type(list.value_type)},
                   std::move(attributes)};
     },
-    [&](const legacy_map_type& map) noexcept {
-      return type{other.name(),
-                  map_type{from_legacy_type(map.key_type),
-                           from_legacy_type(map.value_type)},
-                  std::move(attributes)};
+    [&](const legacy_map_type&) noexcept -> type {
+      die("unreachable");
     },
     [&](const legacy_alias_type& alias) noexcept {
       return type{other.name(), from_legacy_type(alias.value_type),
@@ -684,12 +681,6 @@ legacy_type type::to_legacy_type() const noexcept {
     },
     [&](const list_type& list) noexcept -> legacy_type {
       return legacy_list_type{list.value_type().to_legacy_type()};
-    },
-    [&](const map_type& map) noexcept -> legacy_type {
-      return legacy_map_type{
-        map.key_type().to_legacy_type(),
-        map.value_type().to_legacy_type(),
-      };
     },
     [&](const record_type& record) noexcept -> legacy_type {
       auto result = legacy_record_type{};
@@ -827,15 +818,6 @@ data type::to_definition(bool expand) const noexcept {
         {"list", self.value_type().to_definition(expand)},
       };
     },
-    [&](const map_type& self) noexcept -> data {
-      return record{
-        {"map",
-         record{
-           {"key", self.key_type().to_definition(expand)},
-           {"value", self.value_type().to_definition(expand)},
-         }},
-      };
-    },
     [&](const record_type& self) noexcept -> data {
       auto definition = list{};
       definition.reserve(self.num_fields());
@@ -873,13 +855,6 @@ type type::from_arrow(const arrow::DataType& other) noexcept {
       const auto value_field = lt.value_field();
       VAST_ASSERT(value_field);
       return type{list_type{from_arrow(*value_field)}};
-    },
-    [](const map_type::arrow_type& mt) noexcept -> type {
-      const auto key_field = mt.key_field();
-      const auto item_field = mt.item_field();
-      VAST_ASSERT(key_field);
-      VAST_ASSERT(item_field);
-      return type{map_type{from_arrow(*key_field), from_arrow(*item_field)}};
     },
     [](const record_type::arrow_type& rt) noexcept -> type {
       auto fields = std::vector<record_type::field_view>{};
@@ -2253,84 +2228,6 @@ type list_type::value_type() const noexcept {
   return type{table_->slice(as_bytes(*view))};
 }
 
-// -- map_type ----------------------------------------------------------------
-
-map_type::map_type(const map_type& other) noexcept = default;
-
-map_type& map_type::operator=(const map_type& rhs) noexcept = default;
-
-map_type::map_type(map_type&& other) noexcept = default;
-
-map_type& map_type::operator=(map_type&& other) noexcept = default;
-
-map_type::~map_type() noexcept = default;
-
-map_type::map_type(const type& key_type, const type& value_type) noexcept {
-  const auto key_type_bytes = as_bytes(key_type);
-  const auto value_type_bytes = as_bytes(value_type);
-  const auto reserved_size
-    = 52 + key_type_bytes.size() + value_type_bytes.size();
-  auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-  const auto key_type_offset = builder.CreateVector(
-    reinterpret_cast<const uint8_t*>(key_type_bytes.data()),
-    key_type_bytes.size());
-  const auto value_type_offset = builder.CreateVector(
-    reinterpret_cast<const uint8_t*>(value_type_bytes.data()),
-    value_type_bytes.size());
-  const auto map_type_offset
-    = fbs::type::CreateMapType(builder, key_type_offset, value_type_offset);
-  const auto type_offset = fbs::CreateType(builder, fbs::type::Type::map_type,
-                                           map_type_offset.Union());
-  builder.Finish(type_offset);
-  auto result = builder.Release();
-  VAST_ASSERT(result.size() == reserved_size);
-  table_ = chunk::make(std::move(result));
-}
-
-const fbs::Type& map_type::table() const noexcept {
-  const auto repr = as_bytes(*this);
-  const auto* table = fbs::GetType(repr.data());
-  VAST_ASSERT(table);
-  VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::map_type);
-  return *table;
-}
-
-static_assert(map_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::map_type));
-
-std::span<const std::byte> as_bytes(const map_type& x) noexcept {
-  return as_bytes_complex(x);
-}
-
-map map_type::construct() noexcept {
-  return {};
-}
-
-std::shared_ptr<map_type::arrow_type> map_type::to_arrow_type() const noexcept {
-  return std::make_shared<arrow_type>(key_type().to_arrow_field("key", false),
-                                      value_type().to_arrow_field("item"));
-}
-
-std::shared_ptr<typename arrow::TypeTraits<map_type::arrow_type>::BuilderType>
-map_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
-  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
-    pool, key_type().make_arrow_builder(pool),
-    value_type().make_arrow_builder(pool), to_arrow_type());
-}
-
-type map_type::key_type() const noexcept {
-  const auto* view = table().type_as_map_type()->key_type();
-  VAST_ASSERT(view);
-  return type{table_->slice(as_bytes(*view))};
-}
-
-type map_type::value_type() const noexcept {
-  const auto* view = table().type_as_map_type()->value_type();
-  VAST_ASSERT(view);
-  return type{table_->slice(as_bytes(*view))};
-}
-
 // -- record_type -------------------------------------------------------------
 
 std::strong_ordering
@@ -2463,7 +2360,20 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
+      case fbs::type::Type::list_type: {
+        {
+          auto leaf = leaf_view{
+            {
+              field->name()->string_view(),
+              type{table_->slice(as_bytes(*field->type()))},
+            },
+            index,
+          };
+          co_yield std::move(leaf);
+          ++index.back();
+          break;
+        }
+      }
       case fbs::type::Type::record_type: {
         history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
@@ -2521,7 +2431,11 @@ size_t record_type::num_leaves() const noexcept {
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
+      case fbs::type::Type::list_type: {
+        ++index.back();
+        ++num_leaves;
+        break;
+      }
       case fbs::type::Type::record_type: {
         history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
@@ -2573,7 +2487,13 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
+      case fbs::type::Type::list_type: {
+        if (current_flat_index == flat_index)
+          return index;
+        ++current_flat_index;
+        ++index.back();
+        break;
+      }
       case fbs::type::Type::record_type: {
         history.emplace_back(field_type->type_as_record_type());
         index.push_back(0);
@@ -2629,7 +2549,12 @@ record_type::resolve_key(std::string_view key) const noexcept {
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
+      case fbs::type::Type::list_type: {
+        if (remaining_key == field_name->string_view())
+          return index;
+        ++index.back();
+        break;
+      }
       case fbs::type::Type::record_type: {
         auto [remaining_key_mismatch, field_name_mismatch]
           = std::mismatch(remaining_key.begin(), remaining_key.end(),
@@ -2717,7 +2642,23 @@ record_type::resolve_key_suffix(std::string_view key,
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
+      case fbs::type::Type::list_type: {
+        for (const auto& remaining_key : remaining_keys) {
+          // TODO: Once we no longer support flattening types, we can switch to
+          // an equality comparison between field_name and remaining_key here.
+          const auto [field_name_mismatch, remaining_key_mismatch]
+            = std::mismatch(field_name->rbegin(), field_name->rend(),
+                            remaining_key.rbegin(), remaining_key.rend());
+          if (remaining_key_mismatch == remaining_key.rend()
+              && (field_name_mismatch == field_name->rend()
+                  || *field_name_mismatch == '.')) {
+            co_yield index;
+            break;
+          }
+        }
+        ++index.back();
+        break;
+      }
       case fbs::type::Type::record_type: {
         using history_entry = decltype(history)::value_type;
         auto next = history_entry{
@@ -2851,7 +2792,13 @@ size_t record_type::flat_index(const offset& index) const noexcept {
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
-      case fbs::type::Type::list_type:
+      case fbs::type::Type::list_type: {
+        if (index == current_index)
+          return flat_index;
+        ++current_index.back();
+        ++flat_index;
+        break;
+      }
       case fbs::type::Type::record_type: {
         VAST_ASSERT(index != current_index);
         history.emplace_back(field_type->type_as_record_type());

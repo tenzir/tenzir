@@ -48,11 +48,9 @@ protected:
 // -- concepts ----------------------------------------------------------------
 
 /// The list of concrete types.
-using concrete_types
-  = caf::detail::type_list<bool_type, int64_type, uint64_type, double_type,
-                           duration_type, time_type, string_type, ip_type,
-                           subnet_type, enumeration_type, list_type, map_type,
-                           record_type>;
+using concrete_types = caf::detail::type_list<
+  bool_type, int64_type, uint64_type, double_type, duration_type, time_type,
+  string_type, ip_type, subnet_type, enumeration_type, list_type, record_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -62,14 +60,15 @@ concept concrete_type = requires(const T& value) {
   // The type must not be inherited from to avoid slicing issues.
   requires std::is_final_v<T>;
   // The type must offer a way to get a unique type index.
-  {T::type_index};
+  { T::type_index };
   // Values of the type must offer an `as_bytes` overload.
   { as_bytes(value) } -> std::same_as<std::span<const std::byte>>;
-  // Values of the type must be able to construct the corresponding data type.
-  // TODO: Actually requiring this also requires us to include data.hpp, which
-  // is rather expensive, so we leave this disable for now.
-  // { value.construct() } -> std::convertible_to<data>;
-  // Values of the type must be convertible into a corresponding Arrow DataType.
+  // Values of the type must be able to construct the corresponding data
+  // type.
+  // TODO: Actually requiring this also requires us to include data.hpp,
+  // which is rather expensive, so we leave this disable for now. {
+  // value.construct() } -> std::convertible_to<data>; Values of the type
+  // must be convertible into a corresponding Arrow DataType.
   requires std::is_base_of_v<arrow::DataType, typename T::arrow_type>;
 };
 
@@ -96,10 +95,12 @@ template <class T>
 concept complex_type = requires {
   // The type must be a concrete type.
   requires concrete_type<T>;
-  // The type must inherit from the same base that `type` inherits from.
+  // The type must inherit from the same base that `type`
+  // inherits from.
   requires std::is_base_of_v<stateful_type_base, T>;
-  // The type must only inherit from the same stateful base that `type` inherits
-  // from to avoid slicing issues.
+  // The type must only inherit from the same stateful
+  // base that `type` inherits from to avoid slicing
+  // issues.
   requires sizeof(T) == sizeof(stateful_type_base);
 };
 
@@ -890,8 +891,8 @@ public:
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte>
   as_bytes(const enumeration_type& x) noexcept;
-  friend std::span<const std::byte>
-  as_bytes(enumeration_type&&) noexcept = delete;
+  friend std::span<const std::byte> as_bytes(enumeration_type&&) noexcept
+    = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] enumeration construct() const noexcept;
@@ -1026,77 +1027,6 @@ public:
   [[nodiscard]] std::shared_ptr<
     typename arrow::TypeTraits<arrow_type>::BuilderType>
   make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
-
-  /// Returns the nested value type.
-  [[nodiscard]] type value_type() const noexcept;
-};
-
-// -- map_type ----------------------------------------------------------------
-
-/// An associative mapping from keys to values.
-/// @relates type
-class map_type final : public stateful_type_base {
-  friend class type;
-  friend struct caf::sum_type_access<vast::type>;
-
-public:
-  /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
-  /// @param other The copied-from type.
-  map_type(const map_type& other) noexcept;
-
-  /// Copy-assigns a type, resulting in a shallow copy with shared lifetime.
-  /// @param other The copied-from type.
-  map_type& operator=(const map_type& rhs) noexcept;
-
-  /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the none type.
-  /// @param other The moved-from type.
-  map_type(map_type&& other) noexcept;
-
-  /// Move-constructs a type, leaving the moved-from type in a state
-  /// semantically equivalent to the none type.
-  /// @param other The moved-from type.
-  map_type& operator=(map_type&& other) noexcept;
-
-  /// Destroys a type.
-  ~map_type() noexcept;
-
-  /// Constructs a map type with known key and value types.
-  explicit map_type(const type& key_type, const type& value_type) noexcept;
-
-  template <type_or_concrete_type T, type_or_concrete_type U>
-    requires(!std::is_same_v<T, vast::type> || !std::is_same_v<U, vast::type>)
-  explicit map_type(const T& key_type, const U& value_type) noexcept
-    : map_type{type{key_type}, type{value_type}} {
-    // nop
-  }
-
-  /// Returns the underlying FlatBuffers table representation.
-  [[nodiscard]] const fbs::Type& table() const noexcept;
-
-  /// Returns the type index.
-  static constexpr uint8_t type_index = 13;
-
-  /// The corresponding Arrow DataType.
-  using arrow_type = arrow::MapType;
-
-  /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const map_type& x) noexcept;
-  friend std::span<const std::byte> as_bytes(map_type&&) noexcept = delete;
-
-  /// Constructs data from the type.
-  [[nodiscard]] static map construct() noexcept;
-
-  /// Converts the type into an Arrow DataType.
-  [[nodiscard]] std::shared_ptr<arrow_type> to_arrow_type() const noexcept;
-
-  /// Creates an Arrow ArrayBuilder from the type.
-  [[nodiscard]] std::shared_ptr<
-    typename arrow::TypeTraits<arrow_type>::BuilderType>
-  make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
-
-  /// Returns the nested key type.
-  [[nodiscard]] type key_type() const noexcept;
 
   /// Returns the nested value type.
   [[nodiscard]] type value_type() const noexcept;
@@ -1619,19 +1549,20 @@ struct sum_type_access<arrow::DataType> final {
     -> Result {
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::DataType& x, Visitor&& v, Args&&... xs) -> Result {
-          auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = detail::get_indices(xs_as_tuple);
-          return detail::apply_args_suffxied(
-            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-            get(x, sum_type_token<Ts, Indices>{}));
-        }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{
+          +[](const arrow::DataType& x, Visitor&& v, Args&&... xs) -> Result {
+            auto xs_as_tuple = std::forward_as_tuple(xs...);
+            auto indices = detail::get_indices(xs_as_tuple);
+            return detail::apply_args_suffxied(
+              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+              get(x, sum_type_token<Ts, Indices>{}));
+          }...};
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch = table[index_from_type(x)];
     VAST_ASSERT(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
@@ -1694,19 +1625,20 @@ struct sum_type_access<arrow::Array> final {
     VAST_ASSERT(x.type());
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
-          auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = detail::get_indices(xs_as_tuple);
-          return detail::apply_args_suffxied(
-            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-            get(x, sum_type_token<Ts, Indices>{}));
-        }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{
+          +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
+            auto xs_as_tuple = std::forward_as_tuple(xs...);
+            auto indices = detail::get_indices(xs_as_tuple);
+            return detail::apply_args_suffxied(
+              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+              get(x, sum_type_token<Ts, Indices>{}));
+          }...};
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
     VAST_ASSERT(dispatch);
@@ -1775,19 +1707,20 @@ struct sum_type_access<arrow::Scalar> final {
     VAST_ASSERT(x.type);
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::Scalar& x, Visitor&& v, Args&&... xs) -> Result {
-          auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = detail::get_indices(xs_as_tuple);
-          return detail::apply_args_suffxied(
-            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-            get(x, sum_type_token<Ts, Indices>{}));
-        }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{
+          +[](const arrow::Scalar& x, Visitor&& v, Args&&... xs) -> Result {
+            auto xs_as_tuple = std::forward_as_tuple(xs...);
+            auto indices = detail::get_indices(xs_as_tuple);
+            return detail::apply_args_suffxied(
+              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+              get(x, sum_type_token<Ts, Indices>{}));
+          }...};
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type)];
     VAST_ASSERT(dispatch);
@@ -1853,19 +1786,20 @@ struct sum_type_access<arrow::ArrayBuilder> final {
     VAST_ASSERT(x.type());
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::ArrayBuilder& x, Visitor&& v, Args&&... xs) -> Result {
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{+[](const arrow::ArrayBuilder& x, Visitor&& v,
+                              Args&&... xs) -> Result {
           auto xs_as_tuple = std::forward_as_tuple(xs...);
           auto indices = detail::get_indices(xs_as_tuple);
           return detail::apply_args_suffxied(
             std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
             get(x, sum_type_token<Ts, Indices>{}));
         }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
     VAST_ASSERT(dispatch);
@@ -2045,13 +1979,6 @@ struct formatter<T> {
   auto format(const vast::list_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "list<{}>", value.value_type());
-  }
-
-  template <class FormatContext>
-  auto format(const vast::map_type& value, FormatContext& ctx) const
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "map<{}, {}>", value.key_type(),
-                     value.value_type());
   }
 
   template <class FormatContext>

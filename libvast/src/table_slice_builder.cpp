@@ -387,28 +387,6 @@ append_builder(const list_type& hint,
 }
 
 arrow::Status
-append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
-               const view<type_to_data_t<map_type>>& view) noexcept {
-  if (auto status = builder.Append(); !status.ok())
-    return status;
-  auto append_values = [&](const concrete_type auto& key_type,
-                           const concrete_type auto& item_type) noexcept {
-    auto& key_builder = *builder.key_builder();
-    auto& item_builder = *builder.item_builder();
-    for (const auto& [key_view, item_view] : view) {
-      if (auto status = append_builder(key_type, key_builder, key_view);
-          !status.ok())
-        return status;
-      if (auto status = append_builder(item_type, item_builder, item_view);
-          !status.ok())
-        return status;
-    }
-    return arrow::Status::OK();
-  };
-  return caf::visit(append_values, hint.key_type(), hint.value_type());
-}
-
-arrow::Status
 append_builder(const record_type& hint,
                type_to_arrow_builder_t<record_type>& builder,
                const view<type_to_data_t<record_type>>& view) noexcept {

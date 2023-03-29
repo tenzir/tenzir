@@ -203,50 +203,6 @@ value_at([[maybe_unused]] const Type& type,
         caf::make_counted<list_view>(value_type, arr.value_slice(row))}};
     };
     return caf::visit(f, type.value_type());
-  } else if constexpr (std::is_same_v<Type, map_type>) {
-    auto f = [&]<concrete_type KeyType, concrete_type ItemType>(
-               const KeyType& key_type,
-               const ItemType& item_type) -> map_view_handle {
-      struct map_view final : map_view_handle::view_type {
-        map_view(KeyType key_type, ItemType item_type,
-                 std::shared_ptr<arrow::Array> key_array,
-                 std::shared_ptr<arrow::Array> item_array, int64_t value_offset,
-                 int64_t value_length)
-          : key_type{std::move(key_type)},
-            item_type{std::move(item_type)},
-            key_array{std::move(key_array)},
-            item_array{std::move(item_array)},
-            value_offset{value_offset},
-            value_length{value_length} {
-          // nop
-        }
-        value_type at(size_type i) const override {
-          VAST_ASSERT(!key_array->IsNull(value_offset + i));
-          if (item_array->IsNull(value_offset + i))
-            return {value_at(key_type, *key_array, value_offset + i), {}};
-          return {
-            value_at(key_type, *key_array, value_offset + i),
-            value_at(item_type, *item_array, value_offset + i),
-          };
-        };
-        size_type size() const noexcept override {
-          return detail::narrow_cast<size_type>(value_length);
-        };
-        KeyType key_type;
-        ItemType item_type;
-        std::shared_ptr<arrow::Array> key_array;
-        std::shared_ptr<arrow::Array> item_array;
-        int64_t value_offset;
-        int64_t value_length;
-      };
-      // Note that there's no `value_slice(...)` and `item_slice(...)` functions
-      // for map arrays in Arrow similar to the `value_slice(...)` function for
-      // list arrays, so we need to manually work with offsets and lengths here.
-      return map_view_handle{map_view_ptr{caf::make_counted<map_view>(
-        key_type, item_type, arr.keys(), arr.items(), arr.value_offset(row),
-        arr.value_length(row))}};
-    };
-    return caf::visit(f, type.key_type(), type.value_type());
   } else if constexpr (std::is_same_v<Type, record_type>) {
     struct record_view final : record_view_handle::view_type {
       record_view(record_type type, arrow::ArrayVector fields, int64_t row)

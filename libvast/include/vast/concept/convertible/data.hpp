@@ -322,89 +322,18 @@ caf::error convert(const list& src, To& dst, const list_type& t) {
   return caf::none;
 }
 
-// Overload for maps.
-// clang-format off
+// Overload for list<record> to record.
+// NOTE: This conversion type needs at least one field in the
+// record_type. The first field is pulled out and used
+// as the key for the new entry in the destination recors.
 template <concepts::insertable To>
   requires requires {
     typename To::key_type;
     typename To::mapped_type;
   }
-// clang-format on
-caf::error convert(const map& src, To& dst, const map_type& t) {
-  // TODO: Use structured bindings outside of the lambda once clang supports
-  // that.
-  for (const auto& x : src) {
-    auto err = [&] {
-      const auto& [data_key, data_value] = x;
-      typename To::key_type key{};
-      if (auto err = convert(data_key, key, t.key_type()))
-        return err;
-      typename To::mapped_type value{};
-      if (auto err = convert(data_value, value, t.value_type()))
-        return err;
-      return detail::insert_to_map(dst, std::move(key), std::move(value));
-    }();
-    if (err)
-      return detail::prepend(std::move(err), ".{}", x.first);
-  }
-  return caf::none;
-}
-
-// Overload for record to map.
-template <concepts::insertable To>
-  requires requires {
-    typename To::key_type;
-    typename To::mapped_type;
-  }
-caf::error convert(const record& src, To& dst, const map_type& t) {
-  // TODO: Use structured bindings outside of the lambda once clang supports
-  // that.
-  const auto kt = t.key_type();
-  const auto vt = t.value_type();
-  if (auto key = kt.attribute("key"))
-    return caf::make_error(ec::convert_error,
-                           fmt::format("expected a list of records with the "
-                                       "key field {}, but received record {}",
-                                       *key, src));
-  for (const auto& x : src) {
-    auto err = [&] {
-      const auto& [data_key, data_value] = x;
-      typename To::key_type key{};
-      if (auto err = convert(data_key, key, kt))
-        return err;
-      typename To::mapped_type value{};
-      if (auto err = convert(data_value, value, vt))
-        return err;
-      return detail::insert_to_map(dst, std::move(key), std::move(value));
-    }();
-    if (err)
-      return detail::prepend(std::move(err), ".{}", x.first);
-  }
-  return caf::none;
-}
-
-// Overload for list<record> to map.
-// NOTE: This conversion type needs a field with the "key" attribute in the
-// record_type. The field with the "key" attribute is pulled out and used
-// as the key for the new entry in the destination map.
-template <concepts::insertable To>
-  requires requires {
-    typename To::key_type;
-    typename To::mapped_type;
-  }
-caf::error convert(const list& src, To& dst, const map_type& t) {
-  const auto kt = t.key_type();
-  const auto vt = t.value_type();
-  const auto* rvt = caf::get_if<record_type>(&vt);
-  if (!rvt)
-    return caf::make_error(ec::convert_error,
-                           fmt::format(": expected a record_type, but got {}",
-                                       vt));
-  auto key_field_name = kt.attribute("key");
-  if (!key_field_name)
-    return caf::make_error(
-      ec::convert_error,
-      fmt::format(": record type in list is missing a key field: {}", *rvt));
+caf::error convert(const list& src, To& dst, const record_type& t) {
+  const auto rt = type{t};
+  auto key_field_name = t.field(0).name;
   // We now iterate over all elements in src, converting both key from the key
   // field and and value from the pruned record type.
   for (const auto& element : src) {
@@ -433,36 +362,29 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
       return nullptr;
     };
     auto key
-      = record_resolve_key(record_resolve_key, *element_rec, *key_field_name);
+      = record_resolve_key(record_resolve_key, *element_rec, key_field_name);
     if (!key)
       continue;
     typename To::key_type key_dst{};
-    if (auto err = convert(key->second, key_dst, kt))
+    if (auto err = convert(key->second, key_dst, rt))
       return caf::make_error(
         ec::convert_error,
         fmt::format("failed to convert map key {} of type "
                     "{} to {}: {}",
-                    key->second, kt, detail::pretty_type_name(key_dst), err));
+                    key->second, rt, detail::pretty_type_name(key_dst), err));
     typename To::mapped_type value_dst{};
-    auto stripped_record_prefix = *key_field_name;
+    auto stripped_record_prefix = key_field_name;
     stripped_record_prefix.remove_suffix(key->first.size() + 1);
     if (stripped_record_prefix.empty()) {
-      if (auto err = convert(*element_rec, value_dst, *rvt))
+      if (auto err = convert(*element_rec, value_dst, t))
         return caf::make_error(ec::convert_error,
                                fmt::format("failed to convert map value {} of "
                                            "type {} to {}: {}",
-                                           *element_rec, *rvt,
+                                           *element_rec, t,
                                            detail::pretty_type_name(value_dst),
                                            err));
     } else {
-      // We need to strip an outer layer before handling the value of the map.
-      auto stripped_vt_offset = rvt->resolve_key(stripped_record_prefix);
-      if (!stripped_vt_offset)
-        return caf::make_error(
-          ec::convert_error,
-          fmt::format("failed to strip outer record {} from {} for key {}",
-                      stripped_record_prefix, *rvt, *key_field_name));
-      auto stripped_vt = rvt->field(*stripped_vt_offset);
+      auto stripped_vt = t.field(0);
       // This cannot fail, we already know we can handle the full name, so we
       // can also handle a prefix to get the record.
       auto value = record_resolve_key(record_resolve_key, *element_rec,
@@ -591,8 +513,8 @@ caf::error convert(std::string_view src, To& dst) {
 template <class From, class To, class Type>
 concept is_concrete_typed_convertible
   = requires(const From& src, To& dst, const Type& type) {
-  { vast::convert(src, dst, type) } -> std::same_as<caf::error>;
-};
+      { vast::convert(src, dst, type) } -> std::same_as<caf::error>;
+    };
 
 // The same concept but this time to check for any untyped convert
 // overloads.

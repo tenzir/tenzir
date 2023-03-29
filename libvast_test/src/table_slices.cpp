@@ -119,48 +119,19 @@ table_slices::table_slices(std::string_view suite)
     // + ", [[1, 2, 3]]"s // vl
     // + ", [{1 -> true, 2 -> false, 3 -> true}]"s // vm
     ;
-  auto test_maps_left = ""s
-    + ", {true -> true}"s // maa
-    + ", {+7 -> true}"s // mba
-    + ", {42 -> true}"s // mca
-    + ", {4.2 -> true}"s // mda
-    + ", {1337ms -> true}"s // mea
-    + ", {2018-12-24 -> true}"s // mfa
-    + ", {\"foo\" -> true}"s // mga
-    /* + ", {/foo.*bar/ -> true}"s // mha */
-    + ", {127.0.0.1 -> true}"s // mia
-    + ", {10.0.0.0/8 -> true}"s // mja
-    // + ", {[1, 2, 3] -> true}"s // mla
-    // + ", {{1 -> true, 2 -> false, 3 -> true} -> true}"s // mna
-    ;
-  auto test_maps_right = ""s
-    // (intentionally no maa)
-    + ", {true -> +7}"s // mab
-    + ", {true -> 42}"s // mac
-    + ", {true -> 4.2}"s // mad
-    + ", {true -> 1337ms}"s // mae
-    + ", {true -> 2018-12-24}"s // maf
-    + ", {true -> \"foo\"}"s // mag
-    /* + ", {true -> /foo.*bar/}"s // mah */
-    + ", {true -> 127.0.0.1}"s // mai
-    + ", {true -> 10.0.0.0/8}"s // maj
-    // + ", {true -> [1, 2, 3]}"s // mal
-    // + ", {true -> {1 -> true, 2 -> false, 3 -> true}}"s // man
-    ;
+
   auto test_collections
     = test_lists
-    + test_maps_left
-    + test_maps_right
     ;
   // clang-format on
   // Initialize test data.
   auto rows = std::vector<std::string>{
     "[true, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", 127.0.0.1,"
-    " 10.0.0.0/8, [1, 2, 3], {1 -> true, 2 -> false, 3 -> true}"
+    " 10.0.0.0/8, [1, 2, 3]"
       + test_collections + ", \"aas\"]",
     "[false, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", ::1, "
     "64:ff9b::/96,"
-    " [], {}"
+    " []"
       + test_collections + ", \"aas\"]",
   };
   for (auto& row : rows) {

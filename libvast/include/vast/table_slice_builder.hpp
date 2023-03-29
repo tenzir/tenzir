@@ -179,10 +179,6 @@ append_builder(const list_type& hint,
                const view<type_to_data_t<list_type>>& view) noexcept;
 
 arrow::Status
-append_builder(const map_type& hint, type_to_arrow_builder_t<map_type>& builder,
-               const view<type_to_data_t<map_type>>& view) noexcept;
-
-arrow::Status
 append_builder(const record_type& hint,
                type_to_arrow_builder_t<record_type>& builder,
                const view<type_to_data_t<record_type>>& view) noexcept;

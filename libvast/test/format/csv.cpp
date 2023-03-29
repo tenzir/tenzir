@@ -57,8 +57,6 @@ struct fixture : fixtures::deterministic_actor_system {
       {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
       {"r2", double_type{}},
-      {"msa", map_type{string_type{}, ip_type{}}},
-      {"mcs", map_type{uint64_type{}, string_type{}}},
     },
   };
 
@@ -230,20 +228,6 @@ TEST(csv reader - subschema construction) {
   CHECK(slices[0].at(10, 1) == data{"gladness"});
 }
 
-std::string_view l2_log_msa = R"__(msa
-{ foo=1.2.3.4, bar=2001:db8:: })__";
-
-TEST(csv reader - map string->address) {
-  auto slices = run(l2_log_msa, 1, 1);
-  auto t = map_type{string_type{}, ip_type{}};
-  auto l2_msa = type{"l2", record_type{{"msa", t}}};
-  REQUIRE_EQUAL(slices[0].schema(), l2_msa);
-  auto m = vast::map{};
-  m.emplace(data{"foo"}, unbox(to<ip>("1.2.3.4")));
-  m.emplace(data{"bar"}, unbox(to<ip>("2001:db8::")));
-  CHECK_EQUAL(materialize(slices[0].at(0, 0)), data{m});
-}
-
 std::string_view l2_log_vp = R"__(lc
 [1, 2, 3, 4, 5]
 [])__";
@@ -286,9 +270,8 @@ TEST(csv reader - duration) {
         == data{unbox(to<duration>("42s"))});
 }
 
-std::string_view l2_log_reord
-  = R"__(msa, c, r, i, b,  a,  sn, d,  e,  t, lc, lt, r2
-{ foo=1.2.3.4, bar=2001:db8:: },424242,4.2,-1337,T,147.32.84.165,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,[ 5555,0],[ 2019-04-30T11:46:13Z ],3)__";
+std::string_view l2_log_reord = R"__(c, r, i, b,  a,  sn, d,  e,  t, lc, lt, r2
+424242,4.2,-1337,T,147.32.84.165,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,[ 5555,0],[ 2019-04-30T11:46:13Z ],3)__";
 // FIXME: Parsing maps in csv is broken, see ch12358.
 //   = R"__(msa, c, r, i, b,  a,  sn, d,  e,  t,  lc, lt, mcs
 // { foo=1.2.3.4, bar=2001:db8::
@@ -300,7 +283,6 @@ TEST(csv reader - reordered schema) {
   auto l2_sub = type{
     "l2",
     record_type{
-      {"msa", map_type{string_type{}, ip_type{}}},
       {"c", uint64_type{}},
       {"r", double_type{}},
       {"i", int64_type{}},
@@ -313,28 +295,23 @@ TEST(csv reader - reordered schema) {
       {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
       {"r2", double_type{}},
-      // FIXME: Parsing maps in csv is broken, see ch12358.
-      // {"mcs", map_type{uint64_type{}, string_type{}}}
     },
   };
   REQUIRE_EQUAL(slices[0].schema(), l2_sub);
-  CHECK((slices[0].at(0, 0)
-         == data{map{{data{"foo"}, unbox(to<ip>("1.2.3.4"))},
-                     {data{"bar"}, unbox(to<ip>("2001:db8::"))}}}));
-  CHECK(slices[0].at(0, 1) == data{uint64_t{424242}});
-  CHECK(slices[0].at(0, 2) == data{double{4.2}});
-  CHECK(slices[0].at(0, 3) == data{int64_t{-1337}});
-  CHECK(slices[0].at(0, 4) == data{true});
-  CHECK(slices[0].at(0, 5) == data{unbox(to<ip>("147.32.84.165"))});
-  CHECK(slices[0].at(0, 6) == data{unbox(to<subnet>("192.168.0.1/24"))});
-  CHECK(slices[0].at(0, 7) == data{unbox(to<duration>("42s"))});
-  CHECK(slices[0].at(0, 8) == data{enumeration{2}});
-  CHECK(slices[0].at(0, 9)
+  CHECK(slices[0].at(0, 0) == data{uint64_t{424242}});
+  CHECK(slices[0].at(0, 1) == data{double{4.2}});
+  CHECK(slices[0].at(0, 2) == data{int64_t{-1337}});
+  CHECK(slices[0].at(0, 3) == data{true});
+  CHECK(slices[0].at(0, 4) == data{unbox(to<ip>("147.32.84.165"))});
+  CHECK(slices[0].at(0, 5) == data{unbox(to<subnet>("192.168.0.1/24"))});
+  CHECK(slices[0].at(0, 6) == data{unbox(to<duration>("42s"))});
+  CHECK(slices[0].at(0, 7) == data{enumeration{2}});
+  CHECK(slices[0].at(0, 8)
         == data{unbox(to<vast::time>("2011-08-12+14:59:11.994970"))});
-  CHECK((slices[0].at(0, 10) == data{list{5555u, 0u}}));
-  CHECK(slices[0].at(0, 11)
+  CHECK((slices[0].at(0, 9) == data{list{5555u, 0u}}));
+  CHECK(slices[0].at(0, 10)
         == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
-  CHECK(slices[0].at(0, 12) == data{double{3.}});
+  CHECK(slices[0].at(0, 11) == data{double{3.}});
   // FIXME: Parsing maps in csv is broken, see ch12358.
   // auto m = map{};
   // m[1u] = data{"FOO"};

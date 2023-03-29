@@ -115,9 +115,6 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
         result.emplace_back(extract(value, vt));
       return result;
     },
-    [&](const map_type&) noexcept -> data {
-      return caf::none;
-    },
     [&](const record_type&) noexcept -> data {
       return caf::none;
     },
@@ -168,9 +165,6 @@ data extract(int64_t value, const type& type) {
     [&](const list_type& lt) noexcept -> data {
       return list{extract(value, lt.value_type())};
     },
-    [&](const map_type&) noexcept -> data {
-      return caf::none;
-    },
     [&](const record_type& rt) noexcept -> data {
       auto result = record{};
       result.reserve(rt.num_fields());
@@ -216,15 +210,6 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
     },
     [&](const list_type&) noexcept -> data {
       return caf::none;
-    },
-    [&](const map_type& mt) noexcept -> data {
-      auto result = map{};
-      result.reserve(value.size());
-      const auto kt = mt.key_type();
-      const auto vt = mt.value_type();
-      for (const auto& [k, v] : value)
-        result.emplace(extract(k, kt), extract(v, vt));
-      return result;
     },
     [&](const record_type& rt) noexcept -> data {
       // Adding nested records is a bit more complicated because we try to be
@@ -321,9 +306,6 @@ data extract(uint64_t value, const type& type) {
     [&](const list_type& lt) noexcept -> data {
       return list{extract(value, lt.value_type())};
     },
-    [&](const map_type&) noexcept -> data {
-      return caf::none;
-    },
     [&](const record_type& rt) noexcept -> data {
       auto result = record{};
       result.reserve(rt.num_fields());
@@ -372,9 +354,6 @@ data extract(double value, const type& type) {
     },
     [&](const list_type& lt) noexcept -> data {
       return list{extract(value, lt.value_type())};
-    },
-    [&](const map_type&) noexcept -> data {
-      return caf::none;
     },
     [&](const record_type& rt) noexcept -> data {
       auto result = record{};
@@ -451,9 +430,6 @@ data extract(std::string_view value, const type& type) {
     [&](const list_type& lt) noexcept -> data {
       return list{extract(value, lt.value_type())};
     },
-    [&](const map_type&) noexcept -> data {
-      return caf::none;
-    },
     [&](const record_type& rt) noexcept -> data {
       auto result = record{};
       result.reserve(rt.num_fields());
@@ -499,9 +475,6 @@ data extract(bool value, const type& type) {
     },
     [&](const list_type& lt) noexcept -> data {
       return list{extract(value, lt.value_type())};
-    },
-    [&](const map_type&) noexcept -> data {
-      return caf::none;
     },
     [&](const record_type& rt) noexcept -> data {
       auto result = record{};
@@ -639,10 +612,6 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(list{extract(value, lt.value_type())});
       VAST_ASSERT(added);
     },
-    [&](const map_type&) noexcept {
-      const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
-    },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
     },
@@ -711,10 +680,6 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(list{extract(value, lt.value_type())});
       VAST_ASSERT(added);
     },
-    [&](const map_type&) noexcept {
-      const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
-    },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
     },
@@ -772,10 +737,6 @@ void add(double value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(list{extract(value, lt.value_type())});
       VAST_ASSERT(added);
     },
-    [&](const map_type&) noexcept {
-      const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
-    },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
     },
@@ -827,10 +788,6 @@ void add(bool value, const type& type, table_slice_builder& builder) {
     },
     [&](const list_type& lt) noexcept {
       const auto added = builder.add(list{extract(value, lt.value_type())});
-      VAST_ASSERT(added);
-    },
-    [&](const map_type&) noexcept {
-      const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
     [&](const record_type&) noexcept {
@@ -959,10 +916,6 @@ void add(std::string_view value, const type& type,
       const auto added = builder.add(list{extract(value, lt.value_type())});
       VAST_ASSERT(added);
     },
-    [&](const map_type&) noexcept {
-      const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
-    },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
     },
@@ -980,22 +933,6 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
     for (const auto& field : schema.fields()) {
       auto handle_found = [&](const ::simdjson::dom::element& element) {
         auto f = detail::overload{
-          [&](const map_type& mt) {
-            if (element.is_object()) {
-              const auto object = element.get_object().value();
-              auto result = map{};
-              result.reserve(object.size());
-              const auto kt = mt.key_type();
-              const auto vt = mt.value_type();
-              for (const auto& [k, v] : object)
-                result.emplace(extract(k, kt), extract(v, vt));
-              const auto added = builder.add(result);
-              VAST_ASSERT(added);
-            } else {
-              const auto added = builder.add(caf::none);
-              VAST_ASSERT(added);
-            }
-          },
           [&](const record_type& rt) {
             if (element.is_object()) {
               auto err = self(self, element.get_object().value(), rt, "");

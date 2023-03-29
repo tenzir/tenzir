@@ -96,33 +96,6 @@ caf::expected<type> to_enum(std::string_view name, const data& enumeration,
   return type{name, enumeration_type{enum_fields}, std::move(attributes)};
 }
 
-caf::expected<type> to_map(std::string_view name, const data& map_to_parse,
-                           std::vector<type::attribute_view>&& attributes,
-                           const std::vector<type>& known_types) {
-  const auto* map_record_ptr = caf::get_if<record>(&map_to_parse);
-  if (map_record_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "a map type must be specified as "
-                                            "a YAML dictionary");
-  const auto& map_record = *map_record_ptr;
-  auto found_key = map_record.find("key");
-  auto found_value = map_record.find("value");
-  if (found_key == map_record.end() || found_value == map_record.end())
-    return caf::make_error(ec::parse_error, "a map type must have both a key "
-                                            "and a value");
-  auto key_type_expected = to_type(known_types, found_key->second);
-  if (!key_type_expected)
-    return caf::make_error(ec::parse_error,
-                           fmt::format("failed to parse map key: {}",
-                                       key_type_expected.error()));
-  auto value_type_expected = to_type(known_types, found_value->second);
-  if (!value_type_expected)
-    return caf::make_error(ec::parse_error,
-                           fmt::format("failed to parse map value: {}",
-                                       value_type_expected.error()));
-  return type{name, map_type{*key_type_expected, *value_type_expected},
-              std::move(attributes)};
-}
-
 caf::expected<type>
 to_record_algebra(std::string_view name, const data& record_algebra,
                   std::vector<type::attribute_view>&& attributes,
@@ -313,17 +286,14 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
   auto found_type = declaration_record.find("type");
   auto found_enum = declaration_record.find("enum");
   auto found_list = declaration_record.find("list");
-  auto found_map = declaration_record.find("map");
   auto found_record = declaration_record.find("record");
   auto is_type_found = found_type != declaration_record.end();
   auto is_enum_found = found_enum != declaration_record.end();
   auto is_list_found = found_list != declaration_record.end();
-  auto is_map_found = found_map != declaration_record.end();
   auto is_record_found = found_record != declaration_record.end();
   int type_selector_cnt
     = static_cast<int>(is_type_found) + static_cast<int>(is_enum_found)
-      + static_cast<int>(is_list_found) + static_cast<int>(is_map_found)
-      + static_cast<int>(is_record_found);
+      + static_cast<int>(is_list_found) + static_cast<int>(is_record_found);
   if (type_selector_cnt != 1)
     return caf::make_error(ec::parse_error, "one of type, enum, list, map, "
                                             "record is expected");
@@ -348,9 +318,6 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
                                          type_expected.error()));
     return type{name, list_type{*type_expected}, std::move(attributes)};
   }
-  // Map
-  if (is_map_found)
-    return to_map(name, found_map->second, std::move(attributes), known_types);
   // Record or Record algebra
   if (is_record_found) {
     const auto* record_list_ptr = caf::get_if<list>(&found_record->second);
@@ -520,22 +487,6 @@ TEST(YAML Type - Parsing list_type) {
   };
   auto result = unbox(to_type(known_types, list_type_wo_attrs));
   auto expected_type = type{"list_field", list_type{uint64_type{}}};
-  CHECK_EQUAL(result, expected_type);
-}
-
-TEST(YAML Type - Parsing map_type) {
-  std::vector<type> known_types;
-  auto map_type_wo_attrs = record::value_type{
-    "map_field",
-    record{
-      {"map", record{{"key", "count"}, {"value", "string"}}},
-    },
-  };
-  auto result = unbox(to_type(known_types, map_type_wo_attrs));
-  auto expected_type = type{
-    "map_field",
-    map_type{uint64_type{}, string_type{}},
-  };
   CHECK_EQUAL(result, expected_type);
 }
 

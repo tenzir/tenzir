@@ -71,23 +71,6 @@ caf::error validate_(const vast::data& data, const vast::type& type,
         }
         return caf::error{};
       },
-      [&](const vast::map_type& map_type) {
-        const auto* map = caf::get_if<vast::map>(&data);
-        if (!map)
-          return caf::make_error(ec::invalid_configuration,
-                                 fmt::format("expected map at {}", prefix));
-        for (const auto& [k, v] : *map) {
-          if (auto error
-              = validate_(k, map_type.key_type(), mode,
-                          fmt::format("{}.{}", prefix, k), depth + 1))
-            return error;
-          if (auto error
-              = validate_(v, map_type.value_type(), mode,
-                          fmt::format("{}[{}]", prefix, k), depth + 1))
-            return error;
-        }
-        return caf::error{};
-      },
       [&](const vast::record_type& record_type) {
         auto record = caf::get_if<vast::record>(&data);
         if (!record)

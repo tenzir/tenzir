@@ -50,23 +50,15 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
 }
 
-const type concepts_data_schema = type{map_type{
-  type{string_type{}, {{"key", "concept.name"}}},
-  record_type{
-    {"concept", concept_::schema()},
-  },
-}};
+const type concepts_data_schema
+  = type{record_type{{"concept.name", concept_::schema()}}};
 
 bool operator==(const model& lhs, const model& rhs) {
   return lhs.definition == rhs.definition;
 }
 
-const type models_data_schema = type{map_type{
-  type{string_type{}, {{"key", "model.name"}}},
-  record_type{
-    {"model", model::schema()},
-  },
-}};
+const type models_data_schema
+  = type{record_type{{"model.name", model::schema()}}};
 
 bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
   return lhs.concepts == rhs.concepts && lhs.models == rhs.models;

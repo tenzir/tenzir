@@ -48,8 +48,8 @@ TEST(json to data) {
       {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
       {"rec", record_type{{"c", uint64_type{}}, {"s", string_type{}}}},
-      {"msa", map_type{string_type{}, ip_type{}}},
-      {"mcs", map_type{uint64_type{}, string_type{}}},
+      {"msa", record_type{{"foo", ip_type{}}, {"bar", ip_type{}}}},
+      {"mcs", record_type{{"1", string_type{}}, {"1024", string_type{}}}},
     },
   };
   auto builder = std::make_shared<table_slice_builder>(schema);
@@ -69,7 +69,7 @@ TEST(json to data) {
     "lc": [ "0x3e7", 19, 5555, 0 ],
     "lt": [ 1556624773, "2019-04-30T11:46:13Z" ],
     "rec": { "c": 421, "s":"test" },
-    "msa": { "foo": "1.2.3.4", "bar": "2001:db8::" },
+    "msa": { "foo": "147.32.84.165", "bar": "2001:db8::" },
     "mcs": { "1": "FOO", "1024": "BAR!" }
   })json";
   ::simdjson::dom::parser p;
@@ -100,10 +100,12 @@ TEST(json to data) {
   CHECK(slice.at(0, 12) == data{lc});
   CHECK(slice.at(0, 14) == data{uint64_t{421}});
   CHECK(slice.at(0, 15) == data{std::string{"test"}});
-  auto reference = map{};
-  reference[uint64_t{1}] = data{"FOO"};
-  reference[uint64_t{1024}] = data{"BAR!"};
-  CHECK_EQUAL(materialize(slice.at(0, 17)), data{reference});
+  CHECK(slice.at(0, 16) == data{ip::v4(std::span{addr1})});
+  std::array<std::uint8_t, 16> addr3{32, 1, 13, 184, 0, 0, 0, 0,
+                                     0,  0, 0,  0,   0, 0, 0, 0};
+  CHECK(slice.at(0, 17) == data{ip::v6(std::span{addr3})});
+  CHECK(slice.at(0, 18) == data{std::string{"FOO"}});
+  CHECK(slice.at(0, 19) == data{std::string{"BAR!"}});
 }
 
 TEST(json hex number parser) {

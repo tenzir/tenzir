@@ -130,7 +130,6 @@ class int64_type;
 class legacy_abstract_type;
 class legacy_type;
 class list_type;
-class map_type;
 class module;
 class null_bitmap;
 class passive_store;

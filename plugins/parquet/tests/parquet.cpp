@@ -171,14 +171,11 @@ namespace {
 
 struct table_slice_fixture {
   enumeration_type et = enumeration_type{{"foo"}, {"bar"}, {"bank"}};
-  map_type mt_et_count = map_type{et, uint64_type{}};
-  map_type mt_addr_et = map_type{ip_type{}, et};
-  map_type mt_string_subnet = map_type{string_type{}, subnet_type{}};
   list_type lt = list_type{subnet_type{}};
   list_type elt = list_type{et};
   record_type rt = record_type{
-    {"f9_1", et},
-    {"f9_2", string_type{}},
+    {"f8_1", et},
+    {"f8_2", string_type{}},
   };
   // nested record of record to simulate multiple nesting levels
   record_type rrt = record_type{
@@ -202,12 +199,9 @@ struct table_slice_fixture {
     {"f5", subnet_type{}},
     {"f6", et},
     {"f7", lt},
-    {"f8", mt_et_count},
-    {"f9", elt},
-    {"f10", mt_addr_et},
-    {"f11", mt_string_subnet},
-    {"f12", rrt},
-    {"f13", duration_type{}},
+    {"f8", elt},
+    {"f9", rrt},
+    {"f10", duration_type{}},
   };
   list f1_string = list{"n1", "n2", {}, "n4"};
   list f2_count = list{1_c, {}, 3_c, 4_c};
@@ -231,48 +225,22 @@ struct table_slice_fixture {
     list{f5_subnet[3], f5_subnet[2]},
     {},
   };
-  list f8_map_enum_count = list{
-    map{{0_e, 42_c}, {1_e, 23_c}},
-    map{{2_e, 0_c}, {0_e, caf::none}, {1_e, 2_c}},
-    map{{1_e, 42_c}, {2_e, caf::none}},
-    map{},
-  };
-  list f9_enum_list = list{
+  list f8_enum_list = list{
     list{{1_e, 2_e, caf::none}},
     caf::none,
     list{{caf::none}},
     list{{0_e, 2_e, caf::none}},
   };
-  list f10_map_addr_enum = list{
-    map{{unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")), 0_e},
-        {unbox(to<ip>("2001:db8::")), caf::none}},
-    map{},
-    caf::none,
-    map{{unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")), 1_e},
-        {unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")), caf::none}},
-  };
-  list f11_map_string_subnet = list{
-    map{{"l8", unbox(to<subnet>("172.16.7.0/8"))},
-        {"l16", unbox(to<subnet>("172.16.0.0/16"))},
-        {"l24", unbox(to<subnet>("172.0.0.0/24"))}},
-    map{{"l64", unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/64"))},
-        {"l96", unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/96"))},
-        {"l128", unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/"
-                                  "128"))}},
-    map{},
-    caf::none,
-  };
-  list f12_duration
+  list f9_duration
     = list{duration{13323100000}, caf::none, caf::none, caf::none};
   table_slice slice = make_slice(
     t, f1_string, f2_count, f3_string, f4_address, f5_subnet, f6_enum,
-    f7_list_subnet, f8_map_enum_count, f9_enum_list, f10_map_addr_enum,
-    f11_map_string_subnet,
-    f6_enum,    // f12_1_1 re-using existing data arrays for convenience
-    f5_subnet,  // f12_1_2
-    f4_address, // f12_2_1
-    f3_string,  // f12_2_2
-    f12_duration);
+    f7_list_subnet, f8_enum_list,
+    f6_enum,    // f9_1_1 re-using existing data arrays for convenience
+    f5_subnet,  // f9_1_2
+    f4_address, // f9_2_1
+    f3_string,  // f9_2_2
+    f9_duration);
 };
 
 } // namespace

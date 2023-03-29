@@ -71,7 +71,8 @@ type deduce(simdjson::dom::element e) {
       auto fields = std::vector<record_type::field_view>{};
       auto xs = e.get_object();
       if (xs.size() == 0)
-        return type{map_type{string_type{}, type{}}};
+        // TODO: Allow empty record_types for deduction failures such as these.
+        return {};
       fields.reserve(xs.size());
       for (auto [k, v] : xs)
         fields.push_back({k, deduce(v)});

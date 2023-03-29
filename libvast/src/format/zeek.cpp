@@ -127,9 +127,6 @@ std::string to_zeek_string(const type& t) {
     [](const list_type& lt) -> std::string {
       return fmt::format("vector[{}]", to_zeek_string(lt.value_type()));
     },
-    [](const map_type&) -> std::string {
-      return "map";
-    },
     [](const record_type&) -> std::string {
       return "record";
     },

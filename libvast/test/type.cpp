@@ -269,34 +269,6 @@ TEST(list_type) {
   CHECK_EQUAL(tlit.to_definition(), expected_definition);
 }
 
-TEST(map_type) {
-  static_assert(concrete_type<map_type>);
-  static_assert(!basic_type<map_type>);
-  static_assert(complex_type<map_type>);
-  const auto t = type{};
-  const auto tmsit = type{map_type{string_type{}, int64_type{}}};
-  const auto msit = map_type{string_type{}, int64_type{}};
-  CHECK(tmsit);
-  CHECK_EQUAL(as_bytes(tmsit), as_bytes(msit));
-  CHECK(t != tmsit);
-  CHECK(t < tmsit);
-  CHECK(t <= tmsit);
-  CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int64>");
-  CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<none, none>");
-  CHECK(!caf::holds_alternative<map_type>(t));
-  CHECK(caf::holds_alternative<map_type>(tmsit));
-  CHECK_EQUAL(caf::get<map_type>(tmsit).key_type(), type{string_type{}});
-  CHECK_EQUAL(caf::get<map_type>(tmsit).value_type(), type{int64_type{}});
-  const auto lmabt = type::from_legacy_type(
-    legacy_map_type{legacy_address_type{}, legacy_bool_type{}});
-  CHECK(caf::holds_alternative<map_type>(lmabt));
-  CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{ip_type{}});
-  CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
-  const auto expected_definition
-    = data{record{{"map", record{{"key", "string"}, {"value", "int64"}}}}};
-  CHECK_EQUAL(tmsit.to_definition(), expected_definition);
-}
-
 TEST(record_type) {
   static_assert(concrete_type<record_type>);
   static_assert(!basic_type<record_type>);
@@ -652,15 +624,6 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(list{}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{caf::none}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{bool{}}), list_type{bool_type{}});
-  CHECK_EQUAL(type::infer(map{}), (map_type{type{}, type{}}));
-  CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}),
-              (map_type{type{}, type{}}));
-  CHECK_EQUAL(type::infer(map{{caf::none, int64_t{}}}),
-              (map_type{type{}, int64_type{}}));
-  CHECK_EQUAL(type::infer(map{{bool{}, caf::none}}),
-              (map_type{bool_type{}, type{}}));
-  CHECK_EQUAL(type::infer(map{{bool{}, int64_t{}}}),
-              (map_type{bool_type{}, int64_type{}}));
   const auto r = record{
     {"a", bool{}},
     {"b", int64_t{}},
@@ -954,8 +917,6 @@ TEST(hashes) {
               "0xFFF139D14A6FFAA4");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(list_type{int64_type{}})), "0x2F697BD2"
                                                                     "223CA310");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(map_type{time_type{}, string_type{}})),
-              "0x355D5293D16CC7CD");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(record_type{{"a", ip_type{}},
                                                      {"b", bool_type{}}})),
               "0xC262CE1B00968C16");
@@ -1080,7 +1041,6 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{subnet_type{}});
   CHECK_ROUNDTRIP(type{enumeration_type{{"a"}, {"b"}, {"c"}}});
   CHECK_ROUNDTRIP(type{list_type{int64_type{}}});
-  CHECK_ROUNDTRIP(type{map_type{ip_type{}, subnet_type{}}});
   const auto rt = type{record_type{
     {"i", int64_type{}},
     {"r1",

@@ -95,6 +95,7 @@ union Type {
   subnet_type: SubnetType,
   enumeration_type: EnumerationType,
   list_type: ListType,
+  // NOTE: The MapType was removed with VAST >v3.0.2.
   map_type: MapType,
   record_type: RecordType,
   enriched_type: detail.EnrichedType,

@@ -229,25 +229,6 @@ bool type_check(const type& x, const data_view& y) {
       }
       return false;
     },
-    [&](const map_type& t, const view<map>& u) {
-      if (u.empty())
-        return true;
-      const auto kt = t.key_type();
-      const auto vt = t.value_type();
-      auto it = u.begin();
-      const auto check = [&](const auto& d) noexcept {
-        return type_check(kt, d.first) && type_check(vt, d.second);
-      };
-      if (check(*it)) {
-        // Technically maps can contain heterogeneous data,
-        // but for optimization purposes we only check the
-        // first element when assertions are disabled.
-        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
-                    "expected a homogenous map");
-        return true;
-      }
-      return false;
-    },
     [&](const record_type& t, const view<record>& u) {
       if (u.size() != t.num_fields())
         return false;

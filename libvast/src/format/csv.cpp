@@ -317,16 +317,6 @@ struct container_parser_builder {
               >> ']')
                ->*list_insert;
       // clang-format on
-    } else if constexpr (std::is_same_v<T, map_type>) {
-      auto ws = ignore(*(parsers::space - opt_.separator));
-      auto map_insert = [](std::vector<std::pair<Attribute, Attribute>> xs) {
-        return map(std::make_move_iterator(xs.begin()),
-                   std::make_move_iterator(xs.end()));
-      };
-      // clang-format off
-      auto kvp =
-        caf::visit(*this, t.key_type()) >> ws >> opt_.kvp_separator >> ws >> caf::visit(*this, t.value_type());
-      return (ws >> '{' >> ws >> (kvp % (ws >> opt_.set_separator >> ws)) >> ws >> '}' >> ws) ->* map_insert;
     } else if constexpr (std::is_same_v<T, double_type>) {
       // The default parser for real's requires the dot, so we special-case the
       // real parser here.
@@ -415,9 +405,6 @@ struct csv_parser_factory {
         // clang-format off
       return (field ->* to_enumeration).with(add_t<enumeration>{bptr_});
         // clang-format on
-      } else if constexpr (detail::is_any_v<U, list_type, map_type>) {
-        auto pb = container_parser_builder<Iterator, data>{opt_};
-        return (-caf::visit(pb, t)).with(add_t<data>{bptr_});
       } else if constexpr (std::is_same_v<U, double_type>) {
         // The default parser for real's requires the dot, so we special-case
         // the real parser here.
@@ -427,6 +414,9 @@ struct csv_parser_factory {
         using value_type = type_to_data_t<U>;
         auto p = make_parser<value_type>{};
         return (-(quoted_parser{p} | p)).with(add_t<value_type>{bptr_});
+      } else if constexpr (std::is_same_v<U, list_type>) {
+        auto pb = container_parser_builder<Iterator, data>{opt_};
+        return (-caf::visit(pb, t)).with(add_t<data>{bptr_});
       } else {
         VAST_ERROR("csv parser builder failed to fetch a parser for type "
                    "{}",

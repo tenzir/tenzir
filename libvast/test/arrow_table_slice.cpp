@@ -567,20 +567,6 @@ TEST(single column - list of list of integers) {
   record_batch_roundtrip(slice);
 }
 
-TEST(single column - map) {
-  auto t = map_type{string_type{}, uint64_type{}};
-  record_type schema{{"values", t}};
-  map map1{{"foo"s, 42_c}, {"bar"s, 23_c}};
-  map map2{{"a"s, 0_c}, {"b"s, {}}, {"c", 2_c}};
-  auto slice = make_slice(schema, map1, map2, caf::none);
-  REQUIRE_EQUAL(slice.rows(), 3u);
-  CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), map1);
-  CHECK_VARIANT_EQUAL(materialize(*slice.at(1, 0, t)), map2);
-  CHECK(!slice.at(2, 0, t));
-  CHECK_ROUNDTRIP(slice);
-  record_batch_roundtrip(slice);
-}
-
 TEST(single column - serialization) {
   auto t = uint64_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
@@ -652,7 +638,6 @@ TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{subnet_type{}});
   field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
   field_roundtrip(type{list_type{int64_type{}}});
-  field_roundtrip(type{map_type{int64_type{}, ip_type{}}});
   field_roundtrip(
     type{record_type{{"key", int64_type{}}, {"value", ip_type{}}}});
   field_roundtrip(type{record_type{{"a", string_type{}}, {"b", ip_type{}}}});
@@ -677,13 +662,6 @@ TEST(arrow names and attrs roundtrip) {
   field_roundtrip(deeply_nested_type);
   field_roundtrip(
     type{"my_list_outer", list_type{type{"inner", deeply_nested_type}}});
-  field_roundtrip(type{
-    "my_map",
-    map_type{
-      type{"my_keys", name_n_attrs_type},
-      type{"my_vals", deeply_nested_type},
-    },
-  });
 }
 
 auto schema_roundtrip(const type& t) {
@@ -755,7 +733,6 @@ TEST(arrow record type to schema roundtrip tp) {
 
 TEST(full_table_slice) {
   auto et = enumeration_type{{"foo"}, {"bar"}, {"baz"}};
-  auto mt = map_type{et, uint64_type{}};
   auto lt = list_type{subnet_type{}};
   auto rt = record_type{
     {"f9_1", et},
@@ -783,10 +760,9 @@ TEST(full_table_slice) {
     {"f5", subnet_type{}},
     {"f6", et},
     {"f7", lt},
-    {"f8", mt},
-    {"f9", rt},
-    {"f10", lrt},
-    {"f11", rrt},
+    {"f8", rt},
+    {"f9", lrt},
+    {"f10", rrt},
   };
   auto f1_string = list{"n1", "n2", {}, "n4"};
   auto f2_count = list{1_c, {}, 3_c, 4_c};
@@ -827,7 +803,7 @@ TEST(full_table_slice) {
   };
   auto slice = make_slice(
     t, f1_string, f2_count, f3_string, f4_address, f5_subnet, f6_enum,
-    f7_list_subnet, f8_map_enum_count, f9_1_enum, f9_2_string, f10_list_record,
+    f7_list_subnet, f9_1_enum, f9_2_string, f10_list_record,
     f6_enum,    // f11_1_1 re-using existing data arrays for convenience
     f2_count,   // f11_1_2
     f4_address, // f11_2_1
@@ -840,14 +816,13 @@ TEST(full_table_slice) {
   check_column(slice, 4, subnet_type{}, f5_subnet);
   check_column(slice, 5, et, f6_enum);
   check_column(slice, 6, lt, f7_list_subnet);
-  check_column(slice, 7, mt, f8_map_enum_count);
-  check_column(slice, 8, et, f9_1_enum);
-  check_column(slice, 9, string_type{}, f9_2_string);
-  check_column(slice, 10, lrt, f10_list_record);
-  check_column(slice, 11, et, f6_enum);                // f11_1_1
-  check_column(slice, 12, uint64_type{}, f2_count);    // f11_1_2
-  check_column(slice, 13, ip_type{}, f4_address);      // f11_2_1
-  check_column(slice, 14, string_type{}, f3_string);   // f11_2_2
+  check_column(slice, 7, et, f9_1_enum);
+  check_column(slice, 8, string_type{}, f9_2_string);
+  check_column(slice, 9, lrt, f10_list_record);
+  check_column(slice, 10, et, f6_enum);              // f11_1_1
+  check_column(slice, 11, uint64_type{}, f2_count);  // f11_1_2
+  check_column(slice, 12, ip_type{}, f4_address);    // f11_2_1
+  check_column(slice, 13, string_type{}, f3_string); // f11_2_2
   MESSAGE("test is_serilaized");
   CHECK(slice.is_serialized());
   auto slice2 = table_slice{to_record_batch(slice)};

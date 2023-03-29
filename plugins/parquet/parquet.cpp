@@ -148,19 +148,6 @@ align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
           fixed_array, list_array->null_bitmap(), list_array->null_count());
       return {};
     },
-    [&](const map_type& mt) -> std::shared_ptr<arrow::Array> {
-      auto ma = std::static_pointer_cast<arrow::MapArray>(array);
-      auto key_array = align_array_to_type(mt.key_type(), ma->keys());
-      auto val_array = align_array_to_type(mt.value_type(), ma->items());
-      if (!key_array && !val_array)
-        return {};
-      auto ka = key_array ? key_array : ma->keys();
-      auto va = val_array ? val_array : ma->items();
-      return std::make_shared<arrow::MapArray>(mt.to_arrow_type(), ma->length(),
-                                               ma->value_offsets(), ka, va,
-                                               ma->null_bitmap(),
-                                               ma->null_count());
-    },
     [&](const record_type& rt) -> std::shared_ptr<arrow::Array> {
       auto struct_array = std::static_pointer_cast<arrow::StructArray>(array);
       auto it = struct_array->fields().begin();
@@ -202,9 +189,6 @@ restore_enum_chunk_array(const vast::type& t,
       return map_chunked_array(et, array, fix_enum_array);
     },
     [&](const list_type&) -> std::shared_ptr<arrow::ChunkedArray> {
-      return map_chunked_array(t, array, align_array_to_type);
-    },
-    [&](const map_type&) -> std::shared_ptr<arrow::ChunkedArray> {
       return map_chunked_array(t, array, align_array_to_type);
     },
     [&](const record_type&) -> std::shared_ptr<arrow::ChunkedArray> {

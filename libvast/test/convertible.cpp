@@ -435,79 +435,6 @@ TEST(list to vector of struct) {
   CHECK_EQUAL(x.xs[1].value, 1337);
 }
 
-TEST(map to map) {
-  using Map = vast::detail::flat_map<uint64_t, std::string>;
-  auto x = Map{};
-  auto schema = map_type{uint64_type{}, string_type{}};
-  auto r = map{{1u, "foo"}, {12u, "bar"}, {997u, "baz"}};
-  REQUIRE_EQUAL(convert(r, x, schema), ec::no_error);
-  REQUIRE_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(x[1], "foo");
-  CHECK_EQUAL(x[12], "bar");
-  CHECK_EQUAL(x[997], "baz");
-}
-
-TEST(record to map) {
-  using Map = vast::detail::stable_map<std::string, X<int64_t>>;
-  auto x = Map{};
-  auto schema = map_type{string_type{}, record_type{{"value", int64_type{}}}};
-  auto r = record{{"foo", record{{"value", int64_t{-42}}}},
-                  {"bar", record{{"value", int64_t{1337}}}},
-                  {"baz", record{{"value", int64_t{997}}}}};
-  REQUIRE_EQUAL(convert(r, x, schema), ec::no_error);
-  REQUIRE_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(x["foo"].value, -42);
-  CHECK_EQUAL(x["bar"].value, 1337);
-  CHECK_EQUAL(x["baz"].value, 997);
-}
-
-TEST(list of record to map) {
-  using T = X<int64_t>;
-  auto x = vast::detail::stable_map<std::string, T>{};
-  auto schema = map_type{
-    type{string_type{}, {{"key", "outer.name"}}},
-    record_type{
-      {"outer",
-       record_type{
-         {"value", int64_type{}},
-       }},
-    },
-  };
-  auto l1 = list{
-    record{
-      {"outer",
-       record{
-         {"name", "x"},
-         {"value", int64_t{1}},
-       }},
-    },
-    record{
-      {"outer",
-       record{
-         {"name", "y"},
-         {"value", int64_t{82}},
-       }},
-    },
-  };
-  REQUIRE_EQUAL(convert(l1, x, schema), ec::no_error);
-  auto l2 = list{
-    record{
-      {"outer",
-       record{
-         {"name", "z"},
-         {"value", int64_t{-42}},
-       }},
-    },
-  };
-  REQUIRE_EQUAL(convert(l2, x, schema), ec::no_error);
-  REQUIRE_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(x["x"].value, 1);
-  CHECK_EQUAL(x["y"].value, 82);
-  CHECK_EQUAL(x["z"].value, -42);
-  // Assigning the same keys again should fail.
-  REQUIRE_EQUAL(convert(l2, x, schema), ec::convert_error);
-}
-
 struct iList {
   std::vector<uint64_t> value;
 
@@ -531,58 +458,6 @@ struct iList {
   }
 };
 
-TEST(list of record to map monoid) {
-  auto x = vast::detail::stable_map<std::string, iList>{};
-  auto schema = map_type{
-    type{string_type{}, {{"key", "outer.name"}}},
-    record_type{
-      {"outer", iList::schema()},
-    },
-  };
-  auto l1 = list{
-    record{
-      {"outer",
-       record{
-         {"name", "x"},
-         {"value", list{uint64_t{1}, uint64_t{3}}},
-       }},
-    },
-    record{
-      {"outer",
-       record{
-         {"name", "y"},
-         {"value", list{uint64_t{82}}},
-       }},
-    },
-  };
-  REQUIRE_EQUAL(convert(l1, x, schema), ec::no_error);
-  auto l2 = list{
-    record{
-      {"outer",
-       record{
-         {"name", "x"},
-         {"value", list{uint64_t{42}}},
-       }},
-    },
-    record{
-      {"outer",
-       record{
-         {"name", "y"},
-         {"value", list{uint64_t{121}}},
-       }},
-    },
-  };
-  REQUIRE_EQUAL(convert(l2, x, schema), ec::no_error);
-  REQUIRE_EQUAL(x.size(), 2u);
-  REQUIRE_EQUAL(x["x"].value.size(), 3u);
-  CHECK_EQUAL(x["x"].value[0], 1u);
-  CHECK_EQUAL(x["x"].value[1], 3u);
-  CHECK_EQUAL(x["x"].value[2], 42u);
-  REQUIRE_EQUAL(x["y"].value.size(), 2u);
-  CHECK_EQUAL(x["y"].value[0], 82u);
-  CHECK_EQUAL(x["y"].value[1], 121u);
-}
-
 struct OptVec {
   constexpr inline static bool use_deep_to_string_formatter = true;
 
@@ -602,44 +477,6 @@ struct OptVec {
     return result;
   }
 };
-
-struct SMap {
-  constexpr inline static bool use_deep_to_string_formatter = true;
-
-  vast::detail::stable_map<std::string, OptVec> xs;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, SMap& x) {
-    return f.apply(x.xs);
-  }
-
-  inline static const record_type& schema() noexcept {
-    static const auto result = record_type{
-      {"xs", map_type{string_type{}, OptVec::schema()}},
-    };
-    return result;
-  }
-};
-
-TEST(record with list to optional vector) {
-  auto x = SMap{};
-  auto r = record{{"xs", record{{"foo", record{{"ovs", list{"a", "b", "c"}},
-                                               {"ou", caf::none}}},
-                                {"bar", record{{"ovs", list{"x", "y", "z"}}}},
-                                {"baz", record{{"ou", int64_t{42}}}}}}};
-  REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK(x.xs.contains("foo"));
-  CHECK(x.xs.contains("bar"));
-  CHECK(x.xs.contains("baz"));
-  CHECK(x.xs["foo"].ovs);
-  CHECK_EQUAL(x.xs["foo"].ovs->size(), 3u);
-  CHECK_EQUAL(x.xs["foo"].ou, uint64_t{0});
-  CHECK(x.xs["bar"].ovs);
-  CHECK_EQUAL(x.xs["bar"].ou, uint64_t{0});
-  CHECK_EQUAL(x.xs["bar"].ovs->size(), 3u);
-  CHECK(!x.xs["baz"].ovs);
-  CHECK_EQUAL(*x.xs["baz"].ou, 42u);
-}
 
 TEST(conversion to float) {
   float fdest = 0;
