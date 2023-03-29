@@ -17,7 +17,7 @@ Checks: >
   -hicpp-*,
   -llvm-header-guard,
   -llvmlibc-*,
-  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
   -readability-braces-around-statements,
   -readability-else-after-return,
   -readability-function-cognitive-complexity,
@@ -35,5 +35,7 @@ CheckOptions:
   - key:             misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
     value:           true
   - key:             cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
+    value:           true
+  - key:             cppcoreguidelines-avoid-do-while.IgnoreMacros
     value:           true
 ...

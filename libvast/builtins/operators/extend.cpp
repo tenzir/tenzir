@@ -12,7 +12,7 @@
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
-#include <vast/pipeline_operator.hpp>
+#include <vast/legacy_pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
@@ -100,7 +100,7 @@ struct configuration {
   indexed_transformation::function_type transformation = {};
 };
 
-class extend_operator : public pipeline_operator {
+class extend_operator : public legacy_pipeline_operator {
 public:
   explicit extend_operator(configuration config) noexcept
     : config_{std::move(config)} {
@@ -144,7 +144,7 @@ public:
     return "extend";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& config) const override {
     auto parsed_config = configuration::make(config);
     if (!parsed_config)
@@ -152,8 +152,8 @@ public:
     return std::make_unique<extend_operator>(std::move(*parsed_config));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::data, parsers::end_of_pipeline_operator,

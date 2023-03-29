@@ -6,9 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/pipeline_operator.hpp"
-
 #include "vast/error.hpp"
+#include "vast/legacy_pipeline_operator.hpp"
 #include "vast/plugin.hpp"
 
 #include <fmt/format.h>
@@ -20,7 +19,7 @@ namespace vast {
 // plugins would be registered at startup. However, that will require some more
 // refactoring since `plugins::get()` only gives us unique pointers, so we can't
 // really store the plugin anywhere to later create an operator from it.
-caf::expected<std::unique_ptr<pipeline_operator>>
+caf::expected<std::unique_ptr<legacy_pipeline_operator>>
 make_pipeline_operator(const std::string& name, const vast::record& options) {
   for (const auto& plugin : plugins::get()) {
     if (name != plugin->name())

@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/pipeline.hpp"
+
 #include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
@@ -20,7 +22,7 @@ namespace vast::plugins::pass {
 namespace {
 
 // Does nothing with the input.
-class pass_operator : public pipeline_operator {
+class pass_operator : public legacy_pipeline_operator {
 public:
   pass_operator() noexcept = default;
 
@@ -41,20 +43,15 @@ private:
 };
 
 // Does nothing with the input.
-class pass_operator2 : public logical_operator<events, events> {
+class pass_operator2 final : public crtp_operator<pass_operator2> {
 public:
-  [[nodiscard]] auto
-  make_physical_operator(const type&, operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    return [](generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield std::move(slice);
-      }
-    };
+  template <operator_input_batch T>
+  auto operator()(T x) const -> T {
+    return x;
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("pass");
+  auto to_string() const -> std::string override {
+    return "pass";
   }
 
   [[nodiscard]] auto predicate_pushdown(expression const& expr) const noexcept
@@ -64,7 +61,7 @@ public:
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -77,13 +74,13 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record&) const override {
     return std::make_unique<pass_operator>();
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
     const auto* f = pipeline.begin();
@@ -103,8 +100,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();

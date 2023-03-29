@@ -49,7 +49,7 @@ struct configuration {
 };
 
 /// Drops the specifed fields from the input.
-class drop_operator : public pipeline_operator {
+class drop_operator : public legacy_pipeline_operator {
 public:
   explicit drop_operator(configuration config) noexcept
     : config_{std::move(config)} {
@@ -101,27 +101,26 @@ private:
 };
 
 /// Drops the specifed fields from the input.
-class drop_operator2 : public logical_operator<events, events> {
+class drop_operator2 final
+  : public schematic_operator<
+      drop_operator2, std::optional<std::vector<indexed_transformation>>> {
 public:
   explicit drop_operator2(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
 
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
       = std::any_of(config_.schemas.begin(), config_.schemas.end(),
                     [&](const auto& dropped_schema) {
-                      return dropped_schema == input_schema.name();
+                      return dropped_schema == schema.name();
                     });
     if (drop_schema)
-      return [](generator<table_slice> input) -> generator<table_slice> {
-        (void)input;
-        co_return;
-      };
+      return std::nullopt;
+
     // Apply the transformation.
     auto transform_fn
       = [&](struct record_type::field, std::shared_ptr<arrow::Array>) noexcept
@@ -131,21 +130,24 @@ public:
     };
     auto transformations = std::vector<indexed_transformation>{};
     for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(input_schema)
-                            .resolve_key_suffix(field, input_schema.name()))
+      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
+             field, schema.name()))
         transformations.push_back({std::move(index), transform_fn});
     // transform_columns requires the transformations to be sorted, and that may
     // not necessarily be true if we have multiple fields configured, so we sort
     // again in that case.
     if (config_.fields.size() > 1)
       std::sort(transformations.begin(), transformations.end());
+    return transformations;
+  }
 
-    return [transformations = std::move(transformations)](
-             generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield transform_columns(slice, transformations);
-      }
-    };
+  /// Processes a single slice with the corresponding schema-specific state.
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
+    if (state) {
+      return transform_columns(slice, *state);
+    }
+    return {};
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
@@ -163,7 +165,7 @@ private:
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -176,7 +178,7 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
     if (!(options.contains("fields") || options.contains("schemas")))
       return caf::make_error(ec::invalid_configuration,
@@ -188,8 +190,8 @@ public:
     return std::make_unique<drop_operator>(std::move(*config));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_list;
@@ -212,8 +214,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_list;
     const auto* f = pipeline.begin();

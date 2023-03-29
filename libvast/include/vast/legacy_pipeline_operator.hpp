@@ -19,9 +19,9 @@ namespace vast {
 
 /// An individual pipeline operator. This is mainly used in the plugin API,
 /// later code deals with a complete `transform`.
-class pipeline_operator {
+class legacy_pipeline_operator {
 public:
-  virtual ~pipeline_operator() = default;
+  virtual ~legacy_pipeline_operator() = default;
 
   /// Returns true for pipeline operators for which are not incrementally
   /// usable.
@@ -40,7 +40,7 @@ public:
   [[nodiscard]] virtual caf::expected<std::vector<table_slice>> finish() = 0;
 };
 
-caf::expected<std::unique_ptr<pipeline_operator>>
+caf::expected<std::unique_ptr<legacy_pipeline_operator>>
 make_pipeline_operator(const std::string& name, const vast::record& options);
 
 } // namespace vast

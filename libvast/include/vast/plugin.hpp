@@ -16,8 +16,8 @@
 #include "vast/detail/pp.hpp"
 #include "vast/detail/weak_handle.hpp"
 #include "vast/http_api.hpp"
-#include "vast/logical_operator.hpp"
 #include "vast/operator_control_plane.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
 
@@ -263,7 +263,7 @@ public:
   /// slices. This will be called when constructing pipelines from the
   /// VAST configuration.
   /// @param options The settings configured for this operator.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const vast::record& options) const = 0;
 
   /// Creates a new pipeline operator that maps input to output table
@@ -272,15 +272,15 @@ public:
   /// @param pipeline The entire remaining pipeline.
   /// @returns the remaining pipeline, and the parsed operator (or an error).
   [[nodiscard]] virtual std::pair<
-    std::string_view, caf::expected<std::unique_ptr<pipeline_operator>>>
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const = 0;
 };
 
-class logical_operator_plugin : public virtual plugin {
+class operator_plugin : public virtual plugin {
 public:
-  [[nodiscard]] virtual std::pair<std::string_view,
-                                  caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const = 0;
+  virtual auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>>
+    = 0;
 };
 
 // -- aggregation function plugin ---------------------------------------------
@@ -651,7 +651,9 @@ extern const char* VAST_PLUGIN_VERSION;
     struct auto_register_plugin;                                               \
     template <>                                                                \
     struct auto_register_plugin<name> {                                        \
-      auto_register_plugin() { static_cast<void>(flag); }                      \
+      auto_register_plugin() {                                                 \
+        static_cast<void>(flag);                                               \
+      }                                                                        \
       static bool init() {                                                     \
         ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
           new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \
@@ -666,7 +668,9 @@ extern const char* VAST_PLUGIN_VERSION;
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     struct auto_register_type_id_##name {                                      \
-      auto_register_type_id_##name() { static_cast<void>(flag); }              \
+      auto_register_type_id_##name() {                                         \
+        static_cast<void>(flag);                                               \
+      }                                                                        \
       static bool init() {                                                     \
         ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name::begin,           \

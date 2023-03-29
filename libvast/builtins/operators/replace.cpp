@@ -126,7 +126,7 @@ struct bound_configuration {
   std::vector<indexed_transformation> transformations = {};
 };
 
-class replace_operator : public pipeline_operator {
+class replace_operator : public legacy_pipeline_operator {
 public:
   explicit replace_operator(configuration config) noexcept
     : config_{std::move(config)} {
@@ -175,7 +175,7 @@ public:
     return "replace";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& config) const override {
     auto parsed_config = configuration::make(config);
     if (!parsed_config)
@@ -183,8 +183,8 @@ public:
     return std::make_unique<replace_operator>(std::move(*parsed_config));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_value_assignment_list,

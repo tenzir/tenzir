@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyvast"
-version = "3.0.1"
+version = "3.0.2"
 description = "A security telemetry engine for detection and response"
 authors = ["Tenzir <engineering@tenzir.com>"]
 maintainers = ["Tenzir <engineering@tenzir.com>"]
@@ -33,7 +33,7 @@ pyarrow = "^11.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.2"
-pytest-asyncio = "^0.20.3"
+pytest-asyncio = "^0.21.0"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto" # required for async fixtures
