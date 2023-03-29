@@ -1090,6 +1090,7 @@ jobs:
         with:
           submodules: recursive
       - name: Setup Python
+        if: ${{ matrix.setup.os == 'macos-latest' }}
         uses: actions/setup-python@v4
         with:
           python-version: "3.9"
@@ -1109,7 +1110,6 @@ jobs:
             apt-transport-https \
             curl
           ./scripts/debian/install-dev-dependencies.sh
-          python3 -m pip install --upgrade pip
       - name: Determine VAST Package Name
         id: configure
         run: |
