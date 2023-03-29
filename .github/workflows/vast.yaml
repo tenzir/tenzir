@@ -981,6 +981,7 @@ jobs:
     runs-on: ${{ matrix.setup.os }}
     container: ${{ matrix.setup.container }}
     strategy:
+      fail-fast: false
       matrix:
         setup:
           - os: ubuntu-20.04
