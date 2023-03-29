@@ -164,56 +164,7 @@ private:
   std::unordered_map<type, bound_configuration> bound_config_ = {};
 };
 
-class replace_operator2 : public logical_operator<events, events> {
-public:
-  explicit replace_operator2(configuration config) noexcept
-    : config_{std::move(config)} {
-    // nop
-  }
-
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    auto bound_config = bound_configuration::make(input_schema, config_);
-    if (!bound_config)
-      return bound_config.error();
-    return [transformations = std::move(bound_config->transformations)](
-             generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield transform_columns(slice, transformations);
-      }
-    };
-  }
-
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    auto map = std::vector<std::pair<std::string, data>>{
-      config_.extractor_to_value.begin(), config_.extractor_to_value.end()};
-    std::sort(map.begin(), map.end());
-    auto result = std::string{"replace"};
-    bool first = true;
-    for (auto& [key, value] : map) {
-      if (first) {
-        first = false;
-      } else {
-        result += ',';
-      }
-      result += fmt::format(" {}={}", key, value);
-    }
-    return result;
-  }
-
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
-  }
-
-private:
-  /// The underlying configuration of the transformation.
-  configuration config_ = {};
-};
-
-class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+class plugin final : public virtual pipeline_operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -272,48 +223,6 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<replace_operator>(std::move(*config)),
-    };
-  }
-
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor_value_assignment_list,
-      parsers::data;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> extractor_value_assignment_list
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    std::vector<std::tuple<std::string, vast::data>> parsed_assignments;
-    if (!p(f, l, parsed_assignments)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
-                                                      "operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    record config_record;
-    record fields_record;
-    for (const auto& [key, data] : parsed_assignments) {
-      fields_record[key] = data;
-    }
-    config_record["fields"] = std::move(fields_record);
-    auto config = configuration::make(std::move(config_record));
-    if (!config) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to generate "
-                                                      "configuration for "
-                                                      "extend "
-                                                      "operator: '{}'",
-                                                      config.error())),
-      };
-    }
-    config->reparse_values = false;
-    return {
-      std::string_view{f, l},
-      std::make_unique<replace_operator2>(std::move(*config)),
     };
   }
 };
