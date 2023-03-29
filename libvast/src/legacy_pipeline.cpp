@@ -70,7 +70,8 @@ legacy_pipeline::legacy_pipeline(std::string name,
   : name_(std::move(name)), schema_names_(std::move(schema_names)) {
 }
 
-void legacy_pipeline::add_operator(std::unique_ptr<pipeline_operator> op) {
+void legacy_pipeline::add_operator(
+  std::unique_ptr<legacy_pipeline_operator> op) {
   operators_.emplace_back(std::move(op));
 }
 
@@ -147,7 +148,7 @@ caf::error legacy_pipeline::add_slice(table_slice slice) {
   return caf::none;
 }
 
-caf::error legacy_pipeline::process_queue(pipeline_operator& op,
+caf::error legacy_pipeline::process_queue(legacy_pipeline_operator& op,
                                           std::vector<table_slice>& result,
                                           bool check_schema) {
   caf::error failed{};

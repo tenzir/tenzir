@@ -6,13 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/logical_operator.hpp"
-
 #include <vast/concept/parseable/numeric/integral.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/legacy_pipeline.hpp>
 #include <vast/logger.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice.hpp>
 
@@ -22,7 +21,7 @@ namespace vast::plugins::taste {
 
 namespace {
 
-class taste_operator : public pipeline_operator {
+class taste_operator : public legacy_pipeline_operator {
 public:
   explicit taste_operator(uint64_t limit) noexcept : limit_{limit} {
     // nop
@@ -57,36 +56,33 @@ private:
   std::unordered_map<type, uint64_t> remaining_ = {};
 };
 
-class taste_operator2 : public logical_operator<events, events> {
+class taste_operator2 final
+  : public schematic_operator<taste_operator2, uint64_t> {
 public:
-  explicit taste_operator2(uint64_t limit) noexcept : limit_{limit} {
-    // nop
+  explicit taste_operator2(uint64_t limit) : limit_{limit} {
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type&, operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    return [remaining = limit_](
-             generator<table_slice> input) mutable -> generator<table_slice> {
-      for (auto&& slice : input) {
-        slice = vast::head(slice, remaining);
-        VAST_ASSERT(remaining >= slice.rows());
-        remaining -= slice.rows();
-        co_yield std::move(slice);
-      }
-    };
+  auto initialize(const type&) const -> caf::expected<state_type> override {
+    return limit_;
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto process(table_slice slice, state_type& remaining) const
+    -> table_slice override {
+    auto result = head(slice, remaining);
+    remaining -= result.rows();
+    return result;
+  }
+
+  auto to_string() const -> std::string override {
     return fmt::format("taste {}", limit_);
   }
 
 private:
-  const uint64_t limit_ = {};
+  uint64_t limit_;
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -99,15 +95,15 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record&) const override {
     return caf::make_error(ec::unimplemented,
                            "the taste operator is not available in the YAML "
                            "operator syntax");
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::end_of_pipeline_operator, parsers::u64;
@@ -130,8 +126,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
       parsers::end_of_pipeline_operator, parsers::u64;
     const auto* f = pipeline.begin();

@@ -126,7 +126,7 @@ struct bound_configuration {
   std::vector<indexed_transformation> transformations = {};
 };
 
-class replace_operator : public pipeline_operator {
+class replace_operator : public legacy_pipeline_operator {
 public:
   explicit replace_operator(configuration config) noexcept
     : config_{std::move(config)} {
@@ -164,28 +164,30 @@ private:
   std::unordered_map<type, bound_configuration> bound_config_ = {};
 };
 
-class replace_operator2 : public logical_operator<events, events> {
+class replace_operator2 final
+  : public schematic_operator<replace_operator2,
+                              std::vector<indexed_transformation>> {
 public:
   explicit replace_operator2(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
 
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    auto bound_config = bound_configuration::make(input_schema, config_);
-    if (!bound_config)
-      return bound_config.error();
-    return [transformations = std::move(bound_config->transformations)](
-             generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield transform_columns(slice, transformations);
-      }
-    };
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
+    auto result = bound_configuration::make(schema, config_);
+    if (!result) {
+      return result.error();
+    }
+    return std::move(result->transformations);
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
+    return transform_columns(slice, state);
+  }
+
+  auto to_string() const -> std::string override {
     auto map = std::vector<std::pair<std::string, data>>{
       config_.extractor_to_value.begin(), config_.extractor_to_value.end()};
     std::sort(map.begin(), map.end());
@@ -208,7 +210,7 @@ private:
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -219,7 +221,7 @@ public:
     return "replace";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& config) const override {
     auto parsed_config = configuration::make(config);
     if (!parsed_config)
@@ -227,8 +229,8 @@ public:
     return std::make_unique<replace_operator>(std::move(*parsed_config));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_value_assignment_list,
@@ -270,8 +272,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_value_assignment_list,
       parsers::data;

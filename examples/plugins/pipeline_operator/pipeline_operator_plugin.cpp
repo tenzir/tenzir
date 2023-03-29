@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/pipeline_operator.hpp>
+#include <vast/legacy_pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 
 namespace vast::plugins {
@@ -17,7 +17,7 @@ namespace vast::plugins {
 // The main job of a pipeline plugin is to create a `pipeline_opeartor`
 // when required. A pipeline step is a function that gets a table
 // slice and returns the slice with a transformation applied.
-class example_pipeline_operator : public pipeline_operator {
+class example_pipeline_operator : public legacy_pipeline_operator {
 public:
   example_pipeline_operator() = default;
 
@@ -65,7 +65,7 @@ public:
   // This is called once for every time this pipeline step appears in a
   // pipeline definition. The configuration for the step is opaquely
   // passed as the first argument.
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const vast::record&) const override {
     return std::make_unique<vast::plugins::example_pipeline_operator>();
   }
@@ -74,8 +74,8 @@ public:
   // string, for example as part of the "vast export" command. The return
   // value is the string_view of the pipeline that has to be parsed afterwards
   // combined with either the operator or a parsing error.
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     return {
       pipeline,

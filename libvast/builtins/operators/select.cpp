@@ -6,14 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/logical_operator.hpp"
-
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/legacy_pipeline.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/type.hpp>
 
@@ -47,7 +46,7 @@ struct configuration {
   }
 };
 
-class select_operator : public pipeline_operator {
+class select_operator : public legacy_pipeline_operator {
 public:
   explicit select_operator(configuration config) noexcept
     : config_{std::move(config)} {
@@ -82,32 +81,31 @@ private:
   configuration config_ = {};
 };
 
-class select_operator2 : public logical_operator<events, events> {
+class select_operator2 final
+  : public schematic_operator<select_operator2, std::vector<offset>> {
 public:
   explicit select_operator2(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
 
-  [[nodiscard]] auto make_physical_operator(const type& input_schema,
-                                            operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    auto indices = std::vector<offset>{};
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
+    auto indices = state_type{};
     for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(input_schema)
-                            .resolve_key_suffix(field, input_schema.name()))
+      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
+             field, schema.name()))
         indices.push_back(std::move(index));
     std::sort(indices.begin(), indices.end());
-
-    return [indices = std::move(indices)](
-             generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        co_yield select_columns(slice, indices);
-      }
-    };
+    return indices;
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
+    return select_columns(slice, state);
+  }
+
+  auto to_string() const -> std::string override {
     return fmt::format("select {}", fmt::join(config_.fields, ", "));
   }
 
@@ -117,7 +115,7 @@ private:
 };
 
 class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual logical_operator_plugin {
+                     public virtual operator_plugin {
 public:
   // plugin API
   caf::error initialize([[maybe_unused]] const record& plugin_config,
@@ -130,7 +128,7 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
     if (!options.contains("fields"))
       return caf::make_error(ec::invalid_configuration,
@@ -142,8 +140,8 @@ public:
     return std::make_unique<select_operator>(std::move(*config));
   }
 
-  [[nodiscard]] std::pair<std::string_view,
-                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  [[nodiscard]] std::pair<
+    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor,
@@ -167,8 +165,8 @@ public:
     };
   }
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor,
       parsers::extractor_char, parsers::extractor_list;
