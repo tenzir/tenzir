@@ -105,6 +105,9 @@ private:
     list_record_guard(concrete_series_builder<record_type>& builder,
                       list_guard& parent, length_type starting_fields_length);
 
+    /// @brief Adds a field to a record nested inside a list.
+    /// @param name Field name.
+    /// @return Object that allows the caller to add new values to a given field.
     auto push_field(std::string_view name);
 
     ~list_record_guard() noexcept;
@@ -124,12 +127,19 @@ public:
       value_type{std::move(value_type)} {
   }
 
+  /// @brief Adds a value to a list. Use push_record and push_list to add record
+  /// and list respectively.
+  /// @param view View of a value to be added.
   template <class ViewType>
     requires requires(ViewType x) { materialize(x); }
   auto add(ViewType view) -> void;
 
+  /// @brief Adds a new record as a value of the list.
+  /// @return Object that enables manipulation of the created record.
   auto push_record() -> list_record_guard;
 
+  /// @brief Adds a nested list to the current list
+  /// @return Object that enables manipulation of the created list.
   auto push_list() -> list_guard;
 
 private:
@@ -147,6 +157,9 @@ public:
     : builder_{builder}, starting_fields_length_{starting_fields_length} {
   }
 
+  /// @brief Adds a field to a record.
+  /// @param name Field name.
+  /// @return Object that allows the caller to add new values to a given field.
   auto push_field(std::string_view name);
   ~record_guard() noexcept;
 
@@ -160,11 +173,17 @@ public:
   explicit field_guard(series_builder& builder) : builder_{builder} {
   }
 
+  /// @brief Adds a value to a field returned from push_field.
+  /// @param view View of a value to be added.
   template <class ViewType>
     requires requires(ViewType x) { materialize(x); }
   auto add(ViewType view) -> void;
 
+  /// @brief Turns the field into a record_type if it was of unknown type.
+  /// @return Object that enables manipulation of the record.
   auto push_record() -> record_guard;
+  /// @brief Turns the field into a list_type if it was of unknown type.
+  /// @return Object that enables manipulation of the list.
   auto push_list() -> list_guard;
 
 private:
@@ -225,7 +244,6 @@ public:
       = std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(),
                                              create_builder_impl(value_type),
                                              type_.to_arrow_type());
-
     const auto s = builder_->AppendNulls(nulls_to_prepend_);
     VAST_ASSERT(s.ok());
     nulls_to_prepend_ = 0u;
