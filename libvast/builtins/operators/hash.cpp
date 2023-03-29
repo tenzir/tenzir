@@ -129,7 +129,7 @@ public:
     : config_(std::move(configuration)) {
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     // Get the target field if it exists.
     const auto& schema_rt = caf::get<record_type>(schema);
@@ -188,11 +188,6 @@ public:
     }
     result += config_.field;
     return result;
-  }
-
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
   }
 
 private:

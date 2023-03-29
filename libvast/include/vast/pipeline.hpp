@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/expression.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/table_slice.hpp"
 
@@ -47,6 +48,20 @@ constexpr auto operator_type_name() -> std::string_view {
   }
 }
 
+/// Returns a trivially-true expression. This is a workaround for having no
+/// empty conjunction (yet). It can also be used in a comparison to detect that
+/// an expression is trivially-true.
+inline auto trivially_true_expression() -> const expression& {
+  static auto expr = expression{
+    predicate{
+      meta_extractor{meta_extractor::kind::type},
+      relational_operator::not_equal,
+      data{std::string{"this expression matches everything"}},
+    },
+  };
+  return expr;
+}
+
 /// Uniquely owned pipeline operator.
 using operator_ptr = std::unique_ptr<operator_base>;
 
@@ -70,12 +85,37 @@ public:
     -> caf::expected<operator_output>
     = 0;
 
+  /// Tests the instantiation of the operator for a given input.
+  ///
+  /// Note: The returned generator just a marker and always empty. We could
+  /// improve this interface in the future.
+  template <class T>
+  auto test_instantiate() const -> caf::expected<operator_output> {
+    return test_instantiate_impl(operator_input{T{}});
+  }
+
   /// Copies the underlying pipeline operator.
   virtual auto copy() const -> operator_ptr = 0;
 
   /// Returns a textual representation of this operator for display and
   /// debugging purposes. Not necessarily roundtrippable.
   virtual auto to_string() const -> std::string = 0;
+
+  /// Tries to perform predicate pushdown with the given expression.
+  ///
+  /// Returns `std::nullopt` if predicate pushdown can not be performed.
+  /// Otherwise, returns `std::pair{expr2, this2}` such that `this | where expr`
+  /// is equivalent to `where expr2 | this2`, or alternatively `where expr2` if
+  /// `this2 == nullptr`.
+  virtual auto predicate_pushdown(expression const& expr) const
+    -> std::optional<std::pair<expression, operator_ptr>> {
+    (void)expr;
+    return {};
+  }
+
+private:
+  auto test_instantiate_impl(operator_input input) const
+    -> caf::expected<operator_output>;
 };
 
 /// A pipeline is a sequence of pipeline operators.
@@ -97,12 +137,22 @@ public:
     return std::move(operators_);
   }
 
+  /// Returns whether this is a well-formed `void -> void` pipeline.
+  auto is_closed() const -> bool;
+
+  /// Same as `predicate_pushdown`, but returns a `pipeline` object directly.
+  auto predicate_pushdown_pipeline(expression const& expr) const
+    -> std::optional<std::pair<expression, pipeline>>;
+
   auto instantiate(operator_input input, operator_control_plane& control) const
     -> caf::expected<operator_output> override;
 
   auto copy() const -> operator_ptr override;
 
   auto to_string() const -> std::string override;
+
+  auto predicate_pushdown(expression const& expr) const
+    -> std::optional<std::pair<expression, operator_ptr>> override;
 
 private:
   std::vector<operator_ptr> operators_;
@@ -198,7 +248,8 @@ public:
   using output_type = Output;
 
   /// Returns the initial state for when a schema is first encountered.
-  virtual auto initialize(const type& schema) const -> caf::expected<state_type>
+  virtual auto initialize(const type& schema, operator_control_plane&) const
+    -> caf::expected<state_type>
     = 0;
 
   /// Processes a single slice with the corresponding schema-specific state.
@@ -220,7 +271,7 @@ public:
     for (auto&& slice : input) {
       auto it = states.find(slice.schema());
       if (it == states.end()) {
-        auto state = initialize(slice.schema());
+        auto state = initialize(slice.schema(), ctrl);
         if (!state) {
           ctrl.abort(state.error());
           break;

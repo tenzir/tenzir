@@ -54,8 +54,8 @@ public:
     return "pass";
   }
 
-  [[nodiscard]] auto predicate_pushdown(expression const& expr) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+  auto predicate_pushdown(expression const& expr) const
+    -> std::optional<std::pair<expression, operator_ptr>> override {
     return std::pair{expr, std::make_unique<pass_operator2>(*this)};
   }
 };

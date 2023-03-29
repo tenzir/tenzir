@@ -62,7 +62,8 @@ public:
   explicit taste_operator2(uint64_t limit) : limit_{limit} {
   }
 
-  auto initialize(const type&) const -> caf::expected<state_type> override {
+  auto initialize(const type&, operator_control_plane&) const
+    -> caf::expected<state_type> override {
     return limit_;
   }
 
@@ -75,11 +76,6 @@ public:
 
   auto to_string() const -> std::string override {
     return fmt::format("taste {}", limit_);
-  }
-
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
   }
 
 private:

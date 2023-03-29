@@ -104,7 +104,7 @@ public:
 #endif // VAST_ENABLE_ASSERTIONS
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     return tailor(expr_, schema);
   }
@@ -117,8 +117,8 @@ public:
     return filter(slice, expr).value_or(table_slice{});
   }
 
-  [[nodiscard]] auto predicate_pushdown(expression const& expr) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
+  auto predicate_pushdown(expression const& expr) const
+    -> std::optional<std::pair<expression, operator_ptr>> override {
     return std::pair{conjunction{expr_, expr}, nullptr};
   }
 

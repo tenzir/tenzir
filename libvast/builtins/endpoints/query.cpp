@@ -16,7 +16,7 @@
 #include <vast/detail/weak_run_delayed.hpp>
 #include <vast/format/json.hpp>
 #include <vast/legacy_pipeline.hpp>
-#include <vast/logical_pipeline.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
@@ -356,80 +356,64 @@ struct query_manager_state {
 
 using manager_ptr = query_manager_actor::stateful_pointer<query_manager_state>;
 
-class query_source final : public logical_operator<void, events> {
+class query_source final : public crtp_operator<query_source> {
 public:
   explicit query_source(manager_ptr manager) : manager_(manager) {
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type&, operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<void, events>> override {
-    return [this]() -> generator<table_slice> {
-      auto& state = manager_->state;
-      while (true) {
-        if (state.source_buffer.empty()) {
-          if (state.index_exhausted()) {
-            break;
-          }
-          if (!state.active_index_query) {
-            VAST_DEBUG("query_source: sending query to index");
-            manager_->send(state.index, atom::query_v, state.cursor->id,
-                           BATCH_SIZE);
-            state.active_index_query = true;
-          }
-          VAST_DEBUG("query_source: stalling");
-          co_yield {};
-          continue;
+  auto operator()() const -> generator<table_slice> {
+    auto& state = manager_->state;
+    while (true) {
+      if (state.source_buffer.empty()) {
+        if (state.index_exhausted()) {
+          break;
         }
-        VAST_DEBUG("query_source: popping element from queue");
-        auto slice = std::move(state.source_buffer.front());
-        state.source_buffer.pop_front();
-        co_yield std::move(slice);
+        if (!state.active_index_query) {
+          VAST_DEBUG("query_source: sending query to index");
+          VAST_ASSERT(state.cursor);
+          manager_->send(state.index, atom::query_v, state.cursor->id,
+                         BATCH_SIZE);
+          state.active_index_query = true;
+        }
+        VAST_DEBUG("query_source: stalling");
+        co_yield {};
+        continue;
       }
-      VAST_DEBUG("query_source: done");
-    };
+      VAST_DEBUG("query_source: popping element from queue");
+      auto slice = std::move(state.source_buffer.front());
+      state.source_buffer.pop_front();
+      co_yield std::move(slice);
+    }
+    VAST_DEBUG("query_source: done");
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto to_string() const -> std::string override {
     return "query_source";
-  }
-
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
   }
 
 private:
   manager_ptr manager_;
 };
 
-class query_sink final : public logical_operator<events, void> {
+class query_sink final : public crtp_operator<query_sink> {
 public:
   explicit query_sink(manager_ptr manager) : manager_(manager) {
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type&, operator_control_plane&) noexcept
-    -> caf::expected<physical_operator<events, void>> override {
-    return [this](generator<table_slice> input) -> generator<std::monostate> {
-      auto& state = manager_->state;
-      for (auto&& slice : input) {
-        if (slice.rows() > 0) {
-          VAST_DEBUG("query_sink: putting result in sink buffer");
-          state.sink_buffer.push_back(std::move(slice));
-        }
-        co_yield {};
+  auto operator()(generator<table_slice> input) const
+    -> generator<std::monostate> {
+    auto& state = manager_->state;
+    for (auto&& slice : input) {
+      if (slice.rows() > 0) {
+        VAST_DEBUG("query_sink: putting result in sink buffer");
+        state.sink_buffer.push_back(std::move(slice));
       }
-    };
+      co_yield {};
+    }
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto to_string() const -> std::string override {
     return "query_sink";
-  }
-
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
   }
 
 private:
@@ -447,8 +431,8 @@ struct request_multiplexer_state {
 
 query_manager_actor::behavior_type
 query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
-              system::index_actor index, logical_pipeline open_pipeline,
-              bool expand, duration ttl, query_format_options format_opts) {
+              system::index_actor index, pipeline open_pipeline, bool expand,
+              duration ttl, query_format_options format_opts) {
   VAST_VERBOSE("{} starts with a TTL of {}", *self, data{ttl});
   self->state.self = self;
   self->state.index = std::move(index);
@@ -458,12 +442,11 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   auto ops = std::move(open_pipeline).unwrap();
   ops.insert(ops.begin(), std::make_unique<query_source>(self));
   ops.push_back(std::make_unique<query_sink>(self));
-  auto result = logical_pipeline::make(std::move(ops));
-  // We already checked that the original pipeline was `events -> events`. Thus,
-  // we know that we now have a valid `void -> void` pipeline.
-  VAST_ASSERT(result);
-  VAST_ASSERT(result->closed());
-  self->state.executor = make_local_executor(std::move(*result));
+  auto result = pipeline{std::move(ops)};
+  // We already checked that the original pipeline was `events -> events`.
+  // Thus, we know that we now have a valid `void -> void` pipeline.
+  VAST_ASSERT(result.is_closed());
+  self->state.executor = make_local_executor(std::move(result));
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     if (self->state.promise.pending())
       self->state.promise.deliver(msg.reason);
@@ -584,19 +567,22 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         } else {
           return rq.response->abort(422, "missing parameter 'query'\n");
         }
-        auto parse_result = logical_pipeline::parse(*query_string);
+        auto parse_result = pipeline::parse(*query_string);
         if (!parse_result)
           return rq.response->abort(400, fmt::format("unparseable query: {}\n",
                                                      parse_result.error()));
         auto pipeline = std::move(*parse_result);
-        if (!pipeline.input_element_type().is<events>()) {
-          return rq.response->abort(400, "query must take events as input");
+        auto output = pipeline.test_instantiate<generator<table_slice>>();
+        if (!output) {
+          return rq.response->abort(
+            400,
+            fmt::format("pipeline instantiation failed: {}", output.error()));
         }
-        if (!pipeline.output_element_type().is<events>()) {
+        if (!std::holds_alternative<generator<table_slice>>(*output)) {
           return rq.response->abort(400, "query must return events as output");
         }
         // TODO: Consider replacing this with an empty conjunction.
-        auto& trivially_true = logical_pipeline::trivially_true_expression();
+        auto& trivially_true = trivially_true_expression();
         auto pushdown = pipeline.predicate_pushdown_pipeline(trivially_true);
         if (!pushdown) {
           pushdown.emplace(trivially_true, std::move(pipeline));

@@ -158,30 +158,26 @@ struct bound_configuration {
   std::vector<indexed_transformation> extensions = {};
 };
 
-class put_operator : public logical_operator<events, events> {
+class put_operator final
+  : public schematic_operator<put_operator, bound_configuration> {
 public:
   explicit put_operator(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type& input_schema,
-                         operator_control_plane& ctrl) noexcept
-    -> caf::expected<physical_operator<events, events>> override {
-    auto bound_config = bound_configuration::make(input_schema, config_, ctrl);
-    if (!bound_config)
-      return bound_config.error();
-    return [config = std::move(*bound_config)](
-             generator<table_slice> input) -> generator<table_slice> {
-      for (auto&& slice : input) {
-        if (!config.replacements.empty())
-          slice = transform_columns(slice, config.replacements);
-        if (!config.extensions.empty())
-          slice = transform_columns(slice, config.extensions);
-        co_yield std::move(slice);
-      }
-    };
+  auto initialize(const type& schema, operator_control_plane& ctrl) const
+    -> caf::expected<state_type> override {
+    return bound_configuration::make(schema, config_, ctrl);
+  }
+
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
+    if (!state.replacements.empty())
+      slice = transform_columns(slice, state.replacements);
+    if (!state.extensions.empty())
+      slice = transform_columns(slice, state.extensions);
+    return slice;
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
@@ -201,17 +197,12 @@ public:
     return result;
   }
 
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
-  }
-
 private:
   /// The underlying configuration of the transformation.
   configuration config_ = {};
 };
 
-class plugin final : public virtual logical_operator_plugin {
+class plugin final : public virtual operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -222,8 +213,8 @@ public:
     return "put";
   };
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor_value_assignment_list,
       parsers::data;

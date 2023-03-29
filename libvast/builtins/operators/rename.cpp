@@ -147,7 +147,7 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     // Step 1: Adjust field names.
     auto field_transformations = std::vector<indexed_transformation>{};
@@ -218,11 +218,6 @@ public:
       result += fmt::format(" {}={}", mapping.to, mapping.from);
     }
     return result;
-  }
-
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
   }
 
 private:

@@ -140,7 +140,7 @@ public:
     parse_seed_string();
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     std::vector<indexed_transformation> transformations;
     auto transformation = [&](struct record_type::field field,
@@ -201,11 +201,6 @@ public:
     }
     result += fmt::to_string(fmt::join(config_.fields, ", "));
     return result;
-  }
-
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
   }
 
 private:

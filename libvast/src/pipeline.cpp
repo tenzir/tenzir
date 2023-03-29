@@ -115,6 +115,9 @@ auto pipeline::copy() const -> operator_ptr {
 }
 
 auto pipeline::to_string() const -> std::string {
+  if (operators_.empty()) {
+    return "pass";
+  }
   return fmt::to_string(fmt::join(operators_, " | "));
 }
 
@@ -159,6 +162,75 @@ auto pipeline::instantiate(operator_input input,
   }
 }
 
+auto pipeline::predicate_pushdown(const expression& expr) const
+  -> std::optional<std::pair<expression, operator_ptr>> {
+  auto result = predicate_pushdown_pipeline(expr);
+  if (!result) {
+    return {};
+  }
+  return std::pair{std::move(result->first),
+                   std::make_unique<pipeline>(std::move(result->second))};
+}
+
+auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
+  -> std::optional<std::pair<expression, pipeline>> {
+  auto new_rev = std::vector<operator_ptr>{};
+
+  auto current = expr;
+  for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
+    if (auto result = (*it)->predicate_pushdown(current)) {
+      auto& [new_expr, replacement] = *result;
+      if (replacement) {
+        new_rev.push_back(std::move(replacement));
+      }
+      current = new_expr;
+    } else {
+      if (current != trivially_true_expression()) {
+        // TODO: We just want to create a `where current` operator. However, we
+        // currently only have the interface for parsing this from a string.
+        auto where_plugin = plugins::find<operator_plugin>("where");
+        auto string = fmt::format(" {}", current);
+        auto [rest, op] = where_plugin->make_operator(string);
+        VAST_ASSERT(rest.empty());
+        VAST_ASSERT(op);
+        new_rev.push_back(std::move(*op));
+        current = trivially_true_expression();
+      }
+      auto copy = (*it)->copy();
+      VAST_ASSERT(copy);
+      new_rev.push_back(std::move(copy));
+    }
+  }
+
+  std::reverse(new_rev.begin(), new_rev.end());
+  return std::pair{std::move(current), pipeline{std::move(new_rev)}};
+}
+
+auto operator_base::test_instantiate_impl(operator_input input) const
+  -> caf::expected<operator_output> {
+  local_control_plane ctrl;
+  auto result = instantiate(std::move(input), ctrl);
+  if (!result) {
+    return result.error();
+  }
+  return std::visit(
+    []<class T>(generator<T> x) -> operator_output {
+      // We discard the actual output generator and return a
+      // default-constructed one to make sure that the result is empty.
+      (void)x;
+      return generator<T>{};
+    },
+    std::move(*result));
+}
+
+auto pipeline::is_closed() const -> bool {
+  auto output = test_instantiate<std::monostate>();
+  if (!output) {
+    return false;
+  }
+  return std::holds_alternative<generator<std::monostate>>(*output);
+}
+
 auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
   local_control_plane ctrl;
   auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
@@ -173,11 +245,12 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
     co_return;
   }
   for (auto monostate : *gen) {
-    (void)monostate;
     if (auto error = ctrl.get_error()) {
       co_yield std::move(error);
       co_return;
     }
+    (void)monostate;
+    co_yield {};
   }
   if (auto error = ctrl.get_error()) {
     co_yield std::move(error);

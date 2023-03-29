@@ -89,7 +89,7 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     auto indices = state_type{};
     for (const auto& field : config_.fields)
@@ -107,11 +107,6 @@ public:
 
   auto to_string() const -> std::string override {
     return fmt::format("select {}", fmt::join(config_.fields, ", "));
-  }
-
-  [[nodiscard]] auto predicate_pushdown(expression const&) const noexcept
-    -> std::optional<std::pair<expression, logical_operator_ptr>> override {
-    return {};
   }
 
 private:
