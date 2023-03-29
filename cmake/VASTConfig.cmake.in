@@ -26,6 +26,14 @@ endif ()
 include(VASTMacDependencyPaths)
 include(VASTRegisterPlugin)
 
+find_package(Flatbuffers CONFIG)
+if (NOT Flatbuffers_FOUND)
+  find_package(FlatBuffers CONFIG)
+  if (NOT FlatBuffers_FOUND)
+    message(FATAL_ERROR "Flatbuffers is required but can't be found.")
+  endif ()
+endif ()
+
 @VAST_FIND_DEPENDENCY_LIST@
 
 set(CMAKE_MODULE_PATH "${_CMAKE_MODULE_PATH_OLD}")

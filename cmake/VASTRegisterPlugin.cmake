@@ -182,9 +182,6 @@ function (VASTCompileFlatBuffers)
   endif ()
 
   if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
-    set(VAST_FIND_DEPENDENCY_LIST
-        "${VAST_FIND_DEPENDENCY_LIST}\nfind_package(Flatbuffers REQUIRED)"
-        PARENT_SCOPE)
     dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
   endif ()
 
