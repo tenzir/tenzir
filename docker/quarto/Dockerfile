@@ -41,8 +41,7 @@ USER vast:vast
 # We install Poetry alongside VAST, they shouldn't disturb each other
 ENV POETRY_HOME=$PREFIX
 
-RUN curl -sSL https://install.python-poetry.org | python3 -
-
+RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
 
 # Extra layers with configurations avoiding permission conflicts on host FS
 FROM quarto-base as quarto-bind

@@ -2,17 +2,17 @@
 
 set -euo pipefail
 
-echo 'deb http://deb.debian.org/debian bullseye-backports main' > /etc/apt/sources.list.d/backports.list 
 apt-get update 
 apt-get -y --no-install-recommends install \
     build-essential \
     ca-certificates \
     ccache \
-    cmake-data/bullseye-backports \
-    cmake/bullseye-backports \
+    cmake-data \
+    cmake \
+    curl \
     flatbuffers-compiler-dev \
-    g++-10 \
-    gcc-10 \
+    g++-12 \
+    gcc-12 \
     git-core \
     gnupg2 gnupg-agent\
     jq \
@@ -24,6 +24,7 @@ apt-get -y --no-install-recommends install \
     libre2-dev \
     libspdlog-dev \
     libssl-dev \
+    libsqlite3-dev \
     libunwind-dev \
     libxxhash-dev \
     libyaml-cpp-dev \
@@ -32,6 +33,7 @@ apt-get -y --no-install-recommends install \
     pandoc \
     pkg-config \
     python3-dev \
+    python3-openssl \
     python3-pip \
     python3-venv \
     robin-map-dev \
@@ -53,4 +55,6 @@ apt-get update
 apt-get -y install yarn
 
 # Poetry
-python3 -m pip install poetry
+export POETRY_HOME=/opt/poetry
+curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
+ln -s /opt/poetry/bin/poetry /usr/local/bin/

@@ -50,7 +50,11 @@ public:
 
   void add(std::span<const std::byte> bytes) noexcept {
     VAST_ASSERT(bytes.data() != nullptr || bytes.empty());
-    XXH64_update(&state_, bytes.data(), bytes.size());
+    // Silence a false positive in the `CI` build configuration.
+    VAST_DIAGNOSTIC_PUSH
+    _Pragma("GCC diagnostic ignored \"-Warray-bounds\"")
+      XXH64_update(&state_, bytes.data(), bytes.size());
+    VAST_DIAGNOSTIC_POP
   }
 
   result_type finish() noexcept {
