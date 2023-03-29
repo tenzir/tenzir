@@ -58,7 +58,7 @@ struct bound_configuration {
           result.replacements.push_back({index, make_replace(value)});
         } else {
           ctrl.warn(caf::make_error(
-            ec::invalid_argument, fmt::format("put operator assignment {}={}' "
+            ec::invalid_argument, fmt::format("put operator assignment '{}={}' "
                                               "overrides previous assignment",
                                               extractor, value)));
           replacement->fun = make_replace(value);
