@@ -119,6 +119,48 @@ struct sink final : public crtp_operator<sink> {
 
 struct fixture : fixtures::events {};
 
+FIXTURE_SCOPE(pipeline_fixture, fixture)
+
+TEST(taste 42) {
+  {
+    auto v = unbox(pipeline::parse("taste 42")).unwrap();
+    v.insert(v.begin(),
+             std::make_unique<source>(std::vector<table_slice>{
+               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+    auto count = 0;
+    v.push_back(std::make_unique<sink>([&](table_slice) {
+      count += 1;
+    }));
+    auto p = pipeline{std::move(v)};
+    for (auto&& error : make_local_executor(std::move(p))) {
+      REQUIRE_EQUAL(error, caf::error{});
+    }
+    CHECK_GREATER(count, 0);
+  }
+}
+
+TEST(source | where #type == "zeek.conn" | sink) {
+  auto count = 0;
+  auto v = unbox(pipeline::parse(R"(taste 42 | where #type == "zeek.conn")"))
+             .unwrap();
+  v.insert(v.begin(),
+           std::make_unique<source>(std::vector<table_slice>{
+             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+  v.push_back(std::make_unique<sink>([&](table_slice) {
+    MESSAGE("---- sink ----");
+    count += 1;
+  }));
+  auto executor = make_local_executor(pipeline{std::move(v)});
+  for (auto&& error : executor) {
+    REQUIRE_EQUAL(error, caf::none);
+  }
+  REQUIRE_GREATER(count, 0);
+}
+
+FIXTURE_SCOPE_END()
+
 TEST(pipeline operator typing) {
   dummy_control_plane ctrl;
   {
@@ -186,47 +228,37 @@ TEST(roundtrip) {
   CHECK_EQUAL(roundtrip, original);
 }
 
-FIXTURE_SCOPE(pipeline_fixture, fixture)
-
-TEST(taste 42) {
-  {
-    auto v = unbox(pipeline::parse("taste 42")).unwrap();
-    v.insert(v.begin(),
-             std::make_unique<source>(std::vector<table_slice>{
-               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
-               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
-    auto count = 0;
-    v.push_back(std::make_unique<sink>([&](table_slice) {
-      count += 1;
-    }));
-    auto p = pipeline{std::move(v)};
-    for (auto&& error : make_local_executor(std::move(p))) {
-      REQUIRE_EQUAL(error, caf::error{});
-    }
-    CHECK_GREATER(count, 0);
-  }
+TEST(to - stdout) {
+  auto to_pipeline = pipeline::parse("to stdout");
+  REQUIRE_NOERROR(to_pipeline);
+  REQUIRE_EQUAL(to_pipeline->to_string(), "write json | to stdout");
 }
 
-TEST(source | where #type == "zeek.conn" | sink) {
-  auto count = 0;
-  auto v = unbox(pipeline::parse(R"(taste 42 | where #type == "zeek.conn")"))
-             .unwrap();
-  v.insert(v.begin(),
-           std::make_unique<source>(std::vector<table_slice>{
-             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
-             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
-  v.push_back(std::make_unique<sink>([&](table_slice) {
-    MESSAGE("---- sink ----");
-    count += 1;
-  }));
-  auto executor = make_local_executor(pipeline{std::move(v)});
-  for (auto&& error : executor) {
-    REQUIRE_EQUAL(error, caf::none);
-  }
-  REQUIRE_GREATER(count, 0);
+TEST(to - to stdout write json) {
+  auto to_pipeline = pipeline::parse("to stdout write json");
+  REQUIRE_NOERROR(to_pipeline);
+  REQUIRE_EQUAL(to_pipeline->to_string(), "write json | to stdout");
 }
 
-FIXTURE_SCOPE_END()
+TEST(to - invalid inputs) {
+  REQUIRE_ERROR(pipeline::parse("to json write stdout"));
+}
+
+TEST(write - write json) {
+  auto write_pipeline = pipeline::parse("write json");
+  REQUIRE_NOERROR(write_pipeline);
+  REQUIRE_EQUAL(write_pipeline->to_string(), "write json | to stdout");
+}
+
+TEST(write - write json to stdout) {
+  auto write_pipeline = pipeline::parse("write json to stdout");
+  REQUIRE_NOERROR(write_pipeline);
+  REQUIRE_EQUAL(write_pipeline->to_string(), "write json | to stdout");
+}
+
+TEST(write - invalid inputs) {
+  REQUIRE_ERROR(pipeline::parse("write stdout to json"));
+}
 
 } // namespace
 } // namespace vast

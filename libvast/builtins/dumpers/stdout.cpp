@@ -18,14 +18,9 @@ public:
   [[nodiscard]] auto
   make_dumper(const record&, [[maybe_unused]] type input_schema,
               operator_control_plane&) const -> caf::expected<dumper> override {
-    return [](generator<chunk_ptr> chunks) -> generator<std::monostate> {
-      auto outbuf = detail::fdoutbuf(STDOUT_FILENO);
-      for (const auto& chunk : chunks) {
-        outbuf.sputn(reinterpret_cast<const char*>(chunk->data()),
-                     chunk->size());
-        co_yield std::monostate{};
-      }
-      co_return;
+    auto outbuf = detail::fdoutbuf(STDOUT_FILENO);
+    return [outbuf](chunk_ptr chunk) mutable {
+      outbuf.sputn(reinterpret_cast<const char*>(chunk->data()), chunk->size());
     };
   }
 

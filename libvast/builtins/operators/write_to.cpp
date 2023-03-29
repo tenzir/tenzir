@@ -6,15 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/logical_operator.hpp"
-
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/element_type.hpp>
 #include <vast/error.hpp>
-#include <vast/logical_pipeline.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/type.hpp>
 
@@ -28,120 +26,130 @@ namespace vast::plugins::write_to {
 
 namespace {
 
-/// The logical operator for printing data that will have to be joined later
+/// The operator for printing data that will have to be joined later
 /// during pipeline execution.
-class print_operator : public logical_operator<table_slice, chunk_ptr> {
+class print_operator final
+  : public schematic_operator<print_operator, printer_plugin::printer,
+                              generator<chunk_ptr>> {
 public:
   explicit print_operator(const printer_plugin& printer) noexcept
-    : printer_plugin_{printer} {
+    : printer_plugin_{&printer} {
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type& input_schema,
-                         operator_control_plane& ctrl) noexcept
-    -> caf::expected<physical_operator<table_slice, chunk_ptr>> override {
-    auto new_printer = printer_plugin_.make_printer({}, input_schema, ctrl);
-    if (!new_printer) {
-      return new_printer.error();
-    }
-    printer_ = std::move(*new_printer);
-    return [this](generator<table_slice> input) -> generator<chunk_ptr> {
-      return printer_(std::move(input));
-    };
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
+    auto test = static_cast<operator_control_plane*>(nullptr);
+    return printer_plugin_->make_printer({}, schema, *test);
+  }
+
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
+    return state(std::move(slice));
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("write {}", printer_plugin_.name());
+    return fmt::format("write {}", printer_plugin_->name());
   }
 
 private:
-  const printer_plugin& printer_plugin_;
-  printer_plugin::printer printer_;
+  const printer_plugin* printer_plugin_;
 };
 
-/// The logical operator for dumping data that will have to be joined later
+/// The operator for dumping data that will have to be joined later
 /// during pipeline execution.
-class dump_operator : public logical_operator<chunk_ptr, void> {
+class dump_operator final : public crtp_operator<dump_operator> {
 public:
   explicit dump_operator(const dumper_plugin& dumper) noexcept
-    : dumper_plugin_{dumper} {
+    : dumper_plugin_{&dumper} {
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type& input_schema,
-                         operator_control_plane& ctrl) noexcept
-    -> caf::expected<physical_operator<chunk_ptr, void>> override {
-    auto new_dumper = dumper_plugin_.make_dumper({}, input_schema, ctrl);
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    // TODO: Extend API to allow schema-less make_dumper().
+    auto new_dumper = dumper_plugin_->make_dumper({}, {}, ctrl);
     if (!new_dumper) {
-      return new_dumper.error();
+      ctrl.abort(new_dumper.error());
+      co_return;
     }
-    dumper_ = std::move(*new_dumper);
-    return [this](generator<chunk_ptr> input) -> generator<std::monostate> {
-      return dumper_(std::move(input));
-    };
+    for (auto&& x : input) {
+      (*new_dumper)(std::move(x));
+      co_yield {};
+    }
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("to {}", dumper_plugin_.name());
+  [[nodiscard]] auto to_string() const -> std::string override {
+    return fmt::format("to {}", dumper_plugin_->name());
   }
 
 private:
-  const dumper_plugin& dumper_plugin_;
-  dumper_plugin::dumper dumper_;
+  const dumper_plugin* dumper_plugin_;
 };
 
-/// The logical operator for printing and dumping data without joining.
-class print_dump_operator : public logical_operator<table_slice, void> {
+struct writing_state {
+  printer_plugin::printer p;
+  dumper_plugin::dumper d;
+};
+
+/// The operator for printing and dumping data without joining.
+class print_dump_operator final
+  : public schematic_operator<print_dump_operator, writing_state,
+                              std::monostate> {
 public:
   explicit print_dump_operator(const printer_plugin& printer,
                                const dumper_plugin& dumper) noexcept
-    : printer_plugin_{printer}, dumper_plugin_{dumper} {
+    : printer_plugin_{&printer}, dumper_plugin_{&dumper} {
   }
 
-  [[nodiscard]] auto
-  make_physical_operator(const type& input_schema,
-                         operator_control_plane& ctrl) noexcept
-    -> caf::expected<physical_operator<table_slice, void>> override {
-    auto new_printer = printer_plugin_.make_printer({}, input_schema, ctrl);
+  auto initialize(const type& schema) const
+    -> caf::expected<state_type> override {
+    writing_state ws;
+    auto test = static_cast<operator_control_plane*>(nullptr);
+    auto new_printer = printer_plugin_->make_printer({}, schema, *test);
     if (!new_printer) {
       return new_printer.error();
     }
-    printer_ = std::move(*new_printer);
-    auto new_dumper = dumper_plugin_.make_dumper({}, input_schema, ctrl);
+    ws.p = std::move(*new_printer);
+    auto new_dumper = dumper_plugin_->make_dumper({}, schema, *test);
     if (!new_dumper) {
       return new_dumper.error();
     }
-    dumper_ = std::move(*new_dumper);
-    return [this](generator<table_slice> input) -> generator<std::monostate> {
-      return dumper_(printer_(std::move(input)));
-    };
+    ws.d = std::move(*new_dumper);
+    return ws;
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("write {} to {}", printer_plugin_.name(),
-                       dumper_plugin_.name());
-  }
-
-private:
-  const printer_plugin& printer_plugin_;
-  printer_plugin::printer printer_;
-  const dumper_plugin& dumper_plugin_;
-  dumper_plugin::dumper dumper_;
-};
-
-class write_plugin final : public virtual logical_operator_plugin {
-public:
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto process(table_slice slice, state_type& state) const
+    -> output_type override {
+    for (auto&& x : state.p(std::move(slice))) {
+      state.d(std::move(x));
+    }
     return {};
   }
 
-  [[nodiscard]] std::string name() const override {
+  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+    return fmt::format("write {} to {}", printer_plugin_->name(),
+                       dumper_plugin_->name());
+  }
+
+private:
+  const printer_plugin* printer_plugin_{};
+  const dumper_plugin* dumper_plugin_{};
+};
+
+class write_plugin final : public virtual operator_plugin {
+public:
+  auto initialize([[maybe_unused]] const record& plugin_config,
+                  [[maybe_unused]] const record& global_config)
+    -> caf::error override {
+    return {};
+  }
+
+  [[nodiscard]] auto name() const -> std::string override {
     return "write";
   };
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  [[nodiscard]] auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor, parsers::identifier,
       parsers::extractor_char, parsers::extractor_list;
@@ -152,14 +160,14 @@ public:
                         >> required_ws_or_comment >> identifier)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto result = std::tuple{
-                             std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
+      std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
     if (!p(f, l, result)) {
       return {
-              std::string_view{f, l},
-              caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                            "write operator: '{}'",
-                                                            pipeline)),
-              };
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "write operator: '{}'",
+                                                      pipeline)),
+      };
     }
     auto printer_name = std::get<0>(result);
     auto printer = plugins::find<printer_plugin>(printer_name);
@@ -210,32 +218,30 @@ public:
                                                       std::move(*dumper));
       return {std::string_view{f, l}, std::move(op)};
     }
-    auto print_op = std::make_unique<print_operator>(std::move(*printer));
-    auto dump_op = std::make_unique<dump_operator>(std::move(*dumper));
-    auto ops = std::vector<logical_operator_ptr>{};
-    ops.emplace_back(std::move(print_op));
-    ops.emplace_back(std::move(dump_op));
-    auto sub_pipeline = logical_pipeline::make(std::move(ops));
+    auto ops = std::vector<operator_ptr>{};
+    ops.emplace_back(std::make_unique<print_operator>(std::move(*printer)));
+    ops.emplace_back(std::make_unique<dump_operator>(std::move(*dumper)));
     return {
-            std::string_view{f, l},
-            std::make_unique<logical_pipeline>(std::move(*sub_pipeline)),
-            };
+      std::string_view{f, l},
+      std::make_unique<class pipeline>(std::move(ops)),
+    };
   }
 };
 
-class to_plugin final : public virtual logical_operator_plugin {
+class to_plugin final : public virtual operator_plugin {
 public:
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize([[maybe_unused]] const record& plugin_config,
+                  [[maybe_unused]] const record& global_config)
+    -> caf::error override {
     return {};
   }
 
-  [[nodiscard]] std::string name() const override {
+  [[nodiscard]] auto name() const -> std::string override {
     return "to";
   };
 
-  [[nodiscard]] std::pair<std::string_view, caf::expected<logical_operator_ptr>>
-  make_logical_operator(std::string_view pipeline) const override {
+  [[nodiscard]] auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
       parsers::optional_ws_or_comment, parsers::extractor, parsers::identifier,
       parsers::extractor_char, parsers::extractor_list;
@@ -246,14 +252,14 @@ public:
                         >> required_ws_or_comment >> identifier)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto result = std::tuple{
-                             std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
+      std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
     if (!p(f, l, result)) {
       return {
-              std::string_view{f, l},
-              caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                            "to operator: '{}'",
-                                                            pipeline)),
-              };
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "to operator: '{}'",
+                                                      pipeline)),
+      };
     }
     auto dumper_name = std::get<0>(result);
     auto dumper = plugins::find<dumper_plugin>(dumper_name);
@@ -304,16 +310,13 @@ public:
                                                       std::move(*dumper));
       return {std::string_view{f, l}, std::move(op)};
     }
-    auto print_op = std::make_unique<print_operator>(std::move(*printer));
-    auto dump_op = std::make_unique<dump_operator>(std::move(*dumper));
-    auto ops = std::vector<logical_operator_ptr>{};
-    ops.emplace_back(std::move(print_op));
-    ops.emplace_back(std::move(dump_op));
-    auto sub_pipeline = logical_pipeline::make(std::move(ops));
+    auto ops = std::vector<operator_ptr>{};
+    ops.emplace_back(std::make_unique<print_operator>(std::move(*printer)));
+    ops.emplace_back(std::make_unique<dump_operator>(std::move(*dumper)));
     return {
-            std::string_view{f, l},
-            std::make_unique<logical_pipeline>(std::move(*sub_pipeline)),
-            };
+      std::string_view{f, l},
+      std::make_unique<class pipeline>(std::move(ops)),
+    };
   }
 };
 

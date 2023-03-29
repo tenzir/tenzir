@@ -444,7 +444,7 @@ class printer_plugin : public virtual plugin {
 public:
   // Alias for the byte chunk generation function.
   using printer
-    = std::function<auto(generator<table_slice>)->generator<chunk_ptr>>;
+    = std::function<auto(table_slice)->generator<chunk_ptr>>;
 
   /// Returns a printer for a specified schema.
   [[nodiscard]] virtual auto
@@ -468,8 +468,7 @@ public:
 class dumper_plugin : public virtual plugin {
 public:
   // Alias for the byte chunk dumping function.
-  using dumper
-    = std::function<auto(generator<chunk_ptr>)->generator<std::monostate>>;
+  using dumper = std::function<auto(chunk_ptr)->void>;
 
   /// Returns the dumper.
   [[nodiscard]] virtual auto

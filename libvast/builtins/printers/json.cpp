@@ -20,7 +20,7 @@ public:
   make_printer(const record&, type input_schema, operator_control_plane&) const
     -> caf::expected<printer> override {
     auto input_type = caf::get<record_type>(input_schema);
-    return [input_type](generator<table_slice> slices) -> generator<chunk_ptr> {
+    return [input_type](table_slice slice) -> generator<chunk_ptr> {
       // JSON printer should output NDJSON, see:
       // https://github.com/ndjson/ndjson-spec
       auto printer = vast::json_printer{{.oneline = true}};
@@ -28,17 +28,15 @@ public:
       // version of it that gets the schema ahead of time and only expects data
       // corresponding to exactly that schema.
       auto buffer = std::vector<char>{};
-      for (const auto& slice : slices) {
-        auto resolved_slice = resolve_enumerations(slice);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-        auto out_iter = std::back_inserter(buffer);
-        for (const auto& row : values(input_type, *array)) {
-          VAST_ASSERT_CHEAP(row);
-          const auto ok = printer.print(out_iter, *row);
-          VAST_ASSERT_CHEAP(ok);
-          out_iter = fmt::format_to(out_iter, "\n");
-        }
+      auto resolved_slice = resolve_enumerations(slice);
+      auto array
+        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto out_iter = std::back_inserter(buffer);
+      for (const auto& row : values(input_type, *array)) {
+        VAST_ASSERT_CHEAP(row);
+        const auto ok = printer.print(out_iter, *row);
+        VAST_ASSERT_CHEAP(ok);
+        out_iter = fmt::format_to(out_iter, "\n");
         auto chunk = chunk::make(std::exchange(buffer, {}));
         co_yield std::move(chunk);
       }
