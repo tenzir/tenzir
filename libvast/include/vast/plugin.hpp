@@ -416,23 +416,14 @@ public:
 /// @relates plugin
 class loader_plugin : public virtual plugin {
 public:
-  // Alias for the byte chunk generation function.
-  using loader = std::function<auto()->generator<chunk_ptr>>;
-
-  // Alias for the byte chunk -> table_slice transformation function.
-  using parser
-    = std::function<auto(generator<chunk_ptr>)->generator<table_slice>>;
-
   /// Returns the loader.
-  [[nodiscard]] virtual auto
-  make_loader(const record&, operator_control_plane&) const
-    -> caf::expected<loader>
+  virtual auto make_loader(const record&, operator_control_plane&) const
+    -> caf::expected<generator<chunk_ptr>>
     = 0;
 
   /// Returns the default parser for this loader.
-  [[nodiscard]] virtual auto
-  make_default_parser(const record&, operator_control_plane&) const
-    -> caf::expected<parser>
+  virtual auto get_default_parser(const record&) const
+    -> std::optional<std::pair<std::string, record>>
     = 0;
 };
 

@@ -62,11 +62,13 @@ struct fixture {
     // than one loader type.
     loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
     REQUIRE(loader_plugin);
-    current_loader = unbox(loader_plugin->make_loader({}, control_plane));
+    current_loader = [this] {
+      return unbox(loader_plugin->make_loader({}, control_plane));
+    };
   }
 
   const vast::loader_plugin* loader_plugin;
-  vast::loader_plugin::loader current_loader;
+  std::function<auto()->generator<chunk_ptr>> current_loader;
   mock_control_plane control_plane;
 };
 

@@ -21,46 +21,46 @@ class plugin : public virtual loader_plugin {
 public:
   static constexpr inline auto max_chunk_size = size_t{16384};
 
-  [[nodiscard]] auto make_loader(const record&, operator_control_plane&) const
-    -> caf::expected<loader> override {
-    return [timeout = read_timeout]() -> generator<chunk_ptr> {
-      auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
-      in_buf.read_timeout() = timeout;
-      auto current_data = std::vector<std::byte>{};
-      current_data.reserve(max_chunk_size);
-      auto eof_reached = false;
-      while (not eof_reached) {
-        auto current_char = in_buf.sbumpc();
-        if (current_char != detail::fdinbuf::traits_type::eof()) {
-          current_data.emplace_back(static_cast<std::byte>(current_char));
-        } else {
-          eof_reached = (not in_buf.timed_out());
-          if (current_data.empty()) {
+  auto make_loader(const record&, operator_control_plane&) const
+    -> caf::expected<generator<chunk_ptr>> override {
+    return std::invoke(
+      [](auto timeout) -> generator<chunk_ptr> {
+        auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
+        in_buf.read_timeout() = timeout;
+        auto current_data = std::vector<std::byte>{};
+        current_data.reserve(max_chunk_size);
+        auto eof_reached = false;
+        while (not eof_reached) {
+          auto current_char = in_buf.sbumpc();
+          if (current_char != detail::fdinbuf::traits_type::eof()) {
+            current_data.emplace_back(static_cast<std::byte>(current_char));
+          } else {
+            eof_reached = (not in_buf.timed_out());
+            if (current_data.empty()) {
+              if (not eof_reached) {
+                co_yield chunk::make_empty();
+                continue;
+              } else {
+                break;
+              }
+            }
+          }
+          if (eof_reached || current_data.size() == max_chunk_size) {
+            auto chunk = chunk::make(std::exchange(current_data, {}));
+            co_yield std::move(chunk);
             if (not eof_reached) {
-              co_yield chunk::make_empty();
-              continue;
-            } else {
-              break;
+              current_data.reserve(max_chunk_size);
             }
           }
         }
-        if (eof_reached || current_data.size() == max_chunk_size) {
-          auto chunk = chunk::make(std::exchange(current_data, {}));
-          co_yield std::move(chunk);
-          if (not eof_reached) {
-            current_data.reserve(max_chunk_size);
-          }
-        }
-      }
-      co_return;
-    };
+        co_return;
+      },
+      read_timeout);
   }
 
-  [[nodiscard]] auto
-  make_default_parser(const record&, operator_control_plane&) const
-    -> caf::expected<parser> override {
-    return caf::make_error(ec::unimplemented,
-                           "parser currently not implemented");
+  auto get_default_parser(const record&) const
+    -> std::optional<std::pair<std::string, record>> override {
+    return std::pair{"json", record{}};
   }
 
   [[nodiscard]] caf::error
