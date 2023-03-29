@@ -17,7 +17,7 @@ Checks: >
   -hicpp-*,
   -llvm-header-guard,
   -llvmlibc-*,
-  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
   -readability-braces-around-statements,
   -readability-else-after-return,
   -readability-function-cognitive-complexity,
