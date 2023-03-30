@@ -44,8 +44,8 @@ public:
   }
 
   [[nodiscard]] auto make_default_dumper() const
-    -> const dumper_plugin* override {
-    return vast::plugins::find<vast::dumper_plugin>("stdout");
+    -> std::optional<std::pair<std::string, record>> override {
+    return std::pair{"stdout", record{}};
   }
 
   [[nodiscard]] auto printer_allows_joining() const -> bool override {

@@ -443,8 +443,7 @@ public:
 class printer_plugin : public virtual plugin {
 public:
   // Alias for the byte chunk generation function.
-  using printer
-    = std::function<auto(table_slice)->generator<chunk_ptr>>;
+  using printer = std::function<auto(table_slice)->generator<chunk_ptr>>;
 
   /// Returns a printer for a specified schema.
   [[nodiscard]] virtual auto
@@ -454,7 +453,8 @@ public:
 
   /// Returns the default dumper for this printer.
   [[nodiscard]] virtual auto make_default_dumper() const
-    -> const dumper_plugin* = 0;
+    -> std::optional<std::pair<std::string, record>>
+    = 0;
 
   /// Returns whether the printer allows for joining output streams into a
   /// single dumper.
@@ -478,7 +478,8 @@ public:
 
   /// Returns the default printer for this dumper.
   [[nodiscard]] virtual auto make_default_printer() const
-    -> const printer_plugin* = 0;
+    -> std::optional<std::pair<std::string, record>>
+    = 0;
 
   /// Returns whether the dumper requires that the output from its preceding
   /// printer can be joined.

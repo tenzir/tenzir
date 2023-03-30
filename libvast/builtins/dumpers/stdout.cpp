@@ -25,8 +25,8 @@ public:
   }
 
   [[nodiscard]] auto make_default_printer() const
-    -> const printer_plugin* override {
-    return vast::plugins::find<vast::printer_plugin>("json");
+    -> std::optional<std::pair<std::string, record>> override {
+    return std::pair{"json", record{}};
   }
 
   [[nodiscard]] auto initialize([[maybe_unused]] const record& plugin_config,

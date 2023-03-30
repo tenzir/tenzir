@@ -193,14 +193,26 @@ public:
                                             dumper_name))};
       }
     } else {
-      dumper = printer->make_default_dumper();
-      if (!dumper) {
+      auto default_dumper = printer->make_default_dumper();
+      if (!default_dumper) {
         return {std::string_view{f, l},
                 caf::make_error(ec::invalid_configuration,
                                 fmt::format("failed to parse write operator: "
                                             "no available default sink for "
                                             "printing '{}' output "
                                             "found",
+                                            printer->name()))};
+      }
+      auto [default_dumper_name, _] = *default_dumper;
+      dumper = plugins::find<vast::dumper_plugin>(default_dumper_name);
+      if (!dumper) {
+        return {std::string_view{f, l},
+                caf::make_error(ec::invalid_configuration,
+                                fmt::format("failed to parse write operator: "
+                                            "default sink '{0}' for "
+                                            "printing '{1}' output "
+                                            "found",
+                                            default_dumper_name,
                                             printer->name()))};
       }
     }
@@ -285,14 +297,26 @@ public:
                                             printer_name))};
       }
     } else {
-      printer = dumper->make_default_printer();
-      if (!printer) {
+      auto default_printer = dumper->make_default_printer();
+      if (!default_printer) {
         return {std::string_view{f, l},
                 caf::make_error(ec::invalid_configuration,
                                 fmt::format("failed to parse write operator: "
                                             "no available default printer for "
                                             "sink '{}' "
                                             "found",
+                                            dumper->name()))};
+      }
+      auto [default_printer_name, _] = *default_printer;
+      printer = plugins::find<vast::printer_plugin>(default_printer_name);
+      if (!printer) {
+        return {std::string_view{f, l},
+                caf::make_error(ec::invalid_configuration,
+                                fmt::format("failed to parse write operator: "
+                                            "default format '{0}' for "
+                                            "sink '{1}' "
+                                            "is unavailable",
+                                            default_printer_name,
                                             dumper->name()))};
       }
     }
