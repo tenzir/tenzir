@@ -291,6 +291,9 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning)
 endif ()
 
+set(gcc12plus
+    "$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,12>>"
+)
 target_compile_options(
   libvast_internal
   INTERFACE -Wall
@@ -300,6 +303,9 @@ target_compile_options(
             -Werror=odr
             -Wundef
             $<$<CONFIG:CI>:-Werror
+            # Spurious warnings when ASAN is combined with optimizations.
+            $<$<AND:$<CONFIG:CI>,${gcc12plus}>:-Wno-maybe-uninitialized>
+            $<$<AND:$<CONFIG:CI>,${gcc12plus}>:-Wno-restrict>
             # Never treat deprecation warnings as errors.
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>

@@ -1,10 +1,10 @@
 # -- dependencies --------------------------------------------------------------
 
-FROM python:3.10-slim-bullseye AS dependencies
+FROM debian:bookworm-slim AS dependencies
 LABEL maintainer="engineering@tenzir.com"
 
-ENV CC="gcc-10" \
-    CXX="g++-10"
+ENV CC="gcc-12" \
+    CXX="g++-12"
 
 WORKDIR /tmp/vast
 
@@ -42,8 +42,8 @@ FROM dependencies AS development
 
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}" \
-    CC="gcc-10" \
-    CXX="g++-10" \
+    CC="gcc-12" \
+    CXX="g++-12" \
     VAST_DB_DIRECTORY="/var/lib/vast" \
     VAST_LOG_FILE="/var/log/vast/server.log"
 
@@ -77,7 +77,7 @@ CMD ["--help"]
 
 # -- production ----------------------------------------------------------------
 
-FROM python:3.10-slim-bullseye AS production
+FROM debian:bookworm-slim AS production
 
 # When changing these, make sure to also update the entries in the flake.nix
 # file.
@@ -95,18 +95,18 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ca-certificates \
       gnupg2 \
-      libasan5 \
+      libasan6 \
       libc++1 \
       libc++abi1 \
-      libflatbuffers1 \
-      libfmt7 \
+      libflatbuffers2 \
+      libfmt9 \
       libhttp-parser2.9 \
       libpcap0.8 \
       libre2-9 \
-      libspdlog1 \
+      libspdlog1.10 \
       libunwind8 \
       libxxhash-dev \
-      libyaml-cpp0.6 \
+      libyaml-cpp0.7 \
       lsb-release \
       openssl \
       robin-map-dev \

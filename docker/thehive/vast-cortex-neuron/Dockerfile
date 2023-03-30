@@ -7,6 +7,10 @@ USER root
 
 WORKDIR /worker
 COPY . vast
-RUN pip3 install --no-cache-dir -r vast/requirements.txt
+RUN apt-get update && \
+    apt install -y \
+        python3 && \
+        rm -rf /var/lib/apt/lists/* && \
+        pip3 install --no-cache-dir -r vast/requirements.txt
 
 ENTRYPOINT ["vast/search.py"]
