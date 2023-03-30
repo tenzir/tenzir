@@ -841,13 +841,21 @@ void index_state::schedule_lookups() {
       return;
     }
     auto immediate_completion = [&](const query_queue::entry& x) {
-      for (auto qid : x.queries)
-        if (auto client = pending_queries.handle_completion(qid))
+      for (auto qid : x.queries) {
+        if (auto client = pending_queries.handle_completion(qid)) {
+          VAST_DEBUG("{} completes query {} immediately", *self, qid);
           self->send(*client, atom::done_v);
+        }
+      }
     };
     if (next->erased) {
-      VAST_DEBUG("{} skips erased partition {}", *self, next->partition);
+      VAST_VERBOSE("{} skips erased partition {}", *self, next->partition);
       immediate_completion(*next);
+      continue;
+    }
+    if (next->queries.empty()) {
+      VAST_VERBOSE("{} skips partition {} because it has no scheduled queries",
+                   *self, next->partition);
       continue;
     }
     VAST_DEBUG("{} schedules partition {} for {}", *self, next->partition,
