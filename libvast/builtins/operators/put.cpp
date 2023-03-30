@@ -181,7 +181,7 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    auto map = std::vector<std::pair<std::string, data>>{
+    auto map = std::vector<std::tuple<std::string, data>>{
       config_.extractor_to_value.begin(), config_.extractor_to_value.end()};
     std::sort(map.begin(), map.end());
     auto result = std::string{"put"};
