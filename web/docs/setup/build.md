@@ -33,7 +33,7 @@ Every [release](https://github.com/tenzir/vast/releases) of VAST includes an
 |✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 0.18.7|Implementation of the actor model in C++. (Bundled as submodule.)|
 |✓|[OpenSSL](https://www.openssl.org)||Utilities for secure networking and cryptography.|
 |✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 1.12.0|Memory-efficient cross-platform serialization library.|
-|✓|[Boost](https://arrow.apache.org)|>= 1.70.0|Required for multiple reasons.|
+|✓|[Boost](https://arrow.apache.org)|>= 1.70.0|Required as a general utility library.|
 |✓|[Apache Arrow](https://arrow.apache.org)|>= 8.0.0|Required for in-memory data representation. Must be built with Compute, Zstd and Parquet enabled.|
 |✓|[re2](https://github.com/google/re2)||Required for regular expressione evaluation.|
 |✓|[yaml-cpp](https://github.com/jbeder/yaml-cpp)|>= 0.6.2|Required for reading YAML configuration files.|
