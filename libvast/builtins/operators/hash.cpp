@@ -129,7 +129,7 @@ public:
     : config_(std::move(configuration)) {
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     // Get the target field if it exists.
     const auto& schema_rt = caf::get<record_type>(schema);

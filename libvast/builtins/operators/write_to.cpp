@@ -36,10 +36,9 @@ public:
     : printer_plugin_{&printer} {
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    auto test = static_cast<operator_control_plane*>(nullptr);
-    return printer_plugin_->make_printer({}, schema, *test);
+    return printer_plugin_->make_printer({}, schema, ctrl);
   }
 
   auto process(table_slice slice, state_type& state) const
@@ -101,16 +100,15 @@ public:
     : printer_plugin_{&printer}, dumper_plugin_{&dumper} {
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
     writing_state ws;
-    auto test = static_cast<operator_control_plane*>(nullptr);
-    auto new_printer = printer_plugin_->make_printer({}, schema, *test);
+    auto new_printer = printer_plugin_->make_printer({}, schema, ctrl);
     if (!new_printer) {
       return new_printer.error();
     }
     ws.p = std::move(*new_printer);
-    auto new_dumper = dumper_plugin_->make_dumper({}, schema, *test);
+    auto new_dumper = dumper_plugin_->make_dumper({}, schema, ctrl);
     if (!new_dumper) {
       return new_dumper.error();
     }
