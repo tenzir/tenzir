@@ -269,6 +269,10 @@ public:
     -> generator<output_type> {
     auto states = std::unordered_map<type, state_type>{};
     for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
       auto it = states.find(slice.schema());
       if (it == states.end()) {
         auto state = initialize(slice.schema(), ctrl);
