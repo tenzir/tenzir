@@ -303,19 +303,28 @@ struct query_manager_state {
   }
 
   void run() {
-    while (!executor_exhausted()) {
+    VAST_DEBUG("query: entering executor");
+    while (true) {
+      if (executor_exhausted()) {
+        // The executor can always become exhausted, for example due to `head`.
+        VAST_DEBUG("query: leaving due to exhausted executor");
+        break;
+      }
       if (enough_shippable_events()) {
         // We could continue even when we have enough shippable events, but
         // choose not to in case the user will not request more.
+        VAST_DEBUG("query: leaving due enough events");
         break;
       }
       if (source_buffer.empty() && active_index_query) {
         // If the source buffer is empty, we want to continue until the source
         // requests more data from the index. If the index is exhausted, the
         // source will never make a request and becomes exhausted instead.
+        VAST_DEBUG("query: leaving due to empty source && active index query");
         break;
       }
       auto result = std::move(*executor_it);
+      VAST_DEBUG("query: advancing executor");
       ++executor_it;
       if (!result) {
         // This will abort the execution. We currently do not inform the query
@@ -326,8 +335,10 @@ struct query_manager_state {
     if (should_ship_results()) {
       // We can reach this without having a pending promise if we already
       // shipped the results for the current query but still receive more data
-      // form the index.
+      // from the index.
       if (promise.pending()) {
+        VAST_DEBUG("query: shipping results ({} available)",
+                   shippable_events_count);
         auto rq = std::exchange(request, {});
         VAST_ASSERT(rq.response);
         rq.response->append(create_response());
@@ -474,6 +485,8 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
       }
       self->state.limit = max_events_to_output;
       if (self->state.should_ship_results()) {
+        VAST_DEBUG("query: shipping results immediately ({} available)",
+                   self->state.shippable_events_count);
         rq.response->append(self->state.create_response());
         return atom::done_v;
       }
