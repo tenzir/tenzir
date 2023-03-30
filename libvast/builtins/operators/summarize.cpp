@@ -740,7 +740,7 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     auto result = aggregation::make(schema, config_);
     if (!result) {
