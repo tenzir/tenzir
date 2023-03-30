@@ -37,10 +37,9 @@ public:
         const auto ok = printer.print(out_iter, *row);
         VAST_ASSERT_CHEAP(ok);
         out_iter = fmt::format_to(out_iter, "\n");
-        auto chunk = chunk::make(std::exchange(buffer, {}));
-        co_yield std::move(chunk);
       }
-      co_return;
+      auto chunk = chunk::make(std::move(buffer));
+      co_yield std::move(chunk);
     };
   }
 
