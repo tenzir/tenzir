@@ -192,6 +192,12 @@ struct query_format_options {
 
 } // namespace
 
+struct query_next_state {
+  size_t limit = 0u;
+  http_request request;
+  caf::typed_response_promise<atom::done> promise = {};
+};
+
 struct query_manager_state {
   query_manager_state() = default;
 
@@ -203,16 +209,13 @@ struct query_manager_state {
   bool expand = {};
   duration ttl = {};
   caf::disposable ttl_disposable = {};
-  caf::typed_response_promise<atom::done> promise = {};
-  http_request request;
-  size_t limit = 0u;
-  std::string response_body; // The current response to the GET endpoint
   std::deque<table_slice> source_buffer;
   std::deque<table_slice> sink_buffer;
   size_t shippable_events_count = 0;
   std::optional<system::query_cursor> cursor = std::nullopt;
   size_t processed_partitions = 0u;
   bool active_index_query = false;
+  std::deque<query_next_state> nexts;
   generator<caf::expected<void>> executor;
   generator<caf::expected<void>>::iterator executor_it = {};
 
@@ -235,7 +238,7 @@ struct query_manager_state {
     });
   }
 
-  std::string create_response() {
+  auto create_response(const query_next_state& next) -> std::string {
     auto printer
       = json_printer{{.oneline = true,
                       .flattened = format_opts.flatten,
@@ -251,7 +254,8 @@ struct query_manager_state {
       auto slice = std::move(*it);
       if (slice.rows() == 0)
         continue;
-      if (const auto remaining = limit - written; slice.rows() > remaining) {
+      if (const auto remaining = next.limit - written;
+          slice.rows() > remaining) {
         auto [head, tail] = split(slice, remaining);
         *it = std::move(tail);
         slice = std::move(head);
@@ -274,7 +278,7 @@ struct query_manager_state {
         VAST_ASSERT_CHEAP(ok);
       }
       written += slice.rows();
-      if (written >= limit) {
+      if (written >= next.limit) {
         break;
       }
     }
@@ -302,26 +306,26 @@ struct query_manager_state {
     return result;
   }
 
-  void run() {
+  void run_executor(const query_next_state& next) {
     VAST_DEBUG("query: entering executor");
     while (true) {
       if (executor_exhausted()) {
         // The executor can always become exhausted, for example due to `head`.
         VAST_DEBUG("query: leaving due to exhausted executor");
-        break;
+        return;
       }
-      if (enough_shippable_events()) {
+      if (enough_shippable_events(next)) {
         // We could continue even when we have enough shippable events, but
         // choose not to in case the user will not request more.
         VAST_DEBUG("query: leaving due enough events");
-        break;
+        return;
       }
       if (source_buffer.empty() && active_index_query) {
         // If the source buffer is empty, we want to continue until the source
         // requests more data from the index. If the index is exhausted, the
         // source will never make a request and becomes exhausted instead.
         VAST_DEBUG("query: leaving due to empty source && active index query");
-        break;
+        return;
       }
       auto result = std::move(*executor_it);
       VAST_DEBUG("query: advancing executor");
@@ -332,36 +336,45 @@ struct query_manager_state {
         VAST_WARN("error while applying pipeline: {}", result.error());
       }
     }
-    if (should_ship_results()) {
-      // We can reach this without having a pending promise if we already
-      // shipped the results for the current query but still receive more data
-      // from the index.
-      if (promise.pending()) {
-        VAST_DEBUG("query: shipping results ({} available)",
-                   shippable_events_count);
-        auto rq = std::exchange(request, {});
-        VAST_ASSERT(rq.response);
-        rq.response->append(create_response());
-        promise.deliver(atom::done_v);
+  }
+
+  void run() {
+    // Note: We can reach this without having a pending next request.
+    while (!nexts.empty()) {
+      auto& next = nexts.front();
+      run_executor(next);
+      if (!should_ship_results(next)) {
+        return;
       }
+      VAST_DEBUG("query: shipping results ({} available)",
+                 shippable_events_count);
+      VAST_ASSERT(next.request.response);
+      VAST_ASSERT(next.promise.pending());
+      next.request.response->append(create_response(next));
+      next.promise.deliver(atom::done_v);
+      nexts.pop_front();
+      // Possibly continue, because we might be able to fullfil another request.
     }
   }
 
-  bool index_exhausted() const {
+  auto index_exhausted() const -> bool {
     VAST_ASSERT(cursor);
     return cursor->candidate_partitions == processed_partitions;
   }
 
-  bool enough_shippable_events() const {
-    return shippable_events_count >= limit;
+  auto enough_shippable_events(const query_next_state& next) const -> bool {
+    if (nexts.empty()) {
+      return false;
+    }
+    return shippable_events_count >= next.limit;
   }
 
-  bool executor_exhausted() const {
+  auto executor_exhausted() const -> bool {
     return executor_it == executor.end();
   }
 
-  bool should_ship_results() const {
-    return enough_shippable_events() || executor_exhausted();
+  auto should_ship_results(const query_next_state& next) const -> bool {
+    return enough_shippable_events(next) || executor_exhausted();
   }
 };
 
@@ -459,8 +472,13 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   VAST_ASSERT(result.is_closed());
   self->state.executor = make_local_executor(std::move(result));
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    if (self->state.promise.pending())
-      self->state.promise.deliver(msg.reason);
+    while (!self->state.nexts.empty()) {
+      auto& next = self->state.nexts.front();
+      if (next.promise.pending()) {
+        next.promise.deliver(msg.reason);
+      }
+      self->state.nexts.pop_front();
+    }
     self->quit();
   });
   return {
@@ -479,21 +497,14 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
         rq.response->abort(500, "query manager not ready");
         return atom::done_v;
       }
-      if (self->state.promise.pending()) {
-        rq.response->abort(400, "there is another active `next` request");
-        return atom::done_v;
-      }
-      self->state.limit = max_events_to_output;
-      if (self->state.should_ship_results()) {
-        VAST_DEBUG("query: shipping results immediately ({} available)",
-                   self->state.shippable_events_count);
-        rq.response->append(self->state.create_response());
-        return atom::done_v;
-      }
-      self->state.request = std::move(rq);
-      self->state.promise = self->make_response_promise<atom::done>();
+      auto promise = self->make_response_promise<atom::done>();
+      self->state.nexts.push_back(query_next_state{
+        .limit = max_events_to_output,
+        .request = std::move(rq),
+        .promise = promise,
+      });
       self->state.run();
-      return self->state.promise;
+      return promise;
     },
     // Index-facing API
     [self](vast::table_slice& slice) {
