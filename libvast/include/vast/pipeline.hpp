@@ -198,7 +198,8 @@ public:
   using output_type = Output;
 
   /// Returns the initial state for when a schema is first encountered.
-  virtual auto initialize(const type& schema) const -> caf::expected<state_type>
+  virtual auto initialize(const type& schema, operator_control_plane&) const
+    -> caf::expected<state_type>
     = 0;
 
   /// Processes a single slice with the corresponding schema-specific state.
@@ -220,7 +221,7 @@ public:
     for (auto&& slice : input) {
       auto it = states.find(slice.schema());
       if (it == states.end()) {
-        auto state = initialize(slice.schema());
+        auto state = initialize(slice.schema(), ctrl);
         if (!state) {
           ctrl.abort(state.error());
           break;

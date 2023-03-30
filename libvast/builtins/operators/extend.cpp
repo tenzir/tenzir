@@ -142,7 +142,7 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     auto& schema_rt = caf::get<record_type>(schema);
     for (const auto& [field, _] : config_.field_to_value)

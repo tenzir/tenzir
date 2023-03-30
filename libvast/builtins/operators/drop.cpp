@@ -110,7 +110,7 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
