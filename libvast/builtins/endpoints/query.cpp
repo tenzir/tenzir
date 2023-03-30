@@ -339,7 +339,10 @@ struct query_manager_state {
   }
 
   void run() {
-    // Note: We can reach this without having a pending next request.
+    // We have to wait until the cursor is provisioned.
+    if (!cursor) {
+      return;
+    }
     while (!nexts.empty()) {
       auto& next = nexts.front();
       run_executor(next);
@@ -358,8 +361,7 @@ struct query_manager_state {
   }
 
   auto index_exhausted() const -> bool {
-    VAST_ASSERT(cursor);
-    return cursor->candidate_partitions == processed_partitions;
+    return cursor && cursor->candidate_partitions == processed_partitions;
   }
 
   auto enough_shippable_events(const query_next_state& next) const -> bool {
@@ -392,21 +394,20 @@ public:
         if (state.index_exhausted()) {
           break;
         }
-        if (!state.active_index_query) {
+        if (!state.active_index_query && state.cursor) {
           VAST_DEBUG("query_source: sending query to index");
-          VAST_ASSERT(state.cursor);
           manager_->send(state.index, atom::query_v, state.cursor->id,
                          BATCH_SIZE);
           state.active_index_query = true;
         }
         VAST_DEBUG("query_source: stalling");
         co_yield {};
-        continue;
+      } else {
+        VAST_DEBUG("query_source: popping element from queue");
+        auto slice = std::move(state.source_buffer.front());
+        state.source_buffer.pop_front();
+        co_yield std::move(slice);
       }
-      VAST_DEBUG("query_source: popping element from queue");
-      auto slice = std::move(state.source_buffer.front());
-      state.source_buffer.pop_front();
-      co_yield std::move(slice);
     }
     VAST_DEBUG("query_source: done");
   }
@@ -471,6 +472,7 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   // Thus, we know that we now have a valid `void -> void` pipeline.
   VAST_ASSERT(result.is_closed());
   self->state.executor = make_local_executor(std::move(result));
+  self->state.executor_it = self->state.executor.begin();
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     while (!self->state.nexts.empty()) {
       auto& next = self->state.nexts.front();
@@ -486,17 +488,12 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
       VAST_DEBUG("query: provision");
       self->state.refresh_ttl();
       self->state.cursor = cursor;
-      self->state.executor_it = self->state.executor.begin();
       VAST_DEBUG("query: provision done");
     },
     [self](atom::next, http_request& rq,
            uint64_t max_events_to_output) -> caf::result<atom::done> {
       VAST_DEBUG("query: received next request: {}", max_events_to_output);
       self->state.refresh_ttl();
-      if (!self->state.cursor) {
-        rq.response->abort(500, "query manager not ready");
-        return atom::done_v;
-      }
       auto promise = self->make_response_promise<atom::done>();
       self->state.nexts.push_back(query_next_state{
         .limit = max_events_to_output,
