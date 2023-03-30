@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "web/fwd.hpp"
+
 #include <vast/command.hpp>
 
 #include <caf/actor_system.hpp>
-#include <web/fwd.hpp>
 
 namespace vast::plugins::web {
 
