@@ -5,13 +5,14 @@ FROM $VAST_CONTAINER_REGISTRY/tenzir/vast:$VAST_VERSION
 USER root
 RUN apt-get update && \
     apt install -y \
-        curl && \
+        curl \
+        python3 && \
         rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /home/vast && chown vast:vast /home/vast
 USER vast:vast
 ENV POETRY_HOME=$PREFIX
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
 
 WORKDIR /vast/python/
 # Layer the Poetry install to optimize the dev experience.
