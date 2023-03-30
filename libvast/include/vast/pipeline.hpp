@@ -199,7 +199,7 @@ struct remove_generator<generator<T>> {
 };
 
 template <class T>
-using remove_generator_t = remove_generator<T>::type;
+using remove_generator_t = typename remove_generator<T>::type;
 
 /// Pipeline operator with a per-schema initialization.
 ///
