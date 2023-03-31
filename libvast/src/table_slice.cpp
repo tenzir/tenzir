@@ -600,6 +600,24 @@ split(const table_slice& slice, size_t partition_point) {
   };
 }
 
+auto subslice(const table_slice& slice, size_t begin, size_t end)
+  -> table_slice {
+  VAST_ASSERT(begin <= end && end <= slice.rows());
+  if (begin == 0 && end == slice.rows()) {
+    return slice;
+  }
+  auto offset = slice.offset();
+  auto batch = to_record_batch(slice);
+  auto sub_slice = table_slice{
+    batch->Slice(detail::narrow_cast<int64_t>(begin - offset),
+                 detail::narrow_cast<int64_t>(end - begin)),
+    slice.schema(),
+  };
+  sub_slice.offset(offset + begin);
+  sub_slice.import_time(slice.import_time());
+  return sub_slice;
+}
+
 uint64_t rows(const std::vector<table_slice>& slices) {
   auto result = uint64_t{0};
   for (const auto& slice : slices)

@@ -179,6 +179,28 @@ TEST(tail 5) {
   }
 }
 
+TEST(unique) {
+  auto ops = unbox(pipeline::parse("select id.orig_h | unique")).unwrap();
+  ops.insert(ops.begin(), std::make_unique<source>(std::vector<table_slice>{
+                            head(zeek_conn_log.at(0), 1), // = 1
+                            head(zeek_conn_log.at(0), 1), // + 0
+                            head(zeek_conn_log.at(0), 5), // + 4
+                            head(zeek_conn_log.at(0), 0), // + 0
+                            head(zeek_conn_log.at(0), 5), // + 4
+                            head(zeek_conn_log.at(0), 7), // + 5
+                            head(zeek_conn_log.at(0), 7), // + 6
+                          }));
+  auto count = size_t{0};
+  ops.push_back(std::make_unique<sink>([&](table_slice slice) {
+    count += slice.rows();
+  }));
+  auto executor = make_local_executor(pipeline{std::move(ops)});
+  for (auto&& error : executor) {
+    REQUIRE_NOERROR(error);
+  }
+  CHECK_EQUAL(count, size_t{1 + 0 + 4 + 0 + 4 + 5 + 6});
+}
+
 FIXTURE_SCOPE_END()
 
 TEST(pipeline operator typing) {
@@ -259,7 +281,8 @@ TEST(to_string) {
     "| tail 1 "
     "| select :ip, timestamp "
     "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
-    "| taste 123"};
+    "| taste 123 "
+    "| unique"};
   auto actual = unbox(pipeline::parse(expected)).to_string();
   CHECK_EQUAL(actual, expected);
 }
