@@ -238,9 +238,23 @@ private:
   }
 };
 
+template <class T>
+struct remove_generator {
+  using type = T;
+};
+
+template <class T>
+struct remove_generator<generator<T>> {
+  using type = T;
+};
+
+template <class T>
+using remove_generator_t = typename remove_generator<T>::type;
+
 /// Pipeline operator with a per-schema initialization.
 ///
-/// Usage: Override `initialize` and `process`, perhaps `finish`.
+/// Usage: Override `initialize` and `process`, perhaps `finish`. The
+/// `output_type` can also be a `generator`.
 template <class Self, class State, class Output = table_slice>
 class schematic_operator : public crtp_operator<Self> {
 public:
@@ -259,14 +273,15 @@ public:
 
   /// Called when the input is exhausted.
   virtual auto finish(std::unordered_map<type, state_type> states,
-                      operator_control_plane&) const -> generator<output_type> {
+                      operator_control_plane&) const
+    -> generator<remove_generator_t<output_type>> {
     (void)states;
     co_return;
   }
 
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<output_type> {
+    -> generator<remove_generator_t<output_type>> {
     auto states = std::unordered_map<type, state_type>{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -282,7 +297,15 @@ public:
         }
         it = states.try_emplace(it, slice.schema(), *state);
       }
-      co_yield process(std::move(slice), it->second);
+      auto result = process(std::move(slice), it->second);
+      if constexpr (std::is_same_v<remove_generator_t<output_type>,
+                                   output_type>) {
+        co_yield std::move(result);
+      } else {
+        for (auto&& x : result) {
+          co_yield std::move(x);
+        }
+      }
     }
     for (auto&& output : finish(std::move(states), ctrl)) {
       co_yield output;

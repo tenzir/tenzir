@@ -120,6 +120,48 @@ struct sink final : public crtp_operator<sink> {
 
 struct fixture : fixtures::events {};
 
+FIXTURE_SCOPE(pipeline_fixture, fixture)
+
+TEST(taste 42) {
+  {
+    auto v = unbox(pipeline::parse("taste 42")).unwrap();
+    v.insert(v.begin(),
+             std::make_unique<source>(std::vector<table_slice>{
+               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+    auto count = 0;
+    v.push_back(std::make_unique<sink>([&](table_slice) {
+      count += 1;
+    }));
+    auto p = pipeline{std::move(v)};
+    for (auto&& result : make_local_executor(std::move(p))) {
+      REQUIRE_NOERROR(result);
+    }
+    CHECK_GREATER(count, 0);
+  }
+}
+
+TEST(source | where #type == "zeek.conn" | sink) {
+  auto count = size_t{0};
+  auto v = unbox(pipeline::parse(R"(taste 42 | where #type == "zeek.conn")"))
+             .unwrap();
+  v.insert(v.begin(),
+           std::make_unique<source>(std::vector<table_slice>{
+             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 2),
+             head(zeek_conn_log.at(0), 3), head(zeek_conn_log.at(0), 4)}));
+  v.push_back(std::make_unique<sink>([&](table_slice slice) {
+    MESSAGE("---- sink ----");
+    count += slice.rows();
+  }));
+  auto executor = make_local_executor(pipeline{std::move(v)});
+  for (auto&& result : executor) {
+    REQUIRE_NOERROR(result);
+  }
+  REQUIRE_EQUAL(count, size_t{10});
+}
+
+FIXTURE_SCOPE_END()
+
 TEST(pipeline operator typing) {
   dummy_control_plane ctrl;
   {
@@ -171,64 +213,6 @@ TEST(command) {
   }
 }
 
-TEST(to_string) {
-  // The behavior tested here should not be relied upon and may change.
-  auto expected = std::string{
-    "drop xyz, :ip "
-    "| hash --salt=\"eIudsnREd\" name "
-    "| head 42 "
-    "| pseudonymize --method=\"crypto-pan\" --seed=\"abcd1234\" a "
-    "| rename test=:suricata.flow, source_port=src_port "
-    "| put a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
-    "| select :ip, timestamp "
-    "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
-    "| taste 123"};
-  auto actual = unbox(pipeline::parse(expected)).to_string();
-  CHECK_EQUAL(actual, expected);
-}
-
-FIXTURE_SCOPE(pipeline_fixture, fixture)
-
-TEST(taste 42) {
-  {
-    auto v = unbox(pipeline::parse("taste 42")).unwrap();
-    v.insert(v.begin(),
-             std::make_unique<source>(std::vector<table_slice>{
-               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
-               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
-    auto count = 0;
-    v.push_back(std::make_unique<sink>([&](table_slice) {
-      count += 1;
-    }));
-    auto p = pipeline{std::move(v)};
-    for (auto&& result : make_local_executor(std::move(p))) {
-      REQUIRE_NOERROR(result);
-    }
-    CHECK_GREATER(count, 0);
-  }
-}
-
-TEST(source | where #type == "zeek.conn" | sink) {
-  auto count = size_t{0};
-  auto v = unbox(pipeline::parse(R"(taste 42 | where #type == "zeek.conn")"))
-             .unwrap();
-  v.insert(v.begin(),
-           std::make_unique<source>(std::vector<table_slice>{
-             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 2),
-             head(zeek_conn_log.at(0), 3), head(zeek_conn_log.at(0), 4)}));
-  v.push_back(std::make_unique<sink>([&](table_slice slice) {
-    MESSAGE("---- sink ----");
-    count += slice.rows();
-  }));
-  auto executor = make_local_executor(pipeline{std::move(v)});
-  for (auto&& result : executor) {
-    REQUIRE_NOERROR(result);
-  }
-  REQUIRE_EQUAL(count, size_t{10});
-}
-
-FIXTURE_SCOPE_END()
-
 TEST(predicate pushdown into empty pipeline) {
   auto pipeline = unbox(pipeline::parse("where x == 1 | where y == 2"));
   auto result
@@ -251,6 +235,38 @@ TEST(predicate pushdown select conflict) {
   auto expected_expr
     = conjunction{unbox(to<expression>("x == 0")), trivially_true_expression()};
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
+}
+
+TEST(to_string) {
+  // The behavior tested here should not be relied upon and may change.
+  auto expected = std::string{
+    "drop xyz, :ip "
+    "| hash --salt=\"eIudsnREd\" name "
+    "| head 42 "
+    "| pseudonymize --method=\"crypto-pan\" --seed=\"abcd1234\" a "
+    "| rename test=:suricata.flow, source_port=src_port "
+    "| put a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
+    "| select :ip, timestamp "
+    "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
+    "| taste 123"};
+  auto actual = unbox(pipeline::parse(expected)).to_string();
+  CHECK_EQUAL(actual, expected);
+}
+
+TEST(to - stdout) {
+  auto to_pipeline = pipeline::parse("to stdout");
+  REQUIRE_NOERROR(to_pipeline);
+  REQUIRE_EQUAL(to_pipeline->to_string(), "write json | to stdout");
+}
+
+TEST(to - to stdout write json) {
+  auto to_pipeline = pipeline::parse("to stdout write json");
+  REQUIRE_NOERROR(to_pipeline);
+  REQUIRE_EQUAL(to_pipeline->to_string(), "write json | to stdout");
+}
+
+TEST(to - invalid inputs) {
+  REQUIRE_ERROR(pipeline::parse("to json write stdout"));
 }
 
 } // namespace

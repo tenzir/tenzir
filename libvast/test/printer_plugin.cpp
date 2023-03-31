@@ -91,6 +91,18 @@ struct fixture : fixtures::events {
     co_return;
   }
 
+  auto collect_chunks(std::function<generator<table_slice>()> slice_generator,
+                      printer_plugin::printer current_printer)
+    -> std::vector<chunk_ptr> {
+    auto chunks = std::vector<chunk_ptr>{};
+    for (auto&& x : slice_generator()) {
+      auto chunks_per_slice = collect(current_printer(x));
+      chunks.insert(chunks.end(), chunks_per_slice.begin(),
+                    chunks_per_slice.end());
+    }
+    return chunks;
+  }
+
   const vast::printer_plugin* printer_plugin;
   mock_control_plane control_plane;
 };
@@ -111,7 +123,11 @@ TEST(json printer - singular slice - singular column) {
     = unbox(printer_plugin->make_printer({}, g.schema, control_plane));
   auto str = std::string{R"({"content": "foo"}
 )"};
-  auto chunks = collect(current_printer(generate_basic_table_slices(1, 1, g)));
+  auto slice_generator = [this, &g]() -> generator<table_slice> {
+    return generate_basic_table_slices(1, 1, g);
+  };
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{1});
   auto str_chunk = chunk::copy(str);
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
@@ -135,7 +151,11 @@ TEST(json printer - multiple slices - singular column) {
 )",
     R"({"content": "foo"}
 )"};
-  auto chunks = collect(current_printer(generate_basic_table_slices(3, 1, g)));
+  auto slice_generator = [this, &g]() -> generator<table_slice> {
+    return generate_basic_table_slices(3, 1, g);
+  };
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{3});
   for (auto i = size_t{0}; i < chunks.size(); ++i) {
     auto str_chunk = chunk::copy(strs[i]);
@@ -158,7 +178,11 @@ TEST(json printer - singular slice - multiple columns) {
   auto str = std::string{
     R"({"content": "foo", "content2": "foo", "content3": "foo"}
 )"};
-  auto chunks = collect(current_printer(generate_basic_table_slices(1, 3, g)));
+  auto slice_generator = [this, &g]() -> generator<table_slice> {
+    return generate_basic_table_slices(1, 3, g);
+  };
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{1});
   auto str_chunk = chunk::copy(str);
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
@@ -182,7 +206,11 @@ TEST(json printer - multiple slices - multiple columns) {
 )",
     R"({"content": "foo", "content2": "foo", "content3": "foo"}
 )"};
-  auto chunks = collect(current_printer(generate_basic_table_slices(3, 3, g)));
+  auto slice_generator = [this, &g]() -> generator<table_slice> {
+    return generate_basic_table_slices(3, 3, g);
+  };
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{3});
   for (auto i = size_t{0}; i < chunks.size(); ++i) {
     auto str_chunk = chunk::copy(strs[i]);
@@ -221,7 +249,8 @@ TEST(json printer - nested columns) {
 )",
     R"({"f1": "n2", "f2": 3, "f3_rec": {"f3.1": "p2", "f3.2": 222}}
 )"};
-  auto chunks = collect(current_printer(slice_generator()));
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{2});
   for (auto i = size_t{0}; i < chunks.size(); ++i) {
     auto str_chunk = chunk::copy(strs[i]);
@@ -245,7 +274,8 @@ TEST(json printer - list type) {
     = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
   auto str = std::string{R"({"list": [0, 1, 2]}
 )"};
-  auto chunks = collect(current_printer(slice_generator()));
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{1});
   auto str_chunk = chunk::copy(str);
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
@@ -268,7 +298,8 @@ TEST(json printer - uint64 type) {
 {"foo": 1}
 {"foo": 2}
 )"};
-  auto chunks = collect(current_printer(slice_generator()));
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{1});
   for (auto i = size_t{0}; i < chunks.size(); ++i) {
     auto str_chunk = chunk::copy(strs[i]);
@@ -323,7 +354,9 @@ TEST(json printer - list of structs) {
 )",
     R"({"foo": [{"bar": 4, "baz": 5}, {"bar": 6, "baz": 7}]}
 )"};
-  auto chunks = collect(current_printer(slice_generator()));
+
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{2});
   for (auto i = size_t{0}; i < chunks.size(); ++i) {
     auto str_chunk = chunk::copy(strs[i]);
@@ -345,7 +378,8 @@ TEST(json printer - suricata netflow) {
   auto str = std::string{
     R"({"timestamp": "2011-08-14T05:38:55.549713", "flow_id": 929669869939483, "pcap_cnt": null, "vlan": null, "in_iface": null, "src_ip": "147.32.84.165", "src_port": 138, "dest_ip": "147.32.84.255", "dest_port": 138, "proto": "UDP", "event_type": "netflow", "community_id": null, "netflow": {"pkts": 2, "bytes": 486, "start": "2011-08-12T12:53:47.928539", "end": "2011-08-12T12:53:47.928552", "age": 0}, "app_proto": "failed"}
 )"};
-  auto chunks = collect(current_printer(slice_generator()));
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{1});
   auto str_chunk = chunk::copy(str);
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
@@ -387,7 +421,8 @@ TEST(json printer - zeek conn log) {
 {"ts": "2009-11-18T08:20:18.281001", "uid": "mymcd8Veike", "id.orig_h": "192.168.1.102", "id.orig_p": 138, "id.resp_h": "192.168.1.255", "id.resp_p": 138, "proto": "udp", "service": null, "duration": "2.25s", "orig_bytes": 348, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 2, "orig_ip_bytes": 404, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
 {"ts": "2009-11-18T08:22:05.592454", "uid": "07mJRfg5RU5", "id.orig_h": "192.168.1.1", "id.orig_p": 5353, "id.resp_h": "224.0.0.251", "id.resp_p": 5353, "proto": "udp", "service": "dns", "duration": "99.82ms", "orig_bytes": 273, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 2, "orig_ip_bytes": 329, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}
 )"};
-  auto chunks = collect(current_printer(slice_generator()));
+  auto chunks
+    = collect_chunks(std::move(slice_generator), std::move(current_printer));
   REQUIRE_EQUAL(chunks.size(), size_t{3});
   for (auto i = size_t{0}; i < chunks.size(); ++i) {
     auto str_chunk = chunk::copy(strs[i]);
