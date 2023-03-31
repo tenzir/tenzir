@@ -141,25 +141,11 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
-  // Eagerly verify the export transform configuration, to avoid hidden
-  // configuration errors that pop up the first time a user tries to run
-  // `vast export`.
-  if (auto export_transforms
-      = make_pipelines(system::pipelines_location::server_export, cfg.content);
-      !export_transforms) {
-    VAST_ERROR("invalid export transform configuration: {}",
-               export_transforms.error());
-    return EXIT_FAILURE;
-  }
-  // Warn if vast.pipeline-triggers are defined, as the functionality will be
-  // superseded by the new pipeline executor in a future release. The model
-  // doesn't make much sense when switching from a client-server to a multi-node
-  // architecture, so we plan to replace them with node ingress/egress pipelines
-  // in the near future.
+  // Warn if vast.pipeline-triggers are defined, as the functionality went away
+  // alongside the old pipeline executor.
   if (caf::get_if<caf::settings>(&cfg, "vast.pipeline-triggers")) {
-    VAST_WARN("the 'vast.pipeline-triggers' option is deprecated and will be "
-              "removed in the next release; use inline import and export "
-              "pipelines instead");
+    VAST_WARN("the 'vast.pipeline-triggers' option is no longer functional"
+              "use inline import and export pipelines instead");
   }
   // Set up the event types singleton.
   if (auto module = load_module(cfg)) {

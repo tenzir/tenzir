@@ -54,10 +54,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   if (!importer)
     return caf::make_message(caf::make_error( //
       ec::missing_component, "importer"));
-  auto pipelines
-    = make_pipelines(pipelines_location::client_source, inv.options);
-  if (!pipelines)
-    return caf::make_message(pipelines.error());
+  auto pipelines = std::vector<legacy_pipeline>{};
   expression expr;
   if (!inv.arguments.empty()) {
     auto parse_result = parse_query(inv.arguments);
@@ -67,13 +64,13 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     auto [parsed_expr, pipeline] = std::move(*parse_result);
     expr = parsed_expr;
     if (pipeline) {
-      pipelines->push_back(std::move(*pipeline));
+      pipelines.push_back(std::move(*pipeline));
     }
   }
   const auto format = std::string{inv.name()};
   // Start the source.
   auto src_result = make_source(sys, format, inv, accountant, catalog, importer,
-                                std::move(*pipelines), std::move(expr));
+                                std::move(pipelines), std::move(expr));
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(*src_result);
