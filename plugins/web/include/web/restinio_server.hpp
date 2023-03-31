@@ -13,6 +13,12 @@
 #include <restinio/all.hpp>
 #include <restinio/tls.hpp>
 
+// If restinio uses standalone asio it exists in that namespace already,
+// if it uses Boost we need to define this alias.
+#if defined(RESTINIO_USE_BOOST_ASIO)
+namespace asio = restinio::asio_ns;
+#endif
+
 namespace vast::plugins::web {
 
 using router_t = restinio::router::express_router_t<>;

@@ -91,6 +91,10 @@ else ()
   set(ARROW_LIBRARY arrow_static)
 endif ()
 
+# -- boost --------------------------------------------------------------------
+
+find_package(Boost REQUIRED COMPONENTS headers)
+
 # -- re2 ----------------------------------------------------------------------
 
 find_package(re2 REQUIRED)
@@ -311,6 +315,10 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 # Link against Apache Arrow.
 target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
+
+# Link against Boost.
+target_link_libraries(libvast PRIVATE Boost::headers)
+dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
 target_link_libraries(libvast PRIVATE re2::re2)

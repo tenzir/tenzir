@@ -1017,10 +1017,8 @@ jobs:
             target: web
             path: plugins/web
             debian-dependencies:
-              - libasio-dev
               - libhttp-parser-dev
             mac-dependencies:
-              - asio
               - http-parser
           - name: Compaction
             target: compaction

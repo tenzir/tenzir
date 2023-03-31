@@ -154,6 +154,12 @@ PackageLicenseConcluded: Apache-2.0
 PackageVersion: 6.0.0
 
 SPDXID: SPDXRef-Package
+PackageName: Boost
+PackageHomePage: https://www.boost.org/
+PackageLicenseConcluded: BSL-1.0
+PackageVersion: 1.81.0
+
+SPDXID: SPDXRef-Package
 PackageName: yaml-cpp
 PackageHomePage: https://github.com/jbeder/yaml-cpp
 PackageLicenseConcluded: MIT
