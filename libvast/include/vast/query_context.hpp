@@ -144,13 +144,12 @@ struct query_context {
   vast::ids ids = {};
 
   struct priority {
-    constexpr static uint8_t high = 100;
-    constexpr static uint8_t normal = 25;
-    constexpr static uint8_t low = 1;
+    constexpr static uint64_t normal = 1'000;
+    constexpr static uint64_t low = 1;
   };
 
   /// The query priority.
-  uint8_t priority = priority::normal;
+  uint64_t priority = priority::normal;
 
   /// The issuer of the query.
   std::string issuer = {};
