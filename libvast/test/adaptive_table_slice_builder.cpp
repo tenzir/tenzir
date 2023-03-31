@@ -225,7 +225,7 @@ TEST(two rows of array of complex records) {
                                            list{ip::v4(4u)}}}},
                     {record{
                       {"subnet", row_1_2_subnet},
-                      {"ip arr", list{list{ip::v4(6u)}}},
+                      {"ip arr", list{{list{ip::v4(6u)}}}},
                     }}}));
 
   CHECK_EQUAL(
@@ -235,7 +235,7 @@ TEST(two rows of array of complex records) {
                                  list{ip::v4(0xFF << 3), ip::v4(0xFF << 4)}}}},
           {record{
             {"subnet", row_2_2_subnet},
-            {"ip arr", list{list{ip::v4(0xFF << 5)}}},
+            {"ip arr", list{{list{ip::v4(0xFF << 5)}}}},
           }}}));
   const auto schema = vast::type{
     record_type{{"arr", list_type{record_type{
