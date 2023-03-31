@@ -6,9 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/test/fixtures/events.hpp"
-
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/pipeline.hpp>
+#include <vast/test/fixtures/events.hpp>
 #include <vast/test/test.hpp>
 
 #include <caf/test/dsl.hpp>
@@ -170,20 +171,20 @@ TEST(command) {
   }
 }
 
-TEST(roundtrip) {
-  auto original = std::string{
+TEST(to_string) {
+  // The behavior tested here should not be relied upon and may change.
+  auto expected = std::string{
     "drop xyz, :ip "
     "| hash --salt=\"eIudsnREd\" name "
     "| head 42 "
     "| pseudonymize --method=\"crypto-pan\" --seed=\"abcd1234\" a "
     "| rename test=:suricata.flow, source_port=src_port "
-    "| replace a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
-    "| extend a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
+    "| put a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
     "| select :ip, timestamp "
     "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
     "| taste 123"};
-  auto roundtrip = unbox(pipeline::parse(original)).to_string();
-  CHECK_EQUAL(roundtrip, original);
+  auto actual = unbox(pipeline::parse(expected)).to_string();
+  CHECK_EQUAL(actual, expected);
 }
 
 FIXTURE_SCOPE(pipeline_fixture, fixture)
@@ -200,33 +201,57 @@ TEST(taste 42) {
       count += 1;
     }));
     auto p = pipeline{std::move(v)};
-    for (auto&& error : make_local_executor(std::move(p))) {
-      REQUIRE_EQUAL(error, caf::error{});
+    for (auto&& result : make_local_executor(std::move(p))) {
+      REQUIRE_NOERROR(result);
     }
     CHECK_GREATER(count, 0);
   }
 }
 
 TEST(source | where #type == "zeek.conn" | sink) {
-  auto count = 0;
+  auto count = size_t{0};
   auto v = unbox(pipeline::parse(R"(taste 42 | where #type == "zeek.conn")"))
              .unwrap();
   v.insert(v.begin(),
            std::make_unique<source>(std::vector<table_slice>{
-             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
-             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
-  v.push_back(std::make_unique<sink>([&](table_slice) {
+             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 2),
+             head(zeek_conn_log.at(0), 3), head(zeek_conn_log.at(0), 4)}));
+  v.push_back(std::make_unique<sink>([&](table_slice slice) {
     MESSAGE("---- sink ----");
-    count += 1;
+    count += slice.rows();
   }));
   auto executor = make_local_executor(pipeline{std::move(v)});
-  for (auto&& error : executor) {
-    REQUIRE_EQUAL(error, caf::none);
+  for (auto&& result : executor) {
+    REQUIRE_NOERROR(result);
   }
-  REQUIRE_GREATER(count, 0);
+  REQUIRE_EQUAL(count, size_t{10});
 }
 
 FIXTURE_SCOPE_END()
+
+TEST(predicate pushdown into empty pipeline) {
+  auto pipeline = unbox(pipeline::parse("where x == 1 | where y == 2"));
+  auto result
+    = pipeline.predicate_pushdown_pipeline(unbox(to<expression>("z == 3")));
+  REQUIRE(result);
+  auto [expr, op] = std::move(*result);
+  CHECK(std::move(op).unwrap().empty());
+  CHECK_EQUAL(unbox(normalize_and_validate(expr)),
+              to<expression>("x == 1 && y == 2 && z == 3"));
+}
+
+TEST(predicate pushdown select conflict) {
+  auto pipeline = unbox(pipeline::parse("where x == 0 | select x, z | "
+                                        "where y > 0 | where y < 5"));
+  auto result = pipeline.predicate_pushdown(unbox(to<expression>("z == 3")));
+  REQUIRE(result);
+  auto [expr, op] = std::move(*result);
+  CHECK_EQUAL(op->to_string(),
+              "select x, z | where (y > 0 && y < 5 && z == 3)");
+  auto expected_expr
+    = conjunction{unbox(to<expression>("x == 0")), trivially_true_expression()};
+  CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
+}
 
 } // namespace
 } // namespace vast

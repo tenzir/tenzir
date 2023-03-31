@@ -117,6 +117,11 @@ public:
     return filter(slice, expr).value_or(table_slice{});
   }
 
+  auto predicate_pushdown(expression const& expr) const
+    -> std::optional<std::pair<expression, operator_ptr>> override {
+    return std::pair{conjunction{expr_, expr}, nullptr};
+  }
+
   auto to_string() const -> std::string override {
     return fmt::format("where {}", expr_);
   };

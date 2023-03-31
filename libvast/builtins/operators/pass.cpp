@@ -53,6 +53,11 @@ public:
   auto to_string() const -> std::string override {
     return "pass";
   }
+
+  auto predicate_pushdown(expression const& expr) const
+    -> std::optional<std::pair<expression, operator_ptr>> override {
+    return std::pair{expr, std::make_unique<pass_operator2>(*this)};
+  }
 };
 
 class plugin final : public virtual pipeline_operator_plugin,

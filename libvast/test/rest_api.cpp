@@ -191,7 +191,7 @@ private:
 FIXTURE_SCOPE(query_rest_api_tests, query_fixture)
 
 TEST(query endpoint) {
-  auto response = send_new_query("#type == \"zeek.conn\"");
+  auto response = send_new_query("where #type == \"zeek.conn\"");
   REQUIRE(!response.is_null());
   REQUIRE(!response["id"].is_null());
   auto const* id = response["id"].get<const char*>().value();
@@ -203,7 +203,7 @@ TEST(query endpoint) {
 }
 
 TEST(query endpoint outputs 0 events after all were already shipped) {
-  auto response = send_new_query("#type == \"zeek.conn\"");
+  auto response = send_new_query("where #type == \"zeek.conn\"");
   REQUIRE(!response.is_null());
   REQUIRE(!response["id"].is_null());
   auto const* id = response["id"].get<const char*>().value();
@@ -220,7 +220,7 @@ TEST(query endpoint outputs 0 events after all were already shipped) {
 }
 
 TEST(query endpoint with pipeline) {
-  auto response = send_new_query("#type == \"zeek.conn\" | head 1");
+  auto response = send_new_query("where #type == \"zeek.conn\" | head 1");
   REQUIRE(!response.is_null());
   REQUIRE(!response["id"].is_null());
   auto const* id = response["id"].get<const char*>().value();
@@ -228,6 +228,21 @@ TEST(query endpoint with pipeline) {
   REQUIRE(!next_response.is_null());
   REQUIRE(!next_response["events"].is_null());
   CHECK_EQUAL(next_response["events"].get_array().size(), 1u);
+}
+
+TEST(query endpoint can handle head 0) {
+  auto response = send_new_query("head 0");
+  REQUIRE(!response.is_null());
+  REQUIRE(!response["id"].is_null());
+  auto const* id = response["id"].get<const char*>().value();
+  auto next_response = send_query_next(id, 20);
+  REQUIRE(!next_response.is_null());
+  REQUIRE(!next_response["events"].is_null());
+  CHECK_EQUAL(next_response["events"].get_array().size(), 0u);
+  next_response = send_query_next(id, 20);
+  REQUIRE(!next_response.is_null());
+  REQUIRE(!next_response["events"].is_null());
+  CHECK_EQUAL(next_response["events"].get_array().size(), 0u);
 }
 
 FIXTURE_SCOPE_END()
