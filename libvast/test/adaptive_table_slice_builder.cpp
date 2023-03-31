@@ -12,7 +12,6 @@
 #include "vast/test/test.hpp"
 
 using namespace vast;
-using namespace std::literals;
 using namespace std::chrono_literals;
 
 TEST(add two rows of nested records) {
@@ -20,18 +19,18 @@ TEST(add two rows of nested records) {
   {
     auto row = sut.push_row();
     row.push_field("int1").add(int64_t{5});
-    row.push_field("str1").add("some_str"sv);
+    row.push_field("str1").add("some_str");
     auto nested = row.push_field("nested").push_record();
     nested.push_field("rec1").add(int64_t{10});
-    nested.push_field("rec2").add("rec_str"sv);
+    nested.push_field("rec2").add("rec_str");
   }
   {
     auto row = sut.push_row();
     row.push_field("int1").add(int64_t{5});
-    row.push_field("str1").add("some_str"sv);
+    row.push_field("str1").add("some_str");
     auto nested = row.push_field("nested").push_record();
     nested.push_field("rec1").add(int64_t{10});
-    nested.push_field("rec2").add("rec_str"sv);
+    nested.push_field("rec2").add("rec_str");
   }
   auto out = std::move(sut).finish();
   REQUIRE_EQUAL(out.rows(), 2u);
@@ -287,7 +286,7 @@ TEST(new fields added in new rows) {
   {
     auto row = sut.push_row();
     row.push_field("int").add(int64_t{1});
-    row.push_field("str").add("strr"sv);
+    row.push_field("str").add("strr");
   }
   auto out = std::move(sut).finish();
   CHECK_EQUAL(out.rows(), 3u);
@@ -383,18 +382,18 @@ TEST(
   {
     auto row = sut.push_row();
     row.push_field("int").add(int64_t{20});
-    row.push_field("arr").push_list().add("arr1"sv);
+    row.push_field("arr").push_list().add("arr1");
   }
   sut.push_row().push_field("int").add(int64_t{25});
   sut.push_row()
     .push_field("struct")
     .push_record()
     .push_field("struct.str")
-    .add("str"sv);
+    .add("str");
   {
     auto row = sut.push_row();
     auto root_struct = row.push_field("struct").push_record();
-    root_struct.push_field("struct.str").add("str2"sv);
+    root_struct.push_field("struct.str").add("str2");
     auto inner_struct = root_struct.push_field("struct.struct").push_record();
     inner_struct.push_field("struct.struct.int").add(int64_t{90});
     auto arr = inner_struct.push_field("struct.struct.array").push_list();

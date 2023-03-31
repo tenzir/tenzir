@@ -10,6 +10,34 @@
 
 namespace vast::detail {
 
+namespace {
+
+auto add_data_view(auto& guard, const data_view& view) {
+  caf::visit(detail::overload{
+               [&guard](const auto& v) {
+                 guard.add(make_view(v));
+               },
+               [](const caf::none_t&) {
+                 // nop
+               },
+               [](const map_view_handle&) {
+                 die("adding view<map> is not supported");
+               },
+               [](const list_view_handle&) {
+                 die("adding view<list> is not supported");
+               },
+               [](const record_view_handle&) {
+                 die("adding view<record> is not supported");
+               },
+               [](const pattern_view&) {
+                 die("adding patterns is not supported");
+               },
+             },
+             view);
+}
+
+} // namespace
+
 auto record_guard::push_field(std::string_view name) -> field_guard {
   return field_guard{builder_.get_field_builder(name, starting_fields_length_)};
 }
@@ -28,6 +56,10 @@ list_guard::list_record_guard::~list_record_guard() noexcept {
   if (not parent_.value_type)
     parent_.propagate_type(builder_.type());
   builder_.append();
+}
+
+auto list_guard::add(const data_view& view) -> void {
+  add_data_view(*this, view);
 }
 
 auto list_guard::push_record() -> list_guard::list_record_guard {
@@ -62,6 +94,10 @@ auto list_guard::push_list() -> list_guard {
     VAST_ASSERT(s.ok());
   }
   return list_guard{builder_, this, child_value_type};
+}
+
+auto field_guard::add(const data_view& view) -> void {
+  add_data_view(*this, view);
 }
 
 auto field_guard::push_record() -> record_guard {

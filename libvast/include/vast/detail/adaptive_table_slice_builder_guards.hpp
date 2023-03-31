@@ -15,6 +15,16 @@
 
 namespace vast::detail {
 
+template <class T>
+struct type_from_data
+  : caf::detail::tl_at<
+      concrete_types,
+      caf::detail::tl_index_of<
+        caf::detail::tl_map_t<concrete_types, type_to_data>, T>::value> {};
+
+template <class T>
+using type_from_data_t = typename type_from_data<T>::type;
+
 class field_guard;
 
 /// @brief A view of a list column created within adaptive_table_slice_builder.
@@ -59,12 +69,7 @@ public:
     requires requires(ViewType x) { materialize(x); }
   auto add(ViewType view) -> void {
     using view_value_type = decltype(materialize(std::declval<ViewType>()));
-    using vast_type = typename view_trait<view_value_type>::vast_type;
-    // materialize(const char*) results in bool_type. This is why we must pass
-    // string_view in such cases.
-    static_assert(std::is_same_v<ViewType, vast::view<view_value_type>>,
-                  "Trying to add a type that can be converted to a vast::view. "
-                  "Pass vast::view explicitly instead");
+    using vast_type = type_from_data_t<view_value_type>;
     if (not value_type)
       propagate_type(vast::type{vast_type{}});
     // Casting not supported yet.
@@ -76,6 +81,9 @@ public:
       view);
     VAST_ASSERT(s.ok());
   }
+
+  /// @brief Adds the underlying view to the list if it is of a supported type.
+  auto add(const data_view& view) -> void;
 
   /// @brief Adds a new record as a value of the list.
   /// @return Object that enables manipulation of the created record.
@@ -126,14 +134,12 @@ public:
     requires requires(ViewType x) { materialize(x); }
   auto add(ViewType view) -> void {
     using view_value_type = decltype(materialize(std::declval<ViewType>()));
-    using vast_type = typename view_trait<view_value_type>::vast_type;
-    // materialize(const char*) results in bool_type. This is why we must pass
-    // string_view in such cases.
-    static_assert(std::is_same_v<ViewType, vast::view<view_value_type>>,
-                  "Trying to add a type that can be converted to a vast::view. "
-                  "Pass vast::view explicitly instead");
+    using vast_type = type_from_data_t<view_value_type>;
     builder_.add<vast_type>(view);
   }
+
+  /// @brief Adds the underlying view to the field if it is of a supported type.
+  auto add(const data_view& view) -> void;
 
   /// @brief Turns the field into a record_type if it was of unknown type.
   /// @return Object that enables manipulation of the record.
