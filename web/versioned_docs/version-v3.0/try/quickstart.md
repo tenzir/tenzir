@@ -223,7 +223,7 @@ when the defaults are not enough. In future versions of VAST, you will interact 
 Now that you know a little bit about available schemas of the data, you could
 start referencing record fields in expressions. But VAST can also give you a
 taste of actual events. The [`taste`](/docs/understand/language/operators/taste)
-operator returns a random number of events per unique schema:
+operator limits the number of events per unique schema:
 
 ```bash
 vast export json '#type == /(zeek|suricata).*/ | taste 1'
