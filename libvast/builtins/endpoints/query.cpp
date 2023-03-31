@@ -16,6 +16,7 @@
 #include <vast/detail/weak_run_delayed.hpp>
 #include <vast/format/json.hpp>
 #include <vast/legacy_pipeline.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
@@ -191,6 +192,12 @@ struct query_format_options {
 
 } // namespace
 
+struct query_next_state {
+  size_t limit = 0u;
+  http_request request;
+  caf::typed_response_promise<atom::done> promise = {};
+};
+
 struct query_manager_state {
   query_manager_state() = default;
 
@@ -202,17 +209,15 @@ struct query_manager_state {
   bool expand = {};
   duration ttl = {};
   caf::disposable ttl_disposable = {};
-  caf::typed_response_promise<atom::done> promise = {};
-  http_request request;
-  size_t limit = 0u;
-  std::string response_body; // The current response to the GET endpoint
-  std::deque<table_slice> slice_buffer;
-  // Events produced after application of a pipeline.
-  std::deque<table_slice> processed_slices;
+  std::deque<table_slice> source_buffer;
+  std::deque<table_slice> sink_buffer;
   size_t shippable_events_count = 0;
   std::optional<system::query_cursor> cursor = std::nullopt;
   size_t processed_partitions = 0u;
-  std::optional<pipeline_executor> pipeline_executor_;
+  bool active_index_query = false;
+  std::deque<query_next_state> nexts;
+  generator<caf::expected<void>> executor;
+  generator<caf::expected<void>>::iterator executor_it = {};
 
   void refresh_ttl() {
     // Zero TTL = no TTL at all. This is a requirement for the unit tests, which
@@ -233,7 +238,7 @@ struct query_manager_state {
     });
   }
 
-  std::string create_response() {
+  auto create_response(const query_next_state& next) -> std::string {
     auto printer
       = json_printer{{.oneline = true,
                       .flattened = format_opts.flatten,
@@ -244,12 +249,13 @@ struct query_manager_state {
     auto seen_schemas = std::unordered_set<type>{};
     auto written = size_t{0};
     // write slices
-    auto it = processed_slices.begin();
-    for (bool first = true; it != processed_slices.end(); ++it) {
+    auto it = sink_buffer.begin();
+    for (bool first = true; it != sink_buffer.end(); ++it) {
       auto slice = std::move(*it);
       if (slice.rows() == 0)
         continue;
-      if (const auto remaining = limit - written; slice.rows() > remaining) {
+      if (const auto remaining = next.limit - written;
+          slice.rows() > remaining) {
         auto [head, tail] = split(slice, remaining);
         *it = std::move(tail);
         slice = std::move(head);
@@ -272,12 +278,12 @@ struct query_manager_state {
         VAST_ASSERT_CHEAP(ok);
       }
       written += slice.rows();
-      if (written >= limit) {
+      if (written >= next.limit) {
         break;
       }
     }
     //  Remove events that will be shipped in the response.
-    processed_slices.erase(processed_slices.begin(), it);
+    sink_buffer.erase(sink_buffer.begin(), it);
     // Write schemas
     if (written == 0) {
       out_iter = fmt::format_to(out_iter, "],\"schemas\":[]}}\n");
@@ -300,36 +306,143 @@ struct query_manager_state {
     return result;
   }
 
-  void apply_pipelines() {
-    for (auto&& slice : std::exchange(slice_buffer, {}))
-      if (auto err = pipeline_executor_->add(std::move(slice)))
-        VAST_WARN("adding a slice to pipeline executor resulted in "
-                  "error: {}",
-                  std::move(err));
-    auto transformed = pipeline_executor_->finish();
-    if (not transformed) {
-      VAST_WARN("error while apllying a pipeline: {}", transformed.error());
+  void run_executor(const query_next_state& next) {
+    VAST_DEBUG("query: entering executor");
+    while (true) {
+      if (executor_exhausted()) {
+        // The executor can always become exhausted, for example due to `head`.
+        VAST_DEBUG("query: leaving due to exhausted executor");
+        return;
+      }
+      if (enough_shippable_events(next)) {
+        // We could continue even when we have enough shippable events, but
+        // choose not to in case the user will not request more.
+        VAST_DEBUG("query: leaving due enough events");
+        return;
+      }
+      if (source_buffer.empty() && active_index_query) {
+        // If the source buffer is empty, we want to continue until the source
+        // requests more data from the index. If the index is exhausted, the
+        // source will never make a request and becomes exhausted instead.
+        VAST_DEBUG("query: leaving due to empty source && active index query");
+        return;
+      }
+      auto result = std::move(*executor_it);
+      VAST_DEBUG("query: advancing executor");
+      ++executor_it;
+      if (!result) {
+        // This will abort the execution. We currently do not inform the query
+        // consumer of this error, but might want to change this in the future.
+        VAST_WARN("error while applying pipeline: {}", result.error());
+      }
+    }
+  }
+
+  void run() {
+    // We have to wait until the cursor is provisioned.
+    if (!cursor) {
       return;
     }
-    for (auto& slice : *transformed) {
-      shippable_events_count += slice.rows();
-      processed_slices.push_back(std::move(slice));
+    while (!nexts.empty()) {
+      auto& next = nexts.front();
+      run_executor(next);
+      if (!should_ship_results(next)) {
+        return;
+      }
+      VAST_DEBUG("query: shipping results ({} available)",
+                 shippable_events_count);
+      VAST_ASSERT(next.request.response);
+      VAST_ASSERT(next.promise.pending());
+      next.request.response->append(create_response(next));
+      next.promise.deliver(atom::done_v);
+      nexts.pop_front();
+      // Possibly continue, because we might be able to fullfil another request.
     }
   }
 
-  void enable_buffered_slices_to_be_shipped() {
-    if (pipeline_executor_)
-      return apply_pipelines();
-    for (auto& slice : std::exchange(slice_buffer, {})) {
-      shippable_events_count += slice.rows();
-      processed_slices.push_back(std::move(slice));
+  auto index_exhausted() const -> bool {
+    return cursor && cursor->candidate_partitions == processed_partitions;
+  }
+
+  auto enough_shippable_events(const query_next_state& next) const -> bool {
+    if (nexts.empty()) {
+      return false;
+    }
+    return shippable_events_count >= next.limit;
+  }
+
+  auto executor_exhausted() const -> bool {
+    return executor_it == executor.end();
+  }
+
+  auto should_ship_results(const query_next_state& next) const -> bool {
+    return enough_shippable_events(next) || executor_exhausted();
+  }
+};
+
+using manager_ptr = query_manager_actor::stateful_pointer<query_manager_state>;
+
+class query_source final : public crtp_operator<query_source> {
+public:
+  explicit query_source(manager_ptr manager) : manager_(manager) {
+  }
+
+  auto operator()() const -> generator<table_slice> {
+    auto& state = manager_->state;
+    while (true) {
+      if (state.source_buffer.empty()) {
+        if (state.index_exhausted()) {
+          break;
+        }
+        if (!state.active_index_query && state.cursor) {
+          VAST_DEBUG("query_source: sending query to index");
+          manager_->send(state.index, atom::query_v, state.cursor->id,
+                         BATCH_SIZE);
+          state.active_index_query = true;
+        }
+        VAST_DEBUG("query_source: stalling");
+        co_yield {};
+      } else {
+        VAST_DEBUG("query_source: popping element from queue");
+        auto slice = std::move(state.source_buffer.front());
+        state.source_buffer.pop_front();
+        co_yield std::move(slice);
+      }
+    }
+    VAST_DEBUG("query_source: done");
+  }
+
+  auto to_string() const -> std::string override {
+    return "query_source";
+  }
+
+private:
+  manager_ptr manager_;
+};
+
+class query_sink final : public crtp_operator<query_sink> {
+public:
+  explicit query_sink(manager_ptr manager) : manager_(manager) {
+  }
+
+  auto operator()(generator<table_slice> input) const
+    -> generator<std::monostate> {
+    auto& state = manager_->state;
+    for (auto&& slice : input) {
+      if (slice.rows() > 0) {
+        VAST_DEBUG("query_sink: putting result in sink buffer");
+        state.sink_buffer.push_back(std::move(slice));
+      }
+      co_yield {};
     }
   }
 
-  bool should_ship_results() const {
-    return shippable_events_count >= limit
-           or cursor->candidate_partitions == processed_partitions;
+  auto to_string() const -> std::string override {
+    return "query_sink";
   }
+
+private:
+  manager_ptr manager_;
 };
 
 struct request_multiplexer_state {
@@ -343,8 +456,7 @@ struct request_multiplexer_state {
 
 query_manager_actor::behavior_type
 query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
-              system::index_actor index,
-              std::optional<vast::pipeline_executor> executor, bool expand,
+              system::index_actor index, pipeline open_pipeline, bool expand,
               duration ttl, query_format_options format_opts) {
   VAST_VERBOSE("{} starts with a TTL of {}", *self, data{ttl});
   self->state.self = self;
@@ -352,51 +464,59 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   self->state.expand = expand;
   self->state.ttl = ttl;
   self->state.format_opts = format_opts;
-  self->state.pipeline_executor_ = std::move(executor);
+  auto ops = std::move(open_pipeline).unwrap();
+  ops.insert(ops.begin(), std::make_unique<query_source>(self));
+  ops.push_back(std::make_unique<query_sink>(self));
+  auto result = pipeline{std::move(ops)};
+  // We already checked that the original pipeline was `events -> events`.
+  // Thus, we know that we now have a valid `void -> void` pipeline.
+  VAST_ASSERT(result.is_closed());
+  self->state.executor = make_local_executor(std::move(result));
+  self->state.executor_it = self->state.executor.begin();
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    if (self->state.promise.pending())
-      self->state.promise.deliver(msg.reason);
+    while (!self->state.nexts.empty()) {
+      auto& next = self->state.nexts.front();
+      if (next.promise.pending()) {
+        next.promise.deliver(msg.reason);
+      }
+      self->state.nexts.pop_front();
+    }
     self->quit();
   });
   return {
     [self](atom::provision, system::query_cursor cursor) {
+      VAST_DEBUG("query: provision");
       self->state.refresh_ttl();
       self->state.cursor = cursor;
+      VAST_DEBUG("query: provision done");
     },
     [self](atom::next, http_request& rq,
            uint64_t max_events_to_output) -> caf::result<atom::done> {
+      VAST_DEBUG("query: received next request: {}", max_events_to_output);
       self->state.refresh_ttl();
-      if (!self->state.cursor)
-        rq.response->abort(500, "query manager not ready");
-      self->state.limit = max_events_to_output;
-      if (self->state.should_ship_results()) {
-        rq.response->append(self->state.create_response());
-        return atom::done_v;
-      }
-      self->send(self->state.index, atom::query_v, self->state.cursor->id,
-                 BATCH_SIZE);
-      self->state.request = std::move(rq);
-      self->state.promise = self->make_response_promise<atom::done>();
-      return self->state.promise;
+      auto promise = self->make_response_promise<atom::done>();
+      self->state.nexts.push_back(query_next_state{
+        .limit = max_events_to_output,
+        .request = std::move(rq),
+        .promise = promise,
+      });
+      self->state.run();
+      return promise;
     },
     // Index-facing API
     [self](vast::table_slice& slice) {
-      self->state.slice_buffer.push_back(std::move(slice));
+      VAST_DEBUG("query: received slice from index");
+      self->state.source_buffer.push_back(std::move(slice));
+      self->state.run();
     },
     [self](atom::done) {
+      VAST_DEBUG("query: received done from index");
       // There's technically a race condition with atom::provision here,
       // since the index sends the first `done` asynchronously. But since
       // we always set `taste == 0`, we will not miss any data due to this.
       ++self->state.processed_partitions;
-      self->state.enable_buffered_slices_to_be_shipped();
-      if (self->state.should_ship_results()) {
-        auto request = std::exchange(self->state.request, {});
-        request.response->append(self->state.create_response());
-        self->state.promise.deliver(atom::done_v);
-        return;
-      }
-      self->send(self->state.index, atom::query_v, self->state.cursor->id,
-                 BATCH_SIZE);
+      self->state.active_index_query = false;
+      self->state.run();
     },
   };
 }
@@ -468,25 +588,37 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         } else {
           return rq.response->abort(422, "missing parameter 'query'\n");
         }
-        auto parse_result = system::parse_query(*query_string);
+        auto parse_result = pipeline::parse(*query_string);
         if (!parse_result)
           return rq.response->abort(400, fmt::format("unparseable query: {}\n",
                                                      parse_result.error()));
-        auto [expr, pipeline] = std::move(*parse_result);
+        auto pipeline = std::move(*parse_result);
+        auto output = pipeline.test_instantiate<generator<table_slice>>();
+        if (!output) {
+          return rq.response->abort(
+            400,
+            fmt::format("pipeline instantiation failed: {}", output.error()));
+        }
+        if (!std::holds_alternative<generator<table_slice>>(*output)) {
+          return rq.response->abort(400, "query must return events as output");
+        }
+        // TODO: Consider replacing this with an empty conjunction.
+        auto& trivially_true = trivially_true_expression();
+        auto pushdown = pipeline.predicate_pushdown_pipeline(trivially_true);
+        if (!pushdown) {
+          pushdown.emplace(trivially_true, std::move(pipeline));
+        }
+        VAST_DEBUG("query: push down result: {}", *pushdown);
+        auto [expr, new_pipeline] = std::move(*pushdown);
+        VAST_ASSERT(expr != expression{});
         auto normalized_expr = normalize_and_validate(expr);
         if (!normalized_expr)
           return rq.response->abort(400, fmt::format("invalid query: {}\n",
                                                      normalized_expr.error()));
-        auto pipeline_executor = std::optional<vast::pipeline_executor>{};
-        if (pipeline) {
-          auto pipelines = std::vector<vast::legacy_pipeline>{};
-          pipelines.emplace_back(std::move(*pipeline));
-          pipeline_executor.emplace(std::move(pipelines));
-        }
         auto handler
           = self->spawn<caf::monitored>(query_manager, self->state.index_,
-                                        std::move(pipeline_executor), expand,
-                                        ttl, std::move(format_opts));
+                                        std::move(new_pipeline), expand, ttl,
+                                        std::move(format_opts));
         auto query = vast::query_context::make_extract(
           "http-request", handler, std::move(*normalized_expr));
         query.taste = 0;

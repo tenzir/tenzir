@@ -16,7 +16,7 @@ apt-get -y --no-install-recommends install \
     git-core \
     gnupg2 gnupg-agent\
     jq \
-    libasio-dev \
+    libboost1.81-dev \
     libflatbuffers-dev \
     libfmt-dev \
     libhttp-parser-dev \

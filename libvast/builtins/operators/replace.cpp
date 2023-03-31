@@ -164,53 +164,7 @@ private:
   std::unordered_map<type, bound_configuration> bound_config_ = {};
 };
 
-class replace_operator2 final
-  : public schematic_operator<replace_operator2,
-                              std::vector<indexed_transformation>> {
-public:
-  explicit replace_operator2(configuration config) noexcept
-    : config_{std::move(config)} {
-    // nop
-  }
-
-  auto initialize(const type& schema, operator_control_plane&) const
-    -> caf::expected<state_type> override {
-    auto result = bound_configuration::make(schema, config_);
-    if (!result) {
-      return result.error();
-    }
-    return std::move(result->transformations);
-  }
-
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
-    return transform_columns(slice, state);
-  }
-
-  auto to_string() const -> std::string override {
-    auto map = std::vector<std::pair<std::string, data>>{
-      config_.extractor_to_value.begin(), config_.extractor_to_value.end()};
-    std::sort(map.begin(), map.end());
-    auto result = std::string{"replace"};
-    bool first = true;
-    for (auto& [key, value] : map) {
-      if (first) {
-        first = false;
-      } else {
-        result += ',';
-      }
-      result += fmt::format(" {}={}", key, value);
-    }
-    return result;
-  }
-
-private:
-  /// The underlying configuration of the transformation.
-  configuration config_ = {};
-};
-
-class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual operator_plugin {
+class plugin final : public virtual pipeline_operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -269,48 +223,6 @@ public:
     return {
       std::string_view{f, l},
       std::make_unique<replace_operator>(std::move(*config)),
-    };
-  }
-
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor_value_assignment_list,
-      parsers::data;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> extractor_value_assignment_list
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    std::vector<std::tuple<std::string, vast::data>> parsed_assignments;
-    if (!p(f, l, parsed_assignments)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
-                                                      "operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    record config_record;
-    record fields_record;
-    for (const auto& [key, data] : parsed_assignments) {
-      fields_record[key] = data;
-    }
-    config_record["fields"] = std::move(fields_record);
-    auto config = configuration::make(std::move(config_record));
-    if (!config) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to generate "
-                                                      "configuration for "
-                                                      "extend "
-                                                      "operator: '{}'",
-                                                      config.error())),
-      };
-    }
-    config->reparse_values = false;
-    return {
-      std::string_view{f, l},
-      std::make_unique<replace_operator2>(std::move(*config)),
     };
   }
 };

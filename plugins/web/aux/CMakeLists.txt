@@ -41,8 +41,9 @@ add_custom_target(patch-restinio ALL DEPENDS ${restinio_sources_patched})
 
 add_library(restinio INTERFACE)
 add_dependencies(restinio patch-restinio)
+target_compile_definitions(restinio INTERFACE RESTINIO_USE_BOOST_ASIO)
 
-find_package(Asio REQUIRED)
+find_package(Boost REQUIRED COMPONENTS headers)
 find_package(OpenSSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(http_parser REQUIRED)
@@ -51,7 +52,7 @@ find_package(http_parser REQUIRED)
 target_include_directories(
   restinio INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio")
 target_link_libraries(
-  restinio INTERFACE fmt::fmt Asio::Asio OpenSSL::SSL OpenSSL::Crypto
+  restinio INTERFACE fmt::fmt Boost::headers OpenSSL::SSL OpenSSL::Crypto
                      http_parser::http_parser)
 
 add_library(restinio::restinio ALIAS restinio)

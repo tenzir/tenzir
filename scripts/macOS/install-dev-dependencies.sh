@@ -5,7 +5,7 @@ set -euo pipefail
 brew --version
 brew install \
     apache-arrow \
-    asio \
+    boost \
     ccache \
     flatbuffers \
     fmt \

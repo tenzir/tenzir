@@ -12,6 +12,7 @@
     pkg-config,
     git,
     pandoc,
+    boost,
     caf,
     libpcap,
     arrow-cpp,
@@ -104,6 +105,7 @@
         ];
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
+          boost
           fast_float
           libpcap
           libunwind
