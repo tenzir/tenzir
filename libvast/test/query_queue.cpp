@@ -75,7 +75,7 @@ uuid make_insert(query_queue& q, std::vector<uuid>&& candidates) {
 
 uuid make_insert(query_queue& q, std::vector<uuid>&& candidates,
                  uint32_t taste_size,
-                 uint8_t priority = query_context::priority::normal) {
+                 uint64_t priority = query_context::priority::normal) {
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
   query_context.priority = priority;

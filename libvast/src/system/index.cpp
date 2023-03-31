@@ -888,20 +888,21 @@ void index_state::add_partition_creation_listener(
 
 // -- query handling ---------------------------------------------------------
 
-void index_state::schedule_lookups() {
+auto index_state::schedule_lookups() -> size_t {
   if (!pending_queries.has_work())
-    return;
+    return 0u;
   auto t = timer::start(scheduler_measurement);
   auto num_scheduled = size_t{0};
   auto on_return = caf::detail::make_scope_guard([&] {
     t.stop(num_scheduled);
   });
+  const size_t previous_partition_lookups = running_partition_lookups;
   while (running_partition_lookups < max_concurrent_partition_lookups) {
     // 1. Get the partition with the highest accumulated priority.
     auto next = pending_queries.next();
     if (!next) {
       VAST_DEBUG("{} did not find a partition to query", *self);
-      return;
+      break;
     }
     auto immediate_completion = [&](const query_queue::entry& x) {
       for (auto qid : x.queries)
@@ -970,7 +971,10 @@ void index_state::schedule_lookups() {
         *cnt -= 1;
         if (*cnt == 0) {
           --running_partition_lookups;
-          schedule_lookups();
+          const auto num_scheduled = schedule_lookups();
+          VAST_DEBUG("{} scheduled {} partitions after completion of a "
+                     "previously scheduled lookup",
+                     *self, num_scheduled);
         }
       };
       self
@@ -998,6 +1002,8 @@ void index_state::schedule_lookups() {
     running_partition_lookups++;
     num_scheduled++;
   }
+  VAST_ASSERT_CHEAP(running_partition_lookups >= previous_partition_lookups);
+  return running_partition_lookups - previous_partition_lookups;
 }
 
 // -- introspection ----------------------------------------------------------
@@ -1007,7 +1013,6 @@ namespace {
 struct query_counters {
   size_t num_low_prio = 0;
   size_t num_normal_prio = 0;
-  size_t num_high_prio = 0;
   size_t num_custom_prio = 0;
 };
 
@@ -1018,8 +1023,6 @@ auto get_query_counters(const query_queue& pending_queries) {
       result.num_low_prio++;
     else if (q.query_context.priority == query_context::priority::normal)
       result.num_normal_prio++;
-    else if (q.query_context.priority == query_context::priority::high)
-      result.num_high_prio++;
     else
       result.num_custom_prio++;
   }
@@ -1040,7 +1043,6 @@ void index_state::send_report() {
       {"scheduler.backlog.custom", query_counters.num_custom_prio},
       {"scheduler.backlog.low", query_counters.num_low_prio},
       {"scheduler.backlog.normal", query_counters.num_normal_prio},
-      {"scheduler.backlog.high", query_counters.num_high_prio},
       {"scheduler.partition.pending", pending_queries.num_partitions()},
       {"scheduler.partition.materializations", materializations},
       {"scheduler.partition.lookups", counters.partition_lookups},
@@ -1549,7 +1551,10 @@ index(index_actor::stateful_pointer<index_state> self,
                   std::move(candidates)))
               rp.deliver(err);
             rp.deliver(query_cursor{query_id, num_candidates, scheduled});
-            self->state.schedule_lookups();
+            const auto num_scheduled = self->state.schedule_lookups();
+            VAST_DEBUG("{} scheduled {} partitions for lookup after a new "
+                       "query came in",
+                       *self, num_scheduled);
           },
           [rp](const caf::error& e) mutable {
             rp.deliver(caf::make_error(
@@ -1568,7 +1573,10 @@ index(index_actor::stateful_pointer<index_state> self,
       if (auto err
           = self->state.pending_queries.activate(query_id, num_partitions))
         VAST_WARN("{} can't activate unknown query: {}", *self, err);
-      self->state.schedule_lookups();
+      const auto num_scheduled = self->state.schedule_lookups();
+      VAST_DEBUG("{} scheduled {} partitions following the request to "
+                 "activate {} partitions for query {}",
+                 *self, num_scheduled, num_partitions, query_id);
     },
     [self](atom::erase, uuid partition_id) -> caf::result<atom::done> {
       VAST_VERBOSE("{} erases partition {}", *self, partition_id);
@@ -1821,7 +1829,9 @@ index(index_actor::stateful_pointer<index_state> self,
         pipeline->name(), partition_transfomer, match_everything);
       auto transform_id = self->state.pending_queries.create_query_id();
       query_context.id = transform_id;
-      query_context.priority = query_context::priority::high;
+      // We set the query priority for partition transforms to zero so they
+      // always get less priority than queries.
+      query_context.priority = 0;
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
@@ -1833,7 +1843,10 @@ index(index_actor::stateful_pointer<index_state> self,
                     .requested_partitions = input_size},
         std::vector{old_partition_ids});
       VAST_ASSERT(err == caf::none);
-      self->state.schedule_lookups();
+      const auto num_scheduled = self->state.schedule_lookups();
+      VAST_DEBUG("{} scheduled {} partitions following a request to "
+                 "transform partitions",
+                 *self, num_scheduled);
       auto marker_path = self->state.marker_path(transform_id);
       auto rp = self->make_response_promise<std::vector<partition_info>>();
       auto deliver

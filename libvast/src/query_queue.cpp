@@ -23,7 +23,10 @@ std::size_t memusage(const std::vector<query_queue::entry>& entries) {
 
 bool operator<(const query_queue::entry& lhs,
                const query_queue::entry& rhs) noexcept {
-  return lhs.priority < rhs.priority;
+  const auto lhs_num_queries = lhs.queries.size();
+  const auto rhs_num_queries = rhs.queries.size();
+  return std::tie(lhs.priority, lhs_num_queries)
+         < std::tie(rhs.priority, rhs_num_queries);
 }
 
 bool operator==(const query_queue::entry& lhs, const uuid& rhs) noexcept {

@@ -225,7 +225,9 @@ struct index_state {
 
   // -- query handling ---------------------------------------------------------
 
-  void schedule_lookups();
+  /// Schedules partitions for lookups. Returns the number of newly scheduled
+  /// partitions.
+  [[nodiscard]] auto schedule_lookups() -> size_t;
 
   // -- introspection ----------------------------------------------------------
 
