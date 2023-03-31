@@ -179,6 +179,7 @@ TEST(to_string) {
     "| head 42 "
     "| pseudonymize --method=\"crypto-pan\" --seed=\"abcd1234\" a "
     "| rename test=:suricata.flow, source_port=src_port "
+    "| tail 1 "
     "| put a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
     "| select :ip, timestamp "
     "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
@@ -192,6 +193,25 @@ FIXTURE_SCOPE(pipeline_fixture, fixture)
 TEST(taste 42) {
   {
     auto v = unbox(pipeline::parse("taste 42")).unwrap();
+    v.insert(v.begin(),
+             std::make_unique<source>(std::vector<table_slice>{
+               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+    auto count = 0;
+    v.push_back(std::make_unique<sink>([&](table_slice) {
+      count += 1;
+    }));
+    auto p = pipeline{std::move(v)};
+    for (auto&& result : make_local_executor(std::move(p))) {
+      REQUIRE_NOERROR(result);
+    }
+    CHECK_GREATER(count, 0);
+  }
+}
+
+TEST(tail 5) {
+  {
+    auto v = unbox(pipeline::parse("tail 5")).unwrap();
     v.insert(v.begin(),
              std::make_unique<source>(std::vector<table_slice>{
                head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
