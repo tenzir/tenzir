@@ -160,6 +160,25 @@ TEST(source | where #type == "zeek.conn" | sink) {
   REQUIRE_EQUAL(count, size_t{10});
 }
 
+TEST(tail 5) {
+  {
+    auto v = unbox(pipeline::parse("tail 5")).unwrap();
+    v.insert(v.begin(),
+             std::make_unique<source>(std::vector<table_slice>{
+               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+    auto count = 0;
+    v.push_back(std::make_unique<sink>([&](table_slice) {
+      count += 1;
+    }));
+    auto p = pipeline{std::move(v)};
+    for (auto&& result : make_local_executor(std::move(p))) {
+      REQUIRE_NOERROR(result);
+    }
+    CHECK_GREATER(count, 0);
+  }
+}
+
 FIXTURE_SCOPE_END()
 
 TEST(pipeline operator typing) {
@@ -213,6 +232,23 @@ TEST(command) {
   }
 }
 
+TEST(to_string) {
+  // The behavior tested here should not be relied upon and may change.
+  auto expected = std::string{
+    "drop xyz, :ip "
+    "| hash --salt=\"eIudsnREd\" name "
+    "| head 42 "
+    "| pseudonymize --method=\"crypto-pan\" --seed=\"abcd1234\" a "
+    "| rename test=:suricata.flow, source_port=src_port "
+    "| put a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
+    "| tail 1 "
+    "| select :ip, timestamp "
+    "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
+    "| taste 123"};
+  auto actual = unbox(pipeline::parse(expected)).to_string();
+  CHECK_EQUAL(actual, expected);
+}
+
 TEST(predicate pushdown into empty pipeline) {
   auto pipeline = unbox(pipeline::parse("where x == 1 | where y == 2"));
   auto result
@@ -235,22 +271,6 @@ TEST(predicate pushdown select conflict) {
   auto expected_expr
     = conjunction{unbox(to<expression>("x == 0")), trivially_true_expression()};
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
-}
-
-TEST(to_string) {
-  // The behavior tested here should not be relied upon and may change.
-  auto expected = std::string{
-    "drop xyz, :ip "
-    "| hash --salt=\"eIudsnREd\" name "
-    "| head 42 "
-    "| pseudonymize --method=\"crypto-pan\" --seed=\"abcd1234\" a "
-    "| rename test=:suricata.flow, source_port=src_port "
-    "| put a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
-    "| select :ip, timestamp "
-    "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
-    "| taste 123"};
-  auto actual = unbox(pipeline::parse(expected)).to_string();
-  CHECK_EQUAL(actual, expected);
 }
 
 TEST(to - stdout) {
