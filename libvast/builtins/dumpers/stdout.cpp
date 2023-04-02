@@ -18,23 +18,15 @@ public:
   [[nodiscard]] auto
   make_dumper(const record&, [[maybe_unused]] type input_schema,
               operator_control_plane&) const -> caf::expected<dumper> override {
-    return [](generator<chunk_ptr> chunks) -> generator<std::monostate> {
-      auto outbuf = detail::fdoutbuf(STDOUT_FILENO);
-      for (const auto& chunk : chunks) {
-        outbuf.sputn(reinterpret_cast<const char*>(chunk->data()),
-                     chunk->size());
-        co_yield std::monostate{};
-      }
-      co_return;
+    auto outbuf = detail::fdoutbuf(STDOUT_FILENO);
+    return [outbuf](chunk_ptr chunk) mutable {
+      outbuf.sputn(reinterpret_cast<const char*>(chunk->data()), chunk->size());
     };
   }
 
-  [[nodiscard]] auto
-  make_default_printer(const record& options, type input_schema,
-                       operator_control_plane& ctrl) const
-    -> caf::expected<printer> override {
-    auto default_printer = vast::plugins::find<vast::printer_plugin>("json");
-    return default_printer->make_printer(options, input_schema, ctrl);
+  [[nodiscard]] auto make_default_printer() const
+    -> std::optional<std::pair<std::string, record>> override {
+    return std::pair{"json", record{}};
   }
 
   [[nodiscard]] auto initialize([[maybe_unused]] const record& plugin_config,

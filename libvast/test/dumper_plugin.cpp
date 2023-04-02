@@ -94,6 +94,16 @@ struct fixture {
     std::array<int, 2> pipes;
   };
 
+  auto collect_states(std::function<generator<chunk_ptr>()> output_generator)
+    -> std::vector<std::monostate> {
+    auto states = std::vector<std::monostate>{};
+    for (auto&& x : output_generator()) {
+      current_dumper(x);
+      states.emplace_back();
+    }
+    return states;
+  }
+
   const vast::dumper_plugin* dumper_plugin;
   vast::dumper_plugin::dumper current_dumper;
   mock_control_plane control_plane;
@@ -110,7 +120,7 @@ TEST(stdout dumper - single chunk) {
     co_yield chunk;
     co_return;
   };
-  auto states = collect(current_dumper(output_generator()));
+  auto states = collect_states(std::move(output_generator));
   auto output = capture.flush_captured_stdout_output();
   REQUIRE_EQUAL(states.size(), size_t{1});
   REQUIRE_EQUAL(output, "output");
@@ -128,7 +138,7 @@ TEST(stdout dumper - multiple chunks) {
     co_yield second_chunk;
     co_return;
   };
-  auto states = collect(current_dumper(output_generator()));
+  auto states = collect_states(std::move(output_generator));
   auto output = capture.flush_captured_stdout_output();
   REQUIRE_EQUAL(states.size(), size_t{2});
   REQUIRE_EQUAL(output, "first output\nsecond output\n");
