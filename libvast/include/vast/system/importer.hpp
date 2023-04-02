@@ -12,7 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/heterogeneous_string_hash.hpp"
+#include "vast/detail/heterogeneous_hash.hpp"
 #include "vast/legacy_pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"

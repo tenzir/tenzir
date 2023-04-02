@@ -11,7 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/flat_map.hpp"
-#include "vast/detail/heterogeneous_string_hash.hpp"
+#include "vast/detail/heterogeneous_hash.hpp"
 #include "vast/detail/inspection_common.hpp"
 #include "vast/expression.hpp"
 #include "vast/module.hpp"

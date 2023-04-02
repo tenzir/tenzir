@@ -11,6 +11,7 @@
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/heterogeneous_hash.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/stable_map.hpp"
@@ -28,7 +29,6 @@
 #include <caf/expected.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
-#include <tsl/robin_map.h>
 
 #include <algorithm>
 #include <array>
@@ -365,10 +365,7 @@ private:
   std::vector<digest_type> digests_;
   std::unordered_set<key, key_hasher> unique_digests_;
 
-  // We use a robin_map here because it supports heterogeneous lookup, which
-  // has a major performance impact for `seeds_`, see ch13760.
-  using seeds_map = tsl::robin_map<data, size_t>;
-  static_assert(concepts::transparent<seeds_map::key_equal>);
+  using seeds_map = detail::heterogeneous_data_hashmap<size_t>;
   seeds_map seeds_;
 };
 

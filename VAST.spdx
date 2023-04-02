@@ -21,11 +21,6 @@ LicenseConcluded: Apache-2.0
 LicenseComments: Adapated from the Apache Arrow library.
 
 SPDXID: SPDXRef-File
-FileName: ./libvast/aux/robin-map/*
-FIleCopyrightText: (c) 2017 Tessil
-LicenseConcluded: MIT
-
-SPDXID: SPDXRef-File
 FileName: ./libvast/src/concept/hashable/crc.cpp
 FileCopyrightText: (C) 1995-2013 Jean-loup Gailly and Mark Adler
 LicenseConcluded: Zlib

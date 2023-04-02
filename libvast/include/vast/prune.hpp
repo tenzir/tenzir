@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <vast/detail/heterogeneous_string_hash.hpp>
-#include <vast/expression.hpp>
+#include "vast/detail/heterogeneous_hash.hpp"
+#include "vast/expression.hpp"
 
 namespace vast {
 

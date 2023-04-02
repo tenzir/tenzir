@@ -10,7 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/detail/heterogeneous_string_hash.hpp"
+#include "vast/detail/heterogeneous_hash.hpp"
 #include "vast/detail/tuple_map.hpp"
 
 #include <caf/actor.hpp>

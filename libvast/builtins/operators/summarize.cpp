@@ -22,8 +22,8 @@
 
 #include <arrow/compute/api_scalar.h>
 #include <arrow/type.h>
+#include <boost/unordered/unordered_flat_map.hpp>
 #include <caf/expected.hpp>
-#include <tsl/robin_map.h>
 
 #include <algorithm>
 #include <utility>
@@ -387,6 +387,8 @@ struct group_by_key_view : std::vector<data_view> {
 /// The hash functor for enabling use of *group_by_key* as a key in unordered
 /// map data structures with transparent lookup.
 struct group_by_key_hash {
+  using is_transparent = void;
+
   size_t operator()(const group_by_key& x) const noexcept {
     auto hasher = xxh64{};
     for (const auto& value : x)
@@ -502,7 +504,7 @@ public:
                                              *group_by_arrays[column], row);
       if (auto bucket = buckets.find(reusable_key_view);
           bucket != buckets.end())
-        return bucket.value().get();
+        return bucket->second.get();
       auto new_bucket = std::make_shared<bucket>();
       new_bucket->reserve(aggregation_columns.size());
       for (const auto& column : aggregation_columns) {
@@ -518,7 +520,7 @@ public:
       auto [it, inserted] = buckets.emplace(materialize(reusable_key_view),
                                             std::move(new_bucket));
       VAST_ASSERT(inserted);
-      return it.value().get();
+      return it->second.get();
     };
     // Iterate over all rows of the batch, and determine a sliding window of
     // rows beloging to the same batch as large as possible, and then update the
@@ -644,8 +646,8 @@ private:
   type output_schema = {};
 
   /// The buckets for the ongoing aggregation.
-  tsl::robin_map<group_by_key, std::shared_ptr<bucket>, group_by_key_hash,
-                 group_by_key_equal>
+  boost::unordered_flat_map<group_by_key, std::shared_ptr<bucket>,
+                            group_by_key_hash, group_by_key_equal>
     buckets = {};
 };
 

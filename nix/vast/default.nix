@@ -21,7 +21,6 @@
     spdlog,
     libyamlcpp,
     simdjson,
-    robin-map,
     jemalloc,
     libunwind,
     xxHash,
@@ -118,7 +117,6 @@
           caf
           flatbuffers
           jemalloc
-          robin-map
           simdjson
           spdlog
           xxHash

@@ -28,7 +28,6 @@
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
-#include <tsl/robin_map.h>
 
 #include <chrono>
 #include <filesystem>

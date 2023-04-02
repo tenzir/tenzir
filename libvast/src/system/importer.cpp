@@ -73,7 +73,7 @@ public:
         auto name = slice.schema().name();
         if (auto it = state.schema_counters.find(name);
             it != state.schema_counters.end())
-          it.value() += rows;
+          it->second += rows;
         else
           state.schema_counters.emplace(std::string{name}, rows);
         slice.import_time(time::clock::now());

@@ -1,50 +1,3 @@
-# -- bundled dependencies ------------------------------------------------------
-
-# TODO: VAST bundles robin-map in its aux directory, because we need at least
-# 0.6.2, which is not widely available on package managers. We should
-# investigate switching to a different map, e.g., from folly or abseil.
-
-option(VAST_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map" OFF)
-add_feature_info("VAST_ENABLE_BUNDLED_ROBIN_MAP" VAST_ENABLE_BUNDLED_ROBIN_MAP
-                 "always use the bundled tsl-robin-map.")
-if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
-  find_package(tsl-robin-map QUIET)
-  if (tsl-robin-map_FOUND)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(tsl-robin-map REQUIRED)")
-    dependency_summary("robin-map" tsl::robin_map "Dependencies")
-  endif ()
-endif ()
-if (NOT tsl-robin-map_FOUND)
-  if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
-    message(
-      STATUS
-        "Cannot find installed tsl-robin-map; falling back to bundled version")
-  endif ()
-  add_subdirectory(aux/robin-map)
-  dependency_summary("robin-map" "${CMAKE_CURRENT_SOURCE_DIR}/aux/robin-map"
-                     "Dependencies")
-  export(
-    EXPORT tsl-robin-mapTargets
-    FILE tsl-robin-mapTargets.cmake
-    NAMESPACE tsl::)
-  add_custom_target(
-    tsl-robin-map-targets-link
-    COMMAND
-      ${CMAKE_COMMAND} -E create_symlink
-      "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapTargets.cmake"
-      "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake"
-    COMMENT "Linking tsl-robin-map targets")
-  install(
-    EXPORT tsl-robin-mapTargets
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-    NAMESPACE tsl::
-    COMPONENT Development)
-  string(APPEND VAST_EXTRA_TARGETS_FILES
-         "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
-  add_dependencies(robin_map tsl-robin-map-targets-link)
-endif ()
-
 # -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
@@ -306,11 +259,6 @@ if (NOT simdjson_FOUND)
 endif ()
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
 string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(simdjson 3.1 REQUIRED)")
-
-# Link against robin-map.
-target_link_libraries(libvast PUBLIC tsl::robin_map)
-# This is broken for the bundled robin-map, so we special-case it above.
-# dependency_summary("robin-map" tsl::robin_map "Dependencies")
 
 # Link against Apache Arrow.
 target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})

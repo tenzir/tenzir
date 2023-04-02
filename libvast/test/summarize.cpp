@@ -135,8 +135,8 @@ TEST(summarize Zeek conn log) {
   //     | zeek-cut -D "%Y-%m-%d" ts duration
   //     | awk '{sums[$1] += $2;}END{for (s in sums){print s,sums[s];}}'
   const auto expected_data = std::vector<std::vector<std::string_view>>{
-    {"2009-11-19", "33722481628959ns", "40", "498087", "286586076"},
     {"2009-11-18", "147082148590872ns", "0", "123661", "81051017"},
+    {"2009-11-19", "33722481628959ns", "40", "498087", "286586076"},
   };
   REQUIRE_EQUAL(summarized_slice.rows(), expected_data.size());
   REQUIRE_EQUAL(summarized_slice.columns(), expected_data[0].size());

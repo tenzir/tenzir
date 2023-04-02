@@ -7,47 +7,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/aggregation_function.hpp>
+#include <vast/detail/heterogeneous_hash.hpp>
 #include <vast/detail/passthrough.hpp>
 #include <vast/hash/hash.hpp>
 #include <vast/plugin.hpp>
 
-#include <tsl/robin_set.h>
-
 namespace vast::plugins::distinct {
 
 namespace {
-
-template <concrete_type Type>
-struct heterogeneous_data_hash {
-  using is_transparent = void;
-
-  [[nodiscard]] size_t operator()(view<type_to_data_t<Type>> value) const {
-    return hash(value);
-  }
-
-  [[nodiscard]] size_t operator()(const type_to_data_t<Type>& value) const
-    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
-  {
-    return hash(make_view(value));
-  }
-};
-
-template <concrete_type Type>
-struct heterogeneous_data_equal {
-  using is_transparent = void;
-
-  [[nodiscard]] bool operator()(const type_to_data_t<Type>& lhs,
-                                const type_to_data_t<Type>& rhs) const {
-    return lhs == rhs;
-  }
-
-  [[nodiscard]] bool operator()(const type_to_data_t<Type>& lhs,
-                                view<type_to_data_t<Type>> rhs) const
-    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
-  {
-    return make_view(lhs) == rhs;
-  }
-};
 
 template <concrete_type Type, bool IsList>
 class distinct_function final : public aggregation_function {
@@ -95,9 +62,7 @@ private:
     return data{std::move(result)};
   }
 
-  tsl::robin_set<type_to_data_t<Type>, heterogeneous_data_hash<Type>,
-                 heterogeneous_data_equal<Type>>
-    distinct_ = {};
+  detail::heterogeneous_data_hashset<Type> distinct_ = {};
 };
 
 class plugin : public virtual aggregation_function_plugin {

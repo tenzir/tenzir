@@ -36,7 +36,6 @@ apt-get -y --no-install-recommends install \
     python3-openssl \
     python3-pip \
     python3-venv \
-    robin-map-dev \
     software-properties-common \
     wget
 
