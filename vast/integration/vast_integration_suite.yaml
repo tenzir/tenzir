@@ -28,17 +28,6 @@ fixtures:
     exit: | # python
       node.stop()
 
-  PipelinesTester:
-    enter: | # python
-      node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
-                    work_dir, name='node', port=VAST_PORT,
-                    config_file='vast-pipelines.yaml')
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
-
-    exit: | # python
-      node.stop()
-
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
@@ -513,20 +502,6 @@ tests:
       - command: version
         transformation: sleep 4
       - command: count '#type == /zeek.*/'
-  Pipelines:
-    tags: [server, client, import-export, transforms, suricata]
-    fixture: PipelinesTester
-    steps:
-      - command: --config=@./vast-pipelines.yaml import -b suricata
-        input: data/suricata/eve.json
-      - command: export json '#type == "suricata.http"'
-      - command: export json '#type == "suricata.netflow"'
-      - command: export json '#type == "suricata.dns"'
-      - command: export json '#type == "suricata.fileinfo"'
-      - command: export json '#type == "suricata.alert"'
-      - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.alert"'
-      - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.dns"'
-      - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.fileinfo"'
   Export pipeline operator parsing everything but summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester

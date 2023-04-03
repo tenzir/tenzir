@@ -62,8 +62,7 @@ struct importer_fixture : Base {
     MESSAGE("spawn importer");
     auto dir = this->directory / "importer";
     importer = this->self->spawn(system::importer, dir, system::index_actor{},
-                                 system::accountant_actor{},
-                                 std::vector<vast::legacy_pipeline>{});
+                                 system::accountant_actor{});
   }
 
   ~importer_fixture() {

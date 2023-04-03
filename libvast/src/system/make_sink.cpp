@@ -31,11 +31,7 @@ make_sink(caf::actor_system& sys, const std::string& output_format,
     return writer.error();
   auto max_events
     = get_or(options, "vast.export.max-events", defaults::export_::max_events);
-  auto pipelines = make_pipelines(pipelines_location::client_sink, options);
-  if (!pipelines)
-    return pipelines.error();
-  return sys.spawn(transforming_sink, std::move(*writer), std::move(*pipelines),
-                   max_events);
+  return sys.spawn(sink, std::move(*writer), max_events);
 }
 
 } // namespace vast::system

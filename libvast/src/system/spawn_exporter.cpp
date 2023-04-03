@@ -38,18 +38,15 @@ caf::expected<caf::actor>
 spawn_exporter(node_actor::stateful_pointer<node_state> self,
                spawn_arguments& args) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
-  // Pipelines from configuration.
-  auto pipelines
-    = make_pipelines(pipelines_location::server_export, args.inv.options);
-  if (!pipelines)
-    return pipelines.error();
   // Parse given query.
   auto parse_result = system::parse_query(args.inv.arguments);
   if (!parse_result)
     return parse_result.error();
   auto [expr, pipeline] = std::move(*parse_result);
-  if (pipeline)
-    pipelines->push_back(std::move(*pipeline));
+  auto pipelines = std::vector<legacy_pipeline>{};
+  if (pipeline) {
+    pipelines.push_back(std::move(*pipeline));
+  }
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))
@@ -64,7 +61,7 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     query_opts = query_opts + low_priority;
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
-  auto handle = self->spawn(exporter, expr, query_opts, std::move(*pipelines),
+  auto handle = self->spawn(exporter, expr, query_opts, std::move(pipelines),
                             std::move(index));
   VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
   // Wire the exporter to all components.

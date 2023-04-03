@@ -1000,10 +1000,6 @@ jobs:
             target: example-analyzer
             path: examples/plugins/analyzer
             debian-dependencies:
-          - name: Example Pipeline Operator
-            target: example-pipeline-operator
-            path: examples/plugins/pipeline_operator
-            debian-dependencies:
           - name: Sigma
             target: sigma
             path: plugins/sigma

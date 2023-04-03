@@ -11,7 +11,6 @@
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/make_legacy_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/parse_query.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -33,11 +32,8 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
                            "unable to spawn a remote source when spawning a "
                            "node locally instead of connecting to one; please "
                            "unset the option vast.node");
-  auto pipelines
-    = make_pipelines(pipelines_location::server_import, args.inv.options);
-  if (!pipelines)
-    return pipelines.error();
   expression expr;
+  auto pipelines = std::vector<legacy_pipeline>{};
   if (!args.inv.arguments.empty()) {
     auto parse_result = parse_query(args.inv.arguments);
     if (!parse_result) {
@@ -46,10 +42,10 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
     auto [parsed_expr, pipeline] = std::move(*parse_result);
     expr = parsed_expr;
     if (pipeline) {
-      pipelines->push_back(std::move(*pipeline));
+      pipelines.push_back(std::move(*pipeline));
     }
   }
-  VAST_DEBUG("{} parsed {} pipelines for source", *self, pipelines->size());
+  VAST_DEBUG("{} parsed {} pipelines for source", *self, pipelines.size());
   auto [accountant, importer, catalog]
     = self->state.registry
         .find<accountant_actor, importer_actor, catalog_actor>();
@@ -62,7 +58,7 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
                                 caf::actor_cast<accountant_actor>(accountant),
                                 caf::actor_cast<catalog_actor>(catalog),
                                 caf::actor_cast<importer_actor>(importer),
-                                std::move(*pipelines), std::move(expr), true);
+                                std::move(pipelines), std::move(expr), true);
   if (!src_result)
     return src_result.error();
   auto src = *src_result;
