@@ -257,4 +257,18 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
   }
 }
 
+pipeline::pipeline(pipeline const& other) {
+  operators_.reserve(other.operators_.size());
+  for (const auto& op : other.operators_) {
+    operators_.push_back(op->copy());
+  }
+}
+
+auto pipeline::operator=(pipeline const& other) -> pipeline& {
+  if (this != &other) {
+    *this = pipeline{other};
+  }
+  return *this;
+}
+
 } // namespace vast

@@ -6,6 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/detail/pp.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+
+#include <vast/actor_executor.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/pipeline.hpp>
@@ -118,27 +123,51 @@ struct sink final : public crtp_operator<sink> {
   std::function<void(table_slice)> callback_;
 };
 
-struct fixture : fixtures::events {};
+struct fixture : fixtures::deterministic_actor_system_and_events {
+  fixture() : deterministic_actor_system_and_events{VAST_PP_STRINGIFY(SUITE)} {
+  }
+};
 
 FIXTURE_SCOPE(pipeline_fixture, fixture)
 
-TEST(taste 42) {
-  {
-    auto v = unbox(pipeline::parse("taste 42")).unwrap();
+TEST(actor executor) {
+  for (auto num : {0, 1, 4, 5}) {
+    auto v = unbox(pipeline::parse(fmt::format("head {}", num))).unwrap();
     v.insert(v.begin(),
              std::make_unique<source>(std::vector<table_slice>{
                head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
                head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
-    auto count = 0;
+    auto actual = 0;
     v.push_back(std::make_unique<sink>([&](table_slice) {
-      count += 1;
+      actual += 1;
     }));
     auto p = pipeline{std::move(v)};
-    for (auto&& result : make_local_executor(std::move(p))) {
-      REQUIRE_NOERROR(result);
-    }
-    CHECK_GREATER(count, 0);
+    sys.spawn([&](caf::event_based_actor* self) -> caf::behavior {
+      start_actor_executor(self, p, [](caf::expected<void> result) {
+        REQUIRE_NOERROR(result);
+      });
+      return {};
+    });
+    run();
+    CHECK_EQUAL(actual, std::min(num, 4));
   }
+}
+
+TEST(taste 42) {
+  auto v = unbox(pipeline::parse("taste 42")).unwrap();
+  v.insert(v.begin(),
+           std::make_unique<source>(std::vector<table_slice>{
+             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+  auto count = 0;
+  v.push_back(std::make_unique<sink>([&](table_slice) {
+    count += 1;
+  }));
+  auto p = pipeline{std::move(v)};
+  for (auto&& result : make_local_executor(std::move(p))) {
+    REQUIRE_NOERROR(result);
+  }
+  CHECK_GREATER(count, 0);
 }
 
 TEST(source | where #type == "zeek.conn" | sink) {

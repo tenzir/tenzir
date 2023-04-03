@@ -29,6 +29,69 @@ using operator_output
   = std::variant<generator<std::monostate>, generator<table_slice>,
                  generator<chunk_ptr>>;
 
+/// Variant of all operator batch types.
+struct operator_batch : std::variant<std::monostate, table_slice, chunk_ptr> {
+  using variant::variant;
+
+  auto empty() const -> bool {
+    auto f = detail::overload{
+      [](std::monostate) {
+        return true;
+      },
+      [](const table_slice& slice) {
+        return slice.rows() == 0;
+      },
+      [](const chunk_ptr& chunk) {
+        if (chunk) {
+          return chunk->size() == 0;
+        }
+        return true;
+      },
+    };
+    return std::visit(f, *this);
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, operator_batch& x) {
+    if constexpr (Inspector::is_loading) {
+      auto i = size_t{};
+      if (!f.apply(i)) {
+        return false;
+      }
+      switch (i) {
+        case 0: {
+          x.emplace<0>();
+          return true;
+        }
+        case 1: {
+          auto& y = x.emplace<1>();
+          return f.apply(y);
+        }
+        case 2: {
+          auto& y = x.emplace<2>();
+          return f.apply(y);
+        }
+        default:
+          return false;
+      }
+    } else {
+      auto i = x.index();
+      if (!f.apply(i)) {
+        return false;
+      }
+      auto g = detail::overload{
+        [](std::monostate&) {
+          return true;
+        },
+        [&](auto& y) {
+          return f.apply(y);
+        },
+      };
+      return std::visit(g, x);
+    }
+  }
+};
+
 /// Concept for pipeline operator input element types.
 template <class T>
 concept operator_input_batch
@@ -64,6 +127,9 @@ inline auto trivially_true_expression() -> const expression& {
 
 /// Uniquely owned pipeline operator.
 using operator_ptr = std::unique_ptr<operator_base>;
+
+///
+enum class operator_location { local, remote, anywhere };
 
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
@@ -113,6 +179,11 @@ public:
     return {};
   }
 
+  ///
+  virtual auto location() const -> operator_location {
+    return operator_location::anywhere;
+  }
+
 private:
   auto test_instantiate_impl(operator_input input) const
     -> caf::expected<operator_output>;
@@ -123,6 +194,11 @@ class pipeline final : public operator_base {
 public:
   /// Constructs an empty pipeline.
   pipeline() = default;
+
+  pipeline(pipeline const& other);
+  pipeline(pipeline&& other) noexcept = default;
+  auto operator=(pipeline const& other) -> pipeline&;
+  auto operator=(pipeline&& other) noexcept -> pipeline& = default;
 
   /// Constructs a pipeline from a sequence of operators. Flattens nested
   /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
@@ -153,6 +229,30 @@ public:
 
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override;
+
+  /// Support the CAF type inspection API.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, pipeline& x) -> bool {
+    if constexpr (Inspector::is_loading) {
+      auto repr = std::string{};
+      if (not f.object(x)
+                .pretty_name("vast.logical-pipeline")
+                .fields(f.field("repr", repr)))
+        return false;
+      auto result = pipeline::parse(repr);
+      if (not result) {
+        VAST_WARN("failed to parse pipeline '{}': {}", repr, result.error());
+        return false;
+      }
+      x = std::move(*result);
+      return true;
+    } else {
+      auto repr = x.to_string();
+      return f.object(x)
+        .pretty_name("vast.logical-pipeline")
+        .fields(f.field("repr", repr));
+    }
+  }
 
 private:
   std::vector<operator_ptr> operators_;

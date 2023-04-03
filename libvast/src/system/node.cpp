@@ -735,6 +735,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       VAST_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
+    [](atom::spawn,
+       pipeline&) -> caf::result<std::vector<execution_node_actor>> {
+      return ec::unimplemented;
+    },
   };
 }
 

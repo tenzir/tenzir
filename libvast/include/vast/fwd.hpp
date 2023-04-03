@@ -112,23 +112,25 @@ class stringification_inspector;
 namespace vast {
 
 class active_store;
-class ip;
-class ip_type;
 class aggregation_function;
 class bitmap;
 class bool_type;
 class chunk;
 class command;
-class uint64_type;
 class data;
+class double_type;
 class dumper_plugin;
 class duration_type;
 class enumeration_type;
-class expression;
 class ewah_bitmap;
+class expression;
 class http_request;
 class int64_type;
+class ip_type;
+class ip;
 class legacy_abstract_type;
+class legacy_pipeline_operator;
+class legacy_pipeline;
 class legacy_type;
 class list_type;
 class map_type;
@@ -137,68 +139,68 @@ class null_bitmap;
 class operator_base;
 class passive_store;
 class pattern;
-class plugin;
+class pipeline;
 class plugin_ptr;
+class plugin;
 class port;
-class double_type;
 class record_type;
 class segment;
 class string_type;
-class subnet;
 class subnet_type;
+class subnet;
 class synopsis;
-class table_slice;
 class table_slice_builder;
 class table_slice_column;
+class table_slice;
 class time_type;
-class legacy_pipeline;
-class legacy_pipeline_operator;
 class type;
+class uint64_type;
 class uuid;
 class value_index;
 class wah_bitmap;
 
-struct rest_endpoint;
 struct attribute;
-struct count_query_context;
-struct legacy_address_type;
-struct legacy_alias_type;
-struct meta_extractor;
-struct legacy_bool_type;
 struct concept_;
 struct conjunction;
-struct legacy_count_type;
+struct count_query_context;
 struct curried_predicate;
 struct data_extractor;
 struct disjunction;
 struct extract_query_context;
-struct legacy_duration_type;
-struct legacy_enumeration_type;
 struct field_extractor;
 struct flow;
-struct legacy_integer_type;
 struct invocation;
+struct legacy_address_type;
+struct legacy_alias_type;
+struct legacy_bool_type;
+struct legacy_count_type;
+struct legacy_duration_type;
+struct legacy_enumeration_type;
+struct legacy_integer_type;
 struct legacy_list_type;
 struct legacy_map_type;
+struct legacy_none_type;
+struct legacy_pattern_type;
+struct legacy_real_type;
+struct legacy_record_type;
+struct legacy_string_type;
+struct legacy_subnet_type;
+struct legacy_time_type;
+struct meta_extractor;
 struct model;
 struct negation;
-struct legacy_none_type;
 struct offset;
-struct partition_synopsis;
-struct partition_synopsis_pair;
+struct operator_batch;
 struct partition_info;
-struct legacy_pattern_type;
+struct partition_synopsis_pair;
+struct partition_synopsis;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
+struct rest_endpoint;
 struct schema_statistics;
-struct legacy_real_type;
-struct legacy_record_type;
 struct status;
-struct legacy_string_type;
-struct legacy_subnet_type;
 struct taxonomies;
-struct legacy_time_type;
 struct type_extractor;
 struct type_set;
 
@@ -369,48 +371,50 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
-  VAST_ADD_TYPE_ID((vast::ip))
-  VAST_ADD_TYPE_ID((vast::rest_endpoint))
-  VAST_ADD_TYPE_ID((vast::meta_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
   VAST_ADD_TYPE_ID((vast::chunk_ptr))
   VAST_ADD_TYPE_ID((vast::conjunction))
   VAST_ADD_TYPE_ID((vast::count_query_context))
   VAST_ADD_TYPE_ID((vast::curried_predicate))
-  VAST_ADD_TYPE_ID((vast::data))
   VAST_ADD_TYPE_ID((vast::data_extractor))
+  VAST_ADD_TYPE_ID((vast::data))
   VAST_ADD_TYPE_ID((vast::disjunction))
   VAST_ADD_TYPE_ID((vast::ec))
+  VAST_ADD_TYPE_ID((vast::ewah_bitmap))
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
   VAST_ADD_TYPE_ID((vast::http_request))
   VAST_ADD_TYPE_ID((vast::invocation))
+  VAST_ADD_TYPE_ID((vast::ip))
+  VAST_ADD_TYPE_ID((vast::meta_extractor))
+  VAST_ADD_TYPE_ID((vast::module))
   VAST_ADD_TYPE_ID((vast::negation))
+  VAST_ADD_TYPE_ID((vast::null_bitmap))
   VAST_ADD_TYPE_ID((vast::partition_info))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_pair))
+  VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::pattern))
-  VAST_ADD_TYPE_ID((vast::port))
+  VAST_ADD_TYPE_ID((vast::pipeline_ptr))
+  VAST_ADD_TYPE_ID((vast::pipeline))
   VAST_ADD_TYPE_ID((vast::port_type))
+  VAST_ADD_TYPE_ID((vast::port))
   VAST_ADD_TYPE_ID((vast::predicate))
   VAST_ADD_TYPE_ID((vast::qualified_record_field))
   VAST_ADD_TYPE_ID((vast::query_context))
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
-  VAST_ADD_TYPE_ID((vast::module))
+  VAST_ADD_TYPE_ID((vast::rest_endpoint))
+  VAST_ADD_TYPE_ID((vast::operator_batch))
   VAST_ADD_TYPE_ID((vast::subnet))
+  VAST_ADD_TYPE_ID((vast::table_slice_column))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::taxonomies))
-  VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
+  VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::uuid))
-  VAST_ADD_TYPE_ID((vast::table_slice_column))
-  VAST_ADD_TYPE_ID((vast::pipeline_ptr))
-  VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::wah_bitmap))
-  VAST_ADD_TYPE_ID((vast::ewah_bitmap))
-  VAST_ADD_TYPE_ID((vast::null_bitmap))
 
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See vast/aliases.hpp for their definitions.
@@ -434,6 +438,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((std::vector<uint32_t>))
   VAST_ADD_TYPE_ID((std::vector<uint64_t>))
   VAST_ADD_TYPE_ID((std::vector<std::string>))
+  VAST_ADD_TYPE_ID((std::vector<vast::chunk_ptr>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>))
   VAST_ADD_TYPE_ID((std::vector<vast::uuid>))
@@ -448,8 +453,10 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
       std::unordered_map<vast::uuid, vast::partition_synopsis_ptr>>))
   VAST_ADD_TYPE_ID((std::vector<vast::partition_synopsis_pair>))
 
+  VAST_ADD_TYPE_ID((caf::stream<vast::chunk_ptr>))
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>))
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>))
+  VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::chunk_ptr>))
   VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::table_slice>))
   VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::table_slice_column>))
   VAST_ADD_TYPE_ID((caf::outbound_stream_slot<vast::table_slice>))

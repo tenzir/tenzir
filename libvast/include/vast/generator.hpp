@@ -81,8 +81,9 @@ public:
   // This overload copies v to a temporary, then yields a pointer to that.
   // This allows passing an lvalue to co_yield for a generator<NotReference>.
   // Looks crazy, but taken from the reference implementation in P2529R0.
-  auto yield_value(const T& v) requires(
-    !std::is_reference_v<T> && std::copy_constructible<T>) {
+  auto yield_value(const T& v)
+    requires(!std::is_reference_v<T> && std::copy_constructible<T>)
+  {
     struct Owner : stdcoro::suspend_always {
       Owner(const T& val, pointer_type& out) : v(val) {
         out = &v;
@@ -241,6 +242,11 @@ public:
 
   void swap(generator& other) noexcept {
     std::swap(m_coroutine, other.m_coroutine);
+  }
+
+  /// @pre `begin()` must have been called before
+  auto unsafe_current() const -> iterator {
+    return iterator{m_coroutine};
   }
 
 private:

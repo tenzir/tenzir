@@ -22,6 +22,7 @@
 #include "vast/operator.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/pattern.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/port.hpp"
 #include "vast/qualified_record_field.hpp"

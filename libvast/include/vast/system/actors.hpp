@@ -391,6 +391,16 @@ using datagram_source_actor = typed_actor_fwd<
   // Conform to the protocol of the SOURCE actor.
   ::extend_with<source_actor>::unwrap_as_broker;
 
+/// The interface of a EXECUTION NODE actor.
+using execution_node_actor = system::typed_actor_fwd<
+  // source
+  auto(atom::run, std::vector<caf::actor> next)->caf::result<void>,
+  // stage / sink
+  auto(caf::stream<table_slice> in, std::vector<caf::actor> next)
+    ->caf::result<caf::inbound_stream_slot<table_slice>>,
+  auto(caf::stream<chunk_ptr> in, std::vector<caf::actor> next)
+    ->caf::result<caf::inbound_stream_slot<chunk_ptr>>>::unwrap;
+
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
   // Run an invocation in the node.
@@ -411,7 +421,10 @@ using node_actor = typed_actor_fwd<
   // Retrieve the version of the process running the NODE.
   auto(atom::get, atom::version)->caf::result<record>,
   // Retrieve the configuration of the NODE.
-  auto(atom::config)->caf::result<record>>::unwrap;
+  auto(atom::config)->caf::result<record>,
+  // TODO
+  auto(atom::spawn, pipeline)
+    ->caf::result<std::vector<execution_node_actor>>>::unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.
@@ -430,6 +443,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((std::filesystem::path))
   VAST_ADD_TYPE_ID(
     (std::vector<std::pair<std::filesystem::path, std::filesystem::path>>))
+  VAST_ADD_TYPE_ID((std::vector<vast::system::execution_node_actor>))
 
   VAST_ADD_TYPE_ID((vast::system::accountant_actor))
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))
