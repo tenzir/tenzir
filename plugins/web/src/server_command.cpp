@@ -156,7 +156,8 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         } else if (maybe_content_type == "application/json") {
           auto json_params = parser.parse(body);
           if (!json_params.is_object())
-            return response->abort(400, "invalid JSON body\n");
+            return response->abort(400, fmt::format("invalid JSON body: {}\n",
+                                                    json_params.error()));
           body_params = json_params.get_object();
         } else {
           return response->abort(400, "unsupported content type");
@@ -180,10 +181,8 @@ request_dispatcher_actor::behavior_type request_dispatcher(
               maybe_param = simdjson::minify(maybe_value.value());
               // Simdjson encloses strings into additional double quotes,
               // which we need to remove again.
-              if (maybe_value.is_string()) {
-                VAST_ASSERT_CHEAP(maybe_param->size() >= 2);
-                maybe_param = maybe_param->substr(1, maybe_param->size() - 2);
-              }
+              if (maybe_value.is_string())
+                maybe_param = detail::json_unescape(*maybe_param);
             }
           if (!maybe_param)
             continue;
