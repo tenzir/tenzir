@@ -45,7 +45,9 @@ using view = typename view_trait<T>::type;
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
   };                                                                           \
-  inline type_name materialize(view<type_name> x) { return x; }
+  inline type_name materialize(view<type_name> x) {                            \
+    return x;                                                                  \
+  }
 
 VAST_VIEW_TRAIT(bool)
 VAST_VIEW_TRAIT(int64_t)
@@ -484,6 +486,12 @@ map materialize(map_view_handle xs);
 record materialize(record_view_handle xs);
 
 data materialize(data_view xs);
+
+template <class T>
+  requires(std::is_convertible_v<T, std::string_view>)
+std::string materialize(T&& x) {
+  return materialize(std::string_view{std::forward<T>(x)});
+}
 
 // -- utilities ----------------------------------------------------------------
 

@@ -271,8 +271,8 @@ struct query_manager_state {
         else
           out_iter = fmt::format_to(out_iter, "}},{{");
         first = false;
-        out_iter = fmt::format_to(
-          out_iter, "\"schema-ref\":\"{:x}\",\"data\":", hash(slice.schema()));
+        out_iter = fmt::format_to(out_iter, "\"schema-ref\":\"{}\",\"data\":",
+                                  slice.schema().make_fingerprint());
         VAST_ASSERT_CHEAP(row);
         const auto ok = printer.print(out_iter, *row);
         VAST_ASSERT_CHEAP(ok);
@@ -296,8 +296,9 @@ struct query_manager_state {
       else
         out_iter = fmt::format_to(out_iter, "}},{{");
       first = false;
-      out_iter = fmt::format_to(
-        out_iter, "\"schema-ref\":\"{:x}\",\"definition\":", hash(schema));
+      out_iter
+        = fmt::format_to(out_iter, "\"schema-ref\":\"{}\",\"definition\":",
+                         schema.make_fingerprint());
       const auto ok = printer.print(out_iter, schema.to_definition(expand));
       VAST_ASSERT_CHEAP(ok);
     }
