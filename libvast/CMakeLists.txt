@@ -46,7 +46,7 @@ endif ()
 
 # -- boost --------------------------------------------------------------------
 
-find_package(Boost REQUIRED COMPONENTS headers)
+find_package(Boost 1.81 REQUIRED COMPONENTS headers)
 
 # -- re2 ----------------------------------------------------------------------
 
