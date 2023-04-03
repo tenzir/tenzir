@@ -45,8 +45,8 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   auto [expr, pipeline] = std::move(*parse_result);
   auto pipelines = std::vector<legacy_pipeline>{};
   if (pipeline) {
+    pipelines.push_back(std::move(*pipeline));
   }
-  pipelines.push_back(std::move(*pipeline));
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))
