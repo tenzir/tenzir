@@ -8,10 +8,12 @@
 
 #include "vast/collect.hpp"
 #include "vast/detail/string_literal.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/test.hpp"
 
+#include <caf/error.hpp>
 #include <caf/test/dsl.hpp>
 
 #include <fcntl.h>
@@ -60,11 +62,13 @@ struct fixture {
     // than one loader type.
     loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
     REQUIRE(loader_plugin);
-    current_loader = unbox(loader_plugin->make_loader({}, control_plane));
+    current_loader = [this] {
+      return unbox(loader_plugin->make_loader({}, control_plane));
+    };
   }
 
   const vast::loader_plugin* loader_plugin;
-  vast::loader_plugin::loader current_loader;
+  std::function<auto()->generator<chunk_ptr>> current_loader;
   mock_control_plane control_plane;
 };
 
@@ -155,6 +159,32 @@ TEST(stdin loader - one complete chunk) {
   REQUIRE_EQUAL(chunks.front()->size(), max_chunk_size);
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
                      str_chunk->begin(), str_chunk->end()));
+}
+
+TEST(stdin loader - from operator) {
+  struct sink final : crtp_operator<sink> {
+    auto operator()(generator<table_slice> input) const
+      -> generator<std::monostate> {
+      for (auto&& slice : input) {
+        REQUIRE(slice.rows() == 0);
+        co_yield {};
+      }
+    }
+
+    auto to_string() const -> std::string override {
+      return "<sink>";
+    }
+  };
+
+  stdin_file_input<"artifacts/inputs/nothing.txt"> file;
+  auto ops = unbox(pipeline::parse("from stdin | pass")).unwrap();
+  ops.push_back(std::make_unique<sink>());
+  for (auto&& x : make_local_executor(pipeline{std::move(ops)})) {
+    // TODO: When the parser is implemented, replace the checks below with
+    // `REQUIRE_NOERROR(x);` (and perhaps write some more tests).
+    REQUIRE_ERROR(x);
+    REQUIRE_EQUAL(x.error().code(), static_cast<uint8_t>(ec::unimplemented));
+  }
 }
 
 FIXTURE_SCOPE_END()
