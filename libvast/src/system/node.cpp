@@ -81,6 +81,25 @@ auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(caf::make_error(code, std::move(msg)));
 }
 
+const rest_endpoint_plugin*
+find_endpoint_handler(http_request_description desc) {
+  static std::unordered_map<std::string, const rest_endpoint_plugin*> cache
+    = {}; // FIXME: Move this into node state
+  if (cache.empty()) {
+    for (auto const& plugin : plugins::get()) {
+      auto rest_plugin = plugin.as<rest_endpoint_plugin>();
+      if (!rest_plugin)
+        continue;
+      for (auto const& endpoint : rest_plugin->rest_endpoints())
+        cache[endpoint.canonical_path()] = rest_plugin;
+    }
+  }
+  auto it = cache.find(desc.canonical_path);
+  if (it == cache.end())
+    return nullptr;
+  return it->second;
+}
+
 /// A list of components that are essential for importing and exporting data
 /// from the node.
 std::set<const char*> core_components = {
@@ -638,19 +657,20 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     },
     [self](atom::proxy,
            http_request_description desc) -> caf::result<std::string> {
-      auto const* foo = plugins::find<rest_endpoint_plugin>(desc.plugin);
-      if (!foo)
-        return caf::make_error(ec::invalid_argument, "unknown plugin");
-      auto handler = foo->handler(self->system(), self);
+      auto rest_plugin = find_endpoint_handler(desc);
+      if (!rest_plugin)
+        return caf::make_error(ec::invalid_argument, "unknown endpoint");
+      auto handler = rest_plugin->handler(self->system(), self);
       auto rp = self->make_response_promise<std::string>();
       auto response = std::make_shared<detail::internal_http_response>(rp);
       auto request = http_request{
         .params = desc.params,
         .response = response,
       };
+      auto endpoint_id = 0ull; // FIXME
       self
-        ->request(handler, caf::infinite, atom::http_request_v,
-                  desc.endpoint_id, std::move(request))
+        ->request(handler, caf::infinite, atom::http_request_v, endpoint_id,
+                  std::move(request))
         .then(
           []() mutable {
             /* nop */

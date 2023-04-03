@@ -55,11 +55,14 @@ auto inspect(Inspector& f, api_version& x) {
 }
 
 struct rest_endpoint {
+  std::string canonical_path() const; // -> "POST /query/:id/next (v0)"
+
   /// Arbitrary id for endpoint identification
   //  The purpose of this id is so that plugins providing multiple endpoints can
   //  determine which one was called by the client without having to reimplement
   //  the routing logic, which can get complex in the presence of path
   //  parameters and multiple request methods.
+  //  TODO: Remove this.
   uint64_t endpoint_id = 0ull;
 
   /// The HTTP verb of this endpoint
@@ -127,11 +130,12 @@ public:
 /// message.
 class http_request_description {
 public:
-  /// The name of the plugin to handle the request.
-  std::string plugin;
+  // /// The name of the plugin to handle the request.
+  // std::string plugin;
 
-  /// Endpoint identifier within the plugin.
-  uint64_t endpoint_id;
+  // /// Endpoint identifier within the plugin.
+  // uint64_t endpoint_id;
+  std::string canonical_path;
 
   /// Request parameters.
   vast::record params;
@@ -140,8 +144,7 @@ public:
   friend auto inspect(Inspector& f, http_request_description& e) {
     return f.object(e)
       .pretty_name("vast.http_request_description")
-      .fields(f.field("plugin", e.plugin),
-              f.field("endpoint_id", e.endpoint_id),
+      .fields(f.field("canonical_path", e.canonical_path),
               f.field("params", e.params));
   }
 };
@@ -164,6 +167,25 @@ struct fmt::formatter<vast::http_method> {
         break;
       case vast::http_method::post:
         value_string = "POST";
+        break;
+    }
+    return formatter<std::string_view>{}.format(value_string, ctx);
+  }
+};
+
+template <>
+struct fmt::formatter<vast::api_version> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::api_version& value, FormatContext& ctx) const {
+    std::string value_string;
+    switch (value) {
+      case vast::api_version::v0:
+        value_string = "v0";
         break;
     }
     return formatter<std::string_view>{}.format(value_string, ctx);
