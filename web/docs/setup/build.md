@@ -23,7 +23,7 @@ Every [release](https://github.com/tenzir/vast/releases) of VAST includes an
 [SPDX](https://spdx.dev) format that lists all dependencies and their versions.
 
 <div align="center" class="padding-bottom--md">
-  <a class="button button--md button--primary margin-right--md" href="/download/sbom.spdx">Latest SBOM</a>
+  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/vast/releases/latest/download/VAST.spdx">Latest SBOM</a>
 </div>
 
 |Required|Dependency|Version|Description|
