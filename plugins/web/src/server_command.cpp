@@ -105,7 +105,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       auto const* token
         = response->request()->header().try_get_field("X-VAST-Token");
       if (!token) {
-        response->abort(401, "missing header X-VAST-Token\n");
+        response->abort(401, "missing header X-VAST-Token\n", caf::error{});
         return;
       }
       self
@@ -119,12 +119,10 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                          std::move(response), std::move(endpoint),
                          std::move(handler));
             else
-              response->abort(401, "invalid token\n");
+              response->abort(401, "invalid token\n", caf::error{});
           },
-          [self, response](const caf::error& err) mutable {
-            VAST_WARN("{} received error while authenticating request: {}",
-                      *self, err);
-            response->abort(500, "internal server error\n");
+          [response](const caf::error& err) mutable {
+            response->abort(500, "authentication error\n", err);
           });
     },
     [self](atom::internal, atom::request, restinio_response_ptr& response,
@@ -132,10 +130,8 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       auto const& header = response->request()->header();
       auto query_params = parse_query_params(header.query());
       if (!query_params)
-        return response->abort(400, fmt::format("failed to parse query "
-                                                "parameters: "
-                                                "{}\n",
-                                                query_params.error()));
+        return response->abort(400, "failed to parse query\n",
+                               query_params.error());
       auto parser = simdjson::dom::parser{};
       auto body_params = std::optional<simdjson::dom::object>{};
       // POST requests can contain request parameters in their body in any
@@ -149,18 +145,21 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         if (maybe_content_type == "application/x-www-form-urlencoded") {
           query_params = parse_query_params(body);
           if (!query_params)
-            return response->abort(400, fmt::format("failed to parse query "
-                                                    "parameters: "
-                                                    "{}\n",
-                                                    query_params.error()));
+            return response->abort(400, "failed to parse query\n",
+                                   query_params.error());
         } else if (maybe_content_type == "application/json") {
           auto json_params = parser.parse(body);
-          if (!json_params.is_object())
-            return response->abort(400, fmt::format("invalid JSON body: {}\n",
-                                                    json_params.error()));
+          if (!json_params.is_object()) {
+            return response->abort(
+              400, "invalid JSON body\n",
+              caf::make_error(ec::invalid_query, fmt::to_string(json_params)));
+          }
           body_params = json_params.get_object();
         } else {
-          return response->abort(400, "unsupported content type");
+          return response->abort(
+            400, "unsupported content type\n",
+            caf::make_error(ec::invalid_argument,
+                            fmt::format("{}\n", maybe_content_type)));
         }
       }
       auto const& route_params = response->route_params();
@@ -179,8 +178,6 @@ request_dispatcher_actor::behavior_type request_dispatcher(
             if (auto maybe_value = body_params->at_key(name);
                 maybe_value.error() != simdjson::NO_SUCH_FIELD) {
               maybe_param = simdjson::minify(maybe_value.value());
-              // Simdjson encloses strings into additional double quotes,
-              // which we need to remove again.
               if (maybe_value.is_string())
                 maybe_param = detail::json_unescape(*maybe_param);
             }
@@ -209,7 +206,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                   return *result;
                 },
                 []<complex_type Type>(const Type&) -> caf::expected<data> {
-                  // TODO: Also allow lists.
+                  // todo: also allow lists.
                   return caf::make_error(ec::invalid_argument,
                                          "REST API only accepts basic type "
                                          "parameters");
@@ -218,9 +215,10 @@ request_dispatcher_actor::behavior_type request_dispatcher(
               leaf.field.type);
           if (!typed_value)
             return response->abort(
-              422, fmt::format("failed to parse parameter "
-                               "'{}' with value '{}': {}\n",
-                               name, string_value, typed_value.error()));
+              422, "failed to parse parameter",
+              caf::make_error(ec::parse_error,
+                              fmt::format("'{}' with value '{}': {}", name,
+                                          string_value, typed_value.error())));
           params[name] = std::move(*typed_value);
         }
       }
@@ -249,7 +247,8 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                restinio::router::route_params_t route_params)
       -> restinio::request_handling_status_t {
       auto response = std::make_shared<restinio_response>(
-        std::move(req), std::move(route_params), endpoint);
+        std::move(req), std::move(route_params), config.enable_detailed_errors,
+        endpoint);
       if (config.cors_allowed_origin)
         response->add_header("Access-Control-Allow-Origin",
                              *config.cors_allowed_origin);

@@ -52,11 +52,12 @@ public:
   /// Return an error and close the connection.
   //  TODO: Statically verify that we can only abort
   //  with the documented error codes.
-  void abort(uint16_t error_code, std::string message) override {
+  void
+  abort(uint16_t error_code, std::string message, caf::error detail) override {
     body_ = "";
-    error_
-      = caf::make_error(vast::ec::unspecified,
-                        fmt::format("http error {}: {}", error_code, message));
+    error_ = caf::make_error(vast::ec::unspecified,
+                             fmt::format("http error {}: {}{}", error_code,
+                                         message, detail));
   }
 
   std::string body_ = {};

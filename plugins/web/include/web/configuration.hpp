@@ -78,6 +78,9 @@ public:
   /// Whether to allow the server to bind to non-local addresses.
   bool require_localhost = true;
 
+  /// Whether to include full error information in the response.
+  bool enable_detailed_errors = false;
+
   /// The path to the TLS certificate.
   std::filesystem::path certfile = {};
 
