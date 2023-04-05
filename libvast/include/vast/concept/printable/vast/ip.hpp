@@ -20,7 +20,13 @@
 
 namespace vast {
 
-struct ip_printer : printer_base<ip_printer> {
+enum class ip_printer_policy {
+  any,
+  ipv6,
+};
+
+template <ip_printer_policy Policy = ip_printer_policy::any>
+struct ip_printer : printer_base<ip_printer<Policy>> {
   using attribute = ip;
 
   template <class Iterator>
@@ -28,21 +34,27 @@ struct ip_printer : printer_base<ip_printer> {
     char buf[INET6_ADDRSTRLEN];
     std::memset(buf, 0, sizeof(buf));
     auto bytes = as_bytes(a);
-    auto result = a.is_v4()
-                    ? inet_ntop(AF_INET, &bytes[12], buf, INET_ADDRSTRLEN)
-                    : inet_ntop(AF_INET6, bytes.data(), buf, INET6_ADDRSTRLEN);
+    auto result = [&] {
+      if constexpr (Policy == ip_printer_policy::any) {
+        if (a.is_v4()) {
+          return inet_ntop(AF_INET, &bytes[12], buf, INET_ADDRSTRLEN);
+        }
+      }
+      return inet_ntop(AF_INET6, bytes.data(), buf, INET6_ADDRSTRLEN);
+    }();
     return result != nullptr && printers::str.print(out, result);
   }
 };
 
 template <>
 struct printer_registry<ip> {
-  using type = ip_printer;
+  using type = ip_printer<ip_printer_policy::any>;
 };
 
 namespace printers {
 
-auto const ip = ip_printer{};
+auto const ip = ip_printer<ip_printer_policy::any>{};
+auto const ipv6 = ip_printer<ip_printer_policy::ipv6>{};
 
 } // namespace printers
 } // namespace vast

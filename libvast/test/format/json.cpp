@@ -93,7 +93,7 @@ TEST(json to data) {
   std::array<std::uint8_t, 4> addr1{147, 32, 84, 165};
   CHECK(slice.at(0, 6) == data{ip::v4(std::span{addr1})});
   std::array<std::uint8_t, 4> addr2{192, 168, 0, 1};
-  CHECK((slice.at(0, 7) == data{subnet{ip::v4(std::span{addr2}), 24}}));
+  CHECK((slice.at(0, 7) == data{subnet{ip::v4(std::span{addr2}), 24 + 96}}));
   CHECK(slice.at(0, 11) == data{enumeration{2}});
   const list lc = {data{uint64_t{0x3e7}}, data{uint64_t{19}},
                    data{uint64_t{5555}}, data{uint64_t{0}}};

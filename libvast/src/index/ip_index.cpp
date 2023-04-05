@@ -80,20 +80,22 @@ ip_index::lookup_impl(relational_operator op, data_view d) const {
               || op == relational_operator::not_in))
           return caf::make_error(ec::unsupported_operator, op);
         auto topk = x.length();
-        if (topk == 0)
-          return caf::make_error(ec::unspecified,
-                                 "invalid IP subnet length: ", topk);
-        auto is_v4 = x.network().is_v4();
-        if ((is_v4 ? topk + 96 : topk) == 128)
-          // Asking for /32 or /128 membership is equivalent to an equality
-          // lookup.
+        // Asking for /128 membership is equivalent to an equality lookup.
+        if (topk == 128)
           return lookup_impl(op == relational_operator::in
                                ? relational_operator::equal
                                : relational_operator::not_equal,
                              x.network());
-        auto result = is_v4 ? v4_.coder().storage() : ids{offset(), true};
+        // If we're in a /96 subnet and the network can be represented as a
+        // valid IPv4 address, then we can blindly ignore all IPv4 addresses:
+        // They're irrelevant by definition.
+        if (topk == 96 && x.network().is_v4()) {
+          return is_negated(op) ? ~v4_.coder().storage()
+                                : v4_.coder().storage();
+        }
+        auto result = ids{offset(), true};
         auto network = static_cast<ip::byte_array>(x.network());
-        size_t i = is_v4 ? 12 : 0;
+        size_t i = 0;
         for (; i < 16 && topk >= 8; ++i, topk -= 8)
           result &= bytes_[i].lookup(relational_operator::equal, network[i]);
         for (auto j = 0u; j < topk; ++j) {
@@ -101,7 +103,7 @@ ip_index::lookup_impl(relational_operator op, data_view d) const {
           auto& bm = bytes_[i].coder().storage()[bit];
           result &= (network[i] >> bit) & 1 ? ~bm : bm;
         }
-        if (op == relational_operator::not_in)
+        if (is_negated(op))
           result.flip();
         return result;
       },
