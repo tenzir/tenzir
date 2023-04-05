@@ -11,6 +11,7 @@
 #include <variant>
 
 namespace vast {
+
 /// Marker type for the given type.
 template <typename T>
 struct tag {
@@ -32,4 +33,5 @@ struct tag_variant : std::variant<tag<Ts>...> {
     return std::holds_alternative<tag<T>>(*this);
   }
 };
+
 } // namespace vast
