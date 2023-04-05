@@ -19,7 +19,7 @@ struct tag {
 
 /// Value of the marker type for the given type.
 template <typename T>
-constexpr auto tag_v = tag<T>{};
+inline constexpr auto tag_v = tag<T>{};
 
 /// Variant of the marker types of the given types.
 template <typename... Ts>
