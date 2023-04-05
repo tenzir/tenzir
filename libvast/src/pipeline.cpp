@@ -206,29 +206,50 @@ auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
   return std::pair{std::move(current), pipeline{std::move(new_rev)}};
 }
 
-auto operator_base::test_instantiate_impl(operator_input input) const
-  -> caf::expected<operator_output> {
-  local_control_plane ctrl;
-  auto result = instantiate(std::move(input), ctrl);
-  if (!result) {
-    return result.error();
+auto operator_base::infer_type_impl(operator_type input) const
+  -> caf::expected<operator_type> {
+  auto ctrl = local_control_plane{};
+  auto f = [&]<class Input>(tag<Input>) {
+    if constexpr (std::is_same_v<Input, std::monostate>) {
+      return instantiate(std::monostate{}, ctrl);
+    } else {
+      return instantiate(generator<Input>{}, ctrl);
+    }
+  };
+  auto output = std::visit(f, input);
+  if (!output) {
+    return output.error();
   }
   return std::visit(
-    []<class T>(generator<T> x) -> operator_output {
-      // We discard the actual output generator and return a
-      // default-constructed one to make sure that the result is empty.
-      (void)x;
-      return generator<T>{};
+    [&]<class Output>(generator<Output>&) -> operator_type {
+      return tag_v<Output>;
     },
-    std::move(*result));
+    *output);
 }
 
 auto pipeline::is_closed() const -> bool {
-  auto output = test_instantiate<std::monostate>();
-  if (!output) {
-    return false;
+  if (auto output = infer_type<std::monostate>()) {
+    return output->is<std::monostate>();
   }
-  return std::holds_alternative<generator<std::monostate>>(*output);
+  return false;
+}
+
+auto pipeline::infer_type_impl(operator_type input) const
+  -> caf::expected<operator_type> {
+  auto output = input;
+  for (auto& op : operators_) {
+    if (output.is<std::monostate>()) {
+      return caf::make_error(
+        ec::type_clash,
+        fmt::format("pipeline continues with {} after sink", op->to_string()));
+    }
+    auto next = op->infer_type(output);
+    if (!next) {
+      return next.error();
+    }
+    output = *next;
+  }
+  return output;
 }
 
 auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
