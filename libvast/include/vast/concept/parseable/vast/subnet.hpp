@@ -23,7 +23,7 @@ struct subnet_parser : vast::parser_base<subnet_parser> {
     // clang-format off
     auto v4_prefix = u8.with([](auto x) { return x <= 32; })
                          ->* [](uint8_t x) { return x + 96; };
-    auto v6_prefix = u8.with([](auto x) { return x > 0 && x <= 128; });
+    auto v6_prefix = u8.with([](auto x) { return x <= 128; });
     // clang-format on
     return (ipv4 >> '/' >> v4_prefix) | (ipv6 >> '/' >> v6_prefix);
   }
