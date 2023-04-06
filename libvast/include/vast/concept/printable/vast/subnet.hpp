@@ -21,8 +21,14 @@ struct subnet_printer : printer_base<subnet_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const subnet& sn) const {
-    using printers::ip, printers::chr, printers::u8;
-    return (ip << chr<'/'> << u8)(out, sn.network(), sn.length());
+    using printers::ip, printers::ipv6, printers::chr, printers::u8;
+    const auto length = sn.length();
+    const auto network = sn.network();
+    const auto is_v4 = network.is_v4();
+    if (is_v4 && length >= 96) {
+      return (ip << chr<'/'> << u8)(out, sn.network(), sn.length() - 96);
+    }
+    return (ipv6 << chr<'/'> << u8)(out, sn.network(), sn.length());
   }
 };
 
