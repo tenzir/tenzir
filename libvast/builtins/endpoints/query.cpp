@@ -469,6 +469,7 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   ops.insert(ops.begin(), std::make_unique<query_source>(self));
   ops.push_back(std::make_unique<query_sink>(self));
   auto result = pipeline{std::move(ops)};
+  VAST_DEBUG("final query pipeline: {}", result.to_string());
   // We already checked that the original pipeline was `events -> events`.
   // Thus, we know that we now have a valid `void -> void` pipeline.
   VAST_ASSERT(result.is_closed());

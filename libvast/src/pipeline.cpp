@@ -236,20 +236,21 @@ auto pipeline::is_closed() const -> bool {
 
 auto pipeline::infer_type_impl(operator_type input) const
   -> caf::expected<operator_type> {
-  auto output = input;
+  auto current = input;
   for (auto& op : operators_) {
-    if (output.is<std::monostate>()) {
+    auto first = &op == &operators_.front();
+    if (!first && current.is<std::monostate>()) {
       return caf::make_error(
         ec::type_clash,
         fmt::format("pipeline continues with {} after sink", op->to_string()));
     }
-    auto next = op->infer_type(output);
+    auto next = op->infer_type(current);
     if (!next) {
       return next.error();
     }
-    output = *next;
+    current = *next;
   }
-  return output;
+  return current;
 }
 
 auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
