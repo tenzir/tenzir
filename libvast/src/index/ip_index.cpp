@@ -86,9 +86,9 @@ ip_index::lookup_impl(relational_operator op, data_view d) const {
                                ? relational_operator::equal
                                : relational_operator::not_equal,
                              x.network());
-        // If we're in a /96 subnet and the network can be represented as a
-        // valid IPv4 address, then we can blindly ignore all IPv4 addresses:
-        // They're irrelevant by definition.
+        // OPTIMIZATION: If we're in a /96 subnet and the network can be
+        // represented as a valid IPv4 address, then we can just return the
+        // v4_ bitmap.
         if (topk == 96 && x.network().is_v4()) {
           return is_negated(op) ? ~v4_.coder().storage()
                                 : v4_.coder().storage();
