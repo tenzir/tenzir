@@ -469,6 +469,7 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   ops.insert(ops.begin(), std::make_unique<query_source>(self));
   ops.push_back(std::make_unique<query_sink>(self));
   auto result = pipeline{std::move(ops)};
+  VAST_DEBUG("final query pipeline: {}", result.to_string());
   // We already checked that the original pipeline was `events -> events`.
   // Thus, we know that we now have a valid `void -> void` pipeline.
   VAST_ASSERT(result.is_closed());
@@ -594,14 +595,16 @@ request_multiplexer_actor::behavior_type request_multiplexer(
           return rq.response->abort(400, fmt::format("unparseable query: {}\n",
                                                      parse_result.error()));
         auto pipeline = std::move(*parse_result);
-        auto output = pipeline.test_instantiate<generator<table_slice>>();
+        auto output = pipeline.infer_type<table_slice>();
         if (!output) {
-          return rq.response->abort(
-            400,
-            fmt::format("pipeline instantiation failed: {}", output.error()));
+          return rq.response->abort(400, fmt::format("invalid pipeline: {}",
+                                                     output.error()));
         }
-        if (!std::holds_alternative<generator<table_slice>>(*output)) {
-          return rq.response->abort(400, "query must return events as output");
+        if (!output->is<table_slice>()) {
+          return rq.response->abort(400,
+                                    fmt::format("expected pipeline that "
+                                                "outputs events, but got {}",
+                                                operator_type_name(*output)));
         }
         // TODO: Consider replacing this with an empty conjunction.
         auto& trivially_true = trivially_true_expression();

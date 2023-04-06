@@ -11,6 +11,7 @@
 #include "vast/expression.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/tag.hpp"
 
 #include <fmt/core.h>
 
@@ -29,6 +30,13 @@ using operator_output
   = std::variant<generator<std::monostate>, generator<table_slice>,
                  generator<chunk_ptr>>;
 
+/// Variant of all types that can be used for operators.
+///
+/// @note During instantiation, a type `T` normally corresponds to
+/// `generator<T>`. However, a input type of `std::monostate` corresponds to
+/// sources, which receive a `std::monostate` instead.
+using operator_type = tag_variant<std::monostate, table_slice, chunk_ptr>;
+
 /// Concept for pipeline operator input element types.
 template <class T>
 concept operator_input_batch
@@ -46,6 +54,15 @@ constexpr auto operator_type_name() -> std::string_view {
   } else {
     static_assert(detail::always_false_v<T>, "not a valid element type");
   }
+}
+
+/// @see `operator_type_name<T>()`.
+inline auto operator_type_name(operator_type type) -> std::string_view {
+  return std::visit(
+    []<class T>(tag<T>) {
+      return operator_type_name<T>();
+    },
+    type);
 }
 
 /// Returns a trivially-true expression. This is a workaround for having no
@@ -85,15 +102,6 @@ public:
     -> caf::expected<operator_output>
     = 0;
 
-  /// Tests the instantiation of the operator for a given input.
-  ///
-  /// Note: The returned generator just a marker and always empty. We could
-  /// improve this interface in the future.
-  template <class T>
-  auto test_instantiate() const -> caf::expected<operator_output> {
-    return test_instantiate_impl(operator_input{T{}});
-  }
-
   /// Copies the underlying pipeline operator.
   virtual auto copy() const -> operator_ptr = 0;
 
@@ -113,9 +121,25 @@ public:
     return {};
   }
 
-private:
-  auto test_instantiate_impl(operator_input input) const
-    -> caf::expected<operator_output>;
+  /// Retrieve the output type of this operator for a given input.
+  ///
+  /// The default implementation will try to instantiate the operator and then
+  /// discard the generator if successful. If instantiation has a side-effect
+  /// that happens outside of the associated coroutine function, the
+  /// `operator_base::infer_type_impl` function should be overwritten.
+  template <typename T>
+  auto infer_type() const -> caf::expected<operator_type> {
+    return infer_type(tag_v<T>);
+  }
+
+  /// @see `operator_base::infer_type<T>()`.
+  auto infer_type(operator_type input) const -> caf::expected<operator_type> {
+    return infer_type_impl(input);
+  }
+
+protected:
+  virtual auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type>;
 };
 
 /// A pipeline is a sequence of pipeline operators.
@@ -153,6 +177,10 @@ public:
 
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override;
+
+protected:
+  auto infer_type_impl(operator_type) const
+    -> caf::expected<operator_type> override;
 
 private:
   std::vector<operator_ptr> operators_;
