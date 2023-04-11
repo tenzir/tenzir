@@ -10,6 +10,7 @@
 
 #include <vast/data.hpp>
 #include <vast/detail/inspection_common.hpp>
+#include <vast/detail/stable_map.hpp>
 #include <vast/type.hpp>
 
 #include <caf/actor_addr.hpp>
@@ -55,7 +56,8 @@ auto inspect(Inspector& f, api_version& x) {
 }
 
 struct rest_endpoint {
-  std::string canonical_path() const; // -> "POST /query/:id/next (v0)"
+  [[nodiscard]] auto canonical_path() const
+    -> std::string; // -> "POST /query/:id/next (v0)"
 
   /// Arbitrary id for endpoint identification
   //  The purpose of this id is so that plugins providing multiple endpoints can
@@ -99,6 +101,13 @@ struct rest_endpoint {
   }
 };
 
+/// Go through the provided parameters; discard those that are not understood by
+/// the endpoint and attempt to parse the rest to the expected type.
+auto parse_endpoint_parameters(
+  const vast::rest_endpoint& endpoint,
+  const detail::stable_map<std::string, std::string>& params)
+  -> caf::expected<vast::record>;
+
 // We use the virtual inheritance as a compilation firewall to
 // avoid having the dependency on restinio creep into main VAST
 // until we gained a bit more implementation experience and are
@@ -131,14 +140,10 @@ public:
 class http_request_description {
 public:
   // /// The name of the plugin to handle the request.
-  // std::string plugin;
-
-  // /// Endpoint identifier within the plugin.
-  // uint64_t endpoint_id;
   std::string canonical_path;
 
-  /// Request parameters.
-  vast::record params;
+  /// Request parameters. (unvalidated)
+  detail::stable_map<std::string, std::string> params;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, http_request_description& e) {

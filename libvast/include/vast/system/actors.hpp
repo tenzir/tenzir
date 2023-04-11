@@ -357,6 +357,8 @@ using exporter_actor = typed_actor_fwd<
 /// The interface of a REST HANDLER actor.
 using rest_handler_actor = system::typed_actor_fwd<
   // Receive an incoming HTTP request.
+  // TODO: Remove the `endpoint_id` from the handler interface and replace
+  // it by the `canonical_path`.
   auto(atom::http_request, uint64_t, http_request)->caf::result<void>>::unwrap;
 
 /// The interface of a COMPONENT PLUGIN actor.

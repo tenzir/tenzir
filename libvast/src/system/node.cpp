@@ -81,22 +81,26 @@ auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(caf::make_error(code, std::move(msg)));
 }
 
-const rest_endpoint_plugin*
-find_endpoint_handler(http_request_description desc) {
-  static std::unordered_map<std::string, const rest_endpoint_plugin*> cache
-    = {}; // FIXME: Move this into node state
+using plugin_and_endpoint
+  = std::pair<const rest_endpoint_plugin*, rest_endpoint>;
+
+auto find_endpoint_handler(const http_request_description& desc)
+  -> plugin_and_endpoint {
+  // FIXME: Move this map into the node state.
+  static std::unordered_map<std::string, plugin_and_endpoint> cache = {};
   if (cache.empty()) {
     for (auto const& plugin : plugins::get()) {
-      auto rest_plugin = plugin.as<rest_endpoint_plugin>();
+      auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
       if (!rest_plugin)
         continue;
       for (auto const& endpoint : rest_plugin->rest_endpoints())
-        cache[endpoint.canonical_path()] = rest_plugin;
+        cache[endpoint.canonical_path()]
+          = std::make_pair(rest_plugin, endpoint);
     }
   }
   auto it = cache.find(desc.canonical_path);
   if (it == cache.end())
-    return nullptr;
+    return {nullptr, rest_endpoint{}};
   return it->second;
 }
 
@@ -656,21 +660,23 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       return run(inv, self->system(), node_state::command_factory);
     },
     [self](atom::proxy,
-           http_request_description desc) -> caf::result<std::string> {
-      auto rest_plugin = find_endpoint_handler(desc);
+           const http_request_description& desc) -> caf::result<std::string> {
+      auto [rest_plugin, endpoint] = find_endpoint_handler(desc);
       if (!rest_plugin)
         return caf::make_error(ec::invalid_argument, "unknown endpoint");
       auto handler = rest_plugin->handler(self->system(), self);
       auto rp = self->make_response_promise<std::string>();
       auto response = std::make_shared<detail::internal_http_response>(rp);
+      auto params = parse_endpoint_parameters(endpoint, desc.params);
+      if (!params)
+        return caf::make_error(ec::invalid_argument, "invalid parameters");
       auto request = http_request{
-        .params = desc.params,
+        .params = *params,
         .response = response,
       };
-      auto endpoint_id = 0ull; // FIXME
       self
-        ->request(handler, caf::infinite, atom::http_request_v, endpoint_id,
-                  std::move(request))
+        ->request(handler, caf::infinite, atom::http_request_v,
+                  endpoint.endpoint_id, std::move(request))
         .then(
           []() mutable {
             /* nop */

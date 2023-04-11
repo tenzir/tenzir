@@ -163,7 +163,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         }
       }
       auto const& route_params = response->route_params();
-      vast::record params;
+      auto combined_params = detail::stable_map<std::string, std::string>;
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
@@ -183,45 +183,12 @@ request_dispatcher_actor::behavior_type request_dispatcher(
             }
           if (!maybe_param)
             continue;
-          auto string_value = *maybe_param;
-          auto typed_value
-            = caf::visit(
-              detail::overload{
-                [&string_value](const string_type&) -> caf::expected<data> {
-                  return data{string_value};
-                },
-                [&string_value](const bool_type&) -> caf::expected<data> {
-                  bool result = false;
-                  if (!parsers::boolean(string_value, result))
-                    return caf::make_error(ec::invalid_argument,
-                                           "not a boolean value");
-                  return data{result};
-                },
-                [&string_value]<basic_type Type>(
-                  const Type&) -> caf::expected<data> {
-                  using data_t = type_to_data_t<Type>;
-                  auto result = to<data_t>(string_value);
-                  if (!result)
-                    return result.error();
-                  return *result;
-                },
-                []<complex_type Type>(const Type&) -> caf::expected<data> {
-                  // todo: also allow lists.
-                  return caf::make_error(ec::invalid_argument,
-                                         "REST API only accepts basic type "
-                                         "parameters");
-                },
-              },
-              leaf.field.type);
-          if (!typed_value)
-            return response->abort(
-              422, "failed to parse parameter",
-              caf::make_error(ec::parse_error,
-                              fmt::format("'{}' with value '{}': {}", name,
-                                          string_value, typed_value.error())));
-          params[name] = std::move(*typed_value);
-        }
+          combined_params[name] = *maybe_param;
       }
+      auto params = parse_endpoint_parameters(endpoint, combined_params);
+      if (!params)
+        return response->abort(422, "failed to parse endpoint parameters\n",
+                               params.error());
       auto vast_request = vast::http_request{
         .params = std::move(params),
         .response = std::move(response),
