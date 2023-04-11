@@ -32,15 +32,15 @@ transformations is an **open pipeline**.
 
 Let's take an inside look at the anatomy of a pipeline: the operator building
 blocks. The diagram below shows the three major customization points of the
-pipeline execution engine. The operator SDK consists of transformations,
+pipeline execution engine. The operator SDK enables creating transformations,
 sources, and sinks. The SDK for [connectors and
 formats](#connectors-and-formats) are convience abstractions to make it easy to
 get data in and out of the system.[^1]
 
-[^1]: It is also possible to write source and sink operators, but this requires
-      a bit deeper understanding of system internals. In most of the cases,
-      adding a data source or sink by means of a connector or format is
-      sufficient.
+[^1]: `from <connector> read <format>` and `to <connector> write <format>` are
+      just operators that any developer could write. They are a bit more complex
+      than operators transforming events, so we provide the connector and format
+      SDKs to make it easier for developers to add sources and sinks.
 
 ![Operator Overview](operator-overview.excalidraw.svg)
 
