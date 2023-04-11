@@ -33,9 +33,10 @@ using operator_output
 /// Variant of all types that can be used for operators.
 ///
 /// @note During instantiation, a type `T` normally corresponds to
-/// `generator<T>`. However, a input type of `std::monostate` corresponds to
-/// sources, which receive a `std::monostate` instead.
-using operator_type = tag_variant<std::monostate, table_slice, chunk_ptr>;
+/// `generator<T>`. However, an input type of `void` corresponds to
+/// sources (which receive a `std::monostate`) and an otuput type of `void`
+/// corresponds to sinks (which return a `generator<std::monostate>`).
+using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 
 /// Concept for pipeline operator input element types.
 template <class T>
@@ -127,7 +128,7 @@ public:
   /// discard the generator if successful. If instantiation has a side-effect
   /// that happens outside of the associated coroutine function, the
   /// `operator_base::infer_type_impl` function should be overwritten.
-  template <typename T>
+  template <class T>
   auto infer_type() const -> caf::expected<operator_type> {
     return infer_type(tag_v<T>);
   }
@@ -135,6 +136,22 @@ public:
   /// @see `operator_base::infer_type<T>()`.
   auto infer_type(operator_type input) const -> caf::expected<operator_type> {
     return infer_type_impl(input);
+  }
+
+  /// Returns an error if this is not an `In -> Out` operator.
+  template <class In, class Out>
+  [[nodiscard]] auto check_type() const -> caf::expected<void> {
+    auto out = infer_type<In>();
+    if (!out) {
+      return out.error();
+    }
+    if (!out->template is<Out>()) {
+      return caf::make_error(ec::type_clash,
+                             fmt::format("expected {} as output but got {}",
+                                         operator_type_name<Out>(),
+                                         operator_type_name(*out)));
+    }
+    return {};
   }
 
 protected:
@@ -148,6 +165,11 @@ public:
   /// Constructs an empty pipeline.
   pipeline() = default;
 
+  pipeline(pipeline const& other);
+  pipeline(pipeline&& other) noexcept = default;
+  auto operator=(pipeline const& other) -> pipeline&;
+  auto operator=(pipeline&& other) noexcept -> pipeline& = default;
+
   /// Constructs a pipeline from a sequence of operators. Flattens nested
   /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
   explicit pipeline(std::vector<operator_ptr> operators);
@@ -155,6 +177,16 @@ public:
   /// Parses a logical pipeline from its textual representation. It is *not*
   /// guaranteed that `parse(to_string())` succeeds.
   static auto parse(std::string_view repr) -> caf::expected<pipeline>;
+
+  /// Adds an operator at the end of this pipeline.
+  void append(operator_ptr op) {
+    operators_.push_back(std::move(op));
+  }
+
+  /// Adds an operator at the start of this pipeline.
+  void prepend(operator_ptr op) {
+    operators_.insert(operators_.begin(), std::move(op));
+  }
 
   /// Returns the sequence of operators that this pipeline was built from.
   auto unwrap() && -> std::vector<operator_ptr> {

@@ -70,20 +70,15 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
         return caf::make_error(
           ec::invalid_query,
           fmt::format("{} failed to normalize and validate {}", *self, query));
-      const auto* where_plugin
-        = plugins::find<pipeline_operator_plugin>("where");
-      VAST_ASSERT(where_plugin);
-      auto where_operator = where_plugin->make_pipeline_operator(
-        {{"expression", fmt::to_string(expression{negation{*expr}})}});
-      if (!where_operator)
-        return where_operator.error();
-      auto transform = std::make_shared<vast::legacy_pipeline>(
-        "aging", std::vector<std::string>{});
-      transform->add_operator(std::move(*where_operator));
+      auto transform = pipeline::parse(
+        fmt::format("where {}", fmt::to_string(expression{negation{*expr}})));
+      if (!transform)
+        return transform.error();
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
-          [self, transform, rp](catalog_lookup_result& result) mutable {
+          [self, transform = std::make_shared<pipeline>(std::move(*transform)),
+           rp](catalog_lookup_result& result) mutable {
             for (const auto& [_, partition_infos] : result.candidate_infos) {
               VAST_DEBUG("{} resolved query {} to {} partitions", *self,
                          self->state.query_,

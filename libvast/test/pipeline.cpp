@@ -185,7 +185,7 @@ TEST(pipeline operator typing) {
   dummy_control_plane ctrl;
   {
     auto p = unbox(pipeline::parse(""));
-    REQUIRE(p.infer_type<std::monostate>().value().is<std::monostate>());
+    REQUIRE_NOERROR((p.check_type<void, void>()));
     REQUIRE(std::holds_alternative<generator<std::monostate>>(
       unbox(p.instantiate(std::monostate{}, ctrl))));
     REQUIRE(p.infer_type<chunk_ptr>().value().is<chunk_ptr>());
@@ -197,7 +197,7 @@ TEST(pipeline operator typing) {
   }
   {
     auto p = unbox(pipeline::parse("pass"));
-    REQUIRE(!p.infer_type<std::monostate>());
+    REQUIRE_ERROR(p.infer_type<void>());
     REQUIRE_ERROR(p.instantiate(std::monostate{}, ctrl));
     REQUIRE(p.infer_type<chunk_ptr>().value().is<chunk_ptr>());
     REQUIRE(std::holds_alternative<generator<chunk_ptr>>(
@@ -208,9 +208,9 @@ TEST(pipeline operator typing) {
   }
   {
     auto p = unbox(pipeline::parse("taste 42"));
-    REQUIRE(!p.infer_type<std::monostate>());
+    REQUIRE_ERROR(p.infer_type<void>());
     REQUIRE_ERROR(p.instantiate(std::monostate{}, ctrl));
-    REQUIRE(!p.infer_type<chunk_ptr>());
+    REQUIRE_ERROR(p.infer_type<chunk_ptr>());
     REQUIRE_ERROR(p.instantiate(generator<chunk_ptr>{}, ctrl));
     REQUIRE(p.infer_type<table_slice>().value().is<table_slice>());
     REQUIRE(std::holds_alternative<generator<table_slice>>(
@@ -218,9 +218,9 @@ TEST(pipeline operator typing) {
   }
   {
     auto p = unbox(pipeline::parse("where :ip"));
-    REQUIRE(!p.infer_type<std::monostate>());
+    REQUIRE_ERROR(p.infer_type<void>());
     REQUIRE_ERROR(p.instantiate(std::monostate{}, ctrl));
-    REQUIRE(!p.infer_type<chunk_ptr>());
+    REQUIRE_ERROR(p.infer_type<chunk_ptr>());
     REQUIRE_ERROR(p.instantiate(generator<chunk_ptr>{}, ctrl));
     REQUIRE(p.infer_type<table_slice>().value().is<table_slice>());
     REQUIRE(std::holds_alternative<generator<table_slice>>(
@@ -228,9 +228,9 @@ TEST(pipeline operator typing) {
   }
   {
     auto p = unbox(pipeline::parse("taste 13 | pass | where abc == 123"));
-    REQUIRE(!p.infer_type<std::monostate>());
+    REQUIRE_ERROR(p.infer_type<void>());
     REQUIRE_ERROR(p.instantiate(std::monostate{}, ctrl));
-    REQUIRE(!p.infer_type<std::monostate>());
+    REQUIRE_ERROR(p.infer_type<chunk_ptr>());
     REQUIRE_ERROR(p.instantiate(generator<chunk_ptr>{}, ctrl));
     REQUIRE(p.infer_type<table_slice>().value().is<table_slice>());
     REQUIRE(std::holds_alternative<generator<table_slice>>(

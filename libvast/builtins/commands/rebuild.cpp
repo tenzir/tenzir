@@ -49,7 +49,7 @@ namespace {
 /// about its input, namely that an instance of the operator only takes input
 /// of a single schema. Rebatching is guaranteed not to change the order of
 /// events, just how they're grouped together.
-class rebatch_operator final : public legacy_pipeline_operator {
+class rebatch_operator final : public crtp_operator<rebatch_operator> {
 public:
   /// Constructs a rebatch pipeline operator with a given schema and desired
   /// batch size.
@@ -57,38 +57,44 @@ public:
   /// @param desired_batch_size The desired output batch size; guaranteed to be
   /// exactly matched for all but the last output batch.
   rebatch_operator(type schema, size_t desired_batch_size)
-    : schema_{std::move(schema)}, desired_batch_size_{desired_batch_size} {
+    : schema_{std::move(schema)},
+      desired_batch_size_{desired_batch_size != 0
+                            ? desired_batch_size
+                            : defaults::import::table_slice_size} {
     // nop
   }
 
-  caf::error add(table_slice slice) override {
-    const auto buffered_rows = rows(buffer_) + slice.rows();
-    if (buffered_rows < desired_batch_size_) {
-      buffer_.push_back(std::move(slice));
-    } else {
-      const auto remainder = desired_batch_size_ - buffered_rows;
-      auto [head, tail] = split(slice, slice.rows() - remainder);
-      buffer_.push_back(head);
-      auto result = concatenate(std::exchange(buffer_, {}));
-      results_.emplace_back(std::move(result));
-      buffer_.push_back(tail);
+  auto operator()(generator<table_slice> input) const
+    -> generator<table_slice> {
+    auto buffer = std::vector<table_slice>{};
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        continue;
+      }
+      const auto buffered_rows = rows(buffer);
+      VAST_ASSERT(buffered_rows < desired_batch_size_);
+      if (buffered_rows + slice.rows() < desired_batch_size_) {
+        buffer.push_back(std::move(slice));
+      } else {
+        const auto remainder = desired_batch_size_ - buffered_rows;
+        auto [head, tail] = split(slice, slice.rows() - remainder);
+        buffer.push_back(head);
+        co_yield concatenate(std::exchange(buffer, {}));
+        buffer.push_back(tail);
+      }
     }
-    return {};
+    if (!buffer.empty()) {
+      co_yield concatenate(std::move(buffer));
+    }
   }
 
-  caf::expected<std::vector<table_slice>> finish() override {
-    if (rows(buffer_) > 0) {
-      auto result = concatenate(std::exchange(buffer_, {}));
-      results_.emplace_back(std::move(result));
-    }
-    return std::exchange(results_, {});
+  auto to_string() const -> std::string override {
+    return "<rebatch>";
   }
 
 private:
   type schema_ = {};
   size_t desired_batch_size_ = {};
-  std::vector<table_slice> buffer_ = {};
-  std::vector<table_slice> results_ = {};
 };
 
 /// The threshold at which to consider a partition undersized, relative to the
@@ -432,11 +438,11 @@ struct rebuilder_state {
     }
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
-    auto pipeline = std::make_shared<vast::legacy_pipeline>(
-      "rebuild", std::vector<std::string>{});
-    pipeline->add_operator(std::make_unique<class rebatch_operator>(
+    auto ops = std::vector<operator_ptr>{};
+    ops.push_back(std::make_unique<rebatch_operator>(
       current_run_partitions[0].schema,
       detail::narrow_cast<int64_t>(desired_batch_size)));
+    auto pipe = std::make_shared<pipeline>(std::move(ops));
     emit_telemetry();
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents
@@ -448,7 +454,7 @@ struct rebuilder_state {
               });
     const auto num_partitions = current_run_partitions.size();
     self
-      ->request(index, caf::infinite, atom::apply_v, std::move(pipeline),
+      ->request(index, caf::infinite, atom::apply_v, std::move(pipe),
                 std::move(current_run_partitions),
                 system::keep_original_partition::no)
       .then(
