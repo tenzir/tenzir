@@ -181,7 +181,6 @@ VAST has two types of operators:
 
 1. **Logical Operators**: user-facing operators that express the intent in the
    domain.
-
 2. **Physical Operators**: data-facing implementation detail.
 
 Let's consider an example of a logical pipeline with the source consisting of
