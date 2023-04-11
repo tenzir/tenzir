@@ -45,13 +45,8 @@ get data in and out of the system.[^1]
 ![Operator Overview](operator-overview.excalidraw.svg)
 
 :::caution Work in Progress
-The above diagram shows the scope of our minimum viable product at launch time
-later this year. We are not fully there yet with our new pipeline execution
-engine. Most of the code exists already, but needs to moved into this new
-composable connector/format framework. Most of the transformations exist
-already (only `sort` and `inspect` are missing), but we haven't ported majority
-of formats and connectors yet. Until then, please consider this diagram for
-architectureal exposition only.
+The above diagram shows the scope that we are targeting for VAST v4.0. Some of
+the pictured operators, formats, and connectors are not yet implemented.
 :::
 
 ## Syntax
