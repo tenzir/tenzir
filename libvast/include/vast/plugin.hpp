@@ -632,7 +632,7 @@ extern const char* VAST_PLUGIN_VERSION;
       auto_register_plugin() {                                                 \
         static_cast<void>(flag);                                               \
       }                                                                        \
-      static bool init() {                                                     \
+      static auto init() -> bool {                                             \
         ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
           new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \
           +[](::vast::plugin* plugin) noexcept {                               \
@@ -649,7 +649,7 @@ extern const char* VAST_PLUGIN_VERSION;
       auto_register_type_id_##name() {                                         \
         static_cast<void>(flag);                                               \
       }                                                                        \
-      static bool init() {                                                     \
+      static auto init() -> bool {                                             \
         ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name::begin,           \
                                        ::caf::id_block::name::end},            \
@@ -668,44 +668,44 @@ extern const char* VAST_PLUGIN_VERSION;
 #else
 
 #  define VAST_REGISTER_PLUGIN(name)                                           \
-    extern "C" ::vast::plugin* vast_plugin_create() {                          \
+    extern "C" auto vast_plugin_create()->::vast::plugin* {                    \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       return new (name);                                                       \
     }                                                                          \
-    extern "C" void vast_plugin_destroy(class ::vast::plugin* plugin) {        \
+    extern "C" auto vast_plugin_destroy(class ::vast::plugin* plugin)->void {  \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       delete plugin;                                                           \
     }                                                                          \
-    extern "C" const char* vast_plugin_version() {                             \
+    extern "C" auto vast_plugin_version()->const char* {                       \
       return VAST_PLUGIN_VERSION;                                              \
     }                                                                          \
-    extern "C" const char* vast_libvast_version() {                            \
+    extern "C" auto vast_libvast_version()->const char* {                      \
       return ::vast::version::version;                                         \
     }                                                                          \
-    extern "C" const char* vast_libvast_build_tree_hash() {                    \
+    extern "C" auto vast_libvast_build_tree_hash()->const char* {              \
       return ::vast::version::build::tree_hash;                                \
     }
 
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
-    extern "C" void vast_plugin_register_type_id_block() {                     \
-      caf::init_global_meta_objects<::caf::id_block::name>();                  \
-    }                                                                          \
-    extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {      \
-      return {::caf::id_block::name::begin, ::caf::id_block::name::end};       \
+#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                            \
+    extern "C" auto vast_plugin_register_type_id_block()->void {                \
+      caf::init_global_meta_objects<::caf::id_block::name>();                   \
+    }                                                                           \
+    extern "C" auto vast_plugin_type_id_block()->::vast::plugin_type_id_block { \
+      return {::caf::id_block::name::begin, ::caf::id_block::name::end};        \
     }
 
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                   \
-    extern "C" void vast_plugin_register_type_id_block() {                     \
-      caf::init_global_meta_objects<::caf::id_block::name1>();                 \
-      caf::init_global_meta_objects<::caf::id_block::name2>();                 \
-    }                                                                          \
-    extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {      \
-      return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin    \
-                ? ::caf::id_block::name1::begin                                \
-                : ::caf::id_block::name2::begin,                               \
-              ::caf::id_block::name1::end > ::caf::id_block::name2::end        \
-                ? ::caf::id_block::name1::end                                  \
-                : ::caf::id_block::name2::end};                                \
+#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                    \
+    extern "C" auto vast_plugin_register_type_id_block()->void {                \
+      caf::init_global_meta_objects<::caf::id_block::name1>();                  \
+      caf::init_global_meta_objects<::caf::id_block::name2>();                  \
+    }                                                                           \
+    extern "C" auto vast_plugin_type_id_block()->::vast::plugin_type_id_block { \
+      return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin     \
+                ? ::caf::id_block::name1::begin                                 \
+                : ::caf::id_block::name2::begin,                                \
+              ::caf::id_block::name1::end > ::caf::id_block::name2::end         \
+                ? ::caf::id_block::name1::end                                   \
+                : ::caf::id_block::name2::end};                                 \
     }
 
 #endif
