@@ -26,10 +26,28 @@ The diagram below illustrates the operator chaining:
 If a pipeline would not have a source and sink, it would "leak" data. We call
 pipelines that have both a source and sink a **closed pipeline**. VAST can only
 execute closed pipelines. A pipeline that solely consists of a chain
-transformations is an **open pipeline**. You can use open pipelines as building
-blocks to build nested pipelines:
+transformations is an **open pipeline**.
 
-![Nested Pipeline](pipeline-nested.excalidraw.svg)
+## Operator Overview
+
+Let's take an inside look at the anatomy of a pipeline: the operator building
+blocks. The diagram below shows the three major customization points of the
+pipeline execution engine. The operator SDK enables creating transformations,
+sources, and sinks. The SDK for [connectors and
+formats](#connectors-and-formats) are convience abstractions to make it easy to
+get data in and out of the system.[^1]
+
+[^1]: `from <connector> read <format>` and `to <connector> write <format>` are
+      just operators that any developer could write. They are a bit more complex
+      than operators transforming events, so we provide the connector and format
+      SDKs to make it easier for developers to add sources and sinks.
+
+![Operator Overview](operator-overview.excalidraw.svg)
+
+:::caution Work in Progress
+The above diagram shows the scope that we are targeting for VAST v4.0. Some of
+the pictured operators, formats, and connectors are not yet implemented.
+:::
 
 ## Syntax
 
@@ -158,7 +176,6 @@ VAST has two types of operators:
 
 1. **Logical Operators**: user-facing operators that express the intent in the
    domain.
-
 2. **Physical Operators**: data-facing implementation detail.
 
 Let's consider an example of a logical pipeline with the source consisting of
