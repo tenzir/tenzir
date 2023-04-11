@@ -1,18 +1,19 @@
 # put
 
-Assign new values to given fields in the input data, or add new fields if the
-assigned-to field did not exist.
+Reduce the input to the specified fields in the input data in the specified
+order with the specified values.
 
 ## Synopsis
 
 ```
-put EXTRACTORS=VALUE[, …]
+put FIELD[=OPERAND] [, …]
 ```
 
-### Extractors
+### Fields
 
-The extractors of fields to replace with a new value. For extractors that do not
-match any fields in the input events, the operator adds a new field at the end.
+The names of fields in the output data. If the right-hand side of the assignment
+is omitted, the field name is implicitly used as an extractor. If multiple
+fields match the extractor, the first matching field is used in the output.
 
 ### Example
 
@@ -20,22 +21,27 @@ Given this input event (JSON) and this pipeline:
 
 ```json
 {
-  "source_ip": "10.0.0.1",
+  "src_ip": "10.0.0.1",
   "dest_ip": "192.168.0.1"
+  "src_port": 80,
+  "payload": "foobarbaz"
 }
 ```
 
 ```c
-put source_ip="REDACTED", note="masked source IP address for GDPR-compliance"
+put source_ip=src_ip, dest_ip, dest_port, payload="REDACTED"
 ```
 
-The pipeline will replace the field `source_ip` with a fixed value, and add a
-new field `note` at the end, leading to this output:
+The pipeline will always result in events with the four fields `source_ip`
+(renamed from src_ip), `dest_ip` (unchanged), `dest_port` (all null as the field
+is not available in the input data), and `payload` (set to the fixed value
+`"REDACTED"`) in that order.
 
 ```json
 {
-  "source_ip": "REDACTED",
-  "dest_ip": "192.168.0.1",
-  "note": "masked source IP address for GDPR-compliance"
+  "source_ip": "10.0.0.1",
+  "dest_ip": "192.168.0.1"
+  "dest_port": null,
+  "payload": "REDACTED"
 }
 ```
