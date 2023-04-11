@@ -442,7 +442,6 @@ struct rebuilder_state {
     ops.push_back(std::make_unique<rebatch_operator>(
       current_run_partitions[0].schema,
       detail::narrow_cast<int64_t>(desired_batch_size)));
-    auto pipe = std::make_shared<pipeline>(std::move(ops));
     emit_telemetry();
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents
@@ -454,7 +453,7 @@ struct rebuilder_state {
               });
     const auto num_partitions = current_run_partitions.size();
     self
-      ->request(index, caf::infinite, atom::apply_v, std::move(pipe),
+      ->request(index, caf::infinite, atom::apply_v, pipeline{std::move(ops)},
                 std::move(current_run_partitions),
                 system::keep_original_partition::no)
       .then(

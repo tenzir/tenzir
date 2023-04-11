@@ -210,6 +210,29 @@ public:
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override;
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, pipeline& x) -> bool {
+    if constexpr (Inspector::is_loading) {
+      auto repr = std::string{};
+      if (not f.object(x)
+                .pretty_name("vast.logical-pipeline")
+                .fields(f.field("repr", repr)))
+        return false;
+      auto result = pipeline::parse(repr);
+      if (not result) {
+        VAST_WARN("failed to parse pipeline '{}': {}", repr, result.error());
+        return false;
+      }
+      x = std::move(*result);
+      return true;
+    } else {
+      auto repr = x.to_string();
+      return f.object(x)
+        .pretty_name("vast.logical-pipeline")
+        .fields(f.field("repr", repr));
+    }
+  }
+
 protected:
   auto infer_type_impl(operator_type) const
     -> caf::expected<operator_type> override;

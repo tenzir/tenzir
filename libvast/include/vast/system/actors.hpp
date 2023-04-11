@@ -268,8 +268,8 @@ using index_actor = typed_actor_fwd<
   // the original ones and returns the new partition infos. When
   // keep_original_partition is no: does an in-place pipeline keeping the old
   // ids, and makes new partitions preserving them.
-  auto(atom::apply, std::shared_ptr<pipeline>,
-       std::vector<vast::partition_info>, keep_original_partition)
+  auto(atom::apply, pipeline, std::vector<vast::partition_info>,
+       keep_original_partition)
     ->caf::result<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
   auto(atom::flush)->caf::result<void>>
@@ -468,7 +468,6 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::pipeline_ptr)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::pipeline>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::http_request)
 #undef vast_uuid_synopsis_map
 

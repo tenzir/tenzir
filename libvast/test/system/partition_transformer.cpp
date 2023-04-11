@@ -72,10 +72,9 @@ TEST(pass pipeline / done before persist) {
   auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
-  auto pipe = std::make_shared<vast::pipeline>();
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, catalog, filesystem, std::move(pipe),
+                  index_opts, accountant, catalog, filesystem, vast::pipeline{},
                   PARTITION_PATH_TEMPLATE, SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
   // Stream data
@@ -152,11 +151,10 @@ TEST(delete pipeline / persist before done) {
   auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
-  auto pipe = std::make_shared<vast::pipeline>(
-    unbox(vast::pipeline::parse("drop uid")));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, catalog, filesystem, std::move(pipe),
+                  index_opts, accountant, catalog, filesystem,
+                  unbox(vast::pipeline::parse("drop uid")),
                   PARTITION_PATH_TEMPLATE, SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
   // Stream data
@@ -239,10 +237,9 @@ TEST(partition with multiple types) {
   auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
-  auto pipe = std::make_shared<vast::pipeline>();
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, catalog, filesystem, std::move(pipe),
+                  index_opts, accountant, catalog, filesystem, vast::pipeline{},
                   PARTITION_PATH_TEMPLATE, SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
   // Stream data with three different types
@@ -366,14 +363,12 @@ TEST(pass partition pipeline via the index) {
     [](const caf::error& e) {
       REQUIRE_SUCCESS(e);
     });
-  // Run a partition transformation.
-  auto pipe = std::make_shared<vast::pipeline>();
   std::vector<vast::partition_info> partition_infos;
   auto& partition_info = partition_infos.emplace_back();
   partition_info.uuid = partition_uuid;
   partition_info.schema = partition_type;
-  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, pipe,
-                           partition_infos,
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v,
+                           vast::pipeline{}, partition_infos,
                            vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
@@ -392,7 +387,7 @@ TEST(pass partition pipeline via the index) {
                 REQUIRE_SUCCESS(e);
               });
   auto rp5
-    = self->request(index, caf::infinite, vast::atom::apply_v, pipe,
+    = self->request(index, caf::infinite, vast::atom::apply_v, vast::pipeline{},
                     partition_infos, vast::system::keep_original_partition::no);
   run();
   rp5.receive(
@@ -454,15 +449,14 @@ TEST(query after transform) {
       FAIL("unexpected error " << e);
     });
   // Run a partition transformation.
-  auto pipe = std::make_shared<vast::pipeline>(
-    unbox(vast::pipeline::parse("rename zeek.totally_not_conn=:zeek.conn")));
   std::vector<vast::partition_info> partition_infos;
   auto& partition_info = partition_infos.emplace_back();
   partition_info.uuid = partition_uuid;
   partition_info.schema = partition_type;
-  auto rp3
-    = self->request(index, caf::infinite, vast::atom::apply_v, pipe,
-                    partition_infos, vast::system::keep_original_partition::no);
+  auto rp3 = self->request(
+    index, caf::infinite, vast::atom::apply_v,
+    unbox(vast::pipeline::parse("rename zeek.totally_not_conn=:zeek.conn")),
+    partition_infos, vast::system::keep_original_partition::no);
   run();
   rp3.receive(
     [=](const std::vector<vast::partition_info>& infos) {
@@ -554,14 +548,13 @@ TEST(select pipeline with an empty result set) {
       FAIL("unexpected error" << e);
     });
   // Run a partition transformation.
-  auto pipe = std::make_shared<vast::pipeline>(
-    unbox(vast::pipeline::parse("where #type == \"does_not_exist\"")));
   std::vector<vast::partition_info> partition_infos;
   auto& partition_info = partition_infos.emplace_back();
   partition_info.uuid = partition_uuid;
-  auto rp2
-    = self->request(index, caf::infinite, vast::atom::apply_v, pipe,
-                    partition_infos, vast::system::keep_original_partition::no);
+  auto rp2 = self->request(
+    index, caf::infinite, vast::atom::apply_v,
+    unbox(vast::pipeline::parse("where #type == \"does_not_exist\"")),
+    partition_infos, vast::system::keep_original_partition::no);
   run();
   rp2.receive(
     [=](const std::vector<vast::partition_info>& infos) {
@@ -582,10 +575,9 @@ TEST(exceeded partition size) {
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   index_opts["cardinality"] = 4;
-  auto pipe = std::make_shared<vast::pipeline>();
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, catalog, filesystem, std::move(pipe),
+                  index_opts, accountant, catalog, filesystem, vast::pipeline{},
                   PARTITION_PATH_TEMPLATE, SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
   // Stream data with three different types

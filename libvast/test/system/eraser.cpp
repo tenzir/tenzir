@@ -75,7 +75,7 @@ auto mock_index(system::index_actor::stateful_pointer<mock_index_state>)
         system::send_initial_dbstate) {
       FAIL("no mock implementation available");
     },
-    [=](atom::apply, std::shared_ptr<pipeline>, std::vector<partition_info>,
+    [=](atom::apply, pipeline, std::vector<partition_info>,
         system::keep_original_partition) -> std::vector<partition_info> {
       return std::vector<partition_info>{partition_info{
         vast::uuid::null(),
@@ -157,8 +157,7 @@ TEST(eraser on mock INDEX) {
   expect((atom::run), from(aut).to(aut));
   expect((atom::resolve, vast::expression), from(aut).to(index));
   expect((vast::system::catalog_lookup_result), from(index).to(aut));
-  expect((atom::apply, std::shared_ptr<vast::pipeline>,
-          std::vector<vast::partition_info>,
+  expect((atom::apply, vast::pipeline, std::vector<vast::partition_info>,
           vast::system::keep_original_partition),
          from(aut).to(index));
   // The mock index doesn't do any internal messaging but just

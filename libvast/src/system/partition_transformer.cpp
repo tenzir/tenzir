@@ -307,9 +307,8 @@ auto partition_transformer(
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  catalog_actor catalog, filesystem_actor fs,
-  std::shared_ptr<pipeline> transform, std::string partition_path_template,
-  std::string synopsis_path_template)
+  catalog_actor catalog, filesystem_actor fs, pipeline transform,
+  std::string partition_path_template, std::string synopsis_path_template)
   -> partition_transformer_actor::behavior_type {
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);
@@ -348,7 +347,7 @@ auto partition_transformer(
     },
     [self](atom::done) -> caf::result<void> {
       // We copy the pipeline because we will modify it.
-      auto pipe = *self->state.transform;
+      auto pipe = self->state.transform;
       auto open = pipe.check_type<table_slice, table_slice>();
       if (!open) {
         return open.error();

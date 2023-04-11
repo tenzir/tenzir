@@ -72,7 +72,7 @@ struct partition_transformer_state {
   filesystem_actor fs = {};
 
   /// The transform to be applied to the data.
-  std::shared_ptr<pipeline> transform = {};
+  pipeline transform = {};
 
   /// Collector for the received table slices.
   std::vector<table_slice> input = {};
@@ -171,9 +171,8 @@ auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  catalog_actor catalog, filesystem_actor fs,
-  std::shared_ptr<pipeline> transform, std::string partition_path_template,
-  std::string synopsis_path_template)
+  catalog_actor catalog, filesystem_actor fs, pipeline transform,
+  std::string partition_path_template, std::string synopsis_path_template)
   -> partition_transformer_actor::behavior_type;
 
 } // namespace vast::system
