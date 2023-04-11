@@ -26,10 +26,33 @@ The diagram below illustrates the operator chaining:
 If a pipeline would not have a source and sink, it would "leak" data. We call
 pipelines that have both a source and sink a **closed pipeline**. VAST can only
 execute closed pipelines. A pipeline that solely consists of a chain
-transformations is an **open pipeline**. You can use open pipelines as building
-blocks to build nested pipelines:
+transformations is an **open pipeline**.
 
-![Nested Pipeline](pipeline-nested.excalidraw.svg)
+## Operator Overview
+
+Let's take an inside look at the anatomy of a pipeline: the operator building
+blocks. The diagram below shows the three major customization points of the
+pipeline execution engine. The operator SDK consists of transformations,
+sources, and sinks. The SDK for [connectors and
+formats](#connectors-and-formats) are convience abstractions to make it easy to
+get data in and out of the system.[^1]
+
+[^1]: It is also possible to write source and sink operators, but this requires
+      a bit deeper understanding of system internals. In most of the cases,
+      adding a data source or sink by means of a connector or format is
+      sufficient.
+
+![Operator Overview](operator-overview.excalidraw.svg)
+
+:::caution Work in Progress
+The above diagram shows the scope of our minimum viable product at launch time
+later this year. We are not fully there yet with our new pipeline execution
+engine. Most of the code exists already, but needs to moved into this new
+composable connector/format framework. Most of the transformations exist
+already (only `sort` and `inspect` are missing), but we haven't ported majority
+of formats and connectors yet. Until then, please consider this diagram for
+architectureal exposition only.
+:::
 
 ## Syntax
 
