@@ -453,6 +453,7 @@ struct request_multiplexer_state {
 
   system::index_actor index_ = {};
   std::unordered_map<std::string, query_manager_actor> live_queries_ = {};
+  record config_ = {};
 };
 
 query_manager_actor::behavior_type
@@ -525,9 +526,9 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
 
 auto request_multiplexer(
   request_multiplexer_actor::stateful_pointer<request_multiplexer_state> self,
-  const system::node_actor& node, const record* config)
+  const system::node_actor& node, record config)
   -> request_multiplexer_actor::behavior_type {
-  VAST_ASSERT(config);
+  self->state.config_ = std::move(config);
   self
     ->request(node, caf::infinite, atom::get_v, atom::label_v,
               std::vector<std::string>{"index"})
@@ -556,7 +557,7 @@ auto request_multiplexer(
     self->state.live_queries_.erase(it);
   });
   return {
-    [self, config](atom::http_request, uint64_t endpoint_id, http_request rq) {
+    [self](atom::http_request, uint64_t endpoint_id, http_request rq) {
       VAST_VERBOSE("{} handles /query request for endpoint id {} with params "
                    "{}",
                    *self, endpoint_id, rq.params);
@@ -593,7 +594,7 @@ auto request_multiplexer(
           return rq.response->abort(422, "missing parameter 'query'\n",
                                     caf::error{});
         }
-        auto parse_result = pipeline::parse(*query_string, *config);
+        auto parse_result = pipeline::parse(*query_string, self->state.config_);
         if (!parse_result)
           return rq.response->abort(400, "invalid query\n",
                                     parse_result.error());
@@ -725,7 +726,7 @@ class plugin final : public virtual rest_endpoint_plugin {
 
   auto handler(caf::actor_system& system, system::node_actor node) const
     -> system::rest_handler_actor override {
-    return system.spawn(request_multiplexer, node, &config_);
+    return system.spawn(request_multiplexer, node, config_);
   }
 
 private:
