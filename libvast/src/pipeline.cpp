@@ -74,16 +74,16 @@ auto parse_impl(std::string_view repr, const vast::record& config,
   // plugin name parser
   using parsers::alnum, parsers::chr, parsers::space,
     parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
-  const auto plugin_name_char_parser = alnum | chr{'-'};
-  const auto plugin_name_parser
-    = optional_ws_or_comment >> +plugin_name_char_parser;
+  const auto operator_name_char_parser = alnum | chr{'-'} | chr{'_'};
+  const auto operator_name_parser
+    = optional_ws_or_comment >> +operator_name_char_parser;
   // TODO: allow more empty string
   while (!repr.empty()) {
     // 1. parse a single word as operator plugin name
     const auto* f = repr.begin();
     const auto* const l = repr.end();
     auto operator_name = std::string{};
-    if (!plugin_name_parser(f, l, operator_name)) {
+    if (!operator_name_parser(f, l, operator_name)) {
       return caf::make_error(ec::syntax_error,
                              fmt::format("failed to parse pipeline '{}': "
                                          "operator name is invalid",
@@ -109,7 +109,7 @@ auto parse_impl(std::string_view repr, const vast::record& config,
       }
       if (definition) {
         if (prefix == old_config_prefix) {
-          VAST_WARN("configuring operator aliases with `{}` is deprected, use "
+          VAST_WARN("configuring operator aliases with `{}` is deprecated, use "
                     "`{}` instead",
                     old_config_prefix, new_config_prefix);
         }
