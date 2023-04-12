@@ -33,6 +33,7 @@ The following aggregation functions are available:
   rather than the lists themselves.
 - `sample`: Takes the first of all grouped values that is not null.
 - `count`: Counts all grouped values that are not null.
+- `count_distinct`: Counts all distinct grouped values that are not null.
 
 ### Grouping
 
