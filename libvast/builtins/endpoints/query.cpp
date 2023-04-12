@@ -40,10 +40,10 @@ static auto const* SPEC_V0 = R"_(
         name: query
         schema:
           type: string
-        example: ":ip in 10.42.0.0/16 | head 100"
+        example: "where :ip in 10.42.0.0/16 | head 100"
         required: true
         description: |
-          The query used, optionally including an open pipeline.
+          The query used in the form of a pipeline.
       - in: query
         name: ttl
         schema:
