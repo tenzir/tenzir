@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/test/fixtures/events.hpp>
@@ -345,6 +346,41 @@ TEST(from_read_parsing) {
     // TODO: Cannot test behavior yet because JSON reader is missing.
     (void)executor;
   }
+}
+
+TEST(user defined operator alias) {
+  auto config_data = unbox(from_yaml(R"__(
+vast:
+  operators:
+    something_random: put something_random=123
+    anonymize_urls: put net.url="xxx" | something_random
+    self_recursive: self_recursive | self_recursive
+    mut_recursive1: mut_recursive2
+    mut_recursive2: mut_recursive1
+  pipelines: # <-- TODO: This is deprecated. Remove.
+    aggregate_flows: |
+       summarize
+         pkts_toserver=sum(flow.pkts_toserver),
+         pkts_toclient=sum(flow.pkts_toclient),
+         bytes_toserver=sum(flow.bytes_toserver),
+         bytes_toclient=sum(flow.bytes_toclient),
+         start=min(flow.start),
+         end=max(flow.end)
+       by
+         timestamp,
+         src_ip,
+         dest_ip
+       resolution
+         10 mins
+  )__"));
+  auto config = caf::get_if<record>(&config_data);
+  REQUIRE(config);
+  auto ops = unbox(pipeline::parse("anonymize_urls | aggregate_flows", *config))
+               .unwrap();
+  REQUIRE_EQUAL(ops.size(), size_t{3});
+  REQUIRE_ERROR(pipeline::parse("aggregate_urls", *config));
+  REQUIRE_ERROR(pipeline::parse("self_recursive", *config));
+  REQUIRE_ERROR(pipeline::parse("mut_recursive1", *config));
 }
 
 } // namespace
