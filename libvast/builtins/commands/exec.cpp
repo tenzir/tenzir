@@ -14,12 +14,13 @@ namespace vast::plugins::exec {
 
 namespace {
 
-caf::expected<void> exec_command(std::span<const std::string> args) {
+auto exec_command(std::span<const std::string> args, record config)
+  -> caf::expected<void> {
   if (args.size() != 1)
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
-  auto pipeline = pipeline::parse(args[0]);
+  auto pipeline = pipeline::parse(args[0], config);
   if (not pipeline)
     return caf::make_error(ec::invalid_argument,
                            fmt::format("failed to parse pipeline: {}",
@@ -41,23 +42,24 @@ public:
   plugin() = default;
   ~plugin() override = default;
 
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
+    config_ = global_config;
     return caf::none;
   }
 
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "exec";
   }
 
-  [[nodiscard]] std::pair<std::unique_ptr<command>, command::factory>
-  make_command() const override {
+  auto make_command() const
+    -> std::pair<std::unique_ptr<command>, command::factory> override {
     auto exec = std::make_unique<command>("exec", "execute a pipeline locally",
                                           command::opts("?vast.exec"));
     auto factory = command::factory{
       {"exec",
-       [](const invocation& inv, caf::actor_system&) -> caf::message {
-         auto result = exec_command(inv.arguments);
+       [=](const invocation& inv, caf::actor_system&) -> caf::message {
+         auto result = exec_command(inv.arguments, config_);
          if (not result)
            return caf::make_message(result.error());
          return {};
@@ -65,8 +67,10 @@ public:
     };
     return {std::move(exec), std::move(factory)};
   };
-};
 
+private:
+  record config_;
+};
 } // namespace
 
 } // namespace vast::plugins::exec

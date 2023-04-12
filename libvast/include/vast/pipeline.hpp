@@ -154,7 +154,8 @@ public:
 
   /// Parses a logical pipeline from its textual representation. It is *not*
   /// guaranteed that `parse(to_string())` succeeds.
-  static auto parse(std::string_view repr) -> caf::expected<pipeline>;
+  static auto parse(std::string_view repr, const vast::record& config)
+    -> caf::expected<pipeline>;
 
   /// Returns the sequence of operators that this pipeline was built from.
   auto unwrap() && -> std::vector<operator_ptr> {

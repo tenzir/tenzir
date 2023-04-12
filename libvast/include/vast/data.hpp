@@ -251,11 +251,15 @@ void merge(const record& src, record& dst,
 /// @param rhs The RHS of the predicate.
 bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 
-/// Tries to find the entry with the dot-sperated `path`.
+/// Tries to find the entry with the dot-sperated `path`. If `type_clash !=
+/// nullptr`, it is set to `true` or `false` depending on the reason for
+/// returning `nullptr`.
 /// @pre `!path.empty()`
+/// @post `result != nullptr` implies `*type_clash == false`
 template <typename T>
   requires caf::detail::tl_contains<data::types, T>::value
-const T* get_if(const record* r, std::string_view path) {
+const T*
+get_if(const record* r, std::string_view path, bool* type_clash = nullptr) {
   VAST_ASSERT(!path.empty());
   auto names = detail::split(path, ".");
   VAST_ASSERT(!names.empty());
@@ -263,17 +267,25 @@ const T* get_if(const record* r, std::string_view path) {
   for (auto& name : names) {
     auto last = &name == &names.back();
     auto it = current->find(name);
-    if (it == current->end())
+    if (it == current->end()) {
       // Field not found.
+      if (type_clash)
+        *type_clash = false;
       return nullptr;
+    }
     auto& field = it->second;
     if (last) {
       // Path was completely processed.
-      return caf::get_if<T>(&field);
+      auto result = caf::get_if<T>(&field);
+      if (type_clash)
+        *type_clash = result == nullptr;
+      return result;
     }
     current = caf::get_if<record>(&field);
     if (!current) {
       // This is not a record, but path continues.
+      if (type_clash)
+        *type_clash = true;
       return nullptr;
     }
   }
@@ -281,8 +293,8 @@ const T* get_if(const record* r, std::string_view path) {
 }
 
 template <typename T>
-T* get_if(record* r, std::string_view path) {
-  auto result = get_if<T>(static_cast<const record*>(r), path);
+T* get_if(record* r, std::string_view path, bool* type_clash = nullptr) {
+  auto result = get_if<T>(static_cast<const record*>(r), path, type_clash);
   return const_cast<T*>(result); // NOLINT
 }
 
