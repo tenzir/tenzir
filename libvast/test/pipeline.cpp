@@ -349,6 +349,8 @@ TEST(from_read_parsing) {
 }
 
 TEST(user defined operator alias) {
+  // We could detect some errors in the config file when loading the config.
+  // This test assumes that the error is only triggered when using the alias.
   auto config_data = unbox(from_yaml(R"__(
 vast:
   operators:
@@ -357,6 +359,7 @@ vast:
     self_recursive: self_recursive | self_recursive
     mut_recursive1: mut_recursive2
     mut_recursive2: mut_recursive1
+    head: tail
   pipelines: # <-- TODO: This is deprecated. Remove.
     aggregate_flows: |
        summarize
@@ -381,6 +384,7 @@ vast:
   REQUIRE_ERROR(pipeline::parse("aggregate_urls", *config));
   REQUIRE_ERROR(pipeline::parse("self_recursive", *config));
   REQUIRE_ERROR(pipeline::parse("mut_recursive1", *config));
+  REQUIRE_ERROR(pipeline::parse("head", *config));
 }
 
 } // namespace
