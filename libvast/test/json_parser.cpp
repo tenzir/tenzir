@@ -69,7 +69,7 @@ make_chunk_generator(std::vector<std::string_view> jsons_to_chunkify) {
 }
 
 struct fixture {
-  std::function<void(caf::error)> default_on_warn = [this](caf::error e) {
+  std::function<void(caf::error)> default_on_warn = [](caf::error e) {
     FAIL(fmt::format("Unexpected call to operator_control_plane::warn with {}",
                      e));
   };
