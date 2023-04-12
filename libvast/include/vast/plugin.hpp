@@ -477,6 +477,22 @@ public:
   [[nodiscard]] virtual auto dumper_requires_joining() const -> bool = 0;
 };
 
+/// A parser plugin transfers a stream of chunks to a stream of table slices.
+/// @relates plugin
+class parser_plugin : public virtual plugin {
+public:
+  using parser = std::function<generator<table_slice>(generator<chunk_ptr>)>;
+
+  [[nodiscard]] virtual auto
+  make_parser(const record&, operator_control_plane&) const
+    -> caf::expected<parser>
+    = 0;
+
+  [[nodiscard]] virtual auto make_default_loader() const
+    -> std::optional<std::pair<std::string, record>>
+    = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
