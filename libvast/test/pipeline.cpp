@@ -189,6 +189,7 @@ TEST(unique) {
                             head(zeek_conn_log.at(0), 5), // + 4
                             head(zeek_conn_log.at(0), 7), // + 5
                             head(zeek_conn_log.at(0), 7), // + 6
+                            head(zeek_conn_log.at(0), 8), // + 7
                           }));
   auto count = size_t{0};
   ops.push_back(std::make_unique<sink>([&](table_slice slice) {
@@ -198,7 +199,7 @@ TEST(unique) {
   for (auto&& error : executor) {
     REQUIRE_NOERROR(error);
   }
-  CHECK_EQUAL(count, size_t{1 + 0 + 4 + 0 + 4 + 5 + 6});
+  CHECK_EQUAL(count, size_t{1 + 0 + 4 + 0 + 4 + 5 + 6 + 7});
 }
 
 FIXTURE_SCOPE_END()
