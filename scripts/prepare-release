@@ -68,13 +68,14 @@ if [[ "${new_version}" != *"-rc"* ]]; then
   # ^1: https://docusaurus.io/docs/versioning#deleting-an-existing-version
   #
   # This bit removes the already tagged version:
-  jq "map(select(. != \"${new_version_major_minor}\"))" < versions.json > versions.json.tmp
+  new_version_name="VAST ${new_version_major_minor}"
+  jq "map(select(. != \"${new_version_name}\"))" < versions.json > versions.json.tmp
   mv -f versions.json.tmp versions.json
-  rm -rf "versioned_docs/version-${new_version_major_minor}"
-  rm -rf "versioned_sidebars/version-${new_version_major_minor}-sidebars.json"
+  rm -rf "versioned_docs/version-${new_version_name}"
+  rm -rf "versioned_sidebars/version-${new_version_name}-sidebars.json"
   # And this actually cuts a new docs version:
   yarn install --frozen-lockfile
-  yarn docusaurus docs:version "${new_version_major_minor}"
+  yarn docusaurus docs:version "${new_version_name}"
   popd
 fi
 
