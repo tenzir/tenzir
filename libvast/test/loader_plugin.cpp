@@ -177,7 +177,7 @@ TEST(stdin loader - from operator) {
   };
 
   stdin_file_input<"artifacts/inputs/nothing.txt"> file;
-  auto ops = unbox(pipeline::parse("from stdin | pass")).unwrap();
+  auto ops = unbox(pipeline::parse("from stdin | pass", record{})).unwrap();
   ops.push_back(std::make_unique<sink>());
   for (auto&& x : make_local_executor(pipeline{std::move(ops)})) {
     // TODO: When the parser is implemented, replace the checks below with

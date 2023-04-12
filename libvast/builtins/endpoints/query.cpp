@@ -591,7 +591,8 @@ request_multiplexer_actor::behavior_type request_multiplexer(
           return rq.response->abort(422, "missing parameter 'query'\n",
                                     caf::error{});
         }
-        auto parse_result = pipeline::parse(*query_string);
+        // TODO
+        auto parse_result = pipeline::parse(*query_string, record{});
         if (!parse_result)
           return rq.response->abort(400, "invalid query\n",
                                     parse_result.error());
