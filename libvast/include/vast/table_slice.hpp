@@ -334,10 +334,15 @@ table_slice tail(table_slice slice, size_t num_rows);
 /// @param slice The input table slice.
 /// @param partition_point The index of the first row for the second slice.
 /// @returns two new table slices if `0 < partition_point < slice.rows()`,
-///          otherwise returns `slice` and an invalid tbale slice.
+///          otherwise returns `slice` and an invalid table slice.
 /// @pre `slice.encoding() != table_slice_encoding::none`
 std::pair<table_slice, table_slice>
 split(const table_slice& slice, size_t partition_point);
+
+/// Selects the rows with indices `[begin, end)`.
+/// @pre `begin <= end && end <= slice.rows()`
+auto subslice(const table_slice& slice, size_t begin, size_t end)
+  -> table_slice;
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
