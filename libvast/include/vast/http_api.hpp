@@ -105,7 +105,9 @@ public:
 
   /// Return an HTTP error code and close the connection.
   //  TODO: Add a `&&` qualifier to ensure one-time use.
-  virtual void abort(uint16_t error_code, std::string message) = 0;
+  virtual void
+  abort(uint16_t error_code, std::string message, caf::error detail)
+    = 0;
 };
 
 class http_request {

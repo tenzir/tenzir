@@ -588,23 +588,25 @@ request_multiplexer_actor::behavior_type request_multiplexer(
           VAST_ASSERT(caf::holds_alternative<std::string>(param));
           query_string = caf::get<std::string>(param);
         } else {
-          return rq.response->abort(422, "missing parameter 'query'\n");
+          return rq.response->abort(422, "missing parameter 'query'\n",
+                                    caf::error{});
         }
         auto parse_result = pipeline::parse(*query_string);
         if (!parse_result)
-          return rq.response->abort(400, fmt::format("unparseable query: {}\n",
-                                                     parse_result.error()));
+          return rq.response->abort(400, "invalid query\n",
+                                    parse_result.error());
         auto pipeline = std::move(*parse_result);
         auto output = pipeline.infer_type<table_slice>();
         if (!output) {
-          return rq.response->abort(400, fmt::format("invalid pipeline: {}",
-                                                     output.error()));
+          return rq.response->abort(400, "pipeline instantiation failed\n",
+                                    output.error());
         }
         if (!output->is<table_slice>()) {
-          return rq.response->abort(400,
-                                    fmt::format("expected pipeline that "
-                                                "outputs events, but got {}",
-                                                operator_type_name(*output)));
+          return rq.response->abort(
+            400, "query must return events as output\n",
+            caf::make_error(ec::type_clash,
+                            fmt::format("the given pipeline returns {}",
+                                        operator_type_name(*output))));
         }
         // TODO: Consider replacing this with an empty conjunction.
         auto& trivially_true = trivially_true_expression();
@@ -617,8 +619,8 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         VAST_ASSERT(expr != expression{});
         auto normalized_expr = normalize_and_validate(expr);
         if (!normalized_expr)
-          return rq.response->abort(400, fmt::format("invalid query: {}\n",
-                                                     normalized_expr.error()));
+          return rq.response->abort(400, "invalid query\n",
+                                    normalized_expr.error());
         auto handler
           = self->spawn<caf::monitored>(query_manager, self->state.index_,
                                         std::move(new_pipeline), expand, ttl,
@@ -637,27 +639,25 @@ request_multiplexer_actor::behavior_type request_multiplexer(
               response->append(fmt::format("{{\"id\": \"{}\"}}\n", id_string));
             },
             [response = rq.response](const caf::error& e) {
-              response->abort(500, fmt::format("received error response from "
-                                               "index: {}\n",
-                                               e));
+              response->abort(500, "index evaluation failed\n", e);
             });
       } else {
         VAST_ASSERT_CHEAP(endpoint_id == QUERY_NEXT_ENDPOINT);
         if (!rq.params.contains("id"))
-          return rq.response->abort(400, "missing id\n");
+          return rq.response->abort(400, "missing id\n", caf::error{});
         if (!rq.params.contains("n"))
-          return rq.response->abort(400, "missing parameter 'n'\n");
+          return rq.response->abort(400, "missing parameter 'n'\n",
+                                    caf::error{});
         auto id = caf::get<std::string>(rq.params["id"]);
         auto n = caf::get<uint64_t>(rq.params["n"]);
         auto it = self->state.live_queries_.find(id);
         if (it == self->state.live_queries_.end())
-          return rq.response->abort(422, "unknown id\n");
+          return rq.response->abort(422, "unknown id\n", caf::error{});
         auto& handler = it->second;
         self->request(handler, caf::infinite, atom::next_v, std::move(rq), n)
           .then([](atom::done) { /* nop */ },
                 [response = rq.response](const caf::error& e) {
-                  response->abort(
-                    500, fmt::format("internal server error: {}\n", e));
+                  response->abort(500, "internal server error\n", e);
                 });
       }
     },
