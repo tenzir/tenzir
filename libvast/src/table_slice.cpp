@@ -602,7 +602,8 @@ split(const table_slice& slice, size_t partition_point) {
 
 auto subslice(const table_slice& slice, size_t begin, size_t end)
   -> table_slice {
-  VAST_ASSERT(begin <= end && end <= slice.rows());
+  VAST_ASSERT(begin <= end);
+  VAST_ASSERT(end <= slice.rows());
   if (begin == 0 && end == slice.rows()) {
     return slice;
   }
