@@ -523,9 +523,11 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   };
 }
 
-request_multiplexer_actor::behavior_type request_multiplexer(
+auto request_multiplexer(
   request_multiplexer_actor::stateful_pointer<request_multiplexer_state> self,
-  const system::node_actor& node) {
+  const system::node_actor& node, const record* config)
+  -> request_multiplexer_actor::behavior_type {
+  VAST_ASSERT(config);
   self
     ->request(node, caf::infinite, atom::get_v, atom::label_v,
               std::vector<std::string>{"index"})
@@ -554,7 +556,7 @@ request_multiplexer_actor::behavior_type request_multiplexer(
     self->state.live_queries_.erase(it);
   });
   return {
-    [self](atom::http_request, uint64_t endpoint_id, http_request rq) {
+    [self, config](atom::http_request, uint64_t endpoint_id, http_request rq) {
       VAST_VERBOSE("{} handles /query request for endpoint id {} with params "
                    "{}",
                    *self, endpoint_id, rq.params);
@@ -591,8 +593,7 @@ request_multiplexer_actor::behavior_type request_multiplexer(
           return rq.response->abort(422, "missing parameter 'query'\n",
                                     caf::error{});
         }
-        // TODO
-        auto parse_result = pipeline::parse(*query_string, record{});
+        auto parse_result = pipeline::parse(*query_string, *config);
         if (!parse_result)
           return rq.response->abort(400, "invalid query\n",
                                     parse_result.error());
@@ -666,8 +667,9 @@ request_multiplexer_actor::behavior_type request_multiplexer(
 }
 
 class plugin final : public virtual rest_endpoint_plugin {
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
+    config_ = global_config;
     return {};
   }
 
@@ -721,10 +723,13 @@ class plugin final : public virtual rest_endpoint_plugin {
     return endpoints;
   }
 
-  system::rest_handler_actor
-  handler(caf::actor_system& system, system::node_actor node) const override {
-    return system.spawn(request_multiplexer, node);
+  auto handler(caf::actor_system& system, system::node_actor node) const
+    -> system::rest_handler_actor override {
+    return system.spawn(request_multiplexer, node, &config_);
   }
+
+private:
+  record config_;
 };
 
 } // namespace vast::plugins::rest_api::query
