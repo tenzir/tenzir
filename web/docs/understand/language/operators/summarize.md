@@ -29,8 +29,7 @@ The following aggregation functions are available:
 - `all`: Computes the conjunction (AND) of all grouped values. Requires the
   values to be booleans.
 - `distinct`: Creates a sorted list of all unique grouped values that are not
-  null. If the values are lists, operates on the all values inside the lists
-  rather than the lists themselves.
+  null.
 - `sample`: Takes the first of all grouped values that is not null.
 - `count`: Counts all grouped values that are not null.
 - `count_distinct`: Counts all distinct grouped values that are not null.
