@@ -160,8 +160,9 @@ TEST(summarize test) {
        {"time_min", record{{"min", "time"}}},
        {"time_max", record{{"max", "time"}}},
        {"ports", record{{"distinct", "port"}}},
-       {"num_ports", record{{"count_distinct", "port"}}},
        {"alternating_number", "distinct"},
+       {"num_alternating_numbers", record{{"count_distinct", "alternating_"
+                                                             "number"}}},
        {"sample_time", record{{"sample", "time"}}},
        {"num_sums", record{{"count", list{"sum", "sum_null"}}}},
      }},
@@ -190,11 +191,12 @@ TEST(summarize test) {
               vast::time{std::chrono::seconds(1258329609)});
   const auto expected_ports = list{uint64_t{443}};
   CHECK_EQUAL(materialize(summarized_slice.at(0, 13)), expected_ports);
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 14)), expected_ports.size());
   const auto expected_alternating_numbers
     = list{uint64_t{0}, uint64_t{1}, uint64_t{2}};
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 15)),
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 14)),
               expected_alternating_numbers);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 15)),
+              expected_alternating_numbers.size());
   CHECK_EQUAL(materialize(summarized_slice.at(0, 16)),
               vast::time{std::chrono::seconds(1258329600)});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 17)), uint64_t{9});
