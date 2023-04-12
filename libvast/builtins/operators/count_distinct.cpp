@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/aggregation_function.hpp>
@@ -13,7 +13,7 @@
 
 #include <tsl/robin_set.h>
 
-namespace vast::plugins::distinct {
+namespace vast::plugins::count_distinct {
 
 namespace {
 
@@ -26,9 +26,8 @@ struct heterogeneous_data_hash {
     return hash(value);
   }
 
-  [[nodiscard]] auto
-
-  operator()(const type_to_data_t<Type>& value) const -> size_t
+  [[nodiscard]] auto operator()(const type_to_data_t<Type>& value) const
+    -> size_t
     requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
   {
     return hash(make_view(value));
@@ -53,16 +52,16 @@ struct heterogeneous_data_equal {
 };
 
 template <concrete_type Type>
-class distinct_function final : public aggregation_function {
+class count_distinct_function final : public aggregation_function {
 public:
-  explicit distinct_function(type input_type) noexcept
+  explicit count_distinct_function(type input_type) noexcept
     : aggregation_function(std::move(input_type)) {
     // nop
   }
 
 private:
   [[nodiscard]] auto output_type() const -> type override {
-    return type{list_type{input_type()}};
+    return type{uint64_type{}};
   }
 
   void add(const data_view& view) override {
@@ -77,12 +76,7 @@ private:
   }
 
   [[nodiscard]] auto finish() && -> caf::expected<data> override {
-    auto result = list{};
-    result.reserve(distinct_.size());
-    for (auto& value : distinct_)
-      result.emplace_back(std::move(value));
-    std::sort(result.begin(), result.end());
-    return data{std::move(result)};
+    return data{uint64_t{distinct_.size()}};
   }
 
   tsl::robin_set<type_to_data_t<Type>, heterogeneous_data_hash<Type>,
@@ -98,14 +92,14 @@ class plugin : public virtual aggregation_function_plugin {
   }
 
   [[nodiscard]] auto name() const -> std::string override {
-    return "distinct";
+    return "count_distinct";
   };
 
   [[nodiscard]] auto make_aggregation_function(const type& input_type) const
     -> caf::expected<std::unique_ptr<aggregation_function>> override {
     auto f = [&]<concrete_type Type>(
                const Type&) -> std::unique_ptr<aggregation_function> {
-      return std::make_unique<distinct_function<Type>>(input_type);
+      return std::make_unique<count_distinct_function<Type>>(input_type);
     };
     return caf::visit(f, input_type);
   }
@@ -113,6 +107,6 @@ class plugin : public virtual aggregation_function_plugin {
 
 } // namespace
 
-} // namespace vast::plugins::distinct
+} // namespace vast::plugins::count_distinct
 
-VAST_REGISTER_PLUGIN(vast::plugins::distinct::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::count_distinct::plugin)
