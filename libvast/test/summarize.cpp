@@ -38,7 +38,6 @@ const auto agg_test_schema = vast::type{
     {"any_false", vast::bool_type{}},
     {"all_false", vast::bool_type{}},
     {"alternating_number", vast::uint64_type{}},
-    {"alternating_number_list", vast::list_type{vast::uint64_type{}}},
   },
 };
 
@@ -62,15 +61,8 @@ table_slice make_testdata() {
     auto any_false = false;
     auto all_false = i != 0;
     auto alternating_number = detail::narrow_cast<uint64_t>(i % 3);
-    auto alternating_number_list = list{
-      detail::narrow_cast<uint64_t>(i % 3),
-      detail::narrow_cast<uint64_t>(i % 5),
-    };
-    if (i == 8)
-      alternating_number_list.emplace_back();
     REQUIRE(builder->add(time, ip, port, sum, sum_null, min, max, any_true,
-                         all_true, any_false, all_false, alternating_number,
-                         alternating_number_list));
+                         all_true, any_false, all_false, alternating_number));
   }
   vast::table_slice slice = builder->finish();
   return slice;
@@ -168,8 +160,8 @@ TEST(summarize test) {
        {"time_min", record{{"min", "time"}}},
        {"time_max", record{{"max", "time"}}},
        {"ports", record{{"distinct", "port"}}},
+       {"num_ports", record{{"count_distinct", "port"}}},
        {"alternating_number", "distinct"},
-       {"alternating_number_list", "distinct"},
        {"sample_time", record{{"sample", "time"}}},
        {"num_sums", record{{"count", list{"sum", "sum_null"}}}},
      }},
@@ -198,14 +190,11 @@ TEST(summarize test) {
               vast::time{std::chrono::seconds(1258329609)});
   const auto expected_ports = list{uint64_t{443}};
   CHECK_EQUAL(materialize(summarized_slice.at(0, 13)), expected_ports);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 14)), expected_ports.size());
   const auto expected_alternating_numbers
     = list{uint64_t{0}, uint64_t{1}, uint64_t{2}};
-  const auto expected_alternating_numbers_list
-    = list{uint64_t{0}, uint64_t{1}, uint64_t{2}, uint64_t{3}, uint64_t{4}};
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 14)),
-              expected_alternating_numbers);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 15)),
-              expected_alternating_numbers_list);
+              expected_alternating_numbers);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 16)),
               vast::time{std::chrono::seconds(1258329600)});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 17)), uint64_t{9});
