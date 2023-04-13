@@ -71,7 +71,8 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
           ec::invalid_query,
           fmt::format("{} failed to normalize and validate {}", *self, query));
       auto transform = pipeline::parse(
-        fmt::format("where {}", fmt::to_string(expression{negation{*expr}})));
+        fmt::format("where {}", fmt::to_string(expression{negation{*expr}})),
+        record{});
       if (!transform)
         return transform.error();
       auto rp = self->make_response_promise<atom::ok>();

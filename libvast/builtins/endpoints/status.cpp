@@ -85,7 +85,7 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
         else if (verbosity == "debug")
           caf::put(options, "vast.status.debug", true);
         else
-          return rq.response->abort(422, "invalid verbosity");
+          return rq.response->abort(422, "invalid verbosity\n", caf::error{});
       }
       auto inv = vast::invocation{
         .options = options,
@@ -96,7 +96,7 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
         ->request(self->state.node_, caf::infinite, atom::run_v, std::move(inv))
         .then(
           [rsp = rq.response](const caf::message&) {
-            rsp->abort(500, "unexpected response");
+            rsp->abort(500, "unexpected response\n", caf::error{});
           },
           [rsp = rq.response](caf::error& e) {
             // The NODE uses some black magic to respond to the request with
@@ -104,7 +104,7 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
             // will arrive as an "unexpected_response" error here.
             if (caf::sec{e.code()} != caf::sec::unexpected_response) {
               VAST_ERROR("node error {}", e);
-              rsp->abort(500, "internal error");
+              rsp->abort(500, "internal error\n", caf::error{});
               return;
             }
             std::string result;

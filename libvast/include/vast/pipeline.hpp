@@ -176,7 +176,8 @@ public:
 
   /// Parses a logical pipeline from its textual representation. It is *not*
   /// guaranteed that `parse(to_string())` succeeds.
-  static auto parse(std::string_view repr) -> caf::expected<pipeline>;
+  static auto parse(std::string_view repr, const vast::record& config)
+    -> caf::expected<pipeline>;
 
   /// Adds an operator at the end of this pipeline.
   void append(operator_ptr op) {
@@ -218,7 +219,9 @@ public:
                 .pretty_name("vast.logical-pipeline")
                 .fields(f.field("repr", repr)))
         return false;
-      auto result = pipeline::parse(repr);
+      // Using an empty configuration here is fine, because all aliases were
+      // already resolved before serialization.
+      auto result = pipeline::parse(repr, record{});
       if (not result) {
         VAST_WARN("failed to parse pipeline '{}': {}", repr, result.error());
         return false;

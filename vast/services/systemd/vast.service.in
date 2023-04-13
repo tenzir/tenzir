@@ -2,12 +2,12 @@
 Description=VAST - Visibility Across Space and Time
 StartLimitIntervalSec=120
 StartLimitBurst=1
-OnFailure=vast-collect.service
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=notify
+Restart=always
 
 # user + privileges
 # We explicitly don't use DynamicUser because that can lead to recursive `chown`s.
