@@ -3,8 +3,8 @@
 Computes a SHA256 hash digest of a given field.
 
 :::warning Experimental
-We plan to change the `hash` operator into a function usable in an upcoming
-`put` operator, removing the need for `hash` as an operator.
+This operator will soon be removed in favor of first-class support for functions
+that can be used in a variety of different operators and contexts.
 :::
 
 ## Synopsis
@@ -13,15 +13,23 @@ We plan to change the `hash` operator into a function usable in an upcoming
 hash (-s|--salt=STRING) FIELD
 ```
 
-### Salt
+## Description
+
+The `hash` operator calculates a hash digest of a given field.
+
+## Options
+
+The operator has the following options.
+
+### salt
 
 A salt value for the hash.
 
-### Field
+### field
 
 The field name over which the hash is computed.
 
-## Example
+## Examples
 
 Hash all values of the field `username` using the salt value `"xxx"` and store
 the digest in a new field `username_hashed`:
