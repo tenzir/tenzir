@@ -29,7 +29,8 @@ jobs:
         run: |
           pip install --upgrade cmake_format
           git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) -- "**CMakeLists.txt" "**.cmake" |
-            xargs cmake-format --in-place
+            tr '\\n' '\\0'
+            xargs -0 cmake-format --in-place
           git diff --exit-code
 
       - name: Black
@@ -37,14 +38,15 @@ jobs:
           pip install --upgrade black
           # Note: black fails when it doesn't have to do anything.
           git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
+            tr '\\n' '\\0' |
             grep '\.py$' |
-            xargs --no-run-if-empty black || true
+            xargs -0 --no-run-if-empty black || true
           git diff --exit-code
 
       - name: yamllint
         run: |
           pip install --upgrade yamllint
-          git ls-files '*.yaml' '.yml' | xargs yamllint
+          git ls-files -z '*.yaml' '.yml' | xargs -0 yamllint
 
       - name: Ansible Lint
         run: |

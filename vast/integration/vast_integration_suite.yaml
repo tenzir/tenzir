@@ -542,33 +542,14 @@ tests:
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]'"
+                               | rename source_ip=src_ip'"
       - command: "export json 'pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list'"
-      - command: "export json 'pass
-                               | select timestamp, flow_id, src_ip, dest_ip, src_port
-                               | drop timestamp
-                               | hash --salt=\"abcdefghij12\" flow_id
-                               | drop flow_id
-                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list
-                               | replace new_list=2'"
-      - command: "export json 'pass
-                               | select timestamp, flow_id, src_ip, dest_ip, src_port
-                               | drop timestamp
-                               | hash --salt=\"abcdefghij12\" flow_id
-                               | drop flow_id
-                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list
-                               | replace new_list=2
+                               | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
   Import pipeline operator parsing everything but summarize:
     tags: [server, client, import-export, transforms]
@@ -582,9 +563,7 @@ tests:
             | hash --salt="abcdefghij12" flow_id
             | drop flow_id
             | pseudonymize -m "crypto-pan" -s "123456abcdef" src_ip, dest_ip
-            | extend abc=123,abc_str="123", abc_list=[1,2,3]
-            | rename new_list=abc_list
-            | replace new_list=2
+            | rename source_ip=src_ip
             | where #type == "suricata.alert" /*comments can also be in the
                  middle of an expression*/
                 /* also match fileinfo */
@@ -648,8 +627,7 @@ tests:
                                | drop timestamp
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
-                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]'"
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
                                | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
@@ -657,8 +635,7 @@ tests:
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list'"
+                               | rename source_ip=src_ip'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
                                | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
@@ -666,9 +643,7 @@ tests:
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list
-                               | replace new_list=2'"
+                               | rename source_ip=src_ip'"
       - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
                                | pass
                                | select timestamp, flow_id, src_ip, dest_ip, src_port
@@ -676,9 +651,7 @@ tests:
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list
-                               | replace new_list=2
+                               | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
   Import pipeline operator parsing after expression:
     tags: [server, client, import-export, transforms]
@@ -691,9 +664,7 @@ tests:
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list
-                               | replace new_list=2
+                               | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
         input: data/suricata/eve.json
       - command: export json
@@ -724,9 +695,7 @@ tests:
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list
-                               | replace new_list=2
+                               | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
       - command: export json
   Spawn source with expression and pipeline operators:
@@ -741,9 +710,7 @@ tests:
                                | hash --salt=\"abcdefghij12\" flow_id
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
-                               | rename new_list=abc_list
-                               | replace new_list=2
+                               | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
       - command: export json
   # TODO Reinstate negative test cases from compaction after story 31232 is completed

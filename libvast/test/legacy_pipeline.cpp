@@ -289,46 +289,6 @@ TEST(select operator) {
   CHECK_EQUAL(not_projected.rows(), 0u);
 }
 
-TEST(replace operator) {
-  auto slice = make_pipelines_testdata();
-  auto replace_operator = unbox(make_pipeline_operator(
-    "replace", {{"fields", record{{"uid", "xxx"}, {"desc", "1.2.3.4"}}}}));
-  auto add_failed = replace_operator->add(slice);
-  REQUIRE(!add_failed);
-  auto replaced = unbox(replace_operator->finish());
-  REQUIRE_EQUAL(replaced.size(), 1ull);
-  REQUIRE_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).num_fields(), 3ull);
-  CHECK_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).field(0).name, "uid");
-  CHECK_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).field(1).name,
-    "desc");
-  const auto table_slice = concatenate(replaced);
-  CHECK_EQUAL(materialize(table_slice.at(0, 0)), "xxx");
-  CHECK_EQUAL(materialize(table_slice.at(0, 1)), unbox(to<ip>("1.2.3.4")));
-}
-
-TEST(extend operator) {
-  auto slice = make_pipelines_testdata();
-  auto replace_operator = unbox(make_pipeline_operator(
-    "extend", {{"fields", record{{"secret", "xxx"}, {"ip", "1.2.3.4"}}}}));
-  auto add_failed = replace_operator->add(slice);
-  REQUIRE(!add_failed);
-  auto replaced = unbox(replace_operator->finish());
-  REQUIRE_EQUAL(replaced.size(), 1ull);
-  REQUIRE_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).num_fields(), 5ull);
-  CHECK_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).field(3).name,
-    "secret");
-  CHECK_EQUAL(
-    caf::get<record_type>(concatenate(replaced).schema()).field(4).name, "ip");
-  const auto table_slice = concatenate(replaced);
-  CHECK_EQUAL(materialize(table_slice.at(0, 3)), "xxx");
-  CHECK_EQUAL(materialize(table_slice.at(0, 4)), unbox(to<ip>("1.2.3.4")));
-}
-
 TEST(where operator) {
   auto [slice, single_row_slice, multi_row_slice] = make_where_testdata();
   CHECK_EQUAL(slice.rows(), 10ull);
@@ -512,49 +472,6 @@ TEST(pseudonymize - IPv6 address batch pseudonymizing) {
   REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
                 *to<ip>("2a02:db8:85a3::8a2e:"
                         "370:7344"));
-}
-
-TEST(pipeline with multiple steps) {
-  legacy_pipeline pipeline("test_pipeline", {{"testdata"}});
-  pipeline.add_operator(unbox(
-    make_pipeline_operator("replace", {{"fields", record{{"uid", "xxx"}}}})));
-  pipeline.add_operator(
-    unbox(make_pipeline_operator("drop", {{"fields", list{"index"}}})));
-  auto slice = make_pipelines_testdata();
-  auto add_failed = pipeline.add(std::move(slice));
-  REQUIRE(!add_failed);
-  auto transformed = pipeline.finish();
-  REQUIRE_NOERROR(transformed);
-  REQUIRE_EQUAL(transformed->size(), 1ull);
-  REQUIRE_EQUAL(caf::get<record_type>((*transformed)[0].schema()).num_fields(),
-                2ull);
-  CHECK_EQUAL(caf::get<record_type>((*transformed)[0].schema()).field(0).name,
-              "ui"
-              "d");
-  CHECK_EQUAL(materialize((*transformed)[0].at(0, 0)), "xxx");
-  auto wrong_schema = type{"stub", testdata_schema};
-  wrong_schema.assign_metadata(type{"foo", type{}});
-  auto builder = std::make_shared<table_slice_builder>(wrong_schema);
-  REQUIRE(builder->add("asdf", "jklo", int64_t{23}));
-  auto wrong_slice = builder->finish();
-  auto add2_failed = pipeline.add(std::move(wrong_slice));
-  REQUIRE(!add2_failed);
-  auto not_transformed = pipeline.finish();
-  REQUIRE_NOERROR(not_transformed);
-  REQUIRE_EQUAL(not_transformed->size(), 1ull);
-  REQUIRE_EQUAL(
-    caf::get<record_type>((*not_transformed)[0].schema()).num_fields(), 3ull);
-  CHECK_EQUAL(
-    caf::get<record_type>((*not_transformed)[0].schema()).field(0).name, "uid");
-  CHECK_EQUAL(
-    caf::get<record_type>((*not_transformed)[0].schema()).field(1).name,
-    "desc");
-  CHECK_EQUAL(
-    caf::get<record_type>((*not_transformed)[0].schema()).field(2).name,
-    "index");
-  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 0)), "asdf");
-  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 1)), "jklo");
-  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), int64_t{23});
 }
 
 TEST(pipeline rename schema) {
