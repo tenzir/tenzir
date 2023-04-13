@@ -50,11 +50,11 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> caf::expected<generator<table_slice>> {
-    auto parser = parser_plugin_.make_parser(config_, ctrl);
+    auto parser = parser_plugin_.make_parser(std::move(input), config_, ctrl);
     if (not parser) {
       return std::move(parser.error());
     }
-    return (*parser)(std::move(input));
+    return std::move(*parser);
   }
 
   auto to_string() const -> std::string override {
