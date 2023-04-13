@@ -2,20 +2,15 @@
 
 Replaces the fields matching the configured extractors with fixed values.
 
-:::warning Experimental
-We plan to merge the `extend` and `replace` operators into a single `put`
-operator in the near future, removing the need for the `replace` operator.
-:::
-
 ## Synopsis
 
 ```
-replace FIELDS=VALUE[, …]
+replace EXTRACTORS=VALUE[, …]
 ```
 
 ### Fields
 
-The fields to replace with fixed values.
+The extractors of fields to replace with fixed values.
 
 ### Example
 
