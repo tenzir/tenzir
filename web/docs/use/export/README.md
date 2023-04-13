@@ -114,10 +114,10 @@ schema.
 
 ## Begin with an expression
 
-We designed the [VAST language](../../understand/language/README.md) to make it
+We designed the [VAST language](../../understand/README.md) to make it
 easy to reference the data schema and put constraints on it. Specifically,
-VAST's [expression language](../../understand/language/expressions.md) has the
-concept of [extractors](../../understand/language/expressions.md#extractors)
+VAST's [expression language](../../understand/expressions.md) has the
+concept of [extractors](../../understand/expressions.md#extractors)
 that refer to various parts of the event structure. For example, you can query
 the above schemas with a *meta extractor* to select a specific set of event
 types:
@@ -160,7 +160,7 @@ above query as an example, you can also write:
 ```
 
 In fact, both predicates in this expression are what we call [value
-predicates](../../understand/language/expressions.md#value-predicates), making
+predicates](../../understand/expressions.md#value-predicates), making
 it possible to shorten this expression to:
 
 ```c
@@ -202,7 +202,7 @@ more detailed discussion.
 ## Apply a pipeline
 
 After providing a filter expression, you can optionally continue with a
-[pipeline](../../understand/language/pipelines.md).
+[pipeline](../../understand/pipelines.md).
 
 ```cpp
 src_ip == 192.168.1.104

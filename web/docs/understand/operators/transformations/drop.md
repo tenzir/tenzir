@@ -24,21 +24,3 @@ Drop the fields `source_ip` and `dest_ip`, and all schemas of type
 ```
 drop source_ip, dest_ip, :suricata.dns
 ```
-
-## YAML Syntax Example
-
-:::info Deprecated
-The YAML syntax is deprecated since VAST v3.0, and will be removed in a future
-release. Please use the pipeline syntax instead.
-:::
-
-```yaml
-drop:
-  fields:
-    # Remove the source_ip and dest_ip columns if they exist
-    - source_ip
-    - dest_ip
-  schemas:
-    # Drop all suricata.dns events in their entirety
-    - suricata.dns
-```

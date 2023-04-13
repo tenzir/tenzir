@@ -29,17 +29,3 @@ the digest in a new field `username_hashed`:
 ```
 hash --salt="B3IwnumKPEJDAA4u" username
 ```
-
-## YAML Syntax Example
-
-:::info Deprecated
-The YAML syntax is deprecated since VAST v3.0, and will be removed in a future
-release. Please use the pipeline syntax instead.
-:::
-
-```yaml
-hash:
-  field: username
-  out: pseudonym
-  salt: "B3IwnumKPEJDAA4u"
-```

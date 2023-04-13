@@ -37,7 +37,7 @@ The following aggregation functions are available:
 ### Grouping
 
 The `group-by` option specifies a list of
-[extractors](../expressions.md#extractors) that should form a group. VAST
+[extractors](../../expressions.md#extractors) that should form a group. VAST
 internally calculates the combined hash for all extractors for every row and
 puts the data into buckets for subsequent aggregation.
 
@@ -68,69 +68,4 @@ minute.
 
 ```
 summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute
-```
-
-## YAML Syntax Example
-
-:::info Deprecated
-The YAML syntax is deprecated since VAST v3.0, and will be removed in a future
-release. Please use the pipeline syntax instead.
-:::
-
-The `summarize` operator has grouping and aggregation options. The general
-structure looks as follows:
-
-```yaml
-summarize:
-  group-by:
-    # inputs
-  time-resolution:
-    # bucketing for temporal grouping
-  aggregate:
-    # output 
-```
-
-There exist three ways to configure an aggregation function in the YAML syntax:
-
-```yaml
-# Long form: Specify a list of input extractors explicitly.
-output_field_name:
-  aggregation_function:
-    - input_extractor_1
-    - ...
-    - input_extractor_n
-
-# Long form: Specify a single input extractor.
-output_field_name:
-  aggregation_function: input_extractor
-
-# Short form: Input extractor equals output field name.
-output_field_name: aggregation_function
-```
-
-Here's a full example:
-
-```yaml
-summarize:
-  group-by:
-    - timestamp
-    - proto
-    - event_type
-  time-resolution: 1 hour
-  aggregate:
-    timestamp_min:
-      min: timestamp
-    timestamp_max:
-      max: timestamp
-    pkts_toserver: sum
-    pkts_toclient: sum
-    bytes_toserver: sum
-    bytes_toclient: sum
-    start: min
-    end: max
-    alerted: any
-    ips:
-      distinct:
-        - src_ip
-        - dest_ip
 ```

@@ -83,7 +83,7 @@ tar xOzf suricata.tar.gz | vast import suricata '#type == "suricata.alert"'
 ```
 
 We've added the import filter
-[expression](/docs/understand/language/expressions) `#type == "suricata.alert"`
+[expression](/docs/understand/expressions) `#type == "suricata.alert"`
 because we're want the alerts from Suricata and the metadata from Zeek.
 
 :::note Multi-schema Zeek TSV Parser
@@ -148,16 +148,16 @@ but you could display it in [other formats](/docs/understand/formats) as well.
 
 :::info Pipelines
 As of VAST v3.0, the VAST language supports ad-hoc
-[pipelines](/docs/understand/language/pipelines) for flexible transformation in
+[pipelines](/docs/understand/pipelines) for flexible transformation in
 addition to plain search. A pipeline consists of a chain of
-[operators](/docs/understand/language/operators) and must begin with *source*
+[operators](/docs/understand/operators) and must begin with *source*
 operator, the producer emitting data, and end with a *sink* operator, the
 consumer receiving data. If a pipeline has source and sink, we call it *closed*.
 The `export` command implicitly closes a pipeline by adding the VAST node as
 source and standard output as sink.
 
 Concretely, `export` takes a pipeline of the form `EXPR | OP | OP` where `EXPR`
-is an [expression](/docs/understand/language/expressions) followed by zero or
+is an [expression](/docs/understand/expressions) followed by zero or
 more operators. The full pipeline would be:
 
 ```
@@ -222,7 +222,7 @@ when the defaults are not enough. In future versions of VAST, you will interact 
 
 Now that you know a little bit about available schemas of the data, you could
 start referencing record fields in expressions. But VAST can also give you a
-taste of actual events. The [`taste`](/docs/understand/language/operators/taste)
+taste of actual events. The [`taste`](/docs/understand/operators/taste)
 operator limits the number of events per unique schema:
 
 ```bash
@@ -296,7 +296,7 @@ vast export json --omit-nulls '#type == "suricata.alert" | head 3'
 {"timestamp": "2021-11-17T14:39:24.485595", "flow_id": 368772671891675, "pcap_cnt": 723, "src_ip": "167.94.138.20", "src_port": 36086, "dest_ip": "198.71.247.91", "dest_port": 5683, "proto": "UDP", "event_type": "alert", "alert": {"action": "allowed", "gid": 1, "signature_id": 2200075, "rev": 2, "signature": "SURICATA UDPv4 invalid checksum", "category": "Generic Protocol Command Decode", "severity": 3, "source": {}, "target": {}}, "flow": {"pkts_toserver": 1, "pkts_toclient": 0, "bytes_toserver": 45, "bytes_toclient": 0, "start": "2021-11-17T14:39:24.485595"}, "packet_info": {}}
 ```
 
-Certainly less noisy. The [`select`](/docs/understand/language/operators/select)
+Certainly less noisy. The [`select`](/docs/understand/operators/select)
 operator helps selecting fields of interest:
 
 ```bash
@@ -354,7 +354,7 @@ easy to specify fields in nested records. The fully qualified field name is
 
 :::info Extractors
 Aside from using field names, VAST offers powerful
-[extractors](/docs/understand/language/expressions#extractors) locating data.
+[extractors](/docs/understand/expressions#extractors) locating data.
 If you don't know a field name, you can go through the type system, e.g., to
 apply a query over all fields of the `ip` type by writing `:ip == 172.17.2.163`.
 
@@ -397,7 +397,7 @@ without field names, for experiencing maximum data density.
 ### Extract data with rich expressions
 
 Finally, let's get a feel for the [expression
-language](/docs/understand/language/expressions). VAST comes with native types
+language](/docs/understand/expressions). VAST comes with native types
 for IP addresses, subnets, timestamps, and durations. These come in handy
 to succinctly describe what you want:
 
@@ -421,5 +421,5 @@ matches exactly.
 ## Going deeper
 
 This was just a brief summary of how you could sift through the data. Take a
-look at various [operators](/docs/understand/language/operators) VAST has to
+look at various [operators](/docs/understand/operators) VAST has to
 offer and start writing pipelines!

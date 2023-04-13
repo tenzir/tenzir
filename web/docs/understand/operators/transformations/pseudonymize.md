@@ -38,19 +38,3 @@ Pseudonymize all values of the fields `ip_origin` and `ip_dest` using the
 ```
 pseudonymize --method="crypto-pan" --seed="deadbeef" ip_origin, ip_dest
 ```
-
-## YAML Syntax Example
-
-:::info Deprecated
-The YAML syntax is deprecated since VAST v3.0, and will be removed in a future
-release. Please use the pipeline syntax instead.
-:::
-
-```yaml
-pseudonymize:
-  method: crypto-pan
-  seed: abcdef1234567890987654321fedcbaabcdef1234567890987654321fedcbaab
-  fields:
-    - ip_origin
-    - ip_dest
-```

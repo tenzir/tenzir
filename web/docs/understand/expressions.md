@@ -1,5 +1,5 @@
 ---
-sidebar_position: 1
+sidebar_position: 5
 ---
 
 # Expressions
@@ -136,8 +136,8 @@ disjunction of all fields ending in `z`.
 #### Type Extractor
 
 Type extractors have the form `:T` where `T` is the type of a field. Type
-extractors work for all [basic
-types](../../understand/data-model/type-system.md) and user-defined aliases.
+extractors work for all [basic types](data-model/type-system.md) and
+user-defined aliases.
 
 A search for type `:T` includes all aliased types. For example, given the alias
 `port` that maps to `uint64`, then the `:uint64` type extractor will also
@@ -198,8 +198,8 @@ This makes it easier to search for IP addresses belonging to a specific subnet.
 
 ## Values
 
-Every [type](../../understand/data-model/type-system.md) has a corresponding
-value syntax in the expression language.
+Every [type](data-model/type-system.md) has a corresponding value syntax in the
+expression language.
 
 | Literal    | Example
 | ---------- | -------

@@ -23,17 +23,3 @@ Keep the `ip` and `timestamp` fields.
 ```
 select ip, timestamp
 ```
-
-## YAML Syntax Example
-
-:::info Deprecated
-The YAML syntax is deprecated since VAST v3.0, and will be removed in a future
-release. Please use the pipeline syntax instead.
-:::
-
-```yaml
-select:
-  fields:
-    - ip
-    - timestamp
-```
