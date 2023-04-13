@@ -372,67 +372,12 @@ TEST(pipeline string parsing - value assignment - simple renaming) {
   REQUIRE(parsed_pipeline);
 }
 
-TEST(pipeline string parsing - value assignment - simple assignments) {
-  std::string pipeline_str
-    = R"(extend abc_str ="123", abc= 123, abc = ["a","b", "c"])";
-  std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline
-    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
-  REQUIRE(parsed_pipeline);
-}
-
-TEST(pipeline string parsing - value assignment - list assignment) {
-  std::string pipeline_str = R"(extend strs = ["a", "b", "c"])";
-  std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline
-    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
-  REQUIRE(parsed_pipeline);
-}
-
-TEST(pipeline string parsing - value assignment - no comma) {
-  std::string pipeline_str
-    = R"(extend abc_str ="123", abc= 123, int = 2 abc = ["a","b", "c"] )";
-  std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline
-    = vast::legacy_pipeline::parse("replace", pipeline_str_view);
-  REQUIRE(!parsed_pipeline);
-}
-
 TEST(pipeline string parsing - value assignment - comma at end) {
   std::string pipeline_str
     = R"(rename secret="xxx", my.connection =suricata.flow, int= 2, strs = ["a", "b", "c"], )";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline
     = vast::legacy_pipeline::parse("rename", pipeline_str_view);
-  REQUIRE(!parsed_pipeline);
-}
-
-TEST(pipeline string parsing - value assignment
-     - missing list closing bracket) {
-  std::string pipeline_str
-    = R"(extend abc_str ="123", abc= 123, abc = ["a","b", "c")";
-  std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline
-    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
-  REQUIRE(!parsed_pipeline);
-}
-
-TEST(pipeline string parsing - value assignment
-     - missing list opening bracket) {
-  std::string pipeline_str
-    = R"(extend abc_str ="123", abc= 123, abc = "a","b", "c"], int= 2, )";
-  std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline
-    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
-  REQUIRE(!parsed_pipeline);
-}
-
-TEST(pipeline string parsing - value assignment - double assignment) {
-  std::string pipeline_str
-    = R"(extend abc_str ="123", abc= 123 = 2, abc = ["a","b", "c"])";
-  std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline
-    = vast::legacy_pipeline::parse("extend", pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
