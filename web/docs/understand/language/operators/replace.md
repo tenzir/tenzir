@@ -8,7 +8,7 @@ Replaces the fields matching the configured extractors with fixed values.
 replace EXTRACTORS=VALUE[, …]
 ```
 
-### Fields
+### Extractors
 
 The extractors of fields to replace with fixed values.
 
