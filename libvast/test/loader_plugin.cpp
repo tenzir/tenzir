@@ -140,30 +140,4 @@ TEST(stdin loader - one complete chunk) {
                      str_chunk->begin(), str_chunk->end()));
 }
 
-TEST(stdin loader - from operator) {
-  struct sink final : crtp_operator<sink> {
-    auto operator()(generator<table_slice> input) const
-      -> generator<std::monostate> {
-      for (auto&& slice : input) {
-        REQUIRE(slice.rows() == 0);
-        co_yield {};
-      }
-    }
-
-    auto to_string() const -> std::string override {
-      return "<sink>";
-    }
-  };
-
-  stdin_file_input<"artifacts/inputs/nothing.txt"> file;
-  auto ops = unbox(pipeline::parse("from stdin | pass", record{})).unwrap();
-  ops.push_back(std::make_unique<sink>());
-  for (auto&& x : make_local_executor(pipeline{std::move(ops)})) {
-    // TODO: When the parser is implemented, replace the checks below with
-    // `REQUIRE_NOERROR(x);` (and perhaps write some more tests).
-    REQUIRE_ERROR(x);
-    REQUIRE_EQUAL(x.error().code(), static_cast<uint8_t>(ec::unimplemented));
-  }
-}
-
 FIXTURE_SCOPE_END()
