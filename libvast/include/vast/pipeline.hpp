@@ -216,7 +216,7 @@ public:
     if constexpr (Inspector::is_loading) {
       auto repr = std::string{};
       if (not f.object(x)
-                .pretty_name("vast.logical-pipeline")
+                .pretty_name("vast.pipeline")
                 .fields(f.field("repr", repr)))
         return false;
       // Using an empty configuration here is fine, because all aliases were
@@ -231,7 +231,7 @@ public:
     } else {
       auto repr = x.to_string();
       return f.object(x)
-        .pretty_name("vast.logical-pipeline")
+        .pretty_name("vast.pipeline")
         .fields(f.field("repr", repr));
     }
   }
