@@ -4,9 +4,9 @@ sidebar_position: 0
 
 # Type System
 
-One [design goal](../architecture/design-goals.md) of VAST is
-being expressive enough to capture the semantics of the domain. This led us to
-develop a rich type system for structured security data, inspired by the
+One [design goal](../../develop/architecture/design-goals.md) of VAST is being
+expressive enough to capture the semantics of the domain. This led us to develop
+a rich type system for structured security data, inspired by the
 [Zeek](https://zeek.org) network security monitor.
 
 ## Terminology

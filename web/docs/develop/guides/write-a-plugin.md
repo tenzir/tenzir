@@ -48,10 +48,10 @@ files/directories:
 ## Choose a plugin type
 
 VAST offers [a variety of customization
-points](../../understand/architecture/plugins.md#plugin-types),
-each of which defines its own API by inheriting from the plugin base class
-`vast::plugin`. When writing a new plugin, you can choose a subset of available
-types by inheriting from the respective plugin classes.
+points](../architecture/plugins.md#plugin-types), each of which defines its own
+API by inheriting from the plugin base class `vast::plugin`. When writing a new
+plugin, you can choose a subset of available types by inheriting from the
+respective plugin classes.
 
 :::caution Dreaded Diamond
 To avoid common issues with multiple inheritance, all intermediate plugin

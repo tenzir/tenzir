@@ -13,10 +13,10 @@ vast export json < sigma-rule.yaml
 ```
 
 This requires that you built VAST with the [Sigma
-frontend](../../understand/language-frontends/sigma.md).
+frontend](../../understand/frontends/sigma.md).
 
 :::caution Compatibility
 VAST does not yet support all Sigma features. Please consult the [compatbility
-section](../../understand/language-frontends/sigma.md#compatibility) in the
-documentation for details.
+section](../../understand/frontends/sigma.md#compatibility) in the documentation
+for details.
 :::

@@ -78,9 +78,9 @@ FORMAT to CONNECTOR` and `print FORMAT` operators.
 ### Aggregation Function
 
 The aggregation function plugin adds a new [aggregation
-function](../../understand/operators/summarize.md#aggregate-functions) for the
-`summarize` pipeline operator that performs an incremental aggregation over ajj
-set of grouped input values of a single type.
+function](../../understand/operators/transformations/summarize.md#aggregate-functions)
+for the `summarize` pipeline operator that performs an incremental aggregation
+over ajj set of grouped input values of a single type.
 
 ### Store
 

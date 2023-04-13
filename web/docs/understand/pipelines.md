@@ -144,9 +144,10 @@ conjunction (logical AND), a disjunction (logical OR), and a negation (logical
 NOT). The expressiveness is equivalent to [boolean
 algebra](https://en.wikipedia.org/wiki/Boolean_algebra) and its laws.
 
-Expression occur predominatly as argument to the [where](operators/where.md)
-operator to filter the dataflow. Other expression elements, such as
-[extractors](expressions#extractors), also occur in other operators.
+Expression occur predominatly as argument to the
+[where](operators/transformations/where.md) operator to filter the dataflow.
+Other expression elements, such as [extractors](expressions#extractors), also
+occur in other operators.
 
 Historically, the VAST language only supported providing expressions. But the
 strong demand for reshaping and analytic workloads made the language evolve to
