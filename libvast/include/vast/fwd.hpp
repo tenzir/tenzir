@@ -157,6 +157,7 @@ class type;
 class uuid;
 class value_index;
 class wah_bitmap;
+class pipeline;
 
 struct rest_endpoint;
 struct attribute;
@@ -406,6 +407,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))
   VAST_ADD_TYPE_ID((vast::table_slice_column))
+  VAST_ADD_TYPE_ID((vast::pipeline))
   VAST_ADD_TYPE_ID((vast::pipeline_ptr))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::wah_bitmap))

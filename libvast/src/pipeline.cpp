@@ -277,7 +277,7 @@ auto operator_base::infer_type_impl(operator_type input) const
   -> caf::expected<operator_type> {
   auto ctrl = local_control_plane{};
   auto f = [&]<class Input>(tag<Input>) {
-    if constexpr (std::is_same_v<Input, std::monostate>) {
+    if constexpr (std::is_same_v<Input, void>) {
       return instantiate(std::monostate{}, ctrl);
     } else {
       return instantiate(generator<Input>{}, ctrl);
@@ -289,16 +289,17 @@ auto operator_base::infer_type_impl(operator_type input) const
   }
   return std::visit(
     [&]<class Output>(generator<Output>&) -> operator_type {
-      return tag_v<Output>;
+      if constexpr (std::is_same_v<Output, std::monostate>) {
+        return tag_v<void>;
+      } else {
+        return tag_v<Output>;
+      }
     },
     *output);
 }
 
 auto pipeline::is_closed() const -> bool {
-  if (auto output = infer_type<std::monostate>()) {
-    return output->is<std::monostate>();
-  }
-  return false;
+  return !!check_type<void, void>();
 }
 
 auto pipeline::infer_type_impl(operator_type input) const
@@ -306,7 +307,7 @@ auto pipeline::infer_type_impl(operator_type input) const
   auto current = input;
   for (auto& op : operators_) {
     auto first = &op == &operators_.front();
-    if (!first && current.is<std::monostate>()) {
+    if (!first && current.is<void>()) {
       return caf::make_error(
         ec::type_clash,
         fmt::format("pipeline continues with {} after sink", op->to_string()));
@@ -344,6 +345,20 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
   if (auto error = ctrl.get_error()) {
     co_yield std::move(error);
   }
+}
+
+pipeline::pipeline(pipeline const& other) {
+  operators_.reserve(other.operators_.size());
+  for (const auto& op : other.operators_) {
+    operators_.push_back(op->copy());
+  }
+}
+
+auto pipeline::operator=(pipeline const& other) -> pipeline& {
+  if (this != &other) {
+    *this = pipeline{other};
+  }
+  return *this;
 }
 
 } // namespace vast
