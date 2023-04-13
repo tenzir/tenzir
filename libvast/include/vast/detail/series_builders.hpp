@@ -12,6 +12,8 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 
+#include <functional>
+
 namespace vast::detail {
 
 template <concrete_type T>
@@ -25,12 +27,36 @@ struct make_concrete_series_builder {
 struct series_builder;
 
 // Arrow uses int64_t for all lengths.
-using length_type = int64_t;
+using arrow_length_type = int64_t;
 
-// Used when a field is created but type is not yet known
+class builder_provider {
+public:
+  using builder_provider_impl = std::function<series_builder&()>;
+
+  explicit(false) builder_provider(
+    std::variant<builder_provider_impl, std::reference_wrapper<series_builder>>
+      data)
+    : data_{std::move(data)} {
+  }
+
+  auto provide() -> series_builder&;
+  auto type() -> type;
+  auto is_builder_constructed() -> bool;
+
+private:
+  std::variant<builder_provider_impl, std::reference_wrapper<series_builder>>
+    data_;
+};
+
+// Builder that represents a column of an unknown type.
 class unknown_type_builder {
 public:
-  length_type length() const {
+  unknown_type_builder() = default;
+  explicit unknown_type_builder(arrow_length_type null_count)
+    : null_count_{null_count} {
+  }
+
+  arrow_length_type length() const {
     return null_count_;
   }
 
@@ -38,7 +64,7 @@ public:
     return {};
   }
 
-  auto add_up_to_n_nulls(length_type max_null_count) -> void {
+  auto add_up_to_n_nulls(arrow_length_type max_null_count) -> void {
     null_count_ = std::max(null_count_, max_null_count);
   }
 
@@ -46,8 +72,14 @@ public:
     return nullptr;
   }
 
+  auto remove_last_row() -> void {
+    // remove_last_row can't be practically called when null_count is zero. No
+    // need to guard against underflow
+    --null_count_;
+  }
+
 private:
-  length_type null_count_ = 0u;
+  arrow_length_type null_count_ = 0u;
 };
 
 template <concrete_type Type>
@@ -75,14 +107,23 @@ public:
     return type_;
   }
 
-  auto length() const -> length_type {
+  auto length() const -> arrow_length_type {
     return builder_->length();
   }
 
-  auto add_up_to_n_nulls(length_type max_null_count) -> void {
+  auto add_up_to_n_nulls(arrow_length_type max_null_count) -> void {
     VAST_ASSERT(max_null_count >= length());
     const auto status = builder_->AppendNulls(max_null_count - length());
     VAST_ASSERT(status.ok());
+  }
+
+  auto remove_last_row() -> bool {
+    auto array = builder_->Finish().ValueOrDie();
+    auto new_array = array->Slice(0, array->length() - 1);
+    const auto status
+      = builder_->AppendArraySlice(*new_array->data(), 0u, new_array->length());
+    VAST_ASSERT(status.ok());
+    return builder_->null_count() == builder_->length();
   }
 
 private:
@@ -93,23 +134,23 @@ private:
 template <>
 class concrete_series_builder<record_type> {
 public:
-  explicit concrete_series_builder(length_type nulls_to_prepend = 0u);
-  auto get_field_builder(std::string_view field,
-                         length_type starting_fields_length) -> series_builder&;
+  auto get_field_builder_provider(std::string_view field,
+                                  arrow_length_type starting_fields_length)
+    -> builder_provider;
   auto fill_nulls() -> void;
-  auto add_up_to_n_nulls(length_type max_null_count) -> void;
-  auto get_occupied_rows() -> length_type;
+  auto add_up_to_n_nulls(arrow_length_type max_null_count) -> void;
+  auto get_occupied_rows() -> arrow_length_type;
   auto finish() && -> std::shared_ptr<arrow::Array>;
-  auto length() const -> length_type;
+  auto length() const -> arrow_length_type;
   auto type() const -> vast::type;
   auto get_arrow_builder() -> std::shared_ptr<arrow::StructBuilder>;
   auto append() -> void;
+  auto remove_last_row() -> void;
 
 private:
   auto is_type_known() -> bool;
 
   bool is_type_known_ = false;
-  length_type nulls_to_prepend_ = 0u;
   detail::stable_map<std::string, std::unique_ptr<series_builder>>
     field_builders_;
   std::shared_ptr<arrow::StructBuilder> arrow_builder_;
@@ -118,12 +159,12 @@ private:
 template <>
 class concrete_series_builder<list_type> {
 public:
-  explicit concrete_series_builder(length_type nulls_to_prepend = 0u);
+  explicit concrete_series_builder(arrow_length_type nulls_to_prepend = 0u);
 
   auto finish() && -> std::shared_ptr<arrow::Array>;
-  auto length() const -> length_type;
+  auto length() const -> arrow_length_type;
   auto type() const -> const vast::type&;
-  auto add_up_to_n_nulls(length_type max_null_count) -> void;
+  auto add_up_to_n_nulls(arrow_length_type max_null_count) -> void;
 
   auto create_builder(const vast::type& value_type) -> void;
 
@@ -138,7 +179,8 @@ public:
 
   // Only one record builder exists in list of records as the deeper nestings
   // are handled by the record builder itself.
-  auto get_record_builder() -> concrete_series_builder<record_type>&;
+  auto get_record_builder() -> series_builder&;
+  auto remove_last_row() -> bool;
 
 private:
   auto create_builder_impl(const vast::type& t)
@@ -146,8 +188,8 @@ private:
 
   std::shared_ptr<type_to_arrow_builder_t<list_type>> builder_;
   detail::stable_map<vast::type, arrow::ArrayBuilder*> child_builders_;
-  std::optional<concrete_series_builder<record_type>> record_builder_;
-  length_type nulls_to_prepend_ = 0u;
+  std::unique_ptr<series_builder> record_builder_;
+  arrow_length_type nulls_to_prepend_ = 0u;
   vast::type type_;
 };
 
@@ -160,7 +202,7 @@ using series_builder_base = caf::detail::tl_apply_t<
 struct series_builder : series_builder_base {
   using variant::variant;
 
-  length_type length() const;
+  arrow_length_type length() const;
 
   std::shared_ptr<arrow::ArrayBuilder> get_arrow_builder();
 
@@ -189,7 +231,8 @@ struct series_builder : series_builder_base {
 
   std::shared_ptr<arrow::Array> finish() &&;
 
-  auto add_up_to_n_nulls(length_type max_null_count) -> void;
+  auto add_up_to_n_nulls(arrow_length_type max_null_count) -> void;
+  auto remove_last_row() -> void;
 };
 
 } // namespace vast::detail

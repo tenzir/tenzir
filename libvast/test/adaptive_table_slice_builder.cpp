@@ -52,12 +52,13 @@ TEST(add two rows of nested records) {
   CHECK_EQUAL(expected_schema, out.schema());
 }
 
-TEST(single record with nested lists) {
+TEST(single row with nested lists) {
   adaptive_table_slice_builder sut;
   {
     auto row = sut.push_row();
     row.push_field("int").add(int64_t{5});
-    auto outer_list = row.push_field("arr").push_list();
+    auto arr_field = row.push_field("arr");
+    auto outer_list = arr_field.push_list();
     {
       auto level_1_list = outer_list.push_list();
       {
@@ -106,8 +107,10 @@ TEST(single record with array inside nested record) {
   {
     auto row = sut.push_row();
     row.push_field("bool").add(true);
-    auto nested = row.push_field("nested").push_record();
-    auto nested_arr = nested.push_field("arr").push_list();
+    auto nested_rec_field = row.push_field("nested");
+    auto nested = nested_rec_field.push_record();
+    auto nested_arr_field = nested.push_field("arr");
+    auto nested_arr = nested_arr_field.push_list();
     nested_arr.add(uint64_t{10});
     nested_arr.add(uint64_t{100});
     nested_arr.add(uint64_t{1000});
@@ -132,7 +135,8 @@ TEST(record nested in array of records in two rows) {
   const auto row_2_time_point = row_1_time_point + std::chrono::seconds{5u};
   {
     auto row = sut.push_row();
-    auto arr = row.push_field("arr").push_list();
+    auto arr_field = row.push_field("arr");
+    auto arr = arr_field.push_list();
     auto rec = arr.push_record();
     rec.push_field("rec double").add(2.0);
     rec.push_field("rec time").add(vast::time{row_1_time_point});
@@ -141,7 +145,8 @@ TEST(record nested in array of records in two rows) {
   }
   {
     auto row = sut.push_row();
-    auto arr = row.push_field("arr").push_list();
+    auto arr_field = row.push_field("arr");
+    auto arr = arr_field.push_list();
     auto rec = arr.push_record();
     rec.push_field("rec double").add(4.0);
     rec.push_field("rec time").add(vast::time{row_2_time_point});
@@ -179,11 +184,13 @@ TEST(two rows of array of complex records) {
   adaptive_table_slice_builder sut;
   {
     auto row = sut.push_row();
-    auto arr = row.push_field("arr").push_list();
+    auto arr_field = row.push_field("arr");
+    auto arr = arr_field.push_list();
     {
       auto rec = arr.push_record();
       rec.push_field("subnet").add(row_1_1_subnet);
-      auto ip_arr_arr = rec.push_field("ip arr").push_list();
+      auto ip_arr_arr_field = rec.push_field("ip arr");
+      auto ip_arr_arr = ip_arr_arr_field.push_list();
       auto ip_arr_1 = ip_arr_arr.push_list();
       ip_arr_1.add(ip::v4(2u));
       ip_arr_1.add(ip::v4(3u));
@@ -197,11 +204,13 @@ TEST(two rows of array of complex records) {
   }
   {
     auto row = sut.push_row();
-    auto arr = row.push_field("arr").push_list();
+    auto arr_field = row.push_field("arr");
+    auto arr = arr_field.push_list();
     {
       auto rec = arr.push_record();
       rec.push_field("subnet").add(row_2_1_subnet);
-      auto ip_arr_arr = rec.push_field("ip arr").push_list();
+      auto ip_arr_arr_field = rec.push_field("ip arr");
+      auto ip_arr_arr = ip_arr_arr_field.push_list();
       auto ip_arr_1 = ip_arr_arr.push_list();
       ip_arr_1.add(ip::v4(0xFF << 1));
       ip_arr_1.add(ip::v4(0xFF << 2));
@@ -250,7 +259,8 @@ TEST(two rows with array) {
   {
     auto row = sut.push_row();
     row.push_field("int").add(int64_t{5});
-    auto arr = row.push_field("arr").push_list();
+    auto arrow_field = row.push_field("arr");
+    auto arr = arrow_field.push_list();
     arr.add(int64_t{1});
     arr.add(int64_t{2});
   }
@@ -279,7 +289,8 @@ TEST(new fields added in new rows) {
   sut.push_row().push_field("int").add(int64_t{5});
   {
     auto row = sut.push_row();
-    auto arr = row.push_field("arr").push_list();
+    auto arr_field = row.push_field("arr");
+    auto arr = arr_field.push_list();
     arr.push_list().add(int64_t{3});
     arr.push_list().add(int64_t{4});
   }
@@ -394,9 +405,11 @@ TEST(
     auto row = sut.push_row();
     auto root_struct = row.push_field("struct").push_record();
     root_struct.push_field("struct.str").add("str2");
-    auto inner_struct = root_struct.push_field("struct.struct").push_record();
+    auto inner_struct_field = root_struct.push_field("struct.struct");
+    auto inner_struct = inner_struct_field.push_record();
     inner_struct.push_field("struct.struct.int").add(int64_t{90});
-    auto arr = inner_struct.push_field("struct.struct.array").push_list();
+    auto arr_field = inner_struct.push_field("struct.struct.array");
+    auto arr = arr_field.push_list();
     arr.add(int64_t{10});
     arr.add(int64_t{20});
   }
@@ -460,4 +473,264 @@ TEST(
   }};
   const auto expected_schema = vast::type{schema.make_fingerprint(), schema};
   CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(append nulls to the first field of a record field when a different field
+       was added on the second row and the first field didnt have value added) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto record_field = row.push_field("record");
+    record_field.push_record().push_field("field1").add(int64_t{1});
+  }
+  {
+    auto row = sut.push_row();
+    auto record_field = row.push_field("record");
+    record_field.push_record().push_field("field2").add("field2 val");
+  }
+
+  auto out = std::move(sut).finish();
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 2u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))), int64_t{1});
+  CHECK_EQUAL((materialize(out.at(0u, 1u))), caf::none);
+  CHECK_EQUAL((materialize(out.at(1u, 0u))), caf::none);
+  CHECK_EQUAL((materialize(out.at(1u, 1u))), "field2 val");
+}
+
+TEST(field not present after removing the row which introduced the field) {
+  adaptive_table_slice_builder sut;
+  sut.push_row().push_field("int").add(int64_t{5});
+  auto row = sut.push_row();
+  row.push_field("int").add(int64_t{10});
+  row.push_field("str").add("str");
+  row.cancel();
+  auto output = std::move(sut).finish();
+  REQUIRE_EQUAL(output.rows(), 1u);
+  REQUIRE_EQUAL(output.columns(), 1u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{5});
+}
+
+TEST(remove basic row) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto rec = row.push_field("record").push_record();
+    rec.push_field("rec int").add(int64_t{1});
+    rec.push_field("rec str").add("str");
+  }
+  auto row = sut.push_row();
+  {
+    auto rec = row.push_field("record").push_record();
+    rec.push_field("rec int").add(int64_t{2});
+    rec.push_field("rec str").add("str2");
+  }
+  row.cancel();
+  auto output = std::move(sut).finish();
+  REQUIRE_EQUAL(output.rows(), 1u);
+  REQUIRE_EQUAL(output.columns(), 2u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{1});
+  CHECK_EQUAL(materialize(output.at(0u, 1u)), "str");
+}
+
+TEST(remove row list) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    list.add(int64_t{1});
+    list.add(int64_t{2});
+  }
+
+  auto row = sut.push_row();
+  {
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    list.add(int64_t{3});
+    list.add(int64_t{4});
+  }
+  row.cancel();
+  auto output = std::move(sut).finish();
+  REQUIRE_EQUAL(output.rows(), 1u);
+  REQUIRE_EQUAL(output.columns(), 1u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), (list{int64_t{1}, int64_t{2}}));
+}
+
+TEST(remove row list of records) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    auto record = list.push_record();
+    record.push_field("list_rec_int").add(int64_t{1});
+  }
+
+  auto row = sut.push_row();
+  {
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    auto record = list.push_record();
+    record.push_field("list_rec_int").add(int64_t{2});
+  }
+  row.cancel();
+
+  {
+    auto row = sut.push_row();
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    auto record = list.push_record();
+    record.push_field("list_rec_int").add(int64_t{3});
+  }
+  auto output = std::move(sut).finish();
+  REQUIRE_EQUAL(output.rows(), 2u);
+  REQUIRE_EQUAL(output.columns(), 1u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), (list{record{
+                                                {"list_rec_int", int64_t{1}},
+                                              }}));
+  CHECK_EQUAL(materialize(output.at(1u, 0u)), (list{record{
+                                                {"list_rec_int", int64_t{3}},
+                                              }}));
+}
+
+TEST(remove row list of lists) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto outer_list_field = row.push_field("list");
+    auto outer_list = outer_list_field.push_list();
+    auto inner_list = outer_list.push_list();
+    inner_list.add(int64_t{1u});
+  }
+
+  auto row = sut.push_row();
+  auto outer_list_field = row.push_field("list");
+  auto outer_list = outer_list_field.push_list();
+  auto inner_list = outer_list.push_list();
+  inner_list.add(int64_t{2u});
+  inner_list.add(int64_t{3u});
+  row.cancel();
+
+  {
+    auto row = sut.push_row();
+    auto outer_list_field = row.push_field("list");
+    auto outer_list = outer_list_field.push_list();
+    auto inner_list = outer_list.push_list();
+    inner_list.add(int64_t{4u});
+    inner_list.add(int64_t{5u});
+  }
+
+  auto output = std::move(sut).finish();
+  REQUIRE_EQUAL(output.rows(), 2u);
+  REQUIRE_EQUAL(output.columns(), 1u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), list{{list{int64_t{1}}}});
+  CHECK_EQUAL(materialize(output.at(1u, 0u)),
+              (list{{list{int64_t{4}, int64_t{5}}}}));
+}
+
+TEST(remove row list of records with list fields) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    auto rec = list.push_record();
+    rec.push_field("int").add(int64_t{1});
+    auto inner_list_field = rec.push_field("inner list");
+    auto inner_list = inner_list_field.push_list();
+    auto inner_record = inner_list.push_record();
+    inner_record.push_field("str").add("str1");
+  }
+
+  auto row = sut.push_row();
+  {
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    auto rec = list.push_record();
+    rec.push_field("int").add(int64_t{2});
+    auto inner_list_field = rec.push_field("inner list");
+    auto inner_list = inner_list_field.push_list();
+    auto inner_record = inner_list.push_record();
+    inner_record.push_field("str").add("str2");
+  }
+
+  row.cancel();
+  {
+    auto row = sut.push_row();
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    auto rec = list.push_record();
+    rec.push_field("int").add(int64_t{3});
+    auto inner_list_field = rec.push_field("inner list");
+    auto inner_list = inner_list_field.push_list();
+    auto inner_record = inner_list.push_record();
+    inner_record.push_field("str").add("str3");
+  }
+  auto output = std::move(sut).finish();
+  REQUIRE_EQUAL(output.rows(), 2u);
+  REQUIRE_EQUAL(output.columns(), 1u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)),
+              (list{record{
+                {"int", int64_t{1}},
+                {"inner list", list{record{
+                                 {"str", "str1"},
+                               }}},
+              }}));
+  CHECK_EQUAL(materialize(output.at(1u, 0u)),
+              (list{record{
+                {"int", int64_t{3}},
+                {"inner list", list{record{
+                                 {"str", "str3"},
+                               }}},
+              }}));
+}
+
+TEST(remove row with non empty list after pushing empty lists to previous rows) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    row.push_field("list").push_list();
+    row.push_field("int").add(int64_t{10});
+  }
+  {
+    auto row = sut.push_row();
+    row.push_field("int").add(int64_t{20});
+  }
+
+  auto row = sut.push_row();
+  {
+    row.push_field("list").push_list().add(int64_t{1});
+    row.push_field("int").add(int64_t{30});
+  }
+
+  row.cancel();
+  sut.push_row().push_field("str").add("str0");
+  auto output = std::move(sut).finish();
+  REQUIRE_EQUAL(output.rows(), 3u);
+  REQUIRE_EQUAL(output.columns(), 2u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{10});
+  CHECK_EQUAL(materialize(output.at(0u, 1u)), caf::none);
+  CHECK_EQUAL(materialize(output.at(1u, 0u)), int64_t{20});
+  CHECK_EQUAL(materialize(output.at(1u, 1u)), caf::none);
+  CHECK_EQUAL(materialize(output.at(2u, 0u)), caf::none);
+  CHECK_EQUAL(materialize(output.at(2u, 1u)), "str0");
+}
+
+TEST(remove row empty list) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    row.push_field("list").push_list();
+    row.push_field("int").add(int64_t{10});
+  }
+
+  auto row = sut.push_row();
+  row.push_field("int").add(int64_t{20});
+
+  row.cancel();
+  auto output = std::move(sut).finish();
+  REQUIRE_EQUAL(output.rows(), 1u);
+  REQUIRE_EQUAL(output.columns(), 1u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{10});
 }

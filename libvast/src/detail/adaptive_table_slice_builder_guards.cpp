@@ -39,23 +39,55 @@ auto add_data_view(auto& guard, const data_view& view) {
 } // namespace
 
 auto record_guard::push_field(std::string_view name) -> field_guard {
-  return field_guard{builder_.get_field_builder(name, starting_fields_length_)};
-}
-
-record_guard::~record_guard() noexcept {
-  builder_.fill_nulls();
+  auto provider = [name, this]() -> series_builder& {
+    auto& b = builder_provider_.provide();
+    if (std::holds_alternative<unknown_type_builder>(b)) {
+      b = concrete_series_builder<record_type>();
+      b.add_up_to_n_nulls(starting_fields_length_);
+    }
+    auto& record_builder = std::get<concrete_series_builder<record_type>>(b);
+    return record_builder
+      .get_field_builder_provider(name, starting_fields_length_)
+      .provide();
+  };
+  return {{std::move(provider)}, starting_fields_length_};
 }
 
 auto list_guard::list_record_guard::push_field(std::string_view name)
   -> field_guard {
-  return field_guard{builder_.get_field_builder(name, starting_fields_length_)};
+  // The columnar growth of list type is handled by arrow::ListBuilder. From the
+  // perspective of a record value of a list we start with a field of 0 length
+  // which is later appended into the list builder.
+  constexpr auto list_fields_start_length = arrow_length_type{0};
+  if (builder_provider_.is_builder_constructed()) {
+    auto& b = builder_provider_.provide();
+    cached_builder_ = std::get_if<concrete_series_builder<record_type>>(&b);
+    return field_guard{cached_builder_->get_field_builder_provider(
+                         name, list_fields_start_length),
+                       list_fields_start_length};
+  }
+  auto provider = [this, name]() -> series_builder& {
+    if (cached_builder_) {
+      return cached_builder_
+        ->get_field_builder_provider(name, list_fields_start_length)
+        .provide();
+    }
+    auto& builder = std::get<concrete_series_builder<record_type>>(
+      builder_provider_.provide());
+    cached_builder_ = &builder;
+    return builder.get_field_builder_provider(name, list_fields_start_length)
+      .provide();
+  };
+  return field_guard{{std::move(provider)}, list_fields_start_length};
 }
 
 list_guard::list_record_guard::~list_record_guard() noexcept {
-  builder_.fill_nulls();
-  if (not parent_.value_type)
-    parent_.propagate_type(builder_.type());
-  builder_.append();
+  if (cached_builder_) {
+    cached_builder_->fill_nulls();
+    if (not parent_.value_type)
+      parent_.propagate_type(cached_builder_->type());
+    cached_builder_->append();
+  }
 }
 
 auto list_guard::add(const data_view& view) -> void {
@@ -63,24 +95,46 @@ auto list_guard::add(const data_view& view) -> void {
 }
 
 auto list_guard::push_record() -> list_guard::list_record_guard {
-  auto& record_builder = builder_.get_record_builder();
-  return {record_builder, *this, record_builder.length()};
+  if (builder_provider_.is_builder_constructed()) {
+    auto& builder = std::get<concrete_series_builder<list_type>>(
+      builder_provider_.provide());
+    return {{std::ref(builder.get_record_builder())}, *this};
+  }
+  auto provider = [this]() -> series_builder& {
+    auto& b = builder_provider_.provide();
+    VAST_ASSERT(std::holds_alternative<concrete_series_builder<list_type>>(b));
+    auto& builder = std::get<concrete_series_builder<list_type>>(b);
+    return builder.get_record_builder();
+  };
+  return {{std::move(provider)}, *this};
 }
 
-void list_guard::propagate_type(type child_type) {
+auto list_guard::propagate_type(type child_type) -> void {
   value_type = std::move(child_type);
   if (parent) {
     parent->propagate_type(vast::type{list_type{value_type}});
-    const auto s = builder_
+    const auto s = get_root_list_builder()
                      .get_child_builder<type_to_arrow_builder_t<list_type>>(
                        vast::type{list_type{value_type}})
                      .Append();
     VAST_ASSERT(s.ok());
   } else {
-    builder_.create_builder(value_type);
-    const auto s = builder_.get_arrow_builder()->Append();
+    auto& builder = get_root_list_builder();
+    builder.create_builder(value_type);
+    const auto s = builder.get_arrow_builder()->Append();
     VAST_ASSERT(s.ok());
   }
+}
+
+auto list_guard::get_root_list_builder()
+  -> concrete_series_builder<vast::list_type>& {
+  if (list_builder_)
+    return *list_builder_;
+  auto& series_builder = builder_provider_.provide();
+  list_builder_
+    = std::get_if<concrete_series_builder<list_type>>(&series_builder);
+  VAST_ASSERT(list_builder_);
+  return *list_builder_;
 }
 
 auto list_guard::push_list() -> list_guard {
@@ -88,12 +142,12 @@ auto list_guard::push_list() -> list_guard {
   if (value_type) {
     child_value_type = caf::get<list_type>(value_type).value_type();
     const auto s
-      = builder_
+      = get_root_list_builder()
           .get_child_builder<type_to_arrow_builder_t<list_type>>(value_type)
           .Append();
     VAST_ASSERT(s.ok());
   }
-  return list_guard{builder_, this, child_value_type};
+  return list_guard{builder_provider_, this, child_value_type};
 }
 
 auto field_guard::add(const data_view& view) -> void {
@@ -101,28 +155,29 @@ auto field_guard::add(const data_view& view) -> void {
 }
 
 auto field_guard::push_record() -> record_guard {
-  if (std::holds_alternative<unknown_type_builder>(builder_)) {
-    auto nulls_to_prepend = builder_.length();
-    builder_ = concrete_series_builder<record_type>{nulls_to_prepend};
-  }
-  auto& record_builder
-    = std::get<concrete_series_builder<record_type>>(builder_);
-  return record_guard{record_builder, record_builder.get_occupied_rows()};
+  return {builder_provider_, starting_fields_length_};
 }
 
 auto field_guard::push_list() -> list_guard {
-  if (std::holds_alternative<unknown_type_builder>(builder_)) {
-    auto nulls_to_prepend = builder_.length();
-    builder_ = concrete_series_builder<list_type>{nulls_to_prepend};
-  }
-  auto& list_builder = std::get<concrete_series_builder<list_type>>(builder_);
-  auto list_value_type = type{};
-  if (auto list_type = list_builder.type()) {
-    list_value_type = caf::get<vast::list_type>(list_type).value_type();
-    const auto s = list_builder.get_arrow_builder()->Append();
+  if (auto type = builder_provider_.type()) {
+    auto value_type = caf::get<vast::list_type>(type).value_type();
+    const auto s = std::get<concrete_series_builder<list_type>>(
+                     builder_provider_.provide())
+                     .get_arrow_builder()
+                     ->Append();
     VAST_ASSERT(s.ok());
+    return list_guard{std::move(builder_provider_), nullptr,
+                      std::move(value_type)};
   }
-  return list_guard{list_builder, nullptr, list_value_type};
+  auto provider = [this]() mutable -> series_builder& {
+    auto& builder = builder_provider_.provide();
+    if (std::holds_alternative<unknown_type_builder>(builder)) {
+      builder = concrete_series_builder<list_type>(starting_fields_length_);
+    }
+    return builder;
+  };
+
+  return list_guard{{std::move(provider)}, nullptr, type{}};
 }
 
 } // namespace vast::detail
