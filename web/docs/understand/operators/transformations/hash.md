@@ -2,7 +2,7 @@
 
 Computes a SHA256 hash digest of a given field.
 
-:::warning Experimental
+:::warning Deprecated
 This operator will soon be removed in favor of first-class support for functions
 that can be used in a variety of different operators and contexts.
 :::
@@ -10,7 +10,7 @@ that can be used in a variety of different operators and contexts.
 ## Synopsis
 
 ```
-hash (-s|--salt=STRING) FIELD
+hash [-s|--salt=<string>] <field>
 ```
 
 ## Description
@@ -21,13 +21,13 @@ The `hash` operator calculates a hash digest of a given field.
 
 The operator has the following options.
 
-### salt
+### -s, --salt
 
 A salt value for the hash.
 
 ### field
 
-The field name over which the hash is computed.
+The field over which the hash is computed.
 
 ## Examples
 
