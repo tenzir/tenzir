@@ -13,6 +13,7 @@
 #include <vast/concept/printable/vast/json.hpp>
 #include <vast/defaults.hpp>
 #include <vast/detail/assert.hpp>
+#include <vast/detail/padded_buffer.hpp>
 #include <vast/generator.hpp>
 #include <vast/operator_control_plane.hpp>
 #include <vast/plugin.hpp>
@@ -24,67 +25,6 @@
 namespace vast::plugins::json {
 
 namespace {
-
-auto parse_impl(simdjson::ondemand::value val, auto& pusher, size_t depth)
-  -> simdjson::error_code;
-
-class parser_buffer {
-public:
-  void append(std::string_view json) {
-    if (const auto available_bytes = capacity_ - end_;
-        available_bytes < json.size()) {
-      const auto bytes_missing = json.size() - available_bytes;
-      if (begin_ >= bytes_missing) {
-        std::shift_left(buffer_.get() + begin_, buffer_.get() + end_, begin_);
-        end_ -= begin_;
-        begin_ = 0u;
-      } else {
-        auto new_buffer = std::make_unique<char[]>(
-          end_ + simdjson::SIMDJSON_PADDING + json.size());
-        std::copy(buffer_.get(), buffer_.get() + end_, new_buffer.get());
-        // The simdjson suggests to initialize the padding part to either 0s or
-        // spaces.
-        std::fill_n(new_buffer.get() + capacity_, simdjson::SIMDJSON_PADDING,
-                    '\0');
-        capacity_ = end_ + json.size();
-        buffer_ = std::move(new_buffer);
-      }
-    }
-    std::copy(json.begin(), json.end(), buffer_.get() + end_);
-    end_ += json.size();
-  }
-
-  std::string_view view() {
-    return {buffer_.get() + begin_, end_ - begin_};
-  }
-
-  constexpr explicit operator bool() const {
-    return end_ != 0u;
-  }
-
-  // Reuse the already allocated buffer.
-  void reset() {
-    end_ = 0u;
-    begin_ = 0u;
-  }
-  // The input json can contain the whole event and a part of the other one. E.g
-  // the input chunk is: {"a":5}{"a" This whole string will be in the buffer_
-  // and the parser will tell us that it only consumed the first event. The
-  // {"a":5} was consumed and we want to add the next chunk to the leftover
-  // part. We set begin_ at the end of the consumed events because our allocated
-  // buffer might still have enough capacity to write leftover + new chunk.
-  void truncate(std::size_t n) {
-    begin_ = end_ - n;
-  }
-
-private:
-  std::unique_ptr<char[]> buffer_;
-  std::size_t begin_{0u};
-  std::size_t end_{0u};
-  // The available bytes size for json string. Doesn't include the required
-  // simdjson padding.
-  std::size_t capacity_{0u};
-};
 
 auto parse_impl(simdjson::ondemand::value val, auto& pusher, size_t depth)
   -> simdjson::error_code;
@@ -241,10 +181,13 @@ class plugin final : public virtual parser_plugin,
     return
       [&control_plane](
         generator<chunk_ptr> json_chunk_generator) -> generator<table_slice> {
-        simdjson::ondemand::parser parser;
-        simdjson::ondemand::document_stream stream;
-        adaptive_table_slice_builder slice_builder;
-        parser_buffer json_to_parse_buffer;
+        auto parser = simdjson::ondemand::parser{};
+        auto stream = simdjson::ondemand::document_stream{};
+        auto slice_builder = adaptive_table_slice_builder{};
+        // The simdjson suggests to initialize the padding part to either 0s or
+        // spaces.
+        auto json_to_parse_buffer
+          = detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'>{};
         for (auto chnk : json_chunk_generator) {
           VAST_ASSERT(chnk);
           if (chnk->size() == 0u) {
