@@ -1,25 +1,33 @@
 # select
 
-Keeps the fields having the configured extractors and removes the rest from the
-input.
-
-The `select` operator is the dual to [`drop`](drop), which removes a given set
-of fields from the output.
+Selects fields from the input. The dual to [`drop`](drop.md).
 
 ## Synopsis
 
 ```
-select FIELDS[, …]
+select <extractor>...
 ```
 
-### Fields
+## Description
 
-The extractors of the fields to keep.
+The `select` operator keeps only the fields matching the provided extractors and
+removes all other fields.
 
-## Example
+In relational algebra, `select` performs a *projection* of the provided
+arguments.
 
-Keep the `ip` and `timestamp` fields.
+## Options
+
+The operator has the following options.
+
+### extractor
+
+An extractors identifying fields to keep.
+
+## Examples
+
+Keep the `timestamp` field and all fields of type `ip`:
 
 ```
-select ip, timestamp
+select timestamp, :ip
 ```

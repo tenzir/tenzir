@@ -1,26 +1,33 @@
 # drop
 
-Drops individual fields having the configured extractors from the input or
-entire schemas.
-
-The `drop` operator is the dual to [`select`](select), which selects a given set
-of fields from the output.
+Drops fields from the input. The dual to [`select`](select.md).
 
 ## Synopsis
 
 ```
-drop EXTRACTORS[, …]
+drop <extractor>...
 ```
 
-### Extractors
+## Description
 
-The extractors of the fields or schemas to drop.
+The `drop` operator removes all fields matching the provided extractors and
+keeps all other fields.
 
-## Example
+In relational algebra, `drop` performs a *projection* of the complement of the
+provided arguments.
 
-Drop the fields `source_ip` and `dest_ip`, and all schemas of type
-`suricata.dns`:
+## Options
+
+The operator has the following options.
+
+### extractor
+
+An extractors identifying fields to remove.
+
+## Examples
+
+Remove the `timestamp` field and all fields of type `ip`:
 
 ```
-drop source_ip, dest_ip, :suricata.dns
+drop timestamp, :ip
 ```

@@ -1,26 +1,38 @@
 # head
 
-Limits the input to the first N results.
+Limits the input to the first *N* results.
 
 ## Synopsis
 
 ```
-head [LIMIT]
+head [<limit>]
 ```
 
-### Limit
+## Description
 
-An unsigned integer denoting how many events to keep. Defaults to 10.
+The semantics of the `head` operator are the same of the equivalent Unix tool:
+process a fixed number of events from the input. The operator terminates
+after it has reached its limit.
 
-## Example
+## Options
 
-Get the first ten results.
+The operator has the following options.
+
+### limit
+
+An unsigned integer denoting how many events to keep.
+
+Defaults to 10.
+
+## Examples
+
+Get the first ten events:
 
 ```
 head
 ```
 
-Get the first five results.
+Get the first five events:
 
 ```
 head 5
