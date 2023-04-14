@@ -185,6 +185,10 @@ async function createConfig() {
           apiKey: 'f7c2eb86ff85cd55d9634543ed1c60b2',
           indexName: 'vast',
         },
+        colorMode: {
+          disableSwitch: true,
+          respectPrefersColorScheme: true,
+        },
         navbar: {
           title: 'VAST',
           logo: {
@@ -214,21 +218,6 @@ async function createConfig() {
               position: 'left',
             },
             {
-              type: 'docsVersionDropdown',
-              position: 'right',
-              dropdownActiveClassDisabled: true,
-            },
-            // TODO: Uncomment once the API is available.
-            //{
-            //  to: '/api',
-            //  label: 'API',
-            //  position: 'left',
-            //},
-            {
-              type: 'search',
-              position: 'right',
-            },
-            {
               href: 'https://vast.io/discord',
               'aria-label': 'Discord',
               className: 'header-discord-link',
@@ -238,6 +227,15 @@ async function createConfig() {
               href: 'https://github.com/tenzir/vast',
               'aria-label': 'GitHub',
               className: 'header-github-link',
+              position: 'right',
+            },
+            {
+              type: 'docsVersionDropdown',
+              position: 'right',
+              dropdownActiveClassDisabled: true,
+            },
+            {
+              type: 'search',
               position: 'right',
             },
           ],

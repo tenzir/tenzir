@@ -14,9 +14,10 @@
 
 #include <unistd.h>
 
-namespace vast::plugins::stdin_loader {
+namespace vast::plugins::stdin_ {
 
 // -- loader plugin -----------------------------------------------------
+
 class plugin : public virtual loader_plugin {
 public:
   static constexpr inline auto max_chunk_size = size_t{16384};
@@ -40,9 +41,8 @@ public:
               if (not eof_reached) {
                 co_yield chunk::make_empty();
                 continue;
-              } else {
-                break;
               }
+              break;
             }
           }
           if (eof_reached || current_data.size() == max_chunk_size) {
@@ -97,6 +97,6 @@ private:
   std::chrono::milliseconds read_timeout{vast::defaults::import::read_timeout};
 };
 
-} // namespace vast::plugins::stdin_loader
+} // namespace vast::plugins::stdin_
 
-VAST_REGISTER_PLUGIN(vast::plugins::stdin_loader::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::stdin_::plugin)

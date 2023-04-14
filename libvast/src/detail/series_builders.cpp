@@ -10,22 +10,48 @@
 
 namespace vast::detail {
 
-concrete_series_builder<record_type>::concrete_series_builder(
-  length_type nulls_to_prepend)
-  : nulls_to_prepend_{nulls_to_prepend} {
+auto builder_provider::provide() -> series_builder& {
+  return std::visit(
+    detail::overload{
+      [this](const builder_provider_impl& provider) -> series_builder& {
+        auto& ret = provider();
+        data_ = std::ref(ret);
+        return ret;
+      },
+      [](std::reference_wrapper<series_builder> ref) -> series_builder& {
+        return ref.get();
+      }},
+    data_);
 }
 
-auto concrete_series_builder<record_type>::get_field_builder(
-  std::string_view field, length_type starting_fields_length)
-  -> series_builder& {
+auto builder_provider::type() -> vast::type {
+  return std::visit(
+    detail::overload{[](const builder_provider_impl&) {
+                       return vast::type{};
+                     },
+                     [](std::reference_wrapper<series_builder> ref) {
+                       return ref.get().type();
+                     }},
+    data_);
+}
+
+auto builder_provider::is_builder_constructed() -> bool {
+  return std::holds_alternative<std::reference_wrapper<series_builder>>(data_);
+}
+
+auto concrete_series_builder<record_type>::get_field_builder_provider(
+  std::string_view field, arrow_length_type starting_fields_length)
+  -> builder_provider {
   if (auto it = field_builders_.find(std::string{field});
       it != field_builders_.end())
-    return *(it->second);
-  auto& new_builder
-    = *(field_builders_.emplace(field, std::make_unique<series_builder>())
-          .first->second);
-  new_builder.add_up_to_n_nulls(starting_fields_length);
-  return new_builder;
+    return {std::ref(*(it->second))};
+  return {[field, starting_fields_length,
+           &builders = field_builders_]() -> series_builder& {
+    auto& new_builder = *(
+      builders.emplace(field, std::make_unique<series_builder>()).first->second);
+    new_builder.add_up_to_n_nulls(starting_fields_length);
+    return new_builder;
+  }};
 }
 
 auto concrete_series_builder<record_type>::fill_nulls() -> void {
@@ -35,34 +61,14 @@ auto concrete_series_builder<record_type>::fill_nulls() -> void {
 }
 
 auto concrete_series_builder<record_type>::add_up_to_n_nulls(
-  length_type max_null_count) -> void {
-  if (not is_type_known()) {
-    nulls_to_prepend_ = std::max(max_null_count, nulls_to_prepend_);
-    return;
-  }
+  arrow_length_type max_null_count) -> void {
   for (auto& [name, builder] : field_builders_) {
-    std::visit(detail::overload{
-                 [max_null_count](auto& b) {
-                   b.add_up_to_n_nulls(max_null_count);
-                 },
-                 [](concrete_series_builder<record_type>&) {
-                   // nop. Nested records handle nulls before parents. No need
-                   // to repeadetly call it again for every nesting level.
-                 },
-               },
-               *builder);
+    builder->add_up_to_n_nulls(max_null_count);
   }
 }
 
-auto concrete_series_builder<record_type>::get_occupied_rows() -> length_type {
-  // No type can happen when someone pushes an empty record. We reserve the
-  // rows for the NULLs in case this record will have fields added in the next
-  // rows.
-  return is_type_known() ? length() : nulls_to_prepend_;
-}
-
-std::shared_ptr<arrow::StructBuilder>
-concrete_series_builder<record_type>::get_arrow_builder() {
+auto concrete_series_builder<record_type>::get_arrow_builder()
+  -> std::shared_ptr<arrow::StructBuilder> {
   if (arrow_builder_)
     return arrow_builder_;
   auto field_builders = std::vector<std::shared_ptr<arrow::ArrayBuilder>>{};
@@ -80,15 +86,15 @@ concrete_series_builder<record_type>::get_arrow_builder() {
   return arrow_builder_;
 }
 
-length_type concrete_series_builder<record_type>::length() const {
-  auto len = length_type{0u};
+auto concrete_series_builder<record_type>::length() const -> arrow_length_type {
+  auto len = arrow_length_type{0u};
   for (const auto& [_, builder] : field_builders_) {
     len = std::max(len, builder->length());
   }
   return len;
 }
 
-vast::type concrete_series_builder<record_type>::type() const {
+auto concrete_series_builder<record_type>::type() const -> vast::type {
   if (field_builders_.empty())
     return vast::type{};
   std::vector<record_type::field_view> fields;
@@ -112,18 +118,14 @@ auto concrete_series_builder<record_type>::append() -> void {
   VAST_ASSERT(status.ok());
 }
 
-auto concrete_series_builder<record_type>::is_type_known() -> bool {
-  if (is_type_known_) [[likely]]
-    return true;
-  is_type_known_ = std::any_of(field_builders_.begin(), field_builders_.end(),
-                               [](const auto& field_and_builder) {
-                                 return field_and_builder.second->type();
-                               });
-  return is_type_known_;
+auto concrete_series_builder<record_type>::remove_last_row() -> void {
+  for (const auto& [_, builder] : field_builders_) {
+    builder->remove_last_row();
+  }
 }
 
 concrete_series_builder<list_type>::concrete_series_builder(
-  length_type nulls_to_prepend)
+  arrow_length_type nulls_to_prepend)
   : nulls_to_prepend_{nulls_to_prepend} {
 }
 
@@ -134,7 +136,7 @@ std::shared_ptr<arrow::Array> concrete_series_builder<list_type>::finish() && {
 }
 
 auto concrete_series_builder<list_type>::add_up_to_n_nulls(
-  length_type max_null_count) -> void {
+  arrow_length_type max_null_count) -> void {
   if (builder_) {
     VAST_ASSERT(max_null_count >= length());
     const auto status = builder_->AppendNulls(max_null_count - length());
@@ -148,7 +150,7 @@ auto concrete_series_builder<list_type>::type() const -> const vast::type& {
   return type_;
 }
 
-length_type concrete_series_builder<list_type>::length() const {
+auto concrete_series_builder<list_type>::length() const -> arrow_length_type {
   if (not builder_)
     return 0u;
   return builder_->length();
@@ -174,13 +176,27 @@ auto concrete_series_builder<list_type>::get_arrow_builder()
 // Only one record builder exists in list of records as the deeper nestings
 // are handled by the record builder itself.
 auto concrete_series_builder<list_type>::get_record_builder()
-  -> concrete_series_builder<record_type>& {
-  if (not record_builder_) [[unlikely]]
-    return record_builder_.emplace();
+  -> series_builder& {
+  if (not record_builder_) [[unlikely]] {
+    record_builder_ = std::make_unique<series_builder>();
+    *record_builder_ = concrete_series_builder<record_type>{};
+  }
   return *record_builder_;
 }
 
-length_type series_builder::length() const {
+auto concrete_series_builder<list_type>::remove_last_row() -> bool {
+  if (not builder_) [[unlikely]]
+    return true;
+
+  auto array = builder_->Finish().ValueOrDie();
+  auto new_array = array->Slice(0, array->length() - 1);
+  const auto status
+    = builder_->AppendArraySlice(*new_array->data(), 0u, new_array->length());
+  VAST_ASSERT(status.ok());
+  return builder_->null_count() == builder_->length();
+}
+
+arrow_length_type series_builder::length() const {
   return std::visit(
     [](const auto& actual) {
       return actual.length();
@@ -216,10 +232,26 @@ std::shared_ptr<arrow::Array> series_builder::finish() && {
                     *this);
 }
 
-auto series_builder::add_up_to_n_nulls(length_type max_null_count) -> void {
+auto series_builder::add_up_to_n_nulls(arrow_length_type max_null_count)
+  -> void {
   std::visit(
     [max_null_count](auto& actual) {
       actual.add_up_to_n_nulls(max_null_count);
+    },
+    *this);
+}
+
+auto series_builder::remove_last_row() -> void {
+  std::visit(
+    [this](auto& actual) {
+      if constexpr (std::is_same_v<bool, decltype(actual.remove_last_row())>) {
+        if (auto all_values_are_null = actual.remove_last_row();
+            all_values_are_null) {
+          *this = unknown_type_builder(actual.length());
+        }
+      } else {
+        actual.remove_last_row();
+      }
     },
     *this);
 }

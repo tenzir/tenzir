@@ -14,6 +14,7 @@
 #include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -45,6 +46,7 @@ void store_or_fulfill(
     self,
   partition_transformer_state::stream_data&& stream_data) {
   if (std::holds_alternative<std::monostate>(self->state.persist)) {
+    VAST_DEBUG("{} stores stream data in state.persist", *self);
     self->state.persist = std::move(stream_data);
   } else {
     auto* path_data = std::get_if<partition_transformer_state::path_data>(
@@ -59,6 +61,7 @@ void store_or_fulfill(
     self,
   partition_transformer_state::path_data&& path_data) {
   if (std::holds_alternative<std::monostate>(self->state.persist)) {
+    VAST_DEBUG("{} stores path data in state.persist", *self);
     self->state.persist = std::move(path_data);
   } else {
     auto* stream_data = std::get_if<partition_transformer_state::stream_data>(
@@ -101,6 +104,49 @@ void quit_or_stall(
     self->quit();
   }
 }
+
+class fixed_source final : public crtp_operator<fixed_source> {
+public:
+  explicit fixed_source(std::vector<table_slice> slices)
+    : slices_{std::move(slices)} {
+  }
+
+  auto operator()() const -> generator<table_slice> {
+    for (const auto& slice : slices_) {
+      co_yield slice;
+    }
+  }
+
+  auto to_string() const -> std::string override {
+    return "<fixed_source>";
+  }
+
+private:
+  std::vector<table_slice> slices_;
+};
+
+class collecting_sink final : public crtp_operator<collecting_sink> {
+public:
+  explicit collecting_sink(std::shared_ptr<std::vector<table_slice>> result)
+    : result_{std::move(result)} {
+    VAST_ASSERT(result_);
+  }
+
+  auto operator()(generator<table_slice> input) const
+    -> generator<std::monostate> {
+    for (auto&& slice : input) {
+      result_->push_back(std::move(slice));
+      co_yield {};
+    }
+  }
+
+  auto to_string() const -> std::string override {
+    return "<collecting_sink>";
+  }
+
+private:
+  std::shared_ptr<std::vector<table_slice>> result_;
+};
 
 } // namespace
 
@@ -256,13 +302,14 @@ void partition_transformer_state::fulfill(
   }
 }
 
-partition_transformer_actor::behavior_type partition_transformer(
+auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  catalog_actor catalog, filesystem_actor fs, pipeline_ptr transform,
-  std::string partition_path_template, std::string synopsis_path_template) {
+  catalog_actor catalog, filesystem_actor fs, pipeline transform,
+  std::string partition_path_template, std::string synopsis_path_template)
+  -> partition_transformer_actor::behavior_type {
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);
   self->state.synopsis_path_template = std::move(synopsis_path_template);
@@ -274,7 +321,6 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
   self->state.catalog = std::move(catalog);
-  // transform can be an aggregate transform here
   self->state.transform = std::move(transform);
   self->state.store_id = std::move(store_id);
   self->set_down_handler([self](caf::down_msg& msg) {
@@ -291,26 +337,39 @@ partition_transformer_actor::behavior_type partition_transformer(
   });
   return {
     [self](vast::table_slice& slice) {
-      const auto old_import_time = slice.import_time();
-      if (auto err = self->state.transform->add(std::move(slice))) {
-        VAST_ERROR("{} failed to add slice: {}", *self, err);
-        return;
-      }
       // Adjust the import time range iff necessary.
+      const auto old_import_time = slice.import_time();
       self->state.min_import_time
         = std::min(self->state.min_import_time, old_import_time);
       self->state.max_import_time
         = std::max(self->state.max_import_time, old_import_time);
+      self->state.input.push_back(std::move(slice));
     },
     [self](atom::done) -> caf::result<void> {
-      auto transformed = self->state.transform->finish();
-      if (!transformed) {
-        VAST_ERROR("{} failed to finish transform: {}", *self,
-                   transformed.error());
-        self->state.transform_error = transformed.error();
-        return {};
+      // We copy the pipeline because we will modify it.
+      auto pipe = self->state.transform;
+      auto open = pipe.check_type<table_slice, table_slice>();
+      if (!open) {
+        return open.error();
       }
-      for (auto& slice : *transformed) {
+      pipe.prepend(
+        std::make_unique<fixed_source>(std::move(self->state.input)));
+      auto output = std::make_shared<std::vector<table_slice>>();
+      pipe.append(std::make_unique<collecting_sink>(output));
+      auto closed = pipe.check_type<void, void>();
+      if (!closed) {
+        return caf::make_error(ec::logic_error, "internal error: {}",
+                               closed.error());
+      }
+      auto executor = make_local_executor(std::move(pipe));
+      for (auto&& result : executor) {
+        if (!result) {
+          VAST_ERROR("{} failed pipeline execution: {}", *self, result.error());
+          self->state.transform_error = result.error();
+          return {};
+        }
+      }
+      for (auto& slice : *output) {
         auto const& schema = slice.schema();
         // TODO: Technically we'd only need to send *new* schemas here.
         self->send(self->state.catalog, atom::put_v, schema);

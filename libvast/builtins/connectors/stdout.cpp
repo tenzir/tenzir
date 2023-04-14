@@ -11,7 +11,7 @@
 
 #include <unistd.h>
 
-namespace vast::plugins::stdout_dumper {
+namespace vast::plugins::stdout_ {
 
 class plugin : public virtual dumper_plugin {
 public:
@@ -44,6 +44,6 @@ public:
   }
 };
 
-} // namespace vast::plugins::stdout_dumper
+} // namespace vast::plugins::stdout_
 
-VAST_REGISTER_PLUGIN(vast::plugins::stdout_dumper::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::stdout_::plugin)
