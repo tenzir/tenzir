@@ -16,18 +16,20 @@ keeps all other fields.
 In relational algebra, `drop` performs a *projection* of the complement of the
 provided arguments.
 
-## Options
+### `<extractor>...`
 
-The operator has the following options.
-
-### extractor
-
-An extractors identifying fields to remove.
+A list of extractors identifying fields to remove.
 
 ## Examples
 
-Remove the `timestamp` field and all fields of type `ip`:
+Remove the fields `foo` and `bar`:
 
 ```
-drop timestamp, :ip
+drop foo, bar
+```
+
+Remove all fields of type `ip`:
+
+```
+drop :ip
 ```

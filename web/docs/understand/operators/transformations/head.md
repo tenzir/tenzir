@@ -1,6 +1,6 @@
 # head
 
-Limits the input to the first *N* results.
+Limits the input to the first *N* events.
 
 ## Synopsis
 
@@ -14,11 +14,7 @@ The semantics of the `head` operator are the same of the equivalent Unix tool:
 process a fixed number of events from the input. The operator terminates
 after it has reached its limit.
 
-## Options
-
-The operator has the following options.
-
-### limit
+### `<limit>`
 
 An unsigned integer denoting how many events to keep.
 

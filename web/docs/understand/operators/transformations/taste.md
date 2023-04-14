@@ -1,27 +1,35 @@
 # taste
 
-Limits the input to the first N results per unique schema.
+Limits the input to the first *N* events per unique schema.
 
 ## Synopsis
 
 ```
-taste [LIMIT]
+taste [<limit>]
 ```
 
-### Limit
+## Description
 
-An unsigned integer denoting how many events to keep per schema. Defaults to 10.
+The `taste` operator provides an exemplary overview of the "shape" of the data
+described by the pipeline. This helps to understand the diversity of the
+result, especially when interactively exploring data.
 
-## Example
+### `<limit>`
 
-Get the first ten results of each unique schema.
+An unsigned integer denoting how many events to keep per schema.
+
+Defaults to 10.
+
+## Examples
+
+Get the first 10 results of each unique schema:
 
 ```
 taste
 ```
 
-Get the first five results of each unique schema.
+Get the one sample for every unique event type:
 
 ```
-taste 5
+taste 1
 ```

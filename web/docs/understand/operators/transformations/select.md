@@ -16,18 +16,20 @@ removes all other fields.
 In relational algebra, `select` performs a *projection* of the provided
 arguments.
 
-## Options
+### `<extractor>...`
 
-The operator has the following options.
-
-### extractor
-
-An extractors identifying fields to keep.
+The list of extractors identifying fields to keep.
 
 ## Examples
 
-Keep the `timestamp` field and all fields of type `ip`:
+Only keep fields `foo` and `bar`:
 
 ```
-select timestamp, :ip
+drop foo, bar
+```
+
+Select all fields of type `ip`:
+
+```
+drop :ip
 ```

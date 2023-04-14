@@ -1,29 +1,37 @@
 # summarize
 
-The `summarize` operator bundles input records according to a grouping
-expression and applies an aggregation function over each group.
-
-The extent of a group depends on the pipeline input. For import and export
-pipelines, a group comprises a single batch (configurable as
-`vast.import.batch-size`). For compaction, a group comprises an entire partition
-(configurable as `vast.max-partition-size`).
+Groups events and applies aggregate functions on each group.
 
 ## Synopsis
 
 ```
-summarize [FIELD=]AGGREGATION(EXTRACTOR[, …])[, …] by EXTRACTOR[, …] [resolution DURATION]
+summarize <[field=]aggregation>... by <extractor>... [resolution <duration>]
 ```
 
-### Aggregation Functions
+## Description
 
-Aggregation functions compute a single value of one or more columns in a given
-group. Fields that neither occur in an aggregation function nor in the `by` list
+The `summarize` operator groups events according to a grouping expression and
+applies an aggregation function over each group. The operator consumes the
+entire input before producing an output.
+
+Fields that neither occur in an aggregation function nor in the `by` list
 are dropped from the output.
 
+### `[field=]aggregation`
+
+Aggregation functions compute a single value of one or more columns in a given
+group. Syntactically, `aggregation` has the form `f(xs...)` where `f` is the
+aggregation function and `xs` a comma-separated list arguments.
+
+By default, the name for the new field `aggregation` is its string
+representation, e.g., `min(timestamp)`. You can specify a different name by
+prepending a field assignment, e.g., `min_ts=min(timestamp)`.
+
 The following aggregation functions are available:
+
 - `sum`: Computes the sum of all grouped values.
 - `min`: Computes the minimum of all grouped values.
-- `max`: Computes the maxiumum of all grouped values.
+- `max`: Computes the maximum of all grouped values.
 - `any`: Computes the disjunction (OR) of all grouped values. Requires the
   values to be booleans.
 - `all`: Computes the conjunction (AND) of all grouped values. Requires the
@@ -34,38 +42,52 @@ The following aggregation functions are available:
 - `count`: Counts all grouped values that are not null.
 - `count_distinct`: Counts all distinct grouped values that are not null.
 
-### Grouping
+### `by <extractor>`
 
-The `group-by` option specifies a list of
-[extractors](../../expressions.md#extractors) that should form a group. VAST
-internally calculates the combined hash for all extractors for every row and
-puts the data into buckets for subsequent aggregation.
+The extractors specified after the `by` clause partitions the input into groups.
 
-### Time Resolution
+### `resolution <duration>`
 
 The `resolution` option specifies an optional duration value that specifies the
 tolerance when comparing time values in the `group-by` section. For example,
 `01:48` is rounded down to `01:00` when a 1-hour `resolution` is used.
 
-## Example
+NB: we introduced the `resolution` option as a stop-gap measure to compensate for
+the lack of a rounding function. The ability to apply functions in the grouping
+expression will replace this option in the future.
 
-Show all distinct `id.origin_port` values grouped by `id.origin_ip` values.
+## Examples
 
-```
-summarize distinct(id.origin_port) by id.origin_ip
-```
-
-Show all distinct `id.origin_port` values grouped by `id.origin_ip` values in
-a field with the custom name `total_ports`.
+Group the input by `src_ip` and aggregate all unique `dest_port` values into a
+list:
 
 ```
-summarize total_ports=distinct(id.origin_port) by id.origin_ip
+summarize distinct(dest_port) by src_ip
 ```
 
-Show the result of `any(Initiated)` grouped by the `SourceIp, SourcePort,
-DestinationPoint` and `UtcTime` values, with an optional time resolution of one
-minute.
+Same as above, but produce a count of the unique number of values instead of a
+list:
 
 ```
-summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute
+summarize count_distinct(dest_port) by src_ip
+```
+
+Compute minimum, maximum of the `timestamp` field per `src_ip` group:
+
+```
+summarize min(timestamp), max(timestamp) by src_ip
+```
+
+Create a boolean flag `originator` that is `true` if any value in the group is
+`true`:
+
+```
+summarize originator=any(is_orig) by src_ip
+```
+
+Create 1-hour groups and produce a summary of network traffic between host
+pairs:
+
+```
+summarize sum(bytes_in), sum(bytes_out) by src_ip, dest_ip resolution 1 hour
 ```

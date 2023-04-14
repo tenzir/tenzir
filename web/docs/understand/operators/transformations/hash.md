@@ -17,15 +17,11 @@ hash [-s|--salt=<string>] <field>
 
 The `hash` operator calculates a hash digest of a given field.
 
-## Options
-
-The operator has the following options.
-
-### -s, --salt
+### `<-s|--salt>=<string>`
 
 A salt value for the hash.
 
-### field
+### `<field>`
 
 The field over which the hash is computed.
 

@@ -13,17 +13,13 @@ rename <name=extractor>...
 The `rename` operator assigns new names to fields or types. Renaming only
 modifies metadata and is therefore computationally inexpensive. The operator
 handles nested field extractors as well, but cannot perform field reordering,
-e.g., by hoisting nested fields into the top level. 
+e.g., by hoisting nested fields into the top level.
 
 Renaming only takes place if the provided extractor on the right-hand side of
 the assignment resolves to a field or type. Otherwise the assignment does
 nothing. If no extractors match, `rename` degenerates to [`pass`](pass.md).
 
-## Options
-
-The operator has the following options.
-
-### name=extractor
+### `<name=extractor>...`
 
 An assignment of the form `name=extractor` renames the field or type identified
 by `extractor` to `name`.

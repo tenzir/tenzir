@@ -8,9 +8,17 @@ Removes adjacent duplicates.
 unique
 ```
 
-## Example
+## Description
 
-Let us assume the following input events (using the JSON format):
+The `unique` operator deduplicates adjacent values, similar to the Unix tool
+`uniq`.
+
+A frequent use case is [selecting a set of fields](select.md), [sorting the
+input](sort.md), and then removing duplicates from the input.
+
+## Examples
+
+Consider the following data:
 
 ```json
 {"foo": 1, "bar": "a"}
@@ -23,7 +31,7 @@ Let us assume the following input events (using the JSON format):
 {"foo": null, "bar": "b"}
 ```
 
-The `unique` operator removes adjacent duplicates such that the output is:
+The `unique` operator removes adjacent duplicates and produces the following output:
 
 ```json
 {"foo": 1, "bar": "a"}
@@ -36,7 +44,7 @@ The `unique` operator removes adjacent duplicates such that the output is:
 Note that the output still contains the event `{"foo": null, "bar": "b"}` twice.
 This is because `unique` only removes *adjacent* duplicates.
 
-If we want to remove *all* duplicates instead (including non-adjacent ones), we
-can use `sort | unique` instead. The `sort` operator ensures that all duplicates
-are adjacent and are thus removed by `unique`. Because sorting is a blocking
-operation, the output events will only start arriving after the input is done.
+To remove *all* duplicates (including non-adjacent ones), [`sort`](sort.md)
+input first such that duplicate values lay adjacent to each other. Unlike
+deduplication via `unique`, sorting is a blocking and operation and consumes
+the entire input before producing outputs.
