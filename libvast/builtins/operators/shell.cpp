@@ -35,11 +35,21 @@ public:
     bp::opstream out;
     std::error_code ec;
     bp::child child{command_, bp::std_out > in, bp::std_in < out};
-    if (!child.running(ec)) // TODO: handle error
+    if (!child.running(ec)) {
+      if (ec)
+        VAST_DEBUG(ec);
+      else
+        VAST_ERROR(ec);
       co_return;
+    }
     for (auto&& chunk : input) {
-      if (!child.running(ec)) // TODO: handle error
+      if (!child.running(ec)) {
+        if (ec)
+          VAST_DEBUG(ec);
+        else
+          VAST_ERROR(ec);
         break;
+      }
       // Shove our input into the child's stdin.
       auto chunk_data = reinterpret_cast<const char*>(chunk->data());
       if (!out.write(chunk_data, chunk->size()))
@@ -61,7 +71,11 @@ public:
       }
     }
     // FIXME: do this RAII-style.
-    child.wait(ec); // TODO: handle error
+    child.wait(ec);
+    if (ec)
+      VAST_DEBUG(ec);
+    else
+      VAST_ERROR(ec);
   }
 
   auto to_string() const -> std::string override {
