@@ -587,7 +587,7 @@ tests:
       - command: "import -b -t sysmon.NetworkConnection json 'summarize distinct(SourcePort) by SourceIp'"
         input: data/json/sysmon.json
       - command: export json
-  Export pipeline operator parsing after where:
+  Export pipeline operator parsing after expression:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
     steps:
@@ -668,7 +668,7 @@ tests:
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
         input: data/suricata/eve.json
       - command: export json
-  Export pipeline operator summarize after where:
+  Export pipeline operator summarize after expression:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
     steps:
