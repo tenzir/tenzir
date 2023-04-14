@@ -18,12 +18,6 @@ RUN cmake -S contrib/vast-plugins/compaction -B build-compaction -G Ninja \
       DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
       rm -rf build-compaction
 
-RUN cmake -S contrib/vast-plugins/fleet -B build-fleet -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-fleet --parallel && \
-      DESTDIR=/plugin/fleet cmake --install build-fleet --strip --component Runtime && \
-      rm -rf build-fleet
-
 RUN cmake -S contrib/vast-plugins/inventory -B build-inventory -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-inventory --parallel && \
@@ -55,9 +49,3 @@ COPY --from=plugins --chown=vast:vast /plugin/netflow /
 FROM vast-ce AS vast-ee
 
 COPY --from=plugins --chown=vast:vast /plugin/compaction /
-
-# -- vast-manager --------------------------------------------------------------
-
-FROM production AS vast-manager
-
-COPY --from=plugins --chown=vast:vast /plugin/fleet /
