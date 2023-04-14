@@ -19,7 +19,7 @@ load <connector>
 The `load` operator emits raw bytes. Notably, it cannot be used together with
 operators that expects events as an input, but rather only with operators that
 expect bytes, e.g., [`parse`](../transformations/parse.md) or
-[`dump`](../sinks/dump.md).
+[`save`](../sinks/save.md).
 
 ### `<connector>`
 
