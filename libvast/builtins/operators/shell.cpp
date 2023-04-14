@@ -35,13 +35,6 @@ public:
     bp::opstream out;
     std::error_code ec;
     bp::child child{command_, bp::std_out > in, bp::std_in < out};
-    if (!child.running(ec)) {
-      if (ec)
-        VAST_DEBUG(ec);
-      else
-        VAST_ERROR(ec);
-      co_return;
-    }
     for (auto&& chunk : input) {
       if (!child.running(ec)) {
         if (ec)
