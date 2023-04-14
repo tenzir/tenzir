@@ -184,6 +184,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           if (!maybe_param)
             continue;
           combined_params[name] = *maybe_param;
+        }
       }
       auto params = parse_endpoint_parameters(endpoint, combined_params);
       if (!params)
