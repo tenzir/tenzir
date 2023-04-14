@@ -60,10 +60,10 @@ operator](../../understand/operators/README.md) that users can reference in a
 The loader plugin defines the input side of a connector for use in the `from
 CONNECTOR read FORMAT` and `load CONNECTOR` operators.
 
-### Dumper
+### Saver
 
-The loader plugin defines the output side of a connector for use in the `write
-FORMAT to CONNECTOR` and `dump CONNECTOR` operators.
+The saver plugin defines the output side of a connector for use in the `write
+FORMAT to CONNECTOR` and `save CONNECTOR` operators.
 
 ### Parser
 

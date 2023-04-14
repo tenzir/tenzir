@@ -26,7 +26,7 @@ recommend always using `from` or [`read`](read.md) over [`load`](load.md) and
 
 ### `<connector>`
 
-The [connector][connectors] used to load bytes or events.
+The [connector][connectors] used to load bytes.
 
 Some connectors have connector-specific options. Please refer to the
 documentation of the individual connectors for more information.
