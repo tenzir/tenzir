@@ -153,6 +153,7 @@ in {
     };
   in
     pkg.withPlugins (ps: [
+      ps.cloud
       ps.matcher
       ps.netflow
     ]);
@@ -162,6 +163,7 @@ in {
     };
   in
     pkg.withPlugins (ps: [
+      ps.cloud
       ps.compaction
       #ps.inventory
       ps.matcher
