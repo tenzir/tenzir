@@ -36,7 +36,7 @@ caf::error validate_(const vast::data& data, const vast::type& type,
       [&]<vast::basic_type T>(const T& type) -> caf::error {
         // TODO: Introduce special cases for accepting counts as integers and
         // vice versa if the number is in the valid range.
-        if (caf::holds_alternative<decltype(type)>(data))
+        if (!type_check(vast::type{type}, data))
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected value of type {} at "
                                              "{}",
