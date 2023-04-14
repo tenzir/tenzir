@@ -16,6 +16,7 @@
 #include "vast/expression.hpp"
 #include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/exporter.hpp"
@@ -39,14 +40,14 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
                spawn_arguments& args) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
   // Parse given query.
-  auto parse_result = system::parse_query(args.inv.arguments);
+  // TODO: Changelog.
+  // TODO: Join?
+  // TODO: Config
+  auto parse_result
+    = pipeline::parse(detail::join(args.inv.arguments, " "), record{});
   if (!parse_result)
     return parse_result.error();
-  auto [expr, pipeline] = std::move(*parse_result);
-  auto pipelines = std::vector<legacy_pipeline>{};
-  if (pipeline) {
-    pipelines.push_back(std::move(*pipeline));
-  }
+  auto pipe = std::move(*parse_result);
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))
@@ -61,9 +62,9 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     query_opts = query_opts + low_priority;
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
-  auto handle = self->spawn(exporter, expr, query_opts, std::move(pipelines),
-                            std::move(index));
-  VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
+  auto handle
+    = self->spawn(exporter, query_opts, std::move(pipe), std::move(index));
+  VAST_VERBOSE("{} spawned an exporter for '{}'", *self, pipe.to_string());
   // Wire the exporter to all components.
   if (accountant)
     self->send(handle, atom::set_v, accountant);

@@ -65,7 +65,7 @@ caf::expected<std::string> read_query(const std::string& path) {
 std::string make_all_query() {
   VAST_VERBOSE("not providing a query causes everything to be exported; please "
                "be aware that this operation may be very expensive.");
-  return R"__(#type != "this expression matches everything")__";
+  return "";
 }
 
 } // namespace

@@ -244,6 +244,13 @@ public:
     std::swap(m_coroutine, other.m_coroutine);
   }
 
+  /// @pre The iterator is only safe to dereference if the underlying coroutine
+  /// has been resumed at least once. This happens in `generator::begin()`, and
+  /// also in `iterator::operator++()`.
+  auto unsafe_current() const -> iterator {
+    return iterator{m_coroutine};
+  }
+
 private:
   friend class internal::generator_promise<T>;
 

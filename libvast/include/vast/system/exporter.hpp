@@ -46,9 +46,6 @@ struct exporter_state {
   /// Stores a handle to the INDEX for querying results.
   index_actor index = {};
 
-  /// Stores a pipeline_executor for transforming the results.
-  pipeline_executor pipeline = {};
-
   /// Stores a handle to the SINK that processes results.
   caf::actor sink = {};
 
@@ -61,9 +58,6 @@ struct exporter_state {
 
   /// Caches tailored candidate checkers.
   std::unordered_map<type, expression> checkers = {};
-
-  /// Caches results for the SINK.
-  std::queue<table_slice> results = {};
 
   /// Stores the time point for when this actor got started via 'run'.
   std::chrono::system_clock::time_point start = {};
@@ -78,22 +72,32 @@ struct exporter_state {
   /// Stores the query ID we receive from the INDEX.
   uuid id = {};
 
-  /// Used to send table slices to the sink in a streaming manner.
-  caf::stream_source_ptr<caf::broadcast_downstream_manager<table_slice>> source
-    = {};
+  /// Used to send table slices to `sink` in a streaming manner.
+  caf::stream_source_ptr<caf::broadcast_downstream_manager<table_slice>>
+    result_stream = {};
+
+  /// Provides events to the source of the pipeline.
+  std::deque<table_slice> source_buffer = {};
+
+  /// Stores the events that arrive at the sink of the pipeline.
+  std::deque<table_slice> sink_buffer = {};
+
+  /// The executor for the pipeline of this exporter.
+  generator<caf::expected<void>> executor = {};
+
+  /// The textual representation of this pipeline.
+  std::string pipeline_str = {};
 };
 
 /// The EXPORTER gradually requests more results from the index until no more
 /// results are available or the requested number of events is reached.
 /// It also performs a candidate check to filter out false positives.
 /// @param self The actor handle of the exporter.
-/// @param expr The AST of the query.
 /// @param options The query options.
-/// @param pipelines The applied pipelines.
+/// @param pipe The applied pipeline.
 /// @param index The index actor.
-exporter_actor::behavior_type
-exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<legacy_pipeline>&& pipelines,
-         index_actor index);
+auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
+              query_options options, pipeline pipe, index_actor index)
+  -> exporter_actor::behavior_type;
 
 } // namespace vast::system

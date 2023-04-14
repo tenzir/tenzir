@@ -20,9 +20,12 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
+#include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/query_context.hpp"
+#include "vast/query_options.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
@@ -42,103 +45,108 @@ void shutdown_stream(
   caf::stream_source_ptr<caf::broadcast_downstream_manager<table_slice>> stream) {
   if (!stream)
     return;
+  VAST_DEBUG("exporter: shutting down stream");
   stream->shutdown();
   stream->out().fan_out_flush();
   stream->out().close();
   stream->out().force_emit_batches();
 }
 
-void attach_stream(exporter_actor::stateful_pointer<exporter_state> self) {
+void attach_result_stream(
+  exporter_actor::stateful_pointer<exporter_state> self) {
   struct stream_state {
     exporter_actor self;
     exporter_actor::stateful_pointer<exporter_state> self_ptr{nullptr};
   };
-  auto continuous = has_continuous_option(self->state.options);
-  self->state.source
-    = caf::attach_stream_source(
-        self, self->state.sink,
-        [self](stream_state& state) {
-          state.self = self;
-          state.self_ptr = self;
-        },
-        [](stream_state& state, caf::downstream<table_slice>& out,
-           size_t hint) mutable {
-          auto& results = state.self_ptr->state.results;
-          for (size_t pushed = 0; pushed < hint && !results.empty(); ++pushed) {
-            auto& top = results.front();
-            out.push(std::move(top));
-            results.pop();
-          }
-        },
-        [continuous](const stream_state& state) {
-          if (continuous)
-            return false;
-          auto should_end = state.self_ptr->state.query_status.received
-                              == state.self_ptr->state.query_status.expected
-                            && state.self_ptr->state.results.empty();
-          if (should_end)
-            shutdown_stream(state.self_ptr->state.source);
-          return should_end;
-        })
-        .ptr();
+  self->state.result_stream = // [formatting]
+    caf::attach_stream_source(
+      self, self->state.sink,
+      [self](stream_state& state) {
+        state.self = self;
+        state.self_ptr = self;
+      },
+      [](stream_state& state, caf::downstream<table_slice>& out, size_t hint) {
+        // TODO: Can we run generator here?
+        auto& results = state.self_ptr->state.sink_buffer;
+        (void)hint; // We could consider using `hint`.
+        if (!results.empty()) {
+          out.push(std::move(results.front()));
+          results.pop_front();
+        }
+      },
+      [](const stream_state& state) {
+        // This call to `unsafe_current` is fine because we do not dereference
+        // the iterator.
+        auto should_end = state.self_ptr->state.executor.unsafe_current()
+                            == state.self_ptr->state.executor.end()
+                          && state.self_ptr->state.sink_buffer.empty();
+        if (should_end)
+          shutdown_stream(state.self_ptr->state.result_stream);
+        return should_end;
+      })
+      .ptr();
 }
 
-void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
-  auto transformed = self->state.pipeline.finish();
-  if (!transformed) {
-    VAST_ERROR("exporter failed to finish the transformation: {}",
-               transformed.error());
-    return;
+auto index_exhausted(const query_status& qs) -> bool {
+  if (qs.received > qs.expected) {
+    VAST_WARN("exporter received more partitions than expected: {}/{}",
+              qs.received, qs.expected);
+    return true;
   }
-  if (transformed->empty())
-    return;
-  for (auto& t : *transformed)
-    self->state.results.push(std::move(t));
-  if (!self->state.source) [[unlikely]]
-    attach_stream(self);
+  return qs.received == qs.expected;
 }
 
-void buffer_results(exporter_actor::stateful_pointer<exporter_state> self,
-                    table_slice slice) {
-  VAST_TRACE_SCOPE("");
+auto query_in_flight(const query_status& qs) -> bool {
+  return qs.scheduled > 0;
+}
+
+void continue_execution(exporter_actor::stateful_pointer<exporter_state> self) {
+  // This call is fine, because we advance the iterator before dereferencing it.
+  auto it = self->state.executor.unsafe_current();
+  while (it != self->state.executor.end()) {
+    ++it;
+    if (it == self->state.executor.end()) {
+      VAST_DEBUG("{} has exhausted its executor", *self);
+      break;
+    }
+    auto result = *it;
+    if (!result) {
+      VAST_WARN("{} encountered an error during execution: {}", *self,
+                result.error());
+      // TODO: Inform the user? Quit actor?
+      break;
+    }
+    if (!self->state.source_buffer.empty()) {
+      // Execute at least until the source buffer is empty (or the executor
+      // becomes exhausted).
+      continue;
+    }
+    if (has_historical_option(self->state.options)) {
+      // Make sure that the source requests more data, if possible.
+      if (!index_exhausted(self->state.query_status)
+          && !query_in_flight(self->state.query_status)) {
+        VAST_DEBUG("{} waits for source to request more data", *self);
+        continue;
+      }
+    }
+    // Do not pause if we can see that the source will become exhausted.
+    if (!has_continuous_option(self->state.options)
+        && index_exhausted(self->state.query_status)) {
+      VAST_DEBUG("{} will advance until executor is done", *self);
+      continue;
+    }
+    VAST_DEBUG("{} paused execution", *self);
+    break;
+  }
+}
+
+void provide_to_source(exporter_actor::stateful_pointer<exporter_state> self,
+                       table_slice slice) {
   auto& st = self->state;
   VAST_DEBUG("{} relays {} events", *self, slice.rows());
   // Ship the slice and update state.
   st.query_status.shipped += slice.rows();
-  if (auto err = self->state.pipeline.add(std::move(slice))) {
-    VAST_ERROR("exporter failed to apply the transformation: {}", err);
-    return;
-  }
-  if (!self->state.pipeline.is_blocking())
-    ship_results(self);
-}
-
-void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
-  auto& st = self->state;
-  if (st.statistics_subscriber)
-    self->anon_send(st.statistics_subscriber, st.name, st.query_status);
-  if (st.accountant) {
-    auto processed = st.query_status.processed;
-    auto shipped = st.query_status.shipped;
-    auto results = shipped + st.results.size();
-    auto selectivity = processed != 0
-                         ? detail::narrow_cast<double>(results)
-                             / detail::narrow_cast<double>(processed)
-                         : 1.0;
-    auto msg = report{
-      .data = {
-        {"exporter.processed", processed},
-        {"exporter.results", results},
-        {"exporter.shipped", shipped},
-        {"exporter.selectivity", selectivity},
-        {"exporter.runtime", st.query_status.runtime},
-      },
-      .metadata = {
-        {"query", fmt::to_string(self->state.query_context.id)},
-      },
-    };
-    self->send(st.accountant, atom::metrics_v, std::move(msg));
-  }
+  self->state.source_buffer.push_back(std::move(slice));
 }
 
 void shutdown(exporter_actor::stateful_pointer<exporter_state> self,
@@ -152,32 +160,6 @@ void shutdown(exporter_actor::stateful_pointer<exporter_state> self) {
     return;
   VAST_DEBUG("{} initiates shutdown", *self);
   self->send_exit(self, caf::exit_reason::normal);
-}
-
-void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
-  auto& st = self->state;
-  if (st.query_status.received + st.query_status.scheduled
-      == st.query_status.expected)
-    return;
-  // Sanity check.
-  if (!has_historical_option(st.options)) {
-    VAST_DEBUG("{} requested more hits for continuous query", *self);
-    return;
-  }
-  // The `received < expected` must hold.
-  // Otherwise, we would receive results for more partitions than qualified as
-  // hits by the INDEX.
-  VAST_ASSERT(st.query_status.received < st.query_status.expected);
-  auto remaining = st.query_status.expected - st.query_status.received;
-  // TODO: Figure out right number of partitions to ask for. For now, we
-  // bound the number by an arbitrary constant.
-  auto n = std::min(remaining, size_t{2});
-  // Store how many partitions we schedule with our request. When receiving
-  // 'done', we add this number to `received`.
-  st.query_status.scheduled = n;
-  // Request more hits from the INDEX.
-  VAST_DEBUG("{} asks index to process {} more partitions", *self, n);
-  self->send(st.index, atom::query_v, st.id, detail::narrow<uint32_t>(n));
 }
 
 void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
@@ -209,25 +191,113 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
     return;
   }
   for (auto&& selected : select(slice, expression{}, selection)) {
-    buffer_results(self, std::move(selected));
+    provide_to_source(self, std::move(selected));
   }
+  VAST_DEBUG("{} continues execution because of input stream batch", *self);
+  continue_execution(self);
 }
+
+using exporter_ptr = exporter_actor::stateful_pointer<exporter_state>;
+
+class exporter_source final : public crtp_operator<exporter_source> {
+public:
+  explicit exporter_source(exporter_ptr exporter) : exporter_{exporter} {
+  }
+
+  auto operator()() const -> generator<table_slice> {
+    auto& state = exporter_->state;
+    while (true) {
+      if (state.source_buffer.empty()) {
+        // This operator is only responsible to request historical data.
+        // Continuous data is feed to `source_buffer` by the exporter actor.
+        if (has_historical_option(state.options)) {
+          if (state.id == uuid{}) {
+            VAST_DEBUG("{} source stalls to await cursor", *exporter_);
+          } else if (!index_exhausted(state.query_status)) {
+            // We stall because there is more historical data to receive.
+            if (!query_in_flight(state.query_status)) {
+              VAST_DEBUG("{} source sends query to index", *exporter_);
+              // TODO: The original code requested 2 partitions at once.
+              exporter_->send(state.index, atom::query_v, state.id, 1u);
+              state.query_status.scheduled += 1;
+            }
+            VAST_DEBUG("{} source stalls to await data (got {}/{} partitions)",
+                       *exporter_, state.query_status.received,
+                       state.query_status.expected);
+          } else if (!has_continuous_option(state.options)) {
+            // All historical data has been received, we processed it completely,
+            // and there is no continuous data coming. Hence, we are done.
+            break;
+          }
+        }
+        co_yield {};
+      } else {
+        auto slice = std::move(state.source_buffer.front());
+        state.source_buffer.pop_front();
+        VAST_DEBUG("{} source popped {} events from queue", *exporter_,
+                   slice.rows());
+        co_yield std::move(slice);
+      }
+    }
+    VAST_DEBUG("{} source is done", *exporter_);
+  }
+
+  auto to_string() const -> std::string override {
+    return "<exporter_source>";
+  }
+
+private:
+  exporter_ptr exporter_;
+};
+
+class exporter_sink final : public crtp_operator<exporter_sink> {
+public:
+  explicit exporter_sink(exporter_ptr exporter) : exporter_{exporter} {
+  }
+
+  auto operator()(generator<table_slice> input) const
+    -> generator<std::monostate> {
+    for (auto&& slice : input) {
+      if (slice.rows() != 0) {
+        VAST_DEBUG("{} sink stores {} events in result buffer", *exporter_,
+                   slice.rows());
+        exporter_->state.sink_buffer.push_back(std::move(slice));
+      }
+      co_yield {};
+    }
+  }
+
+  auto to_string() const -> std::string override {
+    return "<exporter_sink>";
+  }
+
+private:
+  exporter_ptr exporter_;
+};
 
 } // namespace
 
-exporter_actor::behavior_type
-exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<legacy_pipeline>&& pipelines,
-         index_actor index) {
-  auto normalized_expr = normalize_and_validate(std::move(expr));
-  if (!normalized_expr) {
+auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
+              query_options options, pipeline pipe, index_actor index)
+  -> exporter_actor::behavior_type {
+  VAST_DEBUG("spawned {} with pipeline {}", *self, pipe);
+  self->state.pipeline_str = pipe.to_string();
+  auto expr = trivially_true_expression();
+  if (auto pushdown = pipe.predicate_pushdown_pipeline(expr)) {
+    std::tie(expr, pipe) = std::move(*pushdown);
+  }
+  auto normalized = normalize_and_validate(std::move(expr));
+  if (!normalized) {
     self->quit(caf::make_error(ec::format_error,
                                fmt::format("{} failed to normalize and "
                                            "validate expression: {}",
-                                           *self, normalized_expr.error())));
+                                           *self, normalized.error())));
     return exporter_actor::behavior_type::make_empty_behavior();
   }
-  expr = *normalized_expr;
+  expr = std::move(*normalized);
+  pipe.prepend(std::make_unique<exporter_source>(self));
+  pipe.append(std::make_unique<exporter_sink>(self));
+  VAST_DEBUG("{} uses filter {} and pipeline {}", *self, expr, pipe);
   self->state.options = options;
   self->state.query_context
     = vast::query_context::make_extract("export", self, std::move(expr));
@@ -235,38 +305,22 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     = has_low_priority_option(self->state.options)
         ? query_context::priority::low
         : query_context::priority::normal;
-  VAST_DEBUG("spawned exporter with {} pipelines", pipelines.size());
-  self->state.pipeline = pipeline_executor{std::move(pipelines)};
-  // Always fetch all partitions for blocking pipelines.
-  if (self->state.pipeline.is_blocking())
-    self->state.query_context.taste = std::numeric_limits<uint32_t>::max();
+  self->state.executor = make_local_executor(std::move(pipe));
   self->state.index = std::move(index);
   if (has_continuous_option(options)) {
-    if (self->state.pipeline.is_blocking()) {
-      self->quit(caf::make_error(ec::invalid_configuration,
-                                 fmt::format("{} cannot use blocking pipeline "
-                                             "in continuous mode",
-                                             *self)));
-      return exporter_actor::behavior_type::make_empty_behavior();
-    }
     VAST_DEBUG("{} has continuous query option", *self);
     self->monitor(self->state.index);
   }
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received exit from {} with reason: {}", *self, msg.source,
                msg.reason);
-    if (msg.reason != caf::exit_reason::kill)
-      report_statistics(self);
-    shutdown_stream(self->state.source);
+    shutdown_stream(self->state.result_stream);
     self->quit(msg.reason);
   });
   self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG("{} received DOWN from {}", *self, msg.source);
-    if (has_continuous_option(self->state.options)
-        && msg.source == self->state.index)
-      report_statistics(self);
     // Without sinks and resumable sessions, there's no reason to proceed.
-    shutdown_stream(self->state.source);
+    shutdown_stream(self->state.result_stream);
     self->quit(msg.reason);
   });
   return {
@@ -274,10 +328,18 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
-    [self](atom::sink, caf::actor& sink) {
+    [self](atom::sink, caf::actor& sink) -> caf::result<void> {
+      if (self->state.sink) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} cannot stream results to {} "
+                                           "because it already streams to {}",
+                                           *self, sink, self->state.sink));
+      }
       VAST_DEBUG("{} registers sink {}", *self, sink);
       self->state.sink = sink;
       self->monitor(self->state.sink);
+      attach_result_stream(self);
+      return {};
     },
     [self](atom::run) {
       VAST_VERBOSE("{} executes query: {}", *self, self->state.query_context);
@@ -299,11 +361,12 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
               self->quit();
               return;
             }
+            VAST_DEBUG("{} is setting cursor ({})", *self, cursor.id);
             self->state.id = cursor.id;
             self->state.query_status.expected = cursor.candidate_partitions;
             self->state.query_status.scheduled = cursor.scheduled_partitions;
-            if (cursor.scheduled_partitions == 0)
-              request_more_hits(self);
+            VAST_DEBUG("{} continues execution due to received cursor", *self);
+            continue_execution(self);
           },
           [=](const caf::error& e) {
             shutdown(self, e);
@@ -327,7 +390,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                [=](caf::unit_t&, const caf::error& err) {
                  if (err)
                    VAST_ERROR("{} got error during streaming: {}", *self, err);
-                 shutdown_stream(self->state.source);
+                 shutdown_stream(self->state.result_stream);
                })
         .inbound_slot();
     },
@@ -340,8 +403,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         if (v >= status_verbosity::detailed) {
           exp["start"] = caf::deep_to_string(self->state.start);
           auto pipeline_names = list{};
-          for (const auto& t : self->state.pipeline.pipelines())
-            pipeline_names.emplace_back(t.name());
+          // TODO: Is this what we want?
+          pipeline_names.emplace_back(self->state.pipeline_str);
           exp["pipelines"] = std::move(pipeline_names);
           if (v >= status_verbosity::debug)
             detail::fill_status_map(exp, self);
@@ -358,28 +421,22 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
       self->state.query_status.processed += slice.rows();
       // Ship slices to connected SINKs.
-      buffer_results(self, std::move(slice));
+      provide_to_source(self, std::move(slice));
     },
     [self](atom::done) {
-      using namespace std::string_literals;
       // Figure out if we're done by bumping the counter for `received`
       // and check whether it reaches `expected`.
       self->state.query_status.received += self->state.query_status.scheduled;
       self->state.query_status.scheduled = 0u;
-      if (self->state.query_status.received
-          < self->state.query_status.expected) {
-        VAST_DEBUG("{} received hits from {}/{} partitions", *self,
-                   self->state.query_status.received,
-                   self->state.query_status.expected);
-        caf::timespan runtime
-          = std::chrono::system_clock::now() - self->state.start;
-        self->state.query_status.runtime = runtime;
-        request_more_hits(self);
-      } else {
-        ship_results(self);
-        caf::timespan runtime
-          = std::chrono::system_clock::now() - self->state.start;
-        self->state.query_status.runtime = runtime;
+      VAST_DEBUG("{} received hits from {}/{} partitions", *self,
+                 self->state.query_status.received,
+                 self->state.query_status.expected);
+      caf::timespan runtime
+        = std::chrono::system_clock::now() - self->state.start;
+      self->state.query_status.runtime = runtime;
+      VAST_DEBUG("{} continues execution due partition completion", *self);
+      continue_execution(self);
+      if (index_exhausted(self->state.query_status)) {
         VAST_DEBUG("{} received all hits from {} partition(s) in {}", *self,
                    self->state.query_status.expected, vast::to_string(runtime));
         VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
@@ -389,7 +446,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
             runtime,
             metrics_metadata{
               {"query", fmt::to_string(self->state.query_context.id)}});
-        if (!self->state.source)
+        if (!self->state.result_stream)
           self->send_exit(self->state.sink, caf::exit_reason::user_shutdown);
       }
     },
