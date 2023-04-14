@@ -10,8 +10,6 @@
 
 namespace vast::plugins::dash {
 
-// -- loader plugin -----------------------------------------------------
-
 class plugin final : public virtual loader_plugin, dumper_plugin {
 public:
   auto make_loader(const record& options, operator_control_plane& ctrl) const
