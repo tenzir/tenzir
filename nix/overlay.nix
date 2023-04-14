@@ -39,6 +39,8 @@ in {
   # spdlog in nixpkgs uses `fmt_8` directly, but we want version 9, so we use a
   # little hack here.
   fmt_8 = prev.fmt;
+  # same for boost :).
+  boost = prev.boost18x;
   http-parser =
     if !isStatic
     then prev.http-parser
