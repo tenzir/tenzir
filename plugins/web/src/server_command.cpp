@@ -163,7 +163,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         }
       }
       auto const& route_params = response->route_params();
-      auto combined_params = detail::stable_map<std::string, std::string>;
+      auto combined_params = detail::stable_map<std::string, std::string>{};
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
@@ -191,7 +191,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         return response->abort(422, "failed to parse endpoint parameters\n",
                                params.error());
       auto vast_request = vast::http_request{
-        .params = std::move(params),
+        .params = *std::move(params),
         .response = std::move(response),
       };
       // Note that the handler should abort the response by itself if
