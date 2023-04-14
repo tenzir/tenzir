@@ -50,12 +50,12 @@ public:
           VAST_ERROR(ec);
         break;
       }
-      // Shove our input into the child's stdin.
+      // Shove operator input into the child's stdin.
       auto chunk_data = reinterpret_cast<const char*>(chunk->data());
       if (!out.write(chunk_data, chunk->size()))
         ctrl.abort(caf::make_error(
           ec::unspecified, fmt::format("failed to write into child's stdin")));
-      // Read stdout in blocks from the child and relay it downstream.
+      // Read child's stdout in chunks and relay them downstream.
       constexpr auto buffer_size = 16_KiB;
       std::vector<char> buffer(buffer_size);
       while (true) {
