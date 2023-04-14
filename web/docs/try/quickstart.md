@@ -5,8 +5,8 @@ sidebar_position: 1
 # Quickstart
 
 This guide illustrates how you can use VAST from the command line interface.
-We're assuming that you have [installed VAST](/docs/setup/install) and that
-you have a `vast` binary in your path.
+We're assuming that you have [installed VAST](../setup/install/README.md) and
+that you have a `vast` binary in your path.
 
 ## Start a VAST node
 
@@ -83,7 +83,7 @@ tar xOzf suricata.tar.gz | vast import suricata '#type == "suricata.alert"'
 ```
 
 We've added the import filter
-[expression](/docs/understand/expressions) `#type == "suricata.alert"`
+[expression](../understand/expressions.md) `#type == "suricata.alert"`
 because we're want the alerts from Suricata and the metadata from Zeek.
 
 :::note Multi-schema Zeek TSV Parser
@@ -143,21 +143,22 @@ bunch of logs to `vast import zeek` Just Works.
 ## Export data
 
 With Zeek and Suricata data in the VAST node, let's run some query pipelines.
-We're going to show the data in [JSON format](/docs/understand/formats/json),
-but you could display it in [other formats](/docs/understand/formats) as well.
+We're going to show the data in [JSON format](../understand/formats/json.md),
+but you could display it in [other formats](../understand/formats/README.md) as
+well.
 
 :::info Pipelines
 As of VAST v3.0, the VAST language supports ad-hoc
-[pipelines](/docs/understand/pipelines) for flexible transformation in
-addition to plain search. A pipeline consists of a chain of
-[operators](/docs/understand/operators) and must begin with *source*
+[pipelines](../understand/pipelines.md) for flexible transformation in addition
+to plain search. A pipeline consists of a chain of
+[operators](../understand/operators/README.md) and must begin with *source*
 operator, the producer emitting data, and end with a *sink* operator, the
 consumer receiving data. If a pipeline has source and sink, we call it *closed*.
 The `export` command implicitly closes a pipeline by adding the VAST node as
 source and standard output as sink.
 
 Concretely, `export` takes a pipeline of the form `EXPR | OP | OP` where `EXPR`
-is an [expression](/docs/understand/expressions) followed by zero or
+is an [expression](../understand/expressions.md) followed by zero or
 more operators. The full pipeline would be:
 
 ```
@@ -215,15 +216,17 @@ various fields as list of key-value pairs under the `record` key. Note the
 nested record `id` that has type alias called `zeek.conn_id`.
 
 :::info Schemas
-In VAST, a [schema](/docs/understand/data-model/schemas) is just a record [type
-definition](/docs/understand/data-model/type-system). You would touch schemas
-when the defaults are not enough. In future versions of VAST, you will interact less and less with schemas because VAST can actually infer them reasonably well.
+In VAST, a [schema](../understand/data-model/schemas.md) is just a record [type
+definition](../understand/data-model/type-system.md). You would touch schemas
+when the defaults are not enough. In future versions of VAST, you will interact
+less and less with schemas because VAST can actually infer them reasonably well.
 :::
 
 Now that you know a little bit about available schemas of the data, you could
 start referencing record fields in expressions. But VAST can also give you a
-taste of actual events. The [`taste`](/docs/understand/operators/taste)
-operator limits the number of events per unique schema:
+taste of actual events. The
+[`taste`](../understand/operators/transformations/taste.md) operator limits the
+number of events per unique schema:
 
 ```bash
 vast export json '#type == /(zeek|suricata).*/ | taste 1'
@@ -296,8 +299,9 @@ vast export json --omit-nulls '#type == "suricata.alert" | head 3'
 {"timestamp": "2021-11-17T14:39:24.485595", "flow_id": 368772671891675, "pcap_cnt": 723, "src_ip": "167.94.138.20", "src_port": 36086, "dest_ip": "198.71.247.91", "dest_port": 5683, "proto": "UDP", "event_type": "alert", "alert": {"action": "allowed", "gid": 1, "signature_id": 2200075, "rev": 2, "signature": "SURICATA UDPv4 invalid checksum", "category": "Generic Protocol Command Decode", "severity": 3, "source": {}, "target": {}}, "flow": {"pkts_toserver": 1, "pkts_toclient": 0, "bytes_toserver": 45, "bytes_toclient": 0, "start": "2021-11-17T14:39:24.485595"}, "packet_info": {}}
 ```
 
-Certainly less noisy. The [`select`](/docs/understand/operators/select)
-operator helps selecting fields of interest:
+Certainly less noisy. The
+[`select`](../understand/operators/transformations/select.md) operator helps
+selecting fields of interest:
 
 ```bash
 vast export json '#type == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
@@ -354,7 +358,7 @@ easy to specify fields in nested records. The fully qualified field name is
 
 :::info Extractors
 Aside from using field names, VAST offers powerful
-[extractors](/docs/understand/expressions#extractors) locating data.
+[extractors](../understand/expressions.md#extractors) locating data.
 If you don't know a field name, you can go through the type system, e.g., to
 apply a query over all fields of the `ip` type by writing `:ip == 172.17.2.163`.
 
@@ -391,15 +395,15 @@ vast export ascii '172.17.2.163 | head 10'
 <2021-11-18T10:32:37.045171, "CZKTgq2jm6IGsHyEQ2", 172.17.2.163, 63536, 172.17.2.17, 445, nil, nil, "\\TRASHYHOUSES-DC.trashyhouses.com\IPC$", nil, nil, "PIPE">
 ```
 
-The [`ascii`](/docs/understand/formats/ascii) format displays the raw data
+The [`ascii`](../understand/formats/ascii.md) format displays the raw data
 without field names, for experiencing maximum data density.
 
 ### Extract data with rich expressions
 
 Finally, let's get a feel for the [expression
-language](/docs/understand/expressions). VAST comes with native types
-for IP addresses, subnets, timestamps, and durations. These come in handy
-to succinctly describe what you want:
+language](../understand/expressions.md). VAST comes with native types for IP
+addresses, subnets, timestamps, and durations. These come in handy to succinctly
+describe what you want:
 
 ```bash
 vast export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | select orig_h, resp_h, orig_bytes'
@@ -421,5 +425,5 @@ matches exactly.
 ## Going deeper
 
 This was just a brief summary of how you could sift through the data. Take a
-look at various [operators](/docs/understand/operators) VAST has to
+look at various [operators](../understand/operators/README.md) VAST has to
 offer and start writing pipelines!

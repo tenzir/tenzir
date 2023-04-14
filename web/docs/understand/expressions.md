@@ -11,8 +11,9 @@ that apply to a single, fixed schema. The language captures this heterogeneity
 with [extractors](#extractors).
 
 :::tip Where?
-Expressions occur in pipeline operators. The [where](operators/where) operator
-is the most prominent example.
+Expressions occur in pipeline operators. The
+[`where`](operators/transformations/where.md) operator is the most prominent
+example.
 :::
 
 An *expression* is a function over an event that evaluates to `true` or
