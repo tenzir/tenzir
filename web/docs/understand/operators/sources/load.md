@@ -16,14 +16,14 @@ load <connector>
 
 ## Description
 
-The `load` operator acquires and emits raw bytes. Notably, it cannot be used in
-conjunction with an operator that expects events as an input, but rather only
-with operators that expect bytes, e.g., [`parse`](../transformations/parse.md)
-or [`dump`](../sinks/dump.md).
+The `load` operator emits raw bytes. Notably, it cannot be used together with
+operators that expects events as an input, but rather only with operators that
+expect bytes, e.g., [`parse`](../transformations/parse.md) or
+[`dump`](../sinks/dump.md).
 
 ### `<connector>`
 
-The [connector][connector-docs] used to load bytes or events.
+The [connector][connector-docs] used to load bytes.
 
 Some connectors have connector-specific options. Please refer to the
 documentation of the individual connectors for more information.

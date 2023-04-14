@@ -1,7 +1,7 @@
 # from
 
-The `from` operator combines a connector with a format to source events. Most
-pipelines start with a `from` operator.
+The `from` operator combines a connector with a format to create an event
+source. Most pipelines start with the `from` operator.
 
 ## Synopsis
 
@@ -12,7 +12,7 @@ read <format> [from <connector>]
 
 ## Description
 
-The from operator is the most common source of a pipeline. It is a convenience
+The `from` operator is the most common source of a pipeline. It is a convenience
 construct that flexibly brings together a [connector][connector-docs] and a
 [format][format-docs].
 
@@ -26,7 +26,7 @@ of connectors and formats the underlying pipeline is a lot more complex. We
 recommend always using `from` or [`read`](read.md) over [`load`](load.md) and
 [`parse`](../transformations/parse.md).
 
-### `from <connector>`
+### `<connector>`
 
 The [connector][connector-docs] used to load bytes or events.
 
@@ -39,7 +39,7 @@ load bytes that need to be parsed into VAST's wire format. Because of this, the
 `vast` connector must be used without a format.
 :::
 
-### `read <format>`
+### `<format>`
 
 The [format][format-docs] used to parse events from the loaded bytes.
 
