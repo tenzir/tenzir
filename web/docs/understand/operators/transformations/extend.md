@@ -1,23 +1,39 @@
 # extend
 
-Adds the configured fields with fixed values.
+Appends fields to events.
 
 ## Synopsis
 
 ```
-extend FIELD=VALUE[, …]
+extend <field=operand>...
 ```
 
-### Fields
+## Description
 
-The fields to add with fixed values.
+The `extend` appends a specified list of fields to the input. All existing
+fields remain intact.
 
-## Example
+The difference between `extend` and [`put`](put.md) is that `put` drops all
+fields not explicitly specified, whereas `extend` only appends fields.
 
-Add a field named `secret` with the string value `"xxx"`, a field named `ints`
-with the list of integers value `[1, 2, 3]`, and a field named `strs` with the
-list of strings value `["a", "b", "c"]`:
+The difference between `extend` and [`replace`](replace.md) is that `replace`
+overwrites existing fields, whereas `extend` doesn't touch the input.
+
+### `<field=operand>`
+
+The assignment consists of `field` that describes the new field name and
+`operand` that defines the field value.
+
+### Examples
+
+Add new fields with fixed values:
 
 ```
 extend secret="xxx", ints=[1, 2, 3], strs=["a", "b", "c"]
+```
+
+Duplicate a column:
+
+```
+extend source=src_ip
 ```

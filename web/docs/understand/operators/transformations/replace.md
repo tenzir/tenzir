@@ -1,24 +1,32 @@
 # replace
 
-Replaces the fields matching the configured extractors with fixed values.
+Replaces the fields matching the given extractors with fixed values.
 
 ## Synopsis
 
 ```
-replace EXTRACTORS=VALUE[, …]
+replace <field=operand>...
 ```
 
-### Extractors
+## Description
 
-The extractors of fields to replace with fixed values.
+The `replace` operator mutates existing fields by providing a new value.
 
-### Example
+The difference between `replace` and [`extend`](extend.md) is that `replace`
+overwrites existing fields, whereas `extend` doesn't touch the input.
 
-Replace all values of the field named `secret` with the string value `"xxx"`,
-all values of the field named `ints` with the list of integers value `[1, 2,
-3]`, and all values of the field named `strs` with the list of strings value
-`["a", "b", "c"]`:
+### `<field=operand>`
+
+The assignment consists of `field` that describes an existing field name and
+`operand` that defines the new field value.
+
+If `field` does not exist in the input, the operator degenerates to
+[`pass`](pass.md).
+
+### Examples
+
+Replace the field the field `src_ip` with a fixed value:
 
 ```
-replace secret="xxx", ints=[1, 2, 3], strs=["a", "b", "c"]
+replace src_ip=0.0.0.0
 ```

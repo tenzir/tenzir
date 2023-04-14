@@ -45,6 +45,6 @@ Note that the output still contains the event `{"foo": null, "bar": "b"}` twice.
 This is because `unique` only removes *adjacent* duplicates.
 
 To remove *all* duplicates (including non-adjacent ones), [`sort`](sort.md)
-input first such that duplicate values lay adjacent to each other. Unlike
+the input first such that duplicate values lay adjacent to each other. Unlike
 deduplication via `unique`, sorting is a blocking and operation and consumes
 the entire input before producing outputs.
