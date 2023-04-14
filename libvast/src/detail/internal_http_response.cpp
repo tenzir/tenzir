@@ -25,9 +25,11 @@ void internal_http_response::append(std::string body) {
     *body_ += body;
 }
 
-void internal_http_response::abort(uint16_t error_code, std::string message) {
+void internal_http_response::abort(uint16_t error_code, std::string message,
+                                   caf::error error) {
   body_ = caf::make_error(ec::system_error,
-                          fmt::format("Error {}: {}", error_code, message));
+                          fmt::format("Error {}: {}{}", error_code, message,
+                                      error));
 }
 
 caf::expected<std::string> internal_http_response::release() && {

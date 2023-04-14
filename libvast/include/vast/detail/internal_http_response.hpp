@@ -21,7 +21,8 @@ public:
 
   void append(std::string body) override;
 
-  void abort(uint16_t error_code, std::string message) override;
+  void
+  abort(uint16_t error_code, std::string message, caf::error error) override;
 
   /// Return the full response body.
   caf::expected<std::string> release() &&;
