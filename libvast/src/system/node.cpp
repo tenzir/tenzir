@@ -687,7 +687,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
             // hand, the downside will be extra copies and we will not be able
             // to use chunked or streaming transfers that way.
             VAST_WARN("proxy request returned error: {}", e);
-            response->abort(500, fmt::format("internal server error"));
+            response->abort(500, "internal server error\n", e);
           });
       return rp;
     },
