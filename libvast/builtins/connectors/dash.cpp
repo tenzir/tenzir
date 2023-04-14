@@ -10,7 +10,7 @@
 
 namespace vast::plugins::dash {
 
-class plugin final : public virtual loader_plugin, dumper_plugin {
+class plugin final : public virtual loader_plugin, saver_plugin {
 public:
   auto make_loader(const record& options, operator_control_plane& ctrl) const
     -> caf::expected<generator<chunk_ptr>> override {
@@ -22,10 +22,10 @@ public:
     return stdin_plugin_->get_default_parser(options);
   }
 
-  auto make_dumper(const record& options, type input_schema,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<dumper> override {
-    return stdout_plugin_->make_dumper(options, std::move(input_schema), ctrl);
+  auto make_saver(const record& options, type input_schema,
+                  operator_control_plane& ctrl) const
+    -> caf::expected<saver> override {
+    return stdout_plugin_->make_saver(options, std::move(input_schema), ctrl);
   }
 
   auto make_default_printer() const
@@ -33,8 +33,8 @@ public:
     return stdout_plugin_->make_default_printer();
   }
 
-  auto dumper_requires_joining() const -> bool override {
-    return stdout_plugin_->dumper_requires_joining();
+  auto saver_requires_joining() const -> bool override {
+    return stdout_plugin_->saver_requires_joining();
   }
 
   auto initialize(const record&, const record&) -> caf::error override {
@@ -42,7 +42,7 @@ public:
     if (not stdin_plugin_) {
       return caf::make_error(ec::logic_error, "stdin plugin unavailable");
     }
-    stdout_plugin_ = plugins::find<dumper_plugin>("stdout");
+    stdout_plugin_ = plugins::find<saver_plugin>("stdout");
     if (not stdout_plugin_) {
       return caf::make_error(ec::logic_error, "stdin plugin unavailable");
     }
@@ -55,7 +55,7 @@ public:
 
 private:
   const loader_plugin* stdin_plugin_ = nullptr;
-  const dumper_plugin* stdout_plugin_ = nullptr;
+  const saver_plugin* stdout_plugin_ = nullptr;
 };
 
 } // namespace vast::plugins::dash

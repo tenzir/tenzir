@@ -13,11 +13,11 @@
 
 namespace vast::plugins::stdout_ {
 
-class plugin : public virtual dumper_plugin {
+class plugin : public virtual saver_plugin {
 public:
   [[nodiscard]] auto
-  make_dumper(const record&, [[maybe_unused]] type input_schema,
-              operator_control_plane&) const -> caf::expected<dumper> override {
+  make_saver(const record&, [[maybe_unused]] type input_schema,
+             operator_control_plane&) const -> caf::expected<saver> override {
     auto outbuf = detail::fdoutbuf(STDOUT_FILENO);
     return [outbuf](chunk_ptr chunk) mutable {
       if (chunk)
@@ -41,7 +41,7 @@ public:
     return "stdout";
   }
 
-  [[nodiscard]] auto dumper_requires_joining() const -> bool override {
+  [[nodiscard]] auto saver_requires_joining() const -> bool override {
     return true;
   }
 };

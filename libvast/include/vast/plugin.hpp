@@ -442,39 +442,39 @@ public:
     -> caf::expected<printer>
     = 0;
 
-  /// Returns the default dumper for this printer.
-  [[nodiscard]] virtual auto make_default_dumper() const
+  /// Returns the default saver for this printer.
+  [[nodiscard]] virtual auto make_default_saver() const
     -> std::optional<std::pair<std::string, record>>
     = 0;
 
   /// Returns whether the printer allows for joining output streams into a
-  /// single dumper.
+  /// single saver.
   [[nodiscard]] virtual auto printer_allows_joining() const -> bool = 0;
 };
 
-// -- dumper plugin -----------------------------------------------------
+// -- saver plugin -----------------------------------------------------
 
-/// A dumper plugin transfers a stream of chunks to a sink.
+/// A saver plugin transfers a stream of chunks to a sink.
 /// @relates plugin
-class dumper_plugin : public virtual plugin {
+class saver_plugin : public virtual plugin {
 public:
   // Alias for the byte chunk dumping function.
-  using dumper = std::function<auto(chunk_ptr)->void>;
+  using saver = std::function<auto(chunk_ptr)->void>;
 
-  /// Returns the dumper.
+  /// Returns the saver.
   [[nodiscard]] virtual auto
-  make_dumper(const record&, type input_schema, operator_control_plane&) const
-    -> caf::expected<dumper>
+  make_saver(const record&, type input_schema, operator_control_plane&) const
+    -> caf::expected<saver>
     = 0;
 
-  /// Returns the default printer for this dumper.
+  /// Returns the default printer for this saver.
   [[nodiscard]] virtual auto make_default_printer() const
     -> std::optional<std::pair<std::string, record>>
     = 0;
 
-  /// Returns whether the dumper requires that the output from its preceding
+  /// Returns whether the saver requires that the output from its preceding
   /// printer can be joined.
-  [[nodiscard]] virtual auto dumper_requires_joining() const -> bool = 0;
+  [[nodiscard]] virtual auto saver_requires_joining() const -> bool = 0;
 };
 
 /// A parser plugin transfers a stream of chunks to a stream of table slices.

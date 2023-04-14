@@ -121,7 +121,6 @@ class chunk;
 class command;
 class uint64_type;
 class data;
-class dumper_plugin;
 class duration_type;
 class enumeration_type;
 class expression;
