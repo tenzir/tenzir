@@ -11,6 +11,7 @@
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/test/fixtures/events.hpp>
+#include <vast/test/stdin_file_inut.hpp>
 #include <vast/test/test.hpp>
 
 #include <caf/test/dsl.hpp>
@@ -334,17 +335,28 @@ TEST(to - invalid inputs) {
   REQUIRE_ERROR(pipeline::parse("to json write stdout", record{}));
 }
 
-TEST(from_read_parsing) {
-  // TODO: add "read json from stdin" and "read json"
-  auto definitions = {"from stdin", "from stdin read json"};
+TEST(stdin with json parser with all from and read combinations) {
+  auto definitions = {"from stdin", "from stdin read json",
+                      "read json from stdin", "read json"};
   for (auto definition : definitions) {
+    test::stdin_file_input<"artifacts/inputs/json.txt"> file;
     auto source = unbox(pipeline::parse(definition, record{}));
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<pipeline>(std::move(source)));
-    ops.push_back(std::make_unique<sink>([](table_slice) {}));
-    auto executor = make_local_executor(pipeline{std::move(ops)});
-    // TODO: Cannot test behavior yet because JSON reader is missing.
-    (void)executor;
+    auto sink_called = false;
+    ops.push_back(std::make_unique<sink>([&sink_called](table_slice slice) {
+      sink_called = true;
+      REQUIRE_EQUAL(slice.rows(), 2u);
+      REQUIRE_EQUAL(slice.columns(), 2u);
+      CHECK_EQUAL(materialize(slice.at(0u, 0u)), int64_t{1});
+      CHECK_EQUAL(materialize(slice.at(0u, 1u)), caf::none);
+      CHECK_EQUAL(materialize(slice.at(1u, 0u)), caf::none);
+      CHECK_EQUAL(materialize(slice.at(1u, 1u)), "2");
+    }));
+    for (auto&& x : make_local_executor(pipeline{std::move(ops)})) {
+      REQUIRE_NOERROR(x);
+    }
+    REQUIRE(sink_called);
   }
 }
 

@@ -53,11 +53,12 @@ private:
   OnWarnCallable on_warn_;
 };
 
-parser_plugin::parser create_sut(operator_control_plane& control_plane) {
+parser_plugin::parser create_sut(generator<chunk_ptr> json_chunk_gen,
+                                 operator_control_plane& control_plane) {
   auto const* plugin = vast::plugins::find<vast::parser_plugin>("json");
-  auto sut = plugin->make_parser({}, control_plane);
+  auto sut = plugin->make_parser(std::move(json_chunk_gen), {}, control_plane);
   REQUIRE(sut);
-  return *sut;
+  return std::move(*sut);
 }
 
 generator<chunk_ptr>
@@ -75,7 +76,6 @@ struct fixture {
   };
   operator_control_plane_mock<decltype(default_on_warn)> control_plane_mock{
     default_on_warn};
-  parser_plugin::parser sut = create_sut(control_plane_mock);
 };
 
 auto make_expected_schema(const type& data_schema) -> type {
@@ -97,8 +97,9 @@ TEST(events with same schema) {
                                        {"b", int64_type{}},
                                        {"c", int64_type{}},
                                      }}}});
+  auto sut = create_sut(make_chunk_generator({in_json}), control_plane_mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator({in_json}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
@@ -127,8 +128,10 @@ TEST(event split across two chunks) {
                                        {"b", int64_type{}},
                                        {"c", int64_type{}},
                                      }}}});
+  auto sut = create_sut(make_chunk_generator({first_json, second_json}),
+                        control_plane_mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator({first_json, second_json}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
@@ -153,9 +156,9 @@ TEST(skip malformed json and emit a warning) {
       FAIL("Warning expected to be emitted only once");
     warn_issued = true;
   }};
-  auto sut = create_sut(mock);
+  auto sut = create_sut(make_chunk_generator({in_json}), mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator({in_json}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   CHECK(output_slices.empty());
@@ -179,8 +182,9 @@ TEST(different schemas in each event are combined into one) {
     {"field2", list_type{double_type{}}},
     {"field3", string_type{}},
   }});
+  auto sut = create_sut(make_chunk_generator({in_json}), control_plane_mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator({in_json}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
@@ -213,10 +217,10 @@ TEST(inproperly formatted json in all input chunks results in 0 slices) {
   auto mock = operator_control_plane_mock{[&issues_warnings](auto&&) {
     ++issues_warnings;
   }};
-  auto sut = create_sut(mock);
   auto json = R"({"12345":{"a":1234)";
+  auto sut = create_sut(make_chunk_generator({json, json, json}), mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator({json, json, json}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   CHECK(output_slices.empty());
@@ -231,11 +235,11 @@ TEST(retrieve one event from joining 2nd and 3rd chunk despite 1st
       FAIL("Warning expected to be emitted only once");
     warn_issued = true;
   }};
-  auto sut = create_sut(mock);
   auto json = R"({"12345":{"a":1234)";
   auto json3 = "}}";
+  auto sut = create_sut(make_chunk_generator({json, json, json3}), mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator({json, json, json3}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   CHECK(warn_issued);
@@ -255,12 +259,13 @@ TEST(properly formatted json followed by inproperly formatted one and ending
     // places.
     warn_issued = true;
   }};
-  auto sut = create_sut(mock);
+  auto sut = create_sut(
+    make_chunk_generator({proper_json.substr(0, 2), proper_json.substr(2, 2),
+                          proper_json.substr(4), not_a_json.substr(0, 2),
+                          not_a_json.substr(2), proper_json}),
+    mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator(
-         {proper_json.substr(0, 2), proper_json.substr(2, 2),
-          proper_json.substr(4), not_a_json.substr(0, 2), not_a_json.substr(2),
-          proper_json}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
@@ -276,8 +281,9 @@ TEST(split results into two slices when input chunks has more events than a
   for (auto i = 0u; i <= defaults::import::table_slice_size; ++i) {
     in_json.append(R"({"a": 5})");
   }
+  auto sut = create_sut(make_chunk_generator({in_json}), control_plane_mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator({in_json}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   CHECK_EQUAL(output_slices.size(), 2u);
@@ -289,8 +295,9 @@ TEST(empty chunk from input generator causes the parser to yield an empty table
   auto gen = []() -> generator<chunk_ptr> {
     co_yield chunk::make_empty();
   };
+  auto sut = create_sut(gen(), control_plane_mock);
   auto output_slice = std::optional<vast::table_slice>{};
-  for (auto slice : (sut)(gen())) {
+  for (auto slice : sut) {
     output_slice = std::move(slice);
     break;
   }
@@ -306,8 +313,9 @@ TEST(empty chunk after parsing json formatted chunk causes the parser to yield
     co_yield chunk::make_empty();
     co_return;
   };
+  auto sut = create_sut(gen(), control_plane_mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(gen())) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
@@ -315,9 +323,11 @@ TEST(empty chunk after parsing json formatted chunk causes the parser to yield
 }
 
 TEST(null in the input json results in the value being missing in the schema) {
+  auto sut = create_sut(
+    make_chunk_generator({R"({"a": 5, "b": null})", R"({"c": null})"}),
+    control_plane_mock);
   auto output_slices = std::vector<vast::table_slice>{};
-  for (auto slice : (sut)(make_chunk_generator(
-         {R"({"a": 5, "b": null})", R"({"c": null})"}))) {
+  for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);

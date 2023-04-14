@@ -481,11 +481,11 @@ public:
 /// @relates plugin
 class parser_plugin : public virtual plugin {
 public:
-  using parser = std::function<generator<table_slice>(generator<chunk_ptr>)>;
+  using parser = generator<table_slice>;
 
   [[nodiscard]] virtual auto
-  make_parser(const record&, operator_control_plane&) const
-    -> caf::expected<parser>
+  make_parser(generator<chunk_ptr> loader, const record&,
+              operator_control_plane&) const -> caf::expected<parser>
     = 0;
 
   [[nodiscard]] virtual auto make_default_loader() const

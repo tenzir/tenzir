@@ -11,15 +11,16 @@
 #include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/stdin_file_inut.hpp"
 #include "vast/test/test.hpp"
 
+#include <arrow/record_batch.h>
 #include <caf/error.hpp>
 #include <caf/test/dsl.hpp>
 
-#include <fcntl.h>
-#include <unistd.h>
-
 using namespace vast;
+
+using test::stdin_file_input;
 
 namespace {
 
@@ -70,28 +71,6 @@ struct fixture {
   const vast::loader_plugin* loader_plugin;
   std::function<auto()->generator<chunk_ptr>> current_loader;
   mock_control_plane control_plane;
-};
-
-// Helper struct that, as long as it is alive, redirects stdin to the output of
-// a file.
-template <detail::string_literal FileName = "">
-struct stdin_file_input {
-  stdin_file_input() {
-    old_stdin_fd = ::dup(fileno(stdin));
-    REQUIRE_NOT_EQUAL(old_stdin_fd, -1);
-    auto input_file_fd = ::open(
-      fmt::format("{}{}", VAST_TEST_PATH, FileName.str()).c_str(), O_RDONLY);
-    REQUIRE_NOT_EQUAL(input_file_fd, -1);
-    ::dup2(input_file_fd, fileno(stdin));
-    ::close(input_file_fd);
-  }
-
-  ~stdin_file_input() {
-    auto old_stdin_status = ::dup2(old_stdin_fd, fileno(stdin));
-    REQUIRE_NOT_EQUAL(old_stdin_status, -1);
-    ::close(old_stdin_fd);
-  }
-  int old_stdin_fd;
 };
 
 } // namespace
@@ -159,32 +138,6 @@ TEST(stdin loader - one complete chunk) {
   REQUIRE_EQUAL(chunks.front()->size(), max_chunk_size);
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
                      str_chunk->begin(), str_chunk->end()));
-}
-
-TEST(stdin loader - from operator) {
-  struct sink final : crtp_operator<sink> {
-    auto operator()(generator<table_slice> input) const
-      -> generator<std::monostate> {
-      for (auto&& slice : input) {
-        REQUIRE(slice.rows() == 0);
-        co_yield {};
-      }
-    }
-
-    auto to_string() const -> std::string override {
-      return "<sink>";
-    }
-  };
-
-  stdin_file_input<"artifacts/inputs/nothing.txt"> file;
-  auto ops = unbox(pipeline::parse("from stdin | pass", record{})).unwrap();
-  ops.push_back(std::make_unique<sink>());
-  for (auto&& x : make_local_executor(pipeline{std::move(ops)})) {
-    // TODO: When the parser is implemented, replace the checks below with
-    // `REQUIRE_NOERROR(x);` (and perhaps write some more tests).
-    REQUIRE_ERROR(x);
-    REQUIRE_EQUAL(x.error().code(), static_cast<uint8_t>(ec::unimplemented));
-  }
 }
 
 FIXTURE_SCOPE_END()

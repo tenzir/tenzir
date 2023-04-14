@@ -21,9 +21,9 @@ namespace vast::plugins::from_read {
 
 namespace {
 
-class from_operator final : public crtp_operator<from_operator> {
+class load_operator final : public crtp_operator<load_operator> {
 public:
-  explicit from_operator(const loader_plugin& loader, record config)
+  explicit load_operator(const loader_plugin& loader, record config)
     : loader_plugin_{loader}, config_{std::move(config)} {
   }
 
@@ -33,7 +33,7 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("from {} <{}>", loader_plugin_.name(), config_);
+    return fmt::format("load {} <{}>", loader_plugin_.name(), config_);
   }
 
 private:
@@ -41,26 +41,28 @@ private:
   record config_;
 };
 
-class read_operator final : public crtp_operator<read_operator> {
+class parse_operator final : public crtp_operator<parse_operator> {
 public:
-  // TODO: Replace `plugin` with `parser_plugin` (once we have it).
-  explicit read_operator(const plugin& parser, record config)
+  explicit parse_operator(const parser_plugin& parser, record config)
     : parser_plugin_{parser}, config_{std::move(config)} {
   }
 
-  auto operator()(generator<chunk_ptr>, operator_control_plane&) const
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> caf::expected<generator<table_slice>> {
-    // TODO: Implement this.
-    return caf::make_error(ec::unimplemented,
-                           "parser_plugin does not exist yet");
+    auto parser = parser_plugin_.make_parser(std::move(input), config_, ctrl);
+    if (not parser) {
+      return std::move(parser.error());
+    }
+    return std::move(*parser);
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("read {} <{}>", parser_plugin_.name(), config_);
+    return fmt::format("parse {} <{}>", parser_plugin_.name(), config_);
   }
 
 private:
-  const plugin& parser_plugin_;
+  const parser_plugin& parser_plugin_;
   record config_;
 };
 
@@ -118,7 +120,7 @@ public:
                                                       loader_name)),
       };
     }
-    auto parser = plugins::find<plugin>(parser_name);
+    auto parser = plugins::find<parser_plugin>(parser_name);
     if (!parser) {
       return {
         std::string_view{f, l},
@@ -127,9 +129,9 @@ public:
       };
     }
     auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::make_unique<from_operator>(*loader, record{}));
+    ops.push_back(std::make_unique<load_operator>(*loader, record{}));
     ops.push_back(
-      std::make_unique<read_operator>(*parser, std::move(parser_config)));
+      std::make_unique<parse_operator>(*parser, std::move(parser_config)));
     return {
       std::string_view{f, l},
       std::make_unique<class pipeline>(std::move(ops)),
@@ -167,13 +169,44 @@ public:
                                     pipeline)),
       };
     }
-
-    // TODO: Implement this (following the same logic as `from_plugin`) as soon
-    // as we have a `parser_plugin`.
+    auto parser_name = std::move(std::get<0>(parsed));
+    auto parser = plugins::find<parser_plugin>(parser_name);
+    if (not parser) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::lookup_error,
+                        fmt::format("no parser found for '{}'", parser_name)),
+      };
+    }
+    auto loader_name = std::string{};
+    auto loader_cfg = record{};
+    if (auto read_opt = std::get<1>(parsed)) {
+      loader_name = std::move(std::get<1>(*read_opt));
+    } else if (auto default_loader = parser->make_default_loader()) {
+      std::tie(loader_name, loader_cfg) = std::move(*default_loader);
+    } else {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("the {} parser must be "
+                                                      "followed by 'from ...'",
+                                                      parser_name)),
+      };
+    }
+    auto loader = plugins::find<loader_plugin>(loader_name);
+    if (!loader) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::lookup_error,
+                        fmt::format("no loader plugin found for '{}'",
+                                    loader_name)),
+      };
+    }
+    auto ops = std::vector<operator_ptr>(2u);
+    ops[0] = std::make_unique<load_operator>(*loader, std::move(loader_cfg));
+    ops[1] = std::make_unique<parse_operator>(*parser, record{});
     return {
       std::string_view{f, l},
-      caf::make_error(ec::unimplemented,
-                      "this operator is not implemented yet"),
+      std::make_unique<class pipeline>(std::move(ops)),
     };
   }
 };
@@ -182,4 +215,4 @@ public:
 } // namespace vast::plugins::from_read
 
 VAST_REGISTER_PLUGIN(vast::plugins::from_read::from_plugin)
-// VAST_REGISTER_PLUGIN(vast::plugins::from_read::read_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::from_read::read_plugin)

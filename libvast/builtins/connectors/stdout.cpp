@@ -20,7 +20,9 @@ public:
               operator_control_plane&) const -> caf::expected<dumper> override {
     auto outbuf = detail::fdoutbuf(STDOUT_FILENO);
     return [outbuf](chunk_ptr chunk) mutable {
-      outbuf.sputn(reinterpret_cast<const char*>(chunk->data()), chunk->size());
+      if (chunk)
+        outbuf.sputn(reinterpret_cast<const char*>(chunk->data()),
+                     chunk->size());
     };
   }
 

@@ -176,11 +176,12 @@ auto emit_warning(operator_control_plane& control_plane,
 class plugin final : public virtual parser_plugin,
                      public virtual printer_plugin {
   [[nodiscard]] auto
-  make_parser(const record&, operator_control_plane& control_plane) const
+  make_parser(generator<chunk_ptr> json_chunk_generator, const record&,
+              operator_control_plane& control_plane) const
     -> caf::expected<parser> override {
     return
-      [&control_plane](
-        generator<chunk_ptr> json_chunk_generator) -> generator<table_slice> {
+      [](generator<chunk_ptr> json_chunk_generator,
+         operator_control_plane& control_plane) -> generator<table_slice> {
         auto parser = simdjson::ondemand::parser{};
         auto stream = simdjson::ondemand::document_stream{};
         auto slice_builder = adaptive_table_slice_builder{};
@@ -229,7 +230,7 @@ class plugin final : public virtual parser_plugin,
         }
         if (auto slice = std::move(slice_builder).finish(); slice.rows() > 0u)
           co_yield std::move(slice);
-      };
+      }(std::move(json_chunk_generator), control_plane);
   }
 
   [[nodiscard]] auto make_default_loader() const
