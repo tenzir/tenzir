@@ -36,7 +36,7 @@ enum class http_status_code : uint16_t {
 };
 
 enum class api_version : uint8_t {
-  v0,
+  v0 = 0,
   latest = v0,
 };
 
