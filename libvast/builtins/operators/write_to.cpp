@@ -20,118 +20,67 @@
 #include <caf/expected.hpp>
 
 #include <algorithm>
+#include <string>
 #include <utility>
 
 namespace vast::plugins::write_to {
 
 namespace {
 
-/// The operator for printing data that will have to be joined later
-/// during pipeline execution.
-class print_operator final
-  : public schematic_operator<print_operator, printer_plugin::printer,
-                              generator<chunk_ptr>> {
-public:
-  explicit print_operator(const printer_plugin& printer) noexcept
-    : printer_plugin_{&printer} {
-  }
-
-  auto initialize(const type& schema, operator_control_plane& ctrl) const
-    -> caf::expected<state_type> override {
-    return printer_plugin_->make_printer({}, schema, ctrl);
-  }
-
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
-    return state(std::move(slice));
-  }
-
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("write {}", printer_plugin_->name());
-  }
-
-private:
-  const printer_plugin* printer_plugin_;
-};
-
-/// The operator for saving data that will have to be joined later
-/// during pipeline execution.
-class save_operator final : public crtp_operator<save_operator> {
-public:
-  explicit save_operator(const saver_plugin& saver) noexcept
-    : saver_plugin_{&saver} {
-  }
-
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
-    // TODO: Extend API to allow schema-less make_saver().
-    auto new_saver = saver_plugin_->make_saver({}, {}, ctrl);
-    if (!new_saver) {
-      ctrl.abort(new_saver.error());
-      co_return;
-    }
-    for (auto&& x : input) {
-      (*new_saver)(std::move(x));
-      co_yield {};
-    }
-  }
-
-  [[nodiscard]] auto to_string() const -> std::string override {
-    return fmt::format("to {}", saver_plugin_->name());
-  }
-
-private:
-  const saver_plugin* saver_plugin_;
-};
-
-struct writing_state {
-  printer_plugin::printer p;
-  saver_plugin::saver s;
+struct print_and_save_state {
+  printer_plugin::printer printer;
+  saver_plugin::saver saver;
 };
 
 /// The operator for printing and saving data without joining.
-class print_save_operator final
-  : public schematic_operator<print_save_operator, writing_state,
+class print_and_save_operator final
+  : public schematic_operator<print_and_save_operator, print_and_save_state,
                               std::monostate> {
 public:
-  explicit print_save_operator(const printer_plugin& printer,
-                               const saver_plugin& saver) noexcept
-    : printer_plugin_{&printer}, saver_plugin_{&saver} {
+  explicit print_and_save_operator(const printer_plugin& printer,
+                                   record print_config,
+                                   const saver_plugin& saver,
+                                   record save_config) noexcept
+    : printer_plugin_{printer},
+      print_config_{std::move(print_config)},
+      saver_plugin_{saver},
+      save_config_{std::move(save_config)} {
   }
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    writing_state ws;
-    auto new_printer = printer_plugin_->make_printer({}, schema, ctrl);
-    if (!new_printer) {
-      return new_printer.error();
+    auto printer = printer_plugin_.make_printer(print_config_, schema, ctrl);
+    if (not printer) {
+      return std::move(printer.error());
     }
-    ws.p = std::move(*new_printer);
-    auto new_saver = saver_plugin_->make_saver({}, schema, ctrl);
-    if (!new_saver) {
-      return new_saver.error();
+    auto saver = saver_plugin_.make_saver(save_config_, schema, ctrl);
+    if (not saver) {
+      return std::move(saver.error());
     }
-    ws.s = std::move(*new_saver);
-    return ws;
+    return print_and_save_state{
+      .printer = std::move(*printer),
+      .saver = std::move(*saver),
+    };
   }
 
   auto process(table_slice slice, state_type& state) const
     -> output_type override {
-    for (auto&& x : state.p(std::move(slice))) {
-      state.s(std::move(x));
+    for (auto&& x : state.printer(std::move(slice))) {
+      state.saver(std::move(x));
     }
     return {};
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    return fmt::format("write {} to {}", printer_plugin_->name(),
-                       saver_plugin_->name());
+  auto to_string() const noexcept -> std::string override {
+    return fmt::format("write {} to {}", printer_plugin_.name(),
+                       saver_plugin_.name());
   }
 
 private:
-  const printer_plugin* printer_plugin_{};
-  const saver_plugin* saver_plugin_{};
+  const printer_plugin& printer_plugin_;
+  record print_config_ = {};
+  const saver_plugin& saver_plugin_;
+  record save_config_ = {};
 };
 
 class write_plugin final : public virtual operator_plugin {
@@ -146,94 +95,75 @@ public:
     return "write";
   };
 
-  [[nodiscard]] auto make_operator(std::string_view pipeline) const
+  auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor, parsers::plugin_name,
-      parsers::extractor_char, parsers::extractor_list;
+    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
+      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
+    // TODO: handle options for saver and printer
+    auto saver_options = record{};
+    auto printer_options = record{};
     const auto p = optional_ws_or_comment >> plugin_name
-                   >> -(required_ws_or_comment >> string_parser{"to"}
-                        >> required_ws_or_comment >> plugin_name)
+                   >> -(required_ws_or_comment >> "to" >> required_ws_or_comment
+                        >> plugin_name)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto result = std::tuple{
-      std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
-    if (!p(f, l, result)) {
+    auto parsed = std::tuple{std::string{}, std::optional<std::string>{}};
+    if (!p(f, l, parsed)) {
       return {
         std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "write operator: '{}'",
-                                                      pipeline)),
+        caf::make_error(ec::syntax_error,
+                        fmt::format("failed to parse write operator: '{}'",
+                                    pipeline)),
       };
     }
-    auto printer_name = std::get<0>(result);
-    auto printer = plugins::find<printer_plugin>(printer_name);
-    if (!printer) {
-      return {std::string_view{f, l},
-              caf::make_error(ec::syntax_error,
-                              fmt::format("failed to parse "
-                                          "write operator: no '{}' printer "
-                                          "found",
-                                          printer_name))};
+    auto& [printer_name, saver_name] = parsed;
+    const auto* printer = plugins::find<printer_plugin>(printer_name);
+    if (not printer) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to find printer "
+                                                      "'{}' in pipeline '{}'",
+                                                      printer_name, pipeline)),
+      };
     }
-    const saver_plugin* saver;
-    auto saver_argument = std::get<1>(result);
-    if (saver_argument) {
-      auto saver_name = std::get<1>(*saver_argument);
-      saver = plugins::find<saver_plugin>(saver_name);
-      if (!saver) {
-        return {std::string_view{f, l},
-                caf::make_error(ec::syntax_error,
-                                fmt::format("failed to parse "
-                                            "write operator: no '{}' saver "
-                                            "found",
-                                            saver_name))};
-      }
-    } else {
-      auto default_saver = printer->make_default_saver();
-      if (!default_saver) {
-        return {std::string_view{f, l},
-                caf::make_error(ec::invalid_configuration,
-                                fmt::format("failed to parse write operator: "
-                                            "no available default sink for "
-                                            "printing '{}' output "
-                                            "found",
-                                            printer->name()))};
-      }
-      auto [default_saver_name, _] = *default_saver;
-      saver = plugins::find<vast::saver_plugin>(default_saver_name);
-      if (!saver) {
-        return {std::string_view{f, l},
-                caf::make_error(ec::invalid_configuration,
-                                fmt::format("failed to parse write operator: "
-                                            "default sink '{0}' for "
-                                            "printing '{1}' output "
-                                            "found",
-                                            default_saver_name,
-                                            printer->name()))};
-      }
+    if (not saver_name) {
+      std::tie(saver_name, saver_options)
+        = printer->default_saver(printer_options);
+    }
+    const auto* saver = plugins::find<saver_plugin>(*saver_name);
+    if (not saver) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to find saver "
+                                                      "'{}' in pipeline '{}'",
+                                                      saver_name, pipeline)),
+      };
     }
     if (saver->saver_requires_joining()
-        and not printer->printer_allows_joining()) {
-      return {std::string_view{f, l},
-              caf::make_error(ec::invalid_argument,
-                              fmt::format("writing '{0}' to '{1}' is not "
-                                          "allowed; the sink '{1}' requires a "
-                                          "single input, and the format '{0}' "
-                                          "has potentially multiple outputs",
-                                          printer->name(), saver->name()))};
-    } else if (not saver->saver_requires_joining()) {
-      auto op = std::make_unique<print_save_operator>(std::move(*printer),
-                                                      std::move(*saver));
-      return {std::string_view{f, l}, std::move(op)};
+        && not printer->printer_allows_joining()) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::invalid_argument,
+                        fmt::format("writing '{0}' to '{1}' is not allowed; "
+                                    "the connector '{1}' requires a single "
+                                    "input, and the format '{0}' has "
+                                    "potentially multiple outputs",
+                                    printer_name, *saver_name)),
+      };
     }
-    auto ops = std::vector<operator_ptr>{};
-    ops.emplace_back(std::make_unique<print_operator>(std::move(*printer)));
-    ops.emplace_back(std::make_unique<save_operator>(std::move(*saver)));
+    if (not saver->saver_requires_joining()) {
+      return {
+        std::string_view{f, l},
+        std::make_unique<print_and_save_operator>(*printer, printer_options,
+                                                  *saver, saver_options),
+      };
+    }
     return {
       std::string_view{f, l},
-      std::make_unique<class pipeline>(std::move(ops)),
+      // TODO: This ignores options
+      pipeline::parse_as_operator(
+        fmt::format("print {} | save {}", printer_name, *saver_name), {}),
     };
   }
 };
@@ -250,94 +180,75 @@ public:
     return "to";
   };
 
-  [[nodiscard]] auto make_operator(std::string_view pipeline) const
+  auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor, parsers::plugin_name,
-      parsers::extractor_char, parsers::extractor_list;
+    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
+      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
+    // TODO: handle options for saver and printer
+    auto saver_options = record{};
+    auto printer_options = record{};
     const auto p = optional_ws_or_comment >> plugin_name
-                   >> -(required_ws_or_comment >> string_parser{"write"}
+                   >> -(required_ws_or_comment >> "write"
                         >> required_ws_or_comment >> plugin_name)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto result = std::tuple{
-      std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
-    if (!p(f, l, result)) {
+    auto parsed = std::tuple{std::string{}, std::optional<std::string>{}};
+    if (!p(f, l, parsed)) {
       return {
         std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "to operator: '{}'",
-                                                      pipeline)),
+        caf::make_error(ec::syntax_error,
+                        fmt::format("failed to parse to operator: '{}'",
+                                    pipeline)),
       };
     }
-    auto saver_name = std::get<0>(result);
-    auto saver = plugins::find<saver_plugin>(saver_name);
-    if (!saver) {
-      return {std::string_view{f, l},
-              caf::make_error(ec::syntax_error,
-                              fmt::format("failed to parse "
-                                          "write operator: no '{}' saver "
-                                          "found",
-                                          saver_name))};
+    auto& [saver_name, printer_name] = parsed;
+    const auto* saver = plugins::find<saver_plugin>(saver_name);
+    if (not saver) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to find saver "
+                                                      "'{}' in pipeline '{}'",
+                                                      saver_name, pipeline)),
+      };
     }
-    const printer_plugin* printer;
-    auto printer_argument = std::get<1>(result);
-    if (printer_argument) {
-      auto printer_name = std::get<1>(*printer_argument);
-      printer = plugins::find<printer_plugin>(printer_name);
-      if (!printer) {
-        return {std::string_view{f, l},
-                caf::make_error(ec::syntax_error,
-                                fmt::format("failed to parse "
-                                            "to operator: no '{}' printer "
-                                            "found",
-                                            printer_name))};
-      }
-    } else {
-      auto default_printer = saver->make_default_printer();
-      if (!default_printer) {
-        return {std::string_view{f, l},
-                caf::make_error(ec::invalid_configuration,
-                                fmt::format("failed to parse write operator: "
-                                            "no available default printer for "
-                                            "sink '{}' "
-                                            "found",
-                                            saver->name()))};
-      }
-      auto [default_printer_name, _] = *default_printer;
-      printer = plugins::find<vast::printer_plugin>(default_printer_name);
-      if (!printer) {
-        return {std::string_view{f, l},
-                caf::make_error(ec::invalid_configuration,
-                                fmt::format("failed to parse write operator: "
-                                            "default format '{0}' for "
-                                            "sink '{1}' "
-                                            "is unavailable",
-                                            default_printer_name,
-                                            saver->name()))};
-      }
+    if (not printer_name) {
+      std::tie(printer_name, printer_options)
+        = saver->default_printer(saver_options);
+    }
+    const auto* printer = plugins::find<printer_plugin>(*printer_name);
+    if (not printer) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to find printer "
+                                                      "'{}' in pipeline '{}'",
+                                                      printer_name, pipeline)),
+      };
     }
     if (saver->saver_requires_joining()
-        and not printer->printer_allows_joining()) {
-      return {std::string_view{f, l},
-              caf::make_error(ec::invalid_argument,
-                              fmt::format("writing '{0}' to '{1}' is not "
-                                          "allowed; the sink '{1}' requires a "
-                                          "single input, and the format '{0}' "
-                                          "has potentially multiple outputs",
-                                          printer->name(), saver->name()))};
-    } else if (not saver->saver_requires_joining()) {
-      auto op = std::make_unique<print_save_operator>(std::move(*printer),
-                                                      std::move(*saver));
-      return {std::string_view{f, l}, std::move(op)};
+        && not printer->printer_allows_joining()) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::invalid_argument,
+                        fmt::format("writing '{0}' to '{1}' is not allowed; "
+                                    "the connector '{1}' requires a single "
+                                    "input, and the format '{0}' has "
+                                    "potentially multiple outputs",
+                                    *printer_name, saver_name)),
+      };
     }
-    auto ops = std::vector<operator_ptr>{};
-    ops.emplace_back(std::make_unique<print_operator>(std::move(*printer)));
-    ops.emplace_back(std::make_unique<save_operator>(std::move(*saver)));
+    if (not saver->saver_requires_joining()) {
+      return {
+        std::string_view{f, l},
+        std::make_unique<print_and_save_operator>(*printer, printer_options,
+                                                  *saver, saver_options),
+      };
+    }
     return {
       std::string_view{f, l},
-      std::make_unique<class pipeline>(std::move(ops)),
+      // TODO: This ignores options
+      pipeline::parse_as_operator(
+        fmt::format("print {} | save {}", *printer_name, saver_name), {}),
     };
   }
 };

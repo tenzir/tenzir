@@ -174,10 +174,15 @@ public:
   /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
   explicit pipeline(std::vector<operator_ptr> operators);
 
-  /// Parses a logical pipeline from its textual representation. It is *not*
-  /// guaranteed that `parse(to_string())` succeeds.
+  /// Parses a pipeline from its textual representation.
   static auto parse(std::string_view repr, const vast::record& config)
     -> caf::expected<pipeline>;
+
+  /// Parses a pipeline from its textual representation, treating the result as
+  /// an individal operator.
+  static auto
+  parse_as_operator(std::string_view repr, const vast::record& config)
+    -> caf::expected<operator_ptr>;
 
   /// Adds an operator at the end of this pipeline.
   void append(operator_ptr op) {

@@ -170,6 +170,15 @@ auto pipeline::parse(std::string_view repr, const vast::record& config)
   return parse_impl(repr, config, recursed);
 }
 
+auto pipeline::parse_as_operator(std::string_view repr,
+                                 const vast::record& config)
+  -> caf::expected<operator_ptr> {
+  auto result = parse(repr, config);
+  if (not result)
+    return std::move(result.error());
+  return std::make_unique<pipeline>(std::move(*result));
+}
+
 auto pipeline::copy() const -> operator_ptr {
   auto copied = std::make_unique<pipeline>();
   copied->operators_.reserve(operators_.size());
