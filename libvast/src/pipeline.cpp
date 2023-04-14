@@ -28,8 +28,8 @@ public:
     error_ = error;
   }
 
-  auto warn(caf::error) noexcept -> void override {
-    die("not implemented");
+  auto warn(caf::error error) noexcept -> void override {
+    VAST_WARN("{}", error);
   }
 
   auto emit(table_slice) noexcept -> void override {
@@ -72,11 +72,9 @@ auto parse_impl(std::string_view repr, const vast::record& config,
   -> caf::expected<pipeline> {
   auto ops = std::vector<operator_ptr>{};
   // plugin name parser
-  using parsers::alnum, parsers::chr, parsers::space,
+  using parsers::plugin_name, parsers::chr, parsers::space,
     parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
-  const auto operator_name_char_parser = alnum | chr{'-'} | chr{'_'};
-  const auto operator_name_parser
-    = optional_ws_or_comment >> +operator_name_char_parser;
+  const auto operator_name_parser = optional_ws_or_comment >> plugin_name;
   // TODO: allow more empty string
   while (!repr.empty()) {
     // 1. parse a single word as operator plugin name

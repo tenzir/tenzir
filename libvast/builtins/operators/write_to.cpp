@@ -149,13 +149,13 @@ public:
   [[nodiscard]] auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor, parsers::identifier,
+      parsers::optional_ws_or_comment, parsers::extractor, parsers::plugin_name,
       parsers::extractor_char, parsers::extractor_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> identifier
+    const auto p = optional_ws_or_comment >> plugin_name
                    >> -(required_ws_or_comment >> string_parser{"to"}
-                        >> required_ws_or_comment >> identifier)
+                        >> required_ws_or_comment >> plugin_name)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto result = std::tuple{
       std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
@@ -253,13 +253,13 @@ public:
   [[nodiscard]] auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor, parsers::identifier,
+      parsers::optional_ws_or_comment, parsers::extractor, parsers::plugin_name,
       parsers::extractor_char, parsers::extractor_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> identifier
+    const auto p = optional_ws_or_comment >> plugin_name
                    >> -(required_ws_or_comment >> string_parser{"write"}
-                        >> required_ws_or_comment >> identifier)
+                        >> required_ws_or_comment >> plugin_name)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto result = std::tuple{
       std::string{}, std::optional<std::tuple<std::string, std::string>>{}};

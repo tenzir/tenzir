@@ -79,12 +79,12 @@ public:
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::identifier, parsers::required_ws_or_comment;
+      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> identifier
+    const auto p = optional_ws_or_comment >> plugin_name
                    >> -(required_ws_or_comment >> string_parser{"read"}
-                        >> required_ws_or_comment >> identifier)
+                        >> required_ws_or_comment >> plugin_name)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     auto parsed = std::tuple{
       std::string{}, std::optional<std::tuple<std::string, std::string>>{}};

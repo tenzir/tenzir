@@ -19,4 +19,7 @@ namespace vast::parsers {
 constexpr inline auto identifier_char = (alnum | ch<'_'> | ch<'.'>);
 constexpr inline auto identifier = +identifier_char;
 
+constexpr inline auto plugin_name_char = alnum | chr{'-'} | chr{'_'};
+constexpr inline auto plugin_name = +plugin_name_char;
+
 } // namespace vast::parsers
