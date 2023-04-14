@@ -6,7 +6,7 @@ sidebar_position: 2
 
 A **module** creates a namespace for [type
 definitions#type-construction](type-system.md),
-[pipelines](../language/pipelines.md), and [taxonomy](taxonomies.md)
+[pipelines](../pipelines.md), and [taxonomy](taxonomies.md)
 elements in single YAML file.
 
 :::warning Work in Progress
