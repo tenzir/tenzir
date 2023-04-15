@@ -158,7 +158,7 @@ system- and user-specified configuration paths.
 
 ## Plugins
 
-VAST's [plugin architecture](../understand/architecture/plugins.md) allows for
+VAST's [plugin architecture](../develop/architecture/plugins.md) allows for
 flexible replacement and enhancement of functionality at various pre-defined
 customization points. There exist **dynamic plugins** that ship as shared
 libraries and **static plugins** that are compiled into libvast.

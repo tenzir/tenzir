@@ -6,7 +6,7 @@ sidebar_label: REST API
 # REST API
 
 VAST provides a REST API to interact with a server node. The `web`
-[plugin](../../../understand/architecture/plugins.md) implements the API as a
+[plugin](../../../develop/architecture/plugins.md) implements the API as a
 dedicated component that can run in multiple ways.
 
 :::tip API Documentation
@@ -139,5 +139,5 @@ ports, or you can spawn more dedicated web server processes:
 We do not anticipate that the web frontend will be on the critical path, since
 the web server itself performs very little work. But we get this form of scaling
 "for free" as a byproduct of VAST's [actor model
-architecture](../../../understand/architecture/actor-model.md), which is why we
+architecture](../../../develop/architecture/actor-model.md), which is why we
 mentioned it here.
