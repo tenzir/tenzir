@@ -1,4 +1,3 @@
-
 # shell
 
 Executes a system command and hook the raw stdin and stdout into the pipeline.
@@ -23,29 +22,44 @@ The command to execute and hook into the pipeline processing.
 
 ## Examples
 
-Convert a tree-structured JSON file to NDJSON via `jq`:
-
-```c
-shell "jq -c ." | parse json
-```
-
-Note that this is equivalent to:
+Consider the use case of converting CSV to JSON:
 
 ```bash
-jq -c | vast exec 'read json'
+vast exec 'read csv | write json' | jq
 ```
 
-Now add an [operator alias](../user-defined.md) to your `vast.yaml`:
+VAST renders the output as NDJSON. Piping this output to `jq` generates a
+colored, tree-structured variation that is arguably easier to read. The above
+example uses Unix pipes to connect stdout of `vast` to stdin of `jq`. The
+`shell` operator makes it possible to integrate Unix tools that rely on
+stdin/stdout for input/output as "native" VAST pipeline operators. We can inject
+`shell` between all operators that process raw bytes. For example, in this
+pipeline:
+
+```c
+print json | save stdout
+```
+
+The [`print`](../transformations/print.md) operator produces raw bytes and
+[`save`](../sinks/save.md) accepts raw bytes. The `shell` operator therefore
+fits right in the middle:
+
+```c
+print json | shell jq | save stdout
+```
+
+Using [user-defined operators](../user-defined.md), we can expose this
+(potentially verbose) post-processing more succinctly in the pipeline language:
 
 ```yaml {0} title="vast.yaml"
 vast:
   operators:
-    jq: >
-      shell "jq -c ." | parse json
+    jsonize: >
+      print json | shell jq | save stdout
 ```
 
-Now you can use `jq` as a custom operator in a pipeline:
+Now you can use `jsonize` as a custom operator in a pipeline:
 
 ```bash
-vast exec 'jq | where field > 42' < tree.json
+vast exec 'read csv | where field > 42 | jsonize' < file.csv
 ```
