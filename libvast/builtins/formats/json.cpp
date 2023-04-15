@@ -265,7 +265,7 @@ class plugin final : public virtual parser_plugin,
     };
   }
 
-  [[nodiscard]] auto make_default_dumper() const
+  [[nodiscard]] auto make_default_saver() const
     -> std::optional<std::pair<std::string, record>> override {
     return std::pair{"stdout", record{}};
   }

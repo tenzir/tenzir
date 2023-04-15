@@ -54,50 +54,50 @@ private:
   const printer_plugin* printer_plugin_;
 };
 
-/// The operator for dumping data that will have to be joined later
+/// The operator for saving data that will have to be joined later
 /// during pipeline execution.
-class dump_operator final : public crtp_operator<dump_operator> {
+class save_operator final : public crtp_operator<save_operator> {
 public:
-  explicit dump_operator(const dumper_plugin& dumper) noexcept
-    : dumper_plugin_{&dumper} {
+  explicit save_operator(const saver_plugin& saver) noexcept
+    : saver_plugin_{&saver} {
   }
 
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    // TODO: Extend API to allow schema-less make_dumper().
-    auto new_dumper = dumper_plugin_->make_dumper({}, {}, ctrl);
-    if (!new_dumper) {
-      ctrl.abort(new_dumper.error());
+    // TODO: Extend API to allow schema-less make_saver().
+    auto new_saver = saver_plugin_->make_saver({}, {}, ctrl);
+    if (!new_saver) {
+      ctrl.abort(new_saver.error());
       co_return;
     }
     for (auto&& x : input) {
-      (*new_dumper)(std::move(x));
+      (*new_saver)(std::move(x));
       co_yield {};
     }
   }
 
   [[nodiscard]] auto to_string() const -> std::string override {
-    return fmt::format("to {}", dumper_plugin_->name());
+    return fmt::format("to {}", saver_plugin_->name());
   }
 
 private:
-  const dumper_plugin* dumper_plugin_;
+  const saver_plugin* saver_plugin_;
 };
 
 struct writing_state {
   printer_plugin::printer p;
-  dumper_plugin::dumper d;
+  saver_plugin::saver s;
 };
 
-/// The operator for printing and dumping data without joining.
-class print_dump_operator final
-  : public schematic_operator<print_dump_operator, writing_state,
+/// The operator for printing and saving data without joining.
+class print_save_operator final
+  : public schematic_operator<print_save_operator, writing_state,
                               std::monostate> {
 public:
-  explicit print_dump_operator(const printer_plugin& printer,
-                               const dumper_plugin& dumper) noexcept
-    : printer_plugin_{&printer}, dumper_plugin_{&dumper} {
+  explicit print_save_operator(const printer_plugin& printer,
+                               const saver_plugin& saver) noexcept
+    : printer_plugin_{&printer}, saver_plugin_{&saver} {
   }
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
@@ -108,30 +108,30 @@ public:
       return new_printer.error();
     }
     ws.p = std::move(*new_printer);
-    auto new_dumper = dumper_plugin_->make_dumper({}, schema, ctrl);
-    if (!new_dumper) {
-      return new_dumper.error();
+    auto new_saver = saver_plugin_->make_saver({}, schema, ctrl);
+    if (!new_saver) {
+      return new_saver.error();
     }
-    ws.d = std::move(*new_dumper);
+    ws.s = std::move(*new_saver);
     return ws;
   }
 
   auto process(table_slice slice, state_type& state) const
     -> output_type override {
     for (auto&& x : state.p(std::move(slice))) {
-      state.d(std::move(x));
+      state.s(std::move(x));
     }
     return {};
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
     return fmt::format("write {} to {}", printer_plugin_->name(),
-                       dumper_plugin_->name());
+                       saver_plugin_->name());
   }
 
 private:
   const printer_plugin* printer_plugin_{};
-  const dumper_plugin* dumper_plugin_{};
+  const saver_plugin* saver_plugin_{};
 };
 
 class write_plugin final : public virtual operator_plugin {
@@ -177,22 +177,22 @@ public:
                                           "found",
                                           printer_name))};
     }
-    const dumper_plugin* dumper;
-    auto dumper_argument = std::get<1>(result);
-    if (dumper_argument) {
-      auto dumper_name = std::get<1>(*dumper_argument);
-      dumper = plugins::find<dumper_plugin>(dumper_name);
-      if (!dumper) {
+    const saver_plugin* saver;
+    auto saver_argument = std::get<1>(result);
+    if (saver_argument) {
+      auto saver_name = std::get<1>(*saver_argument);
+      saver = plugins::find<saver_plugin>(saver_name);
+      if (!saver) {
         return {std::string_view{f, l},
                 caf::make_error(ec::syntax_error,
                                 fmt::format("failed to parse "
-                                            "write operator: no '{}' dumper "
+                                            "write operator: no '{}' saver "
                                             "found",
-                                            dumper_name))};
+                                            saver_name))};
       }
     } else {
-      auto default_dumper = printer->make_default_dumper();
-      if (!default_dumper) {
+      auto default_saver = printer->make_default_saver();
+      if (!default_saver) {
         return {std::string_view{f, l},
                 caf::make_error(ec::invalid_configuration,
                                 fmt::format("failed to parse write operator: "
@@ -201,20 +201,20 @@ public:
                                             "found",
                                             printer->name()))};
       }
-      auto [default_dumper_name, _] = *default_dumper;
-      dumper = plugins::find<vast::dumper_plugin>(default_dumper_name);
-      if (!dumper) {
+      auto [default_saver_name, _] = *default_saver;
+      saver = plugins::find<vast::saver_plugin>(default_saver_name);
+      if (!saver) {
         return {std::string_view{f, l},
                 caf::make_error(ec::invalid_configuration,
                                 fmt::format("failed to parse write operator: "
                                             "default sink '{0}' for "
                                             "printing '{1}' output "
                                             "found",
-                                            default_dumper_name,
+                                            default_saver_name,
                                             printer->name()))};
       }
     }
-    if (dumper->dumper_requires_joining()
+    if (saver->saver_requires_joining()
         and not printer->printer_allows_joining()) {
       return {std::string_view{f, l},
               caf::make_error(ec::invalid_argument,
@@ -222,15 +222,15 @@ public:
                                           "allowed; the sink '{1}' requires a "
                                           "single input, and the format '{0}' "
                                           "has potentially multiple outputs",
-                                          printer->name(), dumper->name()))};
-    } else if (not dumper->dumper_requires_joining()) {
-      auto op = std::make_unique<print_dump_operator>(std::move(*printer),
-                                                      std::move(*dumper));
+                                          printer->name(), saver->name()))};
+    } else if (not saver->saver_requires_joining()) {
+      auto op = std::make_unique<print_save_operator>(std::move(*printer),
+                                                      std::move(*saver));
       return {std::string_view{f, l}, std::move(op)};
     }
     auto ops = std::vector<operator_ptr>{};
     ops.emplace_back(std::make_unique<print_operator>(std::move(*printer)));
-    ops.emplace_back(std::make_unique<dump_operator>(std::move(*dumper)));
+    ops.emplace_back(std::make_unique<save_operator>(std::move(*saver)));
     return {
       std::string_view{f, l},
       std::make_unique<class pipeline>(std::move(ops)),
@@ -271,15 +271,15 @@ public:
                                                       pipeline)),
       };
     }
-    auto dumper_name = std::get<0>(result);
-    auto dumper = plugins::find<dumper_plugin>(dumper_name);
-    if (!dumper) {
+    auto saver_name = std::get<0>(result);
+    auto saver = plugins::find<saver_plugin>(saver_name);
+    if (!saver) {
       return {std::string_view{f, l},
               caf::make_error(ec::syntax_error,
                               fmt::format("failed to parse "
-                                          "write operator: no '{}' dumper "
+                                          "write operator: no '{}' saver "
                                           "found",
-                                          dumper_name))};
+                                          saver_name))};
     }
     const printer_plugin* printer;
     auto printer_argument = std::get<1>(result);
@@ -295,7 +295,7 @@ public:
                                             printer_name))};
       }
     } else {
-      auto default_printer = dumper->make_default_printer();
+      auto default_printer = saver->make_default_printer();
       if (!default_printer) {
         return {std::string_view{f, l},
                 caf::make_error(ec::invalid_configuration,
@@ -303,7 +303,7 @@ public:
                                             "no available default printer for "
                                             "sink '{}' "
                                             "found",
-                                            dumper->name()))};
+                                            saver->name()))};
       }
       auto [default_printer_name, _] = *default_printer;
       printer = plugins::find<vast::printer_plugin>(default_printer_name);
@@ -315,10 +315,10 @@ public:
                                             "sink '{1}' "
                                             "is unavailable",
                                             default_printer_name,
-                                            dumper->name()))};
+                                            saver->name()))};
       }
     }
-    if (dumper->dumper_requires_joining()
+    if (saver->saver_requires_joining()
         and not printer->printer_allows_joining()) {
       return {std::string_view{f, l},
               caf::make_error(ec::invalid_argument,
@@ -326,15 +326,15 @@ public:
                                           "allowed; the sink '{1}' requires a "
                                           "single input, and the format '{0}' "
                                           "has potentially multiple outputs",
-                                          printer->name(), dumper->name()))};
-    } else if (not dumper->dumper_requires_joining()) {
-      auto op = std::make_unique<print_dump_operator>(std::move(*printer),
-                                                      std::move(*dumper));
+                                          printer->name(), saver->name()))};
+    } else if (not saver->saver_requires_joining()) {
+      auto op = std::make_unique<print_save_operator>(std::move(*printer),
+                                                      std::move(*saver));
       return {std::string_view{f, l}, std::move(op)};
     }
     auto ops = std::vector<operator_ptr>{};
     ops.emplace_back(std::make_unique<print_operator>(std::move(*printer)));
-    ops.emplace_back(std::make_unique<dump_operator>(std::move(*dumper)));
+    ops.emplace_back(std::make_unique<save_operator>(std::move(*saver)));
     return {
       std::string_view{f, l},
       std::make_unique<class pipeline>(std::move(ops)),

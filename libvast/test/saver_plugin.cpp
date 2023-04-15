@@ -56,10 +56,10 @@ struct fixture {
 
   fixture() {
     // TODO: Move this into a separate fixture when we are starting to test more
-    // than one dumper type.
-    dumper_plugin = vast::plugins::find<vast::dumper_plugin>("stdout");
-    REQUIRE(dumper_plugin);
-    current_dumper = unbox(dumper_plugin->make_dumper({}, {}, control_plane));
+    // than one saver type.
+    saver_plugin = vast::plugins::find<vast::saver_plugin>("stdout");
+    REQUIRE(saver_plugin);
+    current_saver = unbox(saver_plugin->make_saver({}, {}, control_plane));
   }
 
   // Helper struct that, as long as it is alive, captures stdout.
@@ -98,21 +98,21 @@ struct fixture {
     -> std::vector<std::monostate> {
     auto states = std::vector<std::monostate>{};
     for (auto&& x : output_generator()) {
-      current_dumper(x);
+      current_saver(x);
       states.emplace_back();
     }
     return states;
   }
 
-  const vast::dumper_plugin* dumper_plugin;
-  vast::dumper_plugin::dumper current_dumper;
+  const vast::saver_plugin* saver_plugin;
+  vast::saver_plugin::saver current_saver;
   mock_control_plane control_plane;
 };
 
 } // namespace
 
-FIXTURE_SCOPE(dumper_plugin_tests, fixture)
-TEST(stdout dumper - single chunk) {
+FIXTURE_SCOPE(saver_plugin_tests, fixture)
+TEST(stdout saver - single chunk) {
   auto capture = stdout_capture{};
   auto out = std::string{"output"};
   auto chunk = chunk::copy(out);
@@ -126,7 +126,7 @@ TEST(stdout dumper - single chunk) {
   REQUIRE_EQUAL(output, "output");
 }
 
-TEST(stdout dumper - multiple chunks) {
+TEST(stdout saver - multiple chunks) {
   auto capture = stdout_capture{};
   auto str1 = std::string{"first output\n"};
   auto str2 = std::string{"second output\n"};
