@@ -42,9 +42,7 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   // Parse given query.
   // TODO: Changelog.
   // TODO: Join?
-  // TODO: Config
-  auto parse_result
-    = pipeline::parse(detail::join(args.inv.arguments, " "), record{});
+  auto parse_result = pipeline::parse(detail::join(args.inv.arguments, " "));
   if (!parse_result)
     return parse_result.error();
   auto pipe = std::move(*parse_result);
