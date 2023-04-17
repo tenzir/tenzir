@@ -38,18 +38,28 @@ namespace vast::system {
 auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
                     spawn_arguments& args) -> caf::expected<caf::actor> {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
-  // Parse given query.
-  // TODO: Joining can lead to issues if arguments contain unquoted whitespace.
-  auto joined = detail::join(args.inv.arguments, " ");
-  auto parse_result = pipeline::parse(joined);
-  if (!parse_result) {
-    if (auto as_expr = pipeline::parse(fmt::format("where {}", joined))) {
-      VAST_WARN("`vast export <expr>` is deprecated, please use `vast export "
-                "'where <expr>'` instead");
-      parse_result = std::move(as_expr);
-    } else {
-      return parse_result.error();
+  auto parse_result = std::invoke([&]() -> caf::expected<pipeline> {
+    if (args.inv.arguments.empty()) {
+      return pipeline{};
     }
+    if (args.inv.arguments.size() != 1) {
+      return caf::make_error(ec::invalid_argument,
+                             "exporter expected at most 1 argument, but got {}",
+                             args.inv.arguments.size());
+    }
+    auto& query = args.inv.arguments[0];
+    auto result = pipeline::parse(query);
+    if (!result) {
+      if (auto as_expr = pipeline::parse(fmt::format("where {}", query))) {
+        VAST_WARN("`vast export <expr>` is deprecated, please use `vast export "
+                  "'where <expr>'` instead");
+        result = std::move(as_expr);
+      }
+    }
+    return result;
+  });
+  if (!parse_result) {
+    return std::move(parse_result.error());
   }
   auto pipe = std::move(*parse_result);
   // Parse query options.
