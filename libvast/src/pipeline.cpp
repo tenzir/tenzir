@@ -9,6 +9,7 @@
 #include "vast/concept/parseable/vast/pipeline.hpp"
 
 #include "vast/event_types.hpp"
+#include "vast/global_concepts.hpp"
 #include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 
@@ -55,13 +56,20 @@ public:
     return schemas_;
   }
 
-  auto concepts() const noexcept -> const concepts_map& override {
-    die("not implemented");
+  auto concepts() noexcept -> const concepts_map& override {
+    if (not concepts_.empty()) [[likely]]
+      return concepts_;
+    const auto* concepts = global_concepts::get();
+    if (not concepts)
+      return concepts_;
+    concepts_ = *concepts;
+    return concepts_;
   }
 
 private:
   caf::error error_{};
   std::vector<type> schemas_;
+  concepts_map concepts_;
 };
 
 pipeline::pipeline(std::vector<operator_ptr> operators) {

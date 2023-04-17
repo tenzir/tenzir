@@ -45,7 +45,7 @@ public:
     FAIL("Unexpected call to operator_control_plane::schemas");
   }
 
-  auto concepts() const noexcept -> const concepts_map& override {
+  auto concepts() noexcept -> const concepts_map& override {
     FAIL("Unexpected call to operator_control_plane::concepts");
   }
 

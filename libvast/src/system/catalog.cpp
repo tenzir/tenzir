@@ -24,6 +24,7 @@
 #include "vast/expression.hpp"
 #include "vast/fbs/type_registry.hpp"
 #include "vast/flatbuffer.hpp"
+#include "vast/global_concepts.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/legacy_type.hpp"
@@ -664,6 +665,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     self->quit(std::move(err));
     return catalog_actor::behavior_type::make_empty_behavior();
   }
+  global_concepts::init(self->state.taxonomies.concepts);
   // Load loaded schema types from the singleton.
   // TODO: Move to the load handler and re-parse the files.
   if (const auto* module = vast::event_types::get())

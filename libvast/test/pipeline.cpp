@@ -50,7 +50,7 @@ public:
     die("not implemented");
   }
 
-  auto concepts() const noexcept -> const concepts_map& override {
+  auto concepts() noexcept -> const concepts_map& override {
     die("not implemented");
   }
 
