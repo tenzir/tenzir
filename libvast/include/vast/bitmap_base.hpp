@@ -21,7 +21,7 @@
 namespace vast {
 
 /// The base class for bitmaps. The concrete derived types must model the
-/// *bitmap concept* looks as follows:
+/// *bitmap concept* that looks as follows:
 ///
 ///    struct bitmap {
 ///      bitmap();
