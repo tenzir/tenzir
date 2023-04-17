@@ -290,13 +290,14 @@ vast rebuild start [--all] [--undersized] [--parallel=<number>] [--max-partition
 ```
 
 A rebuild is not only useful when upgrading outdated partitions, but also when
-changing parameters of up-to-date partitions. Use the `--all` flag to extend a
-rebuild operation to *all* partitions. (Internally, VAST versions the partition
-state via FlatBuffers. An outdated partition is one whose version number is not
-the newest.)
+changing parameters of up-to-date partitions. (Internally, VAST versions the
+partition state via FlatBuffers. An outdated partition is one whose version
+number is not the newest.)
 
-The `--undersized` flag (implies `--all`) causes VAST to only rebuild partitions
-that are under the configured partition size limit `vast.max-partition-size`.
+The `--undersized` flag causes VAST to only rebuild partitions that are under
+the configured partition size limit `vast.max-partition-size`.
+
+The `--all` flag causes VAST to rebuild all partitions.
 
 The `--parallel` options is a performance tuning knob. The parallelism level
 controls how many sets of partitions to rebuild in parallel. This value defaults
