@@ -66,7 +66,6 @@ void attach_result_stream(
         state.self_ptr = self;
       },
       [](stream_state& state, caf::downstream<table_slice>& out, size_t hint) {
-        // TODO: Can we run generator here?
         auto& results = state.self_ptr->state.sink_buffer;
         (void)hint; // We could consider using `hint`.
         if (!results.empty()) {
@@ -217,7 +216,6 @@ public:
             // We stall because there is more historical data to receive.
             if (!query_in_flight(state.query_status)) {
               VAST_DEBUG("{} source sends query to index", *exporter_);
-              // TODO: The original code requested 2 partitions at once.
               exporter_->send(state.index, atom::query_v, state.id, 1u);
               state.query_status.scheduled += 1;
             }
