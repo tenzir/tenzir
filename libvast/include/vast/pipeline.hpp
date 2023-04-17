@@ -106,8 +106,12 @@ public:
   /// Copies the underlying pipeline operator.
   virtual auto copy() const -> operator_ptr = 0;
 
-  /// Returns a textual representation of this operator for display and
-  /// debugging purposes. Not necessarily roundtrippable.
+  /// Returns a textual representation of this operator for display, debugging
+  /// purposes, and roundtripping if the operator is not executed locally.
+  ///
+  /// NOTE: If `location() != operator_location::local`, then
+  /// `pipeline::parse(to_string(), {})` must succeed and be semantically
+  /// equivalent to `*this`.
   virtual auto to_string() const -> std::string = 0;
 
   /// Tries to perform predicate pushdown with the given expression.
@@ -174,10 +178,18 @@ public:
   /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
   explicit pipeline(std::vector<operator_ptr> operators);
 
-  /// Parses a logical pipeline from its textual representation. It is *not*
-  /// guaranteed that `parse(to_string())` succeeds.
+  /// Parses a pipeline from its definition.
+  ///
+  /// NOTE: If `location() != operator_location::local`, then
+  /// `pipeline::parse(to_string(), {})` must succeed and be semantically
+  /// equivalent to `*this`.
   static auto parse(std::string_view repr, const vast::record& config)
     -> caf::expected<pipeline>;
+
+  /// @copydoc parse
+  static auto
+  parse_as_operator(std::string_view repr, const vast::record& config)
+    -> caf::expected<operator_ptr>;
 
   /// Adds an operator at the end of this pipeline.
   void append(operator_ptr op) {

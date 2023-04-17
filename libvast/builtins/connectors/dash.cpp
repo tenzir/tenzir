@@ -17,9 +17,9 @@ public:
     return stdin_plugin_->make_loader(options, ctrl);
   }
 
-  auto get_default_parser(const record& options) const
-    -> std::optional<std::pair<std::string, record>> override {
-    return stdin_plugin_->get_default_parser(options);
+  auto default_parser(const record& options) const
+    -> std::pair<std::string, record> override {
+    return stdin_plugin_->default_parser(options);
   }
 
   auto make_saver(const record& options, type input_schema,
@@ -28,9 +28,9 @@ public:
     return stdout_plugin_->make_saver(options, std::move(input_schema), ctrl);
   }
 
-  auto make_default_printer() const
-    -> std::optional<std::pair<std::string, record>> override {
-    return stdout_plugin_->make_default_printer();
+  auto default_printer(const record& options) const
+    -> std::pair<std::string, record> override {
+    return stdout_plugin_->default_printer(options);
   }
 
   auto saver_requires_joining() const -> bool override {

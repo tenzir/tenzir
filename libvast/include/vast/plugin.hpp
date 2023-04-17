@@ -410,24 +410,43 @@ public:
     = 0;
 };
 
-// -- loader plugin -----------------------------------------------------
+// -- loader plugin -----------------------------------------------------------
 
 /// A loader plugin transfers input data into a stream of chunks.
 /// @relates plugin
 class loader_plugin : public virtual plugin {
 public:
   /// Returns the loader.
-  virtual auto make_loader(const record&, operator_control_plane&) const
+  virtual auto
+  make_loader(const record& options, operator_control_plane& ctrl) const
     -> caf::expected<generator<chunk_ptr>>
     = 0;
 
   /// Returns the default parser for this loader.
-  virtual auto get_default_parser(const record&) const
-    -> std::optional<std::pair<std::string, record>>
+  virtual auto default_parser(const record& options) const
+    -> std::pair<std::string, record>
     = 0;
 };
 
-// -- printer plugin -----------------------------------------------------
+// -- parser plugin -----------------------------------------------------------
+
+/// A parser plugin transfers a stream of chunks to a stream of table slices.
+/// @relates plugin
+class parser_plugin : public virtual plugin {
+public:
+  using parser = generator<table_slice>;
+
+  [[nodiscard]] virtual auto
+  make_parser(generator<chunk_ptr> loader, const record& options,
+              operator_control_plane& ctrl) const -> caf::expected<parser>
+    = 0;
+
+  [[nodiscard]] virtual auto default_loader(const record& options) const
+    -> std::pair<std::string, record>
+    = 0;
+};
+
+// -- printer plugin ----------------------------------------------------------
 
 /// A printer plugin formats and transfers output data into a stream of chunks.
 /// @relates plugin
@@ -438,13 +457,13 @@ public:
 
   /// Returns a printer for a specified schema.
   [[nodiscard]] virtual auto
-  make_printer(const record&, type input_schema, operator_control_plane&) const
-    -> caf::expected<printer>
+  make_printer(const record& options, type input_schema,
+               operator_control_plane& ctrl) const -> caf::expected<printer>
     = 0;
 
   /// Returns the default saver for this printer.
-  [[nodiscard]] virtual auto make_default_saver() const
-    -> std::optional<std::pair<std::string, record>>
+  [[nodiscard]] virtual auto default_saver(const record& options) const
+    -> std::pair<std::string, record>
     = 0;
 
   /// Returns whether the printer allows for joining output streams into a
@@ -452,7 +471,7 @@ public:
   [[nodiscard]] virtual auto printer_allows_joining() const -> bool = 0;
 };
 
-// -- saver plugin -----------------------------------------------------
+// -- saver plugin ------------------------------------------------------------
 
 /// A saver plugin transfers a stream of chunks to a sink.
 /// @relates plugin
@@ -463,34 +482,18 @@ public:
 
   /// Returns the saver.
   [[nodiscard]] virtual auto
-  make_saver(const record&, type input_schema, operator_control_plane&) const
-    -> caf::expected<saver>
+  make_saver(const record& options, type input_schema,
+             operator_control_plane& ctrl) const -> caf::expected<saver>
     = 0;
 
   /// Returns the default printer for this saver.
-  [[nodiscard]] virtual auto make_default_printer() const
-    -> std::optional<std::pair<std::string, record>>
+  [[nodiscard]] virtual auto default_printer(const record& options) const
+    -> std::pair<std::string, record>
     = 0;
 
   /// Returns whether the saver requires that the output from its preceding
   /// printer can be joined.
   [[nodiscard]] virtual auto saver_requires_joining() const -> bool = 0;
-};
-
-/// A parser plugin transfers a stream of chunks to a stream of table slices.
-/// @relates plugin
-class parser_plugin : public virtual plugin {
-public:
-  using parser = generator<table_slice>;
-
-  [[nodiscard]] virtual auto
-  make_parser(generator<chunk_ptr> loader, const record&,
-              operator_control_plane&) const -> caf::expected<parser>
-    = 0;
-
-  [[nodiscard]] virtual auto make_default_loader() const
-    -> std::optional<std::pair<std::string, record>>
-    = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

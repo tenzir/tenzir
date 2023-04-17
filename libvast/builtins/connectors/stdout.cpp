@@ -26,8 +26,8 @@ public:
     };
   }
 
-  [[nodiscard]] auto make_default_printer() const
-    -> std::optional<std::pair<std::string, record>> override {
+  [[nodiscard]] auto default_printer(const record&) const
+    -> std::pair<std::string, record> override {
     return std::pair{"json", record{}};
   }
 

@@ -322,13 +322,13 @@ TEST(predicate pushdown select conflict) {
 TEST(to - stdout) {
   auto to_pipeline = pipeline::parse("to stdout", record{});
   REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "write json | to stdout");
+  REQUIRE_EQUAL(to_pipeline->to_string(), "print json | save stdout");
 }
 
 TEST(to - to stdout write json) {
   auto to_pipeline = pipeline::parse("to stdout write json", record{});
   REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "write json | to stdout");
+  REQUIRE_EQUAL(to_pipeline->to_string(), "print json | save stdout");
 }
 
 TEST(to - invalid inputs) {
