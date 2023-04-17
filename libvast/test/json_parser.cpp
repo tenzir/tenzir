@@ -41,7 +41,7 @@ public:
     FAIL("Unexpected call to operator_control_plane::demand");
   }
 
-  auto schemas() const noexcept -> const std::vector<type>& override {
+  auto schemas() noexcept -> const std::vector<type>& override {
     FAIL("Unexpected call to operator_control_plane::schemas");
   }
 

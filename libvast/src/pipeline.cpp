@@ -8,6 +8,7 @@
 
 #include "vast/concept/parseable/vast/pipeline.hpp"
 
+#include "vast/event_types.hpp"
 #include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 
@@ -40,8 +41,18 @@ public:
     die("not implemented");
   }
 
-  auto schemas() const noexcept -> const std::vector<type>& override {
-    die("not implemented");
+  auto schemas() noexcept -> const std::vector<type>& override {
+    if (not schemas_.empty()) [[likely]]
+      return schemas_;
+    const auto* mod = event_types::get();
+    if (not mod)
+      return schemas_;
+    std::copy_if(mod->begin(), mod->end(), std::back_inserter(schemas_),
+                 [](const auto& type) {
+                   return not type.name().empty()
+                          && caf::holds_alternative<record_type>(type);
+                 });
+    return schemas_;
   }
 
   auto concepts() const noexcept -> const concepts_map& override {
@@ -50,6 +61,7 @@ public:
 
 private:
   caf::error error_{};
+  std::vector<type> schemas_;
 };
 
 pipeline::pipeline(std::vector<operator_ptr> operators) {

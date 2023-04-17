@@ -46,7 +46,7 @@ public:
     die("not implemented");
   }
 
-  auto schemas() const noexcept -> const std::vector<type>& override {
+  auto schemas() noexcept -> const std::vector<type>& override {
     die("not implemented");
   }
 

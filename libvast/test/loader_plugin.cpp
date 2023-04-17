@@ -47,8 +47,7 @@ struct fixture {
       FAIL("no mock implementation available");
     }
 
-    [[nodiscard]] auto schemas() const noexcept
-      -> const std::vector<type>& override {
+    [[nodiscard]] auto schemas() noexcept -> const std::vector<type>& override {
       FAIL("no mock implementation available");
     }
 
