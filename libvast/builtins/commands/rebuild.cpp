@@ -15,6 +15,7 @@
 #include <vast/fwd.hpp>
 #include <vast/legacy_pipeline.hpp>
 #include <vast/partition_synopsis.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/catalog.hpp>
@@ -698,16 +699,22 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
                                   system::must_provide_query::no);
   if (!query)
     return caf::make_message(std::move(query.error()));
-  auto expr = to<expression>(*query);
-  if (!expr)
-    return caf::make_message(std::move(expr.error()));
+  auto expr = expression{};
+  if (query->empty()) {
+    expr = trivially_true_expression();
+  } else {
+    auto parsed = to<expression>(*query);
+    if (!parsed)
+      return caf::make_message(std::move(parsed.error()));
+    expr = std::move(*parsed);
+  }
   auto options = start_options{
     .all = caf::get_or(inv.options, "vast.rebuild.all", false),
     .undersized = caf::get_or(inv.options, "vast.rebuild.undersized", false),
     .parallel = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1}),
     .max_partitions = caf::get_or(inv.options, "vast.rebuild.max-partitions",
                                   std::numeric_limits<size_t>::max()),
-    .expression = std::move(*expr),
+    .expression = std::move(expr),
     .detached = caf::get_or(inv.options, "vast.rebuild.detached", false),
     .automatic = false,
   };
