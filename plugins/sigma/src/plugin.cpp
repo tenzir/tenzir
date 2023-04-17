@@ -19,23 +19,21 @@
 
 namespace vast::plugins::sigma {
 
-class plugin final : public virtual legacy_language_plugin {
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+class plugin final : public virtual language_plugin {
+  auto initialize(const record&, const record&) -> caf::error override {
     return caf::none;
   }
 
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "sigma";
   }
 
-  [[nodiscard]] caf::expected<
-    std::pair<expression, std::optional<legacy_pipeline>>>
-  make_query(std::string_view query) const override {
+  auto parse_query(std::string_view query) const
+    -> caf::expected<pipeline> override {
     if (auto yaml = from_yaml(query)) {
       auto parsed = parse_rule(*yaml);
       if (parsed) {
-        return std::pair{std::move(*parsed), std::optional<legacy_pipeline>{}};
+        return pipeline::parse(fmt::format("where {}", *parsed));
       }
       return std::move(parsed.error());
     } else {
