@@ -135,7 +135,8 @@ public:
   auto operator()(generator<table_slice> input) const
     -> generator<std::monostate> {
     for (auto&& slice : input) {
-      result_->push_back(std::move(slice));
+      if (slice.rows() > 0)
+        result_->push_back(std::move(slice));
       co_yield {};
     }
   }
