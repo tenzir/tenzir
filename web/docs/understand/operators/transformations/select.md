@@ -25,11 +25,11 @@ The list of extractors identifying fields to keep.
 Only keep fields `foo` and `bar`:
 
 ```
-drop foo, bar
+select foo, bar
 ```
 
 Select all fields of type `ip`:
 
 ```
-drop :ip
+select :ip
 ```

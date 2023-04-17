@@ -169,7 +169,7 @@ the remaining operators:
 
 ![Connectors & Formats](connector-format.excalidraw.svg)
 
-A connector is typically I/O-bound whereas a format CPU-bound.
+A connector is typically I/O-bound whereas a format is CPU-bound.
 
 ## Logical and Phyiscal Operators
 
@@ -186,7 +186,7 @@ Let's consider an example of a logical pipeline with the source consisting of
 
 A given `from`-`read` and `write`-`to` combination often directly maps to its
 physical counterpart, the `load`-`parse` and `print`-`dump` operators that do
-the actual work with the help of a connector and format:  
+the actual work with the help of a connector and format:
 
 ![Physical Plan](operator-physical.excalidraw.svg)
 
