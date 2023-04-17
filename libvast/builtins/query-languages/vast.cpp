@@ -15,7 +15,7 @@
 
 namespace vast::plugins::vast {
 
-class plugin final : public virtual language_plugin {
+class plugin final : public virtual legacy_language_plugin {
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
     return caf::none;

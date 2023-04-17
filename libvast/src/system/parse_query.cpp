@@ -31,8 +31,8 @@ caf::expected<std::pair<expression, std::optional<legacy_pipeline>>>
 parse_query(const std::string& query) {
   // Get all query languages, but make sure that VAST is at the front.
   // TODO: let the user choose exactly one language instead.
-  auto languages = collect(plugins::get<language_plugin>());
-  if (const auto* vast = plugins::find<language_plugin>("VAST")) {
+  auto languages = collect(plugins::get<legacy_language_plugin>());
+  if (const auto* vast = plugins::find<legacy_language_plugin>("VAST")) {
     const auto it = std::find(languages.begin(), languages.end(), vast);
     VAST_ASSERT_CHEAP(it != languages.end());
     std::rotate(languages.begin(), it, it + 1);
