@@ -105,7 +105,8 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<print_operator>(*printer, record{}),
+      std::make_unique<print_operator>(*printer, record{},
+                                       printer->printer_allows_joining()),
     };
   }
 };
