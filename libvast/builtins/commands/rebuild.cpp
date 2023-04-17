@@ -73,15 +73,26 @@ public:
       }
       const auto buffered_rows = rows(buffer);
       VAST_ASSERT(buffered_rows < desired_batch_size_);
+      // We don't have enough yet.
       if (buffered_rows + slice.rows() < desired_batch_size_) {
         buffer.push_back(std::move(slice));
-      } else {
-        const auto remainder = desired_batch_size_ - buffered_rows;
-        auto [head, tail] = split(slice, slice.rows() - remainder);
-        buffer.push_back(head);
-        co_yield concatenate(std::exchange(buffer, {}));
-        buffer.push_back(tail);
+        co_yield {};
+        continue;
       }
+      // We've got enough, so we can now concatenate and yield.
+      const auto remainder = desired_batch_size_ - buffered_rows;
+      VAST_ASSERT(remainder <= slice.rows());
+      auto [head, tail] = split(slice, slice.rows() - remainder);
+      buffer.push_back(head);
+      co_yield concatenate(std::exchange(buffer, {}));
+      // In case the input slice was oversized, we may have to yield additional
+      // resized batches.
+      while (tail.rows() >= desired_batch_size_) {
+        std::tie(head, tail) = split(tail, desired_batch_size_);
+        co_yield std::move(head);
+      }
+      // Lastly, keep the undersized remainder for the next input or the end.
+      buffer.push_back(std::move(tail));
     }
     if (!buffer.empty()) {
       co_yield concatenate(std::move(buffer));
@@ -324,6 +335,7 @@ struct rebuilder_state {
             [](const auto& candidate_info) {
               return candidate_info.second.partition_infos.empty();
             });
+          VAST_INFO("starts run; all empty = {}", all_empty);
           if (all_empty)
             return finish({}, true);
           if (run->options.automatic)
