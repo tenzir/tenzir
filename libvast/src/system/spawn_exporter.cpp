@@ -35,16 +35,23 @@
 
 namespace vast::system {
 
-caf::expected<caf::actor>
-spawn_exporter(node_actor::stateful_pointer<node_state> self,
-               spawn_arguments& args) {
+auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
+                    spawn_arguments& args) -> caf::expected<caf::actor> {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
   // Parse given query.
   // TODO: Changelog.
   // TODO: Join?
-  auto parse_result = pipeline::parse(detail::join(args.inv.arguments, " "));
-  if (!parse_result)
-    return parse_result.error();
+  auto joined = detail::join(args.inv.arguments, " ");
+  auto parse_result = pipeline::parse(joined);
+  if (!parse_result) {
+    if (auto as_expr = pipeline::parse(fmt::format("where {}", joined))) {
+      VAST_WARN("`vast export <expr>` is deprecated, please use `vast export "
+                "'where <expr>'` instead");
+      parse_result = std::move(as_expr);
+    } else {
+      return parse_result.error();
+    }
+  }
   auto pipe = std::move(*parse_result);
   // Parse query options.
   auto query_opts = no_query_options;
