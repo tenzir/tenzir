@@ -39,8 +39,7 @@ auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
                     spawn_arguments& args) -> caf::expected<caf::actor> {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
   // Parse given query.
-  // TODO: Changelog.
-  // TODO: Join?
+  // TODO: Joining can lead to issues if arguments contain unquoted whitespace.
   auto joined = detail::join(args.inv.arguments, " ");
   auto parse_result = pipeline::parse(joined);
   if (!parse_result) {
