@@ -30,13 +30,24 @@ class print_operator final
   : public schematic_operator<print_operator, printer_plugin::printer,
                               generator<chunk_ptr>> {
 public:
-  explicit print_operator(const printer_plugin& printer, record config) noexcept
-    : printer_plugin_{&printer}, config_{std::move(config)} {
+  explicit print_operator(const printer_plugin& printer, record config,
+                          bool allows_joining) noexcept
+    : printer_plugin_{printer},
+      config_{std::move(config)},
+      allows_joining_{allows_joining} {
   }
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    return printer_plugin_->make_printer(config_, schema, ctrl);
+    if (not allows_joining_ && last_schema_) {
+      return caf::make_error(
+        ec::logic_error,
+        fmt::format("'{}' does not support heterogeneous outputs; cannot "
+                    "initialize for '{}' after '{}'",
+                    to_string(), printer_plugin_.name(), schema, last_schema_));
+    }
+    last_schema_ = schema;
+    return printer_plugin_.make_printer(config_, schema, ctrl);
   }
 
   auto process(table_slice slice, state_type& state) const
@@ -45,12 +56,14 @@ public:
   }
 
   auto to_string() const noexcept -> std::string override {
-    return fmt::format("print {}", printer_plugin_->name());
+    return fmt::format("print {}", printer_plugin_.name());
   }
 
 private:
-  const printer_plugin* printer_plugin_;
+  const printer_plugin& printer_plugin_;
   record config_;
+  bool allows_joining_;
+  mutable type last_schema_ = {};
 };
 
 class plugin final : public virtual operator_plugin {
