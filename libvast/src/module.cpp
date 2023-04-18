@@ -28,7 +28,6 @@
 
 #include <caf/actor_system_config.hpp>
 #include <caf/deserializer.hpp>
-#include <caf/expected.hpp>
 
 #include <filesystem>
 

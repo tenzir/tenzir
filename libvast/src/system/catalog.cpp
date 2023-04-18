@@ -27,7 +27,6 @@
 #include "vast/io/save.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
-#include "vast/module.hpp"
 #include "vast/modules.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/prune.hpp"

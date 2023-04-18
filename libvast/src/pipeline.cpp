@@ -8,7 +8,6 @@
 
 #include "vast/concept/parseable/vast/pipeline.hpp"
 
-#include "vast/module.hpp"
 #include "vast/modules.hpp"
 #include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
