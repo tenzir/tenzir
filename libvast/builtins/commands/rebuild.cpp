@@ -224,8 +224,6 @@ struct rebuilder_state {
     if (options.parallel == 0)
       return caf::make_error(ec::invalid_configuration,
                              "rebuild requires a non-zero parallel level");
-    if (options.undersized)
-      options.all = true;
     if (options.automatic && run)
       return {};
     if (run && !run->options.automatic)
@@ -295,18 +293,26 @@ struct rebuilder_state {
         [this, finish](system::catalog_lookup_result& lookup_result) mutable {
           VAST_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
-            std::erase_if(
-              result.partition_infos, [&](const partition_info& partition) {
-                const auto not_undersized
-                  = run->options.undersized
-                    && partition.events > detail::narrow_cast<size_t>(
-                         detail::narrow_cast<double>(max_partition_size)
-                         * undersized_threshold);
-                const auto not_outdated
-                  = not run->options.all
-                    && partition.version >= version::current_partition_version;
-                return not_undersized && not_outdated;
-              });
+            if (not run->options.all) {
+              std::erase_if(
+                result.partition_infos, [&](const partition_info& partition) {
+                  if (partition.version < version::current_partition_version)
+                    return false;
+                  if (run->options.undersized
+                      && partition.events < detail::narrow_cast<size_t>(
+                           detail::narrow_cast<double>(max_partition_size)
+                           * undersized_threshold))
+                    return false;
+                  return true;
+                });
+            }
+            if (result.partition_infos.size() == 1
+                && result.partition_infos.front().version
+                     < version::current_partition_version) {
+              // Edge case: we can't do anything if we have a single underiszed
+              // partition for a given schema.
+              result.partition_infos.clear();
+            }
             if (run->options.max_partitions < result.partition_infos.size()) {
               std::stable_sort(result.partition_infos.begin(),
                                result.partition_infos.end(),
@@ -551,7 +557,7 @@ struct rebuilder_state {
       data{"this expression matches everything"},
     };
     auto options = start_options{
-      .all = true,
+      .all = false,
       .undersized = true,
       .parallel = automatic_rebuild,
       .max_partitions = std::numeric_limits<size_t>::max(),
@@ -788,9 +794,8 @@ public:
       "rebuilds outdated partitions matching the "
       "(optional) query expression",
       command::opts("?vast.rebuild")
-        .add<bool>("all", "consider all (rather than outdated) partitions")
-        .add<bool>("undersized", "consider only undersized partitions (implies "
-                                 "--all)")
+        .add<bool>("all", "rebuild all partitions")
+        .add<bool>("undersized", "consider only undersized partitions")
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
                                  "rebuild to finish")
         .add<std::string>("read,r", "path for reading the (optional) query")
