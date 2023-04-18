@@ -8,6 +8,8 @@
 
 #include "vast/detail/adaptive_table_slice_builder_guards.hpp"
 
+#include <optional>
+
 namespace vast::detail {
 
 namespace {
@@ -36,9 +38,25 @@ auto add_data_view(auto& guard, const data_view& view) {
              view);
 }
 
+auto try_create_field_builder_for_fixed_builder(
+  builder_provider& record_builder_provider, std::string_view field_name,
+  arrow_length_type starting_fields_length) -> std::optional<field_guard> {
+  if (not record_builder_provider.is_builder_constructed())
+    return {};
+  auto fixed_builder = std::get_if<fixed_fields_record_builder>(
+    &record_builder_provider.provide());
+  if (not fixed_builder)
+    return {};
+  return field_guard{{std::ref(fixed_builder->get_field_builder(field_name))},
+                     starting_fields_length};
+}
+
 } // namespace
 
 auto record_guard::push_field(std::string_view name) -> field_guard {
+  if (auto guard = try_create_field_builder_for_fixed_builder(
+        builder_provider_, name, starting_fields_length_))
+    return std::move(*guard);
   auto provider = [name, this]() -> series_builder& {
     auto& b = builder_provider_.provide();
     if (std::holds_alternative<unknown_type_builder>(b)) {
@@ -59,22 +77,19 @@ auto list_guard::list_record_guard::push_field(std::string_view name)
   // perspective of a record value of a list we start with a field of 0 length
   // which is later appended into the list builder.
   constexpr auto list_fields_start_length = arrow_length_type{0};
+  if (auto guard = try_create_field_builder_for_fixed_builder(
+        builder_provider_, name, list_fields_start_length))
+    return std::move(*guard);
   if (builder_provider_.is_builder_constructed()) {
-    auto& b = builder_provider_.provide();
-    cached_builder_ = std::get_if<concrete_series_builder<record_type>>(&b);
-    return field_guard{cached_builder_->get_field_builder_provider(
-                         name, list_fields_start_length),
+    auto& b = std::get<concrete_series_builder<record_type>>(
+      builder_provider_.provide());
+    return field_guard{b.get_field_builder_provider(name,
+                                                    list_fields_start_length),
                        list_fields_start_length};
   }
   auto provider = [this, name]() -> series_builder& {
-    if (cached_builder_) {
-      return cached_builder_
-        ->get_field_builder_provider(name, list_fields_start_length)
-        .provide();
-    }
     auto& builder = std::get<concrete_series_builder<record_type>>(
       builder_provider_.provide());
-    cached_builder_ = &builder;
     return builder.get_field_builder_provider(name, list_fields_start_length)
       .provide();
   };
@@ -82,11 +97,17 @@ auto list_guard::list_record_guard::push_field(std::string_view name)
 }
 
 list_guard::list_record_guard::~list_record_guard() noexcept {
-  if (cached_builder_) {
-    cached_builder_->fill_nulls();
+  if (builder_provider_.is_builder_constructed()) {
     if (not parent_.value_type)
-      parent_.propagate_type(cached_builder_->type());
-    cached_builder_->append();
+      parent_.propagate_type(builder_provider_.type());
+    std::visit(
+      []<class Builder>(Builder& b) {
+        if constexpr (std::is_base_of_v<record_series_builder_base, Builder>) {
+          b.fill_nulls();
+          b.append();
+        }
+      },
+      builder_provider_.provide());
   }
 }
 

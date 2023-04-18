@@ -11,6 +11,8 @@
 #include "vast/data.hpp"
 #include "vast/test/test.hpp"
 
+#include <arrow/record_batch.h>
+
 using namespace vast;
 using namespace std::chrono_literals;
 
@@ -32,7 +34,7 @@ TEST(add two rows of nested records) {
     nested.push_field("rec1").add(int64_t{10});
     nested.push_field("rec2").add("rec_str");
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   REQUIRE_EQUAL(out.rows(), 2u);
   REQUIRE_EQUAL(out.columns(), 4u);
   for (std::size_t i = 0u; i < out.rows(); ++i) {
@@ -86,7 +88,7 @@ TEST(single row with nested lists) {
       }
     }
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   REQUIRE_EQUAL(out.rows(), 1u);
   REQUIRE_EQUAL(out.columns(), 2u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))), int64_t{5});
@@ -115,7 +117,7 @@ TEST(single record with array inside nested record) {
     nested_arr.add(uint64_t{100});
     nested_arr.add(uint64_t{1000});
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   REQUIRE_EQUAL(out.rows(), 1u);
   REQUIRE_EQUAL(out.columns(), 2u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))), true);
@@ -140,7 +142,8 @@ TEST(record nested in array of records in two rows) {
     auto rec = arr.push_record();
     rec.push_field("rec double").add(2.0);
     rec.push_field("rec time").add(vast::time{row_1_time_point});
-    auto nested_rec = rec.push_field("nested rec").push_record();
+    auto nested_rec_fied = rec.push_field("nested rec");
+    auto nested_rec = nested_rec_fied.push_record();
     nested_rec.push_field("nested duration").add(duration{20us});
   }
   {
@@ -150,10 +153,11 @@ TEST(record nested in array of records in two rows) {
     auto rec = arr.push_record();
     rec.push_field("rec double").add(4.0);
     rec.push_field("rec time").add(vast::time{row_2_time_point});
-    auto nested_rec = rec.push_field("nested rec").push_record();
+    auto nested_rec_fied = rec.push_field("nested rec");
+    auto nested_rec = nested_rec_fied.push_record();
     nested_rec.push_field("nested duration").add(duration{6ms});
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 2u);
   CHECK_EQUAL(out.columns(), 1u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))),
@@ -224,7 +228,7 @@ TEST(two rows of array of complex records) {
       rec.push_field("ip arr").push_list().push_list().add(ip::v4(0xFF << 5));
     }
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 2u);
   CHECK_EQUAL(out.columns(), 1u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))),
@@ -269,7 +273,7 @@ TEST(two rows with array) {
     row.push_field("int").add(int64_t{10});
     row.push_field("arr").push_list().add(int64_t{3});
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 2u);
   CHECK_EQUAL(out.columns(), 2u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))), int64_t{5});
@@ -299,7 +303,7 @@ TEST(new fields added in new rows) {
     row.push_field("int").add(int64_t{1});
     row.push_field("str").add("strr");
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 3u);
   CHECK_EQUAL(out.columns(), 3u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))), int64_t{5});
@@ -327,7 +331,7 @@ TEST(new fields added in new rows) {
 TEST(single empty struct field results in empty table slice) {
   adaptive_table_slice_builder sut;
   sut.push_row().push_field("struct").push_record();
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 0u);
   CHECK_EQUAL(out.columns(), 0u);
 }
@@ -339,7 +343,7 @@ TEST(empty struct is not added to the output table slice) {
     row.push_field("struct").push_record();
     row.push_field("int").add(int64_t{2312});
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 1u);
   CHECK_EQUAL(out.columns(), 1u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))), int64_t{2312});
@@ -353,7 +357,7 @@ TEST(empty struct is not added to the output table slice) {
 TEST(single empty array field results in empty table slice) {
   adaptive_table_slice_builder sut;
   sut.push_row().push_field("arr").push_list();
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 0u);
   CHECK_EQUAL(out.columns(), 0u);
 }
@@ -365,7 +369,7 @@ TEST(empty array is not added to the output table slice) {
     row.push_field("arr").push_list();
     row.push_field("int").add(int64_t{2312});
   }
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 1u);
   CHECK_EQUAL(out.columns(), 1u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))), int64_t{2312});
@@ -414,7 +418,7 @@ TEST(
     arr.add(int64_t{20});
   }
 
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 7u);
   CHECK_EQUAL(out.columns(), 5u);
 
@@ -489,7 +493,7 @@ TEST(append nulls to the first field of a record field when a different field
     record_field.push_record().push_field("field2").add("field2 val");
   }
 
-  auto out = std::move(sut).finish();
+  auto out = sut.finish();
   REQUIRE_EQUAL(out.rows(), 2u);
   REQUIRE_EQUAL(out.columns(), 2u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))), int64_t{1});
@@ -505,7 +509,7 @@ TEST(field not present after removing the row which introduced the field) {
   row.push_field("int").add(int64_t{10});
   row.push_field("str").add("str");
   row.cancel();
-  auto output = std::move(sut).finish();
+  auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 1u);
   REQUIRE_EQUAL(output.columns(), 1u);
   CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{5});
@@ -526,7 +530,7 @@ TEST(remove basic row) {
     rec.push_field("rec str").add("str2");
   }
   row.cancel();
-  auto output = std::move(sut).finish();
+  auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 1u);
   REQUIRE_EQUAL(output.columns(), 2u);
   CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{1});
@@ -551,7 +555,7 @@ TEST(remove row list) {
     list.add(int64_t{4});
   }
   row.cancel();
-  auto output = std::move(sut).finish();
+  auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 1u);
   REQUIRE_EQUAL(output.columns(), 1u);
   CHECK_EQUAL(materialize(output.at(0u, 0u)), (list{int64_t{1}, int64_t{2}}));
@@ -583,7 +587,7 @@ TEST(remove row list of records) {
     auto record = list.push_record();
     record.push_field("list_rec_int").add(int64_t{3});
   }
-  auto output = std::move(sut).finish();
+  auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 2u);
   REQUIRE_EQUAL(output.columns(), 1u);
   CHECK_EQUAL(materialize(output.at(0u, 0u)), (list{record{
@@ -621,7 +625,7 @@ TEST(remove row list of lists) {
     inner_list.add(int64_t{5u});
   }
 
-  auto output = std::move(sut).finish();
+  auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 2u);
   REQUIRE_EQUAL(output.columns(), 1u);
   CHECK_EQUAL(materialize(output.at(0u, 0u)), list{{list{int64_t{1}}}});
@@ -667,7 +671,7 @@ TEST(remove row list of records with list fields) {
     auto inner_record = inner_list.push_record();
     inner_record.push_field("str").add("str3");
   }
-  auto output = std::move(sut).finish();
+  auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 2u);
   REQUIRE_EQUAL(output.columns(), 1u);
   CHECK_EQUAL(materialize(output.at(0u, 0u)),
@@ -706,7 +710,7 @@ TEST(remove row with non empty list after pushing empty lists to previous rows) 
 
   row.cancel();
   sut.push_row().push_field("str").add("str0");
-  auto output = std::move(sut).finish();
+  auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 3u);
   REQUIRE_EQUAL(output.columns(), 2u);
   CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{10});
@@ -729,8 +733,329 @@ TEST(remove row empty list) {
   row.push_field("int").add(int64_t{20});
 
   row.cancel();
-  auto output = std::move(sut).finish();
+  auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 1u);
   REQUIRE_EQUAL(output.columns(), 1u);
   CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{10});
+}
+
+TEST(Add nulls to fields that didnt have values added when adaptive builder is
+       constructed with a schema) {
+  const auto schema = vast::type{
+    "a nice name", record_type{{"int1", int64_type{}},
+                               {"str1", string_type{}},
+                               {"nested", record_type{
+                                            {"rec1", int64_type{}},
+                                            {"rec2", string_type{}},
+                                          }}}};
+  auto sut = adaptive_table_slice_builder{schema};
+  sut.push_row().push_field("int1").add(int64_t{5238592});
+  auto out = sut.finish();
+  REQUIRE_EQUAL(schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 4u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), int64_t{5238592});
+  CHECK_EQUAL(materialize(out.at(0u, 1u)), caf::none);
+  CHECK_EQUAL(materialize(out.at(0u, 2u)), caf::none);
+  CHECK_EQUAL(materialize(out.at(0u, 3u)), caf::none);
+}
+
+TEST(Allow new fields to be added when adaptive builder is constructed with a
+       schema and allow_fields_discovery set to true) {
+  const auto starting_schema
+    = vast::type{"a nice name", record_type{{"int1", int64_type{}}}};
+
+  auto sut = adaptive_table_slice_builder{starting_schema, true};
+  sut.push_row().push_field("int1").add(int64_t{5238592});
+  sut.push_row().push_field("int2").add(int64_t{1});
+  auto out = sut.finish();
+
+  const auto schema = vast::type{record_type{
+    {"int1", int64_type{}},
+    {"int2", int64_type{}},
+  }};
+  const auto expected_schema = vast::type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 2u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), int64_t{5238592});
+  CHECK_EQUAL(materialize(out.at(0u, 1u)), caf::none);
+  CHECK_EQUAL(materialize(out.at(1u, 0u)), caf::none);
+  CHECK_EQUAL(materialize(out.at(1u, 1u)), int64_t{1});
+}
+
+TEST(Add enumeration type from a string representation to a basic field) {
+  const auto enum_type = enumeration_type{{"enum1"}, {"enum2"}, {"enum3"}};
+  const auto starting_schema
+    = vast::type{"a nice name", record_type{{"enum", enum_type}}};
+
+  auto sut = adaptive_table_slice_builder{starting_schema};
+  sut.push_row().push_field("enum").add("enum2");
+  auto out = sut.finish();
+  CHECK_EQUAL(starting_schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)),
+              detail::narrow_cast<enumeration>(*enum_type.resolve("enum2")));
+}
+
+TEST(Add enumeration type from a string representation to a list of enums) {
+  const auto enum_type = enumeration_type{{"enum5"}, {"enum6"}, {"enum7"}};
+  const auto starting_schema
+    = vast::type{"a nice name", record_type{{"list", list_type{enum_type}}}};
+
+  auto sut = adaptive_table_slice_builder{starting_schema};
+  {
+    auto row = sut.push_row();
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    list.add("enum7");
+    list.add("enum5");
+  }
+  auto out = sut.finish();
+  CHECK_EQUAL(starting_schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL(
+    materialize(out.at(0u, 0u)),
+    (list{detail::narrow_cast<enumeration>(*enum_type.resolve("enum7")),
+          detail::narrow_cast<enumeration>(*enum_type.resolve("enum5"))}));
+}
+
+TEST(Add enumeration type from an enum representation to a basic field) {
+  const auto enum_type = enumeration_type{{"enum1"}, {"enum2"}, {"enum3"}};
+  const auto starting_schema
+    = vast::type{"a nice name", record_type{{"enum", enum_type}}};
+
+  auto sut = adaptive_table_slice_builder{starting_schema};
+  const auto input
+    = detail::narrow_cast<enumeration>(*enum_type.resolve("enum2"));
+  sut.push_row().push_field("enum").add(input);
+  auto out = sut.finish();
+  CHECK_EQUAL(starting_schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), input);
+}
+
+TEST(Add enumeration type from an enum representation to a list of enums) {
+  const auto enum_type = enumeration_type{{"enum5"}, {"enum6"}, {"enum7"}};
+  const auto starting_schema
+    = vast::type{"a nice name", record_type{{"list", list_type{enum_type}}}};
+
+  const auto input_1
+    = detail::narrow_cast<enumeration>(*enum_type.resolve("enum7"));
+  const auto input_2
+    = detail::narrow_cast<enumeration>(*enum_type.resolve("enum5"));
+  auto sut = adaptive_table_slice_builder{starting_schema};
+  {
+    auto row = sut.push_row();
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    list.add(input_1);
+    list.add(input_2);
+  }
+  auto out = sut.finish();
+  CHECK_EQUAL(starting_schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), (list{input_1, input_2}));
+}
+
+TEST(Add none for enumerations that dont exist)
+{
+  const auto enum_type = enumeration_type{{"enum1"}, {"enum2"}, {"enum3"}};
+  const auto starting_schema
+    = vast::type{"a nice name", record_type{{"enum", enum_type}}};
+
+  auto sut = adaptive_table_slice_builder{starting_schema};
+  sut.push_row().push_field("enum").add("enum4");
+  auto out = sut.finish();
+  CHECK_EQUAL(starting_schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), caf::none);
+}
+
+TEST(Fixed fields builder can be reused after finish call) {
+  const auto schema
+    = vast::type{"a nice name",
+                 record_type{{"int1", int64_type{}}, {"str1", string_type{}}}};
+  auto sut = adaptive_table_slice_builder{schema, true};
+
+  {
+    auto row = sut.push_row();
+    row.push_field("int1").add(int64_t{1});
+    row.push_field("str1").add("str");
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 2u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), int64_t{1});
+  CHECK_EQUAL(materialize(out.at(0u, 1u)), "str");
+
+  {
+    auto row = sut.push_row();
+    row.push_field("int1").add(int64_t{2});
+    row.push_field("str1").add("str2");
+  }
+  out = sut.finish();
+  REQUIRE_EQUAL(schema, out.schema());
+
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 2u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), int64_t{2});
+  CHECK_EQUAL(materialize(out.at(0u, 1u)), "str2");
+}
+
+TEST(Fixed fields builder add record type) {
+  const auto schema = vast::type{
+    "a nice name",
+    record_type{
+      {"record", record_type{
+                   {"int", int64_type{}},
+                   {"list", list_type{record_type{
+                              {"str", string_type{}},
+                              {"nested list", list_type{int64_type{}}},
+                            }}},
+                 }}}};
+  auto sut = adaptive_table_slice_builder{schema};
+  {
+    auto row = sut.push_row();
+    auto record_field = row.push_field("record");
+    auto record = record_field.push_record();
+    record.push_field("int").add(int64_t{1});
+    auto list_field = record.push_field("list");
+    auto list = list_field.push_list();
+    auto list_record = list.push_record();
+    list_record.push_field("str").add("str1");
+    auto nested_list_field = list_record.push_field("nested list");
+    auto nested_list = nested_list_field.push_list();
+    nested_list.add(int64_t{1});
+    nested_list.add(int64_t{2});
+  }
+  {
+    auto row = sut.push_row();
+    auto record_field = row.push_field("record");
+    auto record = record_field.push_record();
+    record.push_field("int").add(int64_t{2});
+    auto list_field = record.push_field("list");
+    auto list = list_field.push_list();
+    {
+      auto list_record = list.push_record();
+      list_record.push_field("str").add("str2");
+      auto nested_list_field = list_record.push_field("nested list");
+      auto nested_list = nested_list_field.push_list();
+      nested_list.add(int64_t{3});
+      nested_list.add(int64_t{4});
+    }
+    {
+      auto list_record = list.push_record();
+      list_record.push_field("str").add("str3");
+      auto nested_list_field = list_record.push_field("nested list");
+      auto nested_list = nested_list_field.push_list();
+      nested_list.add(int64_t{100});
+    }
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(schema, out.schema());
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 2u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), int64_t{1});
+  CHECK_EQUAL(materialize(out.at(0u, 1u)),
+              (list{
+                {record{
+                  {"str", "str1"},
+                  {"nested list", list{int64_t{1}, int64_t{2}}},
+                }},
+              }));
+  CHECK_EQUAL(materialize(out.at(1u, 0u)), int64_t{2});
+  CHECK_EQUAL(materialize(out.at(1u, 1u)),
+              (list{
+                {record{
+                  {"str", "str2"},
+                  {"nested list", list{int64_t{3}, int64_t{4}}},
+                }},
+                {record{
+                  {"str", "str3"},
+                  {"nested list", list{{int64_t{100}}}},
+                }},
+              }));
+}
+
+TEST(Fixed fields builder remove record type row) {
+  const auto schema = vast::type{
+    "a nice name",
+    record_type{
+      {"record", record_type{
+                   {"int", int64_type{}},
+                   {"list", list_type{record_type{
+                              {"str", string_type{}},
+                              {"nested list", list_type{int64_type{}}},
+                            }}},
+                 }}}};
+  auto sut = adaptive_table_slice_builder{schema};
+  auto row_1 = sut.push_row();
+  {
+    auto record_field = row_1.push_field("record");
+    auto record = record_field.push_record();
+    record.push_field("int").add(int64_t{1});
+    auto list_field = record.push_field("list");
+    auto list = list_field.push_list();
+    auto list_record = list.push_record();
+    list_record.push_field("str").add("str1");
+    auto nested_list_field = list_record.push_field("nested list");
+    auto nested_list = nested_list_field.push_list();
+    nested_list.add(int64_t{1});
+    nested_list.add(int64_t{2});
+  }
+  row_1.cancel();
+  {
+    auto row = sut.push_row();
+    auto record_field = row.push_field("record");
+    auto record = record_field.push_record();
+    record.push_field("int").add(int64_t{2});
+    auto list_field = record.push_field("list");
+    auto list = list_field.push_list();
+    {
+      auto list_record = list.push_record();
+      list_record.push_field("str").add("str2");
+      auto nested_list_field = list_record.push_field("nested list");
+      auto nested_list = nested_list_field.push_list();
+      nested_list.add(int64_t{3});
+      nested_list.add(int64_t{4});
+    }
+    {
+      auto list_record = list.push_record();
+      list_record.push_field("str").add("str3");
+      auto nested_list_field = list_record.push_field("nested list");
+      auto nested_list = nested_list_field.push_list();
+      nested_list.add(int64_t{100});
+    }
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(schema, out.schema());
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 2u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), int64_t{2});
+  CHECK_EQUAL(materialize(out.at(0u, 1u)),
+              (list{
+                {record{
+                  {"str", "str2"},
+                  {"nested list", list{int64_t{3}, int64_t{4}}},
+                }},
+                {record{
+                  {"str", "str3"},
+                  {"nested list", list{{int64_t{100}}}},
+                }},
+              }));
 }
