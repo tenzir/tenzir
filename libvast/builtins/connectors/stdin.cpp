@@ -58,8 +58,8 @@ public:
       read_timeout);
   }
 
-  auto get_default_parser(const record&) const
-    -> std::optional<std::pair<std::string, record>> override {
+  auto default_parser(const record&) const
+    -> std::pair<std::string, record> override {
     return std::pair{"json", record{}};
   }
 

@@ -233,9 +233,9 @@ class plugin final : public virtual parser_plugin,
       }(std::move(json_chunk_generator), control_plane);
   }
 
-  [[nodiscard]] auto make_default_loader() const
-    -> std::optional<std::pair<std::string, record>> override {
-    return {{"stdin", {}}};
+  [[nodiscard]] auto default_loader(const record&) const
+    -> std::pair<std::string, record> override {
+    return {"stdin", {}};
   }
 
   [[nodiscard]] auto
@@ -265,9 +265,9 @@ class plugin final : public virtual parser_plugin,
     };
   }
 
-  [[nodiscard]] auto make_default_saver() const
-    -> std::optional<std::pair<std::string, record>> override {
-    return std::pair{"stdout", record{}};
+  [[nodiscard]] auto default_saver(const record&) const
+    -> std::pair<std::string, record> override {
+    return {"stdout", record{}};
   }
 
   [[nodiscard]] auto printer_allows_joining() const -> bool override {

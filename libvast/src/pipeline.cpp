@@ -89,6 +89,14 @@ auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
                          fmt::format("invalid query: {}", first_error));
 }
 
+auto pipeline::parse_as_operator(std::string_view repr)
+  -> caf::expected<operator_ptr> {
+  auto result = parse(repr);
+  if (not result)
+    return std::move(result.error());
+  return std::make_unique<pipeline>(std::move(*result));
+}
+
 auto pipeline::copy() const -> operator_ptr {
   auto copied = std::make_unique<pipeline>();
   copied->operators_.reserve(operators_.size());

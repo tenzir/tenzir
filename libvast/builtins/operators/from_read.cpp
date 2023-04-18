@@ -21,51 +21,6 @@ namespace vast::plugins::from_read {
 
 namespace {
 
-class load_operator final : public crtp_operator<load_operator> {
-public:
-  explicit load_operator(const loader_plugin& loader, record config)
-    : loader_plugin_{loader}, config_{std::move(config)} {
-  }
-
-  auto operator()(operator_control_plane& ctrl) const
-    -> caf::expected<generator<chunk_ptr>> {
-    return loader_plugin_.make_loader(config_, ctrl);
-  }
-
-  auto to_string() const -> std::string override {
-    return fmt::format("load {} <{}>", loader_plugin_.name(), config_);
-  }
-
-private:
-  const loader_plugin& loader_plugin_;
-  record config_;
-};
-
-class parse_operator final : public crtp_operator<parse_operator> {
-public:
-  explicit parse_operator(const parser_plugin& parser, record config)
-    : parser_plugin_{parser}, config_{std::move(config)} {
-  }
-
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> caf::expected<generator<table_slice>> {
-    auto parser = parser_plugin_.make_parser(std::move(input), config_, ctrl);
-    if (not parser) {
-      return std::move(parser.error());
-    }
-    return std::move(*parser);
-  }
-
-  auto to_string() const -> std::string override {
-    return fmt::format("parse {} <{}>", parser_plugin_.name(), config_);
-  }
-
-private:
-  const parser_plugin& parser_plugin_;
-  record config_;
-};
-
 class from_plugin final : public virtual operator_plugin {
 public:
   auto initialize(const record&, const record&) -> caf::error override {
@@ -82,12 +37,14 @@ public:
       parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
+    // TODO: handle options for loader and parser
+    auto loader_options = record{};
+    auto parser_options = record{};
     const auto p = optional_ws_or_comment >> plugin_name
-                   >> -(required_ws_or_comment >> string_parser{"read"}
+                   >> -(required_ws_or_comment >> "read"
                         >> required_ws_or_comment >> plugin_name)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto parsed = std::tuple{
-      std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
+    auto parsed = std::tuple{std::string{}, std::optional<std::string>{}};
     if (!p(f, l, parsed)) {
       return {
         std::string_view{f, l},
@@ -96,45 +53,34 @@ public:
                                     pipeline)),
       };
     }
-    auto loader_name = std::move(std::get<0>(parsed));
-    auto loader = plugins::find<loader_plugin>(loader_name);
-    if (!loader) {
+    auto& [loader_name, parser_name] = parsed;
+    const auto* loader = plugins::find<loader_plugin>(loader_name);
+    if (not loader) {
       return {
         std::string_view{f, l},
-        caf::make_error(ec::lookup_error,
-                        fmt::format("no loader found for '{}'", loader_name)),
+        caf::make_error(ec::syntax_error, fmt::format("failed to find loader "
+                                                      "'{}' in pipeline '{}'",
+                                                      loader_name, pipeline)),
       };
     }
-
-    auto parser_name = std::string{};
-    auto parser_config = record{};
-    if (auto read_opt = std::get<1>(parsed)) {
-      parser_name = std::move(std::get<1>(*read_opt));
-    } else if (auto default_parser = loader->get_default_parser({})) {
-      std::tie(parser_name, parser_config) = std::move(*default_parser);
-    } else {
+    if (not parser_name) {
+      std::tie(parser_name, parser_options)
+        = loader->default_parser(loader_options);
+    }
+    const auto* parser = plugins::find<parser_plugin>(*parser_name);
+    if (not parser) {
       return {
         std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("the {} loader must be "
-                                                      "followed by 'read ...'",
-                                                      loader_name)),
+        caf::make_error(ec::syntax_error, fmt::format("failed to find parser "
+                                                      "'{}' in pipeline '{}'",
+                                                      parser_name, pipeline)),
       };
     }
-    auto parser = plugins::find<parser_plugin>(parser_name);
-    if (!parser) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::lookup_error,
-                        fmt::format("no parser found for '{}'", parser_name)),
-      };
-    }
-    auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::make_unique<load_operator>(*loader, record{}));
-    ops.push_back(
-      std::make_unique<parse_operator>(*parser, std::move(parser_config)));
     return {
       std::string_view{f, l},
-      std::make_unique<class pipeline>(std::move(ops)),
+      // TODO: This ignores options
+      pipeline::parse_as_operator(
+        fmt::format("load {} | parse {}", loader_name, *parser_name)),
     };
   }
 };
@@ -152,15 +98,17 @@ public:
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::identifier, parsers::required_ws_or_comment;
+      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> identifier
-                   >> -(required_ws_or_comment >> string_parser{"from"}
-                        >> required_ws_or_comment >> identifier)
+    // TODO: handle options for loader and parser
+    auto loader_options = record{};
+    auto parser_options = record{};
+    const auto p = optional_ws_or_comment >> plugin_name
+                   >> -(required_ws_or_comment >> "from"
+                        >> required_ws_or_comment >> plugin_name)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto parsed = std::tuple{
-      std::string{}, std::optional<std::tuple<std::string, std::string>>{}};
+    auto parsed = std::tuple{std::string{}, std::optional<std::string>{}};
     if (!p(f, l, parsed)) {
       return {
         std::string_view{f, l},
@@ -169,44 +117,34 @@ public:
                                     pipeline)),
       };
     }
-    auto parser_name = std::move(std::get<0>(parsed));
-    auto parser = plugins::find<parser_plugin>(parser_name);
+    auto& [parser_name, loader_name] = parsed;
+    const auto* parser = plugins::find<parser_plugin>(parser_name);
     if (not parser) {
       return {
         std::string_view{f, l},
-        caf::make_error(ec::lookup_error,
-                        fmt::format("no parser found for '{}'", parser_name)),
+        caf::make_error(ec::syntax_error, fmt::format("failed to find parser "
+                                                      "'{}' in pipeline '{}'",
+                                                      parser_name, pipeline)),
       };
     }
-    auto loader_name = std::string{};
-    auto loader_cfg = record{};
-    if (auto read_opt = std::get<1>(parsed)) {
-      loader_name = std::move(std::get<1>(*read_opt));
-    } else if (auto default_loader = parser->make_default_loader()) {
-      std::tie(loader_name, loader_cfg) = std::move(*default_loader);
-    } else {
+    if (not loader_name) {
+      std::tie(loader_name, loader_options)
+        = parser->default_loader(parser_options);
+    }
+    const auto* loader = plugins::find<loader_plugin>(*loader_name);
+    if (not loader) {
       return {
         std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("the {} parser must be "
-                                                      "followed by 'from ...'",
-                                                      parser_name)),
+        caf::make_error(ec::syntax_error, fmt::format("failed to find loader "
+                                                      "'{}' in pipeline '{}'",
+                                                      loader_name, pipeline)),
       };
     }
-    auto loader = plugins::find<loader_plugin>(loader_name);
-    if (!loader) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::lookup_error,
-                        fmt::format("no loader plugin found for '{}'",
-                                    loader_name)),
-      };
-    }
-    auto ops = std::vector<operator_ptr>(2u);
-    ops[0] = std::make_unique<load_operator>(*loader, std::move(loader_cfg));
-    ops[1] = std::make_unique<parse_operator>(*parser, record{});
     return {
       std::string_view{f, l},
-      std::make_unique<class pipeline>(std::move(ops)),
+      // TODO: This ignores options
+      pipeline::parse_as_operator(
+        fmt::format("load {} | parse {}", *loader_name, parser_name)),
     };
   }
 };
