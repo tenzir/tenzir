@@ -8,12 +8,12 @@
 
 #include "vast/detail/settings.hpp"
 #include "vast/detail/signal_handlers.hpp"
-#include "vast/event_types.hpp"
 #include "vast/factory.hpp"
 #include "vast/format/reader_factory.hpp" // IWYU pragma: keep
 #include "vast/format/writer_factory.hpp" // IWYU pragma: keep
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
+#include "vast/modules.hpp"
 #include "vast/plugin.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/application.hpp"
@@ -147,13 +147,18 @@ int main(int argc, char** argv) {
     VAST_WARN("the 'vast.pipeline-triggers' option is no longer functional"
               "use inline import and export pipelines instead");
   }
-  // Set up the event types singleton.
-  if (auto module = load_module(cfg)) {
-    event_types::init(*std::move(module));
-  } else {
+  // Set up the modules singleton.
+  auto module = load_module(cfg);
+  if (not module) {
     VAST_ERROR("failed to read schema dirs: {}", module.error());
     return EXIT_FAILURE;
   }
+  auto taxonomies = load_taxonomies(cfg);
+  if (not taxonomies) {
+    VAST_ERROR("failed to load concepts: {}", taxonomies.error());
+    return EXIT_FAILURE;
+  }
+  modules::init(*module, std::move(taxonomies->concepts));
   // Lastly, initialize the actor system context, and execute the given
   // command. From this point onwards, do not execute code that is not
   // thread-safe.

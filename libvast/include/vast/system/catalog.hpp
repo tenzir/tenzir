@@ -128,9 +128,6 @@ public:
   /// Load the type-registry from disk.
   caf::error load_type_registry_from_disk();
 
-  /// Load taxonomies.
-  caf::error load_taxonomies();
-
   /// Store a new schema in the registry.
   void insert(vast::type schema);
 

@@ -20,15 +20,15 @@
 #include "vast/detail/tracepoint.hpp"
 #include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
-#include "vast/event_types.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/type_registry.hpp"
 #include "vast/flatbuffer.hpp"
-#include "vast/global_concepts.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
+#include "vast/module.hpp"
+#include "vast/modules.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/prune.hpp"
 #include "vast/query_context.hpp"
@@ -513,48 +513,6 @@ caf::error catalog_state::load_type_registry_from_disk() {
   return caf::none;
 }
 
-caf::error catalog_state::load_taxonomies() {
-  VAST_DEBUG("{} loads taxonomies", *self);
-  std::error_code err{};
-  auto dirs = get_module_dirs(self->system().config());
-  concepts_map concepts;
-  models_map models;
-  for (const auto& dir : dirs) {
-    const auto dir_exists = std::filesystem::exists(dir, err);
-    if (err)
-      VAST_WARN("{} failed to open directory {}: {}", *self, dir,
-                err.message());
-    if (!dir_exists)
-      continue;
-    auto yamls = load_yaml_dir(dir);
-    if (!yamls)
-      return yamls.error();
-    for (auto& [file, yaml] : *yamls) {
-      VAST_DEBUG("{} extracts taxonomies from {}", *self, file.string());
-      if (auto err = convert(yaml, concepts, concepts_data_schema))
-        return caf::make_error(ec::parse_error,
-                               "failed to extract concepts from file",
-                               file.string(), err.context());
-      for (auto& [name, definition] : concepts)
-        VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
-                   definition.fields.size());
-      if (auto err = convert(yaml, models, models_data_schema))
-        return caf::make_error(ec::parse_error,
-                               "failed to extract models from file",
-                               file.string(), err.context());
-      for (auto& [name, definition] : models) {
-        VAST_DEBUG("{} extracted model {} with {} fields", *self, name,
-                   definition.definition.size());
-        VAST_TRACE("{} uses model mapping {} -> {}", *self, name,
-                   definition.definition);
-      }
-    }
-  }
-  taxonomies.concepts = std::move(concepts);
-  taxonomies.models = std::move(models);
-  return caf::none;
-}
-
 void catalog_state::insert(vast::type schema) {
   auto& old_schemas = type_data[std::string{schema.name()}];
   // Insert into the existing bucket.
@@ -661,15 +619,20 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     self->quit(std::move(err));
     return catalog_actor::behavior_type::make_empty_behavior();
   }
-  if (auto err = self->state.load_taxonomies()) {
-    self->quit(std::move(err));
+  auto taxonomies = load_taxonomies(self->system().config());
+  if (!taxonomies) {
+    self->quit(std::move(taxonomies.error()));
     return catalog_actor::behavior_type::make_empty_behavior();
   }
-  global_concepts::init(self->state.taxonomies.concepts);
-  // Load loaded schema types from the singleton.
-  // TODO: Move to the load handler and re-parse the files.
-  if (const auto* module = vast::event_types::get())
+  self->state.taxonomies.concepts = modules::concepts();
+  self->state.taxonomies.models = std::move(taxonomies->models);
+  //  Load loaded schema types from the singleton.
+  //  TODO: Move to the load handler and re-parse the files.
+  VAST_DIAGNOSTIC_PUSH
+  VAST_DIAGNOSTIC_IGNORE_DEPRECATED
+  if (const auto* module = modules::global_module())
     self->state.configuration_module = *module;
+  VAST_DIAGNOSTIC_POP
   if (accountant) {
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());

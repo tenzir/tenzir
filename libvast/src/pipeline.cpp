@@ -8,8 +8,8 @@
 
 #include "vast/concept/parseable/vast/pipeline.hpp"
 
-#include "vast/event_types.hpp"
-#include "vast/global_concepts.hpp"
+#include "vast/module.hpp"
+#include "vast/modules.hpp"
 #include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 
@@ -43,33 +43,15 @@ public:
   }
 
   auto schemas() noexcept -> const std::vector<type>& override {
-    if (not schemas_.empty()) [[likely]]
-      return schemas_;
-    const auto* mod = event_types::get();
-    if (not mod)
-      return schemas_;
-    std::copy_if(mod->begin(), mod->end(), std::back_inserter(schemas_),
-                 [](const auto& type) {
-                   return not type.name().empty()
-                          && caf::holds_alternative<record_type>(type);
-                 });
-    return schemas_;
+    return vast::modules::schemas();
   }
 
   auto concepts() noexcept -> const concepts_map& override {
-    if (not concepts_.empty()) [[likely]]
-      return concepts_;
-    const auto* concepts = global_concepts::get();
-    if (not concepts)
-      return concepts_;
-    concepts_ = *concepts;
-    return concepts_;
+    return vast::modules::concepts();
   }
 
 private:
   caf::error error_{};
-  std::vector<type> schemas_;
-  concepts_map concepts_;
 };
 
 pipeline::pipeline(std::vector<operator_ptr> operators) {
