@@ -198,6 +198,7 @@ auto pipeline::to_string() const -> std::string {
 auto pipeline::instantiate(operator_input input,
                            operator_control_plane& control) const
   -> caf::expected<operator_output> {
+  VAST_DEBUG("instantiating '{}' for {}", *this, input.index());
   if (operators_.empty()) {
     auto f = detail::overload{
       [](std::monostate) -> operator_output {

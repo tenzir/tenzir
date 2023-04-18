@@ -12,6 +12,8 @@
 #include <vast/detail/string.hpp>
 #include <vast/plugin.hpp>
 
+#include <caf/error.hpp>
+
 #include <unistd.h>
 
 namespace vast::plugins::stdin_ {
@@ -25,6 +27,30 @@ public:
   auto
   make_loader(std::span<std::string const> args, operator_control_plane&) const
     -> caf::expected<generator<chunk_ptr>> override {
+    auto read_timeout = read_timeout_;
+    if (args.empty()) {
+      // Use default read timeout.
+    } else if (args.size() == 2) {
+      if (args[0] == "--timeout") {
+        if (auto parsed = to<vast::duration>(args[1])) {
+          read_timeout
+            = std::chrono::duration_cast<std::chrono::milliseconds>(*parsed);
+        } else {
+          return caf::make_error(ec::syntax_error,
+                                 fmt::format("could not parse duration: {}",
+                                             args[1]));
+        }
+      } else {
+        return caf::make_error(
+          ec::syntax_error,
+          fmt::format("unexpected stdin loader argument: {}", args[0]));
+      }
+    } else {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("stdin loader expects 0 or 2 "
+                                         "arguments, but got {}",
+                                         args.size()));
+    }
     return std::invoke(
       [](auto timeout) -> generator<chunk_ptr> {
         auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
@@ -83,7 +109,7 @@ public:
       return caf::none;
     }
     if (auto timeout_duration = to<vast::duration>(*read_timeout_entry)) {
-      read_timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+      read_timeout_ = std::chrono::duration_cast<std::chrono::milliseconds>(
         *timeout_duration);
     }
     return caf::none;
@@ -94,7 +120,7 @@ public:
   }
 
 private:
-  std::chrono::milliseconds read_timeout{vast::defaults::import::read_timeout};
+  std::chrono::milliseconds read_timeout_{vast::defaults::import::read_timeout};
 };
 
 } // namespace vast::plugins::stdin_

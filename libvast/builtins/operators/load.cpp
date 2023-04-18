@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/concept/parseable/string/quoted_string.hpp"
+
 #include <vast/concept/parseable/string.hpp>
 #include <vast/concept/parseable/vast/identifier.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
@@ -34,7 +36,9 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("load {}", loader_plugin_.name());
+    // TODO: Escape
+    return fmt::format("load {}{}{}", loader_plugin_.name(),
+                       args_.empty() ? "" : " ", fmt::join(args_, " "));
   }
 
 private:
@@ -55,13 +59,16 @@ public:
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::plugin_name, parsers::required_ws_or_comment;
+      parsers::plugin_name, parsers::required_ws_or_comment,
+      parsers::operator_args;
+
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     const auto p = optional_ws_or_comment >> plugin_name
+                   >> optional_ws_or_comment >> operator_args
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto loader_name = std::string{};
-    if (!p(f, l, loader_name)) {
+    auto parsed = std::tuple{std::string{}, std::vector<std::string>{}};
+    if (!p(f, l, parsed)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
@@ -69,6 +76,8 @@ public:
                                     pipeline)),
       };
     }
+    auto& [loader_name, args] = parsed;
+    VAST_INFO("parsed load: {} {}", loader_name, args);
     const auto* loader = plugins::find<loader_plugin>(loader_name);
     if (!loader) {
       return {
@@ -79,7 +88,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<load_operator>(*loader, std::vector<std::string>{}),
+      std::make_unique<load_operator>(*loader, std::move(args)),
     };
   }
 };

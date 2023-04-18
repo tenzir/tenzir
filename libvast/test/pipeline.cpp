@@ -336,9 +336,15 @@ TEST(to - invalid inputs) {
 }
 
 TEST(stdin with json parser with all from and read combinations) {
-  auto definitions = {"from stdin", "from stdin read json",
-                      "read json from stdin", "read json"};
+  auto definitions = {"from stdin",
+                      "from stdin --timeout 1s",
+                      "from stdin read json",
+                      "from stdin --timeout 1s read json",
+                      "read json from stdin",
+                      "read json from stdin --timeout 1s",
+                      "read json"};
   for (auto definition : definitions) {
+    MESSAGE("trying '" << definition << "'");
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
     auto source = unbox(pipeline::parse(definition, record{}));
     auto ops = std::vector<operator_ptr>{};
@@ -397,6 +403,38 @@ vast:
   REQUIRE_ERROR(pipeline::parse("self_recursive", *config));
   REQUIRE_ERROR(pipeline::parse("mut_recursive1", *config));
   REQUIRE_ERROR(pipeline::parse("head", *config));
+}
+
+auto execute(pipeline pipe) -> caf::expected<void> {
+  for (auto&& result : make_local_executor(std::move(pipe))) {
+    if (!result) {
+      return result;
+    }
+  }
+  return {};
+}
+
+// TODO: Investigate crash for changed stdin plugin name.
+
+TEST(load_stdin_arguments) {
+  auto success = {"load stdin", "load stdin --timeout 1s"};
+  auto error = {"load stdin --timeout", "load stdin --timeout nope",
+                "load stdin --t1me0ut 1s", "load stdin --timeout 1s 2s"};
+  for (auto x : success) {
+    MESSAGE(x);
+    test::stdin_file_input<"artifacts/inputs/json.txt"> file;
+    REQUIRE_NOERROR(
+      execute(unbox(pipeline::parse(fmt::format("{} | save stdout", x), {}))));
+  }
+  for (auto x : error) {
+    MESSAGE(x);
+    test::stdin_file_input<"artifacts/inputs/json.txt"> file;
+    // This test shows that pipeline parsing still succeeds. This is because
+    // arguments are only checked when the actual loader is created, which
+    // currently happens during instantiation.
+    REQUIRE_ERROR(unbox(pipeline::parse(fmt::format("{} | save stdout", x), {}))
+                    .infer_type<void>());
+  }
 }
 
 } // namespace
