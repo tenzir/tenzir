@@ -44,10 +44,12 @@ struct operator_control_plane {
     = 0;
 
   /// Access available schemas.
-  [[nodiscard]] virtual auto schemas() noexcept -> const std::vector<type>& = 0;
+  [[nodiscard]] virtual auto schemas() const noexcept
+    -> const std::vector<type>& = 0;
 
   /// Access available concepts.
-  [[nodiscard]] virtual auto concepts() noexcept -> const concepts_map& = 0;
+  [[nodiscard]] virtual auto concepts() const noexcept
+    -> const concepts_map& = 0;
 };
 
 } // namespace vast

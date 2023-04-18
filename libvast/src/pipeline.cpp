@@ -41,11 +41,11 @@ public:
     die("not implemented");
   }
 
-  auto schemas() noexcept -> const std::vector<type>& override {
+  auto schemas() const noexcept -> const std::vector<type>& override {
     return vast::modules::schemas();
   }
 
-  auto concepts() noexcept -> const concepts_map& override {
+  auto concepts() const noexcept -> const concepts_map& override {
     return vast::modules::concepts();
   }
 
