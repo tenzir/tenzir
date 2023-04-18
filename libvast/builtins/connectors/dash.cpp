@@ -10,27 +10,28 @@
 
 namespace vast::plugins::dash {
 
-class plugin final : public virtual loader_plugin, saver_plugin {
+class plugin final : public virtual loader_plugin, public virtual saver_plugin {
 public:
-  auto make_loader(const record& options, operator_control_plane& ctrl) const
+  auto make_loader(std::span<std::string const> args,
+                   operator_control_plane& ctrl) const
     -> caf::expected<generator<chunk_ptr>> override {
-    return stdin_plugin_->make_loader(options, ctrl);
+    return stdin_plugin_->make_loader(args, ctrl);
   }
 
-  auto default_parser(const record& options) const
-    -> std::pair<std::string, record> override {
-    return stdin_plugin_->default_parser(options);
+  auto default_parser(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    return stdin_plugin_->default_parser(args);
   }
 
-  auto make_saver(const record& options, type input_schema,
+  auto make_saver(std::span<std::string const> args, type input_schema,
                   operator_control_plane& ctrl) const
     -> caf::expected<saver> override {
-    return stdout_plugin_->make_saver(options, std::move(input_schema), ctrl);
+    return stdout_plugin_->make_saver(args, std::move(input_schema), ctrl);
   }
 
-  auto default_printer(const record& options) const
-    -> std::pair<std::string, record> override {
-    return stdout_plugin_->default_printer(options);
+  auto default_printer(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    return stdout_plugin_->default_printer(args);
   }
 
   auto saver_requires_joining() const -> bool override {

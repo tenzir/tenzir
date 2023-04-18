@@ -30,16 +30,18 @@ class print_operator final
   : public schematic_operator<print_operator, printer_plugin::printer,
                               generator<chunk_ptr>> {
 public:
-  explicit print_operator(const printer_plugin& printer, record config,
+  explicit print_operator(const printer_plugin& printer,
+                          std::vector<std::string> args,
                           bool allows_joining) noexcept
     : printer_plugin_{printer},
-      config_{std::move(config)},
+      args_{std::move(args)},
       allows_joining_{allows_joining} {
   }
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
     if (not allows_joining_ && last_schema_) {
+      // TODO
       return caf::make_error(
         ec::logic_error,
         fmt::format("'{}' does not support heterogeneous outputs; cannot "
@@ -47,7 +49,7 @@ public:
                     to_string(), printer_plugin_.name(), schema, last_schema_));
     }
     last_schema_ = schema;
-    return printer_plugin_.make_printer(config_, schema, ctrl);
+    return printer_plugin_.make_printer(args_, schema, ctrl);
   }
 
   auto process(table_slice slice, state_type& state) const
@@ -61,16 +63,14 @@ public:
 
 private:
   const printer_plugin& printer_plugin_;
-  record config_;
+  std::vector<std::string> args_;
   bool allows_joining_;
   mutable type last_schema_ = {};
 };
 
 class plugin final : public virtual operator_plugin {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return {};
   }
 
@@ -105,7 +105,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<print_operator>(*printer, record{},
+      std::make_unique<print_operator>(*printer, std::vector<std::string>{},
                                        printer->printer_allows_joining()),
     };
   }

@@ -22,7 +22,8 @@ class plugin : public virtual loader_plugin {
 public:
   static constexpr inline auto max_chunk_size = size_t{16384};
 
-  auto make_loader(const record&, operator_control_plane&) const
+  auto
+  make_loader(std::span<std::string const> args, operator_control_plane&) const
     -> caf::expected<generator<chunk_ptr>> override {
     return std::invoke(
       [](auto timeout) -> generator<chunk_ptr> {
@@ -58,14 +59,13 @@ public:
       read_timeout);
   }
 
-  auto default_parser(const record&) const
-    -> std::pair<std::string, record> override {
-    return std::pair{"json", record{}};
+  auto default_parser(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    return {"json", {}};
   }
 
-  [[nodiscard]] caf::error
-  initialize([[maybe_unused]] const record& plugin_config,
-             const record& global_config) override {
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
     if (!global_config.contains("vast")) {
       return caf::none;
     }
@@ -89,7 +89,7 @@ public:
     return caf::none;
   }
 
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "stdin";
   }
 

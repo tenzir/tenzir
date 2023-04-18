@@ -53,10 +53,11 @@ private:
   OnWarnCallable on_warn_;
 };
 
-parser_plugin::parser create_sut(generator<chunk_ptr> json_chunk_gen,
-                                 operator_control_plane& control_plane) {
+auto create_sut(generator<chunk_ptr> json_chunk_gen,
+                operator_control_plane& control_plane)
+  -> generator<table_slice> {
   auto const* plugin = vast::plugins::find<vast::parser_plugin>("json");
-  auto sut = plugin->make_parser(std::move(json_chunk_gen), {}, control_plane);
+  auto sut = plugin->make_parser({}, std::move(json_chunk_gen), control_plane);
   REQUIRE(sut);
   return std::move(*sut);
 }

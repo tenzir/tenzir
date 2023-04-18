@@ -38,22 +38,22 @@ class print_and_save_operator final
                               std::monostate> {
 public:
   explicit print_and_save_operator(const printer_plugin& printer,
-                                   record print_config,
+                                   std::vector<std::string> print_args,
                                    const saver_plugin& saver,
-                                   record save_config) noexcept
+                                   std::vector<std::string> save_args) noexcept
     : printer_plugin_{printer},
-      print_config_{std::move(print_config)},
+      print_args{std::move(print_args)},
       saver_plugin_{saver},
-      save_config_{std::move(save_config)} {
+      save_args{std::move(save_args)} {
   }
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    auto printer = printer_plugin_.make_printer(print_config_, schema, ctrl);
+    auto printer = printer_plugin_.make_printer(print_args, schema, ctrl);
     if (not printer) {
       return std::move(printer.error());
     }
-    auto saver = saver_plugin_.make_saver(save_config_, schema, ctrl);
+    auto saver = saver_plugin_.make_saver(save_args, schema, ctrl);
     if (not saver) {
       return std::move(saver.error());
     }
@@ -78,9 +78,9 @@ public:
 
 private:
   const printer_plugin& printer_plugin_;
-  record print_config_ = {};
+  std::vector<std::string> print_args;
   const saver_plugin& saver_plugin_;
-  record save_config_ = {};
+  std::vector<std::string> save_args;
 };
 
 class write_plugin final : public virtual operator_plugin {
@@ -102,8 +102,8 @@ public:
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     // TODO: handle options for saver and printer
-    auto saver_options = record{};
-    auto printer_options = record{};
+    auto saver_options = std::vector<std::string>{};
+    auto printer_options = std::vector<std::string>{};
     const auto p = optional_ws_or_comment >> plugin_name
                    >> -(required_ws_or_comment >> "to" >> required_ws_or_comment
                         >> plugin_name)
@@ -187,8 +187,8 @@ public:
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     // TODO: handle options for saver and printer
-    auto saver_options = record{};
-    auto printer_options = record{};
+    auto saver_options = std::vector<std::string>{};
+    auto printer_options = std::vector<std::string>{};
     const auto p = optional_ws_or_comment >> plugin_name
                    >> -(required_ws_or_comment >> "write"
                         >> required_ws_or_comment >> plugin_name)

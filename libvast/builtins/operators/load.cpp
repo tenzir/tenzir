@@ -23,13 +23,14 @@ namespace {
 
 class load_operator final : public crtp_operator<load_operator> {
 public:
-  explicit load_operator(const loader_plugin& loader, record config)
-    : loader_plugin_{loader}, config_{std::move(config)} {
+  explicit load_operator(const loader_plugin& loader,
+                         std::vector<std::string> args)
+    : loader_plugin_{loader}, args_{std::move(args)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
     -> caf::expected<generator<chunk_ptr>> {
-    return loader_plugin_.make_loader(config_, ctrl);
+    return loader_plugin_.make_loader(args_, ctrl);
   }
 
   auto to_string() const -> std::string override {
@@ -38,7 +39,7 @@ public:
 
 private:
   const loader_plugin& loader_plugin_;
-  record config_;
+  std::vector<std::string> args_;
 };
 
 class plugin final : public virtual operator_plugin {
@@ -78,7 +79,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<load_operator>(*loader, record{}),
+      std::make_unique<load_operator>(*loader, std::vector<std::string>{}),
     };
   }
 };

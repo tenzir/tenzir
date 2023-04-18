@@ -30,15 +30,16 @@ namespace {
 /// during pipeline execution.
 class save_operator final : public crtp_operator<save_operator> {
 public:
-  explicit save_operator(const saver_plugin& saver, record config) noexcept
-    : saver_plugin_{saver}, config_{std::move(config)} {
+  explicit save_operator(const saver_plugin& saver,
+                         std::vector<std::string> args) noexcept
+    : saver_plugin_{saver}, args_{std::move(args)} {
   }
 
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     // TODO: Extend API to allow schema-less make_saver().
-    auto new_saver = saver_plugin_.make_saver(config_, {}, ctrl);
+    auto new_saver = saver_plugin_.make_saver(args_, {}, ctrl);
     if (!new_saver) {
       ctrl.abort(new_saver.error());
       co_return;
@@ -49,20 +50,18 @@ public:
     }
   }
 
-  [[nodiscard]] auto to_string() const -> std::string override {
+  auto to_string() const -> std::string override {
     return fmt::format("save {}", saver_plugin_.name());
   }
 
 private:
   const saver_plugin& saver_plugin_;
-  record config_;
+  std::vector<std::string> args_;
 };
 
 class plugin final : public virtual operator_plugin {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return {};
   }
 
@@ -97,7 +96,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<save_operator>(*saver, record{}),
+      std::make_unique<save_operator>(*saver, std::vector<std::string>{}),
     };
   }
 };

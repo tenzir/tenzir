@@ -23,14 +23,15 @@ namespace {
 
 class parse_operator final : public crtp_operator<parse_operator> {
 public:
-  explicit parse_operator(const parser_plugin& parser, record config)
-    : parser_plugin_{parser}, config_{std::move(config)} {
+  explicit parse_operator(const parser_plugin& parser,
+                          std::vector<std::string> args)
+    : parser_plugin_{parser}, args_{std::move(args)} {
   }
 
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> caf::expected<generator<table_slice>> {
-    auto parser = parser_plugin_.make_parser(std::move(input), config_, ctrl);
+    auto parser = parser_plugin_.make_parser(args_, std::move(input), ctrl);
     if (not parser) {
       return std::move(parser.error());
     }
@@ -43,7 +44,7 @@ public:
 
 private:
   const parser_plugin& parser_plugin_;
-  record config_;
+  std::vector<std::string> args_;
 };
 
 class plugin final : public virtual operator_plugin {
@@ -83,7 +84,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<parse_operator>(*parser, record{}),
+      std::make_unique<parse_operator>(*parser, std::vector<std::string>()),
     };
   }
 };

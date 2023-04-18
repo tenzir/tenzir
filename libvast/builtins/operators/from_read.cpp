@@ -38,8 +38,8 @@ public:
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     // TODO: handle options for loader and parser
-    auto loader_options = record{};
-    auto parser_options = record{};
+    auto loader_options = std::vector<std::string>{};
+    auto parser_options = std::vector<std::string>{};
     const auto p = optional_ws_or_comment >> plugin_name
                    >> -(required_ws_or_comment >> "read"
                         >> required_ws_or_comment >> plugin_name)
@@ -102,8 +102,8 @@ public:
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     // TODO: handle options for loader and parser
-    auto loader_options = record{};
-    auto parser_options = record{};
+    auto loader_options = std::vector<std::string>{};
+    auto parser_options = std::vector<std::string>{};
     const auto p = optional_ws_or_comment >> plugin_name
                    >> -(required_ws_or_comment >> "from"
                         >> required_ws_or_comment >> plugin_name)
@@ -128,8 +128,7 @@ public:
       };
     }
     if (not loader_name) {
-      std::tie(loader_name, loader_options)
-        = parser->default_loader(parser_options);
+      std::tie(loader_name, loader_options) = parser->default_loader({});
     }
     const auto* loader = plugins::find<loader_plugin>(*loader_name);
     if (not loader) {

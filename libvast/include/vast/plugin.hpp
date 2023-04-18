@@ -417,14 +417,14 @@ public:
 class loader_plugin : public virtual plugin {
 public:
   /// Returns the loader.
-  virtual auto
-  make_loader(const record& options, operator_control_plane& ctrl) const
+  virtual auto make_loader(std::span<std::string const> args,
+                           operator_control_plane& ctrl) const
     -> caf::expected<generator<chunk_ptr>>
     = 0;
 
   /// Returns the default parser for this loader.
-  virtual auto default_parser(const record& options) const
-    -> std::pair<std::string, record>
+  virtual auto default_parser(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>>
     = 0;
 };
 
@@ -436,13 +436,13 @@ class parser_plugin : public virtual plugin {
 public:
   using parser = generator<table_slice>;
 
-  [[nodiscard]] virtual auto
-  make_parser(generator<chunk_ptr> loader, const record& options,
+  virtual auto
+  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
               operator_control_plane& ctrl) const -> caf::expected<parser>
     = 0;
 
-  [[nodiscard]] virtual auto default_loader(const record& options) const
-    -> std::pair<std::string, record>
+  virtual auto default_loader(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>>
     = 0;
 };
 
@@ -456,19 +456,19 @@ public:
   using printer = std::function<auto(table_slice)->generator<chunk_ptr>>;
 
   /// Returns a printer for a specified schema.
-  [[nodiscard]] virtual auto
-  make_printer(const record& options, type input_schema,
+  virtual auto
+  make_printer(std::span<std::string const> args, type input_schema,
                operator_control_plane& ctrl) const -> caf::expected<printer>
     = 0;
 
   /// Returns the default saver for this printer.
-  [[nodiscard]] virtual auto default_saver(const record& options) const
-    -> std::pair<std::string, record>
+  virtual auto default_saver(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>>
     = 0;
 
   /// Returns whether the printer allows for joining output streams into a
   /// single saver.
-  [[nodiscard]] virtual auto printer_allows_joining() const -> bool = 0;
+  virtual auto printer_allows_joining() const -> bool = 0;
 };
 
 // -- saver plugin ------------------------------------------------------------
@@ -481,19 +481,19 @@ public:
   using saver = std::function<auto(chunk_ptr)->void>;
 
   /// Returns the saver.
-  [[nodiscard]] virtual auto
-  make_saver(const record& options, type input_schema,
-             operator_control_plane& ctrl) const -> caf::expected<saver>
+  virtual auto make_saver(std::span<std::string const> args, type input_schema,
+                          operator_control_plane& ctrl) const
+    -> caf::expected<saver>
     = 0;
 
   /// Returns the default printer for this saver.
-  [[nodiscard]] virtual auto default_printer(const record& options) const
-    -> std::pair<std::string, record>
+  virtual auto default_printer(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>>
     = 0;
 
   /// Returns whether the saver requires that the output from its preceding
   /// printer can be joined.
-  [[nodiscard]] virtual auto saver_requires_joining() const -> bool = 0;
+  virtual auto saver_requires_joining() const -> bool = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------
