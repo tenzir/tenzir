@@ -335,7 +335,6 @@ struct rebuilder_state {
             [](const auto& candidate_info) {
               return candidate_info.second.partition_infos.empty();
             });
-          VAST_INFO("starts run; all empty = {}", all_empty);
           if (all_empty)
             return finish({}, true);
           if (run->options.automatic)
