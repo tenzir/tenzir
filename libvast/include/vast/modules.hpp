@@ -13,17 +13,18 @@
 namespace vast::modules {
 
 /// Initialize the global module and concepts registries.
+/// @returns `true` after first initialization, `false` otherwise.
 auto init(module mod, concepts_map concepts) -> bool;
 
-// Get the list of schemas.
-// Returns an empty list if init(...) was not called.
+/// Get the list of schemas.
+/// @returns An empty list if init(...) was not called.
 auto schemas() -> const std::vector<type>&;
 
-// Get the concepts map.
-// Returns an empty map if init(...) was not called.
+/// Get the concepts map.
+/// @returns An empty map if init(...) was not called.
 auto concepts() -> const concepts_map&;
 
-// Get the list of modules.
+/// Get the list of modules.
 [[deprecated("call modules::schemas() instead")]] auto global_module()
   -> const module*;
 
