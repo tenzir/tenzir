@@ -625,6 +625,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     return catalog_actor::behavior_type::make_empty_behavior();
   }
   self->state.taxonomies.concepts = modules::concepts();
+  // TODO: Taxonomy models are to be removed soon.
   self->state.taxonomies.models = std::move(taxonomies->models);
   //  Load loaded schema types from the singleton.
   //  TODO: Move to the load handler and re-parse the files.
