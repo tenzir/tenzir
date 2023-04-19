@@ -41,13 +41,15 @@ public:
   auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
     if (not allows_joining_ && last_schema_) {
-      // TODO
       return caf::make_error(
         ec::logic_error,
         fmt::format("'{}' does not support heterogeneous outputs; cannot "
                     "initialize for '{}' after '{}'",
                     to_string(), printer_plugin_.name(), schema, last_schema_));
     }
+    // TODO: Operator instances shall be immutable. This is mostly a hack to
+    // work around the API of `schematic_operator`, which currently does not
+    // provide a way to store non-schema-specific state.
     last_schema_ = schema;
     return printer_plugin_.make_printer(args_, schema, ctrl);
   }
