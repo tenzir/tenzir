@@ -43,6 +43,9 @@ auto bind_operand(std::string field, table_slice slice, operand op)
   auto bind_value = [&](const data& value) {
     inferred_type = type::infer(value);
     if (not inferred_type) {
+      inferred_type = type{string_type{}};
+      // VAST has no N/A type equivalent for Arrow, so we just use a string type
+      // here.
       auto builder
         = string_type::make_arrow_builder(arrow::default_memory_pool());
       const auto append_result = builder->AppendNulls(batch->num_rows());
@@ -132,7 +135,8 @@ public:
     // nop
   }
 
-  auto operator()(const table_slice& slice) const -> table_slice {
+  auto operator()(const table_slice& slice, operator_control_plane& ctrl) const
+    -> table_slice {
     if (slice.rows() == 0)
       return {};
     const auto& layout = caf::get<record_type>(slice.schema());
@@ -155,9 +159,31 @@ public:
       auto result = std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>{};
       result.reserve(config_.field_to_operand.size());
-      for (const auto& [field, operand] : config_.field_to_operand) {
-        result.push_back(
-          bind_operand(field, slice, operand.value_or(field_extractor{field})));
+      auto duplicates = std::unordered_set<std::string>{};
+      for (auto it = config_.field_to_operand.rbegin();
+           it < config_.field_to_operand.rend(); ++it) {
+        auto [field, operand] = *it;
+        if (not duplicates.insert(field).second) {
+          ctrl.warn(caf::make_error(
+            ec::invalid_argument, fmt::format("put operator ignores duplicate "
+                                              "assignment for field {}",
+                                              field)));
+          continue;
+        }
+        if (not operand) {
+          auto field_as_operand = to<vast::operand>(field);
+          if (not field_as_operand) {
+            ctrl.warn(caf::make_error(
+              ec::logic_error,
+              fmt::format("put operator failed to parse field as extractor in "
+                          "implicit assignment for field {}, and assigns null",
+                          field)));
+            field_as_operand = data{};
+          }
+          operand.emplace(std::move(*field_as_operand));
+        }
+        result.insert(result.begin(), bind_operand(std::move(field), slice,
+                                                   std::move(*operand)));
       }
       return result;
     };
