@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/parseable/vast/pipeline.hpp"
+#include "vast/pipeline.hpp"
 
 #include "vast/collect.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/modules.hpp"
 #include "vast/plugin.hpp"
 
 namespace vast {
@@ -42,11 +42,11 @@ public:
   }
 
   auto schemas() const noexcept -> const std::vector<type>& override {
-    die("not implemented");
+    return vast::modules::schemas();
   }
 
   auto concepts() const noexcept -> const concepts_map& override {
-    die("not implemented");
+    return vast::modules::concepts();
   }
 
 private:
