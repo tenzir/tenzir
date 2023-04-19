@@ -8,6 +8,7 @@
 
 #include "vast/detail/file_path_to_parser.hpp"
 
+#include <array>
 #include <filesystem>
 #include <string>
 
@@ -15,12 +16,21 @@ namespace vast::detail {
 
 constexpr inline auto fallback_parser = "json";
 
+constexpr inline auto extension_to_parser_list
+  = std::array<std::pair<std::string, std::string>, 2>{
+    {{"eve.json", "suricata"}, {".ndjson", "json"}}};
+
 auto file_path_to_parser(std::string_view path) -> std::string {
-  auto extension = std::filesystem::path(path).extension();
-  if (extension.empty()) {
+  for (const auto& [special_extension, parser] : extension_to_parser_list) {
+    if (path.ends_with(special_extension)) {
+      return parser;
+    }
+  }
+  auto fallback_ext = std::filesystem::path(path).extension();
+  if (fallback_ext.empty()) {
     return fallback_parser;
   }
-  return extension.string().substr(1);
+  return fallback_ext.string().substr(1);
 }
 
 } // namespace vast::detail
