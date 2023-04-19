@@ -154,7 +154,7 @@ table_slice concatenate(caf::expected<std::vector<table_slice>> slices) {
 FIXTURE_SCOPE(pipeline_tests, pipelines_fixture)
 
 TEST(head 1) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
+  const auto* vast = plugins::find<legacy_language_plugin>("VAST");
   auto [expr, pipeline] = unbox(vast->make_query("head 1"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
@@ -169,7 +169,7 @@ TEST(head 1) {
 }
 
 TEST(head 0) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
+  const auto* vast = plugins::find<legacy_language_plugin>("VAST");
   auto [expr, pipeline] = unbox(vast->make_query("head 0"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
@@ -183,7 +183,7 @@ TEST(head 0) {
 }
 
 TEST(head 10 with overlap) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
+  const auto* vast = plugins::find<legacy_language_plugin>("VAST");
   auto [expr, pipeline] = unbox(vast->make_query("head"));
   REQUIRE(pipeline);
   CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 9u)),
@@ -196,7 +196,7 @@ TEST(head 10 with overlap) {
 }
 
 TEST(taste 1) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
+  const auto* vast = plugins::find<legacy_language_plugin>("VAST");
   auto [expr, pipeline] = unbox(vast->make_query("taste 1"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
@@ -213,7 +213,7 @@ TEST(taste 1) {
 }
 
 TEST(taste 0) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
+  const auto* vast = plugins::find<legacy_language_plugin>("VAST");
   auto [expr, pipeline] = unbox(vast->make_query("taste 0"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
@@ -227,7 +227,7 @@ TEST(taste 0) {
 }
 
 TEST(taste 10 with overlap) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
+  const auto* vast = plugins::find<legacy_language_plugin>("VAST");
   auto [expr, pipeline] = unbox(vast->make_query("taste"));
   REQUIRE(pipeline);
   CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 4u)),
@@ -240,7 +240,7 @@ TEST(taste 10 with overlap) {
 }
 
 TEST(head and taste fail with negative limit) {
-  const auto* vast = plugins::find<language_plugin>("VAST");
+  const auto* vast = plugins::find<legacy_language_plugin>("VAST");
   REQUIRE_ERROR(vast->make_query("head -1"));
   REQUIRE_ERROR(vast->make_query("taste -5"));
 }

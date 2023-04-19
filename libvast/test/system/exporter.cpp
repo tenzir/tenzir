@@ -84,8 +84,10 @@ struct fixture : fixture_base {
   }
 
   void spawn_exporter(query_options opts) {
-    exporter = self->spawn(system::exporter, expr, opts,
-                           std::vector<vast::legacy_pipeline>{}, index);
+    exporter
+      = self->spawn(system::exporter, opts,
+                    unbox(pipeline::parse(fmt::format("where {}", expr))),
+                    index);
   }
 
   void spawn_sink() {

@@ -80,7 +80,7 @@ public:
       std::string_view{f, l},
       // TODO: This ignores options
       pipeline::parse_as_operator(
-        fmt::format("load {} | parse {}", loader_name, *parser_name), {}),
+        fmt::format("load {} | parse {}", loader_name, *parser_name)),
     };
   }
 };
@@ -144,7 +144,7 @@ public:
       std::string_view{f, l},
       // TODO: This ignores options
       pipeline::parse_as_operator(
-        fmt::format("load {} | parse {}", *loader_name, parser_name), {}),
+        fmt::format("load {} | parse {}", *loader_name, parser_name)),
     };
   }
 };

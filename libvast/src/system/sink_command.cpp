@@ -119,7 +119,6 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         exporter = nullptr;
         snk = nullptr;
         if (msg.reason && msg.reason != caf::exit_reason::user_shutdown) {
-          VAST_WARN("{} received error message: {}", inv.full_name, msg.reason);
           err = std::move(msg.reason);
         }
       },

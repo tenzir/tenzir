@@ -34,7 +34,8 @@ struct sink_state {
   accountant_actor accountant;
   vast::system::measurement measurement;
   format::writer_ptr writer;
-  const char* name = "writer";
+
+  static constexpr auto name = "sink";
 
   explicit sink_state(caf::event_based_actor* self_ptr);
 
