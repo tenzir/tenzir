@@ -80,14 +80,10 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> plugin_name
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto printer_name = std::string{};
-    if (!p(f, l, printer_name)) {
+    auto parsed = parsers::name_args.apply(f, l);
+    if (not parsed) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
@@ -95,17 +91,18 @@ public:
                                     pipeline)),
       };
     }
-    const auto* printer = plugins::find<printer_plugin>(printer_name);
+    auto& [name, args] = *parsed;
+    const auto* printer = plugins::find<printer_plugin>(name);
     if (!printer) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::lookup_error,
-                        fmt::format("no printer found for '{}'", printer_name)),
+                        fmt::format("no printer found for '{}'", name)),
       };
     }
     return {
       std::string_view{f, l},
-      std::make_unique<print_operator>(*printer, std::vector<std::string>{},
+      std::make_unique<print_operator>(*printer, std::move(args),
                                        printer->printer_allows_joining()),
     };
   }

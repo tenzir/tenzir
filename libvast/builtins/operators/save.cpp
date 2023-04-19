@@ -71,14 +71,10 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> plugin_name
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto saver_name = std::string{};
-    if (!p(f, l, saver_name)) {
+    auto parsed = parsers::name_args.apply(f, l);
+    if (not parsed) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
@@ -86,17 +82,18 @@ public:
                                     pipeline)),
       };
     }
-    const auto* saver = plugins::find<saver_plugin>(saver_name);
+    auto& [name, args] = *parsed;
+    const auto* saver = plugins::find<saver_plugin>(name);
     if (!saver) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::lookup_error,
-                        fmt::format("no saver found for '{}'", saver_name)),
+                        fmt::format("no saver found for '{}'", name)),
       };
     }
     return {
       std::string_view{f, l},
-      std::make_unique<save_operator>(*saver, std::vector<std::string>{}),
+      std::make_unique<save_operator>(*saver, std::move(args)),
     };
   }
 };

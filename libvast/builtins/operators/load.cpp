@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/parseable/string/quoted_string.hpp"
-
 #include <vast/concept/parseable/string.hpp>
 #include <vast/concept/parseable/vast/identifier.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
@@ -36,7 +34,7 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    // TODO: Escape
+    // TODO: Quote and escape.
     return fmt::format("load {}{}{}", loader_plugin_.name(),
                        args_.empty() ? "" : " ", fmt::join(args_, " "));
   }
@@ -58,17 +56,10 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::plugin_name, parsers::required_ws_or_comment,
-      parsers::operator_args;
-
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> plugin_name
-                   >> optional_ws_or_comment >> operator_args
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto parsed = std::tuple{std::string{}, std::vector<std::string>{}};
-    if (!p(f, l, parsed)) {
+    auto parsed = parsers::name_args.apply(f, l);
+    if (!parsed) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
@@ -76,14 +67,14 @@ public:
                                     pipeline)),
       };
     }
-    auto& [loader_name, args] = parsed;
-    VAST_INFO("parsed load: {} {}", loader_name, args);
-    const auto* loader = plugins::find<loader_plugin>(loader_name);
+    auto& [name, args] = *parsed;
+    VAST_INFO("parsed load: {} {}", name, args);
+    const auto* loader = plugins::find<loader_plugin>(name);
     if (!loader) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::lookup_error,
-                        fmt::format("no loader found for '{}'", loader_name)),
+                        fmt::format("no loader found for '{}'", name)),
       };
     }
     return {

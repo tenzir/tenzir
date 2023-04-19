@@ -45,7 +45,7 @@ public:
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    auto parsed = parsers::parse_name_args_opt_keyword_name_args("read", f, l);
+    auto parsed = parsers::name_args_opt_keyword_name_args("read").apply(f, l);
     if (not parsed) {
       return {
         std::string_view{f, l},
@@ -95,7 +95,7 @@ public:
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    auto parsed = parsers::parse_name_args_opt_keyword_name_args("from", f, l);
+    auto parsed = parsers::name_args_opt_keyword_name_args("from").apply(f, l);
     if (not parsed) {
       return {
         std::string_view{f, l},

@@ -59,32 +59,29 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> plugin_name
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto parser_name = std::string{};
-    if (!p(f, l, parser_name)) {
+    auto parsed = parsers::name_args.apply(f, l);
+    if (!parsed) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse parse operator: '{}'",
+                        fmt::format("failed to parse 'parse' operator: '{}'",
                                     pipeline)),
       };
     }
-    const auto* parser = plugins::find<parser_plugin>(parser_name);
+    auto& [name, args] = *parsed;
+    const auto* parser = plugins::find<parser_plugin>(name);
     if (!parser) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::lookup_error,
-                        fmt::format("no parser found for '{}'", parser_name)),
+                        fmt::format("no parser found for '{}'", name)),
       };
     }
     return {
       std::string_view{f, l},
-      std::make_unique<parse_operator>(*parser, std::vector<std::string>()),
+      std::make_unique<parse_operator>(*parser, std::move(args)),
     };
   }
 };
