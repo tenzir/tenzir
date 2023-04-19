@@ -23,10 +23,9 @@ namespace {
 
 auto load_parse(auto&& loader, auto&& loader_args, auto&& parser,
                 auto&& parser_args) -> caf::expected<operator_ptr> {
-  // TODO: Escaping?
   auto expanded = fmt::format("load {} {} | parse {} {}", loader,
-                              fmt::join(loader_args, " "), parser,
-                              fmt::join(parser_args, " "));
+                              escape_operator_args(loader_args), parser,
+                              escape_operator_args(parser_args));
   VAST_INFO("from/read expanded to '{}'", expanded);
   return pipeline::parse_as_operator(expanded, {});
 }

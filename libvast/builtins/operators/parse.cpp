@@ -39,7 +39,8 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("parse {}", parser_plugin_.name());
+    return fmt::format("parse {}{}{}", parser_plugin_.name(),
+                       args_.empty() ? "" : " ", escape_operator_args(args_));
   }
 
 private:

@@ -132,8 +132,8 @@ std::string double_unescape(std::string_view str, std::string_view esc);
 /// @param search The string to search.
 /// @param replace The replacement string.
 /// @returns The string with replacements.
-std::string replace_all(std::string str, std::string_view search,
-                        std::string_view replace);
+std::string
+replace_all(std::string str, std::string_view search, std::string_view replace);
 
 /// Splits a character sequence into a vector of substrings.
 /// @param str The string to split.
@@ -147,10 +147,9 @@ std::string replace_all(std::string str, std::string_view search,
 /// @warning The lifetime of the returned substrings are bound to the lifetime
 /// of the string pointed to by `str`.
 /// @returns A vector of substrings.
-std::vector<std::string_view> split(std::string_view str, std::string_view sep,
-                                    std::string_view esc = "",
-                                    size_t max_splits = -1,
-                                    bool include_sep = false);
+std::vector<std::string_view>
+split(std::string_view str, std::string_view sep, std::string_view esc = "",
+      size_t max_splits = -1, bool include_sep = false);
 
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.
@@ -163,8 +162,8 @@ std::vector<std::string> to_strings(const std::vector<std::string_view>& v);
 /// @param sep The string to insert between each element of the sequence.
 /// @returns The joined string.
 template <class Iterator, class Predicate>
-std::string join(Iterator begin, Iterator end, std::string_view sep,
-                 Predicate p) {
+std::string
+join(Iterator begin, Iterator end, std::string_view sep, Predicate p) {
   std::string result;
   if (begin != end) {
     result += p(*begin++);
@@ -178,7 +177,9 @@ std::string join(Iterator begin, Iterator end, std::string_view sep,
 
 template <class Iterator>
 std::string join(Iterator begin, Iterator end, std::string_view sep) {
-  return join(begin, end, sep, [](auto&& x) -> decltype(x) { return x; });
+  return join(begin, end, sep, [](auto&& x) -> decltype(x) {
+    return x;
+  });
 }
 
 template <class T>

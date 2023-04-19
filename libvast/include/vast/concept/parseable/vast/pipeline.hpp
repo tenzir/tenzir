@@ -14,6 +14,7 @@
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
+#include "vast/detail/string.hpp"
 
 #include <fmt/format.h>
 
@@ -119,3 +120,41 @@ inline auto name_args_opt_keyword_name_args(const std::string& keyword) {
 }
 
 } // namespace vast::parsers
+
+namespace vast {
+
+/// Escapes a string such that it can be safely used as an operator argument.
+/// This generally tries tries to avoid quotes, but it does not quote minimally.
+/// It will also quote the words `from`, `read`, `write` and `to`.
+///
+/// Guarantees `operator_arg.apply(operator_arg_escape(y)).value() == y` for
+/// every `y == operator_arg.apply(x).value()`.
+inline auto escape_operator_arg(std::string_view x) -> std::string {
+  auto f = x.begin();
+  if (parsers::alnum.parse(f, x.end(), unused)) {
+    for (auto y : {"from", "read", "write", "to"}) {
+      if (x == y) {
+        return fmt::format("'{}'", x);
+      }
+    }
+    return std::string{x};
+  }
+  return '\'' + detail::replace_all(std::string{x}, "'", "\\'") + '\'';
+}
+
+/// The multi-argument version of @see operator_arg_escape.
+template <class Range>
+inline auto escape_operator_args(Range&& r) -> std::string {
+  auto result = std::string{};
+  auto first = true;
+  for (auto&& x : r) {
+    if (!first) {
+      result += ' ';
+    }
+    first = false;
+    result += escape_operator_arg(x);
+  }
+  return result;
+}
+
+} // namespace vast

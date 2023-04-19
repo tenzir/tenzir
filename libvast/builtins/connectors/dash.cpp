@@ -45,7 +45,7 @@ public:
     }
     stdout_plugin_ = plugins::find<saver_plugin>("stdout");
     if (not stdout_plugin_) {
-      return caf::make_error(ec::logic_error, "stdin plugin unavailable");
+      return caf::make_error(ec::logic_error, "stdout plugin unavailable");
     }
     return caf::none;
   }

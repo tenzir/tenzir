@@ -58,7 +58,8 @@ public:
   }
 
   auto to_string() const noexcept -> std::string override {
-    return fmt::format("print {}", printer_plugin_.name());
+    return fmt::format("print {}{}{}", printer_plugin_.name(),
+                       args_.empty() ? "" : " ", escape_operator_args(args_));
   }
 
 private:

@@ -30,10 +30,9 @@ namespace {
 // TODO: Perhaps unify this with `from_read.cpp::load_parse`.
 auto print_save(auto&& printer, auto&& printer_args, auto&& saver,
                 auto&& saver_args) -> caf::expected<operator_ptr> {
-  // TODO: Escaping?
   auto expanded = fmt::format("print {} {} | save {} {}", printer,
-                              fmt::join(printer_args, " "), saver,
-                              fmt::join(saver_args, " "));
+                              escape_operator_args(printer_args), saver,
+                              escape_operator_args(saver_args));
   VAST_INFO("write/to expanded to '{}'", expanded);
   return pipeline::parse_as_operator(expanded);
 }
@@ -83,8 +82,11 @@ public:
   }
 
   auto to_string() const noexcept -> std::string override {
-    return fmt::format("write {} to {}", printer_plugin_.name(),
-                       saver_plugin_.name());
+    return fmt::format("write {}{}{} to {}{}{}", printer_plugin_.name(),
+                       print_args.empty() ? "" : " ",
+                       escape_operator_args(print_args), saver_plugin_.name(),
+                       save_args.empty() ? "" : " ",
+                       escape_operator_args(save_args));
   }
 
 private:

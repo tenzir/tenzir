@@ -34,9 +34,8 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    // TODO: Quote and escape.
     return fmt::format("load {}{}{}", loader_plugin_.name(),
-                       args_.empty() ? "" : " ", fmt::join(args_, " "));
+                       args_.empty() ? "" : " ", escape_operator_args(args_));
   }
 
 private:
