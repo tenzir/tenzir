@@ -59,16 +59,10 @@ const inline auto aggregation_function
 const inline auto aggregation_function_list
   = (aggregation_function % (',' >> optional_ws_or_comment));
 
-// An operator argument can be ...
-const inline auto operator_arg =
-  // ... a single quoted string
-  qstr
-  // ... or a double quoted string
-  | qqstr
-  // ... or something that does not start with a quote
-  | &!(chr{'\''} | '"')
-      // ... and contains no whitespace, comments or pipes.
-      >> +(printable - '|' - required_ws_or_comment);
+const inline auto unquoted_operator_arg
+  = &!(chr{'\''} | '"') >> +(printable - '|' - required_ws_or_comment);
+
+const inline auto operator_arg = qstr | qqstr | unquoted_operator_arg;
 
 namespace detail {
 
@@ -124,14 +118,14 @@ inline auto name_args_opt_keyword_name_args(const std::string& keyword) {
 namespace vast {
 
 /// Escapes a string such that it can be safely used as an operator argument.
-/// This generally tries tries to avoid quotes, but it does not quote minimally.
-/// It will also quote the words `from`, `read`, `write` and `to`.
+/// It generally tries tries to avoid quotes, but it will also quote the words
+/// `from`, `read`, `write` and `to`.
 ///
 /// Guarantees `operator_arg.apply(operator_arg_escape(y)).value() == y` for
 /// every `y == operator_arg.apply(x).value()`.
 inline auto escape_operator_arg(std::string_view x) -> std::string {
   auto f = x.begin();
-  if (parsers::alnum.parse(f, x.end(), unused)) {
+  if (parsers::unquoted_operator_arg.parse(f, x.end(), unused)) {
     for (auto y : {"from", "read", "write", "to"}) {
       if (x == y) {
         return fmt::format("'{}'", x);

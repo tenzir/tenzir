@@ -67,7 +67,6 @@ public:
       };
     }
     auto& [name, args] = *parsed;
-    VAST_INFO("parsed load: {} {}", name, args);
     const auto* loader = plugins::find<loader_plugin>(name);
     if (!loader) {
       return {

@@ -26,8 +26,8 @@ auto load_parse(auto&& loader, auto&& loader_args, auto&& parser,
   auto expanded = fmt::format("load {} {} | parse {} {}", loader,
                               escape_operator_args(loader_args), parser,
                               escape_operator_args(parser_args));
-  VAST_INFO("from/read expanded to '{}'", expanded);
-  return pipeline::parse_as_operator(expanded, {});
+  VAST_DEBUG("from/read expanded to '{}'", expanded);
+  return pipeline::parse_as_operator(expanded);
 }
 
 class from_plugin final : public virtual operator_plugin {
