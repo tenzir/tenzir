@@ -419,8 +419,6 @@ auto execute(pipeline pipe) -> caf::expected<void> {
   return {};
 }
 
-// TODO: Investigate crash for changed stdin plugin name.
-
 TEST(load_stdin_arguments) {
   auto success = {"load stdin", "load stdin --timeout 1s"};
   auto error = {"load stdin --timeout", "load stdin --timeout nope",

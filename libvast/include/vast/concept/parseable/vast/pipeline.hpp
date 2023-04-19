@@ -73,7 +73,7 @@ namespace detail {
 
 constexpr inline auto or_default
   = [](caf::optional<std::vector<std::string>> x) -> std::vector<std::string> {
-  // Note: `value_or` always performs a copy.
+  // Note: `caf::optional::value_or` always performs a copy.
   if (!x) {
     return {};
   }
@@ -119,17 +119,3 @@ inline auto name_args_opt_keyword_name_args(const std::string& keyword) {
 }
 
 } // namespace vast::parsers
-
-namespace vast {
-
-template <class Parser, class Iterator>
-auto parse(Parser&& p, Iterator& f, const Iterator& l)
-  -> std::optional<typename std::remove_cvref_t<Parser>::attribute> {
-  auto result = typename std::remove_cvref_t<Parser>::attribute{};
-  if (!p(f, l, result)) {
-    return std::nullopt;
-  }
-  return result;
-}
-
-} // namespace vast
