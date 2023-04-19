@@ -149,19 +149,6 @@ void provide_to_source(exporter_actor::stateful_pointer<exporter_state> self,
   self->state.source_buffer.push_back(std::move(slice));
 }
 
-void shutdown(exporter_actor::stateful_pointer<exporter_state> self,
-              caf::error err) {
-  VAST_DEBUG("{} initiates shutdown with error {}", *self, render(err));
-  self->send_exit(self, std::move(err));
-}
-
-void shutdown(exporter_actor::stateful_pointer<exporter_state> self) {
-  if (has_continuous_option(self->state.options))
-    return;
-  VAST_DEBUG("{} initiates shutdown", *self);
-  self->send_exit(self, caf::exit_reason::normal);
-}
-
 void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
                   table_slice slice) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
@@ -172,19 +159,23 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   if (it == self->state.checkers.end()) {
     auto x = tailor(self->state.query_context.expr, schema);
     if (!x) {
-      VAST_ERROR("{} failed to tailor expression: {}", *self,
-                 render(x.error()));
-      shutdown(self);
-      return;
+      VAST_DEBUG("{} failed to tailor expression and drops slice: {}", *self,
+                 x.error());
+      std::tie(it, std::ignore)
+        = self->state.checkers.emplace(schema, std::nullopt);
+    } else {
+      VAST_DEBUG("{} tailored AST to {}: {}", *self, schema, x);
+      std::tie(it, std::ignore)
+        = self->state.checkers.emplace(schema, std::move(*x));
     }
-    VAST_DEBUG("{} tailored AST to {}: {}", *self, schema, x);
-    std::tie(it, std::ignore)
-      = self->state.checkers.emplace(schema, std::move(*x));
   }
   auto& checker = it->second;
   // Perform candidate check, splitting the slice into subsets if needed.
   self->state.query_status.processed += slice.rows();
-  auto selection = evaluate(checker, slice, {});
+  if (not checker) {
+    return;
+  }
+  auto selection = evaluate(*checker, slice, {});
   auto selection_size = rank(selection);
   if (selection_size == 0) {
     // No rows qualify.
@@ -368,7 +359,12 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
             continue_execution(self);
           },
           [=](const caf::error& e) {
-            shutdown(self, e);
+            if (self->state.result_stream) {
+              self->state.result_stream->stop(e);
+            } else {
+              VAST_WARN("{} shuts down before sink is attached: {}", *self, e);
+              self->quit(e);
+            }
           });
     },
     [self](atom::statistics, const caf::actor& statistics_subscriber) {

@@ -57,7 +57,7 @@ struct exporter_state {
   accountant_actor accountant = {};
 
   /// Caches tailored candidate checkers.
-  std::unordered_map<type, expression> checkers = {};
+  std::unordered_map<type, std::optional<expression>> checkers = {};
 
   /// Stores the time point for when this actor got started via 'run'.
   std::chrono::system_clock::time_point start = {};
