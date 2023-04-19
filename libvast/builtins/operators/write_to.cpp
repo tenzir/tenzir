@@ -187,7 +187,7 @@ public:
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse write operator: '{}'",
+                        fmt::format("failed to parse to operator: '{}'",
                                     pipeline)),
       };
     }
