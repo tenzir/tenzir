@@ -429,7 +429,7 @@ TEST(load_stdin_arguments) {
     MESSAGE(x);
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
     REQUIRE_NOERROR(
-      execute(unbox(pipeline::parse(fmt::format("{} | save stdout", x), {}))));
+      execute(unbox(pipeline::parse(fmt::format("{} | save stdout", x)))));
   }
   for (auto x : error) {
     MESSAGE(x);
@@ -437,7 +437,7 @@ TEST(load_stdin_arguments) {
     // This test shows that pipeline parsing still succeeds. This is because
     // arguments are only checked when the actual loader is created, which
     // currently happens during instantiation.
-    REQUIRE_ERROR(unbox(pipeline::parse(fmt::format("{} | save stdout", x), {}))
+    REQUIRE_ERROR(unbox(pipeline::parse(fmt::format("{} | save stdout", x)))
                     .infer_type<void>());
   }
 }
