@@ -29,6 +29,7 @@ namespace vast::plugins::file {
 class plugin : public virtual loader_plugin {
 public:
   static constexpr inline auto max_chunk_size = size_t{16384};
+  static constexpr inline auto stdin_path = "-";
 
   auto
   make_loader(std::span<std::string const> args, operator_control_plane&) const
@@ -57,7 +58,7 @@ public:
       } else if (arg == "--uds") {
         file_type = std::filesystem::file_type::socket;
       } else if (arg == "-" || arg == "stdin") {
-        path = "-";
+        path = stdin_path;
       } else if (arg == "-f" || arg == "--follow") {
         following = true;
       } else if (not arg.starts_with("-")) {
@@ -104,7 +105,7 @@ public:
         return caf::make_error(ec::filesystem_error, "unsupported file type",
                                path);
       case std::filesystem::file_type::socket: {
-        if (path == "-") {
+        if (path == stdin_path) {
           return caf::make_error(ec::filesystem_error,
                                  "cannot use STDIN as UNIX "
                                  "domain socket");
@@ -119,7 +120,7 @@ public:
         break;
       }
       case std::filesystem::file_type::regular: {
-        if (path != "-") {
+        if (path != stdin_path) {
           fd = ::open(path.c_str(), std::ios_base::binary | std::ios_base::in);
           if (fd == -1) {
             return caf::make_error(ec::filesystem_error,
@@ -168,7 +169,7 @@ public:
   auto default_parser(std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
     for (std::string_view arg : args) {
-      if (arg == "-") {
+      if (arg == "-" || arg == "stdin") {
         break;
       }
       return {detail::file_path_to_parser(arg), {}};
