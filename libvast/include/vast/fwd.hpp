@@ -10,6 +10,27 @@
 
 #include "vast/config.hpp" // IWYU pragma: export
 
+namespace caf {
+
+// This overrides a few CAF types to be marked [[nodiscard]] to make using them
+// less error prone. This must to be done before including <caf/fwd.hpp> and is
+// enforced by adding "vast/fwd.hpp" as a public precompiled header for libvast.
+template <class>
+class [[nodiscard]] expected;
+template <class...>
+class [[nodiscard]] result;
+template <class...>
+class [[nodiscard]] typed_response_promise;
+template <class, class>
+class [[nodiscard]] response_handle;
+class [[nodiscard]] response_promise;
+
+// As long as `response_promise::delegate` returns a delegated rather than void
+// we can't mark it [[nodiscard]].
+// template <class...> class [[nodiscard]] delegated;
+
+} // namespace caf
+
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>
 #include <caf/type_id.hpp>

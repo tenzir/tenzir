@@ -143,7 +143,7 @@ get_authenticator(caf::scoped_actor& self, system::node_actor node,
 authenticator_actor::behavior_type
 authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
               system::filesystem_actor fs) {
-  self->state.path_ = std::filesystem::path{"plugins/web/server_state.fb.svs"};
+  self->state.path_ = std::filesystem::path{"plugins/web/authenticator.svs"};
   self->state.filesystem_ = fs;
   self->request(fs, caf::infinite, atom::read_v, self->state.path_)
     .await(
@@ -168,8 +168,29 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
       // We don't expect token generation to be very frequent and the total
       // number of tokens to be relatively small, so it should be fine to
       // re-write the complete file every time.
-      self->state.save();
-      return result;
+      auto state = self->state.save();
+      if (not state) {
+        return caf::make_error(ec::serialization_error,
+                               fmt::format("{} failed to serialize state: {}",
+                                           *self, state.error()));
+      }
+      auto rp = self->make_response_promise<token_t>();
+      self
+        ->request(self->state.filesystem_, caf::infinite, atom::write_v,
+                  self->state.path_, std::move(*state))
+        .then(
+          [rp, result = std::move(result)](atom::ok) mutable {
+            // We deliberately delay delivering the generated token until it is
+            // persisted successfully, as we otherwise cannot error in case
+            // persisting it fails.
+            rp.deliver(std::move(result));
+          },
+          [rp, self](const caf::error& err) mutable {
+            rp.deliver(caf::make_error(
+              ec::filesystem_error,
+              fmt::format("{} failed to persist token: {}", *self, err)));
+          });
+      return rp;
     },
     [self](atom::validate, const token_t& token) -> bool {
       return self->state.authenticate(token);
