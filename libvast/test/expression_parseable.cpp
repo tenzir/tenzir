@@ -183,7 +183,7 @@ TEST(parseable - field extractor predicate) {
   REQUIRE(extractor);
   CHECK_EQUAL(extractor->field, "foo.bar");
   CHECK_EQUAL(pred->op, relational_operator::not_equal);
-  CHECK_EQUAL(pred->rhs, predicate::operand{data{}});
+  CHECK_EQUAL(pred->rhs, operand{data{}});
 }
 
 TEST(parseable - type extractor predicate) {
@@ -195,7 +195,7 @@ TEST(parseable - type extractor predicate) {
   REQUIRE(extractor);
   CHECK_EQUAL(extractor->type, ip_type{});
   CHECK_EQUAL(pred->op, relational_operator::not_equal);
-  CHECK_EQUAL(pred->rhs, predicate::operand{data{}});
+  CHECK_EQUAL(pred->rhs, operand{data{}});
 }
 
 TEST(parseable - custom type extractor predicate) {
@@ -208,7 +208,7 @@ TEST(parseable - custom type extractor predicate) {
   auto expected = type{"foo.bar", type{}};
   CHECK_EQUAL(extractor->type, expected);
   CHECK_EQUAL(pred->op, relational_operator::not_equal);
-  CHECK_EQUAL(pred->rhs, predicate::operand{data{}});
+  CHECK_EQUAL(pred->rhs, operand{data{}});
 }
 
 TEST(parseable - comments in expressions) {
