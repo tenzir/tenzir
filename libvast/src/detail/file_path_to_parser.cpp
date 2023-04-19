@@ -13,7 +13,7 @@
 
 namespace vast::detail {
 
-constexpr auto fallback_parser = "json";
+constexpr inline auto fallback_parser = "json";
 
 auto file_path_to_parser(std::string_view path) -> std::string {
   auto extension = std::filesystem::path(path).extension();
