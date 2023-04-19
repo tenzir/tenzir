@@ -102,7 +102,13 @@ auto bind_operand(std::string field, table_slice slice, operand op)
           return;
         }
         case meta_extractor::import_time: {
-          bind_value(slice.import_time());
+          if (slice.import_time() == time{}) {
+            // The table slice API returns the epoch timestamp if no import
+            // time was set, so we convert that to null.
+            bind_value({});
+          } else {
+            bind_value(slice.import_time());
+          }
           return;
         }
       }
