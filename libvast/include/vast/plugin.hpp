@@ -365,7 +365,7 @@ private:
 
 /// A language parser to pass query in a custom language to VAST.
 /// @relates plugin
-class language_plugin : public virtual plugin {
+class legacy_language_plugin : public virtual plugin {
 public:
   /// Parses a query expression string into a VAST expression.
   /// @param The string representing the custom query.
@@ -374,6 +374,17 @@ public:
   [[nodiscard]] virtual caf::expected<
     std::pair<expression, std::optional<legacy_pipeline>>>
   make_query(std::string_view query) const = 0;
+};
+
+/// A language parser to pass query in a custom language to VAST.
+/// @relates plugin
+class language_plugin : public virtual plugin {
+public:
+  /// Parses a query string into a pipeline object.
+  /// @param query The string representing the custom query.
+  virtual auto parse_query(std::string_view query) const
+    -> caf::expected<pipeline>
+    = 0;
 };
 
 // -- rest endpoint plugin -----------------------------------------------------

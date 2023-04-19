@@ -29,13 +29,13 @@ tests:
     steps:
       - command: import -b pcap
         input: data/pcap/example.pcap.gz
-      - command: export ascii ':ip in 192.168.168.0/24'
-      - command: export pcap 'sport > 60000 && src !in 192.168.168.0/8'
+      - command: export ascii 'where :ip in 192.168.168.0/24'
+      - command: export pcap 'where sport > 60000 && src !in 192.168.168.0/8'
 
   Manual 1 node:
     tags: [node, import, pcap]
     steps:
       - command: -N import pcap
         input: data/pcap/example.pcap.gz
-      - command: -N export ascii ':ip in 192.168.168.0/24'
-      - command: -N export pcap 'sport > 60000 && src !in 192.168.168.0/8'
+      - command: -N export ascii 'where :ip in 192.168.168.0/24'
+      - command: -N export pcap 'where sport > 60000 && src !in 192.168.168.0/8'

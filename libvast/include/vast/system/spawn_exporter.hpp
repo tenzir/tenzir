@@ -20,8 +20,7 @@ namespace vast::system {
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
-caf::expected<caf::actor>
-spawn_exporter(node_actor::stateful_pointer<node_state> self,
-               spawn_arguments& args);
+auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
+                    spawn_arguments& args) -> caf::expected<caf::actor>;
 
 } // namespace vast::system

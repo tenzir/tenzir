@@ -96,7 +96,6 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
              VAST_ARG(max_events));
   using namespace std::chrono;
   self->state.writer = std::move(writer);
-  self->state.name = self->state.writer->name();
   self->state.last_flush = steady_clock::now();
   if (max_events > 0) {
     VAST_DEBUG("{} caps event export at {} events", *self, max_events);
@@ -126,9 +125,8 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
                  process_slice(state.self_ptr, std::move(slice));
                },
                [](stream_state& state, const caf::error& err) {
-                 if (err)
-                   VAST_ERROR("{} got error during streaming: {}",
-                              *state.self_ptr, err);
+                 // There's no need to warn here, as we already print the error
+                 // in the down handler of the sink command.
                  state.self_ptr->state.writer->flush();
                  state.self_ptr->state.send_report();
                  state.self_ptr->quit(err);

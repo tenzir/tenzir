@@ -453,7 +453,6 @@ struct request_multiplexer_state {
 
   system::index_actor index_ = {};
   std::unordered_map<std::string, query_manager_actor> live_queries_ = {};
-  record config_ = {};
 };
 
 query_manager_actor::behavior_type
@@ -526,9 +525,7 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
 
 auto request_multiplexer(
   request_multiplexer_actor::stateful_pointer<request_multiplexer_state> self,
-  const system::node_actor& node, record config)
-  -> request_multiplexer_actor::behavior_type {
-  self->state.config_ = std::move(config);
+  const system::node_actor& node) -> request_multiplexer_actor::behavior_type {
   self
     ->request(node, caf::infinite, atom::get_v, atom::label_v,
               std::vector<std::string>{"index"})
@@ -594,7 +591,7 @@ auto request_multiplexer(
           return rq.response->abort(422, "missing parameter 'query'\n",
                                     caf::error{});
         }
-        auto parse_result = pipeline::parse(*query_string, self->state.config_);
+        auto parse_result = pipeline::parse(*query_string);
         if (!parse_result)
           return rq.response->abort(400, "invalid query\n",
                                     parse_result.error());
@@ -668,9 +665,7 @@ auto request_multiplexer(
 }
 
 class plugin final : public virtual rest_endpoint_plugin {
-  auto initialize(const record&, const record& global_config)
-    -> caf::error override {
-    config_ = global_config;
+  auto initialize(const record&, const record&) -> caf::error override {
     return {};
   }
 
@@ -726,11 +721,8 @@ class plugin final : public virtual rest_endpoint_plugin {
 
   auto handler(caf::actor_system& system, system::node_actor node) const
     -> system::rest_handler_actor override {
-    return system.spawn(request_multiplexer, node, config_);
+    return system.spawn(request_multiplexer, node);
   }
-
-private:
-  record config_;
 };
 
 } // namespace vast::plugins::rest_api::query

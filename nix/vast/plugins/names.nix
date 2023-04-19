@@ -1,6 +1,6 @@
 [
+  "cloud"
   "compaction"
-  "fleet"
   "inventory"
   "matcher"
   "netflow"

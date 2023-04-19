@@ -183,12 +183,10 @@ public:
   /// NOTE: If `location() != operator_location::local`, then
   /// `pipeline::parse(to_string(), {})` must succeed and be semantically
   /// equivalent to `*this`.
-  static auto parse(std::string_view repr, const vast::record& config)
-    -> caf::expected<pipeline>;
+  static auto parse(std::string_view repr) -> caf::expected<pipeline>;
 
   /// @copydoc parse
-  static auto
-  parse_as_operator(std::string_view repr, const vast::record& config)
+  static auto parse_as_operator(std::string_view repr)
     -> caf::expected<operator_ptr>;
 
   /// Adds an operator at the end of this pipeline.
@@ -231,9 +229,7 @@ public:
                 .pretty_name("vast.pipeline")
                 .fields(f.field("repr", repr)))
         return false;
-      // Using an empty configuration here is fine, because all aliases were
-      // already resolved before serialization.
-      auto result = pipeline::parse(repr, record{});
+      auto result = pipeline::parse(repr);
       if (not result) {
         VAST_WARN("failed to parse pipeline '{}': {}", repr, result.error());
         return false;

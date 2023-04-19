@@ -163,7 +163,7 @@ public:
       std::string_view{f, l},
       // TODO: This ignores options
       pipeline::parse_as_operator(
-        fmt::format("print {} | save {}", printer_name, *saver_name), {}),
+        fmt::format("print {} | save {}", printer_name, *saver_name)),
     };
   }
 };
@@ -248,7 +248,7 @@ public:
       std::string_view{f, l},
       // TODO: This ignores options
       pipeline::parse_as_operator(
-        fmt::format("print {} | save {}", *printer_name, saver_name), {}),
+        fmt::format("print {} | save {}", *printer_name, saver_name)),
     };
   }
 };

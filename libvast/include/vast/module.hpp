@@ -116,6 +116,13 @@ load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
 /// around *get_module_dirs* and *load_module*.
 caf::expected<vast::module> load_module(const caf::actor_system_config& cfg);
 
+/// Loads taxonomies according to the configuration.
+/// Mainly used for loading concepts into the global concept registry.
+/// @param cfg The application config.
+/// @returns The loaded taxonomies.
+auto load_taxonomies(const caf::actor_system_config& cfg)
+  -> caf::expected<taxonomies>;
+
 } // namespace vast
 
 namespace fmt {

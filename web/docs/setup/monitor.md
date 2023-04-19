@@ -127,11 +127,6 @@ The following list describes all available metrics keys:
 |`ascii-writer.rate`|The rate of events processed by the ascii sink.|#events/second||
 |`csv-reader.rate`|The rate of events processed by the CSV source.|#events/second||
 |`csv-writer.rate`|The rate of events processed by the CSV sink.|#events/second||
-|`exporter.processed`|The number of processed events for the current query.|#events|🔎|
-|`exporter.results`|The number of results for the current query.|#events|🔎|
-|`exporter.runtime`|The runtime for the current query in nanoseconds.|nanoseconds|🔎|
-|`exporter.selectivity`|The rate of results out of processed events.|#events-results/#events-processed|🔎|
-|`exporter.shipped`|The number of shipped events for the current query.|#events|🔎|
 |`importer.rate`|The rate of events processed by the importer component.|#events/second||
 |`index.memory-usage`|The rough estimate of memory used by the index|#bytes||
 |`ingest.rate`|The ingest rate keyed by the schema name.|#events/second|🗂️|

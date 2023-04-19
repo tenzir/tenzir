@@ -14,13 +14,12 @@ namespace vast::plugins::exec {
 
 namespace {
 
-auto exec_command(std::span<const std::string> args, record config)
-  -> caf::expected<void> {
+auto exec_command(std::span<const std::string> args) -> caf::expected<void> {
   if (args.size() != 1)
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
-  auto pipeline = pipeline::parse(args[0], config);
+  auto pipeline = pipeline::parse(args[0]);
   if (not pipeline)
     return caf::make_error(ec::invalid_argument,
                            fmt::format("failed to parse pipeline: {}",
@@ -42,9 +41,7 @@ public:
   plugin() = default;
   ~plugin() override = default;
 
-  auto initialize(const record&, const record& global_config)
-    -> caf::error override {
-    config_ = global_config;
+  auto initialize(const record&, const record&) -> caf::error override {
     return caf::none;
   }
 
@@ -59,7 +56,7 @@ public:
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system&) -> caf::message {
-         auto result = exec_command(inv.arguments, config_);
+         auto result = exec_command(inv.arguments);
          if (not result)
            return caf::make_message(result.error());
          return {};
@@ -67,9 +64,6 @@ public:
     };
     return {std::move(exec), std::move(factory)};
   };
-
-private:
-  record config_;
 };
 } // namespace
 

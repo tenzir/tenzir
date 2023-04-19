@@ -15,6 +15,7 @@
 #include <vast/fwd.hpp>
 #include <vast/legacy_pipeline.hpp>
 #include <vast/partition_synopsis.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/catalog.hpp>
@@ -73,15 +74,26 @@ public:
       }
       const auto buffered_rows = rows(buffer);
       VAST_ASSERT(buffered_rows < desired_batch_size_);
+      // We don't have enough yet.
       if (buffered_rows + slice.rows() < desired_batch_size_) {
         buffer.push_back(std::move(slice));
-      } else {
-        const auto remainder = desired_batch_size_ - buffered_rows;
-        auto [head, tail] = split(slice, slice.rows() - remainder);
-        buffer.push_back(head);
-        co_yield concatenate(std::exchange(buffer, {}));
-        buffer.push_back(tail);
+        co_yield {};
+        continue;
       }
+      // We've got enough, so we can now concatenate and yield.
+      const auto remainder = desired_batch_size_ - buffered_rows;
+      VAST_ASSERT(remainder <= slice.rows());
+      auto [head, tail] = split(slice, slice.rows() - remainder);
+      buffer.push_back(head);
+      co_yield concatenate(std::exchange(buffer, {}));
+      // In case the input slice was oversized, we may have to yield additional
+      // resized batches.
+      while (tail.rows() >= desired_batch_size_) {
+        std::tie(head, tail) = split(tail, desired_batch_size_);
+        co_yield std::move(head);
+      }
+      // Lastly, keep the undersized remainder for the next input or the end.
+      buffer.push_back(std::move(tail));
     }
     if (!buffer.empty()) {
       co_yield concatenate(std::move(buffer));
@@ -213,8 +225,6 @@ struct rebuilder_state {
     if (options.parallel == 0)
       return caf::make_error(ec::invalid_configuration,
                              "rebuild requires a non-zero parallel level");
-    if (options.undersized)
-      options.all = true;
     if (options.automatic && run)
       return {};
     if (run && !run->options.automatic)
@@ -284,18 +294,26 @@ struct rebuilder_state {
         [this, finish](system::catalog_lookup_result& lookup_result) mutable {
           VAST_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
-            std::erase_if(
-              result.partition_infos, [&](const partition_info& partition) {
-                const auto not_undersized
-                  = run->options.undersized
-                    && partition.events > detail::narrow_cast<size_t>(
-                         detail::narrow_cast<double>(max_partition_size)
-                         * undersized_threshold);
-                const auto not_outdated
-                  = not run->options.all
-                    && partition.version >= version::current_partition_version;
-                return not_undersized && not_outdated;
-              });
+            if (not run->options.all) {
+              std::erase_if(
+                result.partition_infos, [&](const partition_info& partition) {
+                  if (partition.version < version::current_partition_version)
+                    return false;
+                  if (run->options.undersized
+                      && partition.events < detail::narrow_cast<size_t>(
+                           detail::narrow_cast<double>(max_partition_size)
+                           * undersized_threshold))
+                    return false;
+                  return true;
+                });
+            }
+            if (result.partition_infos.size() == 1
+                && result.partition_infos.front().version
+                     < version::current_partition_version) {
+              // Edge case: we can't do anything if we have a single underiszed
+              // partition for a given schema.
+              result.partition_infos.clear();
+            }
             if (run->options.max_partitions < result.partition_infos.size()) {
               std::stable_sort(result.partition_infos.begin(),
                                result.partition_infos.end(),
@@ -540,7 +558,7 @@ struct rebuilder_state {
       data{"this expression matches everything"},
     };
     auto options = start_options{
-      .all = true,
+      .all = false,
       .undersized = true,
       .parallel = automatic_rebuild,
       .max_partitions = std::numeric_limits<size_t>::max(),
@@ -698,16 +716,22 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
                                   system::must_provide_query::no);
   if (!query)
     return caf::make_message(std::move(query.error()));
-  auto expr = to<expression>(*query);
-  if (!expr)
-    return caf::make_message(std::move(expr.error()));
+  auto expr = expression{};
+  if (query->empty()) {
+    expr = trivially_true_expression();
+  } else {
+    auto parsed = to<expression>(*query);
+    if (!parsed)
+      return caf::make_message(std::move(parsed.error()));
+    expr = std::move(*parsed);
+  }
   auto options = start_options{
     .all = caf::get_or(inv.options, "vast.rebuild.all", false),
     .undersized = caf::get_or(inv.options, "vast.rebuild.undersized", false),
     .parallel = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1}),
     .max_partitions = caf::get_or(inv.options, "vast.rebuild.max-partitions",
                                   std::numeric_limits<size_t>::max()),
-    .expression = std::move(*expr),
+    .expression = std::move(expr),
     .detached = caf::get_or(inv.options, "vast.rebuild.detached", false),
     .automatic = false,
   };
@@ -777,9 +801,8 @@ public:
       "rebuilds outdated partitions matching the "
       "(optional) query expression",
       command::opts("?vast.rebuild")
-        .add<bool>("all", "consider all (rather than outdated) partitions")
-        .add<bool>("undersized", "consider only undersized partitions (implies "
-                                 "--all)")
+        .add<bool>("all", "rebuild all partitions")
+        .add<bool>("undersized", "consider only undersized partitions")
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
                                  "rebuild to finish")
         .add<std::string>("read,r", "path for reading the (optional) query")
