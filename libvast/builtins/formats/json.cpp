@@ -178,6 +178,9 @@ class plugin final : public virtual parser_plugin,
                    generator<chunk_ptr> json_chunk_generator,
                    operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument, "unexpected arguments");
+    };
     return [](generator<chunk_ptr> json_chunk_generator,
               operator_control_plane& ctrl) -> generator<table_slice> {
       auto parser = simdjson::ondemand::parser{};
@@ -233,12 +236,16 @@ class plugin final : public virtual parser_plugin,
 
   auto default_loader(std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
+    (void)args; // TODO
     return {"stdin", {}};
   }
 
   auto make_printer(std::span<std::string const> args, type input_schema,
                     operator_control_plane&) const
     -> caf::expected<printer> override {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument, "unexpected arguments");
+    };
     auto input_type = caf::get<record_type>(input_schema);
     return [input_type](table_slice slice) -> generator<chunk_ptr> {
       // JSON printer should output NDJSON, see:
@@ -265,6 +272,7 @@ class plugin final : public virtual parser_plugin,
 
   auto default_saver(std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
+    (void)args; // TODO
     return {"stdout", {}};
   }
 

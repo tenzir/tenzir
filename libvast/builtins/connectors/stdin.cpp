@@ -87,6 +87,7 @@ public:
 
   auto default_parser(std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
+    (void)args; // TODO
     return {"json", {}};
   }
 

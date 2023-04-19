@@ -18,6 +18,9 @@ public:
   auto make_saver(std::span<std::string const> args, type,
                   operator_control_plane&) const
     -> caf::expected<saver> override {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument, "unexpected arguments");
+    };
     auto outbuf = detail::fdoutbuf(STDOUT_FILENO);
     return [outbuf](chunk_ptr chunk) mutable {
       if (chunk)
@@ -28,6 +31,7 @@ public:
 
   auto default_printer(std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
+    (void)args; // TODO
     return {"json", {}};
   }
 
