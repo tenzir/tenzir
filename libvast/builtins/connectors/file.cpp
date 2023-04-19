@@ -36,6 +36,7 @@ public:
     auto read_timeout = read_timeout_;
     auto path = std::string{};
     auto file_type = std::filesystem::file_type::regular;
+    auto following = false;
     for (auto i = size_t{0}; i < args.size(); ++i) {
       const auto& arg = args[i];
       VAST_TRACE("processing loader argument {}", arg);
@@ -57,6 +58,8 @@ public:
         file_type = std::filesystem::file_type::socket;
       } else if (arg == "-" || arg == "stdin") {
         path = "-";
+      } else if (arg == "-f" || arg == "--follow") {
+        following = true;
       } else if (not arg.starts_with("-")) {
         std::error_code err{};
         auto status = std::filesystem::status(arg, err);
@@ -129,7 +132,7 @@ public:
       }
     }
     return std::invoke(
-      [](auto timeout, auto fd) -> generator<chunk_ptr> {
+      [](auto timeout, auto fd, auto following) -> generator<chunk_ptr> {
         auto in_buf = detail::fdinbuf(fd, max_chunk_size);
         in_buf.read_timeout() = timeout;
         auto current_data = std::vector<std::byte>{};
@@ -140,7 +143,7 @@ public:
           if (current_char != detail::fdinbuf::traits_type::eof()) {
             current_data.emplace_back(static_cast<std::byte>(current_char));
           } else {
-            eof_reached = (not in_buf.timed_out());
+            eof_reached = (not following and not in_buf.timed_out());
             if (current_data.empty()) {
               if (not eof_reached) {
                 co_yield chunk::make_empty();
@@ -159,7 +162,7 @@ public:
         }
         co_return;
       },
-      read_timeout, fd);
+      read_timeout, fd, following);
   }
 
   auto default_parser(std::span<std::string const> args) const
