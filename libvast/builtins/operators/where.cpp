@@ -92,7 +92,7 @@ private:
 
 // Selects matching rows from the input.
 class where_operator2 final
-  : public schematic_operator<where_operator2, expression> {
+  : public schematic_operator<where_operator2, std::optional<expression>> {
 public:
   /// Constructs a *where* pipeline operator.
   /// @pre *expr* must be normalized and validated
@@ -106,7 +106,12 @@ public:
 
   auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
-    return tailor(expr_, schema);
+    auto tailored_expr = tailor(expr_, schema);
+    // Failing to tailor in this context is not an error, it just means that we
+    // cannot do anything with the result.
+    if (not tailored_expr)
+      return std::nullopt;
+    return std::move(*tailored_expr);
   }
 
   auto process(table_slice slice, state_type& expr) const
@@ -114,7 +119,9 @@ public:
     // TODO: Adjust filter function return type.
     // TODO: Replace this with an Arrow-native filter function as soon as we
     // are able to directly evaluate expressions on a record batch.
-    return filter(slice, expr).value_or(table_slice{});
+    if (expr)
+      return filter(slice, *expr).value_or(table_slice{});
+    return {};
   }
 
   auto predicate_pushdown(expression const& expr) const

@@ -110,10 +110,11 @@ void continue_execution(exporter_actor::stateful_pointer<exporter_state> self) {
     }
     auto result = *it;
     if (!result) {
-      VAST_WARN("{} encountered an error during execution: {}", *self,
-                result.error());
-      // TODO: Inform the user? Quit actor?
-      break;
+      self->state.result_stream->stop(caf::make_error(
+        ec::unspecified, fmt::format("{} encountered an error during "
+                                     "execution and shuts down: {}",
+                                     *self, result.error())));
+      return;
     }
     if (!self->state.source_buffer.empty()) {
       // Execute at least until the source buffer is empty (or the executor
