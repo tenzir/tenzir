@@ -8,6 +8,7 @@
 
 #include "vast/concept/parseable/vast/pipeline.hpp"
 
+#include "vast/modules.hpp"
 #include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 
@@ -41,11 +42,11 @@ public:
   }
 
   auto schemas() const noexcept -> const std::vector<type>& override {
-    die("not implemented");
+    return vast::modules::schemas();
   }
 
   auto concepts() const noexcept -> const concepts_map& override {
-    die("not implemented");
+    return vast::modules::concepts();
   }
 
 private:
