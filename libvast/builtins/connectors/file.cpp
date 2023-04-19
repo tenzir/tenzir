@@ -209,4 +209,49 @@ private:
 
 } // namespace vast::plugins::file
 
+namespace vast::plugins::stdin_ {
+
+class plugin : public virtual vast::plugins::file::plugin {
+public:
+  auto make_loader([[maybe_unused]] std::span<std::string const> args,
+                   operator_control_plane& ctrl) const
+    -> caf::expected<generator<chunk_ptr>> override {
+    std::vector<std::string> new_args = {args.begin(), args.end()};
+    new_args.emplace_back("-");
+    return vast::plugins::file::plugin::make_loader(new_args, ctrl);
+  }
+
+  auto default_parser([[maybe_unused]] std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    return {"json", {}};
+  }
+
+  auto name() const -> std::string override {
+    return "stdin";
+  }
+};
+
+} // namespace vast::plugins::stdin_
+
+namespace vast::plugins::uds {
+
+class plugin : public virtual vast::plugins::file::plugin {
+public:
+  auto make_loader([[maybe_unused]] std::span<std::string const> args,
+                   operator_control_plane& ctrl) const
+    -> caf::expected<generator<chunk_ptr>> override {
+    std::vector<std::string> new_args = {args.begin(), args.end()};
+    new_args.emplace_back("--uds");
+    return vast::plugins::file::plugin::make_loader(new_args, ctrl);
+  }
+
+  auto name() const -> std::string override {
+    return "uds";
+  }
+};
+
+} // namespace vast::plugins::uds
+
 VAST_REGISTER_PLUGIN(vast::plugins::file::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::stdin_::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::uds::plugin)
