@@ -6,9 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/detail/overload.hpp"
+
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
@@ -26,173 +29,147 @@ namespace {
 
 /// The parsed configuration.
 struct configuration {
-  std::vector<std::tuple<std::string, data>> extractor_to_value = {};
+  std::vector<std::tuple<std::string, caf::optional<operand>>> field_to_operand
+    = {};
 };
 
-/// The confguration bound to a specific schema.
-struct bound_configuration {
-  /// Bind a *configuration* to a given schema.
-  /// @param schema The schema to bind to.
-  /// @param config The parsed configuration.
-  /// @param ctrl The operator control plane.
-  static caf::expected<bound_configuration>
-  make(const type& schema, const configuration& config,
-       operator_control_plane& ctrl) {
-    auto result = bound_configuration{};
-    const auto& schema_rt = caf::get<record_type>(schema);
-    auto extensions = std::vector<std::tuple<std::string, data, type>>{};
-    for (const auto& [extractor, value] : config.extractor_to_value) {
-      bool found = false;
-      // If the extractor resolves, we replace all matched fields.
-      for (const auto& index :
-           schema_rt.resolve_key_suffix(extractor, schema.name())) {
-        found = true;
-        // If the extractor overrides, then we warn the user and prioritize the
-        // value that was specified last.
-        auto replacement
-          = std::find_if(result.replacements.begin(), result.replacements.end(),
-                         [&](const auto& replacement) {
-                           return replacement.index == index;
-                         });
-        if (replacement == result.replacements.end()) {
-          result.replacements.push_back({index, make_replace(value)});
-        } else {
-          ctrl.warn(caf::make_error(
-            ec::invalid_argument, fmt::format("put operator assignment '{}={}' "
-                                              "overrides previous assignment",
-                                              extractor, value)));
-          replacement->fun = make_replace(value);
-        }
-      }
-      // If the extractor did not resolve and if it is not a type extractor, we
-      // instead add one new field at the end.
-      const auto is_type_extractor = extractor.starts_with(':');
-      if (not found && not is_type_extractor) {
-        auto inferred_type = type::infer(value);
-        if (not inferred_type)
-          return caf::make_error(ec::logic_error,
-                                 fmt::format("failed to infer type from '{}'",
-                                             value));
-        extensions.emplace_back(extractor, value, std::move(inferred_type));
-      }
+auto bind_operand(std::string field, table_slice slice, operand op)
+  -> std::pair<struct record_type::field, std::shared_ptr<arrow::Array>> {
+  VAST_ASSERT(slice.rows() > 0);
+  const auto batch = to_record_batch(slice);
+  const auto& layout = caf::get<record_type>(slice.schema());
+  auto inferred_type = type{};
+  auto array = std::shared_ptr<arrow::Array>{};
+  auto bind_value = [&](const data& value) {
+    inferred_type = type::infer(value);
+    if (not inferred_type) {
+      auto builder
+        = string_type::make_arrow_builder(arrow::default_memory_pool());
+      const auto append_result = builder->AppendNulls(batch->num_rows());
+      VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+      array = builder->Finish().ValueOrDie();
+      return;
     }
-    // We maintain two separate lists of column transformations because we
-    // cannot both modify the last column and add additional columns in a single
-    // call to transform_columns, because that would modify a precondition of
-    // the function.
-    if (not extensions.empty())
-      result.extensions.push_back(
-        {{schema_rt.num_fields() - 1}, make_extend(std::move(extensions))});
-    std::sort(result.replacements.begin(), result.replacements.end());
-    VAST_ASSERT_CHEAP(result.extensions.size() <= 1);
-    return result;
-  }
-
-  /// Create a transformation function for a single value.
-  static indexed_transformation::function_type make_replace(data value) {
-    auto inferred_type = type::infer(value);
-    return
-      [inferred_type = std::move(inferred_type),
-       value = std::move(value)](struct record_type::field field,
-                                 std::shared_ptr<arrow::Array> array) noexcept
-      -> std::vector<
-        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-      field.type = inferred_type;
-      array = make_array(field.type, value, array->length());
-      return {
-        {
-          std::move(field),
-          std::move(array),
-        },
-      };
-    };
-  }
-
-  /// Create a transformation function for a single value.
-  static indexed_transformation::function_type
-  make_extend(std::vector<std::tuple<std::string, data, type>> extensions) {
-    return [extensions = std::move(extensions)](
-             struct record_type::field field,
-             std::shared_ptr<arrow::Array> array) noexcept {
-      auto result = std::vector<
-        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>{};
-      const auto length = array->length();
-      result.reserve(extensions.size() + 1);
-      result.emplace_back(std::move(field), std::move(array));
-      for (const auto& [name, value, type] : extensions) {
-        auto& extension = result.emplace_back();
-        extension.first.name = name;
-        extension.first.type = type;
-        extension.second = make_array(type, value, length);
+    auto g = [&]<concrete_type Type>(const Type& inferred_type) {
+      auto builder
+        = inferred_type.make_arrow_builder(arrow::default_memory_pool());
+      for (int i = 0; i < batch->num_rows(); ++i) {
+        const auto append_result
+          = append_builder(inferred_type, *builder,
+                           make_view(caf::get<type_to_data_t<Type>>(value)));
+        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
       }
-      return result;
+      array = builder->Finish().ValueOrDie();
     };
-  }
-
-  static auto make_array(const type& type, const data& value, int64_t length)
-    -> std::shared_ptr<arrow::Array> {
-    auto builder = type.make_arrow_builder(arrow::default_memory_pool());
-    auto f = [&]<concrete_type Type>(const Type& type) {
-      if (caf::holds_alternative<caf::none_t>(value)) {
-        for (int i = 0; i < length; ++i) {
-          const auto append_status = builder->AppendNull();
-          VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+    caf::visit(g, inferred_type);
+  };
+  auto f = detail::overload{
+    [&](const data& value) {
+      bind_value(value);
+    },
+    [&](const field_extractor& ex) {
+      for (const auto& index :
+           layout.resolve_key_suffix(ex.field, slice.schema().name())) {
+        inferred_type = layout.field(index).type;
+        array = static_cast<arrow::FieldPath>(index).Get(*batch).ValueOrDie();
+        return;
+      }
+      bind_value({});
+    },
+    [&](const type_extractor& ex) {
+      for (const auto& [field, index] : layout.leaves()) {
+        bool match = field.type == ex.type;
+        if (not match) {
+          for (auto name : field.type.names()) {
+            if (name == ex.type.name()) {
+              match = true;
+              break;
+            }
+          }
         }
-      } else {
-        for (int i = 0; i < length; ++i) {
-          VAST_ASSERT(caf::holds_alternative<type_to_data_t<Type>>(value));
-          const auto append_status
-            = append_builder(type,
-                             caf::get<type_to_arrow_builder_t<Type>>(*builder),
-                             make_view(caf::get<type_to_data_t<Type>>(value)));
-          VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+        if (match) {
+          inferred_type = field.type;
+          array = static_cast<arrow::FieldPath>(index).Get(*batch).ValueOrDie();
+          return;
         }
       }
-    };
-    caf::visit(f, type);
-    return builder->Finish().ValueOrDie();
-  }
+      bind_value({});
+    },
+    [&](const meta_extractor& ex) {
+      switch (ex.kind) {
+        case meta_extractor::type: {
+          bind_value(std::string{slice.schema().name()});
+          return;
+        }
+        case meta_extractor::import_time: {
+          bind_value(slice.import_time());
+          return;
+        }
+      }
+      die("unhandled meta extractor kind");
+    },
+    [&](const data_extractor&) {
+      die("data extractor must not occur here");
+    },
+  };
+  caf::visit(f, op);
+  return {
+    {std::move(field), std::move(inferred_type)},
+    std::move(array),
+  };
+}
 
-  /// The list of configured transformations.
-  std::vector<indexed_transformation> replacements = {};
-  std::vector<indexed_transformation> extensions = {};
-};
-
-class put_operator final
-  : public schematic_operator<put_operator, bound_configuration> {
+class put_operator final : public crtp_operator<put_operator> {
 public:
   explicit put_operator(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
 
-  auto initialize(const type& schema, operator_control_plane& ctrl) const
-    -> caf::expected<state_type> override {
-    return bound_configuration::make(schema, config_, ctrl);
-  }
-
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
-    if (!state.replacements.empty())
-      slice = transform_columns(slice, state.replacements);
-    if (!state.extensions.empty())
-      slice = transform_columns(slice, state.extensions);
-    return slice;
+  auto operator()(const table_slice& slice) const -> table_slice {
+    if (slice.rows() == 0)
+      return {};
+    const auto& layout = caf::get<record_type>(slice.schema());
+    auto batch = to_record_batch(slice);
+    VAST_ASSERT(batch);
+    std::vector<indexed_transformation> transformations = {};
+    // We drop all fields except for the last one...
+    for (size_t i = 0; i < layout.num_fields() - 1; ++i) {
+      static auto drop =
+        [](struct record_type::field, std::shared_ptr<arrow::Array>)
+        -> std::vector<
+          std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+        return {};
+      };
+      transformations.push_back({{i}, drop});
+    }
+    // ... and then replace the last one with our new fields.
+    auto put = [&](struct record_type::field, std::shared_ptr<arrow::Array>) {
+      // For each field in the configuration, we want to create a new field.
+      auto result = std::vector<
+        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>{};
+      result.reserve(config_.field_to_operand.size());
+      for (const auto& [field, operand] : config_.field_to_operand) {
+        result.push_back(
+          bind_operand(field, slice, operand.value_or(field_extractor{field})));
+      }
+      return result;
+    };
+    transformations.push_back({{layout.num_fields() - 1}, std::move(put)});
+    return transform_columns(slice, transformations);
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    auto map = std::vector<std::tuple<std::string, data>>{
-      config_.extractor_to_value.begin(), config_.extractor_to_value.end()};
-    std::sort(map.begin(), map.end());
     auto result = std::string{"put"};
     bool first = true;
-    for (auto& [key, value] : map) {
-      if (first) {
-        first = false;
-      } else {
+    for (const auto& [field, operand] : config_.field_to_operand) {
+      if (not std::exchange(first, false)) {
         result += ',';
       }
-      result += fmt::format(" {}={}", key, value);
+      fmt::format_to(std::back_inserter(result), " {}", field);
+      if (operand) {
+        fmt::format_to(std::back_inserter(result), "={}", *operand);
+      }
     }
     return result;
   }
@@ -204,31 +181,38 @@ private:
 
 class plugin final : public virtual operator_plugin {
 public:
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize([[maybe_unused]] const record& plugin_config,
+                  [[maybe_unused]] const record& global_config)
+    -> caf::error override {
     return {};
   }
 
-  [[nodiscard]] std::string name() const override {
+  [[nodiscard]] auto name() const -> std::string override {
     return "put";
   };
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::extractor_value_assignment_list,
-      parsers::data;
+      parsers::optional_ws_or_comment, parsers::identifier, parsers::operand;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> extractor_value_assignment_list
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
+    // put <field=operand>...
+    // clang-format off
+    const auto p
+       = required_ws_or_comment
+      >> ((identifier >> -(optional_ws_or_comment >> '=' >> optional_ws_or_comment >> operand))
+        % (optional_ws_or_comment >> ',' >> optional_ws_or_comment))
+      >> optional_ws_or_comment
+      >> end_of_pipeline_operator;
+    // clang-format on
     auto config = configuration{};
-    if (!p(f, l, config.extractor_to_value)) {
+    if (!p(f, l, config.field_to_operand)) {
       return {
         std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
-                                                      "operator: '{}'",
-                                                      pipeline)),
+        caf::make_error(ec::syntax_error,
+                        fmt::format("failed to parse put operator: '{}'",
+                                    pipeline)),
       };
     }
     return {

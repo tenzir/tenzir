@@ -523,6 +523,21 @@ struct formatter<vast::relational_operator> {
 };
 
 template <>
+struct formatter<vast::operand> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::operand& value, FormatContext& ctx) const {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
 struct formatter<vast::predicate> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
