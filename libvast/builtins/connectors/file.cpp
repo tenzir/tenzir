@@ -35,8 +35,8 @@ public:
     -> caf::expected<generator<chunk_ptr>> override {
     auto read_timeout = read_timeout_;
     auto path = std::string{};
-    auto file_type = std::filesystem::file_type::regular;
     auto following = false;
+    auto is_socket = false;
     for (auto i = size_t{0}; i < args.size(); ++i) {
       const auto& arg = args[i];
       VAST_TRACE("processing loader argument {}", arg);
@@ -54,8 +54,6 @@ public:
                                  fmt::format("could not parse duration: {}",
                                              args[i + 1]));
         }
-      } else if (arg == "--uds") {
-        file_type = std::filesystem::file_type::socket;
       } else if (arg == "-" || arg == "stdin") {
         path = stdin_path;
       } else if (arg == "-f" || arg == "--follow") {
@@ -65,32 +63,10 @@ public:
         auto status = std::filesystem::status(arg, err);
         if (err) {
           return caf::make_error(ec::parse_error,
-                                 fmt::format("could not parse file path {}: {}",
+                                 fmt::format("could not access file {}: {}",
                                              arg, err));
         }
-        auto exists = (status.type() != std::filesystem::file_type::not_found);
-        if (not exists) {
-          return caf::make_error(ec::filesystem_error,
-                                 fmt::format("file {} does not exist", arg));
-        }
-        if (not path.empty()) {
-          return caf::make_error(ec::syntax_error,
-                                 fmt::format(
-                                   "multiple paths have been "
-                                   "specified; currently only one "
-                                   "path per read operator call is valid"));
-        }
-        auto permissions = status.permissions();
-        auto readable = ((permissions & std::filesystem::perms::owner_read)
-                           != std::filesystem::perms::none
-                         && (permissions & std::filesystem::perms::group_read)
-                              != std::filesystem::perms::none
-                         && (permissions & std::filesystem::perms::others_read)
-                              != std::filesystem::perms::none);
-        if (not readable) {
-          return caf::make_error(ec::filesystem_error,
-                                 fmt::format("file {} is not readable", arg));
-        }
+        is_socket = (status.type() == std::filesystem::file_type::socket);
         path = arg;
       } else {
         return caf::make_error(
@@ -103,35 +79,31 @@ public:
                              fmt::format("no file specified"));
     }
     auto fd = STDIN_FILENO;
-    switch (file_type) {
-      default:
-        return caf::make_error(ec::filesystem_error, "unsupported file type",
-                               path);
-      case std::filesystem::file_type::socket: {
-        if (path == stdin_path) {
-          return caf::make_error(ec::filesystem_error,
-                                 "cannot use STDIN as UNIX "
-                                 "domain socket");
-        }
-        auto uds = detail::unix_domain_socket::connect(path);
-        if (!uds) {
-          return caf::make_error(ec::filesystem_error,
-                                 "failed to connect to UNIX domain socket at",
-                                 path);
-        }
-        fd = uds.recv_fd(); // Blocks!
-        break;
+    if (is_socket) {
+      if (path == stdin_path) {
+        return caf::make_error(ec::filesystem_error, "cannot use STDIN as UNIX "
+                                                     "domain socket");
       }
-      case std::filesystem::file_type::regular: {
-        if (path != stdin_path) {
-          fd = ::open(path.c_str(), std::ios_base::binary | std::ios_base::in);
-          if (fd == -1) {
-            return caf::make_error(ec::filesystem_error,
-                                   "open(2) for file {} failed {}:", path,
-                                   std::strerror(errno));
-          }
+      auto uds = detail::unix_domain_socket::connect(path);
+      if (!uds) {
+        return caf::make_error(ec::filesystem_error,
+                               "failed to connect to UNIX domain socket at",
+                               path);
+      }
+      fd = uds.recv_fd();
+      if (fd == -1) {
+        return caf::make_error(
+          ec::filesystem_error,
+          "Unable to connect to UNIX domain socket at {}:", path);
+      }
+    } else {
+      if (path != stdin_path) {
+        fd = ::open(path.c_str(), std::ios_base::binary | std::ios_base::in);
+        if (fd == -1) {
+          return caf::make_error(ec::filesystem_error,
+                                 "open(2) for file {} failed {}:", path,
+                                 std::strerror(errno));
         }
-        break;
       }
     }
     return std::invoke(
@@ -234,25 +206,5 @@ public:
 
 } // namespace vast::plugins::stdin_
 
-namespace vast::plugins::uds {
-
-class plugin : public virtual vast::plugins::file::plugin {
-public:
-  auto make_loader([[maybe_unused]] std::span<std::string const> args,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<generator<chunk_ptr>> override {
-    std::vector<std::string> new_args = {args.begin(), args.end()};
-    new_args.emplace_back("--uds");
-    return vast::plugins::file::plugin::make_loader(new_args, ctrl);
-  }
-
-  auto name() const -> std::string override {
-    return "uds";
-  }
-};
-
-} // namespace vast::plugins::uds
-
 VAST_REGISTER_PLUGIN(vast::plugins::file::plugin)
 VAST_REGISTER_PLUGIN(vast::plugins::stdin_::plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::uds::plugin)
