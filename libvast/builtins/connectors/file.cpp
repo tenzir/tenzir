@@ -126,7 +126,6 @@ public:
                                    "open(2) for file {} failed {}:", path,
                                    std::strerror(errno));
           }
-          ::close(fd);
         }
         break;
       }
@@ -161,6 +160,9 @@ public:
               current_data.reserve(max_chunk_size);
             }
           }
+        }
+        if (fd != STDIN_FILENO) {
+          ::close(fd);
         }
         co_return;
       },
