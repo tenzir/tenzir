@@ -20,9 +20,11 @@
 
 namespace vast::parsers {
 
+const inline auto comment_start = str{"/*"};
 /// Parses a '/* ... */' style comment. The attribute of the parser is the
 /// comment between the '/*' and '*/' delimiters.
-const inline auto comment = "/*" >> *(any - (chr{'*'} >> &chr{'/'})) >> "*/";
+const inline auto comment
+  = comment_start >> *(any - (chr{'*'} >> &chr{'/'})) >> "*/";
 
 const inline auto required_ws_or_comment = ignore(+(space | comment));
 const inline auto optional_ws_or_comment = ignore(*(space | comment));
@@ -60,7 +62,7 @@ const inline auto aggregation_function_list
   = (aggregation_function % (',' >> optional_ws_or_comment));
 
 const inline auto unquoted_operator_arg
-  = &!(chr{'\''} | '"') >> +(printable - '|' - required_ws_or_comment);
+  = &!(chr{'\''} | '"') >> +(printable - '|' - space - comment_start);
 
 const inline auto operator_arg = qstr | qqstr | unquoted_operator_arg;
 
@@ -125,7 +127,8 @@ namespace vast {
 /// every `y == operator_arg.apply(x).value()`.
 inline auto escape_operator_arg(std::string_view x) -> std::string {
   auto f = x.begin();
-  if (parsers::unquoted_operator_arg.parse(f, x.end(), unused)) {
+  parsers::unquoted_operator_arg.parse(f, x.end(), unused);
+  if (f == x.end()) {
     for (auto y : {"from", "read", "write", "to"}) {
       if (x == y) {
         return fmt::format("'{}'", x);

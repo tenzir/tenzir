@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/concept/parseable/vast/pipeline.hpp"
+
 #include "vast/aliases.hpp"
 
 #include <vast/concept/parseable/to.hpp>
@@ -438,6 +440,28 @@ TEST(load_stdin_arguments) {
     REQUIRE_ERROR(unbox(pipeline::parse(fmt::format("{} | save stdout", x)))
                     .infer_type<void>());
   }
+}
+
+TEST(operator argument parsing and escaping) {
+  using namespace std::literals;
+  auto a1 = "42\n --abc /**/ 'read' \n \\ \\\\"sv;
+  auto a2 = "42 --abc 'read' \\ \\\\"sv; // NOLINT
+  auto b1 = "' ' ~/okay/test.txt \"/*\" \t'1 2 3' "sv;
+  auto b2 = "' ' ~/okay/test.txt '/*' '1 2 3'"sv;
+  auto input = fmt::format("foo {} read xyz {}", a1, b1);
+  auto f = input.begin();
+  auto result
+    = parsers::name_args_opt_keyword_name_args("read").apply(f, input.end());
+  REQUIRE(result);
+  auto& [first, first_args, opt_second] = *result;
+  CHECK_EQUAL(first, "foo");
+  CHECK_EQUAL(first_args.size(), size_t{5});
+  REQUIRE(opt_second);
+  auto& [second, second_args] = *opt_second;
+  CHECK_EQUAL(second, "xyz");
+  CHECK_EQUAL(second_args.size(), size_t{4});
+  CHECK_EQUAL(escape_operator_args(first_args), a2);
+  CHECK_EQUAL(escape_operator_args(second_args), b2);
 }
 
 } // namespace
