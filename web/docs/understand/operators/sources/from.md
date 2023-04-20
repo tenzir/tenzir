@@ -44,11 +44,17 @@ Read bytes from stdin and parse them as JSON.
 
 ```
 from stdin read json
+from file stdin read json
+from file - read json
+from - read json
 ```
 
 Read bytes from the file `path/to/eve.json` and parse them as Suricata.
+Note that the `file` connector automatically assigns the Suricata parser for
+`eve.json` files when no other parser is specified.
 
 ```
+from file path/to/eve.json
 from file path/to/eve.json read suricata
 ```
 
