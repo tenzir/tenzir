@@ -151,12 +151,12 @@ TEST(file loader - nonexistent file) {
 
 TEST(file loader - unreadable file) {
   auto current_epoch = std::time(nullptr);
-  auto unique_temp_file = fmt::format(
-    VAST_TEST_PATH "artifacts/inputs/read_restricted_{}.json", current_epoch);
+  auto unique_temp_file
+    = fmt::format("{}artifacts/inputs/read_restricted_{}.json",
+                  std::filesystem::temp_directory_path(), current_epoch);
   file f{unique_temp_file};
   REQUIRE(f.open(file::write_only));
   REQUIRE(f.handle() > 0);
-  REQUIRE(f.close());
   std::filesystem::permissions(unique_temp_file,
                                std::filesystem::perms::group_write
                                  | std::filesystem::perms::owner_write
@@ -165,6 +165,7 @@ TEST(file loader - unreadable file) {
   auto args = std::vector<std::string>{unique_temp_file};
   REQUIRE(loader_plugin);
   REQUIRE_ERROR(loader_plugin->make_loader(args, control_plane));
+  REQUIRE(f.close());
   CHECK(std::filesystem::remove_all(unique_temp_file));
 }
 
