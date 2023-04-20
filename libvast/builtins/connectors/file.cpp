@@ -6,14 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/logger.hpp"
-
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/detail/fdinbuf.hpp>
 #include <vast/detail/file_path_to_parser.hpp>
 #include <vast/detail/posix.hpp>
 #include <vast/detail/string.hpp>
+#include <vast/logger.hpp>
 #include <vast/plugin.hpp>
 
 #include <caf/error.hpp>
@@ -127,7 +126,7 @@ public:
                                    "open(2) for file {} failed {}:", path,
                                    std::strerror(errno));
           }
-          close(fd);
+          ::close(fd);
         }
         break;
       }
@@ -139,24 +138,26 @@ public:
         auto current_data = std::vector<std::byte>{};
         current_data.reserve(max_chunk_size);
         auto eof_reached = false;
-        while (not eof_reached) {
+        while (following or not eof_reached) {
           auto current_char = in_buf.sbumpc();
           if (current_char != detail::fdinbuf::traits_type::eof()) {
             current_data.emplace_back(static_cast<std::byte>(current_char));
           } else {
-            eof_reached = (not following and not in_buf.timed_out());
+            eof_reached = (not in_buf.timed_out());
             if (current_data.empty()) {
               if (not eof_reached) {
                 co_yield chunk::make_empty();
                 continue;
               }
-              break;
+              if (eof_reached and not following) {
+                break;
+              }
             }
           }
-          if (eof_reached || current_data.size() == max_chunk_size) {
+          if (eof_reached or current_data.size() == max_chunk_size) {
             auto chunk = chunk::make(std::exchange(current_data, {}));
             co_yield std::move(chunk);
-            if (not eof_reached) {
+            if (following or not eof_reached) {
               current_data.reserve(max_chunk_size);
             }
           }
