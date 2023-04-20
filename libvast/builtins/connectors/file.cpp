@@ -92,6 +92,10 @@ public:
                                  fmt::format("file {} is not readable", arg));
         }
         path = arg;
+      } else {
+        return caf::make_error(
+          ec::invalid_argument,
+          fmt::format("unexpected argument for 'file' connector: {}", arg));
       }
     }
     if (path.empty()) {
