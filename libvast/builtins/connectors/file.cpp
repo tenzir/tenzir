@@ -186,20 +186,8 @@ public:
 
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
-    if (!global_config.contains("vast")) {
-      return caf::none;
-    }
-    const auto* vast_settings = caf::get_if<record>(&global_config.at("vast"));
-    if (!vast_settings || !vast_settings->contains("import")) {
-      return caf::none;
-    }
-    const auto* import_settings
-      = caf::get_if<record>(&vast_settings->at("import"));
-    if (!import_settings || !import_settings->contains("read-timeout")) {
-      return caf::none;
-    }
     const auto* read_timeout_entry
-      = caf::get_if<std::string>(&import_settings->at("read-timeout"));
+      = get_if<std::string>(&global_config, "vast.import.read-timeout");
     if (!read_timeout_entry) {
       return caf::none;
     }
