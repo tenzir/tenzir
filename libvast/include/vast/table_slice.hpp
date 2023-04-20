@@ -12,6 +12,7 @@
 
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/print.hpp"
+#include "vast/expression.hpp"
 #include "vast/table_slice_encoding.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
@@ -381,6 +382,14 @@ filter(const table_slice& slice, const ids& hints);
 /// Resolves all enumeration columns in a table slice to string columns. Note
 /// that this does not go into records inside lists or maps.
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);
+
+/// Resolve a meta extractor for a given table slice.
+auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
+  -> view<data>;
+
+/// Resolve an operand into an Array for a given table slice.
+auto resolve_operand(const table_slice& slice, const operand& op)
+  -> std::pair<type, std::shared_ptr<arrow::Array>>;
 
 } // namespace vast
 

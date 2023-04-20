@@ -32,106 +32,6 @@ struct configuration {
     = {};
 };
 
-auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
-  -> view<data> {
-  if (slice.encoding() == table_slice_encoding::none)
-    return {};
-  switch (ex.kind) {
-    case meta_extractor::type: {
-      return slice.schema().name();
-    }
-    case meta_extractor::import_time: {
-      const auto import_time = slice.import_time();
-      if (import_time == time{}) {
-        // The table slice API returns the epoch timestamp if no import
-        // time was set, so we convert that to null.
-        return {};
-      }
-      return import_time;
-    }
-  }
-  die("unhandled meta extractor kind");
-}
-
-auto bind_operand(std::string field, table_slice slice, operand op)
-  -> std::pair<struct record_type::field, std::shared_ptr<arrow::Array>> {
-  VAST_ASSERT(slice.rows() > 0);
-  const auto batch = to_record_batch(slice);
-  const auto& layout = caf::get<record_type>(slice.schema());
-  auto inferred_type = type{};
-  auto array = std::shared_ptr<arrow::Array>{};
-  auto bind_value = [&](const data& value) {
-    inferred_type = type::infer(value);
-    if (not inferred_type) {
-      inferred_type = type{string_type{}};
-      // VAST has no N/A type equivalent for Arrow, so we just use a string type
-      // here.
-      auto builder
-        = string_type::make_arrow_builder(arrow::default_memory_pool());
-      const auto append_result = builder->AppendNulls(batch->num_rows());
-      VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
-      array = builder->Finish().ValueOrDie();
-      return;
-    }
-    auto g = [&]<concrete_type Type>(const Type& inferred_type) {
-      auto builder
-        = inferred_type.make_arrow_builder(arrow::default_memory_pool());
-      for (int i = 0; i < batch->num_rows(); ++i) {
-        const auto append_result
-          = append_builder(inferred_type, *builder,
-                           make_view(caf::get<type_to_data_t<Type>>(value)));
-        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
-      }
-      array = builder->Finish().ValueOrDie();
-    };
-    caf::visit(g, inferred_type);
-  };
-  auto f = detail::overload{
-    [&](const data& value) {
-      bind_value(value);
-    },
-    [&](const field_extractor& ex) {
-      for (const auto& index :
-           layout.resolve_key_suffix(ex.field, slice.schema().name())) {
-        inferred_type = layout.field(index).type;
-        array = static_cast<arrow::FieldPath>(index).Get(*batch).ValueOrDie();
-        return;
-      }
-      bind_value({});
-    },
-    [&](const type_extractor& ex) {
-      for (const auto& [field, index] : layout.leaves()) {
-        bool match = field.type == ex.type;
-        if (not match) {
-          for (auto name : field.type.names()) {
-            if (name == ex.type.name()) {
-              match = true;
-              break;
-            }
-          }
-        }
-        if (match) {
-          inferred_type = field.type;
-          array = static_cast<arrow::FieldPath>(index).Get(*batch).ValueOrDie();
-          return;
-        }
-      }
-      bind_value({});
-    },
-    [&](const meta_extractor& ex) {
-      bind_value(materialize(resolve_meta_extractor(slice, ex)));
-    },
-    [&](const data_extractor&) {
-      die("data extractor must not occur here");
-    },
-  };
-  caf::visit(f, op);
-  return {
-    {std::move(field), std::move(inferred_type)},
-    std::move(array),
-  };
-}
-
 class put_operator final : public crtp_operator<put_operator> {
 public:
   explicit put_operator(configuration config) noexcept
@@ -186,8 +86,8 @@ public:
           }
           operand.emplace(std::move(*field_as_operand));
         }
-        result.insert(result.begin(), bind_operand(std::move(field), slice,
-                                                   std::move(*operand)));
+        auto [type, array] = resolve_operand(slice, *operand);
+        result.insert(result.begin(), {{field, type}, array});
       }
       return result;
     };
