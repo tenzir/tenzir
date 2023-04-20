@@ -117,22 +117,20 @@ public:
           auto current_char = in_buf.sbumpc();
           if (current_char != detail::fdinbuf::traits_type::eof()) {
             current_data.emplace_back(static_cast<std::byte>(current_char));
-          } else {
-            eof_reached = (not in_buf.timed_out());
-            if (current_data.empty()) {
-              if (not eof_reached) {
-                co_yield chunk::make_empty();
-                continue;
-              }
-              if (eof_reached and not following) {
-                break;
-              }
-            }
           }
-          if (eof_reached or current_data.size() == max_chunk_size) {
+          if (current_char == detail::fdinbuf::traits_type::eof()
+              or current_data.size() == max_chunk_size) {
+            eof_reached = (current_char == detail::fdinbuf::traits_type::eof()
+                           and not in_buf.timed_out());
+            if (eof_reached and current_data.empty() and not following) {
+              break;
+            }
             auto chunk = chunk::make(std::exchange(current_data, {}));
             co_yield std::move(chunk);
-            if (following or not eof_reached) {
+            if (eof_reached and not following) {
+              break;
+            }
+            if (not eof_reached or following) {
               current_data.reserve(max_chunk_size);
             }
           }

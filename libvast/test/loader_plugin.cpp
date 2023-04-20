@@ -152,7 +152,7 @@ TEST(file loader - nonexistent file) {
 TEST(file loader - unreadable file) {
   auto current_epoch = std::time(nullptr);
   auto unique_temp_file
-    = fmt::format("{}artifacts/inputs/read_restricted_{}.json",
+    = fmt::format("{}/read_restricted_{}.json",
                   std::filesystem::temp_directory_path(), current_epoch);
   file f{unique_temp_file};
   REQUIRE(f.open(file::write_only));
