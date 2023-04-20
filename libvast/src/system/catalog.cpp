@@ -339,17 +339,6 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             };
             return search(pred);
           }();
-          // Preserve compatibility with databases that were created beore
-          // the #timestamp attribute was removed.
-          if (lhs.type.name() == "timestamp") {
-            auto pred = [](auto& field) {
-              const auto type = field.type();
-              return type.attribute("timestamp").has_value();
-            };
-            auto pred_search_result = search(pred);
-            detail::inplace_unify(result.partition_infos,
-                                  pred_search_result.partition_infos);
-          }
           return result;
         },
         [&](const auto&, const auto&) -> catalog_lookup_result::candidate_info {
