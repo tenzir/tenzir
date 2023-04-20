@@ -28,6 +28,7 @@
 #include "vast/test/test.hpp"
 
 #include <caf/actor_system.hpp>
+#include <caf/error.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
@@ -425,8 +426,17 @@ TEST(query after transform) {
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   // Persist the partition to disk
-  self->request(index, caf::infinite, vast::atom::flush_v);
+  auto flush_handle = self->request(index, caf::infinite, vast::atom::flush_v);
   run();
+  bool flush_ack = false;
+  flush_handle.receive(
+    [&]() {
+      flush_ack = true;
+    },
+    [](const caf::error& err) {
+      FAIL(err);
+    });
+  CHECK(flush_ack);
   // Get the uuid of the partition
   auto matching_expression
     = vast::to<vast::expression>("#type == \"zeek.conn\"");
