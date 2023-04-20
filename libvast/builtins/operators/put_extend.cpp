@@ -22,9 +22,24 @@
 #include <arrow/array.h>
 #include <fmt/format.h>
 
-namespace vast::plugins::put {
+namespace vast::plugins::put_extend {
 
 namespace {
+
+enum class mode {
+  put,
+  extend,
+};
+
+constexpr auto operator_name(enum mode mode) -> std::string_view {
+  switch (mode) {
+    case mode::put:
+      return "put";
+    case mode::extend:
+      return "extend";
+  }
+  return "<unknown>";
+}
 
 /// The parsed configuration.
 struct configuration {
@@ -32,9 +47,11 @@ struct configuration {
     = {};
 };
 
-class put_operator final : public crtp_operator<put_operator> {
+template <mode Mode>
+class put_extend_operator final
+  : public crtp_operator<put_extend_operator<Mode>> {
 public:
-  explicit put_operator(configuration config) noexcept
+  explicit put_extend_operator(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
@@ -47,15 +64,27 @@ public:
     auto batch = to_record_batch(slice);
     VAST_ASSERT(batch);
     std::vector<indexed_transformation> transformations = {};
-    // We drop all fields except for the last one...
-    for (size_t i = 0; i < layout.num_fields() - 1; ++i) {
-      static auto drop =
-        [](struct record_type::field, std::shared_ptr<arrow::Array>)
-        -> std::vector<
-          std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-        return {};
-      };
-      transformations.push_back({{i}, drop});
+    auto duplicates = std::unordered_set<std::string>{};
+    switch (Mode) {
+      case mode::put: {
+        // For `put` we drop all fields except for the last one...
+        for (size_t i = 0; i < layout.num_fields() - 1; ++i) {
+          static auto drop =
+            [](struct record_type::field, std::shared_ptr<arrow::Array>)
+            -> std::vector<std::pair<struct record_type::field,
+                                     std::shared_ptr<arrow::Array>>> {
+            return {};
+          };
+          transformations.push_back({{i}, drop});
+        }
+      }
+      case mode::extend: {
+        // For `extend` we instead consider all keys in the schema as
+        // conflicting fields.
+        for (const auto& leaf : layout.leaves()) {
+          duplicates.insert(layout.key(leaf.index));
+        }
+      }
     }
     // ... and then replace the last one with our new fields.
     auto put = [&](struct record_type::field, std::shared_ptr<arrow::Array>) {
@@ -63,15 +92,15 @@ public:
       auto result = std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>{};
       result.reserve(config_.field_to_operand.size());
-      auto duplicates = std::unordered_set<std::string>{};
       for (auto it = config_.field_to_operand.rbegin();
            it < config_.field_to_operand.rend(); ++it) {
         auto [field, operand] = *it;
         if (not duplicates.insert(field).second) {
           ctrl.warn(caf::make_error(
-            ec::invalid_argument, fmt::format("put operator ignores duplicate "
-                                              "assignment for field {}",
-                                              field)));
+            ec::invalid_argument,
+            fmt::format("{} operator ignores duplicate or conflicting "
+                        "assignment for field {} in schema {}",
+                        operator_name(Mode), field, slice.schema())));
           continue;
         }
         if (not operand) {
@@ -79,9 +108,9 @@ public:
           if (not field_as_operand) {
             ctrl.warn(caf::make_error(
               ec::logic_error,
-              fmt::format("put operator failed to parse field as extractor in "
+              fmt::format("{} operator failed to parse field as extractor in "
                           "implicit assignment for field {}, and assigns null",
-                          field)));
+                          operator_name(Mode), field)));
             field_as_operand = data{};
           }
           operand.emplace(std::move(*field_as_operand));
@@ -96,7 +125,7 @@ public:
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
-    auto result = std::string{"put"};
+    auto result = std::string{operator_name(Mode)};
     bool first = true;
     for (const auto& [field, operand] : config_.field_to_operand) {
       if (not std::exchange(first, false)) {
@@ -115,6 +144,7 @@ private:
   configuration config_ = {};
 };
 
+template <mode Mode>
 class plugin final : public virtual operator_plugin {
 public:
   auto initialize([[maybe_unused]] const record& plugin_config,
@@ -124,7 +154,7 @@ public:
   }
 
   [[nodiscard]] auto name() const -> std::string override {
-    return "put";
+    return std::string{operator_name(Mode)};
   };
 
   auto make_operator(std::string_view pipeline) const
@@ -133,7 +163,7 @@ public:
       parsers::optional_ws_or_comment, parsers::identifier, parsers::operand;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    // put <field=operand>...
+    // put|extend <field=operand>...
     // clang-format off
     const auto p
        = required_ws_or_comment
@@ -147,19 +177,23 @@ public:
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse put operator: '{}'",
-                                    pipeline)),
+                        fmt::format("failed to parse {} operator: '{}'",
+                                    operator_name(Mode), pipeline)),
       };
     }
     return {
       std::string_view{f, l},
-      std::make_unique<put_operator>(std::move(config)),
+      std::make_unique<put_extend_operator<Mode>>(std::move(config)),
     };
   }
 };
 
+using put_plugin = plugin<mode::put>;
+using extend_plugin = plugin<mode::extend>;
+
 } // namespace
 
-} // namespace vast::plugins::put
+} // namespace vast::plugins::put_extend
 
-VAST_REGISTER_PLUGIN(vast::plugins::put::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::put_extend::put_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::put_extend::extend_plugin)
