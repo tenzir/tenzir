@@ -12,7 +12,6 @@
 
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/module.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
@@ -52,9 +51,6 @@ struct source_state {
 
   /// Actor for collecting statistics.
   accountant_actor accountant = {};
-
-  /// The executor for transforming table slices in a pipeline.
-  pipeline_executor executor;
 
   /// The `source` only supports a single sink, so we track here if we
   /// already got it.
@@ -117,12 +113,10 @@ struct source_state {
 /// @param local_module Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
-/// @param input_transformations The input transformations to be applied.
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
        const catalog_actor& catalog, vast::module local_module,
-       std::string type_filter, accountant_actor accountant,
-       std::vector<legacy_pipeline>&& input_pipelines);
+       std::string type_filter, accountant_actor accountant);
 
 } // namespace vast::system

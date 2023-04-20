@@ -171,8 +171,6 @@ class table_slice;
 class table_slice_builder;
 class table_slice_column;
 class time_type;
-class legacy_pipeline;
-class legacy_pipeline_operator;
 class type;
 class uuid;
 class value_index;
@@ -258,7 +256,6 @@ class legacy_deserializer;
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
-using pipeline_ptr = std::shared_ptr<legacy_pipeline>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.
@@ -428,7 +425,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::uuid))
   VAST_ADD_TYPE_ID((vast::table_slice_column))
   VAST_ADD_TYPE_ID((vast::pipeline))
-  VAST_ADD_TYPE_ID((vast::pipeline_ptr))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::wah_bitmap))
   VAST_ADD_TYPE_ID((vast::ewah_bitmap))

@@ -15,16 +15,15 @@
 #include <vast/concept/printable/vast/json.hpp>
 #include <vast/detail/weak_run_delayed.hpp>
 #include <vast/format/json.hpp>
-#include <vast/legacy_pipeline.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
-#include <vast/system/parse_query.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/table_slice.hpp>
 
+#include <arrow/record_batch.h>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 

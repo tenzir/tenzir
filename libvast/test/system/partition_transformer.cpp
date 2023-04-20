@@ -17,7 +17,6 @@
 #include "vast/fbs/flatbuffer_container.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/catalog.hpp"

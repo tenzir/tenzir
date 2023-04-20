@@ -15,12 +15,12 @@
 #include <vast/concept/parseable/vast/time.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
-#include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/compute/api_scalar.h>
+#include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
 #include <tsl/robin_map.h>
@@ -649,93 +649,14 @@ private:
     buckets = {};
 };
 
+
 /// The summarize pipeline operator implementation.
-class summarize_operator : public legacy_pipeline_operator {
+class summarize_operator final
+  : public schematic_operator<summarize_operator, std::optional<aggregation>> {
 public:
   /// Creates a pipeline operator from its configuration.
   /// @param config The parsed configuration of the summarize operator.
   explicit summarize_operator(configuration config) noexcept
-    : config_{std::move(config)} {
-    // nop
-  }
-
-private:
-  [[nodiscard]] bool is_blocking() const override {
-    return true;
-  }
-
-  /// Adds a batch to the operator, which effectively calls the corresponding
-  /// add for the lazily created aggregation for the schema.
-  [[nodiscard]] caf::error add(table_slice slice) override {
-    // Try to find whether we have an aggregation already for the schema to
-    // forward the batch to it.
-    if (auto aggregation = aggregations_.find(slice.schema());
-        aggregation != aggregations_.end()) {
-      aggregation->second.add(to_record_batch(slice));
-      return {};
-    }
-    // Note: We intentionally decouple the lifetime of the type's underlying
-    // chunk here in order to make sure that no data is held alive for the
-    // duration of the pipeline operator's existence.
-    auto decoupled_schema = type{chunk::copy(slice.schema())};
-    // Check if we already blacklisted this schema.
-    if (auto blacklist_entry = blacklist_.find(slice.schema());
-        blacklist_entry != blacklist_.end()) {
-      blacklist_entry->second.push_back(std::move(slice));
-      return {};
-    }
-    // We didn't have one, so we create a new one for this schema.
-    auto aggregation = aggregation::make(decoupled_schema, config_);
-    if (!aggregation) {
-      VAST_WARN("summarize operator does not apply to schema {} and leaves "
-                "events unchanged: {}",
-                slice.schema(), aggregation.error());
-      blacklist_.emplace(std::move(decoupled_schema),
-                         std::vector{std::move(slice)});
-      return {};
-    }
-    auto [it, inserted] = aggregations_.emplace(std::move(decoupled_schema),
-                                                std::move(*aggregation));
-    VAST_ASSERT(inserted);
-    it->second.add(to_record_batch(slice));
-    return {};
-  }
-
-  /// Retrieves the results of all configured aggregations.
-  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
-    auto result = std::vector<table_slice>{};
-    result.reserve(aggregations_.size());
-    for (auto& [schema, aggregation] : aggregations_) {
-      auto batch = aggregation.finish();
-      if (!batch)
-        return batch.error();
-      result.push_back(std::move(*batch));
-    }
-    for (auto& [schema, batches] : blacklist_) {
-      result.reserve(result.size() + batches.size());
-      result.insert(result.end(), std::make_move_iterator(batches.begin()),
-                    std::make_move_iterator(batches.end()));
-    }
-    return result;
-  }
-
-  /// The underlying configuration of the summary transformation.
-  configuration config_ = {};
-
-  /// The currently in-progress aggregations.
-  std::unordered_map<type, aggregation> aggregations_ = {};
-
-  /// Batches that do not apply to any aggregation.
-  std::unordered_map<type, std::vector<table_slice>> blacklist_ = {};
-};
-
-/// The summarize pipeline operator implementation.
-class summarize_operator2 final
-  : public schematic_operator<summarize_operator2, std::optional<aggregation>> {
-public:
-  /// Creates a pipeline operator from its configuration.
-  /// @param config The parsed configuration of the summarize operator.
-  explicit summarize_operator2(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
@@ -806,57 +727,8 @@ private:
   configuration config_ = {};
 };
 
-caf::expected<std::unique_ptr<legacy_pipeline_operator>>
-make_summarize_operator(const record& config) {
-  auto parsed_config = configuration::make(config);
-  if (!parsed_config)
-    return parsed_config.error();
-  return std::make_unique<summarize_operator>(std::move(*parsed_config));
-}
-
-std::vector<std::string>
-get_keys_from_legacy_sections(const data& legacy_section) {
-  const auto* list = caf::get_if<vast::list>(&legacy_section);
-  if (!list)
-    return {};
-  std::vector<std::string> keys;
-  for (const auto& item : *list) {
-    if (auto item_str = caf::get_if<std::string>(&item))
-      keys.emplace_back(*item_str);
-  }
-  return keys;
-}
-
-/// change legacy config into newer format
-caf::expected<std::unique_ptr<legacy_pipeline_operator>>
-try_handle_deprecations(const record& config,
-                        const std::vector<std::string>& sections_to_reformat) {
-  auto new_config = config;
-  auto aggregate = record{};
-  for (const auto& section : sections_to_reformat) {
-    VAST_WARN("the configuration key '{}' for the summarize operator is "
-              "deprecated and will be removed in the next major release; "
-              "please migrate to using explicit output field names",
-              section);
-    for (const auto& key :
-         get_keys_from_legacy_sections(new_config.at(section))) {
-      if (aggregate.contains(key))
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("aggregation function '{}' for "
-                                           "output field '{}' shadows previous "
-                                           "definition",
-                                           section, key));
-      aggregate.emplace(key, section);
-    }
-    new_config.erase(section);
-  }
-  new_config.emplace("aggregate", std::move(aggregate));
-  return make_summarize_operator(new_config);
-}
-
 /// The summarize pipeline operator plugin.
-class plugin final : public virtual pipeline_operator_plugin,
-                     public virtual operator_plugin {
+class plugin final : public virtual operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
@@ -868,83 +740,6 @@ public:
   [[nodiscard]] std::string name() const override {
     return "summarize";
   };
-
-  [[nodiscard]] caf::expected<std::unique_ptr<legacy_pipeline_operator>>
-  make_pipeline_operator(const record& config) const override {
-    std::vector<std::string> sections_to_reformat;
-    for (const auto& key : {"min", "max", "any", "all", "sum"}) {
-      if (config.contains(key))
-        sections_to_reformat.emplace_back(key);
-    }
-    // new format detected. Proceed as usual
-    if (sections_to_reformat.empty())
-      return make_summarize_operator(config);
-    if (config.contains("aggregate")) {
-      return caf::make_error(
-        ec::invalid_configuration,
-        fmt::format("the configuration keys '{}' for the summarize operator "
-                    "are deprecated and will be removed in the next major "
-                    "release; please migrate to using explicit output field "
-                    "names",
-                    fmt::join(sections_to_reformat, "', '")));
-    }
-    return try_handle_deprecations(config, sections_to_reformat);
-  }
-
-  [[nodiscard]] std::pair<
-    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
-  make_pipeline_operator(std::string_view pipeline) const override {
-    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment, parsers::duration,
-      parsers::extractor_list, parsers::aggregation_function_list;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> aggregation_function_list
-                   >> required_ws_or_comment >> ("by") >> required_ws_or_comment
-                   >> extractor_list >> -(required_ws_or_comment >> "resolution"
-                                          >> required_ws_or_comment >> duration)
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
-                                      std::vector<std::string>>>,
-               std::vector<std::string>, std::optional<vast::duration>>
-      parsed_aggregations{};
-    if (!p(f, l, parsed_aggregations)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "summarize "
-                                                      "operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    auto config = configuration{};
-    for (const auto& [output, function_name, arguments] :
-         std::get<0>(parsed_aggregations)) {
-      configuration::aggregation new_aggregation{};
-      if (!plugins::find<aggregation_function_plugin>(function_name)) {
-        return {
-          std::string_view{f, l},
-          caf::make_error(ec::syntax_error, fmt::format("invalid aggregation "
-                                                        "name: '{}'",
-                                                        function_name)),
-        };
-      }
-      new_aggregation.function_name = function_name;
-      new_aggregation.input_extractors = arguments;
-      new_aggregation.output
-        = (output)
-            ? *output
-            : fmt::format("{}({})", function_name, fmt::join(arguments, ","));
-      config.aggregations.push_back(std::move(new_aggregation));
-    }
-    config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
-    config.time_resolution = std::move(std::get<2>(parsed_aggregations));
-
-    return {
-      std::string_view{f, l},
-      std::make_unique<summarize_operator>(std::move(config)),
-    };
-  }
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
@@ -996,7 +791,7 @@ public:
 
     return {
       std::string_view{f, l},
-      std::make_unique<summarize_operator2>(std::move(config)),
+      std::make_unique<summarize_operator>(std::move(config)),
     };
   }
 };

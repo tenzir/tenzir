@@ -10,7 +10,6 @@
 
 #include <vast/data.hpp>
 #include <vast/error.hpp>
-#include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
 
 #include <caf/error.hpp>

@@ -9,7 +9,6 @@
 #include <vast/concept/parseable/numeric/integral.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
-#include <vast/legacy_pipeline.hpp>
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>

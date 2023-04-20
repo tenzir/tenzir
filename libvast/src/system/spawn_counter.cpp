@@ -8,16 +8,17 @@
 
 #include "vast/system/spawn_counter.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/counter.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/node_control.hpp"
-#include "vast/system/parse_query.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
@@ -33,17 +34,21 @@ spawn_counter(node_actor::stateful_pointer<node_state> self,
               spawn_arguments& args) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
   // Parse given expression.
-  auto query_result = parse_query(args);
-  if (!query_result)
-    return query_result.error();
-  if (query_result->second) {
-    return caf::make_error(ec::invalid_configuration,
-                           fmt::format("{} failed to spawn counter: the "
-                                       "provided query must not contain a "
-                                       "pipeline",
-                                       *self));
+  auto expr = trivially_true_expression();
+  if (not args.inv.arguments.empty()) {
+    if (args.inv.arguments.size() > 1) {
+      return caf ::make_error(ec::invalid_argument,
+                              fmt::format("expected at most one argument, but "
+                                          "got [{}]",
+                                          fmt::join(args.inv.arguments, ", ")));
+    }
+    if (not args.inv.arguments[0].empty()) {
+      auto parse_result = to<expression>(args.inv.arguments[0]);
+      if (!parse_result)
+        return parse_result.error();
+      expr = std::move(*parse_result);
+    }
   }
-  auto expr = query_result->first;
   // pipeline should be impossible here.
   auto [index] = self->state.registry.find<index_actor>();
   if (!index)

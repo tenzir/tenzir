@@ -551,26 +551,6 @@ tests:
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
-  Import pipeline operator parsing everything but summarize:
-    tags: [server, client, import-export, transforms]
-    fixture: ServerTester
-    steps:
-      - command: |
-          import -b suricata
-            ' pass
-            | select timestamp, flow_id, src_ip, dest_ip, src_port
-            | drop timestamp
-            | hash --salt="abcdefghij12" flow_id
-            | drop flow_id
-            | pseudonymize -m "crypto-pan" -s "123456abcdef" src_ip, dest_ip
-            | rename source_ip=src_ip
-            | where #type == "suricata.alert" /*comments can also be in the
-                 middle of an expression*/
-                /* also match fileinfo */
-                || #type == /*foo*/ "suricata.fileinfo"
-            '
-        input: data/suricata/eve.json
-      - command: export json
   Export pipeline operator parsing only summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -580,13 +560,6 @@ tests:
       - command: export json 'summarize distinct(SourcePort) by SourceIp'
       - command: export json 'summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute'
       - command: export json 'summarize usercount=count(User), initiated=all(Initiated) by ProcessId'
-  Import pipeline operator parsing only summarize:
-    tags: [server, client, import-export, transforms]
-    fixture: ServerTester
-    steps:
-      - command: "import -b -t sysmon.NetworkConnection json 'summarize distinct(SourcePort) by SourceIp'"
-        input: data/json/sysmon.json
-      - command: export json
   Export pipeline operator parsing after expression:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -653,67 +626,6 @@ tests:
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
-  Import pipeline operator parsing after expression:
-    tags: [server, client, import-export, transforms]
-    fixture: ServerTester
-    steps:
-      - command: "import -b suricata 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | pass
-                               | select timestamp, flow_id, src_ip, dest_ip, src_port
-                               | drop timestamp
-                               | hash --salt=\"abcdefghij12\" flow_id
-                               | drop flow_id
-                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | rename source_ip=src_ip
-                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
-        input: data/suricata/eve.json
-      - command: export json
-  Export pipeline operator summarize after expression:
-    tags: [server, client, import-export, transforms]
-    fixture: ServerTester
-    steps:
-      - command: import -b -t sysmon.NetworkConnection json
-        input: data/json/sysmon.json
-      - command: "export json 'where SourcePort==56162 || SourcePort == 37156
-                               | summarize distinct(SourceIp) by SourcePort'"
-  Import pipeline operator summarize after expression:
-    tags: [server, client, import-export, transforms]
-    fixture: ServerTester
-    steps:
-      - command: "import -b -t sysmon.NetworkConnection json 'SourcePort==56162 || SourcePort == 37156
-                               | summarize distinct(SourceIp) by SourcePort'"
-        input: data/json/sysmon.json
-      - command: export json
-  Spawn source with pipeline operators:
-    tags: [import-export, spawn-source, transforms, zeek]
-    fixture: ServerTester
-    steps:
-      - command: "spawn source -r @./data/suricata/eve.json suricata
-                               'pass
-                               | select timestamp, flow_id, src_ip, dest_ip, src_port
-                               | drop timestamp
-                               | hash --salt=\"abcdefghij12\" flow_id
-                               | drop flow_id
-                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | rename source_ip=src_ip
-                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
-      - command: export json
-  Spawn source with expression and pipeline operators:
-    tags: [import-export, spawn-source, transforms, zeek]
-    fixture: ServerTester
-    steps:
-      - command: "spawn source -r @./data/suricata/eve.json suricata
-                               'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
-                               | pass
-                               | select timestamp, flow_id, src_ip, dest_ip, src_port
-                               | drop timestamp
-                               | hash --salt=\"abcdefghij12\" flow_id
-                               | drop flow_id
-                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
-                               | rename source_ip=src_ip
-                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
-      - command: export json
-  # TODO Reinstate negative test cases from compaction after story 31232 is completed
 
   # A (small) stress test to see how the server handles queries that time out
   # before they're completed. We don't care about the output for these, we
