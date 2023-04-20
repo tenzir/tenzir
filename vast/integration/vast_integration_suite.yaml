@@ -857,3 +857,8 @@ tests:
         input: data/json/irc.log.json.gz
       - command: exec 'from file - read json | write json to -'
         input: data/json/irc.log.json.gz
+
+  Read from JSON File:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from file @./data/json/record-in-list.json read json | write json to stdout'
