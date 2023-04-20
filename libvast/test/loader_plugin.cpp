@@ -8,7 +8,7 @@
 
 #include "vast/collect.hpp"
 #include "vast/detail/string_literal.hpp"
-#include "vast/pipeline.hpp"
+#include "vast/file.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/stdin_file_inut.hpp"
@@ -17,6 +17,8 @@
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
 #include <caf/test/dsl.hpp>
+
+#include <filesystem>
 
 using namespace vast;
 
@@ -138,6 +140,32 @@ TEST(stdin loader - one complete chunk) {
   REQUIRE_EQUAL(chunks.front()->size(), max_chunk_size);
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
                      str_chunk->begin(), str_chunk->end()));
+}
+
+TEST(file loader - nonexistent file) {
+  loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
+  auto args = std::vector<std::string>{"no-file-oops"};
+  REQUIRE(loader_plugin);
+  REQUIRE_ERROR(loader_plugin->make_loader(args, control_plane));
+}
+
+TEST(file loader - unreadable file) {
+  auto current_epoch = std::time(nullptr);
+  auto unique_temp_file = fmt::format(
+    VAST_TEST_PATH "artifacts/inputs/read_restricted_{}.json", current_epoch);
+  file f{unique_temp_file};
+  REQUIRE(f.open(file::write_only));
+  REQUIRE(f.handle() > 0);
+  REQUIRE(f.close());
+  std::filesystem::permissions(unique_temp_file,
+                               std::filesystem::perms::group_write
+                                 | std::filesystem::perms::owner_write
+                                 | std::filesystem::perms::others_write);
+  loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
+  auto args = std::vector<std::string>{unique_temp_file};
+  REQUIRE(loader_plugin);
+  REQUIRE_ERROR(loader_plugin->make_loader(args, control_plane));
+  CHECK(std::filesystem::remove_all(unique_temp_file));
 }
 
 FIXTURE_SCOPE_END()
