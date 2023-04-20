@@ -8,7 +8,7 @@ on:
         required: false
         default: false
       upload-docker-image-to-ecr:
-        description: "Build the vast-manager image and upload to ECR"
+        description: "Build the vast-ce image and upload to ECR"
         type: boolean
         required: false
         default: false
