@@ -237,9 +237,8 @@ class plugin final : public virtual parser_plugin,
     }(std::move(json_chunk_generator), ctrl);
   }
 
-  auto default_loader(std::span<std::string const> args) const
+  auto default_loader(std::span<std::string const>) const
     -> std::pair<std::string, std::vector<std::string>> override {
-    (void)args; // TODO
     return {"stdin", {}};
   }
 
@@ -276,9 +275,8 @@ class plugin final : public virtual parser_plugin,
     };
   }
 
-  auto default_saver(std::span<std::string const> args) const
+  auto default_saver(std::span<std::string const>) const
     -> std::pair<std::string, std::vector<std::string>> override {
-    (void)args; // TODO
     return {"stdout", {}};
   }
 
