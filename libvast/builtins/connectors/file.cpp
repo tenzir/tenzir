@@ -86,23 +86,18 @@ public:
       }
       auto uds = detail::unix_domain_socket::connect(path);
       if (!uds) {
-        return caf::make_error(ec::filesystem_error,
-                               "failed to connect to UNIX domain socket at",
-                               path);
-      }
-      fd = uds.recv_fd();
-      if (fd == -1) {
         return caf::make_error(
           ec::filesystem_error,
-          "Unable to connect to UNIX domain socket at {}:", path);
+          fmt::format("Unable to connect to UNIX domain socket at {}:", path));
       }
+      fd = uds.fd;
     } else {
       if (path != stdin_path) {
         fd = ::open(path.c_str(), std::ios_base::binary | std::ios_base::in);
         if (fd == -1) {
           return caf::make_error(ec::filesystem_error,
-                                 "open(2) for file {} failed {}:", path,
-                                 std::strerror(errno));
+                                 fmt::format("open(2) for file {} failed {}:",
+                                             path, std::strerror(errno)));
         }
       }
     }
