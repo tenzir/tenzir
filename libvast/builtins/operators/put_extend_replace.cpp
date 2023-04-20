@@ -14,7 +14,6 @@
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/overload.hpp>
 #include <vast/error.hpp>
-#include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
