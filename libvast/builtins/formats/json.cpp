@@ -179,7 +179,10 @@ class plugin final : public virtual parser_plugin,
                    operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     if (!args.empty()) {
-      return caf::make_error(ec::invalid_argument, "unexpected arguments");
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("json parser received unexpected "
+                                         "arguments: {}",
+                                         fmt::join(args, ", ")));
     };
     return [](generator<chunk_ptr> json_chunk_generator,
               operator_control_plane& ctrl) -> generator<table_slice> {
@@ -244,7 +247,10 @@ class plugin final : public virtual parser_plugin,
                     operator_control_plane&) const
     -> caf::expected<printer> override {
     if (!args.empty()) {
-      return caf::make_error(ec::invalid_argument, "unexpected arguments");
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("json printer received unexpected "
+                                         "arguments: {}",
+                                         fmt::join(args, ", ")));
     };
     auto input_type = caf::get<record_type>(input_schema);
     return [input_type](table_slice slice) -> generator<chunk_ptr> {
