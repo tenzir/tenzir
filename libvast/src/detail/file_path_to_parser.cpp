@@ -16,7 +16,7 @@ namespace vast::detail {
 
 constexpr inline auto fallback_parser = "json";
 
-constexpr inline auto extension_to_parser_list
+const auto extension_to_parser_list
   = std::array<std::pair<std::string, std::string>, 2>{
     {{"eve.json", "suricata"}, {".ndjson", "json"}}};
 

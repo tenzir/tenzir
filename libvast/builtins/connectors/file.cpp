@@ -27,8 +27,8 @@ namespace vast::plugins::file {
 
 class plugin : public virtual loader_plugin {
 public:
-  static constexpr inline auto max_chunk_size = size_t{16384};
-  static constexpr inline auto stdin_path = "-";
+  static constexpr auto max_chunk_size = size_t{16384};
+  static constexpr auto stdin_path = "-";
 
   auto
   make_loader(std::span<std::string const> args, operator_control_plane&) const
