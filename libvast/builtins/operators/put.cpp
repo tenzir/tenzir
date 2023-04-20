@@ -6,14 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/detail/overload.hpp"
-
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/narrow.hpp>
+#include <vast/detail/overload.hpp>
 #include <vast/error.hpp>
 #include <vast/legacy_pipeline.hpp>
 #include <vast/plugin.hpp>
@@ -32,6 +31,27 @@ struct configuration {
   std::vector<std::tuple<std::string, caf::optional<operand>>> field_to_operand
     = {};
 };
+
+auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
+  -> view<data> {
+  if (slice.encoding() == table_slice_encoding::none)
+    return {};
+  switch (ex.kind) {
+    case meta_extractor::type: {
+      return slice.schema().name();
+    }
+    case meta_extractor::import_time: {
+      const auto import_time = slice.import_time();
+      if (import_time == time{}) {
+        // The table slice API returns the epoch timestamp if no import
+        // time was set, so we convert that to null.
+        return {};
+      }
+      return import_time;
+    }
+  }
+  die("unhandled meta extractor kind");
+}
 
 auto bind_operand(std::string field, table_slice slice, operand op)
   -> std::pair<struct record_type::field, std::shared_ptr<arrow::Array>> {
@@ -99,23 +119,7 @@ auto bind_operand(std::string field, table_slice slice, operand op)
       bind_value({});
     },
     [&](const meta_extractor& ex) {
-      switch (ex.kind) {
-        case meta_extractor::type: {
-          bind_value(std::string{slice.schema().name()});
-          return;
-        }
-        case meta_extractor::import_time: {
-          if (slice.import_time() == time{}) {
-            // The table slice API returns the epoch timestamp if no import
-            // time was set, so we convert that to null.
-            bind_value({});
-          } else {
-            bind_value(slice.import_time());
-          }
-          return;
-        }
-      }
-      die("unhandled meta extractor kind");
+      bind_value(materialize(resolve_meta_extractor(slice, ex)));
     },
     [&](const data_extractor&) {
       die("data extractor must not occur here");
