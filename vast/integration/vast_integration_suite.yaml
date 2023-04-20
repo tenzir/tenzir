@@ -502,8 +502,24 @@ tests:
       - command: version
         transformation: sleep 4
       - command: count '#type == /zeek.*/'
+  Cast:
+    tags: [server, client, import-export, pipeline]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: |
+          export json 'where #type == "zeek.conn"
+            | head 1
+            | extend schema_before=#type'
+      - command: |
+          export json 'where #type == "zeek.conn"
+            | head 1
+            | extend schema_before=#type
+            | cast zeek.sip
+            | extend schema_after=#type'
   Export pipeline operator parsing everything but summarize:
-    tags: [server, client, import-export, transforms]
+    tags: [server, client, import-export, pipeline]
     fixture: ServerTester
     steps:
       - command: import -b suricata
@@ -552,7 +568,7 @@ tests:
                                | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
   Import pipeline operator parsing everything but summarize:
-    tags: [server, client, import-export, transforms]
+    tags: [server, client, import-export, pipeline]
     fixture: ServerTester
     steps:
       - command: |
@@ -572,7 +588,7 @@ tests:
         input: data/suricata/eve.json
       - command: export json
   Export pipeline operator parsing only summarize:
-    tags: [server, client, import-export, transforms]
+    tags: [server, client, import-export, pipeline]
     fixture: ServerTester
     steps:
       - command: import -b -t sysmon.NetworkConnection json
@@ -581,14 +597,14 @@ tests:
       - command: export json 'summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute'
       - command: export json 'summarize usercount=count(User), initiated=all(Initiated) by ProcessId'
   Import pipeline operator parsing only summarize:
-    tags: [server, client, import-export, transforms]
+    tags: [server, client, import-export, pipeline]
     fixture: ServerTester
     steps:
       - command: "import -b -t sysmon.NetworkConnection json 'summarize distinct(SourcePort) by SourceIp'"
         input: data/json/sysmon.json
       - command: export json
   Export pipeline operator parsing after expression:
-    tags: [server, client, import-export, transforms]
+    tags: [server, client, import-export, pipeline]
     fixture: ServerTester
     steps:
       - command: import -b suricata
@@ -654,7 +670,7 @@ tests:
                                | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
   Import pipeline operator parsing after expression:
-    tags: [server, client, import-export, transforms]
+    tags: [server, client, import-export, pipeline]
     fixture: ServerTester
     steps:
       - command: "import -b suricata 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
@@ -669,7 +685,7 @@ tests:
         input: data/suricata/eve.json
       - command: export json
   Export pipeline operator summarize after expression:
-    tags: [server, client, import-export, transforms]
+    tags: [server, client, import-export, pipeline]
     fixture: ServerTester
     steps:
       - command: import -b -t sysmon.NetworkConnection json
@@ -677,7 +693,7 @@ tests:
       - command: "export json 'where SourcePort==56162 || SourcePort == 37156
                                | summarize distinct(SourceIp) by SourcePort'"
   Import pipeline operator summarize after expression:
-    tags: [server, client, import-export, transforms]
+    tags: [server, client, import-export, pipeline]
     fixture: ServerTester
     steps:
       - command: "import -b -t sysmon.NetworkConnection json 'SourcePort==56162 || SourcePort == 37156
@@ -685,7 +701,7 @@ tests:
         input: data/json/sysmon.json
       - command: export json
   Spawn source with pipeline operators:
-    tags: [import-export, spawn-source, transforms, zeek]
+    tags: [import-export, spawn-source, pipeline, zeek]
     fixture: ServerTester
     steps:
       - command: "spawn source -r @./data/suricata/eve.json suricata
@@ -699,7 +715,7 @@ tests:
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
       - command: export json
   Spawn source with expression and pipeline operators:
-    tags: [import-export, spawn-source, transforms, zeek]
+    tags: [import-export, spawn-source, pipeline, zeek]
     fixture: ServerTester
     steps:
       - command: "spawn source -r @./data/suricata/eve.json suricata
@@ -831,7 +847,7 @@ tests:
 
   Comments:
     fixture: ServerTester
-    tags: [pipelines, comments]
+    tags: [pipeline, comments]
     steps:
       - command: import --blocking suricata
         input: data/suricata/eve.json
@@ -842,7 +858,7 @@ tests:
         expected_result: error
 
   Local Pipeline Execution:
-    tags: [pipelines]
+    tags: [pipeline]
     steps:
       # - is an alternative form of stdin and stdout
       - command: exec 'from stdin read json | write json to stdout'
