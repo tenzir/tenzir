@@ -15,9 +15,12 @@ namespace vast::plugins::stdout_ {
 
 class plugin : public virtual saver_plugin {
 public:
-  [[nodiscard]] auto
-  make_saver(const record&, [[maybe_unused]] type input_schema,
-             operator_control_plane&) const -> caf::expected<saver> override {
+  auto make_saver(std::span<std::string const> args, type,
+                  operator_control_plane&) const
+    -> caf::expected<saver> override {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument, "unexpected arguments");
+    };
     auto outbuf = detail::fdoutbuf(STDOUT_FILENO);
     return [outbuf](chunk_ptr chunk) mutable {
       if (chunk)
@@ -26,22 +29,21 @@ public:
     };
   }
 
-  [[nodiscard]] auto default_printer(const record&) const
-    -> std::pair<std::string, record> override {
-    return std::pair{"json", record{}};
+  auto default_printer(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    (void)args; // TODO
+    return {"json", {}};
   }
 
-  [[nodiscard]] auto initialize([[maybe_unused]] const record& plugin_config,
-                                [[maybe_unused]] const record& global_config)
-    -> caf::error override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return caf::none;
   }
 
-  [[nodiscard]] auto name() const -> std::string override {
+  auto name() const -> std::string override {
     return "stdout";
   }
 
-  [[nodiscard]] auto saver_requires_joining() const -> bool override {
+  auto saver_requires_joining() const -> bool override {
     return true;
   }
 };

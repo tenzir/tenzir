@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/concept/parseable/vast/pipeline.hpp"
+
 #include "vast/aliases.hpp"
 
 #include <vast/concept/parseable/to.hpp>
@@ -336,9 +338,15 @@ TEST(to - invalid inputs) {
 }
 
 TEST(stdin with json parser with all from and read combinations) {
-  auto definitions = {"from stdin", "from stdin read json",
-                      "read json from stdin", "read json"};
+  auto definitions = {"from stdin",
+                      "from stdin --timeout 1s",
+                      "from stdin read json",
+                      "from stdin --timeout 1s read json",
+                      "read json from stdin",
+                      "read json from stdin --timeout 1s",
+                      "read json"};
   for (auto definition : definitions) {
+    MESSAGE("trying '" << definition << "'");
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
     auto source = unbox(pipeline::parse(definition));
     auto ops = std::vector<operator_ptr>{};
@@ -402,6 +410,58 @@ vast:
   REQUIRE_ERROR(pipeline::parse("self_recursive"));
   REQUIRE_ERROR(pipeline::parse("mut_recursive1"));
   REQUIRE_ERROR(pipeline::parse("head"));
+}
+
+auto execute(pipeline pipe) -> caf::expected<void> {
+  for (auto&& result : make_local_executor(std::move(pipe))) {
+    if (!result) {
+      return result;
+    }
+  }
+  return {};
+}
+
+TEST(load_stdin_arguments) {
+  auto success = {"load stdin", "load stdin --timeout 1s"};
+  auto error = {"load stdin --timeout", "load stdin --timeout nope",
+                "load stdin --t1me0ut 1s", "load stdin --timeout 1s 2s"};
+  for (auto x : success) {
+    MESSAGE(x);
+    test::stdin_file_input<"artifacts/inputs/json.txt"> file;
+    REQUIRE_NOERROR(
+      execute(unbox(pipeline::parse(fmt::format("{} | save stdout", x)))));
+  }
+  for (auto x : error) {
+    MESSAGE(x);
+    test::stdin_file_input<"artifacts/inputs/json.txt"> file;
+    // This test shows that pipeline parsing still succeeds. This is because
+    // arguments are only checked when the actual loader is created, which
+    // currently happens during instantiation.
+    REQUIRE_ERROR(unbox(pipeline::parse(fmt::format("{} | save stdout", x)))
+                    .infer_type<void>());
+  }
+}
+
+TEST(operator argument parsing and escaping) {
+  using namespace std::literals;
+  auto a1 = "42\n --abc /**/ 'read' \n \\ \\\\"sv;
+  auto a2 = "42 --abc 'read' \\ \\\\"sv; // NOLINT
+  auto b1 = "' ' ~/okay/test.txt \"/*\" \t'1 2 3' "sv;
+  auto b2 = "' ' ~/okay/test.txt '/*' '1 2 3'"sv;
+  auto input = fmt::format("foo {} read xyz {}", a1, b1);
+  auto f = input.begin();
+  auto result
+    = parsers::name_args_opt_keyword_name_args("read").apply(f, input.end());
+  REQUIRE(result);
+  auto& [first, first_args, opt_second] = *result;
+  CHECK_EQUAL(first, "foo");
+  CHECK_EQUAL(first_args.size(), size_t{5});
+  REQUIRE(opt_second);
+  auto& [second, second_args] = *opt_second;
+  CHECK_EQUAL(second, "xyz");
+  CHECK_EQUAL(second_args.size(), size_t{4});
+  CHECK_EQUAL(escape_operator_args(first_args), a2);
+  CHECK_EQUAL(escape_operator_args(second_args), b2);
 }
 
 } // namespace

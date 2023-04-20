@@ -23,22 +23,24 @@ namespace {
 
 class load_operator final : public crtp_operator<load_operator> {
 public:
-  explicit load_operator(const loader_plugin& loader, record config)
-    : loader_plugin_{loader}, config_{std::move(config)} {
+  explicit load_operator(const loader_plugin& loader,
+                         std::vector<std::string> args)
+    : loader_plugin_{loader}, args_{std::move(args)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
     -> caf::expected<generator<chunk_ptr>> {
-    return loader_plugin_.make_loader(config_, ctrl);
+    return loader_plugin_.make_loader(args_, ctrl);
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("load {}", loader_plugin_.name());
+    return fmt::format("load {}{}{}", loader_plugin_.name(),
+                       args_.empty() ? "" : " ", escape_operator_args(args_));
   }
 
 private:
   const loader_plugin& loader_plugin_;
-  record config_;
+  std::vector<std::string> args_;
 };
 
 class plugin final : public virtual operator_plugin {
@@ -53,14 +55,10 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> plugin_name
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto loader_name = std::string{};
-    if (!p(f, l, loader_name)) {
+    auto parsed = parsers::name_args.apply(f, l);
+    if (!parsed) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
@@ -68,17 +66,18 @@ public:
                                     pipeline)),
       };
     }
-    const auto* loader = plugins::find<loader_plugin>(loader_name);
+    auto& [name, args] = *parsed;
+    const auto* loader = plugins::find<loader_plugin>(name);
     if (!loader) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::lookup_error,
-                        fmt::format("no loader found for '{}'", loader_name)),
+                        fmt::format("no loader found for '{}'", name)),
       };
     }
     return {
       std::string_view{f, l},
-      std::make_unique<load_operator>(*loader, record{}),
+      std::make_unique<load_operator>(*loader, std::move(args)),
     };
   }
 };

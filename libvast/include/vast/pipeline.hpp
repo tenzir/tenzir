@@ -43,6 +43,30 @@ template <class T>
 concept operator_input_batch
   = std::is_same_v<T, table_slice> || std::is_same_v<T, chunk_ptr>;
 
+inline auto to_operator_type(const operator_input& x) -> operator_type {
+  return std::visit(
+    []<class T>(const T&) -> operator_type {
+      if constexpr (std::is_same_v<T, std::monostate>) {
+        return tag_v<void>;
+      } else {
+        return tag_v<typename T::value_type>;
+      }
+    },
+    x);
+}
+
+inline auto to_operator_type(const operator_output& x) -> operator_type {
+  return std::visit(
+    []<class T>(const generator<T>&) -> operator_type {
+      if constexpr (std::is_same_v<T, std::monostate>) {
+        return tag_v<void>;
+      } else {
+        return tag_v<T>;
+      }
+    },
+    x);
+}
+
 /// User-friendly name for the given pipeline batch type.
 template <class T>
 constexpr auto operator_type_name() -> std::string_view {
@@ -64,6 +88,16 @@ inline auto operator_type_name(operator_type type) -> std::string_view {
       return operator_type_name<T>();
     },
     type);
+}
+
+/// @see `operator_type_name<T>()`.
+inline auto operator_type_name(const operator_input& x) -> std::string_view {
+  return operator_type_name(to_operator_type(x));
+}
+
+/// @see `operator_type_name<T>()`.
+inline auto operator_type_name(const operator_output& x) -> std::string_view {
+  return operator_type_name(to_operator_type(x));
 }
 
 /// Returns a trivially-true expression. This is a workaround for having no
