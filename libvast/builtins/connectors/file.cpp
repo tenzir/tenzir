@@ -179,7 +179,9 @@ public:
       if (arg == "-" || arg == "stdin") {
         break;
       }
-      return {detail::file_path_to_parser(arg), {}};
+      if (!arg.starts_with("-")) {
+        return {detail::file_path_to_parser(arg), {}};
+      }
     }
     return {"json", {}};
   }
