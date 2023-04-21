@@ -777,7 +777,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
   // Helper function that binds an existing array.
   auto bind_array = [&](const offset& index) {
     inferred_type = layout.field(index).type;
-    array = static_cast<arrow::FieldPath>(index).Get(*batch).ValueOrDie();
+    array = arrow::FieldPath{index}.Get(*batch).ValueOrDie();
   };
   auto f = detail::overload{
     [&](const data& value) {

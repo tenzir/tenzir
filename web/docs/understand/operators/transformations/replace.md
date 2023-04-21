@@ -17,8 +17,8 @@ overwrites existing fields, whereas `extend` doesn't touch the input.
 
 ### `<extractor=operand>`
 
-The assignment consists of an `extractor` that describe match existing fields
-and `operand` that defines the new field value.
+The assignment consists of an `extractor` that matches against existing fields
+and an `operand` that defines the new field value.
 
 If `field` does not exist in the input, the operator degenerates to
 [`pass`](pass.md).

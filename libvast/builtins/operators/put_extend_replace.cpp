@@ -21,7 +21,7 @@
 #include <arrow/array.h>
 #include <fmt/format.h>
 
-namespace vast::plugins::put_extend {
+namespace vast::plugins::put_extend_replace {
 
 namespace {
 
@@ -275,8 +275,8 @@ using replace_plugin = plugin<mode::replace>;
 
 } // namespace
 
-} // namespace vast::plugins::put_extend
+} // namespace vast::plugins::put_extend_replace
 
-VAST_REGISTER_PLUGIN(vast::plugins::put_extend::put_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::put_extend::extend_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::put_extend::replace_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::put_extend_replace::put_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::put_extend_replace::extend_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::put_extend_replace::replace_plugin)
