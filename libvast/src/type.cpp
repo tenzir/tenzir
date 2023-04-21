@@ -2834,6 +2834,93 @@ record_type::resolve_key_suffix(std::string_view key,
   co_return;
 }
 
+generator<offset> record_type::resolve_type_extractor(
+  std::string_view type_extractor) const noexcept {
+  if (type_extractor.empty())
+    co_return;
+  if (not type_extractor.starts_with(':'))
+    co_return;
+  type_extractor = type_extractor.substr(1);
+  if (type_extractor.empty())
+    co_return;
+  auto index = offset{0};
+  auto history = std::vector{
+    table().type_as_record_type(),
+  };
+  while (!index.empty()) {
+    const auto* record = history.back();
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // This is our exit condition: If we arrived at the end of a record, we
+    // need to step out one layer. We must also reset the target key at this
+    // point.
+    if (index.back() >= fields->size()) {
+      history.pop_back();
+      index.pop_back();
+      if (!index.empty())
+        ++index.back();
+      continue;
+    }
+    const auto* field = record->fields()->Get(index.back());
+    VAST_ASSERT(field);
+    const auto* field_type = field->type_nested_root();
+    VAST_ASSERT(field_type);
+  recurse_enriched_type:
+    switch (field_type->type_type()) {
+      case fbs::type::Type::pattern_type: {
+        __builtin_unreachable();
+      }
+      case fbs::type::Type::NONE: {
+        ++index.back();
+        break;
+      }
+#define VAST_MATCH(t)                                                          \
+  case fbs::type::Type::t##_type: {                                            \
+    if (type_extractor == #t)                                                  \
+      co_yield index;                                                          \
+    ++index.back();                                                            \
+    break;                                                                     \
+  }
+        VAST_MATCH(bool)
+        VAST_MATCH(int64)
+        VAST_MATCH(uint64)
+        VAST_MATCH(double)
+        VAST_MATCH(duration)
+        VAST_MATCH(time)
+        VAST_MATCH(string)
+        VAST_MATCH(ip)
+        VAST_MATCH(subnet)
+        VAST_MATCH(enumeration)
+#undef VAST_MATCH
+      case fbs::type::Type::list_type:
+        [[fallthrough]];
+      case fbs::type::Type::map_type: {
+        ++index.back();
+        break;
+      }
+      case fbs::type::Type::record_type: {
+        const auto* record = field_type->type_as_record_type();
+        VAST_ASSERT(record);
+        history.push_back(record);
+        index.push_back(0);
+        break;
+      }
+      case fbs::type::Type::enriched_type: {
+        const auto* enriched = field_type->type_as_enriched_type();
+        VAST_ASSERT(enriched);
+        const auto* name = enriched->name();
+        VAST_ASSERT(name);
+        if (type_extractor == name->string_view())
+          co_yield index;
+        field_type = field_type->type_as_enriched_type()->type_nested_root();
+        VAST_ASSERT(field_type);
+        goto recurse_enriched_type; // NOLINT
+      }
+    }
+  }
+}
+
 std::string_view record_type::key(size_t index) const& noexcept {
   const auto* record = table().type_as_record_type();
   VAST_ASSERT(record);

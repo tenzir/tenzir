@@ -178,6 +178,9 @@ public:
                layout.resolve_key_suffix(extractor, slice.schema().name())) {
             index_to_operand.emplace_back(index, &*operand);
           }
+          for (const auto& index : layout.resolve_type_extractor(extractor)) {
+            index_to_operand.emplace_back(index, &*operand);
+          }
         }
         // Remove adjacent duplicates.
         std::stable_sort(index_to_operand.begin(), index_to_operand.end(),

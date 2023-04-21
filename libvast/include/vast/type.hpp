@@ -1251,6 +1251,12 @@ public:
   resolve_key_suffix(std::string_view key, std::string_view prefix
                                            = "") const noexcept;
 
+  /// Resolves a ty pe extractor into a list of offsets.
+  /// @note If the extrctor does not begin with ':', the function returns no
+  /// results.
+  [[nodiscard]] generator<offset>
+  resolve_type_extractor(std::string_view type_extractor) const noexcept;
+
   /// Computes the flattened field name at a given index.
   [[nodiscard]] std::string_view key(size_t index) const& noexcept;
   [[nodiscard]] std::string_view key(size_t index) && = delete;
