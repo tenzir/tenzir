@@ -2866,6 +2866,7 @@ generator<offset> record_type::resolve_type_extractor(
     VAST_ASSERT(field);
     const auto* field_type = field->type_nested_root();
     VAST_ASSERT(field_type);
+    bool matched_enriched_type = false;
   recurse_enriched_type:
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type: {
@@ -2877,8 +2878,9 @@ generator<offset> record_type::resolve_type_extractor(
       }
 #define VAST_MATCH(t)                                                          \
   case fbs::type::Type::t##_type: {                                            \
-    if (type_extractor == #t)                                                  \
+    if (matched_enriched_type || type_extractor == #t)                         \
       co_yield index;                                                          \
+    matched_enriched_type = false;                                             \
     ++index.back();                                                            \
     break;                                                                     \
   }
@@ -2912,7 +2914,7 @@ generator<offset> record_type::resolve_type_extractor(
         const auto* name = enriched->name();
         VAST_ASSERT(name);
         if (type_extractor == name->string_view())
-          co_yield index;
+          matched_enriched_type = true;
         field_type = field_type->type_as_enriched_type()->type_nested_root();
         VAST_ASSERT(field_type);
         goto recurse_enriched_type; // NOLINT
