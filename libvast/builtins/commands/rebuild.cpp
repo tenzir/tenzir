@@ -13,7 +13,6 @@
 #include <vast/detail/inspection_common.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/fwd.hpp>
-#include <vast/legacy_pipeline.hpp>
 #include <vast/partition_synopsis.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
@@ -552,17 +551,12 @@ struct rebuilder_state {
 
   /// Schedule a rebuild run.
   auto schedule() -> void {
-    auto match_everything = predicate{
-      meta_extractor{meta_extractor::kind::type},
-      relational_operator::not_equal,
-      data{"this expression matches everything"},
-    };
     auto options = start_options{
       .all = false,
       .undersized = true,
       .parallel = automatic_rebuild,
       .max_partitions = std::numeric_limits<size_t>::max(),
-      .expression = std::move(match_everything),
+      .expression = trivially_true_expression(),
       .detached = true,
       .automatic = true,
     };

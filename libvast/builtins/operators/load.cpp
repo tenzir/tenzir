@@ -10,7 +10,6 @@
 #include <vast/concept/parseable/vast/identifier.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
-#include <vast/legacy_pipeline.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
 

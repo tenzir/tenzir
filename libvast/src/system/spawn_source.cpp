@@ -8,11 +8,13 @@
 
 #include "vast/system/spawn_source.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/make_source.hpp"
-#include "vast/system/parse_query.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/uuid.hpp"
 
@@ -32,20 +34,20 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
                            "unable to spawn a remote source when spawning a "
                            "node locally instead of connecting to one; please "
                            "unset the option vast.node");
-  expression expr;
-  auto pipelines = std::vector<legacy_pipeline>{};
-  if (!args.inv.arguments.empty()) {
-    auto parse_result = parse_query(args.inv.arguments);
+  expression expr = trivially_true_expression();
+  if (not args.inv.arguments.empty()) {
+    if (args.inv.arguments.size() > 1) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("expected at most one argument, but "
+                                         "got [{}]",
+                                         fmt::join(args.inv.arguments, ", ")));
+    }
+    auto parse_result = to<expression>(args.inv.arguments[0]);
     if (!parse_result) {
       return parse_result.error();
     }
-    auto [parsed_expr, pipeline] = std::move(*parse_result);
-    expr = parsed_expr;
-    if (pipeline) {
-      pipelines.push_back(std::move(*pipeline));
-    }
+    expr = std::move(*parse_result);
   }
-  VAST_DEBUG("{} parsed {} pipelines for source", *self, pipelines.size());
   auto [accountant, importer, catalog]
     = self->state.registry
         .find<accountant_actor, importer_actor, catalog_actor>();
@@ -58,7 +60,7 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
                                 caf::actor_cast<accountant_actor>(accountant),
                                 caf::actor_cast<catalog_actor>(catalog),
                                 caf::actor_cast<importer_actor>(importer),
-                                std::move(pipelines), std::move(expr), true);
+                                std::move(expr), true);
   if (!src_result)
     return src_result.error();
   auto src = *src_result;

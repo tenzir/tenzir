@@ -40,7 +40,6 @@
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/segment.hpp"

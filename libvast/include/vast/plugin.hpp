@@ -255,26 +255,6 @@ public:
 
 // -- transform plugin ---------------------------------------------------------
 
-/// A base class for plugins that add new pipeline operators.
-class pipeline_operator_plugin : public virtual plugin {
-public:
-  /// Creates a new pipeline operator that maps input to output table
-  /// slices. This will be called when constructing pipelines from the
-  /// VAST configuration.
-  /// @param options The settings configured for this operator.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<legacy_pipeline_operator>>
-  make_pipeline_operator(const vast::record& options) const = 0;
-
-  /// Creates a new pipeline operator that maps input to output table
-  /// slices. This will be called when constructing pipelines from the command
-  /// line.
-  /// @param pipeline The entire remaining pipeline.
-  /// @returns the remaining pipeline, and the parsed operator (or an error).
-  [[nodiscard]] virtual std::pair<
-    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
-  make_pipeline_operator(std::string_view pipeline) const = 0;
-};
-
 class operator_plugin : public virtual plugin {
 public:
   virtual auto make_operator(std::string_view pipeline) const
@@ -362,19 +342,6 @@ private:
 };
 
 // -- language plugin ---------------------------------------------------
-
-/// A language parser to pass query in a custom language to VAST.
-/// @relates plugin
-class legacy_language_plugin : public virtual plugin {
-public:
-  /// Parses a query expression string into a VAST expression.
-  /// @param The string representing the custom query.
-  /// In the future, we may want to let this plugin return a substrait query
-  /// plan instead of a VAST expression.
-  [[nodiscard]] virtual caf::expected<
-    std::pair<expression, std::optional<legacy_pipeline>>>
-  make_query(std::string_view query) const = 0;
-};
 
 /// A language parser to pass query in a custom language to VAST.
 /// @relates plugin
