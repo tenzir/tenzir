@@ -847,7 +847,7 @@ tests:
       # - is an alternative form of stdin and stdout
       - command: exec 'from stdin read json | write json to stdout'
         input: data/json/sip.log.json.gz
-      - command: exec 'from file stdin read json | write json to stdout'
+      - command: exec 'from file - read json | write json to stdout'
         input: data/json/sip.log.json.gz
       # stdin and stdout are the defaults
       - command: exec 'read json | write json'

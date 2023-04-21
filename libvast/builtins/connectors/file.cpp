@@ -23,12 +23,18 @@
 #include <string_view>
 #include <unistd.h>
 
+namespace {
+const auto stdin_path = std::string{"-"};
+} // namespace
+
 namespace vast::plugins::file {
+
+using file_description_deleter = std::function<void(int*)>;
+using file_description_wrapper = std::unique_ptr<int, file_description_deleter>;
 
 class plugin : public virtual loader_plugin {
 public:
   static constexpr auto max_chunk_size = size_t{16384};
-  static constexpr auto stdin_path = "-";
 
   auto
   make_loader(std::span<std::string const> args, operator_control_plane&) const
@@ -54,8 +60,8 @@ public:
                                  fmt::format("could not parse duration: {}",
                                              args[i + 1]));
         }
-      } else if (arg == "-" || arg == "stdin") {
-        path = stdin_path;
+      } else if (arg == "-") {
+        path = ::stdin_path;
       } else if (arg == "-f" || arg == "--follow") {
         following = true;
       } else if (not arg.starts_with("-")) {
@@ -67,6 +73,13 @@ public:
                                              arg, err));
         }
         is_socket = (status.type() == std::filesystem::file_type::socket);
+        if (path == "-") {
+          return caf::make_error(ec::parse_error,
+                                 fmt::format("file argument {} can not be "
+                                             "combined with "
+                                             "stdin file argument",
+                                             arg));
+        }
         path = arg;
       } else {
         return caf::make_error(
@@ -78,23 +91,37 @@ public:
       return caf::make_error(ec::syntax_error,
                              fmt::format("no file specified"));
     }
-    auto fd = STDIN_FILENO;
+    auto fd = file_description_wrapper(new int(STDIN_FILENO), [](auto* fd) {
+      std::default_delete<int>()(fd);
+    });
     if (is_socket) {
-      if (path == stdin_path) {
+      if (path == ::stdin_path) {
         return caf::make_error(ec::filesystem_error, "cannot use STDIN as UNIX "
                                                      "domain socket");
       }
       auto uds = detail::unix_domain_socket::connect(path);
       if (!uds) {
-        return caf::make_error(
-          ec::filesystem_error,
-          fmt::format("Unable to connect to UNIX domain socket at {}:", path));
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("unable to connect to UNIX domain "
+                                           "socket at {}",
+                                           path));
       }
-      fd = uds.fd;
+      fd = file_description_wrapper(new int(uds.fd), [](auto fd) {
+        if (*fd == -1) {
+          ::close(*fd);
+        }
+        std::default_delete<int>()(fd);
+      });
     } else {
-      if (path != stdin_path) {
-        fd = ::open(path.c_str(), std::ios_base::binary | std::ios_base::in);
-        if (fd == -1) {
+      if (path != ::stdin_path) {
+        fd = file_description_wrapper(new int(::open(path.c_str(), O_RDONLY)),
+                                      [](auto fd) {
+                                        if (*fd == -1) {
+                                          ::close(*fd);
+                                        }
+                                        std::default_delete<int>()(fd);
+                                      });
+        if (*fd == -1) {
           return caf::make_error(ec::filesystem_error,
                                  fmt::format("open(2) for file {} failed {}:",
                                              path, std::strerror(errno)));
@@ -103,7 +130,7 @@ public:
     }
     return std::invoke(
       [](auto timeout, auto fd, auto following) -> generator<chunk_ptr> {
-        auto in_buf = detail::fdinbuf(fd, max_chunk_size);
+        auto in_buf = detail::fdinbuf(*fd, max_chunk_size);
         in_buf.read_timeout() = timeout;
         auto current_data = std::vector<std::byte>{};
         current_data.reserve(max_chunk_size);
@@ -125,26 +152,25 @@ public:
             if (eof_reached and not following) {
               break;
             }
-            if (not eof_reached or following) {
-              current_data.reserve(max_chunk_size);
-            }
+            current_data.reserve(max_chunk_size);
           }
-        }
-        if (fd != STDIN_FILENO) {
-          ::close(fd);
         }
         co_return;
       },
-      read_timeout, fd, following);
+      read_timeout, std::move(fd), following);
   }
 
   auto default_parser(std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
-    for (std::string_view arg : args) {
-      if (arg == "-" || arg == "stdin") {
+    for (auto i = size_t{0}; i < args.size(); ++i) {
+      const auto& arg = args[i];
+      VAST_TRACE("processing loader argument {}", arg);
+      if (arg == "-") {
         break;
       }
-      if (!arg.starts_with("-")) {
+      if (arg == "--timeout") {
+        ++i;
+      } else if (!arg.starts_with("-")) {
         return {detail::file_path_to_parser(arg), {}};
       }
     }
@@ -176,14 +202,13 @@ private:
 } // namespace vast::plugins::file
 
 namespace vast::plugins::stdin_ {
-
 class plugin : public virtual vast::plugins::file::plugin {
 public:
   auto make_loader([[maybe_unused]] std::span<std::string const> args,
                    operator_control_plane& ctrl) const
     -> caf::expected<generator<chunk_ptr>> override {
-    std::vector<std::string> new_args = {args.begin(), args.end()};
-    new_args.emplace_back("-");
+    std::vector<std::string> new_args = {"-"};
+    new_args.insert(new_args.end(), args.begin(), args.end());
     return vast::plugins::file::plugin::make_loader(new_args, ctrl);
   }
 

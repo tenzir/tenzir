@@ -142,6 +142,33 @@ TEST(stdin loader - one complete chunk) {
                      str_chunk->begin(), str_chunk->end()));
 }
 
+TEST(file loader - parser deduction) {
+  loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
+  REQUIRE(loader_plugin);
+  auto [parser, _] = loader_plugin->default_parser(
+    std::vector<std::string>{"--timeout", "1s", "foo.csv"});
+  REQUIRE_EQUAL(parser, std::string{"csv"});
+  parser = loader_plugin
+             ->default_parser(
+               std::vector<std::string>{"--timeout", "1s", "foo.ndjson"})
+             .first;
+  REQUIRE_EQUAL(parser, std::string{"json"});
+  parser = loader_plugin
+             ->default_parser(
+               std::vector<std::string>{"--timeout", "1s", "eve.json"})
+             .first;
+  REQUIRE_EQUAL(parser, std::string{"suricata"});
+  parser = loader_plugin
+             ->default_parser(
+               std::vector<std::string>{"-", "--timeout", "1s", "eve.json"})
+             .first;
+  REQUIRE_EQUAL(parser, std::string{"json"});
+  parser = loader_plugin
+             ->default_parser(std::vector<std::string>{"-", "--timeout", "1s"})
+             .first;
+  REQUIRE_EQUAL(parser, std::string{"json"});
+}
+
 TEST(file loader - nonexistent file) {
   loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
   auto args = std::vector<std::string>{"no-file-oops"};

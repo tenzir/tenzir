@@ -437,8 +437,8 @@ TEST(load_stdin_arguments) {
     // This test shows that pipeline parsing still succeeds. This is because
     // arguments are only checked when the actual loader is created, which
     // currently happens during instantiation.
-    REQUIRE_ERROR(unbox(pipeline::parse(fmt::format("{} | save stdout", x)))
-                    .infer_type<void>());
+    REQUIRE_ERROR(
+      execute(unbox(pipeline::parse(fmt::format("{} | to stdout", x)))));
   }
 }
 
@@ -471,8 +471,6 @@ TEST(file loader - arguments) {
     "from file - read json",
     "from file " VAST_TEST_PATH "artifacts/inputs/json.json",
     "from file " VAST_TEST_PATH "artifacts/inputs/json.json read json",
-    "from file stdin --timeout 1s",
-    "from stdin",
     "read json from file " VAST_TEST_PATH "artifacts/inputs/json.json",
     "read json from file " VAST_TEST_PATH "artifacts/inputs/json.json --follow",
     "read json from file " VAST_TEST_PATH "artifacts/inputs/json.json -f",
@@ -482,30 +480,32 @@ TEST(file loader - arguments) {
     "read json from file stdin",
     "load file " VAST_TEST_PATH "artifacts/inputs/json.json | parse json",
     "load file - | parse json",
-    "load file stdin | parse json",
     "load file " VAST_TEST_PATH
     "artifacts/inputs/json.json --timeout 2m | parse json"};
-  auto error = {"from - --timeout",
-                "from - --timeout nope",
-                "from - --t1me0ut 2m",
-                "from - --timeout 20s 23s",
-                "from file",
-                "from file --timeout 2m",
-                "load file " VAST_TEST_PATH
-                "artifacts/inputs/json.json --timeout | parse json",
-                "load file " VAST_TEST_PATH
-                "artifacts/inputs/json.json --timeout wtf | parse json"};
+  auto error
+    = {"from - --timeout",
+       "from - --timeout nope",
+       "from file stdin --timeout 1s",
+       "from - --t1me0ut 2m",
+       "from - --timeout 20s 23s",
+       "from file",
+       "from file --timeout 2m",
+       "load file stdin | parse json",
+       "load stdin --timeout 1s /home/dakostu/Documents/vast2/version.json",
+       "load file " VAST_TEST_PATH
+       "artifacts/inputs/json.json --timeout | parse json",
+       "load file " VAST_TEST_PATH
+       "artifacts/inputs/json.json --timeout wtf | parse json"};
   for (const auto* x : success) {
     MESSAGE(x);
     test::stdin_file_input<"artifacts/inputs/json.json"> file;
-    REQUIRE_NOERROR(
-      execute(unbox(pipeline::parse(fmt::format("{} | to stdout", x)))));
+    REQUIRE_NOERROR(pipeline::parse(fmt::format("{} | to stdout", x)));
   }
   for (const auto* x : error) {
     MESSAGE(x);
     test::stdin_file_input<"artifacts/inputs/json.json"> file;
-    REQUIRE_ERROR(unbox(pipeline::parse(fmt::format("{} | to stdout", x)))
-                    .infer_type<void>());
+    REQUIRE_ERROR(
+      execute(unbox(pipeline::parse(fmt::format("{} | to stdout", x)))));
   }
 }
 
