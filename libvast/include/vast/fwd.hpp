@@ -10,6 +10,27 @@
 
 #include "vast/config.hpp" // IWYU pragma: export
 
+namespace caf {
+
+// This overrides a few CAF types to be marked [[nodiscard]] to make using them
+// less error prone. This must to be done before including <caf/fwd.hpp> and is
+// enforced by adding "vast/fwd.hpp" as a public precompiled header for libvast.
+template <class>
+class [[nodiscard]] expected;
+template <class...>
+class [[nodiscard]] result;
+template <class...>
+class [[nodiscard]] typed_response_promise;
+template <class, class>
+class [[nodiscard]] response_handle;
+class [[nodiscard]] response_promise;
+
+// As long as `response_promise::delegate` returns a delegated rather than void
+// we can't mark it [[nodiscard]].
+// template <class...> class [[nodiscard]] delegated;
+
+} // namespace caf
+
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>
 #include <caf/type_id.hpp>
@@ -150,8 +171,6 @@ class table_slice;
 class table_slice_builder;
 class table_slice_column;
 class time_type;
-class legacy_pipeline;
-class legacy_pipeline_operator;
 class type;
 class uuid;
 class value_index;
@@ -237,7 +256,6 @@ class legacy_deserializer;
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
-using pipeline_ptr = std::shared_ptr<legacy_pipeline>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.
@@ -407,7 +425,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::uuid))
   VAST_ADD_TYPE_ID((vast::table_slice_column))
   VAST_ADD_TYPE_ID((vast::pipeline))
-  VAST_ADD_TYPE_ID((vast::pipeline_ptr))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::wah_bitmap))
   VAST_ADD_TYPE_ID((vast::ewah_bitmap))

@@ -16,7 +16,6 @@
 #include "vast/query_context.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/make_legacy_pipelines.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>

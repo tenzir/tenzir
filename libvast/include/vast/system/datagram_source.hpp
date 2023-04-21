@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/legacy_pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/source.hpp"
 
@@ -56,7 +55,6 @@ caf::behavior datagram_source(
   uint16_t udp_listening_port, format::reader_ptr reader,
   size_t table_slice_size, std::optional<size_t> max_events,
   const catalog_actor& catalog, vast::module local_module,
-  std::string type_filter, accountant_actor accountant,
-  std::vector<legacy_pipeline>&& pipelines);
+  std::string type_filter, accountant_actor accountant);
 
 } // namespace vast::system

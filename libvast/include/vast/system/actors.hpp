@@ -467,7 +467,6 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::pipeline_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::http_request)
 #undef vast_uuid_synopsis_map
 

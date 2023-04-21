@@ -166,81 +166,91 @@ auto parse(simdjson::simdjson_result<simdjson::ondemand::document_reference> doc
   return {};
 }
 
-auto emit_warning(operator_control_plane& control_plane,
-                  simdjson::error_code err) -> void {
-  control_plane.warn(caf::make_error(ec::parse_error, error_message(err)));
+void emit_warning(operator_control_plane& ctrl, simdjson::error_code err) {
+  ctrl.warn(caf::make_error(ec::parse_error, error_message(err)));
 }
 
 } // namespace
 
 class plugin final : public virtual parser_plugin,
                      public virtual printer_plugin {
-  [[nodiscard]] auto
-  make_parser(generator<chunk_ptr> json_chunk_generator, const record&,
-              operator_control_plane& control_plane) const
+  auto make_parser(std::span<std::string const> args,
+                   generator<chunk_ptr> json_chunk_generator,
+                   operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
-    return
-      [](generator<chunk_ptr> json_chunk_generator,
-         operator_control_plane& control_plane) -> generator<table_slice> {
-        auto parser = simdjson::ondemand::parser{};
-        auto stream = simdjson::ondemand::document_stream{};
-        auto slice_builder = adaptive_table_slice_builder{};
-        // The simdjson suggests to initialize the padding part to either 0s or
-        // spaces.
-        auto json_to_parse_buffer
-          = detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'>{};
-        for (auto chnk : json_chunk_generator) {
-          VAST_ASSERT(chnk);
-          if (chnk->size() == 0u) {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("json parser received unexpected "
+                                         "arguments: {}",
+                                         fmt::join(args, ", ")));
+    };
+    return [](generator<chunk_ptr> json_chunk_generator,
+              operator_control_plane& ctrl) -> generator<table_slice> {
+      auto parser = simdjson::ondemand::parser{};
+      auto stream = simdjson::ondemand::document_stream{};
+      auto slice_builder = adaptive_table_slice_builder{};
+      // The simdjson suggests to initialize the padding part to either 0s or
+      // spaces.
+      auto json_to_parse_buffer
+        = detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'>{};
+      for (auto chnk : json_chunk_generator) {
+        VAST_ASSERT(chnk);
+        if (chnk->size() == 0u) {
+          co_yield std::move(slice_builder).finish();
+          slice_builder = {};
+          continue;
+        }
+        json_to_parse_buffer.append(
+          {reinterpret_cast<const char*>(chnk->data()), chnk->size()});
+        auto view = json_to_parse_buffer.view();
+        auto err = parser
+                     .iterate_many(view.data(), view.length(),
+                                   simdjson::ondemand::DEFAULT_BATCH_SIZE)
+                     .get(stream);
+        if (err) {
+          // For the simdjson 3.1 it seems impossible to have an error
+          // returned here so it is hard to understand if we can recover from
+          // it somehow.
+          json_to_parse_buffer.reset();
+          emit_warning(ctrl, err);
+          continue;
+        }
+        for (auto doc : stream) {
+          if (auto err = parse(doc, slice_builder)) {
+            emit_warning(ctrl, err);
+            continue;
+          }
+          // TODO: change max table slice size to be fetched from options.
+          if (slice_builder.rows() == defaults::import::table_slice_size) {
             co_yield std::move(slice_builder).finish();
             slice_builder = {};
-            continue;
-          }
-          json_to_parse_buffer.append(
-            {reinterpret_cast<const char*>(chnk->data()), chnk->size()});
-          auto view = json_to_parse_buffer.view();
-          auto err = parser
-                       .iterate_many(view.data(), view.length(),
-                                     simdjson::ondemand::DEFAULT_BATCH_SIZE)
-                       .get(stream);
-          if (err) {
-            // For the simdjson 3.1 it seems impossible to have an error
-            // returned here so it is hard to understand if we can recover from
-            // it somehow.
-            json_to_parse_buffer.reset();
-            emit_warning(control_plane, err);
-            continue;
-          }
-          for (auto doc : stream) {
-            if (auto err = parse(doc, slice_builder)) {
-              emit_warning(control_plane, err);
-              continue;
-            }
-            // TODO: change max table slice size to be fetched from options.
-            if (slice_builder.rows() == defaults::import::table_slice_size) {
-              co_yield std::move(slice_builder).finish();
-              slice_builder = {};
-            }
-          }
-          if (auto trunc = stream.truncated_bytes(); trunc == 0) {
-            json_to_parse_buffer.reset();
-          } else {
-            json_to_parse_buffer.truncate(trunc);
           }
         }
-        if (auto slice = std::move(slice_builder).finish(); slice.rows() > 0u)
-          co_yield std::move(slice);
-      }(std::move(json_chunk_generator), control_plane);
+        if (auto trunc = stream.truncated_bytes(); trunc == 0) {
+          json_to_parse_buffer.reset();
+        } else {
+          json_to_parse_buffer.truncate(trunc);
+        }
+      }
+      if (auto slice = std::move(slice_builder).finish(); slice.rows() > 0u)
+        co_yield std::move(slice);
+    }(std::move(json_chunk_generator), ctrl);
   }
 
-  [[nodiscard]] auto default_loader(const record&) const
-    -> std::pair<std::string, record> override {
+  auto default_loader(std::span<std::string const>) const
+    -> std::pair<std::string, std::vector<std::string>> override {
     return {"stdin", {}};
   }
 
-  [[nodiscard]] auto
-  make_printer(const record&, type input_schema, operator_control_plane&) const
+  auto make_printer(std::span<std::string const> args, type input_schema,
+                    operator_control_plane&) const
     -> caf::expected<printer> override {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("json printer received unexpected "
+                                         "arguments: {}",
+                                         fmt::join(args, ", ")));
+    };
     auto input_type = caf::get<record_type>(input_schema);
     return [input_type](table_slice slice) -> generator<chunk_ptr> {
       // JSON printer should output NDJSON, see:
@@ -265,21 +275,20 @@ class plugin final : public virtual parser_plugin,
     };
   }
 
-  [[nodiscard]] auto default_saver(const record&) const
-    -> std::pair<std::string, record> override {
-    return {"stdout", record{}};
+  auto default_saver(std::span<std::string const>) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    return {"stdout", {}};
   }
 
-  [[nodiscard]] auto printer_allows_joining() const -> bool override {
+  auto printer_allows_joining() const -> bool override {
     return true;
   };
 
-  [[nodiscard]] auto initialize(const record&, const record&)
-    -> caf::error override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return {};
   }
 
-  [[nodiscard]] auto name() const -> std::string override {
+  auto name() const -> std::string override {
     return "json";
   }
 };

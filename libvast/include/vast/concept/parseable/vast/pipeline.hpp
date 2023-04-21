@@ -14,14 +14,17 @@
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
+#include "vast/detail/string.hpp"
 
 #include <fmt/format.h>
 
 namespace vast::parsers {
 
+const inline auto comment_start = str{"/*"};
 /// Parses a '/* ... */' style comment. The attribute of the parser is the
 /// comment between the '/*' and '*/' delimiters.
-const inline auto comment = "/*" >> *(any - (chr{'*'} >> &chr{'/'})) >> "*/";
+const inline auto comment
+  = comment_start >> *(any - (chr{'*'} >> &chr{'/'})) >> "*/";
 
 const inline auto required_ws_or_comment = ignore(+(space | comment));
 const inline auto optional_ws_or_comment = ignore(*(space | comment));
@@ -58,4 +61,97 @@ const inline auto aggregation_function
 const inline auto aggregation_function_list
   = (aggregation_function % (',' >> optional_ws_or_comment));
 
+const inline auto unquoted_operator_arg
+  = &!(chr{'\''} | '"') >> +(printable - '|' - space - comment_start);
+
+const inline auto operator_arg = qstr | qqstr | unquoted_operator_arg;
+
+namespace detail {
+
+constexpr inline auto or_default
+  = [](caf::optional<std::vector<std::string>> x) -> std::vector<std::string> {
+  // Note: `caf::optional::value_or` always performs a copy.
+  if (!x) {
+    return {};
+  }
+  return std::move(*x);
+};
+
+} // namespace detail
+
+// Multiple operator arguments are separated by whitespace or comments.
+const inline auto operator_args
+  = (-(operator_arg % required_ws_or_comment)).then(detail::or_default);
+
+/// Parses `arg*`, but stops if the keyword is encountered.
+inline auto operator_args_before(const std::string& keyword) {
+  return (-((operator_arg - keyword) % required_ws_or_comment))
+    .then(detail::or_default);
+}
+
+/// Parses `name arg*`.
+const inline auto name_args
+  = optional_ws_or_comment >> plugin_name >> optional_ws_or_comment
+    >> operator_args >> optional_ws_or_comment >> end_of_pipeline_operator;
+
+/// Parses `name arg* (KEYWORD name arg*)?`.
+inline auto name_args_opt_keyword_name_args(const std::string& keyword) {
+  // clang-format off
+  return optional_ws_or_comment
+    >> plugin_name
+    >> (-(required_ws_or_comment
+      >> ((operator_arg - keyword) % required_ws_or_comment))
+    ).then(detail::or_default)
+    >> -(required_ws_or_comment
+      >> keyword
+      >> required_ws_or_comment
+      >> plugin_name
+      >> (-(required_ws_or_comment
+        >> (operator_arg % required_ws_or_comment))
+      ).then(detail::or_default)
+    )
+    >> optional_ws_or_comment
+    >> end_of_pipeline_operator;
+  // clang-format on
+}
+
 } // namespace vast::parsers
+
+namespace vast {
+
+/// Escapes a string such that it can be safely used as an operator argument.
+/// It generally tries tries to avoid quotes, but it will also quote the words
+/// `from`, `read`, `write` and `to`.
+///
+/// Guarantees `operator_arg.apply(operator_arg_escape(y)).value() == y` for
+/// every `y == operator_arg.apply(x).value()`.
+inline auto escape_operator_arg(std::string_view x) -> std::string {
+  auto f = x.begin();
+  parsers::unquoted_operator_arg.parse(f, x.end(), unused);
+  if (f == x.end()) {
+    for (auto y : {"from", "read", "write", "to"}) {
+      if (x == y) {
+        return fmt::format("'{}'", x);
+      }
+    }
+    return std::string{x};
+  }
+  return '\'' + detail::replace_all(std::string{x}, "'", "\\'") + '\'';
+}
+
+/// The multi-argument version of @see operator_arg_escape.
+template <class Range>
+inline auto escape_operator_args(Range&& r) -> std::string {
+  auto result = std::string{};
+  auto first = true;
+  for (auto&& x : r) {
+    if (!first) {
+      result += ' ';
+    }
+    first = false;
+    result += escape_operator_arg(x);
+  }
+  return result;
+}
+
+} // namespace vast

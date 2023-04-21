@@ -12,7 +12,6 @@
 
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/query_context.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"

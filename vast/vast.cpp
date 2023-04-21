@@ -18,7 +18,6 @@
 #include "vast/scope_linked.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
-#include "vast/system/make_legacy_pipelines.hpp"
 #include "vast/system/signal_reflector.hpp"
 
 #include <arrow/util/compression.h>

@@ -30,15 +30,16 @@ namespace {
 /// during pipeline execution.
 class save_operator final : public crtp_operator<save_operator> {
 public:
-  explicit save_operator(const saver_plugin& saver, record config) noexcept
-    : saver_plugin_{saver}, config_{std::move(config)} {
+  explicit save_operator(const saver_plugin& saver,
+                         std::vector<std::string> args) noexcept
+    : saver_plugin_{saver}, args_{std::move(args)} {
   }
 
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     // TODO: Extend API to allow schema-less make_saver().
-    auto new_saver = saver_plugin_.make_saver(config_, {}, ctrl);
+    auto new_saver = saver_plugin_.make_saver(args_, {}, ctrl);
     if (!new_saver) {
       ctrl.abort(new_saver.error());
       co_return;
@@ -49,20 +50,19 @@ public:
     }
   }
 
-  [[nodiscard]] auto to_string() const -> std::string override {
-    return fmt::format("save {}", saver_plugin_.name());
+  auto to_string() const -> std::string override {
+    return fmt::format("save {}{}{}", saver_plugin_.name(),
+                       args_.empty() ? "" : " ", escape_operator_args(args_));
   }
 
 private:
   const saver_plugin& saver_plugin_;
-  record config_;
+  std::vector<std::string> args_;
 };
 
 class plugin final : public virtual operator_plugin {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return {};
   }
 
@@ -72,14 +72,10 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> plugin_name
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto saver_name = std::string{};
-    if (!p(f, l, saver_name)) {
+    auto parsed = parsers::name_args.apply(f, l);
+    if (not parsed) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
@@ -87,17 +83,18 @@ public:
                                     pipeline)),
       };
     }
-    const auto* saver = plugins::find<saver_plugin>(saver_name);
+    auto& [name, args] = *parsed;
+    const auto* saver = plugins::find<saver_plugin>(name);
     if (!saver) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::lookup_error,
-                        fmt::format("no saver found for '{}'", saver_name)),
+                        fmt::format("no saver found for '{}'", name)),
       };
     }
     return {
       std::string_view{f, l},
-      std::make_unique<save_operator>(*saver, record{}),
+      std::make_unique<save_operator>(*saver, std::move(args)),
     };
   }
 };

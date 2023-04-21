@@ -30,10 +30,11 @@ class print_operator final
   : public schematic_operator<print_operator, printer_plugin::printer,
                               generator<chunk_ptr>> {
 public:
-  explicit print_operator(const printer_plugin& printer, record config,
+  explicit print_operator(const printer_plugin& printer,
+                          std::vector<std::string> args,
                           bool allows_joining) noexcept
     : printer_plugin_{printer},
-      config_{std::move(config)},
+      args_{std::move(args)},
       allows_joining_{allows_joining} {
   }
 
@@ -46,8 +47,11 @@ public:
                     "initialize for '{}' after '{}'",
                     to_string(), printer_plugin_.name(), schema, last_schema_));
     }
+    // TODO: Operator instances shall be immutable. This is mostly a hack to
+    // work around the API of `schematic_operator`, which currently does not
+    // provide a way to store non-schema-specific state.
     last_schema_ = schema;
-    return printer_plugin_.make_printer(config_, schema, ctrl);
+    return printer_plugin_.make_printer(args_, schema, ctrl);
   }
 
   auto process(table_slice slice, state_type& state) const
@@ -56,21 +60,20 @@ public:
   }
 
   auto to_string() const noexcept -> std::string override {
-    return fmt::format("print {}", printer_plugin_.name());
+    return fmt::format("print {}{}{}", printer_plugin_.name(),
+                       args_.empty() ? "" : " ", escape_operator_args(args_));
   }
 
 private:
   const printer_plugin& printer_plugin_;
-  record config_;
+  std::vector<std::string> args_;
   bool allows_joining_;
   mutable type last_schema_ = {};
 };
 
 class plugin final : public virtual operator_plugin {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return {};
   }
 
@@ -80,14 +83,10 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::plugin_name, parsers::required_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> plugin_name
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto printer_name = std::string{};
-    if (!p(f, l, printer_name)) {
+    auto parsed = parsers::name_args.apply(f, l);
+    if (not parsed) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
@@ -95,17 +94,18 @@ public:
                                     pipeline)),
       };
     }
-    const auto* printer = plugins::find<printer_plugin>(printer_name);
+    auto& [name, args] = *parsed;
+    const auto* printer = plugins::find<printer_plugin>(name);
     if (!printer) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::lookup_error,
-                        fmt::format("no printer found for '{}'", printer_name)),
+                        fmt::format("no printer found for '{}'", name)),
       };
     }
     return {
       std::string_view{f, l},
-      std::make_unique<print_operator>(*printer, record{},
+      std::make_unique<print_operator>(*printer, std::move(args),
                                        printer->printer_allows_joining()),
     };
   }

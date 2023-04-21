@@ -12,6 +12,8 @@
 #include <vast/detail/string.hpp>
 #include <vast/plugin.hpp>
 
+#include <caf/error.hpp>
+
 #include <unistd.h>
 
 namespace vast::plugins::stdin_ {
@@ -22,8 +24,33 @@ class plugin : public virtual loader_plugin {
 public:
   static constexpr inline auto max_chunk_size = size_t{16384};
 
-  auto make_loader(const record&, operator_control_plane&) const
+  auto
+  make_loader(std::span<std::string const> args, operator_control_plane&) const
     -> caf::expected<generator<chunk_ptr>> override {
+    auto read_timeout = read_timeout_;
+    if (args.empty()) {
+      // Use default read timeout.
+    } else if (args.size() == 2) {
+      if (args[0] == "--timeout") {
+        if (auto parsed = to<vast::duration>(args[1])) {
+          read_timeout
+            = std::chrono::duration_cast<std::chrono::milliseconds>(*parsed);
+        } else {
+          return caf::make_error(ec::syntax_error,
+                                 fmt::format("could not parse duration: {}",
+                                             args[1]));
+        }
+      } else {
+        return caf::make_error(
+          ec::syntax_error,
+          fmt::format("unexpected stdin loader argument: {}", args[0]));
+      }
+    } else {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("stdin loader expects 0 or 2 "
+                                         "arguments, but got {}",
+                                         args.size()));
+    }
     return std::invoke(
       [](auto timeout) -> generator<chunk_ptr> {
         auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
@@ -58,14 +85,14 @@ public:
       read_timeout);
   }
 
-  auto default_parser(const record&) const
-    -> std::pair<std::string, record> override {
-    return std::pair{"json", record{}};
+  auto default_parser(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    (void)args; // TODO
+    return {"json", {}};
   }
 
-  [[nodiscard]] caf::error
-  initialize([[maybe_unused]] const record& plugin_config,
-             const record& global_config) override {
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
     if (!global_config.contains("vast")) {
       return caf::none;
     }
@@ -83,18 +110,18 @@ public:
       return caf::none;
     }
     if (auto timeout_duration = to<vast::duration>(*read_timeout_entry)) {
-      read_timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+      read_timeout_ = std::chrono::duration_cast<std::chrono::milliseconds>(
         *timeout_duration);
     }
     return caf::none;
   }
 
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "stdin";
   }
 
 private:
-  std::chrono::milliseconds read_timeout{vast::defaults::import::read_timeout};
+  std::chrono::milliseconds read_timeout_{vast::defaults::import::read_timeout};
 };
 
 } // namespace vast::plugins::stdin_

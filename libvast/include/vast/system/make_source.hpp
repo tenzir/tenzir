@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/legacy_pipeline.hpp"
 #include "vast/system/actors.hpp"
 
 #include <caf/expected.hpp>
@@ -26,7 +25,6 @@ namespace vast::system {
 /// @param catalog A handle to the catalog.
 /// @param importer A handle to the stream sink of the source, which usually is
 /// the importer component.
-/// @param pipelines The input transformations to apply.
 /// @param expr The expression to send to the source.
 /// @returns a handle to the spawned actor on success, an error otherwise.
 caf::expected<caf::actor>
@@ -34,7 +32,6 @@ make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
             catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
-            std::vector<legacy_pipeline>&& pipelines, expression expr,
-            bool detached = false);
+            expression expr, bool detached = false);
 
 } // namespace vast::system
