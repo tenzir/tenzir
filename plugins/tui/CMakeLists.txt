@@ -9,12 +9,8 @@ include(CTest)
 
 find_package(VAST REQUIRED)
 
-#file(GLOB_RECURSE tui_sources CONFIGURE_DEPENDS
-#     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 file(GLOB_RECURSE tui_sources CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/plugin.cpp",
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/elements.cpp"
-  )
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 VASTRegisterPlugin(
   TARGET tui

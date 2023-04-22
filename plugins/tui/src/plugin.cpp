@@ -6,7 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tui/elements.hpp" // TODO: remove
+#include "tui/components.hpp"
+#include "tui/elements.hpp"
+#include "tui/ui_state.hpp"
 
 #include <vast/table_slice.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
@@ -14,7 +16,6 @@
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
 
-#include <ftxui/component/component.hpp> // TODO: remove
 #include <ftxui/component/screen_interactive.hpp>
 
 #include <thread>
@@ -23,24 +24,22 @@ namespace vast::plugins::tui {
 
 namespace {
 
-using namespace ftxui;
-
 class tui_operator final : public crtp_operator<tui_operator> {
 public:
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<std::monostate> {
-    auto screen = ScreenInteractive::Fullscreen();
+    using namespace ftxui;
+    auto screen = ScreenInteractive::TerminalOutput();
+    ui_state shared_state;
+    // Ban UI main loop into dedicated thread.
     auto thread = std::thread([&] {
-      auto main = Renderer([] {
-        return Vee();
-      });
+      auto main = MainWindow(&screen, &shared_state);
       screen.Loop(main);
     });
     for (auto&& slice : input) {
-      // Render slice
-      // TODO
-      // Update screen with every new piece of input.
-      screen.PostEvent(Event::Custom);
+      // TODO: discuss thread safety.
+      shared_state.data.push_back(std::move(slice));
+      screen.PostEvent(Event::Custom); // Redraw screen
       co_yield {};
     }
     thread.join();
