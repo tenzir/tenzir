@@ -9,6 +9,7 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/detail/fdinbuf.hpp>
+#include <vast/detail/fdoutbuf.hpp>
 #include <vast/detail/file_path_to_parser.hpp>
 #include <vast/detail/posix.hpp>
 #include <vast/detail/string.hpp>
@@ -17,20 +18,22 @@
 
 #include <caf/error.hpp>
 
+#include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
 #include <memory>
 #include <string_view>
 #include <unistd.h>
+#include <variant>
 
 namespace {
-const auto stdin_path = std::string{"-"};
+const auto std_io_path = std::string{"-"};
 } // namespace
 
 namespace vast::plugins::file {
 
 using file_description_deleter = std::function<void(int*)>;
-using file_description_wrapper = std::unique_ptr<int, file_description_deleter>;
+using file_description_wrapper = std::shared_ptr<int>;
 
 class plugin : public virtual loader_plugin, public virtual saver_plugin {
 public:
@@ -61,7 +64,7 @@ public:
                                              args[i + 1]));
         }
       } else if (arg == "-") {
-        path = ::stdin_path;
+        path = ::std_io_path;
       } else if (arg == "-f" || arg == "--follow") {
         following = true;
       } else if (not arg.starts_with("-")) {
@@ -73,7 +76,7 @@ public:
                                              arg, err));
         }
         is_socket = (status.type() == std::filesystem::file_type::socket);
-        if (path == "-") {
+        if (path == ::std_io_path) {
           return caf::make_error(ec::parse_error,
                                  fmt::format("file argument {} can not be "
                                              "combined with "
@@ -95,7 +98,7 @@ public:
       std::default_delete<int>()(fd);
     });
     if (is_socket) {
-      if (path == ::stdin_path) {
+      if (path == ::std_io_path) {
         return caf::make_error(ec::filesystem_error, "cannot use STDIN as UNIX "
                                                      "domain socket");
       }
@@ -107,16 +110,16 @@ public:
                                            path));
       }
       fd = file_description_wrapper(new int(uds.fd), [](auto fd) {
-        if (*fd == -1) {
+        if (*fd != -1) {
           ::close(*fd);
         }
         std::default_delete<int>()(fd);
       });
     } else {
-      if (path != ::stdin_path) {
+      if (path != ::std_io_path) {
         fd = file_description_wrapper(new int(::open(path.c_str(), O_RDONLY)),
                                       [](auto fd) {
-                                        if (*fd == -1) {
+                                        if (*fd != -1) {
                                           ::close(*fd);
                                         }
                                         std::default_delete<int>()(fd);
@@ -191,26 +194,103 @@ public:
     return caf::none;
   }
 
-  auto make_saver(std::span<std::string const> args, type input_schema,
-                  operator_control_plane& ctrl) const
+  auto make_saver(std::span<std::string const> args,
+                  [[maybe_unused]] type input_schema,
+                  [[maybe_unused]] operator_control_plane& ctrl) const
     -> caf::expected<saver> override {
-    die();
+    auto appending = false;
+    auto real_time = false;
+    auto is_socket = false;
+    auto path = std::string{};
+    for (auto i = size_t{0}; i < args.size(); ++i) {
+      const auto& arg = args[i];
+      VAST_TRACE("processing saver argument {}", arg);
+      if (arg == "-") {
+        path = ::std_io_path;
+      } else if (arg == "-a" || arg == "--append") {
+        appending = true;
+      } else if (arg == "--real-time") {
+        real_time = true;
+      } else if (arg == "--uds") {
+        is_socket = true;
+      } else if (not arg.starts_with("-")) {
+        if (path == ::std_io_path) {
+          return caf::make_error(ec::parse_error,
+                                 fmt::format("file argument {} can not be "
+                                             "combined with "
+                                             "stdout file argument",
+                                             arg));
+        }
+        path = arg;
+      } else {
+        return caf::make_error(
+          ec::invalid_argument,
+          fmt::format("unexpected argument for 'file' sink: {}", arg));
+      }
+    }
+    auto fd = file_description_wrapper(new int(STDOUT_FILENO), [](auto* fd) {
+      std::default_delete<int>()(fd);
+    });
+    if (is_socket) {
+      if (path == ::std_io_path) {
+        return caf::make_error(ec::filesystem_error,
+                               "cannot use STDOUT as UNIX "
+                               "domain socket");
+      }
+      auto uds = detail::unix_domain_socket::connect(path);
+      if (!uds) {
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("unable to connect to UNIX domain "
+                                           "socket at {}",
+                                           path));
+      }
+      fd = file_description_wrapper(new int(uds.fd), [](auto fd) {
+        if (*fd != -1) {
+          ::close(*fd);
+        }
+        std::default_delete<int>()(fd);
+      });
+    } else {
+      if (path != ::std_io_path) {
+        fd = file_description_wrapper(
+          new int(::open(path.c_str(), appending ? O_APPEND : O_WRONLY)),
+          [](auto fd) {
+            if (*fd != -1) {
+              ::close(*fd);
+            }
+            std::default_delete<int>()(fd);
+          });
+        if (*fd == -1) {
+          return caf::make_error(ec::filesystem_error,
+                                 fmt::format("open(2) for file {} failed: {}",
+                                             path, std::strerror(errno)));
+        }
+      }
+    }
+    return [&ctrl, real_time, fd](chunk_ptr chunk) mutable {
+      if (!fd) {
+        return;
+      }
+      auto outbuf = detail::fdoutbuf(*fd);
+      if (chunk) {
+        outbuf.sputn(reinterpret_cast<const char*>(chunk->data()),
+                     chunk->size());
+        if (!real_time) {
+          return;
+        }
+        auto sync_success = outbuf.pubsync();
+        if (sync_success != -1) {
+          ctrl.abort(caf::make_error(ec::filesystem_error,
+                                     "writing to file failed: {}",
+                                     std::strerror(errno)));
+          fd.reset();
+        }
+      }
+    };
   }
 
   auto default_printer(std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
-    /*for (auto i = size_t{0}; i < args.size(); ++i) {
-      const auto& arg = args[i];
-      VAST_TRACE("processing loader argument {}", arg);
-      if (arg == "-") {
-        break;
-      }
-      if (arg == "--timeout") {
-        ++i;
-      } else if (!arg.starts_with("-")) {
-        return {detail::file_path_to_parser(arg), {}};
-      }
-    }*/
     return {"json", {}};
   }
 
@@ -277,3 +357,4 @@ public:
 
 VAST_REGISTER_PLUGIN(vast::plugins::file::plugin)
 VAST_REGISTER_PLUGIN(vast::plugins::stdin_::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::stdout_::plugin)
