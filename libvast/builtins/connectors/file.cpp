@@ -214,7 +214,7 @@ public:
     return {"json", {}};
   }
 
-  auto saver_requires_joining() const -> bool override {
+  auto saver_does_joining() const -> bool override {
     return true;
   }
 
