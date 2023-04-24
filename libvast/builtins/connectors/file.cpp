@@ -251,5 +251,29 @@ public:
 
 } // namespace vast::plugins::stdin_
 
+namespace vast::plugins::stdout_ {
+class plugin : public virtual vast::plugins::file::plugin {
+public:
+  auto make_saver(std::span<std::string const> args, type input_schema,
+                  operator_control_plane& ctrl) const
+    -> caf::expected<saver> override {
+    std::vector<std::string> new_args = {"-"};
+    new_args.insert(new_args.end(), args.begin(), args.end());
+    return vast::plugins::file::plugin::make_saver(new_args, input_schema,
+                                                   ctrl);
+  }
+
+  auto default_printer([[maybe_unused]] std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    return {"json", {}};
+  }
+
+  auto name() const -> std::string override {
+    return "stdout";
+  }
+};
+
+} // namespace vast::plugins::stdout_
+
 VAST_REGISTER_PLUGIN(vast::plugins::file::plugin)
 VAST_REGISTER_PLUGIN(vast::plugins::stdin_::plugin)
