@@ -32,7 +32,7 @@ namespace vast::plugins::file {
 using file_description_deleter = std::function<void(int*)>;
 using file_description_wrapper = std::unique_ptr<int, file_description_deleter>;
 
-class plugin : public virtual loader_plugin {
+class plugin : public virtual loader_plugin, public virtual saver_plugin {
 public:
   static constexpr auto max_chunk_size = size_t{16384};
 
@@ -189,6 +189,33 @@ public:
         *timeout_duration);
     }
     return caf::none;
+  }
+
+  auto make_saver(std::span<std::string const> args, type input_schema,
+                  operator_control_plane& ctrl) const
+    -> caf::expected<saver> override {
+    die();
+  }
+
+  auto default_printer(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    /*for (auto i = size_t{0}; i < args.size(); ++i) {
+      const auto& arg = args[i];
+      VAST_TRACE("processing loader argument {}", arg);
+      if (arg == "-") {
+        break;
+      }
+      if (arg == "--timeout") {
+        ++i;
+      } else if (!arg.starts_with("-")) {
+        return {detail::file_path_to_parser(arg), {}};
+      }
+    }*/
+    return {"json", {}};
+  }
+
+  auto saver_requires_joining() const -> bool override {
+    return true;
   }
 
   auto name() const -> std::string override {
