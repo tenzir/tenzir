@@ -37,6 +37,18 @@ public:
                        args_.empty() ? "" : " ", escape_operator_args(args_));
   }
 
+protected:
+  auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type> override {
+    if (input.is<void>()) {
+      return tag_v<chunk_ptr>;
+    }
+    // TODO: Fuse this check with crtp_operator::instantiate()
+    return caf::make_error(ec::type_clash,
+                           fmt::format("'{}' does not accept {} as input",
+                                       to_string(), operator_type_name(input)));
+  }
+
 private:
   const loader_plugin& loader_plugin_;
   std::vector<std::string> args_;

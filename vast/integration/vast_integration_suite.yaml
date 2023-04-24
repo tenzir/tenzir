@@ -759,9 +759,18 @@ tests:
       # - is an alternative form of stdin and stdout
       - command: exec 'from stdin read json | write json to stdout'
         input: data/json/sip.log.json.gz
+      - command: exec 'from file - read json | write json to stdout'
+        input: data/json/sip.log.json.gz
       # stdin and stdout are the defaults
       - command: exec 'read json | write json'
         input: data/json/files.log.json.gz
       # - is an alternative form of stdin and stdout
       - command: exec 'from - read json | write json to -'
         input: data/json/irc.log.json.gz
+      - command: exec 'from file - read json | write json to -'
+        input: data/json/irc.log.json.gz
+
+  Read from JSON File:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from file @./data/json/record-in-list.json read json | write json to stdout'
