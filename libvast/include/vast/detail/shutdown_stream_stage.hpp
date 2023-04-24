@@ -14,8 +14,11 @@
 
 namespace vast::detail {
 
-/// Properly flushes and shuts down a `caf::stream_stage` connected to
-/// a `caf::broadcast_downstream_manager`.
+/// Flushes and shuts down a `caf::stream_stage` connected to
+/// a `caf::broadcast_downstream_manager` as diligently as possible
+/// without a continuation. Note that this version still has a race
+/// if an upstream has already sent a message that hasn't been placed
+/// in the inbound queue yet when this function runs.
 template <typename In,
           detail::specialization_of<caf::broadcast_downstream_manager>
             DownstreamManager>
