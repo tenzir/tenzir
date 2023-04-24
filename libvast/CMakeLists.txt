@@ -169,7 +169,6 @@ file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/*.hpp")
 
 add_library(libvast ${libvast_sources})
-target_precompile_headers(libvast PUBLIC [["vast/fwd.hpp"]])
 VASTTargetEnableTooling(libvast)
 add_library(vast::libvast ALIAS libvast)
 
