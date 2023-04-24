@@ -47,7 +47,6 @@ private:
   private:
     builder_provider builder_provider_;
     list_guard& parent_;
-    concrete_series_builder<record_type>* cached_builder_ = nullptr;
   };
 
 public:
@@ -67,16 +66,7 @@ public:
   auto add(ViewType view) -> void {
     using view_value_type = decltype(materialize(std::declval<ViewType>()));
     using vast_type = type_from_data_t<view_value_type>;
-    if (not value_type)
-      propagate_type(vast::type{vast_type{}});
-    // Casting not supported yet.
-    VAST_ASSERT(caf::holds_alternative<vast_type>(value_type));
-    const auto s = append_builder(
-      vast_type{},
-      get_root_list_builder()
-        .get_child_builder<type_to_arrow_builder_t<vast_type>>(value_type),
-      view);
-    VAST_ASSERT(s.ok());
+    add<vast_type>(view);
   }
 
   /// @brief Adds the underlying view to the list if it is of a supported type.
@@ -97,6 +87,48 @@ public:
 private:
   auto propagate_type(type child_type) -> void;
   auto get_root_list_builder() -> concrete_series_builder<vast::list_type>&;
+
+  template <concrete_type Type>
+  auto add(auto view) -> void {
+    if constexpr (std::is_same_v<Type, string_type>) {
+      add_str(view);
+      return;
+    }
+    add_impl<Type>(view);
+  }
+
+  auto add_str(std::string_view view) -> void {
+    auto enum_type = caf::get_if<enumeration_type>(&value_type);
+    if (not enum_type) {
+      add_impl<string_type>(view);
+      return;
+    }
+    auto& builder
+      = get_root_list_builder()
+          .get_child_builder<type_to_arrow_builder_t<enumeration_type>>(
+            value_type);
+    if (auto resolved = enum_type->resolve(view)) {
+      const auto s = append_builder(*enum_type, builder, *resolved);
+      VAST_ASSERT(s.ok());
+      return;
+    }
+    const auto s = builder.AppendNull();
+    VAST_ASSERT(s.ok());
+  }
+
+  template <concrete_type Type>
+  auto add_impl(auto view) -> void {
+    if (not value_type)
+      propagate_type(vast::type{Type{}});
+    // Casting not supported yet.
+    VAST_ASSERT(caf::holds_alternative<Type>(value_type));
+    const auto s = append_builder(
+      caf::get<Type>(value_type),
+      get_root_list_builder().get_child_builder<type_to_arrow_builder_t<Type>>(
+        value_type),
+      view);
+    VAST_ASSERT(s.ok());
+  }
 
   builder_provider builder_provider_;
   list_guard* parent = nullptr;
