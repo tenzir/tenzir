@@ -16,8 +16,7 @@
 namespace vast::plugins::directory {
 
 class plugin : public virtual saver_plugin {
-  auto initialize(const record&, const record& global_config)
-    -> caf::error override {
+  auto initialize(const record&, const record&) -> caf::error override {
     // TODO: option for path output to stdout as file is closed
     saver_plugin_ = plugins::find<saver_plugin>("file");
     if (!saver_plugin_) {
@@ -55,7 +54,7 @@ class plugin : public virtual saver_plugin {
     return saver_plugin_->make_saver(new_args, std::move(info), ctrl);
   }
 
-  auto default_printer(std::span<std::string const> args) const
+  auto default_printer([[maybe_unused]] std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
     return {"json", {}};
   }

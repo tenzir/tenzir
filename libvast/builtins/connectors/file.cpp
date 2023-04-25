@@ -195,7 +195,7 @@ public:
   }
 
   auto make_saver(std::span<std::string const> args,
-                  [[maybe_unused]] type input_schema,
+                  [[maybe_unused]] printer_info info,
                   operator_control_plane& ctrl) const
     -> caf::expected<saver> override {
     auto appending = false;

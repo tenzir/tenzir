@@ -463,7 +463,7 @@ public:
   using saver = std::function<auto(chunk_ptr)->void>;
 
   /// Returns the saver.
-  virtual auto make_saver(std::span<std::string const> args, type input_schema,
+  virtual auto make_saver(std::span<std::string const> args, printer_info info,
                           operator_control_plane& ctrl) const
     -> caf::expected<saver>
     = 0;
