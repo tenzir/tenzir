@@ -335,23 +335,24 @@ public:
                       "ctrl)`");
         if constexpr (one) {
           return std::invoke(
-            [this](generator<Input> input)
+            [](generator<Input> input, const Self& self)
               -> generator<std::invoke_result_t<Self&, Input>> {
               for (auto&& x : input) {
-                co_yield self()(std::move(x));
+                co_yield self(std::move(x));
               }
             },
-            std::move(input));
+            std::move(input), self());
         } else if constexpr (one_ctrl) {
           return std::invoke(
-            [this](generator<Input> input, operator_control_plane* ctrl)
+            [](generator<Input> input, operator_control_plane& ctrl,
+               const Self& self)
               -> generator<
                 std::invoke_result_t<Self&, Input, operator_control_plane&>> {
               for (auto&& x : input) {
-                co_yield self()(std::move(x), *ctrl);
+                co_yield self(std::move(x), ctrl);
               }
             },
-            std::move(input), &ctrl);
+            std::move(input), ctrl, self());
         } else if constexpr (gen) {
           return convert_output(self()(std::move(input)));
         } else if constexpr (gen_ctrl) {
