@@ -469,9 +469,9 @@ public:
     -> std::pair<std::string, std::vector<std::string>>
     = 0;
 
-  /// Returns whether the saver requires that the output from its preceding
-  /// printer can be joined.
-  virtual auto saver_requires_joining() const -> bool = 0;
+  /// Returns whether the saver joins output from its preceding
+  /// printer.
+  virtual auto saver_does_joining() const -> bool = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

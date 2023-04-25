@@ -34,8 +34,8 @@ public:
     return stdout_plugin_->default_printer(args);
   }
 
-  auto saver_requires_joining() const -> bool override {
-    return stdout_plugin_->saver_requires_joining();
+  auto saver_does_joining() const -> bool override {
+    return stdout_plugin_->saver_does_joining();
   }
 
   auto initialize(const record&, const record&) -> caf::error override {

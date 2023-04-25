@@ -142,8 +142,7 @@ public:
                                                       saver_name, pipeline)),
       };
     }
-    if (saver->saver_requires_joining()
-        && not printer->printer_allows_joining()) {
+    if (saver->saver_does_joining() && not printer->printer_allows_joining()) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::invalid_argument,
@@ -154,7 +153,7 @@ public:
                                     printer_name, saver_name)),
       };
     }
-    if (not saver->saver_requires_joining()) {
+    if (not saver->saver_does_joining()) {
       return {
         std::string_view{f, l},
         std::make_unique<print_and_save_operator>(
@@ -214,8 +213,7 @@ public:
                                                       printer_name, pipeline)),
       };
     }
-    if (saver->saver_requires_joining()
-        && not printer->printer_allows_joining()) {
+    if (saver->saver_does_joining() && not printer->printer_allows_joining()) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::invalid_argument,
@@ -226,7 +224,7 @@ public:
                                     printer_name, saver_name)),
       };
     }
-    if (not saver->saver_requires_joining()) {
+    if (not saver->saver_does_joining()) {
       return {
         std::string_view{f, l},
         std::make_unique<print_and_save_operator>(
