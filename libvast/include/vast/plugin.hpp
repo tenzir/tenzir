@@ -455,11 +455,15 @@ public:
 /// @relates plugin
 class saver_plugin : public virtual plugin {
 public:
+  struct printer_info {
+    type input_schema{};
+    std::string format{};
+  };
   // Alias for the byte chunk dumping function.
   using saver = std::function<auto(chunk_ptr)->void>;
 
   /// Returns the saver.
-  virtual auto make_saver(std::span<std::string const> args, type input_schema,
+  virtual auto make_saver(std::span<std::string const> args, printer_info info,
                           operator_control_plane& ctrl) const
     -> caf::expected<saver>
     = 0;

@@ -195,7 +195,7 @@ public:
   }
 
   auto make_saver(std::span<std::string const> args,
-                  [[maybe_unused]] type input_schema,
+                  [[maybe_unused]] printer_info info,
                   operator_control_plane& ctrl) const
     -> caf::expected<saver> override {
     auto appending = false;
@@ -335,12 +335,12 @@ public:
 namespace vast::plugins::stdout_ {
 class plugin : public virtual vast::plugins::file::plugin {
 public:
-  auto make_saver(std::span<std::string const> args, type input_schema,
+  auto make_saver(std::span<std::string const> args, printer_info info,
                   operator_control_plane& ctrl) const
     -> caf::expected<saver> override {
     std::vector<std::string> new_args = {"-"};
     new_args.insert(new_args.end(), args.begin(), args.end());
-    return vast::plugins::file::plugin::make_saver(new_args, input_schema,
+    return vast::plugins::file::plugin::make_saver(new_args, std::move(info),
                                                    ctrl);
   }
 
