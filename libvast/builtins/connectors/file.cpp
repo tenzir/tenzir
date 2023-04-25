@@ -196,7 +196,7 @@ public:
 
   auto make_saver(std::span<std::string const> args,
                   [[maybe_unused]] type input_schema,
-                  [[maybe_unused]] operator_control_plane& ctrl) const
+                  operator_control_plane& ctrl) const
     -> caf::expected<saver> override {
     auto appending = false;
     auto real_time = false;
@@ -253,7 +253,8 @@ public:
     } else {
       if (path != ::std_io_path) {
         fd = file_description_wrapper(
-          new int(::open(path.c_str(), appending ? O_APPEND : O_WRONLY)),
+          new int(::open(path.c_str(),
+                         appending ? O_APPEND : O_CREAT | O_WRONLY, 0777)),
           [](auto fd) {
             if (*fd != -1) {
               ::close(*fd);
@@ -289,7 +290,7 @@ public:
     };
   }
 
-  auto default_printer(std::span<std::string const> args) const
+  auto default_printer([[maybe_unused]] std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
     return {"json", {}};
   }
