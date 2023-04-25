@@ -324,21 +324,35 @@ public:
       [&]<class Input>(
         generator<Input> input) -> caf::expected<operator_output> {
         constexpr auto one = std::is_invocable_v<Self&, Input>;
+        constexpr auto one_ctrl
+          = std::is_invocable_v<Self&, Input, operator_control_plane&>;
         constexpr auto gen = std::is_invocable_v<Self&, generator<Input>>;
         constexpr auto gen_ctrl = std::is_invocable_v<Self&, generator<Input>,
                                                       operator_control_plane&>;
-        static_assert(one + gen + gen_ctrl <= 1,
+        static_assert(one + one_ctrl + gen + gen_ctrl <= 1,
                       "ambiguous operator definition: callable with more than "
-                      "one of `op(x)`, `op(gen)` and `op(gen, ctrl)`");
+                      "one of `op(x)`, `op(x, ctrl)`, `op(gen)` and `op(gen, "
+                      "ctrl)`");
         if constexpr (one) {
           return std::invoke(
-            [this](generator<Input> input)
+            [](generator<Input> input, const Self& self)
               -> generator<std::invoke_result_t<Self&, Input>> {
               for (auto&& x : input) {
-                co_yield self()(std::move(x));
+                co_yield self(std::move(x));
               }
             },
-            std::move(input));
+            std::move(input), self());
+        } else if constexpr (one_ctrl) {
+          return std::invoke(
+            [](generator<Input> input, operator_control_plane& ctrl,
+               const Self& self)
+              -> generator<
+                std::invoke_result_t<Self&, Input, operator_control_plane&>> {
+              for (auto&& x : input) {
+                co_yield self(std::move(x), ctrl);
+              }
+            },
+            std::move(input), ctrl, self());
         } else if constexpr (gen) {
           return convert_output(self()(std::move(input)));
         } else if constexpr (gen_ctrl) {

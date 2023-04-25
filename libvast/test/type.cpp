@@ -8,6 +8,7 @@
 
 #include "vast/type.hpp"
 
+#include "vast/collect.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/legacy_type.hpp"
@@ -439,6 +440,44 @@ TEST(record_type name resolving) {
     to_vector(
       caf::get<record_type>(zeek_conn_flat).resolve_key_suffix("resp_p")),
     (std::vector<offset>{{5}}));
+}
+
+TEST(record_type type resolving) {
+  const auto layout = record_type{
+    {"ts", type{"timestamp", time_type{}}},
+    {"uid", type{"id", string_type{}, {{"index", "hash"}}}},
+    {
+      "id",
+      type{"conn_id",
+           record_type{
+             {"orig_h", ip_type{}},
+             {"orig_p", type{"port", uint64_type{}}},
+             {"resp_h", ip_type{}},
+             {"resp_p", type{"port", uint64_type{}}},
+           }},
+    },
+    {"proto", string_type{}},
+  };
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":time")),
+              (std::vector<offset>{{0}}));
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":timestamp")),
+              (std::vector<offset>{{0}}));
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":id")),
+              (std::vector<offset>{{1}}));
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":string")),
+              (std::vector<offset>{{1}, {3}}));
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":ip")),
+              (std::vector<offset>{{2, 0}, {2, 2}}));
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":port")),
+              (std::vector<offset>{{2, 1}, {2, 3}}));
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":uint64")),
+              (std::vector<offset>{{2, 1}, {2, 3}}));
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":record")),
+              (std::vector<offset>{}));
+  CHECK_EQUAL(collect(layout.resolve_type_extractor(":conn_id")),
+              (std::vector<offset>{}));
+  // TODO: type extractors do not currently support stepping through lists,
+  // which we nede to fix as part of the planned unnesting effort.
 }
 
 TEST(record_type flat index computation) {

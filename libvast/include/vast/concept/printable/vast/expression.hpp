@@ -56,6 +56,10 @@ struct expression_printer : printer_base<expression_printer> {
              && caf::visit(*this, p.rhs);
     }
 
+    bool operator()(const operand& op) const {
+      return caf::visit(*this, op);
+    }
+
     bool operator()(const meta_extractor& e) const {
       return printers::str(
         out_, e.kind == meta_extractor::type ? "#type" : "#import_time");
@@ -84,8 +88,9 @@ struct expression_printer : printer_base<expression_printer> {
   };
 
   template <class Iterator, class T>
-    requires(detail::is_any_v<T, meta_extractor, field_extractor, data_extractor,
-                              predicate, conjunction, disjunction, negation>)
+    requires(
+      detail::is_any_v<T, meta_extractor, field_extractor, data_extractor,
+                       operand, predicate, conjunction, disjunction, negation>)
   auto print(Iterator& out, const T& x) const -> bool {
     return visitor<Iterator>{out}(x);
   }
@@ -98,7 +103,7 @@ struct expression_printer : printer_base<expression_printer> {
 
 template <class T>
   requires(
-    detail::is_any_v<T, meta_extractor, field_extractor, data_extractor,
+    detail::is_any_v<T, meta_extractor, field_extractor, data_extractor, operand,
                      predicate, conjunction, disjunction, negation, expression>)
 struct printer_registry<T> {
   using type = expression_printer;
