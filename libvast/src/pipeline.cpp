@@ -82,7 +82,9 @@ auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
     else {
       VAST_DEBUG("failed to parse query as {} language: {}", language->name(),
                  parsed.error());
-      first_error = std::move(parsed.error());
+      if (!first_error) {
+        first_error = std::move(parsed.error());
+      }
     }
   }
   return caf::make_error(ec::syntax_error,
