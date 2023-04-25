@@ -23,10 +23,10 @@ public:
     return stdin_plugin_->default_parser(args);
   }
 
-  auto make_saver(std::span<std::string const> args, type input_schema,
+  auto make_saver(std::span<std::string const> args, printer_info info,
                   operator_control_plane& ctrl) const
     -> caf::expected<saver> override {
-    return stdout_plugin_->make_saver(args, std::move(input_schema), ctrl);
+    return stdout_plugin_->make_saver(args, std::move(info), ctrl);
   }
 
   auto default_printer(std::span<std::string const> args) const

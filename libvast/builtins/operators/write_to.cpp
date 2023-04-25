@@ -63,7 +63,9 @@ public:
     if (not printer) {
       return std::move(printer.error());
     }
-    auto saver = saver_plugin_.make_saver(save_args, schema, ctrl);
+    auto saver = saver_plugin_.make_saver(
+      save_args, {.input_schema = schema, .format = printer_plugin_.name()},
+      ctrl);
     if (not saver) {
       return std::move(saver.error());
     }
