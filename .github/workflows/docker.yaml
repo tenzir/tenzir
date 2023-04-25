@@ -123,7 +123,7 @@ jobs:
         run: |
           # Expand the registries arrays and output each entry together with
           # the corresponding edition.
-          jq -r '.editions[] | .name as $name | .registries[]? // .registries | [ $name, . ] | join(" ")' \
+          jq -r '.editions[] | .name as $name | .registries[]? | [ $name, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name registry; do
             for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
               docker tag "tenzir/${name}:latest" "${registry}/tenzir/${name}:${tag}"
