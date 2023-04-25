@@ -7,11 +7,6 @@ on:
         type: boolean
         required: false
         default: false
-      upload-docker-image-to-ecr:
-        description: "Build the vast-manager image and upload to ECR"
-        type: boolean
-        required: false
-        default: false
   push:
     branches:
       - main
@@ -199,9 +194,6 @@ jobs:
             echo "::notice Enabling workflow dispatch jobs"
             if [[ "${{ inputs.upload-static-binary-to-github }}" == "true" ]]; then
               echo "run-vast-nix=true" >> $GITHUB_OUTPUT
-            fi
-            if [[ "${{ inputs.upload-docker-image-to-ecr }}" == "true" ]]; then
-              echo "run-docker-vast=true" >> $GITHUB_OUTPUT
             fi
             exit 0
           fi

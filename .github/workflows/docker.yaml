@@ -59,7 +59,7 @@ jobs:
           echo "needs-vast-plugins=false" >> "$GITHUB_OUTPUT"
           if [[ $(comm -12 \
                  <(jq -r '[(.editions[] | .name)] | sort | .[]' <<< '${{ inputs.config }}') \
-                 <(echo vast-{ce,ee,manager}| tr ' ' '\n' | sort)) \
+                 <(echo vast-{ce,ee}| tr ' ' '\n' | sort)) \
           ]]; then
             echo "needs-vast-plugins=true" >> "$GITHUB_OUTPUT"
           fi
@@ -114,7 +114,7 @@ jobs:
         if: steps.cfg.outputs.needs-ecr
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::622024652768:role/ecr-vast-manager-github-access
+          role-to-assume: arn:aws:iam::622024652768:role/ecr-vast-ce-github-access
           aws-region: eu-west-1
       - name: Login to AWS ECR
         if: steps.cfg.outputs.needs-ecr
