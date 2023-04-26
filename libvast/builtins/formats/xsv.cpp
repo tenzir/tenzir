@@ -10,6 +10,7 @@
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/printable/vast/json.hpp>
+#include <vast/detail/string_literal.hpp>
 #include <vast/plugin.hpp>
 #include <vast/view.hpp>
 
@@ -22,134 +23,177 @@
 
 namespace vast::plugins::xsv {
 
-template <class Iterator>
+namespace {
 struct xsv_printer {
-  auto operator()(caf::none_t) noexcept -> bool {
-    out_ = std::copy(null_value_.begin(), null_value_.end(), out_);
-    return true;
+  xsv_printer(char sep, char list_sep, std::string null)
+    : sep{sep}, list_sep{list_sep}, null{std::move(null)} {
   }
 
-  auto operator()(auto x) noexcept -> bool {
-    // TODO: Avoid the data_view cast.
-    return data_view_printer{}.print(out_, make_data_view(x));
-  }
-
-  auto operator()(view<pattern>) noexcept -> bool {
-    die("unreachable");
-  }
-
-  auto operator()(view<map>) noexcept -> bool {
-    die("unreachable");
-  }
-
-  auto operator()(view<std::string> x) noexcept -> bool {
-    auto needs_escaping = std::any_of(x.begin(), x.end(), [this](auto c) {
-      return std::iscntrl(static_cast<unsigned char>(c)) || c == row_separator_
-             || c == '"';
-    });
-    if (needs_escaping) {
-      static auto p = '"' << printers::escape(detail::json_escaper) << '"';
-      return p.print(out_, x);
-    }
-    out_ = std::copy(x.begin(), x.end(), out_);
-    return true;
-  }
-
-  auto operator()(const view<list>& x) noexcept -> bool {
-    auto json_list = std::string{};
-    auto l = std::back_inserter(json_list);
-    auto first = true;
-    for (const auto& v : x) {
-      if (!first) {
-        ++out_ = list_separator_;
-      } else {
-        first = false;
-      }
-      //(*this)(v);
-      if (!printer_.print(l, v)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  auto operator()(const view<record>& x) noexcept -> bool {
-    auto first = true;
-    for (const auto& [_, v] : x) {
-      if (!first) {
-        ++out_ = row_separator_;
-      } else {
-        first = false;
-      }
-      auto json_record = std::string{};
-      auto l = std::back_inserter(json_record);
-      if (!printer_.print(l, v)) {
-        return false;
-      }
-      (*this)(json_record);
-    }
-    return true;
-  }
-
-  auto print_header(const view<record>& x) noexcept -> bool {
+  template <typename It>
+  auto print_header(It& out, const view<record>& x) const noexcept -> bool {
     auto first = true;
     for (const auto& [k, _] : x) {
       if (!first) {
-        ++out_ = row_separator_;
+        ++out = sep;
       } else {
         first = false;
       }
-      (*this)(k);
+      visitor{out, *this}(k);
     }
     return true;
   }
 
-  auto print_values(const view<record>& x) noexcept -> bool {
+  template <typename It>
+  auto print_values(It& out, const view<record>& x) const noexcept -> bool {
     auto first = true;
     for (const auto& [_, v] : x) {
       if (!first) {
-        ++out_ = row_separator_;
+        ++out = sep;
       } else {
         first = false;
       }
-      caf::visit(*this, v);
+      caf::visit(visitor{out, *this}, v);
     }
     return true;
   }
 
-  Iterator& out_;
-  // TODO:
-  // must not overlap with null value
-  // must not be alphanumeric
-  // must not be a dot (single or double)
-  // must not be a bracket/brace
-  // must not be a double quote
-  // must not be + or -
-  // -> allow space, comma, tab, semicolon, \0
-  // with shorthands
-  char row_separator_{','};
-  char list_separator_{';'};
-  std::string null_value_{};
-  json_printer printer_{{.oneline = true}};
+  template <class Iterator>
+  struct visitor {
+    visitor(Iterator& out, const xsv_printer& printer)
+      : out{out}, printer{printer} {
+    }
 
-  xsv_printer(Iterator& out, char separator = ',', std::string null_value = "")
-    : out_(out),
-      row_separator_(separator),
-      null_value_(std::move(null_value)),
-      printer_{{.oneline = true}} {
-  }
+    auto operator()(caf::none_t) noexcept -> bool {
+      if (!printer.null.empty()) {
+        sequence_empty = false;
+        out = std::copy(printer.null.begin(), printer.null.end(), out);
+      }
+      return true;
+    }
+
+    auto operator()(auto x) noexcept -> bool {
+      sequence_empty = false;
+      // TODO: Avoid the data_view cast.
+      return data_view_printer{}.print(out, make_data_view(x));
+    }
+
+    auto operator()(view<pattern>) noexcept -> bool {
+      die("unreachable");
+    }
+
+    auto operator()(view<map>) noexcept -> bool {
+      die("unreachable");
+    }
+
+    auto operator()(view<std::string> x) noexcept -> bool {
+      sequence_empty = false;
+      auto needs_escaping = std::any_of(x.begin(), x.end(), [this](auto c) {
+        return std::iscntrl(static_cast<unsigned char>(c)) || c == printer.sep
+               || c == '"';
+      });
+      if (needs_escaping) {
+        static auto p = '"' << printers::escape(detail::json_escaper) << '"';
+        return p.print(out, x);
+      }
+      out = std::copy(x.begin(), x.end(), out);
+      return true;
+    }
+
+    auto operator()(const view<list>& x) noexcept -> bool {
+      sequence_empty = true;
+      for (const auto& v : x) {
+        if (!sequence_empty) {
+          ++out = printer.list_sep;
+        }
+        if (!caf::visit(*this, v)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    auto operator()(const view<record>& x) noexcept -> bool {
+      sequence_empty = true;
+      for (const auto& [_, v] : x) {
+        if (!sequence_empty) {
+          ++out = printer.list_sep;
+        }
+        if (!caf::visit(*this, v)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    Iterator& out;
+    const xsv_printer& printer;
+    bool sequence_empty{true};
+  };
+
+  char sep{','};
+  char list_sep{';'};
+  std::string null{};
 };
 
-class plugin final : public virtual printer_plugin {
-  auto make_printer([[maybe_unused]] std::span<std::string const> args,
-                    type input_schema, operator_control_plane&) const
+auto to_sep(std::string_view x) -> caf::expected<char> {
+  if (x == "\\t") {
+    return '\t';
+  }
+  if (x == "\\0" || x == "NUL") {
+    return '\0';
+  }
+  if (x.size() == 1) {
+    using namespace std::literals;
+    auto allowed_chars = ",;\t\0 "sv;
+    if (allowed_chars.find(x[0]) != std::string_view::npos) {
+      return x[0];
+    }
+  }
+  return caf::make_error(ec::invalid_argument,
+                         fmt::format("separator must be one of comma, "
+                                     "semicolon, tab, NUL, or space, but is "
+                                     "'{}'",
+                                     x));
+}
+
+class xsv_plugin : public virtual printer_plugin {
+public:
+  auto make_printer(std::span<std::string const> args, type input_schema,
+                    operator_control_plane&) const
     -> caf::expected<printer> override {
+    if (args.size() != 3) {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("xsv requires exactly 3 arguments but "
+                                         "got {}: [{}]",
+                                         args.size(), fmt::join(args, ", ")));
+    }
+    auto sep = to_sep(args[0]);
+    if (!sep) {
+      return std::move(sep.error());
+    }
+    auto list_sep = to_sep(args[1]);
+    if (!list_sep) {
+      return std::move(list_sep.error());
+    }
+    if (*sep == *list_sep) {
+      return caf::make_error(ec::invalid_argument,
+                             "separator and list separator must be different");
+    }
+    auto null = args[2];
+    auto conflict = std::any_of(null.begin(), null.end(), [&](auto ch) {
+      return ch == sep || ch == list_sep;
+    });
+    if (conflict) {
+      return caf::make_error(ec::invalid_argument,
+                             "null value must not contain separator or list "
+                             "separator");
+    }
     auto input_type = caf::get<record_type>(input_schema);
-    return [input_type](table_slice slice) -> generator<chunk_ptr> {
+    auto printer = xsv_printer{*sep, *list_sep, null};
+    return [printer = std::move(printer), input_type = std::move(input_type)](
+             table_slice slice) -> generator<chunk_ptr> {
       auto buffer = std::vector<char>{};
       auto out_iter = std::back_inserter(buffer);
-      // TODO: Custom args for sep and null values.
-      auto printer = xsv_printer{out_iter};
       auto resolved_slice = resolve_enumerations(slice);
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
@@ -157,11 +201,11 @@ class plugin final : public virtual printer_plugin {
       for (const auto& row : values(input_type, *array)) {
         VAST_ASSERT_CHEAP(row);
         if (first) {
-          printer.print_header(*row);
+          printer.print_header(out_iter, *row);
           first = false;
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        const auto ok = printer.print_values(*row);
+        const auto ok = printer.print_values(out_iter, *row);
         VAST_ASSERT_CHEAP(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
@@ -172,7 +216,7 @@ class plugin final : public virtual printer_plugin {
 
   auto default_saver(std::span<std::string const>) const
     -> std::pair<std::string, std::vector<std::string>> override {
-    return {"stdout", {}};
+    return {"directory", {"."}};
   }
 
   auto printer_allows_joining() const -> bool override {
@@ -188,6 +232,39 @@ class plugin final : public virtual printer_plugin {
   }
 };
 
+template <detail::string_literal Name, char Sep, char ListSep,
+          detail::string_literal Null>
+class configured_xsv_plugin final : public virtual xsv_plugin {
+public:
+  auto make_printer(std::span<std::string const> args, type input_schema,
+                    operator_control_plane& ctrl) const
+    -> caf::expected<printer> override {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} does not expected any arguments, "
+                                         "but got [{}]",
+                                         name(), fmt::join(args, ", ")));
+    }
+
+    return xsv_plugin::make_printer(
+      std::vector<std::string>{std::string{Sep}, std::string{ListSep},
+                               std::string{Null.str()}},
+      std::move(input_schema), ctrl);
+  }
+
+  auto name() const -> std::string override {
+    return std::string{Name.str()};
+  }
+};
+
+using csv_plugin = configured_xsv_plugin<"csv", ',', ';', "">;
+using tsv_plugin = configured_xsv_plugin<"tsv", '\t', ',', "-">;
+using ssv_plugin = configured_xsv_plugin<"ssv", ' ', ',', "-">;
+
+} // namespace
 } // namespace vast::plugins::xsv
 
-VAST_REGISTER_PLUGIN(vast::plugins::xsv::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::xsv::xsv_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::xsv::csv_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::xsv::tsv_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::xsv::ssv_plugin)

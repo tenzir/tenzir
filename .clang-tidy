@@ -1,6 +1,7 @@
 ---
 Checks: >
   *,
+  -abseil-*,
   -altera-*,
   -bugprone-lambda-function-name,
   -cert-dcl16-c,
