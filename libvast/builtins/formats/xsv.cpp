@@ -260,11 +260,13 @@ public:
                              % sep);
         auto fields = std::vector<std::string>{};
         if (!split_parser(*it, fields)) {
-          // TODO: failed to parse header
-          die("nooooo!");
+          ctrl.abort(caf::make_error(ec::parse_error,
+                                     fmt::format("{0} parser failed to parse "
+                                                 "header of {0} input",
+                                                 name)));
+          co_return;
         }
         ++it;
-
         auto b = adaptive_table_slice_builder{};
         for (; it != lines.end(); ++it) {
           auto line = *it;
@@ -272,18 +274,21 @@ public:
             co_yield b.finish();
             continue;
           }
-
           auto row = b.push_row();
           auto values = std::vector<std::string>{};
           if (!split_parser(*it, values)) {
-            die("noooo 2");
+            ctrl.warn(caf::make_error(ec::parse_error,
+                                      fmt::format("{} parser skipped line: "
+                                                  "parsing line failed",
+                                                  name)));
+            continue;
           }
           if (values.size() != fields.size()) {
             ctrl.warn(caf::make_error(
               ec::parse_error,
               fmt::format("{} parser skipped line: expected {} fields but got "
                           "{}",
-                          name, header.size(), values.size())));
+                          name, fields.size(), values.size())));
             continue;
           }
           for (const auto& [field, value] : detail::zip(fields, values)) {
