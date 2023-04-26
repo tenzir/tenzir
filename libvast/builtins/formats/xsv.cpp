@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/adaptive_table_slice_builder.hpp"
+#include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/printable/vast/view.hpp"
+#include "vast/detail/zip_iterator.hpp"
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/printable/vast/json.hpp>
@@ -88,11 +91,25 @@ struct xsv_printer {
     auto operator()(view<std::string> x) noexcept -> bool {
       sequence_empty = false;
       auto needs_escaping = std::any_of(x.begin(), x.end(), [this](auto c) {
-        return std::iscntrl(static_cast<unsigned char>(c)) || c == printer.sep
-               || c == '"';
+        return c == printer.sep || c == '"';
       });
       if (needs_escaping) {
-        static auto p = '"' << printers::escape(detail::json_escaper) << '"';
+        static auto escaper = [](auto& f, auto out) {
+          switch (*f) {
+            default:
+              *out++ = *f++;
+              return;
+            case '\\':
+              *out++ = '\\';
+              *out++ = '\\';
+              return;
+            case '"':
+              *out++ = '\\';
+              *out++ = '"';
+              return;
+          }
+        };
+        static auto p = '"' << printers::escape(escaper) << '"';
         return p.print(out, x);
       }
       out = std::copy(x.begin(), x.end(), out);
@@ -156,8 +173,122 @@ auto to_sep(std::string_view x) -> caf::expected<char> {
                                      x));
 }
 
-class xsv_plugin : public virtual printer_plugin {
+auto to_lines(generator<chunk_ptr> input) -> generator<std::string_view> {
+  auto buffer = std::string{};
+  bool ended_on_linefeed = false;
+  for (auto&& chunk : input) {
+    if (!chunk || chunk->size() == 0) {
+      co_yield {};
+      continue;
+    }
+    const auto* begin = reinterpret_cast<const char*>(chunk->data());
+    const auto* const end = begin + chunk->size();
+    if (ended_on_linefeed && *begin == '\n') {
+      ++begin;
+    };
+    ended_on_linefeed = false;
+    for (const auto* current = begin; current != end; ++current) {
+      if (*current != '\n' && *current != '\r') {
+        continue;
+      }
+      if (buffer.empty()) {
+        co_yield {begin, current};
+      } else {
+        buffer.append(begin, current);
+        co_yield buffer;
+        buffer.clear();
+      }
+      if (*current == '\r') {
+        auto next = current + 1;
+        if (next == end) {
+          ended_on_linefeed = true;
+        } else if (*next == '\n') {
+          ++current;
+        }
+      }
+      begin = current + 1;
+    }
+    buffer.append(begin, end);
+    co_yield {};
+  }
+  if (!buffer.empty()) {
+    co_yield std::move(buffer);
+  }
+}
+
+class xsv_plugin : public virtual parser_plugin, public virtual printer_plugin {
 public:
+  auto
+  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
+              operator_control_plane& ctrl) const
+    -> caf::expected<parser> override {
+    return std::invoke(
+      [](generator<std::string_view> lines, operator_control_plane& ctrl,
+         std::string name) -> generator<table_slice> {
+        // Parse header.
+        auto it = lines.begin();
+        auto header = std::string_view{};
+        while (it != lines.end()) {
+          header = *it;
+          if (!header.empty())
+            break;
+          co_yield {};
+        }
+        if (header.empty())
+          co_return;
+        auto sep = ',';
+        auto split_parser = (((parsers::qqstr
+                                 .then([](std::string in) {
+                                   return in; // TODO unescape
+                                 })
+                                 .with([](const std::string& in) {
+                                   return !in.empty();
+                                 })
+                               >> &(sep | parsers::eoi))
+                              | +(parsers::any - sep))
+                             % sep);
+        auto fields = std::vector<std::string>{};
+        if (!split_parser(*it, fields)) {
+          // TODO: failed to parse header
+          die("nooooo!");
+        }
+        ++it;
+
+        auto b = adaptive_table_slice_builder{};
+        for (; it != lines.end(); ++it) {
+          auto line = *it;
+          if (line.empty()) {
+            co_yield b.finish();
+            continue;
+          }
+
+          auto row = b.push_row();
+          auto values = std::vector<std::string>{};
+          if (!split_parser(*it, values)) {
+            die("noooo 2");
+          }
+          if (values.size() != header.size()) {
+            ctrl.warn(caf::make_error(
+              ec::parse_error,
+              fmt::format("{} parser skipped line: expected {} fields but got "
+                          "{}",
+                          name, header.size(), values.size())));
+          }
+          for (const auto& [field, value] : detail::zip(fields, values)) {
+            auto field_guard = row.push_field(field);
+            field_guard.add(value);
+            // TODO: Check what add() does with strings.
+          }
+        }
+      },
+      to_lines(std::move(loader)), ctrl, name());
+  }
+
+  auto default_loader(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    return {"stdin", {}};
+  }
+
   auto make_printer(std::span<std::string const> args, type input_schema,
                     operator_control_plane&) const
     -> caf::expected<printer> override {
