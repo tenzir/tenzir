@@ -18,6 +18,7 @@
 #include <vast/view.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/error.hpp>
 #include <fmt/core.h>
 
 #include <algorithm>
@@ -222,9 +223,20 @@ public:
   make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
               operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
+    if (args.size() != 1) {
+      return caf::make_error(
+        ec::syntax_error,
+        fmt::format("{} parser requires exactly 1 argument but "
+                    "got {}: [{}]",
+                    name(), args.size(), fmt::join(args, ", ")));
+    }
+    auto sep = to_sep(args[0]);
+    if (!sep) {
+      return std::move(sep.error());
+    }
     return std::invoke(
       [](generator<std::string_view> lines, operator_control_plane& ctrl,
-         std::string name) -> generator<table_slice> {
+         char sep, std::string name) -> generator<table_slice> {
         // Parse header.
         auto it = lines.begin();
         auto header = std::string_view{};
@@ -236,7 +248,6 @@ public:
         }
         if (header.empty())
           co_return;
-        auto sep = ',';
         auto split_parser = (((parsers::qqstr
                                  .then([](std::string in) {
                                    return in; // TODO unescape
@@ -282,10 +293,10 @@ public:
           }
         }
       },
-      to_lines(std::move(loader)), ctrl, name());
+      to_lines(std::move(loader)), ctrl, *sep, name());
   }
 
-  auto default_loader(std::span<std::string const> args) const
+  auto default_loader([[maybe_unused]] std::span<std::string const> args) const
     -> std::pair<std::string, std::vector<std::string>> override {
     return {"stdin", {}};
   }
@@ -294,10 +305,11 @@ public:
                     operator_control_plane&) const
     -> caf::expected<printer> override {
     if (args.size() != 3) {
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("xsv requires exactly 3 arguments but "
-                                         "got {}: [{}]",
-                                         args.size(), fmt::join(args, ", ")));
+      return caf::make_error(
+        ec::syntax_error,
+        fmt::format("{} printer requires exactly 3 arguments but "
+                    "got {}: [{}]",
+                    name(), args.size(), fmt::join(args, ", ")));
     }
     auto sep = to_sep(args[0]);
     if (!sep) {
@@ -368,12 +380,29 @@ template <detail::string_literal Name, char Sep, char ListSep,
           detail::string_literal Null>
 class configured_xsv_plugin final : public virtual xsv_plugin {
 public:
+  auto
+  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
+              operator_control_plane& ctrl) const
+    -> caf::expected<parser> override {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} parser does not expect any "
+                                         "arguments, "
+                                         "but got [{}]",
+                                         name(), fmt::join(args, ", ")));
+    }
+
+    return xsv_plugin::make_parser(std::vector<std::string>{std::string{Sep}},
+                                   std::move(loader), ctrl);
+  }
+
   auto make_printer(std::span<std::string const> args, type input_schema,
                     operator_control_plane& ctrl) const
     -> caf::expected<printer> override {
     if (!args.empty()) {
       return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} does not expected any arguments, "
+                             fmt::format("{} printer does not expect any "
+                                         "arguments, "
                                          "but got [{}]",
                                          name(), fmt::join(args, ", ")));
     }
