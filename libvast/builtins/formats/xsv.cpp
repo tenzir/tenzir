@@ -104,12 +104,14 @@ struct xsv_printer {
             case '\\':
               *out++ = '\\';
               *out++ = '\\';
-              return;
+              break;
             case '"':
               *out++ = '\\';
               *out++ = '"';
-              return;
+              break;
           }
+          ++f;
+          return;
         };
         static auto p = '"' << printers::escape(escaper) << '"';
         return p.print(out, x);
