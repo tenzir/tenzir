@@ -267,7 +267,7 @@ public:
           if (!split_parser(*it, values)) {
             die("noooo 2");
           }
-          if (values.size() != header.size()) {
+          if (values.size() != fields.size()) {
             ctrl.warn(caf::make_error(
               ec::parse_error,
               fmt::format("{} parser skipped line: expected {} fields but got "
