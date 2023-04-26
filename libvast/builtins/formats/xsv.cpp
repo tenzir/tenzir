@@ -273,6 +273,7 @@ public:
               fmt::format("{} parser skipped line: expected {} fields but got "
                           "{}",
                           name, header.size(), values.size())));
+            continue;
           }
           for (const auto& [field, value] : detail::zip(fields, values)) {
             auto field_guard = row.push_field(field);
