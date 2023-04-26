@@ -8,6 +8,7 @@
 
 #include "vast/adaptive_table_slice_builder.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
+#include "vast/concept/printable/string/escape.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/zip_iterator.hpp"
 
@@ -248,16 +249,35 @@ public:
         }
         if (header.empty())
           co_return;
-        auto split_parser = (((parsers::qqstr
-                                 .then([](std::string in) {
-                                   return in; // TODO unescape
-                                 })
-                                 .with([](const std::string& in) {
-                                   return !in.empty();
-                                 })
-                               >> &(sep | parsers::eoi))
-                              | +(parsers::any - sep))
-                             % sep);
+        auto split_parser
+          = (((parsers::qqstr
+                 .then([](std::string in) {
+                   static auto unescaper = [](auto& f, auto l, auto out) {
+                     if (*f != '\\') { // Skip every non-escape character.
+                       *out++ = *f++;
+                       return true;
+                     }
+                     if (l - f < 2)
+                       return false;
+                     switch (auto c = *++f) {
+                       case '\\':
+                         *out++ = '\\';
+                         break;
+                       case '"':
+                         *out++ = '"';
+                         break;
+                     }
+                     ++f;
+                     return true;
+                   };
+                   return detail::unescape(in, unescaper);
+                 })
+                 .with([](const std::string& in) {
+                   return !in.empty();
+                 })
+               >> &(sep | parsers::eoi))
+              | +(parsers::any - sep))
+             % sep);
         auto fields = std::vector<std::string>{};
         if (!split_parser(*it, fields)) {
           ctrl.abort(caf::make_error(ec::parse_error,
