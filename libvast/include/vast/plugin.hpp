@@ -275,72 +275,6 @@ public:
   make_aggregation_function(const type& input_type) const = 0;
 };
 
-// -- store plugin ------------------------------------------------------------
-
-/// A base class for plugins that add new store backends.
-/// @note Consider using the simler `store_plugin` instead, which abstracts the
-/// actor system logic away with a default implementation, which usually
-/// suffices for most store backends.
-class store_actor_plugin : public virtual plugin {
-public:
-  /// A store_builder actor and a chunk called the "header". The contents of the
-  /// header will be persisted on disk, and should allow the plugin to retrieve
-  /// the correct store actor when `make_store()` below is called.
-  struct builder_and_header {
-    system::store_builder_actor store_builder;
-    chunk_ptr header;
-  };
-
-  /// Create a store builder actor that accepts incoming table slices.
-  /// The store builder is required to keep a reference to itself alive
-  /// as long as its input stream is live, and persist itself and exit as
-  /// soon as the input stream terminates.
-  /// @param accountant The actor handle of the accountant.
-  /// @param fs The actor handle of a filesystem.
-  /// @param id The partition id for which we want to create a store. Can be
-  /// used as a unique key by the implementation.
-  /// @returns A handle to the store builder actor to add events to, and a
-  /// header that uniquely identifies this store for later use in `make_store`.
-  [[nodiscard]] virtual caf::expected<builder_and_header>
-  make_store_builder(system::accountant_actor accountant,
-                     system::filesystem_actor fs, const vast::uuid& id) const
-    = 0;
-
-  /// Create a store actor from the given header. Called when deserializing a
-  /// partition that uses this partition as a store backend.
-  /// @param accountant The actor handle the accountant.
-  /// @param fs The actor handle of a filesystem.
-  /// @param header The store header as found in the partition flatbuffer.
-  /// @returns A new store actor.
-  [[nodiscard]] virtual caf::expected<system::store_actor>
-  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
-             std::span<const std::byte> header) const
-    = 0;
-};
-
-/// A base class for plugins that add new store backends.
-class store_plugin : public virtual store_actor_plugin {
-public:
-  /// Create a store for passive partitions.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
-  make_passive_store() const = 0;
-
-  /// Create a store for active partitions.
-  /// @param vast_config The vast node configuration.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
-  make_active_store(const caf::settings& vast_config) const = 0;
-
-private:
-  [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(system::accountant_actor accountant,
-                     system::filesystem_actor fs,
-                     const vast::uuid& id) const final;
-
-  [[nodiscard]] caf::expected<system::store_actor>
-  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
-             std::span<const std::byte> header) const final;
-};
-
 // -- language plugin ---------------------------------------------------
 
 /// A language parser to pass query in a custom language to VAST.
@@ -476,6 +410,91 @@ public:
   /// Returns whether the saver joins output from its preceding
   /// printer.
   virtual auto saver_does_joining() const -> bool = 0;
+};
+
+// -- store plugin ------------------------------------------------------------
+
+/// A base class for plugins that add new store backends.
+/// @note Consider using the simler `store_plugin` instead, which abstracts the
+/// actor system logic away with a default implementation, which usually
+/// suffices for most store backends.
+class store_actor_plugin : public virtual plugin {
+public:
+  /// A store_builder actor and a chunk called the "header". The contents of the
+  /// header will be persisted on disk, and should allow the plugin to retrieve
+  /// the correct store actor when `make_store()` below is called.
+  struct builder_and_header {
+    system::store_builder_actor store_builder;
+    chunk_ptr header;
+  };
+
+  /// Create a store builder actor that accepts incoming table slices.
+  /// The store builder is required to keep a reference to itself alive
+  /// as long as its input stream is live, and persist itself and exit as
+  /// soon as the input stream terminates.
+  /// @param accountant The actor handle of the accountant.
+  /// @param fs The actor handle of a filesystem.
+  /// @param id The partition id for which we want to create a store. Can be
+  /// used as a unique key by the implementation.
+  /// @returns A handle to the store builder actor to add events to, and a
+  /// header that uniquely identifies this store for later use in `make_store`.
+  [[nodiscard]] virtual caf::expected<builder_and_header>
+  make_store_builder(system::accountant_actor accountant,
+                     system::filesystem_actor fs, const vast::uuid& id) const
+    = 0;
+
+  /// Create a store actor from the given header. Called when deserializing a
+  /// partition that uses this partition as a store backend.
+  /// @param accountant The actor handle the accountant.
+  /// @param fs The actor handle of a filesystem.
+  /// @param header The store header as found in the partition flatbuffer.
+  /// @returns A new store actor.
+  [[nodiscard]] virtual caf::expected<system::store_actor>
+  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
+             std::span<const std::byte> header) const
+    = 0;
+};
+
+/// A base class for plugins that add new store backends.
+class store_plugin : public virtual store_actor_plugin,
+                     public virtual parser_plugin,
+                     public virtual printer_plugin {
+public:
+  /// Create a store for passive partitions.
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
+  make_passive_store() const = 0;
+
+  /// Create a store for active partitions.
+  /// @param vast_config The vast node configuration.
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
+  make_active_store(const caf::settings& vast_config) const = 0;
+
+private:
+  [[nodiscard]] caf::expected<builder_and_header>
+  make_store_builder(system::accountant_actor accountant,
+                     system::filesystem_actor fs,
+                     const vast::uuid& id) const final;
+
+  [[nodiscard]] caf::expected<system::store_actor>
+  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
+             std::span<const std::byte> header) const final;
+
+  auto
+  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
+              operator_control_plane& ctrl) const
+    -> caf::expected<parser> final;
+
+  auto default_loader(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> final;
+
+  auto make_printer(std::span<std::string const> args, type input_schema,
+                    operator_control_plane& ctrl) const
+    -> caf::expected<printer> final;
+
+  auto default_saver(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> final;
+
+  auto printer_allows_joining() const -> bool final;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

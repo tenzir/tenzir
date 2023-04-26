@@ -401,6 +401,74 @@ store_plugin::make_store(system::accountant_actor accountant,
                                                  std::move(path), name());
 }
 
+auto store_plugin::make_parser(std::span<std::string const> args,
+                               generator<chunk_ptr> loader,
+                               operator_control_plane& ctrl) const
+  -> caf::expected<parser> {
+  if (not args.empty()) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt ::format("{} parser expected no arguments, but "
+                                        "got [{}]",
+                                        name(), fmt::join(args, ", ")));
+  }
+  auto store = make_passive_store();
+  if (not store) {
+    return caf::make_error(ec::logic_error,
+                           fmt ::format("{} parser failed to create store: {}",
+                                        name(), store.error()));
+  }
+  return [](generator<chunk_ptr> loader, operator_control_plane& ctrl,
+            std::unique_ptr<passive_store> store,
+            std::string name) -> generator<table_slice> {
+    // TODO: Loading everything into memory here is far from ideal. We should
+    // instead load passive stores incrementally. For now we at least warn the
+    // user that this is experimental.
+    VAST_WARN("the experimental {} parser does not currently load files "
+              "incrementally and may use an excessive amount of memory",
+              name);
+    auto buffer = std::vector<std::byte>{};
+    for (const auto& chunk : loader) {
+      if (not chunk) {
+        co_yield {};
+        continue;
+      }
+      buffer.reserve(buffer.size() + chunk->size());
+      buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+      co_yield {};
+    }
+    if (auto err = store->load(chunk::make(std::move(buffer)))) {
+      ctrl.abort(caf::make_error(ec::format_error,
+                                 "{} parser failed to load: {}", name,
+                                 std::move(err)));
+      co_return;
+    }
+    for (auto&& slice : store->slices()) {
+      co_yield std::move(slice);
+    }
+  }(std::move(loader), ctrl, std::move(*store), name());
+}
+
+auto store_plugin::default_loader(std::span<std::string const>) const
+  -> std::pair<std::string, std::vector<std::string>> {
+  return {"stdin", {}};
+}
+
+auto store_plugin::make_printer(std::span<std::string const> args,
+                                type input_schema,
+                                operator_control_plane& ctrl) const
+  -> caf::expected<printer> {
+  die("unimplemented");
+}
+
+auto store_plugin::default_saver(std::span<std::string const>) const
+  -> std::pair<std::string, std::vector<std::string>> {
+  return {"directory", {"."}};
+}
+
+auto store_plugin::printer_allows_joining() const -> bool {
+  return false;
+}
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 caf::expected<plugin_ptr>
