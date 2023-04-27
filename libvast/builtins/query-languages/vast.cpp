@@ -47,7 +47,7 @@ auto parse(std::string_view repr, const record& config,
     for (auto prefix : {new_config_prefix, old_config_prefix}) {
       auto key = fmt::format("{}.{}", prefix, operator_name);
       auto result = try_get_only<std::string>(config, key);
-      if (result.error()) {
+      if (not result) {
         return std::move(result.error());
       }
       if (*result != nullptr) {
@@ -64,9 +64,10 @@ auto parse(std::string_view repr, const record& config,
     }
     if (plugin && definition) {
       return caf::make_error(ec::lookup_error,
-                             "the operator {} is defined by a plugin, but also "
-                             "by the `{}` config",
-                             operator_name, used_config_prefix);
+                             fmt::format("the operator {} is defined by a "
+                                         "plugin, but also "
+                                         "by the `{}` config",
+                                         operator_name, used_config_prefix));
     }
     if (plugin) {
       // 3a. ask the plugin to parse itself from the remainder
