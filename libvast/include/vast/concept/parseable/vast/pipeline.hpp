@@ -127,8 +127,7 @@ namespace vast {
 /// every `y == operator_arg.apply(x).value()`.
 inline auto escape_operator_arg(std::string_view x) -> std::string {
   auto f = x.begin();
-  parsers::unquoted_operator_arg.parse(f, x.end(), unused);
-  if (f == x.end()) {
+  if ((parsers::unquoted_operator_arg >> parsers::eoi)(f, x.end(), unused)) {
     for (auto y : {"from", "read", "write", "to"}) {
       if (x == y) {
         return fmt::format("'{}'", x);

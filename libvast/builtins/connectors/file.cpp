@@ -254,7 +254,8 @@ public:
       if (path != ::std_io_path) {
         fd = file_description_wrapper(
           new int(::open(path.c_str(),
-                         appending ? O_APPEND : O_CREAT | O_WRONLY, 0777)),
+                         appending ? O_APPEND : O_CREAT | O_WRONLY | O_TRUNC,
+                         0644)),
           [](auto fd) {
             if (*fd != -1) {
               ::close(*fd);
