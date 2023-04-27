@@ -13,7 +13,7 @@ run_if_changed_default() {
   if [ $# -ne 0 ] && is_changed "${@}"; then
     changed=true
   fi
-  declare "$job_shellvar"="${changed}"
+  declare -g "$job_shellvar"="${changed}"
   echo "run-${job}=${changed}" >> $GITHUB_OUTPUT
 }
 
