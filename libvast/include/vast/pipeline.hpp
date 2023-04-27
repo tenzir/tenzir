@@ -455,7 +455,7 @@ public:
           ctrl.abort(state.error());
           break;
         }
-        it = states.try_emplace(it, slice.schema(), *state);
+        it = states.try_emplace(it, slice.schema(), std::move(*state));
       }
       auto result = process(std::move(slice), it->second);
       if constexpr (std::is_same_v<remove_generator_t<output_type>,

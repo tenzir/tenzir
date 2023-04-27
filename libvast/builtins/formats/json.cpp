@@ -245,14 +245,14 @@ class plugin final : public virtual parser_plugin,
   auto make_printer(std::span<std::string const> args, type input_schema,
                     operator_control_plane&) const
     -> caf::expected<printer> override {
+    (void)input_schema;
     if (!args.empty()) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("json printer received unexpected "
                                          "arguments: {}",
                                          fmt::join(args, ", ")));
     };
-    auto input_type = caf::get<record_type>(input_schema);
-    return [input_type](table_slice slice) -> generator<chunk_ptr> {
+    return to_printer([](table_slice slice) -> generator<chunk_ptr> {
       // JSON printer should output NDJSON, see:
       // https://github.com/ndjson/ndjson-spec
       auto printer = vast::json_printer{{.oneline = true}};
@@ -264,7 +264,8 @@ class plugin final : public virtual parser_plugin,
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto out_iter = std::back_inserter(buffer);
-      for (const auto& row : values(input_type, *array)) {
+      for (const auto& row :
+           values(caf::get<record_type>(slice.schema()), *array)) {
         VAST_ASSERT_CHEAP(row);
         const auto ok = printer.print(out_iter, *row);
         VAST_ASSERT_CHEAP(ok);
@@ -272,7 +273,7 @@ class plugin final : public virtual parser_plugin,
       }
       auto chunk = chunk::make(std::move(buffer));
       co_yield std::move(chunk);
-    };
+    });
   }
 
   auto default_saver(std::span<std::string const>) const

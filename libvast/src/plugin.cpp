@@ -20,6 +20,7 @@
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/operator_control_plane.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query_context.hpp"
 #include "vast/store.hpp"
@@ -370,7 +371,7 @@ caf::expected<store_actor_plugin::builder_and_header>
 store_plugin::make_store_builder(system::accountant_actor accountant,
                                  system::filesystem_actor fs,
                                  const vast::uuid& id) const {
-  auto store = make_active_store(content(fs->home_system().config()));
+  auto store = make_active_store();
   if (!store)
     return store.error();
   auto path
@@ -457,7 +458,53 @@ auto store_plugin::make_printer(std::span<std::string const> args,
                                 type input_schema,
                                 operator_control_plane& ctrl) const
   -> caf::expected<printer> {
-  die("unimplemented");
+  VAST_ASSERT(input_schema != type{});
+  if (not args.empty()) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt ::format("{} printer expected no arguments, but "
+                                        "got [{}]",
+                                        name(), fmt::join(args, ", ")));
+  }
+  auto store = make_active_store();
+  if (not store) {
+    return caf::make_error(ec::logic_error,
+                           fmt ::format("{} parser failed to create store: {}",
+                                        name(), store.error()));
+  }
+
+  class store_printer : public printer_base {
+  public:
+    explicit store_printer(std::unique_ptr<active_store> store,
+                           operator_control_plane& ctrl)
+      : store_{std::move(store)}, ctrl_{ctrl} {
+    }
+
+    auto process(table_slice slice) -> generator<chunk_ptr> override {
+      auto vec = std::vector<table_slice>{};
+      vec.push_back(std::move(slice));
+      if (auto error = store_->add(std::move(vec))) {
+        ctrl_.abort(std::move(error));
+        co_return;
+      }
+      // TODO
+      auto chunk = store_->finish();
+      if (!chunk) {
+        ctrl_.abort(std::move(chunk.error()));
+        co_return;
+      }
+      co_yield std::move(*chunk);
+    }
+
+    auto finish() -> generator<chunk_ptr> override {
+      return {};
+    }
+
+  private:
+    std::unique_ptr<active_store> store_;
+    operator_control_plane& ctrl_;
+  };
+
+  return std::make_unique<store_printer>(std::move(*store), ctrl);
 }
 
 auto store_plugin::default_saver(std::span<std::string const>) const

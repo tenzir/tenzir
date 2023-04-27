@@ -18,6 +18,7 @@
 
 #include <caf/error.hpp>
 
+#include <chrono>
 #include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
@@ -182,14 +183,14 @@ public:
 
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
-    const auto* read_timeout_entry
-      = get_if<std::string>(&global_config, "vast.import.read-timeout");
-    if (!read_timeout_entry) {
-      return caf::none;
+    auto timeout
+      = try_get<vast::duration>(global_config, "vast.import.read-timeout");
+    if (!timeout.engaged()) {
+      return std::move(timeout.error());
     }
-    if (auto timeout_duration = to<vast::duration>(*read_timeout_entry)) {
-      read_timeout_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        *timeout_duration);
+    if (timeout->has_value()) {
+      read_timeout_
+        = std::chrono::duration_cast<std::chrono::milliseconds>(**timeout);
     }
     return caf::none;
   }

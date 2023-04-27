@@ -364,10 +364,39 @@ public:
 /// @relates plugin
 class printer_plugin : public virtual plugin {
 public:
-  // Alias for the byte chunk generation function.
-  using printer = std::function<auto(table_slice)->generator<chunk_ptr>>;
+  class printer_base {
+  public:
+    virtual ~printer_base() = default;
 
-  /// Returns a printer for a specified schema.
+    virtual auto process(table_slice slice) -> generator<chunk_ptr> = 0;
+
+    virtual auto finish() -> generator<chunk_ptr> {
+      return {};
+    }
+  };
+
+  using printer = std::unique_ptr<printer_base>;
+
+  template <class F>
+  static auto to_printer(F f) -> printer {
+    class func_printer : public printer_base {
+    public:
+      explicit func_printer(F f) : f_{std::move(f)} {
+      }
+
+      auto process(table_slice slice) -> generator<chunk_ptr> override {
+        return f_(std::move(slice));
+      }
+
+    private:
+      F f_;
+    };
+    return std::make_unique<func_printer>(std::move(f));
+  }
+
+  /// Returns a printer for a specified schema. If `printer_allows_joining()`,
+  /// then `input_schema`can also be `type{}`, which means that the printer
+  /// should expect a hetergenous input instead.
   virtual auto
   make_printer(std::span<std::string const> args, type input_schema,
                operator_control_plane& ctrl) const -> caf::expected<printer>
@@ -467,7 +496,7 @@ public:
   /// Create a store for active partitions.
   /// @param vast_config The vast node configuration.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
-  make_active_store(const caf::settings& vast_config) const = 0;
+  make_active_store() const = 0;
 
 private:
   [[nodiscard]] caf::expected<builder_and_header>
