@@ -214,7 +214,7 @@ jobs:
           run_if_changed vast-io "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
           VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json)
-          run_if_changed vast "$VAST_SOURCES[@]"
+          run_if_changed vast "${VAST_SOURCES[@]}"
           run_if_changed vast-plugins "plugins/" "contrib/vast-plugins/"
           # The vast-plugins job downloads the VAST artifact from GCS, so we
           # need to run the vast job in case it is missing.
@@ -233,7 +233,7 @@ jobs:
           run_docker_vast="$(any ${run_docker_compose} ${run_vast_io} ${run_python})"
           run_if_changed_default docker-vast $run_docker_vast
           run_if_changed_default regression-tests $run_docker_vast
-          run_if_changed vast-nix "$VAST_SOURCES[@]" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/
+          run_if_changed vast-nix "{$VAST_SOURCES[@]}" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/
       - name: Configure Docker
         id: docker
         if: steps.configure.outputs.run-docker-vast == 'true'
