@@ -26,11 +26,11 @@ void internal_http_response::append(std::string body) {
 }
 
 void internal_http_response::abort(uint16_t error_code, std::string message,
-                                   caf::error) {
-  // TODO: Add a setting where the `detail` is also included in
-  // the error message.
+                                   caf::error detail) {
+  // TODO: Add a setting where the `detail` is omitted for production usage.
   body_ = caf::make_error(ec::system_error,
-                          fmt::format("Error {}: {}", error_code, message));
+                          fmt::format("Error {}: {} ({})\n", error_code,
+                                      message, detail));
 }
 
 auto internal_http_response::release() && -> caf::expected<std::string> {
