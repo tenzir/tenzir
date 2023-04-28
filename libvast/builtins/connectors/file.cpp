@@ -102,6 +102,10 @@ public:
       if (path == ::std_io_path) {
         return caf::make_error(ec::filesystem_error, "cannot mmap STDIN");
       }
+      if (following) {
+        return caf::make_error(ec::filesystem_error,
+                               "cannot use `--follow` with `--mmap`");
+      }
       auto chunk = chunk::mmap(path);
       if (not chunk)
         return std::move(chunk.error());
