@@ -785,3 +785,27 @@ tests:
     tags: [pipelines]
     steps:
       - command: exec 'from file @./data/json/record-in-list.json read json | write json to stdout'
+
+  Inspect Events:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read json | inspect | drop timestamp | write json'
+        input: data/json/files.log.json.gz
+      - command: exec 'read json | inspect | inspect | drop timestamp | write json'
+        input: data/json/files.log.json.gz
+      - command: exec 'read json | inspect --real-time | drop timestamp | write json'
+        input: data/json/files.log.json.gz
+      - command: exec 'read json | inspect --real-time | inspect | drop timestamp | write json'
+        input: data/json/files.log.json.gz
+
+  Inspect Bytes:
+    tags: [pipelines]
+    steps:
+      - command: exec 'load stdin | inspect | drop timestamp | write json'
+        input: data/json/conn.log.json.gz
+      - command: exec 'load stdin | inspect | inspect | drop timestamp | write json'
+        input: data/json/conn.log.json.gz
+      - command: exec 'load stdin | inspect --real-time | drop timestamp | write json'
+        input: data/json/conn.log.json.gz
+      - command: exec 'load stdin | inspect --real-time | inspect | drop timestamp | write json'
+        input: data/json/conn.log.json.gz
