@@ -4,14 +4,14 @@
     "annotated git tag without the leading 'v'.",
     "This value gets updated automatically by `scripts/prepare-release`."
   ],
-  "vast-version-fallback": "3.0.3",
+  "vast-version-fallback": "3.1.0-rc1",
   "vast-version-rev-count_COMMENT": [
     "This value stores the ancestor count of the tagged commit, calculated",
     "with `git rev-list --count HEAD`, then incremented by 1. This operates",
     "under the assumption that the release-preparing PR contains exactly one",
     "commit and is rebased before merging."
   ],
-  "vast-version-rev-count": 15807,
+  "vast-version-rev-count": 16190,
   "vast-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",
