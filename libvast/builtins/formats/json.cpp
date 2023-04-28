@@ -253,6 +253,9 @@ class plugin final : public virtual parser_plugin,
                                          fmt::join(args, ", ")));
     };
     return to_printer([](table_slice slice) -> generator<chunk_ptr> {
+      if (slice.rows() == 0) {
+        co_return;
+      }
       // JSON printer should output NDJSON, see:
       // https://github.com/ndjson/ndjson-spec
       auto printer = vast::json_printer{{.oneline = true}};

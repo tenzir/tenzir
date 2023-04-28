@@ -424,24 +424,40 @@ auto store_plugin::make_parser(std::span<std::string const> args,
     // TODO: Loading everything into memory here is far from ideal. We should
     // instead load passive stores incrementally. For now we at least warn the
     // user that this is experimental.
-    VAST_WARN("the experimental {} parser does not currently load files "
-              "incrementally and may use an excessive amount of memory",
-              name);
-    auto buffer = std::vector<std::byte>{};
-    for (const auto& chunk : loader) {
-      if (not chunk) {
+    auto chunks = std::vector<chunk_ptr>{};
+    for (auto&& chunk : loader) {
+      if (not chunk || chunk->size() == 0) {
         co_yield {};
         continue;
       }
-      buffer.reserve(buffer.size() + chunk->size());
-      buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+      chunks.push_back(std::move(chunk));
       co_yield {};
     }
-    if (auto err = store->load(chunk::make(std::move(buffer)))) {
-      ctrl.abort(caf::make_error(ec::format_error,
-                                 "{} parser failed to load: {}", name,
-                                 std::move(err)));
-      co_return;
+    if (chunks.size() == 1) {
+      if (auto err = store->load(std::move(chunks.front()))) {
+        ctrl.abort(caf::make_error(ec::format_error,
+                                   "{} parser failed to load: {}", name,
+                                   std::move(err)));
+        co_return;
+      }
+    } else {
+      ctrl.warn(caf::make_error(
+        ec::unspecified, fmt::format("the experimental {} parser does "
+                                     "not currently load files "
+                                     "incrementally and may use an "
+                                     "excessive amount of memory; consider "
+                                     "using 'from file --mmap'",
+                                     name)));
+      auto buffer = std::vector<std::byte>{};
+      for (auto&& chunk : chunks) {
+        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+      }
+      if (auto err = store->load(chunk::make(std::move(buffer)))) {
+        ctrl.abort(caf::make_error(ec::format_error,
+                                   "{} parser failed to load: {}", name,
+                                   std::move(err)));
+        co_return;
+      }
     }
     for (auto&& slice : store->slices()) {
       co_yield std::move(slice);

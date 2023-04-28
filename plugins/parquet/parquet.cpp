@@ -482,8 +482,8 @@ class plugin final : public virtual store_plugin {
     const auto default_compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
           .ValueOrDie();
-    auto level = get_and_convert_or(
-      global_config, "vast.zstd-compression-level", default_compression_level);
+    auto level = try_get_or(global_config, "vast.zstd-compression-level",
+                            default_compression_level);
     if (!level) {
       return std::move(level.error());
     }
