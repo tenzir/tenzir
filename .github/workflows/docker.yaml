@@ -65,7 +65,7 @@ jobs:
           fi
       - name: Configure ssh-agent
         if: steps.cfg.outputs.needs-vast-plugins == 'true'
-        uses: webfactory/ssh-agent@v0.7.0
+        uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Update submodules
