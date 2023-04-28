@@ -30,16 +30,21 @@ public:
                   operator_control_plane& ctrl) const -> generator<std::monostate> {
     using namespace ftxui;
     auto screen = ScreenInteractive::TerminalOutput();
-    ui_state shared_state;
+    ui_state state;
     // Ban UI main loop into dedicated thread.
     auto thread = std::thread([&] {
-      auto main = MainWindow(&screen, &shared_state);
+      auto main = MainWindow(&screen, &state);
       screen.Loop(main);
     });
     for (auto&& slice : input) {
-      // TODO: discuss thread safety.
-      shared_state.data.push_back(std::move(slice));
-      screen.PostEvent(Event::Custom); // Redraw screen
+      // The task executes inside the UI thread. Therefore state access is
+      // thread-safe.
+      auto task = [&state, &screen, slice = std::move(slice)] {
+        state.dataset[std::string{slice.schema().name()}].push_back(slice);
+        ++state.num_slices;
+        screen.PostEvent(Event::Custom); // Redraw screen
+      };
+      screen.Post(task);
       co_yield {};
     }
     thread.join();

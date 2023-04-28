@@ -137,11 +137,10 @@ Component Explorer(ui_state* state) {
     }
 
     Element Render() override {
-      // We only check for updates when we can expect more data to come.
-      auto num_slices = state_->data.size();
-      if (num_slices == slices_processed_)
+      // We only check for updates we have new data..
+      if (state_->num_slices == slices_processed_)
         return ComponentBase::Render();
-      VAST_ASSERT(num_slices > slices_processed_);
+      VAST_ASSERT(state_->num_slices > slices_processed_);
       // TODO: make rebuilding of components incremental, i.e, the amount of
       // work should be proportional to the new batches that arrive. Right
       // now, we're starting from scratch for every batch, which is quadratic
@@ -149,12 +148,8 @@ Component Explorer(ui_state* state) {
       index_ = 0;
       schemas_.clear();
       data_views_->DetachAllChildren();
-      // Left-fold all slices with the same schema name into a dataset.
-      std::map<std::string, std::vector<table_slice>> dataset;
-      for (const auto& slice : state_->data)
-        dataset[std::string{slice.schema().name()}].push_back(slice);
       // Display the dataset by schema name & count.
-      for (const auto& [schema, slices] : dataset) {
+      for (const auto& [schema, slices] : state_->dataset) {
         size_t num_records = 0;
         for (const auto& slice : slices)
           num_records += slice.rows();
@@ -163,10 +158,10 @@ Component Explorer(ui_state* state) {
         const auto& first = slices[0];
         auto n = fmt::format(std::locale("en_US.UTF-8"), "{:L}", num_records);
         schemas_.push_back(fmt::format("{} ({})", schema, n));
-        data_views_->Add(VerticalDataView(first, 100));
+        data_views_->Add(VerticalDataView(first));
       }
       VAST_ASSERT(data_views_->ChildCount() == schemas_.size());
-      slices_processed_ = num_slices;
+      slices_processed_ = state_->num_slices;
       return ComponentBase::Render();
     }
 
