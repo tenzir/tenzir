@@ -367,7 +367,7 @@ template <typename T>
   requires caf::detail::tl_contains<data::types, T>::value
 auto get_if(const record* r, std::string_view path) -> const T* {
   auto result = descend(r, path);
-  if (!result.engaged()) {
+  if (not result || not *result) {
     return nullptr;
   }
   if (auto ptr = caf::get_if<T>(*result)) {
