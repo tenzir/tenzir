@@ -30,6 +30,7 @@ enum class validate {
 /// the correct type.
 /// The `validate` behavior can be adjusted using type attributes:
 ///    - required: This field must always be present.
+///    - opaque: (only on records) Don't validate the contents of this record.
 caf::error validate(const vast::data&, const vast::record_type& schema,
                     enum validate mode);
 
