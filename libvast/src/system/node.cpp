@@ -662,6 +662,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     },
     [self](atom::proxy,
            const http_request_description& desc) -> caf::result<std::string> {
+      // FIXME: verbose -> debug
+      VAST_VERBOSE("proxying request to {}", desc.canonical_path);
       auto [rest_plugin, endpoint] = find_endpoint_handler(desc);
       if (!rest_plugin)
         return caf::make_error(ec::invalid_argument, "unknown endpoint");
