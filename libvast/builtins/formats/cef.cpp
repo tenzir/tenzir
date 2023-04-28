@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/to_lines.hpp"
-
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/numeric.hpp>
 #include <vast/concept/parseable/to.hpp>
@@ -23,6 +21,7 @@
 #include <vast/module.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
+#include <vast/to_lines.hpp>
 #include <vast/type.hpp>
 #include <vast/view.hpp>
 
