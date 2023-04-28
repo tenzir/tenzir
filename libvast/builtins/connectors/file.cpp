@@ -46,6 +46,7 @@ public:
     auto read_timeout = read_timeout_;
     auto path = std::string{};
     auto following = false;
+    auto mmap = false;
     auto is_socket = false;
     for (auto i = size_t{0}; i < args.size(); ++i) {
       const auto& arg = args[i];
@@ -66,6 +67,8 @@ public:
         }
       } else if (arg == "-") {
         path = ::std_io_path;
+      } else if (arg == "--mmap") {
+        mmap = true;
       } else if (arg == "-f" || arg == "--follow") {
         following = true;
       } else if (not arg.starts_with("-")) {
@@ -94,6 +97,19 @@ public:
     if (path.empty()) {
       return caf::make_error(ec::syntax_error,
                              fmt::format("no file specified"));
+    }
+    if (mmap) {
+      if (path == ::std_io_path) {
+        return caf::make_error(ec::filesystem_error, "cannot mmap STDIN");
+      }
+      auto chunk = chunk::mmap(path);
+      if (not chunk)
+        return std::move(chunk.error());
+      return std::invoke(
+        [](chunk_ptr chunk) mutable -> generator<chunk_ptr> {
+          co_yield std::move(chunk);
+        },
+        std::move(*chunk));
     }
     auto fd = file_description_wrapper(new int(STDIN_FILENO), [](auto* fd) {
       std::default_delete<int>()(fd);

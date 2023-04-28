@@ -218,21 +218,22 @@ chunk_ptr chunk::make_empty() noexcept {
 
 caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
                                      size_type size, size_type offset) {
-  // Figure out the file size if not provided.
-  if (size == 0) {
-    std::error_code err{};
-    size = std::filesystem::file_size(filename, err);
-    if (size == static_cast<std::uintmax_t>(-1))
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to get file size for file"
-                                         "{}: {}",
-                                         filename, err.message()));
-  }
   // Open and memory-map the file.
   const auto fd = ::open(filename.c_str(), O_RDONLY, 0644);
   if (fd == -1)
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to open file {}", filename));
+  // Figure out the file size if not provided.
+  if (size == 0) {
+    struct stat filestat {};
+    if (::fstat(fd, &filestat) != 0) {
+      ::close(fd);
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to get file size for file {}",
+                                         filename));
+    }
+    size = filestat.st_size;
+  }
   auto* map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd,
                      detail::narrow_cast<::off_t>(offset));
   auto mmap_errno = errno;
