@@ -16,21 +16,35 @@ namespace vast {
 
 namespace {
 
-caf::error validate_(const vast::data& data, const vast::type& type,
-                     const enum vast::validate mode,
-                     const std::string& prefix = "", size_t depth = 0) {
+auto validate_opaque_(const vast::data& data) -> caf::error {
+  return caf::visit(vast::detail::overload{
+                      [](const record&) -> caf::error {
+                        return caf::error{};
+                      },
+                      [](auto const&) -> caf::error {
+                        return caf::make_error(ec::invalid_argument,
+                                               "only records may have 'opaque' "
+                                               "attribute");
+                      },
+                    },
+                    data);
+}
+
+auto validate_(const vast::data& data, const vast::type& type,
+               const enum vast::validate mode, const std::string& prefix = "",
+               size_t depth = 0) -> caf::error {
   if (depth > vast::defaults::max_recursion)
     return caf::make_error(
       ec::invalid_configuration,
       fmt::format("too many layers of nesting at prefix {}", prefix));
-  // Note that only the `record_type` needs to have special logic
-  // depending on `mode`.
   if (caf::holds_alternative<caf::none_t>(data))
     return caf::none;
   if (!type)
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("expected type for non-null value at {}",
                                        prefix));
+  // Note that only the `record_type` needs to have special logic
+  // depending on `mode`.
   return caf::visit(
     vast::detail::overload{
       [&]<vast::basic_type T>(const T& type) -> caf::error {
@@ -89,12 +103,12 @@ caf::error validate_(const vast::data& data, const vast::type& type,
         return caf::error{};
       },
       [&](const vast::record_type& record_type) {
-        auto record = caf::get_if<vast::record>(&data);
+        auto const* record = caf::get_if<vast::record>(&data);
         if (!record)
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected record at {}", prefix));
         std::unordered_set<std::string> prefixes;
-        // Go through the data and check that every field has
+        // Go through the data and check that every field has the expected type.
         for (const auto& [k, v] : *record) {
           auto field_offset = record_type.resolve_key(k);
           if (!field_offset) {
@@ -107,6 +121,8 @@ caf::error validate_(const vast::data& data, const vast::type& type,
             continue;
           }
           auto field = record_type.field(*field_offset);
+          if (field.type.attribute("opaque"))
+            return validate_opaque_(v);
           auto nested_prefix = fmt::format("{}.{}", prefix, field.name);
           // Note that this currently can not happen for configuration parsed
           // from a YAML file, since the parser already overwrites duplicate
@@ -134,12 +150,6 @@ caf::error validate_(const vast::data& data, const vast::type& type,
             return caf::make_error(ec::invalid_configuration,
                                    fmt::format("missing field {}.{}", prefix,
                                                field.name));
-          auto type = field.type;
-          auto data = it->second;
-          if (auto error
-              = validate_(data, field.type, mode,
-                          fmt::format("{}.{}", prefix, field.name), depth + 1))
-            return error;
         }
         return caf::error{};
       },
@@ -149,8 +159,8 @@ caf::error validate_(const vast::data& data, const vast::type& type,
 
 } // namespace
 
-caf::error validate(const vast::data& data, const vast::record_type& schema,
-                    enum vast::validate mode) {
+auto validate(const vast::data& data, const vast::record_type& schema,
+              enum vast::validate mode) -> caf::error {
   return validate_(data, vast::type{schema}, mode);
 }
 
