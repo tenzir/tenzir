@@ -26,9 +26,7 @@ namespace vast::plugins::print {
 
 namespace {
 
-class print_operator final
-  : public schematic_operator<print_operator, printer_plugin::printer,
-                              generator<chunk_ptr>> {
+class print_operator final : public crtp_operator<print_operator> {
 public:
   explicit print_operator(const printer_plugin& printer,
                           std::vector<std::string> args,
@@ -38,25 +36,57 @@ public:
       allows_joining_{allows_joining} {
   }
 
-  auto initialize(const type& schema, operator_control_plane& ctrl) const
-    -> caf::expected<state_type> override {
-    if (not allows_joining_ && last_schema_) {
-      return caf::make_error(
-        ec::logic_error,
-        fmt::format("'{}' does not support heterogeneous outputs; cannot "
-                    "initialize for '{}' after '{}'",
-                    to_string(), printer_plugin_.name(), schema, last_schema_));
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    if (allows_joining_) {
+      auto p = printer_plugin_.make_printer(args_, {}, ctrl);
+      if (!p) {
+        ctrl.abort(caf::make_error(
+          ec::print_error,
+          fmt::format("failed to initialize printer: {}", p.error())));
+        co_return;
+      }
+      for (auto&& slice : input) {
+        for (auto&& chunk : (*p)->process(std::move(slice))) {
+          co_yield std::move(chunk);
+        }
+      }
+      for (auto&& chunk : (*p)->finish()) {
+        co_yield std::move(chunk);
+      }
+    } else {
+      auto state = std::optional<std::pair<printer_plugin::printer, type>>{};
+      for (auto&& slice : input) {
+        if (slice.rows() == 0) {
+          co_yield {};
+          continue;
+        }
+        if (!state) {
+          auto p = printer_plugin_.make_printer(args_, slice.schema(), ctrl);
+          if (!p) {
+            ctrl.abort(caf::make_error(
+              ec::print_error,
+              fmt::format("failed to initialize printer: {}", p.error())));
+            co_return;
+          }
+          state = std::pair{std::move(*p), slice.schema()};
+        } else if (state->second != slice.schema()) {
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("'{}' does not support heterogeneous outputs; cannot "
+                        "initialize for '{}' after '{}'",
+                        to_string(), printer_plugin_.name(), slice.schema(),
+                        state->second)));
+          co_return;
+        }
+        for (auto&& chunk : state->first->process(std::move(slice))) {
+          co_yield std::move(chunk);
+        }
+      }
+      for (auto&& chunk : state->first->finish()) {
+        co_yield std::move(chunk);
+      }
     }
-    // TODO: Operator instances shall be immutable. This is mostly a hack to
-    // work around the API of `schematic_operator`, which currently does not
-    // provide a way to store non-schema-specific state.
-    last_schema_ = schema;
-    return printer_plugin_.make_printer(args_, schema, ctrl);
-  }
-
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
-    return state(std::move(slice));
   }
 
   auto to_string() const noexcept -> std::string override {

@@ -96,10 +96,12 @@ struct fixture : fixtures::events {
     -> std::vector<chunk_ptr> {
     auto chunks = std::vector<chunk_ptr>{};
     for (auto&& x : slice_generator()) {
-      auto chunks_per_slice = collect(current_printer(x));
+      auto chunks_per_slice = collect(current_printer->process(x));
       chunks.insert(chunks.end(), chunks_per_slice.begin(),
                     chunks_per_slice.end());
     }
+    auto last = collect(current_printer->finish());
+    chunks.insert(chunks.end(), last.begin(), last.end());
     return chunks;
   }
 

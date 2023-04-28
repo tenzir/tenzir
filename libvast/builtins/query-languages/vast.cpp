@@ -46,20 +46,17 @@ auto parse(std::string_view repr, const record& config,
     auto used_config_key = std::string{};
     for (auto prefix : {new_config_prefix, old_config_prefix}) {
       auto key = fmt::format("{}.{}", prefix, operator_name);
-      auto type_clash = bool{};
-      definition = get_if<std::string>(&config, key, &type_clash);
-      if (type_clash) {
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("malformed config: `{}` must "
-                                           "be a record that maps to strings",
-                                           prefix));
+      auto result = try_get_only<std::string>(config, key);
+      if (not result) {
+        return std::move(result.error());
       }
-      if (definition) {
+      if (*result != nullptr) {
         if (prefix == old_config_prefix) {
           VAST_WARN("configuring operator aliases with `{}` is deprecated, use "
                     "`{}` instead",
                     old_config_prefix, new_config_prefix);
         }
+        definition = *result;
         used_config_prefix = prefix;
         used_config_key = key;
         break;
@@ -67,9 +64,10 @@ auto parse(std::string_view repr, const record& config,
     }
     if (plugin && definition) {
       return caf::make_error(ec::lookup_error,
-                             "the operator {} is defined by a plugin, but also "
-                             "by the `{}` config",
-                             operator_name, used_config_prefix);
+                             fmt::format("the operator {} is defined by a "
+                                         "plugin, but also "
+                                         "by the `{}` config",
+                                         operator_name, used_config_prefix));
     }
     if (plugin) {
       // 3a. ask the plugin to parse itself from the remainder

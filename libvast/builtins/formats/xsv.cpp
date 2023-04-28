@@ -361,28 +361,29 @@ public:
     }
     auto input_type = caf::get<record_type>(input_schema);
     auto printer = xsv_printer{*sep, *list_sep, null};
-    return [printer = std::move(printer), input_type = std::move(input_type)](
-             table_slice slice) -> generator<chunk_ptr> {
-      auto buffer = std::vector<char>{};
-      auto out_iter = std::back_inserter(buffer);
-      auto resolved_slice = resolve_enumerations(slice);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto first = true;
-      for (const auto& row : values(input_type, *array)) {
-        VAST_ASSERT_CHEAP(row);
-        if (first) {
-          printer.print_header(out_iter, *row);
-          first = false;
+    return to_printer(
+      [printer = std::move(printer), input_type = std::move(input_type)](
+        table_slice slice) -> generator<chunk_ptr> {
+        auto buffer = std::vector<char>{};
+        auto out_iter = std::back_inserter(buffer);
+        auto resolved_slice = resolve_enumerations(slice);
+        auto array
+          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto first = true;
+        for (const auto& row : values(input_type, *array)) {
+          VAST_ASSERT_CHEAP(row);
+          if (first) {
+            printer.print_header(out_iter, *row);
+            first = false;
+            out_iter = fmt::format_to(out_iter, "\n");
+          }
+          const auto ok = printer.print_values(out_iter, *row);
+          VAST_ASSERT_CHEAP(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        const auto ok = printer.print_values(out_iter, *row);
-        VAST_ASSERT_CHEAP(ok);
-        out_iter = fmt::format_to(out_iter, "\n");
-      }
-      auto chunk = chunk::make(std::move(buffer));
-      co_yield std::move(chunk);
-    };
+        auto chunk = chunk::make(std::move(buffer));
+        co_yield std::move(chunk);
+      });
   }
 
   auto default_saver(std::span<std::string const>) const

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/aliases.hpp"
+#include "vast/concept/convertible/to.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
@@ -251,15 +252,12 @@ void merge(const record& src, record& dst,
 /// @param rhs The RHS of the predicate.
 bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 
-/// Tries to find the entry with the dot-sperated `path`. If `type_clash !=
-/// nullptr`, it is set to `true` or `false` depending on the reason for
-/// returning `nullptr`.
+/// Tries to find the entry with the dot-sperated `path`. If one of the parents
+/// is not a record, but it does exist, an error is returned. Otherwise, returns
+/// `nullptr` if the path does not resolve.
 /// @pre `!path.empty()`
-/// @post `result != nullptr` implies `*type_clash == false`
-template <typename T>
-  requires caf::detail::tl_contains<data::types, T>::value
-const T*
-get_if(const record* r, std::string_view path, bool* type_clash = nullptr) {
+inline auto descend(const record* r, std::string_view path)
+  -> caf::expected<const data*> {
   VAST_ASSERT(!path.empty());
   auto names = detail::split(path, ".");
   VAST_ASSERT(!names.empty());
@@ -269,40 +267,128 @@ get_if(const record* r, std::string_view path, bool* type_clash = nullptr) {
     auto it = current->find(name);
     if (it == current->end()) {
       // Field not found.
-      if (type_clash)
-        *type_clash = false;
       return nullptr;
     }
     auto& field = it->second;
     if (last) {
       // Path was completely processed.
-      auto result = caf::get_if<T>(&field);
-      if (type_clash)
-        *type_clash = result == nullptr;
-      return result;
+      return &field;
     }
     current = caf::get_if<record>(&field);
     if (!current) {
       // This is not a record, but path continues.
-      if (type_clash)
-        *type_clash = true;
-      return nullptr;
+      return caf::make_error(
+        ec::lookup_error,
+        fmt::format("expected {} to be a record",
+                    fmt::join(std::span{names.data(), &name}, ".")));
     }
   }
   die("unreachable");
 }
 
+/// Tries to find the entry with the dot-sperated `path` with the given type.
+/// Attempts to convert the entry, if possible.
+/// @pre `!path.empty()`
+template <class T>
+auto try_get(const record& r, std::string_view path)
+  -> caf::expected<std::optional<T>> {
+  auto result = descend(&r, path);
+  if (!result) {
+    // Error.
+    return std::move(result.error());
+  }
+  if (!*result) {
+    // Entry not found.
+    return std::nullopt;
+  }
+  // Attempt conversion.
+  return caf::visit(
+    [&](auto& x) -> caf::expected<std::optional<T>> {
+      using U = std::remove_cvref_t<decltype(x)>;
+      if constexpr (std::is_same_v<U, T>) {
+        return x;
+      } else if constexpr (convertible<U, T>) {
+        return to<T>(x);
+      } else {
+        return caf::make_error(
+          ec::convert_error,
+          fmt::format("'{}' has type {}, which cannot be converted to {}", path,
+                      typeid(U).name(), typeid(T).name()));
+      }
+    },
+    **result);
+}
+
+/// Tries to find the entry with the dot-sperated `path` with the given type.
+/// Does not attempt to perform any conversions.
+/// @pre `!path.empty()`
+template <class T>
+auto try_get_only(const record& r, std::string_view path)
+  -> caf::expected<T const*> {
+  auto result = descend(&r, path);
+  if (!result) {
+    return std::move(result.error());
+  }
+  if (!*result) {
+    return nullptr;
+  }
+  return caf::visit(
+    [&](auto& x) -> caf::expected<T const*> {
+      using U = std::remove_cvref_t<decltype(x)>;
+      if constexpr (std::is_same_v<U, T>) {
+        return &x;
+      } else {
+        return caf::make_error(
+          ec::type_clash, fmt::format("'{}' has type {} but expected {}", path,
+                                      typeid(U).name(), typeid(T).name()));
+      }
+    },
+    **result);
+}
+
+template <class T>
+auto try_get_or(const record& r, std::string_view path, const T& fallback)
+  -> caf::expected<T> {
+  auto result = try_get<T>(r, path);
+  if (!result.engaged()) {
+    return std::move(result.error());
+  }
+  if (!result->has_value()) {
+    return fallback;
+  }
+  return std::move(**result);
+}
+
+/// Tries to find the entry with the dot-sperated `path` with the given type.
+/// Does not attempt to perform any conversions. Returns `nullptr` if the path
+/// does not exist.
+/// @pre `!path.empty()`
 template <typename T>
-T* get_if(record* r, std::string_view path, bool* type_clash = nullptr) {
-  auto result = get_if<T>(static_cast<const record*>(r), path, type_clash);
+  requires caf::detail::tl_contains<data::types, T>::value
+auto get_if(const record* r, std::string_view path) -> const T* {
+  auto result = descend(r, path);
+  if (not result || not *result) {
+    return nullptr;
+  }
+  if (auto ptr = caf::get_if<T>(*result)) {
+    return ptr;
+  }
+  return nullptr;
+}
+
+template <typename T>
+auto get_if(record* r, std::string_view path) -> T* {
+  auto result = get_if<T>(static_cast<const record*>(r), path);
   return const_cast<T*>(result); // NOLINT
 }
 
-/// Finds the entry with the dot-sperated `path` or returns the `fallback` value.
+/// Finds the entry with the dot-sperated `path` or returns the `fallback`
+/// value.
 /// @pre `!path.empty()`
 template <class T>
   requires(!std::convertible_to<T, std::string_view>)
-T const& get_or(const record& r, std::string_view path, T const& fallback) {
+auto get_or(const record& r, std::string_view path, T const& fallback)
+  -> T const& {
   VAST_ASSERT(!path.empty());
   auto result = get_if<T>(&r, path);
   if (result)
@@ -312,10 +398,11 @@ T const& get_or(const record& r, std::string_view path, T const& fallback) {
 
 template <class T>
   requires(!std::is_reference_v<T>)
-T const& get_or(const record& r, std::string_view path, T&& fallback) = delete;
+auto get_or(const record& r, std::string_view path, T&& fallback)
+  -> T const& = delete;
 
-inline std::string_view
-get_or(const record& r, std::string_view path, std::string_view fallback) {
+inline auto get_or(const record& r, std::string_view path,
+                   std::string_view fallback) -> std::string_view {
   auto result = get_if<std::string>(&r, path);
   if (result)
     return *result;

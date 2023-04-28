@@ -264,9 +264,17 @@ private:
 };
 
 class plugin final : public virtual store_plugin {
-  [[nodiscard]] caf::error
-  initialize(const record& plugin_config,
-             [[maybe_unused]] const record& global_config) override {
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
+    const auto default_compression_level
+      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie();
+    auto level = try_get_or(global_config, "vast.zstd-compression-level",
+                            default_compression_level);
+    if (!level) {
+      return std::move(level.error());
+    }
+    zstd_compression_level_ = *level;
     return convert(plugin_config, feather_config_);
   }
 
@@ -280,15 +288,13 @@ class plugin final : public virtual store_plugin {
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
-  make_active_store(const caf::settings& vast_config) const override {
-    const auto default_compression_level
-      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-          .ValueOrDie();
-    return std::make_unique<active_feather_store>(configuration{caf::get_or(
-      vast_config, "vast.zstd-compression-level", default_compression_level)});
+  make_active_store() const override {
+    return std::make_unique<active_feather_store>(
+      configuration{zstd_compression_level_});
   }
 
 private:
+  int zstd_compression_level_ = {};
   configuration feather_config_ = {};
 };
 
