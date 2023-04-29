@@ -76,12 +76,6 @@ Cell(std::string contents, ftxui::Color color = ftxui::Color::Default);
 /// @returns The FTXUI component.
 ftxui::Component Cell(view<data> x);
 
-/// A component that renders data as scrollable table.
-/// @param slice The data to render.
-/// @param max_rows The maximum number of rows to render.
-/// @returns The FTXUI component.
-ftxui::Component VerticalDataView(table_slice slice, size_t max_rows = 100);
-
 /// The help window.
 /// @returns The FTXUI component.
 ftxui::Component Help();

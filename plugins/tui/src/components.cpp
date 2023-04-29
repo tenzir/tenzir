@@ -12,6 +12,8 @@
 
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/data.hpp>
+#include <vast/detail/narrow.hpp>
+#include <vast/detail/stable_map.hpp>
 #include <vast/table_slice.hpp>
 #include <vast/table_slice_column.hpp>
 
@@ -50,48 +52,6 @@ Component HeaderCell(std::string top, std::string bottom) {
     });
 }
 
-Component VerticalDataView(table_slice slice, size_t max_rows) {
-  auto table = Container::Horizontal({});
-  auto rids = Container::Vertical({});
-  rids->Add(HeaderCell("#", ""));
-  rids->Add(Renderer([=] {
-    return separator() | color(default_theme.color.frame);
-  }));
-  for (size_t i = 0; i < std::min(size_t{slice.rows()}, max_rows); ++i)
-    rids->Add(Renderer([=] {
-      return text(to_string(i)) | color(default_theme.color.frame);
-    }));
-  table->Add(std::move(rids));
-  table->Add(Renderer([=] {
-    return separator() | color(default_theme.color.frame);
-  }));
-  for (size_t i = 0; i < slice.columns(); ++i) {
-    auto column = Container::Vertical({});
-    // Add column header.
-    const auto& schema = caf::get<record_type>(slice.schema());
-    auto offset = schema.resolve_flat_index(i);
-    auto bottom = fmt::to_string(schema.field(offset).type);
-    column->Add(HeaderCell(schema.key(offset), std::move(bottom)));
-    // Separate column header from data.
-    column->Add(Renderer([=] {
-      return separator() | color(default_theme.color.frame);
-    }));
-    // Assemble a column.
-    auto col = table_slice_column(slice, i);
-    for (size_t j = 0; j < std::min(col.size(), max_rows); ++j)
-      column->Add(Cell(col[j]));
-    // Append column to table.
-    table->Add(column);
-    // Separate inner columns.
-    table->Add(Renderer([=] {
-      return separator() | color(default_theme.color.frame);
-    }));
-  }
-  return Renderer(table, [=] {
-    return table->Render() | vscroll_indicator | frame;
-  });
-}
-
 Component Help() {
   return Renderer([] {
     auto table = Table({
@@ -118,74 +78,140 @@ Component Explorer(ui_state* state) {
   class Impl : public ComponentBase {
   public:
     Impl(ui_state* state) : state_{state} {
-      // Create the schema navigator.
-      auto menu_style = state_->theme.navigation(MenuOption::Direction::Down);
-      auto nav = Menu(&schemas_, &index_, menu_style);
-      // Build the containers that the menu references.
+      tab_ = Container::Tab({}, &index_); // to be filled
       auto loading = Renderer([] {
-        return Vee() | center | flex; // fancy spinner instead?
+        return Vee() | center | flex;
       });
-      data_views_ = Container::Tab({loading}, &index_);
-      nav = Renderer(nav, [=] {
-        return vbox({
-          nav->Render(),
-          filler(),
-        });
-      });
-      auto split = ResizableSplitLeft(nav, data_views_, &nav_width_);
-      Add(split);
+      Add(loading);
     }
 
     Element Render() override {
-      // We only check for updates we have new data..
-      if (state_->num_slices == slices_processed_)
+      if (state_->data.empty())
         return ComponentBase::Render();
-      VAST_ASSERT(state_->num_slices > slices_processed_);
-      // TODO: make rebuilding of components incremental, i.e, the amount of
-      // work should be proportional to the new batches that arrive. Right
-      // now, we're starting from scratch for every batch, which is quadratic
-      // work.
-      index_ = 0;
-      schemas_.clear();
-      data_views_->DetachAllChildren();
-      // Display the dataset by schema name & count.
-      for (const auto& [schema, slices] : state_->dataset) {
-        size_t num_records = 0;
-        for (const auto& slice : slices)
-          num_records += slice.rows();
-        // FIXME: Do not only show the first few events. We currently do that
-        // because it would overwhelm the DOM rendering otherwise.
-        const auto& first = slices[0];
-        auto n = fmt::format(std::locale("en_US.UTF-8"), "{:L}", num_records);
-        schemas_.push_back(fmt::format("{} ({})", schema, n));
-        data_views_->Add(VerticalDataView(first));
+      // Update table components.
+      for (auto&& slice : state_->data) {
+        tables_[slice.schema()].append(slice);
+        state_->data.clear();
+        // Update surrounding UI components.
+        if (tables_.size() == 1) {
+          // If we only have a single schema, we don't need a schema navigation.
+          if (schemas_.empty()) {
+            auto& [type, table] = *tables_.begin();
+            auto component = table.component();
+            schemas_.push_back(std::string{type.name()});
+            tab_->Add(component);
+            DetachAllChildren();
+            Add(component);
+          }
+        } else {
+          VAST_ASSERT(tables_.size() > 1);
+          if (schemas_.size() == 1) {
+            // Rebuild UI with outer framing when we have more than 1 schema.
+            DetachAllChildren();
+            auto style = state_->theme.navigation(MenuOption::Direction::Down);
+            auto menu = Menu(&schemas_, &index_, style);
+            auto split = ResizableSplitLeft(menu, tab_, &menu_width_);
+            Add(split);
+          }
+          if (schemas_.size() != tables_.size()) {
+            // If there's a delta, we need to add new table viewers.
+            for (auto& [type, table] : tables_) {
+              auto width = detail::narrow_cast<int>(type.name().size());
+              menu_width_ = std::max(menu_width_, width);
+              // Skip schemas we already processed.
+              auto name = std::string{type.name()};
+              auto it = std::find(schemas_.begin(), schemas_.end(), name);
+              if (it != schemas_.end())
+                continue;
+              schemas_.push_back(name);
+              tab_->Add(table.component());
+            }
+          }
+        }
       }
-      VAST_ASSERT(data_views_->ChildCount() == schemas_.size());
-      slices_processed_ = state_->num_slices;
       return ComponentBase::Render();
     }
 
   private:
+    static auto make_separator() {
+      return Renderer([] {
+        return separator() | color(default_theme.color.frame);
+      });
+    }
+
+    /// A table component for a fixed schema that grows incrementally.
+    class table_viewer {
+    public:
+      /// Appends a new table slice at the bottom.
+      /// @param slice The slice to append at the bottom of the table.
+      /// @pre `schema.slice()` is the same across all invocations.
+      void append(table_slice slice) {
+        // If this is the first slice, we'll assemble the header first.
+        const auto& schema = caf::get<record_type>(slice.schema());
+        if (columns_.empty()) {
+          // Add header for row ID column.
+          rids_->Add(HeaderCell(" # ", ""));
+          rids_->Add(make_separator());
+          table_->Add(rids_);
+          table_->Add(make_separator());
+          // Add header for schema columns.
+          for (size_t i = 0; i < slice.columns(); ++i) {
+            auto column = Container::Vertical({});
+            auto offset = schema.resolve_flat_index(i);
+            auto type = fmt::to_string(schema.field(offset).type);
+            column->Add(HeaderCell(schema.key(offset), std::move(type)));
+            column->Add(make_separator());
+            columns_.push_back(column);
+            table_->Add(column);
+            table_->Add(make_separator());
+          }
+        }
+        // Append table slice data.
+        VAST_ASSERT(columns_.size() == slice.columns());
+        for (size_t j = 0; j < slice.rows(); ++j) {
+          auto rid = rids_->ChildCount() - 2; // subtract header rows
+          rids_->Add(Renderer([=] {
+            return text(to_string(rid)) | color(default_theme.color.frame);
+          }));
+        }
+        for (size_t i = 0; i < slice.columns(); ++i) {
+          auto column = table_slice_column(slice, i);
+          for (size_t j = 0; j < column.size(); ++j)
+            columns_[i]->Add(Cell(column[j]));
+        }
+      }
+
+      Component component() const {
+        return Renderer(table_, [=] {
+          return table_->Render() | vscroll_indicator | frame;
+        });
+      }
+
+    private:
+      Component rids_ = Container::Vertical({});
+      Components columns_;
+      Component table_ = Container::Horizontal({});
+    };
+
     ui_state* state_;
 
     /// The width of the navigation split.
-    int nav_width_ = 25;
-
-    /// The number of slices already processed.
-    size_t slices_processed_ = 0;
+    int menu_width_ = 25;
 
     /// The currently selected schema.
     int index_ = 0;
 
-    /// The menu items for the navigator.
+    /// The menu items for the navigator. In sync with the tab.
     std::vector<std::string> schemas_;
 
-    /// The main tab.
-    Component data_views_;
+    /// The tab component containing all table viewers. In sync with schemas.
+    Component tab_;
+
+    /// The tables with data viewers.
+    detail::stable_map<type, table_viewer> tables_;
   };
   return Make<Impl>(state);
 }
-
 
 Component MainWindow(ScreenInteractive* screen, ui_state* state) {
   class Impl : public ComponentBase {

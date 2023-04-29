@@ -12,8 +12,6 @@
 
 #include <vast/table_slice.hpp>
 
-#include <map>
-#include <string>
 #include <vector>
 
 namespace vast::plugins::tui {
@@ -23,11 +21,8 @@ struct ui_state {
   /// The active theme.
   struct theme theme;
 
-  /// The buffered dataset, mapping schema names to batches.
-  std::map<std::string, std::vector<table_slice>> dataset;
-
-  /// The total number of slices in the dataset.
-  std::atomic<size_t> num_slices = 0;
+  /// The data to render.
+  std::vector<table_slice> data;
 };
 
 } // namespace vast::plugins::tui
