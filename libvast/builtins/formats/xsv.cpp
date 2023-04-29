@@ -7,16 +7,16 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/adaptive_table_slice_builder.hpp"
+#include "vast/arrow_table_slice.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/printable/string/escape.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/view.hpp"
+#include "vast/detail/string_literal.hpp"
 #include "vast/detail/zip_iterator.hpp"
-
-#include <vast/arrow_table_slice.hpp>
-#include <vast/concept/printable/vast/json.hpp>
-#include <vast/detail/string_literal.hpp>
-#include <vast/plugin.hpp>
-#include <vast/view.hpp>
+#include "vast/plugin.hpp"
+#include "vast/to_lines.hpp"
+#include "vast/view.hpp"
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
@@ -177,49 +177,6 @@ auto to_sep(std::string_view x) -> caf::expected<char> {
                                      x));
 }
 
-auto to_lines(generator<chunk_ptr> input) -> generator<std::string_view> {
-  auto buffer = std::string{};
-  bool ended_on_linefeed = false;
-  for (auto&& chunk : input) {
-    if (!chunk || chunk->size() == 0) {
-      co_yield {};
-      continue;
-    }
-    const auto* begin = reinterpret_cast<const char*>(chunk->data());
-    const auto* const end = begin + chunk->size();
-    if (ended_on_linefeed && *begin == '\n') {
-      ++begin;
-    };
-    ended_on_linefeed = false;
-    for (const auto* current = begin; current != end; ++current) {
-      if (*current != '\n' && *current != '\r') {
-        continue;
-      }
-      if (buffer.empty()) {
-        co_yield {begin, current};
-      } else {
-        buffer.append(begin, current);
-        co_yield buffer;
-        buffer.clear();
-      }
-      if (*current == '\r') {
-        auto next = current + 1;
-        if (next == end) {
-          ended_on_linefeed = true;
-        } else if (*next == '\n') {
-          ++current;
-        }
-      }
-      begin = current + 1;
-    }
-    buffer.append(begin, end);
-    co_yield {};
-  }
-  if (!buffer.empty()) {
-    co_yield std::move(buffer);
-  }
-}
-
 class xsv_plugin : public virtual parser_plugin, public virtual printer_plugin {
 public:
   auto
@@ -238,18 +195,20 @@ public:
       return std::move(sep.error());
     }
     return std::invoke(
-      [](generator<std::string_view> lines, operator_control_plane& ctrl,
-         char sep, std::string name) -> generator<table_slice> {
+      [](generator<std::optional<std::string_view>> lines,
+         operator_control_plane& ctrl, char sep,
+         std::string name) -> generator<table_slice> {
         // Parse header.
         auto it = lines.begin();
-        auto header = std::string_view{};
+        auto header = std::optional<std::string_view>{};
         while (it != lines.end()) {
           header = *it;
-          if (!header.empty())
+          if (header && !header->empty()) {
             break;
+          }
           co_yield {};
         }
-        if (header.empty())
+        if (!header || header->empty())
           co_return;
         auto split_parser
           = (((parsers::qqstr
@@ -281,7 +240,7 @@ public:
               | +(parsers::any - sep))
              % sep);
         auto fields = std::vector<std::string>{};
-        if (!split_parser(*it, fields)) {
+        if (!split_parser(*header, fields)) {
           ctrl.abort(caf::make_error(ec::parse_error,
                                      fmt::format("{0} parser failed to parse "
                                                  "header of {0} input",
@@ -292,13 +251,13 @@ public:
         auto b = adaptive_table_slice_builder{};
         for (; it != lines.end(); ++it) {
           auto line = *it;
-          if (line.empty()) {
+          if (!line || line->empty()) {
             co_yield b.finish();
             continue;
           }
           auto row = b.push_row();
           auto values = std::vector<std::string>{};
-          if (!split_parser(*it, values)) {
+          if (!split_parser(*line, values)) {
             ctrl.warn(caf::make_error(ec::parse_error,
                                       fmt::format("{} parser skipped line: "
                                                   "parsing line failed",

@@ -40,6 +40,11 @@ public:
   /// Destroys an Arrow table slice builder.
   ~table_slice_builder() noexcept;
 
+  table_slice_builder(table_slice_builder const&) = delete;
+  table_slice_builder& operator=(table_slice_builder const&) = delete;
+  table_slice_builder(table_slice_builder&&) = default;
+  table_slice_builder& operator=(table_slice_builder&&) = default;
+
   // -- properties -------------------------------------------------------------
 
   /// Calls `add(x)` as long as `x` is not a vector, otherwise calls `add(y)`

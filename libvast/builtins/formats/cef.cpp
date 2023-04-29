@@ -21,6 +21,7 @@
 #include <vast/module.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
+#include <vast/to_lines.hpp>
 #include <vast/type.hpp>
 #include <vast/view.hpp>
 
@@ -331,7 +332,8 @@ private:
   mutable size_t num_lines_ = 0;
 };
 
-class plugin final : public virtual reader_plugin {
+class plugin final : public virtual reader_plugin,
+                     public virtual parser_plugin {
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
     return caf::none;
@@ -358,6 +360,67 @@ class plugin final : public virtual reader_plugin {
   make_reader(const caf::settings& options) const override {
     auto in = detail::make_input_stream(options);
     return std::make_unique<reader>(options, in ? std::move(*in) : nullptr);
+  }
+
+  auto
+  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
+              operator_control_plane& ctrl) const
+    -> caf::expected<parser> override {
+    if (!args.empty()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("CEF parser does not expecte any "
+                                         "arguments but got [{}]",
+                                         fmt::join(args, ", ")));
+    }
+    return std::invoke(
+      [](generator<std::optional<std::string_view>> lines,
+         operator_control_plane& ctrl) -> generator<table_slice> {
+        auto builder = std::optional<table_slice_builder>{};
+        for (auto&& line : lines) {
+          if (!line) {
+            co_yield {};
+            continue;
+          }
+          if (line->empty()) {
+            VAST_DEBUG("CEF parser ignored empty line");
+            continue;
+          }
+          auto msg = to<message_view>(*line);
+          if (!msg) {
+            ctrl.warn(caf::make_error(ec::parse_error,
+                                      fmt::format("CEF parser failed to parse "
+                                                  "message: {} "
+                                                  "(line: '{}')",
+                                                  msg.error(), *line)));
+            continue;
+          }
+          auto schema = infer(*msg);
+          if (!builder || builder->schema() != schema) {
+            if (builder) {
+              co_yield builder->finish();
+            }
+            builder = table_slice_builder{schema};
+          }
+          if (auto error = add(*msg, *builder)) {
+            ctrl.warn(
+              caf::make_error(ec::parse_error, fmt::format("CEF parser failed "
+                                                           "to add message: {} "
+                                                           "(line: '{}')",
+                                                           error, line)));
+            continue;
+          }
+        }
+        if (builder) {
+          co_yield builder->finish();
+        }
+      },
+      to_lines(std::move(loader)), ctrl);
+  }
+
+  auto default_loader(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> override {
+    (void)args;
+    return {"stdin", {}};
   }
 };
 

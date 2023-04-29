@@ -732,6 +732,17 @@ tests:
       - command: export json 'where 172.31.5.93'
       - command: export json 'where act == /Accept|Bypass/'
 
+  From CEF:
+    tags: [cef]
+    fixture: ServerTester
+    steps:
+      - command: exec 'read cef | write json'
+        input: data/cef/cynet.log
+      - command: exec 'read cef | write json'
+        input: data/cef/checkpoint.log
+      - command: exec 'read cef | write json'
+        input: data/cef/forcepoint.log
+
   Patterns:
     fixture: ServerTester
     tags: [import, export]
