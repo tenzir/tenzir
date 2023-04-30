@@ -18,8 +18,8 @@
 
 namespace vast::plugins::tui {
 
-// We are adding our "deep" event catching helper here becase we are facing the
-// smae issue of a parent component masking the events from its children as
+// We are adding a "deep" event catching helper here becase we are facing the
+// same issue of a parent component masking the events from its children as
 // reported in https://github.com/ArthurSonzogni/FTXUI/discussions/428.
 
 enum class catch_policy {
@@ -47,15 +47,17 @@ protected:
 };
 
 template <catch_policy Policy>
-ftxui::Component Catch(ftxui::Component child,
-                       std::function<bool(ftxui::Event event)> on_event) {
+auto Catch(ftxui::Component child,
+           std::function<bool(ftxui::Event event)> on_event)
+  -> ftxui::Component {
   auto out = Make<CatchBase<Policy>>(std::move(on_event));
   out->Add(std::move(child));
   return out;
 }
 
 template <catch_policy Policy>
-ftxui::ComponentDecorator Catch(std::function<bool(ftxui::Event)> on_event) {
+auto Catch(std::function<bool(ftxui::Event)> on_event)
+  -> ftxui::ComponentDecorator {
   return [on_event = std::move(on_event)](ftxui::Component child) {
     return Catch<Policy>(std::move(child),
                          [on_event = on_event](ftxui::Event event) {
@@ -68,22 +70,22 @@ ftxui::ComponentDecorator Catch(std::function<bool(ftxui::Event)> on_event) {
 /// @param contents The cell contents.
 /// @param color The cell color.
 /// @returns The FTXUI component.
-ftxui::Component
-Cell(std::string contents, ftxui::Color color = ftxui::Color::Default);
+auto Cell(std::string contents, ftxui::Color color) -> ftxui::Component;
 
 /// A focusable data cell.
 /// @param x The data view to render.
 /// @returns The FTXUI component.
-ftxui::Component Cell(view<data> x);
+auto Cell(view<data> x, const struct theme& theme) -> ftxui::Component;
 
 /// The help window.
 /// @returns The FTXUI component.
-ftxui::Component Help();
+auto Help() -> ftxui::Component;
 
 /// The top-level component of the application.
 /// @param screen The screen to hook for UI events.
 /// @param state The UI state.
 /// @returns The FTXUI component.
-ftxui::Component MainWindow(ftxui::ScreenInteractive* screen, ui_state* state);
+auto MainWindow(ftxui::ScreenInteractive* screen, ui_state* state)
+  -> ftxui::Component;
 
 } // namespace vast::plugins::tui

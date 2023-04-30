@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <vast/view.hpp>
-
 #include <ftxui/component/component_options.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/dom/table.hpp>
@@ -17,104 +15,74 @@
 
 namespace vast::plugins::tui {
 
-/// The state of an FTXUI component.
-/// @relates theme
-struct component_state {
-  bool focused;
-  bool hovered;
-  bool active;
+/// The theme colors.
+struct palette {
+  // General
+  ftxui::Color text;
+  ftxui::Color subtext;
+  ftxui::Color subsubtext;
+  ftxui::Color subtle;
+  ftxui::Color link_normal;
+  ftxui::Color link_followed;
+  ftxui::Color link_hover;
+  ftxui::Color success;
+  ftxui::Color error;
+  ftxui::Color warning;
+  ftxui::Color info;
+  // Window
+  ftxui::Color cursor;
+  ftxui::Color cursor_text;
+  ftxui::Color border_active;
+  ftxui::Color border_inactive;
+  ftxui::Color border_bell;
+  // Colors
+  ftxui::Color color0;
+  ftxui::Color color1;
+  ftxui::Color color2;
+  ftxui::Color color3;
+  ftxui::Color color4;
+  ftxui::Color color5;
+  ftxui::Color color6;
+  ftxui::Color color7;
+  ftxui::Color color8;
+  ftxui::Color color9;
+  ftxui::Color color10;
+  ftxui::Color color11;
+  ftxui::Color color12;
+  ftxui::Color color13;
+  ftxui::Color color14;
+  ftxui::Color color15;
+  ftxui::Color color16;
+  ftxui::Color color17;
+  // Language
+  ftxui::Color keyword;
+  ftxui::Color string;
+  ftxui::Color escape;
+  ftxui::Color comment;
+  ftxui::Color number;
+  ftxui::Color operator_;
+  ftxui::Color brace;
+  ftxui::Color function;
+  ftxui::Color parameter;
+  ftxui::Color builtin;
+  ftxui::Color type;
 };
 
 /// Application-wide color and style settings.
 struct theme {
-  /// Varies the style to drive the user attention.
-  enum class style { normal, alert };
+  /// A themed FTXUI menu option.
+  auto menu_option(ftxui::Direction direction) const -> ftxui::MenuOption;
 
-  /// The theme colors.
-  struct color_state {
-    ftxui::Color primary = ftxui::Color::Cyan;
-    ftxui::Color secondary = ftxui::Color::Blue;
-    ftxui::Color frame = ftxui::Color::GrayDark;
-    ftxui::Color focus = ftxui::Color::Green;
-    ftxui::Color hover = ftxui::Color::GreenLight;
-    ftxui::Color alert = ftxui::Color::Red;
-  } color;
+  /// A themed FTXUI border.
+  auto border() const -> ftxui::Decorator;
 
-  template <style Style = style::normal>
-  void transform(ftxui::Element& e, const component_state& state) const {
-    using namespace ftxui;
-    if constexpr (Style == style::normal) {
-      if (state.hovered)
-        e |= ftxui::color(color.hover);
-      if (state.focused)
-        e |= ftxui::color(color.focus);
-      if (state.active)
-        e |= bold;
-      if (!state.focused && !state.active)
-        e |= dim;
-    } else if constexpr (Style == style::alert) {
-      if (state.focused || state.hovered)
-        e |= ftxui::color(color.alert);
-      if (state.active)
-        e |= bold;
-      if (!state.focused && !state.active)
-        e |= dim;
-    }
-  }
+  /// Returns a themed separator.
+  auto separator() const -> ftxui::Element;
 
-  /// Transforms an element according to given entry state.
-  template <style Style>
-  void transform(ftxui::Element& e, const ftxui::EntryState& entry) const {
-    using namespace ftxui;
-    if constexpr (Style == style::normal) {
-      if (entry.focused)
-        e |= ftxui::color(color.focus);
-      if (entry.active)
-        e |= ftxui::color(color.secondary) | bold;
-      if (!entry.focused && !entry.active)
-        e |= ftxui::color(color.secondary) | dim;
-    } else if constexpr (Style == style::alert) {
-      if (entry.focused)
-        e |= ftxui::color(color.alert);
-      if (entry.active)
-        e |= ftxui::color(color.alert) | bold;
-      if (!entry.focused && !entry.active)
-        e |= ftxui::color(color.alert) | dim;
-    }
-  }
-
-  /// Styles the first row of a table.
-  /// In general, we're trying to style tables like the LaTeX booktabs package,
-  /// i.e., as minimal vertical lines as possible.
-  /// @param table The table to style.
-  /// @pre The table must have at least one row.
-  void style_table_header(ftxui::Table& table) const;
-
-  /// Generates a ButtonOption instance.
-  template <style Style = style::normal>
-  [[nodiscard]] ftxui::ButtonOption button_option() const {
-    using namespace ftxui;
-    ButtonOption result;
-    result.transform = [=](const EntryState& entry) {
-      Element e
-        = hbox({text(" "), text(entry.label), text(" ")}) | center | border;
-      transform<Style>(e, entry);
-      return e;
-    };
-    return result;
-  }
-
-  [[nodiscard]] ftxui::MenuOption structured_data() const;
-
-  [[nodiscard]] ftxui::MenuOption
-  navigation(ftxui::MenuOption::Direction direction
-             = ftxui::MenuOption::Direction::Right) const;
+  struct palette palette;
 };
 
 /// The default theme if the user doesn't adjust one.
 const theme default_theme = theme{};
-
-/// Computes a color for a given piece of data for a given theme.
-ftxui::Color colorize(data_view x, const struct theme& theme = default_theme);
 
 } // namespace vast::plugins::tui
