@@ -31,18 +31,18 @@ namespace {
 struct configuration {
   int width = 0;
   int height = 0;
-  std::string mode;
+  bool fullscreen = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return detail::apply_all(f, x.width, x.height, x.mode);
+    return detail::apply_all(f, x.width, x.height, x.fullscreen);
   }
 
   static inline const record_type& schema() noexcept {
     static auto result = record_type{
       {"height", int64_type{}},
       {"width", int64_type{}},
-      {"mode", string_type{}},
+      {"fullscreen", bool_type{}},
     };
     return result;
   }
@@ -53,10 +53,8 @@ auto make_screen(const configuration& config) -> ftxui::ScreenInteractive {
   using namespace ftxui;
   if (config.width > 0 && config.height > 0)
     return ScreenInteractive::FixedSize(config.width, config.height);
-  if (config.mode == "fullscreen")
+  if (config.fullscreen)
     return ScreenInteractive::Fullscreen();
-  if (config.mode == "fit")
-    return ScreenInteractive::FitComponent();
   return ScreenInteractive::TerminalOutput();
 }
 
@@ -118,7 +116,8 @@ public:
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     // Parse options first.
-    const auto options = option_set_parser{{{"width", 'w'}, {"height", 'h'}}};
+    const auto options = option_set_parser{
+      {{"fullscreen", 'f'}, {"width", 'w'}, {"height", 'h'}}};
     const auto option_parser = optional_ws_or_comment >> ~options;
     auto parsed_options = std::unordered_map<std::string, data>{};
     if (!option_parser(f, l, parsed_options)) {
@@ -132,25 +131,19 @@ public:
     // Assign parsed options to configuration.
     auto config = configuration();
     for (const auto& [key, value] : parsed_options) {
-      auto integer = caf::get_if<uint64_t>(&value);
-      if (!integer) {
-        return {
-          std::string_view{f, l},
-          caf::make_error(ec::syntax_error,
-                          fmt::format("invalid integer option for {} operator: "
-                                      "'{}'",
-                                      name(), value)),
-        };
+      if (key == "w" || key == "width") {
+        if (auto integer = caf::get_if<uint64_t>(&value))
+          config.width = detail::narrow_cast<int>(*integer);
+      } else if (key == "h" || key == "height") {
+        if (auto integer = caf::get_if<uint64_t>(&value))
+          config.width = detail::narrow_cast<int>(*integer);
+      } else if (key == "f" || key == "fullscreen") {
+        config.fullscreen = true;
       }
-      if (key == "w" || key == "width")
-        config.width = detail::narrow_cast<int>(*integer);
-      else if (key == "h" || key == "height")
-        config.height = detail::narrow_cast<int>(*integer);
     }
     // Parse positional arguments.
-    auto mode = str("fullscreen") | str("fit");
-    const auto p = optional_ws_or_comment >> ~mode >> end_of_pipeline_operator;
-    if (!p(f, l, config.mode)) {
+    const auto p = optional_ws_or_comment >> end_of_pipeline_operator;
+    if (!p(f, l, unused)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
