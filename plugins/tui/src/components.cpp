@@ -36,7 +36,7 @@ auto component(T x) -> ftxui::Component {
 /// Makes a component a vertically scrollable in a frame.
 auto enframe(Component component) -> Component {
   return Renderer(component, [component] {
-    return component->Render() | vscroll_indicator | frame;
+    return component->Render() | frame;
   });
 }
 
