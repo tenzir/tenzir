@@ -61,7 +61,7 @@ struct palette {
   ftxui::Color comment;
   ftxui::Color number;
   ftxui::Color operator_;
-  ftxui::Color brace;
+  ftxui::Color delimiter;
   ftxui::Color function;
   ftxui::Color parameter;
   ftxui::Color builtin;
@@ -82,7 +82,10 @@ struct theme {
   struct palette palette;
 };
 
+/// Constructs the mocha scheme.
+auto mocha() -> theme;
+
 /// The default theme if the user doesn't adjust one.
-const theme default_theme = theme{};
+const theme default_theme = mocha();
 
 } // namespace vast::plugins::tui

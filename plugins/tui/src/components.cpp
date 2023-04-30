@@ -54,7 +54,7 @@ auto render(data_view v, const struct theme& theme) -> Element {
     [&](const auto& x) {
       return align_left(x) | color(theme.palette.color0);
     },
-    [&](caf::none_t x) {
+    [&](caf::none_t) {
       return align_center("∅") | color(theme.palette.subtle);
     },
     [&](view<bool> x) {
@@ -70,10 +70,10 @@ auto render(data_view v, const struct theme& theme) -> Element {
       return align_right(x) | color(theme.palette.number);
     },
     [&](view<duration> x) {
-      return align_right(x) | color(theme.palette.number);
+      return align_right(x) | color(theme.palette.operator_);
     },
     [&](view<time> x) {
-      return align_left(x) | color(theme.palette.number);
+      return align_left(x) | color(theme.palette.operator_);
     },
     [&](view<std::string> x) {
       return align_left(x) | color(theme.palette.string);
@@ -82,10 +82,10 @@ auto render(data_view v, const struct theme& theme) -> Element {
       return align_left(x) | color(theme.palette.string);
     },
     [&](view<ip> x) {
-      return align_left(x) | color(theme.palette.string);
+      return align_left(x) | color(theme.palette.type);
     },
     [&](view<subnet> x) {
-      return align_left(x) | color(theme.palette.string);
+      return align_left(x) | color(theme.palette.type);
     },
   };
   return caf::visit(f, v);
@@ -107,8 +107,8 @@ auto HeaderCell(std::string top, std::string bottom, const struct theme& theme)
   return Renderer(
     [top_text = std::move(top), bottom_text = std::move(bottom),
      top_color = color(theme.palette.text),
-     bottom_color = color(theme.palette.subtext)](bool focused) mutable {
-      auto header = text(top_text) | center | top_color;
+     bottom_color = color(theme.palette.comment)](bool focused) mutable {
+      auto header = text(top_text) | bold | center | top_color;
       if (focused)
         header = header | inverted | focus;
       auto element = vbox({

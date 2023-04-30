@@ -19,7 +19,7 @@ namespace vast::plugins::tui {
 /// The UI-global state.
 struct ui_state {
   /// The active theme.
-  struct theme theme;
+  struct theme theme = default_theme;
 
   /// The data to render.
   std::vector<table_slice> data;
