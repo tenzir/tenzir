@@ -2654,6 +2654,64 @@ size_t record_type::num_leaves() const noexcept {
   return num_leaves;
 }
 
+// TODO: the implementation is copied from above. We may want to factor the two
+// functions.
+size_t record_type::depth() const noexcept {
+  auto index = offset{0};
+  auto record_depth = index.size();
+  auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
+    table().type_as_record_type()};
+  while (!index.empty()) {
+    const auto* record = history.back();
+    VAST_ASSERT(record);
+    const auto* fields = record->fields();
+    VAST_ASSERT(fields);
+    // This is our exit condition: If we arrived at the end of a record, we need
+    // to step out one layer. We must also reset the target key at this point.
+    if (index.back() >= fields->size()) {
+      history.pop_back();
+      index.pop_back();
+      if (!index.empty())
+        ++index.back();
+      continue;
+    }
+    const auto* field = record->fields()->Get(index.back());
+    VAST_ASSERT(field);
+    const auto* field_type = resolve_transparent(field->type_nested_root());
+    VAST_ASSERT(field_type);
+    switch (field_type->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
+      case fbs::type::Type::NONE:
+      case fbs::type::Type::bool_type:
+      case fbs::type::Type::int64_type:
+      case fbs::type::Type::uint64_type:
+      case fbs::type::Type::double_type:
+      case fbs::type::Type::duration_type:
+      case fbs::type::Type::time_type:
+      case fbs::type::Type::string_type:
+      case fbs::type::Type::ip_type:
+      case fbs::type::Type::subnet_type:
+      case fbs::type::Type::enumeration_type:
+      case fbs::type::Type::list_type:
+      case fbs::type::Type::map_type: {
+        ++index.back();
+        break;
+      }
+      case fbs::type::Type::record_type: {
+        history.emplace_back(field_type->type_as_record_type());
+        index.push_back(0);
+        record_depth = std::max(record_depth, index.size());
+        break;
+      }
+      case fbs::type::Type::enriched_type:
+        __builtin_unreachable();
+        break;
+    }
+  }
+  return record_depth;
+}
+
 offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
   size_t current_flat_index = 0;
   auto index = offset{0};

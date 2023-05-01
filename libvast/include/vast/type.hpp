@@ -1236,6 +1236,9 @@ public:
   /// Returns the number of leaf fields in a record.
   [[nodiscard]] size_t num_leaves() const noexcept;
 
+  /// Returns the number of nested sub-records.
+  [[nodiscard]] size_t depth() const noexcept;
+
   /// Resolves a flat index into an offset.
   [[nodiscard]] offset resolve_flat_index(size_t flat_index) const noexcept;
 
