@@ -1230,7 +1230,7 @@ public:
   /// Returns an iterable view over the leaf fields of a record type.
   [[nodiscard]] generator<leaf_view> leaves() const noexcept;
 
-  /// Returns the numnber of fields in a record.
+  /// Returns the number of fields in a record.
   [[nodiscard]] size_t num_fields() const noexcept;
 
   /// Returns the number of leaf fields in a record.
