@@ -138,21 +138,22 @@ auto HeaderCell(std::string top, std::string bottom, size_t height,
 auto Help() -> Component {
   return Renderer([] {
     auto table = Table({
-      {"Key", "Description"},
-      {"q", "quit the UI"},
-      {"<UP>", "move focus one window up"},
-      {"<DOWN>", "move focus one window down"},
-      {"<LEFT>", "move focus one window to the left"},
-      {"<RIGHT>", "move focus one window to the right"},
-      {"?", "render this help"},
+      {" Key ", " Alias ", " Description "},
+      {"k", "↑", "move focus one window up"},
+      {"j", "↓", "move focus one window down"},
+      {"h","←", "move focus one window to the left"},
+      {"l", "→", "move focus one window to the right"},
+      {"?", "", "show this help"},
+      {"q", "", "quit the UI"},
     });
     table.SelectAll().Border(ROUNDED);
     // Set the table header apart from the rest
     table.SelectRow(0).Decorate(bold);
-    table.SelectRow(0).SeparatorHorizontal(LIGHT);
+    table.SelectRow(0).SeparatorHorizontal(ROUNDED);
     table.SelectRow(0).Border(ROUNDED);
     // Align center the first column.
     table.SelectColumn(0).DecorateCells(center);
+    table.SelectColumn(1).DecorateCells(center);
     return table.Render();
   });
 }
