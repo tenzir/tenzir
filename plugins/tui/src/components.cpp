@@ -93,8 +93,8 @@ auto render(data_view v, const struct theme& theme) -> Element {
 
 } // namespace
 
-/// A focusable cell in a DataView.
-auto Cell(view<data> x, const struct theme& theme) -> Component {
+/// A focusable cell in the table body.
+auto BodyCell(view<data> x, const struct theme& theme) -> Component {
   return Renderer([element = render(x, theme)](bool focused) mutable {
     if (focused)
       return element | inverted | focus;
@@ -102,19 +102,35 @@ auto Cell(view<data> x, const struct theme& theme) -> Component {
   });
 }
 
-auto HeaderCell(std::string top, std::string bottom, const struct theme& theme)
-  -> Component {
+/// A single-row focusable cell in the table header.
+auto HeaderCell(std::string top, const struct theme& theme) -> Component {
   return Renderer(
-    [top_text = std::move(top), bottom_text = std::move(bottom),
+    [top_text = std::move(top),
+     top_color = color(theme.palette.text)](bool focused) mutable {
+      auto header = text(top_text) | bold | center | top_color;
+      if (focused)
+        header = header | inverted | focus;
+      return header;
+    });
+}
+
+/// A double-row focusable cell in the table header.
+auto HeaderCell(std::string top, std::string bottom, size_t height,
+                const struct theme& theme) -> Component {
+  return Renderer(
+    [height, top_text = std::move(top), bottom_text = std::move(bottom),
      top_color = color(theme.palette.text),
      bottom_color = color(theme.palette.comment)](bool focused) mutable {
       auto header = text(top_text) | bold | center | top_color;
       if (focused)
         header = header | inverted | focus;
       auto element = vbox({
-        std::move(header),
-        text(bottom_text) | center | bottom_color,
-      });
+                       filler(),
+                       std::move(header),
+                       text(bottom_text) | center | bottom_color,
+                       filler(),
+                     })
+                     | size(HEIGHT, EQUAL, height);
       return element;
     });
 }
@@ -207,39 +223,61 @@ auto Explorer(ui_state* state) -> Component {
       Component table = Container::Horizontal({});
     };
 
+    // TODO: protect against recursion.
+    auto add_column_header(table_state& tbl, record_type::field_view field,
+                           Component parent, size_t depth) -> void {
+      auto column = Container::Vertical({});
+      if (auto inner = caf::get_if<record_type>(&field.type)) {
+        column->Add(HeaderCell(std::string{field.name}, state_->theme));
+        column->Add(component(state_->theme.separator()));
+        auto inner_table = Container::Horizontal({});
+        auto first = true;
+        for (auto inner_field : inner->fields()) {
+          if (first)
+            first = false;
+          else
+            inner_table->Add(component(state_->theme.separator()));
+          add_column_header(tbl, inner_field, inner_table, inner->depth());
+        }
+        column->Add(inner_table);
+      } else {
+        // Add extra buffer for recursive headers
+        auto type = fmt::to_string(field.type);
+        column->Add(HeaderCell(std::string{field.name}, std::move(type),
+                               depth * 2, state_->theme));
+        column->Add(component(state_->theme.separator()));
+        // Side effect: add all leaf columns to the table state.
+        tbl.columns.push_back(column);
+      }
+      parent->Add(column);
+    }
+
     auto append(table_slice slice) -> void {
       auto& tbl = tables_[slice.schema()];
       // If this is the first slice, we'll assemble the header first.
       const auto& schema = caf::get<record_type>(slice.schema());
       if (tbl.columns.empty()) {
         // Add header for row ID column.
-        tbl.rids->Add(HeaderCell(" # ", "", state_->theme));
+        tbl.rids->Add(HeaderCell(" # ", "", schema.depth() * 2, state_->theme));
         tbl.rids->Add(component(state_->theme.separator()));
         tbl.table->Add(tbl.rids);
         // Add header for schema columns.
-        for (size_t i = 0; i < slice.columns(); ++i) {
-          auto column = Container::Vertical({});
-          auto offset = schema.resolve_flat_index(i);
-          auto type = fmt::to_string(schema.field(offset).type);
-          column->Add(
-            HeaderCell(schema.key(offset), std::move(type), state_->theme));
-          column->Add(component(state_->theme.separator()));
-          tbl.columns.push_back(column);
+        for (auto field : schema.fields()) {
           tbl.table->Add(component(state_->theme.separator()));
-          tbl.table->Add(column);
+          add_column_header(tbl, field, tbl.table, schema.depth());
         }
       }
       VAST_ASSERT(tbl.columns.size() == slice.columns());
       // Append RIDs.
       for (size_t j = 0; j < slice.rows(); ++j) {
         auto rid = uint64_t{tbl.rids->ChildCount() - 2}; // subtract header rows
-        tbl.rids->Add(Cell(view<data>{rid}, state_->theme));
+        tbl.rids->Add(BodyCell(view<data>{rid}, state_->theme));
       }
       // Append table slice data.
       for (size_t i = 0; i < slice.columns(); ++i) {
         auto column = table_slice_column(slice, i);
         for (size_t j = 0; j < column.size(); ++j)
-          tbl.columns[i]->Add(Cell(column[j], state_->theme));
+          tbl.columns[i]->Add(BodyCell(column[j], state_->theme));
       }
     }
 

@@ -55,7 +55,7 @@ auto make_screen(const configuration& config) -> ftxui::ScreenInteractive {
     return ScreenInteractive::FixedSize(config.width, config.height);
   if (config.fullscreen)
     return ScreenInteractive::Fullscreen();
-  return ScreenInteractive::TerminalOutput();
+  return ScreenInteractive::FitComponent();
 }
 
 /// The *terminal user interface (tui)* operator.
