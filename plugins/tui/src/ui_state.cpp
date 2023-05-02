@@ -159,6 +159,7 @@ auto Column(record_type::leaf_view leaf,
 } // namespace
 
 auto ui_state::add(table_slice slice) -> void {
+  VAST_ASSERT(caf::holds_alternative<record_type>(slice.schema()));
   auto& state = tables[slice.schema()];
   if (!state.slices)
     state.slices = std::make_shared<std::vector<table_slice>>();

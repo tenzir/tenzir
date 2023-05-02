@@ -76,6 +76,10 @@ public:
       screen.Loop(main);
     });
     for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
       // The task executes inside the UI thread. Therefore state access is
       // thread-safe.
       auto task = [&state, &screen, slice] {
