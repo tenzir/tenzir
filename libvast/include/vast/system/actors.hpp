@@ -188,6 +188,11 @@ using accountant_actor = typed_actor_fwd<
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
+/// The interface of a PIPELINE EXECUTOR actor.
+using pipeline_executor_actor = system::typed_actor_fwd<
+  // Execute a logical pipeline, returning the result asynchronously.
+  auto(atom::run)->caf::result<void>>::unwrap;
+
 /// The PARTITION CREATION LISTENER actor interface.
 using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, partition_synopsis_pair)->caf::result<void>,

@@ -32,7 +32,7 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> caf::event_based_actor& override {
+  auto self() noexcept -> caf::scheduled_actor& override {
     die("not implemented");
   }
 
@@ -134,7 +134,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(pipeline_fixture, fixture)
 
-TEST(actor executor) {
+TEST(actor executor success) {
   for (auto num : {0, 1, 4, 5}) {
     auto v = unbox(pipeline::parse(fmt::format("head {}", num))).unwrap();
     v.insert(v.begin(),
@@ -155,6 +155,75 @@ TEST(actor executor) {
     run();
     CHECK_EQUAL(actual, std::min(num, 4));
   }
+}
+
+TEST(actor executor execution error) {
+  class execution_error_operator final
+    : public crtp_operator<execution_error_operator> {
+  public:
+    auto operator()(generator<table_slice>, operator_control_plane& ctrl) const
+      -> generator<table_slice> {
+      ctrl.abort(caf::make_error(ec::unspecified));
+      co_return;
+    }
+
+    auto to_string() const -> std::string override {
+      return "error";
+    }
+  };
+
+  auto ops = std::vector<operator_ptr>{};
+  ops.push_back(std::make_unique<source>(zeek_conn_log));
+  ops.push_back(std::make_unique<execution_error_operator>());
+  ops.push_back(std::make_unique<sink>([](table_slice input) {
+    CHECK(input.rows() == 0);
+  }));
+  auto pipe = pipeline{std::move(ops)};
+  auto called = false;
+  sys.spawn([&](caf::event_based_actor* self) -> caf::behavior {
+    start_actor_executor(self, std::move(pipe),
+                         [&](caf::expected<void> result) {
+                           called = true;
+                           REQUIRE_ERROR(result);
+                         });
+    return {};
+  });
+  run();
+  CHECK(called);
+}
+
+TEST(actor executor instantiation error) {
+  class instantiation_error_operator final
+    : public crtp_operator<instantiation_error_operator> {
+  public:
+    auto operator()(generator<table_slice>, operator_control_plane&) const
+      -> caf::expected<generator<table_slice>> {
+      return caf::make_error(ec::unspecified);
+    }
+
+    auto to_string() const -> std::string override {
+      return "error";
+    }
+  };
+
+  auto ops = std::vector<operator_ptr>{};
+  ops.push_back(std::make_unique<source>(zeek_conn_log));
+  ops.push_back(std::make_unique<instantiation_error_operator>());
+  ops.push_back(std::make_unique<sink>([](table_slice) {
+    CHECK(false);
+  }));
+  auto pipe = pipeline{std::move(ops)};
+  auto called = false;
+  sys.spawn([&](caf::event_based_actor* self) -> caf::behavior {
+    start_actor_executor(self, std::move(pipe),
+                         [&](caf::expected<void> result) {
+                           called = true;
+                           REQUIRE_ERROR(result);
+                         });
+    return {};
+  });
+  run();
+  CHECK(called);
 }
 
 TEST(taste 42) {

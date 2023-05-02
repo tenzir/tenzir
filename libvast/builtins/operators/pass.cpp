@@ -32,6 +32,11 @@ public:
     return "pass";
   }
 
+  // FIXME: Remove this again.
+  auto location() const -> operator_location override {
+    return operator_location::remote;
+  }
+
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override {
     return std::pair{expr, std::make_unique<pass_operator>(*this)};

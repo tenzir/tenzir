@@ -6,15 +6,19 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/actor_executor.hpp>
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
+
+#include <caf/scoped_actor.hpp>
 
 namespace vast::plugins::exec {
 
 namespace {
 
-auto exec_command(std::span<const std::string> args) -> caf::expected<void> {
+auto exec_command(std::span<const std::string> args, caf::actor_system& sys)
+  -> caf::expected<void> {
   if (args.size() != 1)
     return caf::make_error(
       ec::invalid_argument,
@@ -24,16 +28,23 @@ auto exec_command(std::span<const std::string> args) -> caf::expected<void> {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("failed to parse pipeline: {}",
                                        pipeline.error()));
-  auto executor = make_local_executor(std::move(*pipeline));
+
+  caf::scoped_actor self{sys};
+  auto executor = self->spawn(pipeline_executor, std::move(*pipeline));
+  auto result = caf::expected<void>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This will
   // likely be easier to implement once we switch to the actor-based
   // asynchronous executor, so we may as well wait until then.
-  for (auto&& result : executor) {
-    if (not result)
-      return result;
-  }
-  return {};
+  self->request(executor, caf::infinite, atom::run_v)
+    .receive(
+      [] {
+        // no-op
+      },
+      [&](caf::error& error) {
+        result = std::move(error);
+      });
+  return result;
 }
 
 class plugin final : public virtual command_plugin {
@@ -55,8 +66,8 @@ public:
                                           command::opts("?vast.exec"));
     auto factory = command::factory{
       {"exec",
-       [=](const invocation& inv, caf::actor_system&) -> caf::message {
-         auto result = exec_command(inv.arguments);
+       [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
+         auto result = exec_command(inv.arguments, sys);
          if (not result)
            return caf::make_message(result.error());
          return {};

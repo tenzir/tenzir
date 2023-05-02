@@ -21,7 +21,7 @@ public:
   explicit operator_control_plane_mock(OnWarnCallable on_warn)
     : on_warn_{std::move(on_warn)} {
   }
-  auto self() noexcept -> caf::event_based_actor& override {
+  auto self() noexcept -> caf::scheduled_actor& override {
     FAIL("Unexpected call to operator_control_plane::self");
   }
 

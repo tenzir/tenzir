@@ -23,7 +23,7 @@ struct operator_control_plane {
   virtual ~operator_control_plane() noexcept = default;
 
   /// Returns the hosting actor.
-  [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor& = 0;
+  [[nodiscard]] virtual auto self() noexcept -> caf::scheduled_actor& = 0;
 
   /// Stop the execution of the operator.
   /// @pre error != caf::none

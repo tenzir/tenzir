@@ -163,12 +163,16 @@ public:
     return {};
   }
 
-  ///
+  /// FIXME: docs
   virtual auto location() const -> operator_location {
     return operator_location::anywhere;
   }
 
-private:
+  /// FIXME: docs
+  virtual auto detached() const -> bool {
+    return false;
+  }
+
   /// Retrieve the output type of this operator for a given input.
   ///
   /// The default implementation will try to instantiate the operator and then
@@ -253,6 +257,14 @@ public:
   /// Same as `predicate_pushdown`, but returns a `pipeline` object directly.
   auto predicate_pushdown_pipeline(expression const& expr) const
     -> std::optional<std::pair<expression, pipeline>>;
+
+  auto location() const -> operator_location override {
+    die("pipeline::location() must not be called");
+  }
+
+  auto detached() const -> bool override {
+    die("pipeline::detached() must not be called");
+  }
 
   auto instantiate(operator_input input, operator_control_plane& control) const
     -> caf::expected<operator_output> override;

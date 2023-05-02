@@ -194,8 +194,7 @@ class plugin final : public virtual parser_plugin,
       auto json_to_parse_buffer
         = detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'>{};
       for (auto chnk : json_chunk_generator) {
-        VAST_ASSERT(chnk);
-        if (chnk->size() == 0u) {
+        if (!chnk || chnk->size() == 0u) {
           co_yield std::move(slice_builder).finish();
           slice_builder = {};
           continue;

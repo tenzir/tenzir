@@ -20,7 +20,7 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> caf::event_based_actor& override {
+  auto self() noexcept -> caf::scheduled_actor& override {
     die("not implemented");
   }
 
