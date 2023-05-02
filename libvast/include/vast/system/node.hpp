@@ -11,6 +11,7 @@
 #include "vast/aliases.hpp"
 #include "vast/command.hpp"
 #include "vast/error.hpp"
+#include "vast/plugin.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/component_registry.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -22,6 +23,7 @@
 #include <chrono>
 #include <filesystem>
 #include <map>
+#include <unordered_map>
 #include <string>
 
 namespace vast::system {
@@ -71,6 +73,9 @@ struct node_state {
 
   /// Counters for multi-instance components.
   std::unordered_map<std::string, uint64_t> label_counters = {};
+
+  ///
+  std::unordered_map<const rest_endpoint_plugin*, rest_handler_actor> rest_handlers = {};
 
   /// Flag to signal if the node received an exit message.
   bool tearing_down = false;

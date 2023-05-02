@@ -667,7 +667,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       auto [rest_plugin, endpoint] = find_endpoint_handler(desc);
       if (!rest_plugin)
         return caf::make_error(ec::invalid_argument, "unknown endpoint");
-      auto handler = rest_plugin->handler(self->system(), self);
+      auto& handler = self->state.rest_handlers[rest_plugin];
+      if (!handler)
+        // TODO: Monitor the spawned handler and restart if it goes down.
+        handler = rest_plugin->handler(self->system(), self);
       auto rp = self->make_response_promise<std::string>();
       auto response = std::make_shared<detail::internal_http_response>(rp);
       auto params = parse_endpoint_parameters(endpoint, desc.params);
