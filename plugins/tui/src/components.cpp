@@ -10,8 +10,6 @@
 
 #include "tui/elements.hpp"
 
-#include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/data.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/stable_map.hpp>
 #include <vast/table_slice.hpp>
@@ -25,14 +23,6 @@ using namespace ftxui;
 
 namespace {
 
-/// Lifts an FTXUI element into a component.
-template <class T>
-auto component(T x) -> ftxui::Component {
-  return ftxui::Renderer([x = std::move(x)]() {
-    return x;
-  });
-}
-
 /// Makes a component a vertically scrollable in a frame.
 auto enframe(Component component) -> Component {
   return Renderer(component, [component] {
@@ -40,108 +30,14 @@ auto enframe(Component component) -> Component {
   });
 }
 
-auto render(data_view v, const struct theme& theme) -> Element {
-  auto align_left = [](const auto& x) {
-    return text(to_string(x));
-  };
-  auto align_center = [](const auto& x) {
-    return hbox({filler(), text(to_string(x)), filler()});
-  };
-  auto align_right = [](const auto& x) {
-    return hbox({filler(), text(to_string(x))});
-  };
-  auto f = detail::overload{
-    [&](const auto& x) {
-      return align_left(x) | color(theme.palette.color0);
-    },
-    [&](caf::none_t) {
-      return align_center("∅") | color(theme.palette.subtle);
-    },
-    [&](view<bool> x) {
-      return align_left(x) | color(theme.palette.number);
-    },
-    [&](view<int64_t> x) {
-      return align_right(x) | color(theme.palette.number);
-    },
-    [&](view<uint64_t> x) {
-      return align_right(x) | color(theme.palette.number);
-    },
-    [&](view<double> x) {
-      return align_right(x) | color(theme.palette.number);
-    },
-    [&](view<duration> x) {
-      return align_right(x) | color(theme.palette.operator_);
-    },
-    [&](view<time> x) {
-      return align_left(x) | color(theme.palette.operator_);
-    },
-    [&](view<std::string> x) {
-      return align_left(x) | color(theme.palette.string);
-    },
-    [&](view<pattern> x) {
-      return align_left(x) | color(theme.palette.string);
-    },
-    [&](view<ip> x) {
-      return align_left(x) | color(theme.palette.type);
-    },
-    [&](view<subnet> x) {
-      return align_left(x) | color(theme.palette.type);
-    },
-  };
-  return caf::visit(f, v);
-}
-
-} // namespace
-
-/// A focusable cell in the table body.
-auto BodyCell(view<data> x, const struct theme& theme) -> Component {
-  return Renderer([element = render(x, theme)](bool focused) mutable {
-    if (focused)
-      return element | inverted | focus;
-    return element;
-  });
-}
-
-/// A single-row focusable cell in the table header.
-auto HeaderCell(std::string top, const struct theme& theme) -> Component {
-  return Renderer(
-    [top_text = std::move(top),
-     top_color = color(theme.palette.text)](bool focused) mutable {
-      auto header = text(top_text) | bold | center | top_color;
-      if (focused)
-        header = header | inverted | focus;
-      return header;
-    });
-}
-
 /// A double-row focusable cell in the table header.
-auto HeaderCell(std::string top, std::string bottom, size_t height,
-                const struct theme& theme) -> Component {
-  return Renderer(
-    [height, top_text = std::move(top), bottom_text = std::move(bottom),
-     top_color = color(theme.palette.text),
-     bottom_color = color(theme.palette.comment)](bool focused) mutable {
-      auto header = text(top_text) | bold | center | top_color;
-      if (focused)
-        header = header | inverted | focus;
-      auto element = vbox({
-                       filler(),
-                       std::move(header),
-                       text(bottom_text) | center | bottom_color,
-                       filler(),
-                     })
-                     | size(HEIGHT, EQUAL, height);
-      return element;
-    });
-}
-
 auto Help() -> Component {
   return Renderer([] {
     auto table = Table({
       {" Key ", " Alias ", " Description "},
       {"k", "↑", "move focus one window up"},
       {"j", "↓", "move focus one window down"},
-      {"h","←", "move focus one window to the left"},
+      {"h", "←", "move focus one window to the left"},
       {"l", "→", "move focus one window to the right"},
       {"?", "", "show this help"},
       {"q", "", "quit the UI"},
@@ -158,6 +54,18 @@ auto Help() -> Component {
   });
 }
 
+/// A single-row focusable cell in the table header.
+auto RecordHeader(std::string top, const struct theme& theme) -> Component {
+  return Renderer(
+    [top_text = std::move(top),
+     top_color = color(theme.palette.text)](bool focused) mutable {
+      auto header = text(top_text) | bold | center | top_color;
+      if (focused)
+        header = header | inverted | focus;
+      return header;
+    });
+}
+
 auto Explorer(ui_state* state) -> Component {
   class Impl : public ComponentBase {
   public:
@@ -169,25 +77,31 @@ auto Explorer(ui_state* state) -> Component {
       Add(loading);
     }
 
-    Element Render() override {
-      if (state_->data.empty())
+    auto Render() -> Element override {
+      if (tables_.size() == state_->tables.size())
         return ComponentBase::Render();
-      // Update table state with new data.
-      for (auto&& slice : state_->data)
-        append(slice);
-      state_->data.clear();
+      VAST_ASSERT(tables_.size() < state_->tables.size());
+      // Assemble new tables.
+      for (auto [type, _] : state_->tables)
+        if (!tables_.contains(type)) {
+          auto flat_index = size_t{0};
+          const auto& parent = caf::get<record_type>(type);
+          auto table = assemble(type, parent, flat_index);
+          tables_.emplace(type, std::move(table));
+        }
       // Update surrounding UI components.
       if (tables_.size() == 1) {
         // If we only have a single schema, we don't need a schema navigation.
         if (schemas_.empty()) {
-          auto& [type, state] = *tables_.begin();
-          auto component = enframe(state.table);
-          schemas_.push_back(std::string{type.name()});
+          auto& [type, table] = *tables_.begin();
+          auto component = enframe(table);
+          schemas_.emplace_back(type.name());
           tab_->Add(component);
           DetachAllChildren();
           Add(component);
         }
       } else {
+        // For more than one schema, show a navigation.
         VAST_ASSERT(tables_.size() > 1);
         if (schemas_.size() == 1) {
           // Rebuild UI with outer framing when we have more than 1 schema.
@@ -199,8 +113,8 @@ auto Explorer(ui_state* state) -> Component {
           Add(split);
         }
         if (schemas_.size() != tables_.size()) {
-          // If there's a delta, we need to add new table viewers.
-          for (auto& [type, state] : tables_) {
+          // If there's a delta, we need to add new tables.
+          for (auto& [type, table] : tables_) {
             auto width = detail::narrow_cast<int>(type.name().size());
             menu_width_ = std::max(menu_width_, width);
             // Skip schemas we already processed.
@@ -209,7 +123,7 @@ auto Explorer(ui_state* state) -> Component {
             if (it != schemas_.end())
               continue;
             schemas_.push_back(name);
-            tab_->Add(enframe(state.table));
+            tab_->Add(enframe(table));
           }
         }
       }
@@ -217,69 +131,37 @@ auto Explorer(ui_state* state) -> Component {
     }
 
   private:
-    /// The append-only state per unique schema.
-    struct table_state {
-      Components columns = {};
-      Component rids = Container::Vertical({});
-      Component table = Container::Horizontal({});
-    };
-
-    // TODO: protect against recursion.
-    auto add_column_header(table_state& tbl, record_type::field_view field,
-                           Component parent, size_t depth) -> void {
-      auto column = Container::Vertical({});
-      if (auto inner = caf::get_if<record_type>(&field.type)) {
-        column->Add(HeaderCell(std::string{field.name}, state_->theme));
-        column->Add(component(state_->theme.separator()));
-        auto inner_table = Container::Horizontal({});
-        auto first = true;
-        for (auto inner_field : inner->fields()) {
-          if (first)
-            first = false;
-          else
-            inner_table->Add(component(state_->theme.separator()));
-          add_column_header(tbl, inner_field, inner_table, inner->depth());
-        }
-        column->Add(inner_table);
-      } else {
-        // Add extra buffer for recursive headers
-        auto type = fmt::to_string(field.type);
-        column->Add(HeaderCell(std::string{field.name}, std::move(type),
-                               depth * 2, state_->theme));
-        column->Add(component(state_->theme.separator()));
-        // Side effect: add all leaf columns to the table state.
-        tbl.columns.push_back(column);
-      }
-      parent->Add(column);
-    }
-
-    auto append(table_slice slice) -> void {
-      auto& tbl = tables_[slice.schema()];
-      // If this is the first slice, we'll assemble the header first.
-      const auto& schema = caf::get<record_type>(slice.schema());
-      if (tbl.columns.empty()) {
-        // Add header for row ID column.
-        tbl.rids->Add(HeaderCell(" # ", "", schema.depth() * 2, state_->theme));
-        tbl.rids->Add(component(state_->theme.separator()));
-        tbl.table->Add(tbl.rids);
-        // Add header for schema columns.
-        for (auto field : schema.fields()) {
-          tbl.table->Add(component(state_->theme.separator()));
-          add_column_header(tbl, field, tbl.table, schema.depth());
+    /// Assembles a nested table component from the columns in the UI state.
+    auto assemble(const type& schema, const record_type& parent, size_t& index)
+      -> Component {
+      auto result = Container::Horizontal({});
+      auto first = true;
+      for (auto field : parent.fields()) {
+        if (first)
+          first = false;
+        else
+          result->Add(component(state_->theme.separator()));
+        if (auto nested_record = caf::get_if<record_type>(&field.type)) {
+          auto column = Container::Vertical({});
+          column->Add(RecordHeader(std::string{field.name}, state_->theme));
+          column->Add(component(state_->theme.separator()));
+          column->Add(assemble(schema, *nested_record, index));
+          result->Add(column);
+        } else {
+          VAST_ASSERT(state_->tables.contains(schema));
+          auto& table_state = state_->tables[schema];
+          // Prepend rids.
+          if (index == 0) {
+            result->Add(table_state.rids);
+            result->Add(component(state_->theme.separator()));
+          }
+          // Fetch leaf column from UI state.
+          VAST_ASSERT(index < table_state.leaves.size());
+          auto column = table_state.leaves[index++];
+          result->Add(column);
         }
       }
-      VAST_ASSERT(tbl.columns.size() == slice.columns());
-      // Append RIDs.
-      for (size_t j = 0; j < slice.rows(); ++j) {
-        auto rid = uint64_t{tbl.rids->ChildCount() - 2}; // subtract header rows
-        tbl.rids->Add(BodyCell(view<data>{rid}, state_->theme));
-      }
-      // Append table slice data.
-      for (size_t i = 0; i < slice.columns(); ++i) {
-        auto column = table_slice_column(slice, i);
-        for (size_t j = 0; j < column.size(); ++j)
-          tbl.columns[i]->Add(BodyCell(column[j], state_->theme));
-      }
+      return result;
     }
 
     ui_state* state_;
@@ -296,11 +178,13 @@ auto Explorer(ui_state* state) -> Component {
     /// The tab component containing all table viewers. In sync with schemas.
     Component tab_;
 
-    /// The tables with data viewers.
-    detail::stable_map<type, table_state> tables_;
+    /// The tables by schema.
+    detail::stable_map<type, Component> tables_;
   };
   return Make<Impl>(state);
 }
+
+} // namespace
 
 auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
   class Impl : public ComponentBase {

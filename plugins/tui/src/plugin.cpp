@@ -78,8 +78,8 @@ public:
     for (auto&& slice : input) {
       // The task executes inside the UI thread. Therefore state access is
       // thread-safe.
-      auto task = [&state, &screen, slice = std::move(slice)] {
-        state.data.push_back(std::move(slice));
+      auto task = [&state, &screen, slice] {
+        state.add(slice);
         screen.PostEvent(Event::Custom); // Redraw screen
       };
       screen.Post(task);

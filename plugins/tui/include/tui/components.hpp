@@ -18,6 +18,14 @@
 
 namespace vast::plugins::tui {
 
+/// Lifts an FTXUI element into a component.
+template <class T>
+auto component(T x) -> ftxui::Component {
+  return ftxui::Renderer([x = std::move(x)]() {
+    return x;
+  });
+}
+
 // We are adding a "deep" event catching helper here becase we are facing the
 // same issue of a parent component masking the events from its children as
 // reported in https://github.com/ArthurSonzogni/FTXUI/discussions/428.
@@ -65,21 +73,6 @@ auto Catch(std::function<bool(ftxui::Event)> on_event)
                          });
   };
 }
-
-/// A focusable data cell.
-/// @param contents The cell contents.
-/// @param color The cell color.
-/// @returns The FTXUI component.
-auto Cell(std::string contents, ftxui::Color color) -> ftxui::Component;
-
-/// A focusable data cell.
-/// @param x The data view to render.
-/// @returns The FTXUI component.
-auto Cell(view<data> x, const struct theme& theme) -> ftxui::Component;
-
-/// The help window.
-/// @returns The FTXUI component.
-auto Help() -> ftxui::Component;
 
 /// The top-level component of the application.
 /// @param screen The screen to hook for UI events.
