@@ -94,7 +94,9 @@ auto theme::menu_option(Direction direction) const -> MenuOption {
     if (horizontal)
       e |= center;
     e |= flex;
-    // transform<style::normal>(e, entry);
+    e |= bold;
+    if (entry.focused)
+      e |= inverted;
     return e;
   };
   result.underline.enabled = horizontal;
