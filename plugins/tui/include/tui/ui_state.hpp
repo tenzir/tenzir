@@ -10,6 +10,7 @@
 
 #include "tui/theme.hpp"
 
+#include <vast/detail/stable_map.hpp>
 #include <vast/table_slice.hpp>
 #include <vast/table_slice_column.hpp>
 #include <vast/type.hpp>
@@ -33,7 +34,7 @@ struct ui_state {
   };
 
   /// The data to render.
-  std::unordered_map<type, table_state> tables;
+  detail::stable_map<type, table_state> tables;
 
   /// Defines styling and colors.
   struct theme theme = default_theme;

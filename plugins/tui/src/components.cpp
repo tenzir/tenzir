@@ -11,7 +11,7 @@
 #include "tui/elements.hpp"
 
 #include <vast/detail/narrow.hpp>
-#include <vast/detail/stable_map.hpp>
+#include <vast/detail/stable_set.hpp>
 #include <vast/table_slice.hpp>
 #include <vast/table_slice_column.hpp>
 
@@ -70,63 +70,50 @@ auto Explorer(ui_state* state) -> Component {
   class Impl : public ComponentBase {
   public:
     Impl(ui_state* state) : state_{state} {
-      tab_ = Container::Tab({}, &index_); // to be filled
       auto loading = Renderer([] {
         return Vee() | center | flex;
       });
-      Add(loading);
+      tab_ = Container::Tab({loading}, &index_); // to be filled
+      auto style = state_->theme.menu_option(Direction::Down);
+      auto menu = Menu(&schemas_, &index_, style);
+      auto lhs = Container::Horizontal({
+        menu,
+        component(state_->theme.separator()),
+        fingerprints_,
+      });
+      // The menu width is 0 initially, which means the menu is not shown. Once
+      // we have more than one schema, we'll change that.
+      auto split = ResizableSplitLeft(lhs, tab_, &menu_width_);
+      Add(split);
     }
 
     auto Render() -> Element override {
-      if (tables_.size() == state_->tables.size())
+      if (types_.size() == state_->tables.size())
         return ComponentBase::Render();
-      VAST_ASSERT(tables_.size() < state_->tables.size());
-      // Assemble new tables.
-      for (auto [type, _] : state_->tables)
-        if (!tables_.contains(type)) {
+      VAST_ASSERT(types_.size() < state_->tables.size());
+      // Assemble new tables and update components.
+      for (auto [type, _] : state_->tables) {
+        if (!types_.contains(type)) {
+          if (types_.empty())
+            tab_->DetachAllChildren(); // remove loading boilerplate
           auto flat_index = size_t{0};
           const auto& parent = caf::get<record_type>(type);
-          auto table = assemble(type, parent, flat_index);
-          tables_.emplace(type, std::move(table));
-        }
-      // Update surrounding UI components.
-      if (tables_.size() == 1) {
-        // If we only have a single schema, we don't need a schema navigation.
-        if (schemas_.empty()) {
-          auto& [type, table] = *tables_.begin();
-          auto component = enframe(table);
+          auto table = enframe(assemble(type, parent, flat_index));
+          tab_->Add(table);
+          types_.emplace(type);
           schemas_.emplace_back(type.name());
-          tab_->Add(component);
-          DetachAllChildren();
-          Add(component);
-        }
-      } else {
-        // For more than one schema, show a navigation.
-        VAST_ASSERT(tables_.size() > 1);
-        if (schemas_.size() == 1) {
-          // Rebuild UI with outer framing when we have more than 1 schema.
-          DetachAllChildren();
-          auto style = state_->theme.menu_option(Direction::Down);
-          auto menu = Menu(&schemas_, &index_, style);
-          menu_width_ = detail::narrow_cast<int>(schemas_[0].size());
-          auto split = ResizableSplitLeft(menu, tab_, &menu_width_);
-          Add(split);
-        }
-        if (schemas_.size() != tables_.size()) {
-          // If there's a delta, we need to add new tables.
-          for (auto& [type, table] : tables_) {
-            auto width = detail::narrow_cast<int>(type.name().size());
-            menu_width_ = std::max(menu_width_, width);
-            // Skip schemas we already processed.
-            auto name = std::string{type.name()};
-            auto it = std::find(schemas_.begin(), schemas_.end(), name);
-            if (it != schemas_.end())
-              continue;
-            schemas_.push_back(name);
-            tab_->Add(enframe(table));
-          }
+          auto fingerprint = type.make_fingerprint();
+          // One extra character for the separator.
+          auto width = type.name().size() + fingerprint.size() + 1;
+          menu_width_ = std::max(menu_width_, detail::narrow_cast<int>(width));
+          auto element = text(std::move(fingerprint))
+                         | color(state_->theme.palette.subtle);
+          fingerprints_->Add(component(std::move(element)));
         }
       }
+      // Reset menu width if we only have a single schema.
+      if (schemas_.size() == 1)
+        menu_width_ = 0;
       return ComponentBase::Render();
     }
 
@@ -175,11 +162,14 @@ auto Explorer(ui_state* state) -> Component {
     /// The menu items for the navigator. In sync with the tab.
     std::vector<std::string> schemas_;
 
+    /// The component that shows the fingerprints.
+    Component fingerprints_ = Container::Vertical({});
+
     /// The tab component containing all table viewers. In sync with schemas.
     Component tab_;
 
     /// The tables by schema.
-    detail::stable_map<type, Component> tables_;
+    detail::stable_set<type> types_;
   };
   return Make<Impl>(state);
 }
