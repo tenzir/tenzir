@@ -32,10 +32,10 @@ using json_buffer = detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'>;
 caf::error
 make_generic_parser_err(simdjson::error_code err, std::string_view faulty_json,
                         std::string_view faulty_json_description) {
-  return caf::make_error(ec::parse_error,
-                         fmt::format("{} The following {} will be ignored: {}",
-                                     error_message(err),
-                                     faulty_json_description, faulty_json));
+  return caf::make_error(
+    ec::parse_error,
+    fmt::format("failed to parse '{}' and skips JSON '{}': {}",
+                faulty_json_description, faulty_json, error_message(err)));
 }
 
 class doc_parser {
@@ -282,11 +282,10 @@ class plugin final : public virtual parser_plugin,
         }
         for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
           if (auto err = parse(doc_it, slice_builder, ctrl)) {
-            ctrl.warn(caf::make_error(ec::parse_error,
-                                      fmt::format("{} Parts of the following "
-                                                  "JSON input: {} "
-                                                  "can be skipped",
-                                                  error_message(err), view)));
+            ctrl.warn(caf::make_error(
+              ec::parse_error, fmt::format("failed to fully parse '{}' : {}. "
+                                           "Some events can be skipped.",
+                                           view, error_message(err))));
             continue;
           }
           if (slice_builder.rows() == max_table_slice_rows) {
@@ -297,9 +296,13 @@ class plugin final : public virtual parser_plugin,
         if (auto trunc = stream.truncated_bytes(); trunc == 0) {
           json_to_parse_buffer.reset();
         }
-        // Simdjson return that more bytes are left unparsed than the
-        // input. In such cases we can try to parse the whole input again line
-        // by line and extract some events out of it.
+        // Simdjson returns that more bytes are left unparsed than the
+        // input. It is hard to reason what it means that a parser didn't manage
+        // to parse more bytes than the input had. These type of return values
+        // only seemed to sometimes occur where the input json couldn't be split
+        // into documents. We don't have any hint where we should resume the
+        // JSON from. We can either skip the whole input or try parsing it line
+        // by line, which can still extract some events
         else if (trunc > view.size()) {
           auto line_parser = line_by_line_parser{parser, json_to_parse_buffer,
                                                  slice_builder, ctrl};
