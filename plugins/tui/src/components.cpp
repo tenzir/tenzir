@@ -148,7 +148,9 @@ auto Explorer(ui_state* state) -> Component {
           result->Add(column);
         }
       }
-      return result;
+      return Renderer(result, [result]() {
+        return result->Render() | yflex_grow;
+      });
     }
 
     ui_state* state_;
