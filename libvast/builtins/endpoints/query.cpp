@@ -695,7 +695,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   rest_endpoints() const override {
     static auto endpoints = std::vector<vast::rest_endpoint>{
       {
-        // .endpoint_id = system::query_endpoints::new_,
+        .endpoint_id = static_cast<uint64_t>(system::query_endpoints::new_),
         .method = http_method::post,
         .path = "/query/new",
         .params = vast::record_type{
@@ -710,7 +710,7 @@ class plugin final : public virtual rest_endpoint_plugin {
         .content_type = http_content_type::json,
       },
       {
-        // .endpoint_id = system::query_endpoints::next,
+        .endpoint_id = static_cast<uint64_t>(system::query_endpoints::next),
         .method = http_method::get,
         .path = "/query/:id/next",
         .params = vast::record_type{
