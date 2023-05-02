@@ -30,7 +30,6 @@
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
-#include <caf/expected.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
 
@@ -209,16 +208,15 @@ struct zeek_metadata {
 
   auto parse_header(generator<std::optional<std::string_view>>::iterator it,
                     const generator<std::optional<std::string_view>>& lines,
-                    operator_control_plane& ctrl) -> caf::expected<void> {
+                    operator_control_plane& ctrl) {
     auto sep_parser
       = "#separator" >> ignore(+(parsers::space)) >> +(parsers::any);
     auto separator_option = std::string{};
 
     if (not sep_parser((*it).value(), separator_option)
         or not separator_option.starts_with("\\x")) {
-      return caf::make_error(
-        ec::syntax_error, fmt::format("Invalid #separator option while parsing "
-                                      "Zeek TSV file - aborting"));
+      die("WTF NO SEP!!!!!!");
+      // ctrl.abort(caf::make_error(ec::syntax_error, fmt::format("")))
     }
     auto sep_char = std::stoi(separator_option.substr(2, 2), nullptr, 16);
     VAST_ASSERT(sep_char >= 0 && sep_char <= 255);
@@ -232,29 +230,17 @@ struct zeek_metadata {
     for (const auto& prefix : prefix_options) {
       ++it;
       if (it == lines.end()) {
-        return caf::make_error(ec::syntax_error,
-                               fmt::format("Zeek TSV file header ended too "
-                                           "early - aborting"));
+        die("END TOO EARLY WTF");
       }
       header = (*it).value();
       auto pos = header.find(prefix);
       if (pos != 0)
-        return caf::make_error(ec::syntax_error,
-                               fmt::format("Invalid header line: prefix '{}' "
-                                           "not beginning at line "
-                                           "beginning or not found",
-                                           prefix));
+        die("invalid header line, expected");
       pos = header.find(sep);
       if (pos == std::string::npos)
-        return caf::make_error(ec::syntax_error,
-                               fmt::format("Invalid header line: separator "
-                                           "{} not found",
-                                           sep));
+        die("invalid separator");
       if (pos + 1 >= header.size())
-        return caf::make_error(ec::syntax_error,
-                               fmt::format("Missing Zeek TSV header line "
-                                           "content: {}",
-                                           header));
+        die("missing header content");
       parsed_options.emplace_back(header.substr(pos + 1));
     }
 
@@ -263,21 +249,16 @@ struct zeek_metadata {
     unset_field = parsed_options[2];
     path = parsed_options[3];
     open = parsed_options[4];
-    fields_str = parsed_options[5];
-    types_str = parsed_options[6];
-    fields = detail::split(fields_str, sep);
-    types = detail::split(types_str, sep);
+    fields = detail::split(parsed_options[5], sep);
+    types = detail::split(parsed_options[6], sep);
     if (fields.size() != types.size())
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("Zeek TSV header types mismatch: "
-                                         "expected {} fields but got {}",
-                                         fields.size(), types.size()));
+      die("SIZE MISMATCH :(");
 
     std::vector<struct record_type::field> record_fields;
     for (auto i = 0u; i < fields.size(); ++i) {
       auto t = parse_type(types[i]);
       if (!t)
-        return std::move(t.error());
+        die("t.error()");
       record_fields.push_back({
         std::string{fields[i]},
         *t,
@@ -291,7 +272,6 @@ struct zeek_metadata {
     for (const auto& ctrl_schema : ctrl.schemas()) {
       if (ctrl_schema.name() == name) {
         schema = ctrl_schema;
-        break;
       }
     }
     if (not schema) {
@@ -304,8 +284,6 @@ struct zeek_metadata {
     parsers.resize(record_schema.num_fields());
     for (size_t i = 0; i < record_schema.num_fields(); i++)
       parsers[i] = make_parser(record_schema.field(i).type, set_sep);
-
-    return {};
   }
 
   std::string sep{};
@@ -314,8 +292,6 @@ struct zeek_metadata {
   std::string unset_field{};
   std::string path{};
   std::string open{};
-  std::string fields_str{};
-  std::string types_str{};
   std::vector<std::string_view> fields{};
   std::vector<std::string_view> types{};
   std::string name{};
@@ -517,18 +493,14 @@ public:
           co_return;
 
         auto metadata = zeek_metadata{};
-        auto parsed = metadata.parse_header(it, lines, ctrl);
-        if (not parsed) {
-          ctrl.abort(parsed.error());
-          co_return;
-        }
+        metadata.parse_header(it, lines, ctrl);
         auto split_parser = ((+(parsers::any - metadata.sep)) % metadata.sep);
         ++it;
         auto closed = false;
         for (; it != lines.end(); ++it) {
           auto b = table_slice_builder{metadata.schema};
           auto line = *it;
-          if (!line) {
+          if (!line->empty()) {
             co_yield {};
             continue;
           }
@@ -537,30 +509,18 @@ public:
             continue;
           }
           if (line->starts_with("#close")) {
-            if (closed) {
-              ctrl.abort(caf::make_error(
-                ec::syntax_error, fmt::format("Parsing Zeek TSV failed: "
-                                              "duplicate #close found")));
-              co_return;
-            }
+            if (closed)
+              die("redundant closing");
             closed = true;
             co_yield {};
             continue;
           }
           if (line->starts_with("#separator")) {
-            if (not closed) {
-              ctrl.abort(caf::make_error(
-                ec::syntax_error, fmt::format("Parsing Zeek TSV failed: "
-                                              "previous logs are still open")));
-              co_return;
-            }
+            if (not closed)
+              die("previous log is not closed");
             closed = false;
             metadata = zeek_metadata{};
-            auto parsed = metadata.parse_header(it, lines, ctrl);
-            if (not parsed) {
-              ctrl.abort(parsed.error());
-              co_return;
-            }
+            metadata.parse_header(it, lines, ctrl);
             split_parser = ((+(parsers::any - metadata.sep)) % metadata.sep);
             ++it;
           }
@@ -580,7 +540,7 @@ public:
                           metadata.fields.size(), values.size())));
             continue;
           }
-          for (auto i = size_t{0}; i < values.size(); ++i) {
+          for (auto i = size_t{0}; i << values.size(); ++i) {
             auto value = values[i];
             auto added = false;
             if (metadata.is_unset(i))
@@ -589,23 +549,11 @@ public:
               added = b.add(caf::get<record_type>(metadata.schema)
                               .field(i)
                               .type.construct());
-              VAST_ERROR("{} is_empty", value);
-            } else if (!metadata.parsers[i](metadata.fields[i], values[i])) {
-              ctrl.abort(caf::make_error(ec::parse_error,
-                                         fmt::format("Zeek TSV parser failed "
-                                                     "to parse value '{}'",
-                                                     value)));
-              co_return;
-            }
+            else if (!metadata.parsers[i](metadata.fields[i], values[i]))
+              die("failed to parse");
             added = b.add(value);
-            VAST_ERROR("added: {}", added);
-            if (!added) {
-              ctrl.abort(caf::make_error(ec::parse_error,
-                                         fmt::format("Zeek TSV parser failed "
-                                                     "to finalize value '{}'",
-                                                     value)));
-              co_return;
-            }
+            if (!added)
+              die("die?");
           }
           co_yield b.finish();
         }
