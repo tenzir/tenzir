@@ -43,7 +43,7 @@ public:
     : on_event_{std::move(on_event)} {
   }
 
-  bool OnEvent(ftxui::Event event) override {
+  auto OnEvent(ftxui::Event event) -> bool override {
     if constexpr (Policy == catch_policy::child)
       return ComponentBase::OnEvent(event) || on_event_(event);
     else

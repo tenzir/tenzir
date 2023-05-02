@@ -38,7 +38,7 @@ struct configuration {
     return detail::apply_all(f, x.width, x.height, x.fullscreen);
   }
 
-  static inline const record_type& schema() noexcept {
+  static inline auto schema() noexcept -> const record_type& {
     static auto result = record_type{
       {"height", int64_type{}},
       {"width", int64_type{}},
@@ -100,12 +100,13 @@ private:
 class plugin final : public virtual operator_plugin {
 public:
   // plugin API
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize([[maybe_unused]] const record& plugin_config,
+                  [[maybe_unused]] const record& global_config)
+    -> caf::error override {
     return {};
   }
 
-  [[nodiscard]] std::string name() const override {
+  [[nodiscard]] auto name() const -> std::string override {
     return "tui";
   };
 

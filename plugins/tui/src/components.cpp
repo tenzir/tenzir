@@ -216,7 +216,7 @@ auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
       Add(main);
     }
 
-    Element Render() override {
+    auto Render() -> Element override {
       return ComponentBase::Render() | state_->theme.border();
     }
 
