@@ -9,10 +9,9 @@
 #include "vast/adaptive_table_slice_builder.hpp"
 #include "vast/arrow_table_slice.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
-#include "vast/concept/printable/string/escape.hpp"
 #include "vast/concept/printable/vast/json.hpp"
-#include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/string_literal.hpp"
+#include "vast/detail/to_xsv_sep.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/plugin.hpp"
 #include "vast/to_lines.hpp"
@@ -25,9 +24,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iterator>
-
 namespace vast::plugins::xsv {
-
 namespace {
 struct xsv_printer {
   xsv_printer(char sep, char list_sep, std::string null)
@@ -156,26 +153,7 @@ struct xsv_printer {
   std::string null{};
 };
 
-auto to_sep(std::string_view x) -> caf::expected<char> {
-  if (x == "\\t") {
-    return '\t';
-  }
-  if (x == "\\0" || x == "NUL") {
-    return '\0';
-  }
-  if (x.size() == 1) {
-    using namespace std::literals;
-    auto allowed_chars = ",;\t\0 "sv;
-    if (allowed_chars.find(x[0]) != std::string_view::npos) {
-      return x[0];
-    }
-  }
-  return caf::make_error(ec::invalid_argument,
-                         fmt::format("separator must be one of comma, "
-                                     "semicolon, tab, NUL, or space, but is "
-                                     "'{}'",
-                                     x));
-}
+} // namespace
 
 class xsv_plugin : public virtual parser_plugin, public virtual printer_plugin {
 public:
@@ -190,7 +168,7 @@ public:
                     "got {}: [{}]",
                     name(), args.size(), fmt::join(args, ", ")));
     }
-    auto sep = to_sep(args[0]);
+    auto sep = to_xsv_sep(args[0]);
     if (!sep) {
       return std::move(sep.error());
     }
@@ -300,11 +278,11 @@ public:
                     "got {}: [{}]",
                     name(), args.size(), fmt::join(args, ", ")));
     }
-    auto sep = to_sep(args[0]);
+    auto sep = to_xsv_sep(args[0]);
     if (!sep) {
       return std::move(sep.error());
     }
-    auto list_sep = to_sep(args[1]);
+    auto list_sep = to_xsv_sep(args[1]);
     if (!list_sep) {
       return std::move(list_sep.error());
     }
@@ -412,7 +390,6 @@ using csv_plugin = configured_xsv_plugin<"csv", ',', ';', "">;
 using tsv_plugin = configured_xsv_plugin<"tsv", '\t', ',', "-">;
 using ssv_plugin = configured_xsv_plugin<"ssv", ' ', ',', "-">;
 
-} // namespace
 } // namespace vast::plugins::xsv
 
 VAST_REGISTER_PLUGIN(vast::plugins::xsv::xsv_plugin)
