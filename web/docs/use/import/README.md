@@ -25,22 +25,6 @@ For example, to import a file in JSON, use the `json` format:
 vast import json < data.json
 ```
 
-## Apply a pipeline during import
-
-You can apply a [pipeline](../../understand/language/pipelines.md) before
-sending data to VAST. This comes in handy to reduce data volume, perform
-reshaping, or apply some early aggregations.
-
-For example, you could reduce a Suricata EVE JSON feed to just flow records:
-
-```bash
-vast import -r eve.json suricata 'src_ip in 10.0.0.0/8 
-  | select timestamp, flow_id, src_ip, dest_ip, src_port'
-````
-
-See the [language documentation](../../understand/language/README.md) to learn
-more about writing pipelines.
-
 ## Infer a schema automatically
 
 :::caution Auto-inference coming soon

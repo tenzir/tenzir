@@ -80,13 +80,14 @@ struct fixture : fixture_base {
 
   void spawn_importer() {
     importer = self->spawn(system::importer, directory / "importer", index,
-                           system::accountant_actor{},
-                           std::vector<vast::legacy_pipeline>{});
+                           system::accountant_actor{});
   }
 
   void spawn_exporter(query_options opts) {
-    exporter = self->spawn(system::exporter, expr, opts,
-                           std::vector<vast::legacy_pipeline>{}, index);
+    exporter
+      = self->spawn(system::exporter, opts,
+                    unbox(pipeline::parse(fmt::format("where {}", expr))),
+                    index);
   }
 
   void spawn_sink() {

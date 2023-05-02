@@ -24,7 +24,7 @@ public:
 
   /// Constructs a prefix from an address.
   /// @param addr The address.
-  /// @param length The prefix length.
+  /// @param length The prefix length, as specified for IPv6 addresses.
   subnet(ip addr, uint8_t length);
 
   /// Checks whether this subnet includes a given address.

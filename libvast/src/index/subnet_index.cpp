@@ -85,10 +85,9 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
               || op == relational_operator::not_ni))
           return caf::make_error(ec::unsupported_operator, op);
         auto result = ids{offset(), false};
-        uint8_t bits = x.is_v4() ? 32 : 128;
-        for (uint8_t i = 0; i <= bits; ++i) { // not an off-by-one
+        for (uint8_t i = 0; i <= 128; ++i) { // not an off-by-one
           auto masked = x;
-          masked.mask(128 - bits + i);
+          masked.mask(i);
           ids len = length_.lookup(relational_operator::equal, i);
           auto net = network_->lookup(relational_operator::equal, masked);
           if (!net)

@@ -1,11 +1,13 @@
 ---
 Checks: >
   *,
+  -abseil-*,
   -altera-*,
   -bugprone-lambda-function-name,
   -cert-dcl16-c,
   -cert-err58-cpp,
   -clang-analyzer-alpha*,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-avoid-non-const-global-variables,
   -cppcoreguidelines-macro-usage,

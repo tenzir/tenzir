@@ -20,7 +20,6 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
 #include "vast/system/actors.hpp"
@@ -135,25 +134,11 @@ void source_state::filter_and_push(
   table_slice slice, const std::function<void(table_slice)>& push_to_out) {
   const auto unfiltered_rows = slice.rows();
   if (filter) {
-    if (auto filtered_slice = vast::filter(std::move(slice), *filter)) {
+    if (auto filtered_slice = vast::filter(slice, *filter)) {
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
                  slice.schema());
-      if (auto err = executor.add(std::move(*filtered_slice))) {
-        VAST_ERROR("source can not add slice to pipeline executor - data "
-                   "loss due to error: {}",
-                   err);
-      }
-      auto transformed_slices = executor.finish();
-      if (!transformed_slices) {
-        VAST_ERROR("source can not transform slices in pipeline - data "
-                   "loss due to error: {}",
-                   transformed_slices.error());
-      } else {
-        for (auto&& slice : *transformed_slices) {
-          push_to_out(std::move(slice));
-        }
-      }
+      push_to_out(std::move(*filtered_slice));
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
                  reader->name(), unfiltered_rows, slice.schema());
@@ -161,15 +146,7 @@ void source_state::filter_and_push(
   } else {
     VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
                unfiltered_rows, slice.schema());
-    auto import_ok = executor.add(std::move(slice));
-    if (import_ok) {
-      VAST_WARN("source can not add slice to pipeline executor - data "
-                "loss");
-    }
-    auto transformed_slices = executor.finish();
-    for (auto&& slice : *transformed_slices) {
-      push_to_out(std::move(slice));
-    }
+    push_to_out(std::move(slice));
   }
 }
 
@@ -177,8 +154,7 @@ caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
        const catalog_actor& catalog, vast::module local_module,
-       std::string type_filter, accountant_actor accountant,
-       std::vector<legacy_pipeline>&& pipelines) {
+       std::string type_filter, accountant_actor accountant) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(*self));
   // Initialize state.
   self->state.self = self;
@@ -190,7 +166,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.table_slice_size = table_slice_size;
   self->state.has_sink = false;
   self->state.done = false;
-  self->state.executor = pipeline_executor{std::move(pipelines)};
   // Register with the accountant.
   self->send(self->state.accountant, atom::announce_v, self->state.name);
   self->state.initialize(catalog, std::move(type_filter));

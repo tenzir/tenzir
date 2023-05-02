@@ -119,7 +119,6 @@ class chunk;
 class command;
 class data;
 class double_type;
-class dumper_plugin;
 class duration_type;
 class enumeration_type;
 class ewah_bitmap;
@@ -158,6 +157,7 @@ class uint64_type;
 class uuid;
 class value_index;
 class wah_bitmap;
+class pipeline;
 
 struct attribute;
 struct concept_;
@@ -239,7 +239,6 @@ class legacy_deserializer;
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
-using pipeline_ptr = std::shared_ptr<legacy_pipeline>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.
@@ -395,7 +394,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::partition_synopsis_pair))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::pattern))
-  VAST_ADD_TYPE_ID((vast::pipeline_ptr))
   VAST_ADD_TYPE_ID((vast::pipeline))
   VAST_ADD_TYPE_ID((vast::port_type))
   VAST_ADD_TYPE_ID((vast::port))

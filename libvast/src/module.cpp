@@ -8,6 +8,7 @@
 
 #include "vast/module.hpp"
 
+#include "vast/concept/convertible/data.hpp"
 #include "vast/concept/parseable/parse.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
@@ -20,9 +21,10 @@
 #include "vast/detail/settings.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
-#include "vast/event_types.hpp"
 #include "vast/logger.hpp"
+#include "vast/modules.hpp"
 #include "vast/plugin.hpp"
+#include "vast/taxonomies.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/deserializer.hpp>
@@ -106,7 +108,10 @@ bool operator==(const module& x, const module& y) {
 
 caf::expected<module> get_module(const caf::settings& options) {
   // Get the default module from the registry.
-  const auto* module_reg_ptr = event_types::get();
+  VAST_DIAGNOSTIC_PUSH
+  VAST_DIAGNOSTIC_IGNORE_DEPRECATED
+  const auto* module_reg_ptr = modules::global_module();
+  VAST_DIAGNOSTIC_POP
   auto module = module_reg_ptr ? *module_reg_ptr : vast::module{};
   // Update with an alternate module, if requested.
   auto sc = caf::get_if<std::string>(&options, "vast.import.schema");
@@ -221,6 +226,45 @@ load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
 
 caf::expected<vast::module> load_module(const caf::actor_system_config& cfg) {
   return load_module(get_module_dirs(cfg));
+}
+
+auto load_taxonomies(const caf::actor_system_config& cfg)
+  -> caf::expected<taxonomies> {
+  std::error_code err{};
+  auto dirs = get_module_dirs(cfg);
+  concepts_map concepts;
+  models_map models;
+  for (const auto& dir : dirs) {
+    VAST_DEBUG("loading taxonomies from {}", dir);
+    const auto dir_exists = std::filesystem::exists(dir, err);
+    if (err)
+      VAST_WARN("failed to open directory {}: {}", dir, err.message());
+    if (!dir_exists)
+      continue;
+    auto yamls = load_yaml_dir(dir);
+    if (!yamls)
+      return yamls.error();
+    for (auto& [file, yaml] : *yamls) {
+      VAST_DEBUG("extracting taxonomies from {}", file.string());
+      if (auto err = convert(yaml, concepts, concepts_data_schema))
+        return caf::make_error(ec::parse_error,
+                               "failed to extract concepts from file",
+                               file.string(), err.context());
+      for (auto& [name, definition] : concepts)
+        VAST_DEBUG("extracted concept {} with {} fields", name,
+                   definition.fields.size());
+      if (auto err = convert(yaml, models, models_data_schema))
+        return caf::make_error(ec::parse_error,
+                               "failed to extract models from file",
+                               file.string(), err.context());
+      for (auto& [name, definition] : models) {
+        VAST_DEBUG("extracted model {} with {} fields", name,
+                   definition.definition.size());
+        VAST_TRACE("uses model mapping {} -> {}", name, definition.definition);
+      }
+    }
+  }
+  return vast::taxonomies{std::move(concepts), std::move(models)};
 }
 
 } // namespace vast

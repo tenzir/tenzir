@@ -8,17 +8,16 @@
 
 #include "vast/detail/settings.hpp"
 #include "vast/detail/signal_handlers.hpp"
-#include "vast/event_types.hpp"
 #include "vast/factory.hpp"
 #include "vast/format/reader_factory.hpp" // IWYU pragma: keep
 #include "vast/format/writer_factory.hpp" // IWYU pragma: keep
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
+#include "vast/modules.hpp"
 #include "vast/plugin.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
-#include "vast/system/make_legacy_pipelines.hpp"
 #include "vast/system/signal_reflector.hpp"
 
 #include <arrow/util/compression.h>
@@ -141,33 +140,24 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
-  // Eagerly verify the export transform configuration, to avoid hidden
-  // configuration errors that pop up the first time a user tries to run
-  // `vast export`.
-  if (auto export_transforms
-      = make_pipelines(system::pipelines_location::server_export, cfg.content);
-      !export_transforms) {
-    VAST_ERROR("invalid export transform configuration: {}",
-               export_transforms.error());
-    return EXIT_FAILURE;
-  }
-  // Warn if vast.pipeline-triggers are defined, as the functionality will be
-  // superseded by the new pipeline executor in a future release. The model
-  // doesn't make much sense when switching from a client-server to a multi-node
-  // architecture, so we plan to replace them with node ingress/egress pipelines
-  // in the near future.
+  // Warn if vast.pipeline-triggers are defined, as the functionality went away
+  // alongside the old pipeline executor.
   if (caf::get_if<caf::settings>(&cfg, "vast.pipeline-triggers")) {
-    VAST_WARN("the 'vast.pipeline-triggers' option is deprecated and will be "
-              "removed in the next release; use inline import and export "
-              "pipelines instead");
+    VAST_WARN("the 'vast.pipeline-triggers' option is no longer functional"
+              "use inline import and export pipelines instead");
   }
-  // Set up the event types singleton.
-  if (auto module = load_module(cfg)) {
-    event_types::init(*std::move(module));
-  } else {
+  // Set up the modules singleton.
+  auto module = load_module(cfg);
+  if (not module) {
     VAST_ERROR("failed to read schema dirs: {}", module.error());
     return EXIT_FAILURE;
   }
+  auto taxonomies = load_taxonomies(cfg);
+  if (not taxonomies) {
+    VAST_ERROR("failed to load concepts: {}", taxonomies.error());
+    return EXIT_FAILURE;
+  }
+  modules::init(*module, std::move(taxonomies->concepts));
   // Lastly, initialize the actor system context, and execute the given
   // command. From this point onwards, do not execute code that is not
   // thread-safe.

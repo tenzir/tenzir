@@ -1,1 +1,2 @@
-failed to parse query parameters: !! parse_error: invalid non-escaped char with code 0X21 at pos: 0
+failed to parse query
+!! parse_error: invalid non-escaped char with code 0X21 at pos: 0

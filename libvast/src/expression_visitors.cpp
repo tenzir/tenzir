@@ -401,17 +401,6 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
           return compatible(t, op_, d);
       return false;
     };
-    // Preserve compatibility with databases that were created beore
-    // the #timestamp attribute was removed.
-    if (ex.type.name() == "timestamp") {
-      if (!caf::holds_alternative<time>(d))
-        return caf::make_error(ec::type_clash, ":timestamp", op_, d);
-      auto has_timestamp_attribute = [&](const type& t) {
-        return t.attribute("timestamp").has_value();
-      };
-      return disjunction{resolve_extractor(matches, d),
-                         resolve_extractor(has_timestamp_attribute, d)};
-    }
     return resolve_extractor(matches, d);
   }
   auto is_congruent = [&](const type& t) {

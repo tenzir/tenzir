@@ -2,10 +2,11 @@ name: VAST
 on:
   workflow_dispatch:
     inputs:
-      arguments:
-        description: "Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`"
+      upload-static-binary-to-github:
+        description: "Build the static binary packages and attach to the Workflow Run"
+        type: boolean
         required: false
-        default: ""
+        default: false
   push:
     branches:
       - main
@@ -65,14 +66,15 @@ jobs:
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
-      docker-build-args: ${{ steps.configure.outputs.docker-build-args }}
       vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
-      run-policy-enforcement: ${{ steps.configure.outputs.run-policy-enforcement }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
       run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
+      docker-config: ${{ steps.docker.outputs.docker-config }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
+      run-vast-thehive-app: ${{ steps.configure.outputs.run-vast-thehive-app }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
+      run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
       run-vast: ${{ steps.configure.outputs.run-vast }}
       run-vast-plugins: ${{ steps.configure.outputs.run-vast-plugins }}
@@ -123,9 +125,6 @@ jobs:
           # Inject the branch slugs for cache names.
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
-          # Utility alias for detecting changes to files.
-          shopt -s expand_aliases
-          alias is_unchanged="git diff --exit-code ${before_sha} --"
           # For pull requests we make it possible to cache all layers by setting
           # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
           # accept the downaside that this means that Docker images created
@@ -140,110 +139,135 @@ jobs:
             vast_tag="${build_version}"
             vast_container_ref="${{ github.sha }}"
           fi
-          cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}"
-          for plugin in $(ls plugins); do
-            var="VAST_PLUGIN_${plugin^^}_REVISION"
-            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
-            cmake_version_args="${cmake_version_args} -D${var}:STRING=${value}"
-          done
-          echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
-          docker_build_args="${cmake_version_args} -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
-          docker_build_args="${docker_build_args} -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF"
-          echo "docker-build-args=${docker_build_args}" >> $GITHUB_OUTPUT
           echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
-          # Decide what jobs to run
-          run_python_package=false
-          if [[ $GITHUB_EVENT_NAME == "release" ]]; then
-            run_python_package=true
-          fi
-          run_example_notebooks=true
-          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_example_notebooks=false
-          fi
-          # Policy checks are not constrained.
-          echo "run-policy-enforcement=true" >> $GITHUB_OUTPUT
-          echo "run-example-notebooks=${run_example_notebooks}" >> $GITHUB_OUTPUT
-          echo "run-python-package=${run_python_package}" >> $GITHUB_OUTPUT
-          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]] || ! is_unchanged .github/workflows/vast.yaml; then
-            echo "run-changelog=true" >> $GITHUB_OUTPUT
-            echo "run-python=true" >> $GITHUB_OUTPUT
-            echo "run-vast-io=true" >> $GITHUB_OUTPUT
-            echo "run-docker-vast=true" >> $GITHUB_OUTPUT
-            echo "run-docker-compose=true" >> $GITHUB_OUTPUT
-            echo "run-vast-nix=true" >> $GITHUB_OUTPUT
-            echo "run-vast=true" >> $GITHUB_OUTPUT
-            echo "run-vast-plugins=true" >> $GITHUB_OUTPUT
+          cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}"
+          echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
+          #################################
+          ######## Decide what jobs to run.
+          #################################
+          # TODO: Split this into two steps:
+          # * Set version variables (above)
+          # * Enable Jobs (below)
+          echo "::notice Disable all others so we can selectivly enable again"
+          echo "run-changelog=false" >> $GITHUB_OUTPUT
+          echo "run-example-notebooks=false" >> $GITHUB_OUTPUT
+          echo "run-regression-tests=false" >> $GITHUB_OUTPUT
+          echo "run-python=false" >> $GITHUB_OUTPUT
+          echo "run-python-package=false" >> $GITHUB_OUTPUT
+          echo "run-vast-io=false" >> $GITHUB_OUTPUT
+          echo "run-docker-vast=false" >> $GITHUB_OUTPUT
+          echo "run-docker-compose=false" >> $GITHUB_OUTPUT
+          echo "run-vast-thehive-app=false" >> $GITHUB_OUTPUT
+          echo "run-vast-nix=false" >> $GITHUB_OUTPUT
+          echo "run-vast=false" >> $GITHUB_OUTPUT
+          echo "run-vast-plugins=false" >> $GITHUB_OUTPUT
+          # A little helper to enable all checks.
+          shopt -s expand_aliases
+          alias run_all_checks=' \
+            echo "run-changelog=true" >> $GITHUB_OUTPUT; \
+            echo "run-example-notebooks=true" >> $GITHUB_OUTPUT; \
+            echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
+            echo "run-python=true" >> $GITHUB_OUTPUT; \
+            echo "run-vast-io=true" >> $GITHUB_OUTPUT; \
+            echo "run-docker-vast=true" >> $GITHUB_OUTPUT; \
+            echo "run-docker-compose=true" >> $GITHUB_OUTPUT; \
+            echo "run-vast-thehive-app=true" >> $GITHUB_OUTPUT
+            echo "run-vast-nix=true" >> $GITHUB_OUTPUT; \
+            echo "run-vast=true" >> $GITHUB_OUTPUT; \
+            echo "run-vast-plugins=true" >> $GITHUB_OUTPUT;'
+          # Run all if this is a release.
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            echo "::notice Enabling release jobs"
+            run_all_checks
+            # Publish pyvast to Pypi.
+            echo "run-python-package=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          run_python=false
-          if ! is_unchanged python/; then
-            run_python=true
+          # Run all checks if this is a push to master or a tag.
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            echo "::notice Enabling push jobs"
+            run_all_checks
+            exit 0
           fi
-          echo "run-python=${run_python}" >> $GITHUB_OUTPUT
-          run_vast_io=${run_python}
-          if ! is_unchanged web/; then
-            run_vast_io=true
+          # Run only what is requested for a workflow dispatch.
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "::notice Enabling workflow dispatch jobs"
+            if [[ "${{ inputs.upload-static-binary-to-github }}" == "true" ]]; then
+              echo "run-vast-nix=true" >> $GITHUB_OUTPUT
+            fi
+            exit 0
           fi
-          echo "run-vast-io=${run_vast_io}" >> $GITHUB_OUTPUT
-          run_changelog=${run_vast_io}
-          if ! is_unchanged CHANGELOG.md changelog/; then
-            run_changelog=true
+          # From here on we should be in a pull request.
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "::error Unexpected GitHub Event: $GITHUB_EVENT_NAME"
+            exit 1
           fi
-          echo "run-changelog=${run_changelog}" >> $GITHUB_OUTPUT
-          run_vast=false
-          if ! is_unchanged cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json; then
-            run_vast=true
+          echo "::notice Enabling pull request jobs"
+          echo "::notice sourcing configure helpers"
+          source ./.github/workflows/configure_helpers.bash
+          # Run all checks if this file changed.
+          if is_changed .github/workflows/vast.yaml; then
+            run_all_checks
+            exit 0
           fi
-          run_vast_plugins=${run_vast}
-          if ! is_unchanged plugins/; then
-            run_vast_plugins=true
-          fi
-          if ! is_unchanged contrib/vast-plugins/; then
-            run_vast_plugins=true
-          fi
-          echo "run-vast-plugins=${run_vast_plugins}" >> $GITHUB_OUTPUT
-          # Build vast if no artifact is present in google store
+          run_if_changed python "python/"
+          run_if_changed vast-io "web/" "python/"
+          run_if_changed changelog "changelog/" "web/" "python/"
+          VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json)
+          run_if_changed vast "${VAST_SOURCES[@]}"
+          run_if_changed vast-plugins "plugins/" "contrib/vast-plugins/"
+          # The vast-plugins job downloads the VAST artifact from GCS, so we
+          # need to run the vast job in case it is missing.
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
             deb_package="$(echo "vast-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
             mac_package="$(echo "vast-${before_version}-darwin-Release-Clang" | awk '{ print tolower($0) }')"
-            if ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${deb_package}.tar.gz; then
-              run_vast=true
-            elif ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${mac_package}.tar.gz; then
+            if ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${deb_package}.tar.gz || \
+               ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${mac_package}.tar.gz; then
+              echo "run-vast=true" >> $GITHUB_OUTPUT
               run_vast=true
             fi
           fi
-          echo "run-vast=${run_vast}" >> $GITHUB_OUTPUT
-          run_docker_compose=${run_vast}
-          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_docker_compose=false
-          elif [[ ${run_vast_plugins} == "true" || ${run_python} == "true" ]]; then
-            run_docker_compose=true
-          elif ! is_unchanged docker/ Dockerfile .dockerignore; then
-            run_docker_compose=true
+          run_docker_compose="$(any ${run_vast} ${run_vast_plugins} ${run_python})"
+          run_if_changed_default docker-compose $run_docker_compose "docker/" "Dockerfile" ".dockerignore"
+          run_if_changed_default vast-thehive-app $run_docker_compose
+          run_docker_vast="$(any ${run_docker_compose} ${run_vast_io} ${run_python})"
+          run_if_changed_default docker-vast $run_docker_vast
+          run_if_changed_default regression-tests $run_docker_vast
+          run_if_changed vast-nix "${VAST_SOURCES[@]}" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/
+      - name: Configure Docker
+        id: docker
+        if: steps.configure.outputs.run-docker-vast == 'true'
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tags=("${{ steps.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            tags=('latest' "${{ github.sha }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+          else
+            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            exit 1
           fi
-          echo "run-docker-compose=${run_docker_compose}" >> $GITHUB_OUTPUT
-          run_docker_vast=${run_docker_compose}
-          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_docker_vast=false
-          elif [[ ${run_vast_io} == "true" || ${run_python} == "true" ]]; then
-            run_docker_vast=true
+          docker_config="$(jq -c \
+            '."version" = $v | ."tags" = $ARGS.positional' \
+            .github/workflows/docker-config-base.json \
+            --arg v "${{ steps.configure.outputs.build-version-short }}" \
+            --args -- "${tags[@]}")"
+          # Clear push repos in case we're in a PR, but push the developer
+          # edition to ghcr.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            docker_config="$(jq -c '(.editions[] | .registries) |= [] |
+              (.editions[] | select(.name == "vast") | .registries) |= ["ghcr.io"]' \
+              <<< "${docker_config}")"
           fi
-          echo "run-docker-vast=${run_docker_vast}" >> $GITHUB_OUTPUT
-          run_vast_nix=${run_vast}
-          if ${run_vast_plugins}; then
-            run_vast_nix=true
-          elif ! is_unchanged nix/ flake.lock *.nix; then
-            run_vast_nix=true
-          elif [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_vast_nix=true
-          fi
-          echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
+          echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
+          echo "::notice docker-config = ${docker_config}"
 
   policy-enforcement:
     name: Policy Enforcement
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-policy-enforcement == 'true' }}
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -270,7 +294,7 @@ jobs:
           nix/update.sh
           git diff --quiet --exit-code || {
             echo "Some Nix source references are not aligned with the git submodules."
-            echo "Please run `nix/update.sh` or apply the following diff directly:"
+            echo "Please run *nix/update.sh* or apply the following diff directly:"
             git diff --exit-code
           }
 
@@ -360,126 +384,20 @@ jobs:
           user_email: engineering@tenzir.com
 
   docker-vast:
+    name: Docker
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
-    name: ${{ matrix.docker-vast.job-name }} (Docker)
-    runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        docker-vast:
-          - name: vast
-            job-name: VAST
-            upload-dev-images: true
-          - name: vast-ce
-            job-name: VAST CE
-            upload-dev-images: false
-            plugins:
-              - matcher
-              - netflow
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Update submodules
-        run: |
-          git submodule update --init --recursive libvast plugins
-      - name: Configure ssh-agent
-        if: ${{ matrix.docker-vast.name == 'vast-ce' }}
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
-      - name: Initialize Community Edition plugins
-        if: ${{ matrix.docker-vast.name == 'vast-ce' }}
-        run: |
-          git submodule update --init --recursive contrib/vast-plugins
-          # Remove plugins that are not in matrix.docker-vast.plugins
-          # We move everything out first and then only move the wanted plugins
-          # back in.
-          mv contrib/vast-plugins _plugtmp
-          mkdir contrib/vast-plugins
-          for plugin in ${{ join(matrix.docker-vast.plugins, ' ') }}; do
-            mv "_plugtmp/$plugin" contrib/vast-plugins/
-          done
-          rm -rf _plugtmp
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: tenzir-bot
-          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-      - name: Build Docker Images
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            ref_tag="${{ needs.configure.outputs.head-ref-slug }}"
-          else
-            ref_tag="${{ github.sha }}"
-          fi
-          docker_build_args="${{ needs.configure.outputs.docker-build-args }}"
-          # Build the Docker images using ghcr.io/tenzir/vast as a registry-type
-          # layer cache. We upload this cache for every merge but also for every
-          # pull request, using the head ref slug as an identifier within PRs.
-          # We specify cache-from multiple times in order because we want to
-          # prefer an existing cache for the current trigger over the cache that
-          # we attempt to restore from, which is the before sha for pushes and
-          # the merge-base for pull requests.
-          docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}:latest --target production --load \
-            --platform linux/amd64 \
-            --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
-            --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
-          if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
-            docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-dev:latest --target development --load \
-              --platform linux/amd64 \
-              --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
-              --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-              --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
-            docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-deps:latest --target dependencies --load \
-              --platform linux/amd64 \
-              --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
-              --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-              --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
-          fi
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            docker tag tenzir/${{ matrix.docker-vast.name }}:latest "ghcr.io/tenzir/${{ matrix.docker-vast.name }}:${ref_tag}"
-            docker push "ghcr.io/tenzir/${{ matrix.docker-vast.name }}:${ref_tag}"
-          fi
-      - name: Publish Docker Images
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          registries=('' 'ghcr.io/')
-          images=('tenzir/${{ matrix.docker-vast.name }}')
-          if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
-            images+=('tenzir/${{ matrix.docker-vast.name }}-dev' 'tenzir/${{ matrix.docker-vast.name }}-deps')
-          fi
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
-          else
-            tags=('latest' "${{ github.sha }}")
-          fi
-          for registry in "${registries[@]}"; do
-            for image in "${images[@]}"; do
-              for tag in "${tags[@]}"; do
-                docker tag "${image}:latest" "${registry}${image}:${tag}"
-                docker push "${registry}${image}:${tag}"
-              done
-            done
-          done
+    if: needs.configure.outputs.run-docker-vast == 'true'
+    uses: ./.github/workflows/docker.yaml
+    with:
+      config: ${{ needs.configure.outputs.docker-config }}
+    secrets: inherit
 
   regression-tests:
     needs:
       - docker-vast
       - configure
+    if: needs.configure.outputs.run-regression-tests == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -504,7 +422,6 @@ jobs:
       - name: Run Regression Tests
         run: |
           scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.vast-container-ref }}
-
 
   docker-compose:
     needs:
@@ -533,12 +450,37 @@ jobs:
       - name: Run VAST Tests
         run: |
           docker/test
-      - name: Run Cortex Neuron Tests
+
+  vast-thehive-app:
+    needs:
+      - docker-vast
+      - configure
+    if: ${{ needs.configure.outputs.run-vast-thehive-app == 'true' }}
+    name: VAST TheHive App
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+      VAST_CONTAINER_REGISTRY: ghcr.io
+      VAST_CONTAINER_REF: ${{ needs.configure.outputs.vast-container-ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Cortex Neuron & TheHive Tests
         run: |
-          docker/thehive/vast-cortex-neuron/tests/run service
-      - name: Run TheHive Tests
-        run: |
-          docker/thehive/test
+          # TheHive likes to fail to start up, so for now the test is intentionally
+          # disabled.
+          docker/thehive/vast-cortex-neuron/tests/run service && docker/thehive/test ||
+            echo "::warning title=VAST TheHive App test failure::Test failed, check logs for details"
 
   example-notebooks:
     needs:
@@ -870,12 +812,13 @@ jobs:
           # here is built specifically as input for the plugin CI jobs and not
           # suitable for general use.
           cmake -B "$BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
-            -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
+            -DVAST_PLUGINS:STRING="" \
             ${{ needs.configure.outputs.cmake-version-args }} \
             ${{ matrix.vast.cmake-extra-flags }}
       - name: Compile All Targets
@@ -1000,10 +943,6 @@ jobs:
             target: example-analyzer
             path: examples/plugins/analyzer
             debian-dependencies:
-          - name: Example Pipeline Operator
-            target: example-pipeline-operator
-            path: examples/plugins/pipeline_operator
-            debian-dependencies:
           - name: Sigma
             target: sigma
             path: plugins/sigma
@@ -1022,20 +961,20 @@ jobs:
               - http-parser
           - name: Compaction
             target: compaction
-            path: plugins/compaction
+            path: contrib/vast-plugins/compaction
           # TODO: Enable once this builds without warnings
           # - name: Fleet
           #   target: fleet
-          #   path: plugins/fleet
+          #   path: contrib/vast-plugins/fleet
           - name: Inventory
             target: inventory
-            path: plugins/inventory
+            path: contrib/vast-plugins/inventory
           - name: Matcher
             target: matcher
-            path: plugins/matcher
+            path: contrib/vast-plugins/matcher
           - name: Netflow
             target: netflow
-            path: plugins/netflow
+            path: contrib/vast-plugins/netflow
         exclude:
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
@@ -1264,8 +1203,8 @@ jobs:
       - changelog
       - vast-io
       - docker-vast
-      # We currently have a transient error on TheHive init script (sc-39576)
-      # - docker-compose
+      - docker-compose
+      - vast-thehive-app
       - example-notebooks
       - python
       - python-package
@@ -1274,7 +1213,7 @@ jobs:
       - vast-io
       - vast-nix
       - vast-plugins
-    if: always()
+    if: always() && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Pass Branch Protections
     steps:

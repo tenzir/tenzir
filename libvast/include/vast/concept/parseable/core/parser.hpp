@@ -88,6 +88,16 @@ struct parser_base {
     }
   }
 
+  template <class Iterator, class D = Derived>
+  auto apply(Iterator& f, const Iterator& l) const
+    -> std::optional<typename D::attribute> {
+    auto result = typename D::attribute{};
+    if (!(*this)(f, l, result)) {
+      return std::nullopt;
+    }
+    return result;
+  }
+
 private:
   [[nodiscard]] const Derived& derived() const {
     return static_cast<const Derived&>(*this);
@@ -107,9 +117,8 @@ using make_parser = typename parser_registry<T>::type;
 
 /// Checks whether the parser registry has a given type registered.
 template <class T>
-concept registered_parser_type = requires {
-  typename parser_registry<T>::type;
-};
+concept registered_parser_type
+  = requires { typename parser_registry<T>::type; };
 
 /// Checks whether a given type is-a parser, i.e., derived from ::vast::parser.
 template <class T>
@@ -122,4 +131,3 @@ template <class T>
 concept parser = is_parser<std::decay_t<T>>::value;
 
 } // namespace vast
-

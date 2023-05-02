@@ -4,9 +4,9 @@ sidebar_position: 0
 
 # Type System
 
-One [design goal](../architecture/design-goals.md) of VAST is
-being expressive enough to capture the semantics of the domain. This led us to
-develop a rich type system for structured security data, inspired by the
+One [design goal](../../develop/architecture/design-goals.md) of VAST is being
+expressive enough to capture the semantics of the domain. This led us to develop
+a rich type system for structured security data, inspired by the
 [Zeek](https://zeek.org) network security monitor.
 
 ## Terminology
@@ -84,7 +84,7 @@ All alias types have a name. They coexist in a global namespace.
 An alias always *refines* the type it points to, i.e., it is more specific that
 its parent. For example, let's assume a type `U` is an alias for an existing
 type `T`. Then, the [type
-extractor](../language/expressions.md#type-extractor) `:U` only
+extractor](../expressions.md#type-extractor) `:U` only
 resolves for types of instance `U`. However, `:T` comprises both instances of
 types `U` and `T`.
 :::

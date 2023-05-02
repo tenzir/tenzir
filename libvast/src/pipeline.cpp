@@ -6,9 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/parseable/vast/pipeline.hpp"
-
 #include "vast/pipeline.hpp"
+
+#include "vast/collect.hpp"
+#include "vast/modules.hpp"
 #include "vast/plugin.hpp"
 
 namespace vast {
@@ -28,8 +29,8 @@ public:
     error_ = error;
   }
 
-  auto warn(caf::error) noexcept -> void override {
-    die("not implemented");
+  auto warn(caf::error error) noexcept -> void override {
+    VAST_WARN("{}", error);
   }
 
   auto emit(table_slice) noexcept -> void override {
@@ -41,11 +42,11 @@ public:
   }
 
   auto schemas() const noexcept -> const std::vector<type>& override {
-    die("not implemented");
+    return vast::modules::schemas();
   }
 
   auto concepts() const noexcept -> const concepts_map& override {
-    die("not implemented");
+    return vast::modules::concepts();
   }
 
 private:
@@ -66,43 +67,36 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
 }
 
 auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
-  auto ops = std::vector<operator_ptr>{};
-  // plugin name parser
-  using parsers::alnum, parsers::chr, parsers::space,
-    parsers::optional_ws_or_comment;
-  const auto plugin_name_char_parser = alnum | chr{'-'};
-  const auto plugin_name_parser
-    = optional_ws_or_comment >> +plugin_name_char_parser;
-  // TODO: allow more empty string
-  while (!repr.empty()) {
-    // 1. parse a single word as operator plugin name
-    const auto* f = repr.begin();
-    const auto* const l = repr.end();
-    auto plugin_name = std::string{};
-    if (!plugin_name_parser(f, l, plugin_name)) {
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("failed to parse pipeline '{}': "
-                                         "operator name is invalid",
-                                         repr));
-    }
-    // 2. find plugin using operator name
-    const auto* plugin = plugins::find<operator_plugin>(plugin_name);
-    if (!plugin) {
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("failed to parse pipeline '{}': "
-                                         "operator '{}' does not exist",
-                                         repr, plugin_name));
-    }
-    // 3. ask the plugin to parse itself from the remainder
-    auto [remaining_repr, op] = plugin->make_operator(std::string_view{f, l});
-    if (!op)
-      return caf::make_error(ec::unspecified,
-                             fmt::format("failed to parse pipeline '{}': {}",
-                                         repr, op.error()));
-    ops.push_back(std::move(*op));
-    repr = remaining_repr;
+  // Get all query languages, but make sure that VAST is at the front.
+  // TODO: let the user choose exactly one language instead.
+  auto languages = collect(plugins::get<language_plugin>());
+  if (const auto* vast = plugins::find<language_plugin>("VAST")) {
+    const auto it = std::find(languages.begin(), languages.end(), vast);
+    VAST_ASSERT_CHEAP(it != languages.end());
+    std::rotate(languages.begin(), it, it + 1);
   }
-  return pipeline{std::move(ops)};
+  auto first_error = caf::error{};
+  for (const auto& language : languages) {
+    if (auto parsed = language->parse_query(repr))
+      return parsed;
+    else {
+      VAST_DEBUG("failed to parse query as {} language: {}", language->name(),
+                 parsed.error());
+      if (!first_error) {
+        first_error = std::move(parsed.error());
+      }
+    }
+  }
+  return caf::make_error(ec::syntax_error,
+                         fmt::format("invalid query: {}", first_error));
+}
+
+auto pipeline::parse_as_operator(std::string_view repr)
+  -> caf::expected<operator_ptr> {
+  auto result = parse(repr);
+  if (not result)
+    return std::move(result.error());
+  return std::make_unique<pipeline>(std::move(*result));
 }
 
 auto pipeline::copy() const -> operator_ptr {
@@ -124,6 +118,7 @@ auto pipeline::to_string() const -> std::string {
 auto pipeline::instantiate(operator_input input,
                            operator_control_plane& control) const
   -> caf::expected<operator_output> {
+  VAST_DEBUG("instantiating '{}' for {}", *this, operator_type_name(input));
   if (operators_.empty()) {
     auto f = detail::overload{
       [](std::monostate) -> operator_output {
@@ -206,29 +201,52 @@ auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
   return std::pair{std::move(current), pipeline{std::move(new_rev)}};
 }
 
-auto operator_base::test_instantiate_impl(operator_input input) const
-  -> caf::expected<operator_output> {
-  local_control_plane ctrl;
-  auto result = instantiate(std::move(input), ctrl);
-  if (!result) {
-    return result.error();
+auto operator_base::infer_type_impl(operator_type input) const
+  -> caf::expected<operator_type> {
+  auto ctrl = local_control_plane{};
+  auto f = [&]<class Input>(tag<Input>) {
+    if constexpr (std::is_same_v<Input, void>) {
+      return instantiate(std::monostate{}, ctrl);
+    } else {
+      return instantiate(generator<Input>{}, ctrl);
+    }
+  };
+  auto output = std::visit(f, input);
+  if (!output) {
+    return output.error();
   }
   return std::visit(
-    []<class T>(generator<T> x) -> operator_output {
-      // We discard the actual output generator and return a
-      // default-constructed one to make sure that the result is empty.
-      (void)x;
-      return generator<T>{};
+    [&]<class Output>(generator<Output>&) -> operator_type {
+      if constexpr (std::is_same_v<Output, std::monostate>) {
+        return tag_v<void>;
+      } else {
+        return tag_v<Output>;
+      }
     },
-    std::move(*result));
+    *output);
 }
 
 auto pipeline::is_closed() const -> bool {
-  auto output = test_instantiate<std::monostate>();
-  if (!output) {
-    return false;
+  return !!check_type<void, void>();
+}
+
+auto pipeline::infer_type_impl(operator_type input) const
+  -> caf::expected<operator_type> {
+  auto current = input;
+  for (auto& op : operators_) {
+    auto first = &op == &operators_.front();
+    if (!first && current.is<void>()) {
+      return caf::make_error(
+        ec::type_clash,
+        fmt::format("pipeline continues with {} after sink", op->to_string()));
+    }
+    auto next = op->infer_type(current);
+    if (!next) {
+      return next.error();
+    }
+    current = *next;
   }
-  return std::holds_alternative<generator<std::monostate>>(*output);
+  return current;
 }
 
 auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {

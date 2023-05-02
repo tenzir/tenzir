@@ -1,0 +1,44 @@
+# -- plugins -------------------------------------------------------------------
+
+FROM development AS plugins
+
+WORKDIR /tmp/vast
+
+COPY contrib/vast-plugins ./contrib/vast-plugins
+
+RUN cmake -S contrib/vast-plugins/compaction -B build-compaction -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-compaction --parallel && \
+      DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
+      rm -rf build-compaction
+
+RUN cmake -S contrib/vast-plugins/inventory -B build-inventory -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-inventory --parallel && \
+      DESTDIR=/plugin/inventory cmake --install build-inventory --strip --component Runtime && \
+      rm -rf build-inventory
+
+RUN cmake -S contrib/vast-plugins/matcher -B build-matcher -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-matcher --parallel && \
+      DESTDIR=/plugin/matcher cmake --install build-matcher --strip --component Runtime && \
+      rm -rf build-matcher
+
+RUN cmake -S contrib/vast-plugins/netflow -B build-netflow -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-netflow --parallel && \
+      DESTDIR=/plugin/netflow cmake --install build-netflow --strip --component Runtime && \
+      rm -rf build-netflow
+
+# -- vast-ce -------------------------------------------------------------------
+
+FROM production AS vast-ce
+
+COPY --from=plugins --chown=vast:vast /plugin/matcher /
+COPY --from=plugins --chown=vast:vast /plugin/netflow /
+
+# -- vast-ee -------------------------------------------------------------------
+
+FROM vast-ce AS vast-ee
+
+COPY --from=plugins --chown=vast:vast /plugin/compaction /

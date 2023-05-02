@@ -26,7 +26,6 @@
 #include "vast/module.hpp"
 #include "vast/optional.hpp"
 #include "vast/system/datagram_source.hpp"
-#include "vast/system/parse_query.hpp"
 #include "vast/system/source.hpp"
 #include "vast/uuid.hpp"
 
@@ -54,8 +53,7 @@ make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
             catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
-            std::vector<legacy_pipeline>&& pipelines, expression expr,
-            bool detached) {
+            expression expr, bool detached) {
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
   // Placeholder thingies.
@@ -138,8 +136,7 @@ make_source(caf::actor_system& sys, const std::string& format,
                                         std::forward<decltype(args)>(args)...);
       return sys.spawn(source, std::forward<decltype(args)>(args)...);
     }(std::move(*reader), slice_size, max_events, std::move(catalog),
-      std::move(local_module), std::move(type_filter), std::move(accountant),
-      std::move(pipelines));
+      std::move(local_module), std::move(type_filter), std::move(accountant));
   VAST_ASSERT(src);
   if (!caf::holds_alternative<caf::none_t>(expr)) {
     send_to_source(src, atom::normalize_v, std::move(expr));

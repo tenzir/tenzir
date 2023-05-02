@@ -130,12 +130,12 @@ auto inspect(Inspector& f, data_extractor& x) {
     .fields(f.field("type", x.type), f.field("column", x.column));
 }
 
+/// The operand of a predicate, which can be either LHS or RHS.
+using operand = caf::variant<meta_extractor, field_extractor, type_extractor,
+                             data_extractor, data>;
+
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
-  /// The operand of a predicate, which can be either LHS or RHS.
-  using operand = caf::variant<meta_extractor, field_extractor, type_extractor,
-                               data_extractor, data>;
-
   predicate() = default;
 
   predicate(operand l, relational_operator o, operand r);
@@ -162,8 +162,6 @@ auto inspect(Inspector& f, predicate& x) {
 /// A curried predicate, i.e., a predicate with its `lhs` operand fixed by an
 /// outer scope or context.
 struct curried_predicate {
-  using operand = predicate::operand;
-
   relational_operator op;
   data rhs;
 };
@@ -518,6 +516,21 @@ struct formatter<vast::relational_operator> {
   template <typename FormatContext>
   auto
   format(const vast::relational_operator& value, FormatContext& ctx) const {
+    auto out = ctx.out();
+    vast::print(out, value);
+    return out;
+  }
+};
+
+template <>
+struct formatter<vast::operand> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::operand& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;

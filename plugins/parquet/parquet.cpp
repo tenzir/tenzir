@@ -478,7 +478,16 @@ private:
 
 class plugin final : public virtual store_plugin {
   caf::error initialize(const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+                        const record& global_config) override {
+    const auto default_compression_level
+      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie();
+    auto level = try_get_or(global_config, "vast.zstd-compression-level",
+                            default_compression_level);
+    if (!level) {
+      return std::move(level.error());
+    }
+    zstd_compression_level_ = *level;
     return convert(plugin_config, parquet_config_);
   }
 
@@ -491,18 +500,14 @@ class plugin final : public virtual store_plugin {
     return std::make_unique<passive_parquet_store>(parquet_config_);
   }
 
-  [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
-  make_active_store(const caf::settings& vast_config) const override {
-    const auto default_compression_level
-      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-          .ValueOrDie();
-    auto zstd_compression_level = caf::get_or(
-      vast_config, "vast.zstd-compression-level", default_compression_level);
+  auto make_active_store() const
+    -> caf::expected<std::unique_ptr<active_store>> override {
     return std::make_unique<active_parquet_store>(
-      configuration{parquet_config_.row_group_size, zstd_compression_level});
+      configuration{parquet_config_.row_group_size, zstd_compression_level_});
   }
 
 private:
+  int zstd_compression_level_ = {};
   configuration parquet_config_ = {};
 };
 

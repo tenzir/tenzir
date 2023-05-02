@@ -52,11 +52,12 @@ public:
   /// Return an error and close the connection.
   //  TODO: Statically verify that we can only abort
   //  with the documented error codes.
-  void abort(uint16_t error_code, std::string message) override {
+  void
+  abort(uint16_t error_code, std::string message, caf::error detail) override {
     body_ = "";
-    error_
-      = caf::make_error(vast::ec::unspecified,
-                        fmt::format("http error {}: {}", error_code, message));
+    error_ = caf::make_error(vast::ec::unspecified,
+                             fmt::format("http error {}: {}{}", error_code,
+                                         message, detail));
   }
 
   std::string body_ = {};
@@ -191,7 +192,7 @@ private:
 FIXTURE_SCOPE(query_rest_api_tests, query_fixture)
 
 TEST(query endpoint) {
-  auto response = send_new_query("where #type == \"zeek.conn\"");
+  auto response = send_new_query(R"__(where #type == "zeek.conn")__");
   REQUIRE(!response.is_null());
   REQUIRE(!response["id"].is_null());
   auto const* id = response["id"].get<const char*>().value();
@@ -203,7 +204,7 @@ TEST(query endpoint) {
 }
 
 TEST(query endpoint outputs 0 events after all were already shipped) {
-  auto response = send_new_query("where #type == \"zeek.conn\"");
+  auto response = send_new_query(R"__(where #type == "zeek.conn")__");
   REQUIRE(!response.is_null());
   REQUIRE(!response["id"].is_null());
   auto const* id = response["id"].get<const char*>().value();
@@ -220,7 +221,7 @@ TEST(query endpoint outputs 0 events after all were already shipped) {
 }
 
 TEST(query endpoint with pipeline) {
-  auto response = send_new_query("where #type == \"zeek.conn\" | head 1");
+  auto response = send_new_query(R"__(where #type == "zeek.conn" | head 1)__");
   REQUIRE(!response.is_null());
   REQUIRE(!response["id"].is_null());
   auto const* id = response["id"].get<const char*>().value();

@@ -12,6 +12,7 @@
 
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/print.hpp"
+#include "vast/expression.hpp"
 #include "vast/table_slice_encoding.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
@@ -334,10 +335,15 @@ table_slice tail(table_slice slice, size_t num_rows);
 /// @param slice The input table slice.
 /// @param partition_point The index of the first row for the second slice.
 /// @returns two new table slices if `0 < partition_point < slice.rows()`,
-///          otherwise returns `slice` and an invalid tbale slice.
+///          otherwise returns `slice` and an invalid table slice.
 /// @pre `slice.encoding() != table_slice_encoding::none`
 std::pair<table_slice, table_slice>
 split(const table_slice& slice, size_t partition_point);
+
+/// Selects the rows with indices `[begin, end)`.
+/// @pre `begin <= end && end <= slice.rows()`
+auto subslice(const table_slice& slice, size_t begin, size_t end)
+  -> table_slice;
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
@@ -376,6 +382,14 @@ filter(const table_slice& slice, const ids& hints);
 /// Resolves all enumeration columns in a table slice to string columns. Note
 /// that this does not go into records inside lists or maps.
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);
+
+/// Resolve a meta extractor for a given table slice.
+auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
+  -> view<data>;
+
+/// Resolve an operand into an Array for a given table slice.
+auto resolve_operand(const table_slice& slice, const operand& op)
+  -> std::pair<type, std::shared_ptr<arrow::Array>>;
 
 } // namespace vast
 

@@ -36,6 +36,9 @@ in {
         doCheck = false;
         doInstallCheck = false;
       });
+  # spdlog in nixpkgs uses `fmt_8` directly, but we want version 9, so we use a
+  # little hack here.
+  fmt_8 = prev.fmt;
   http-parser =
     if !isStatic
     then prev.http-parser
@@ -153,9 +156,9 @@ in {
       ps.matcher
       ps.netflow
     ]);
-  vast-full = let
+  vast-ee = let
     pkg = final.vast.override {
-      pname = "vast-full";
+      pname = "vast-ee";
     };
   in
     pkg.withPlugins (ps: [

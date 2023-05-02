@@ -28,11 +28,11 @@ aiohttp = "^3.8"
 coloredlogs = "^15.0"
 dynaconf = "^3.1"
 numpy = "^1.24"
-pandas = "^1.5"
+pandas = ">=1.5,<3.0"
 pyarrow = "^11.0"
 
 [tool.poetry.dev-dependencies]
-pytest = "^7.2"
+pytest = "^7.3"
 pytest-asyncio = "^0.21.0"
 
 [tool.pytest.ini_options]

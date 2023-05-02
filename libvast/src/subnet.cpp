@@ -19,8 +19,7 @@ namespace vast {
 subnet::subnet() : length_{0u} {
 }
 
-subnet::subnet(ip addr, uint8_t length)
-  : network_{std::move(addr)}, length_{length} {
+subnet::subnet(ip addr, uint8_t length) : network_{addr}, length_{length} {
   if (!initialize()) {
     network_ = ip{};
     length_ = 0;
@@ -40,15 +39,11 @@ const ip& subnet::network() const {
 }
 
 uint8_t subnet::length() const {
-  return network_.is_v4() ? length_ - 96 : length_;
+  return length_;
 }
 
 bool subnet::initialize() {
-  if (network_.is_v4()) {
-    if (length_ > 32)
-      return false;
-    length_ += 96;
-  } else if (length_ > 128) {
+  if (length_ > 128) {
     return false;
   }
   network_.mask(length_);

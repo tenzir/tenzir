@@ -2,7 +2,7 @@
 
 VAST has powerful features for transforming [data in
 motion](#modify-data-in-motion) and [data at rest](#modify-data-at-rest). Both
-aspects rely on [pipelines](../../understand/language/pipelines.md) as building
+aspects rely on [pipelines](../../understand/pipelines.md) as building
 block.
 
 ## Define a pipeline
@@ -31,60 +31,8 @@ This `example` pipeline consists of two operators, `hash` and `summarize` that
 execute in sequential order.
 
 Have a look at [all available
-operators](../../understand/language/operators/README.md) to understand what
+operators](../../understand/operators/README.md) to understand what
 other transformations you can apply.
-
-## Modify data in motion
-
-VAST supports *import* and *export* pipelines. The former apply to new data
-ingested into the system, the latter apply to the results of a VAST query. Both
-import and export pipelines can run in the server or client process. For
-imports, the client is the source generating the data, for exports the client is
-the sink receiving the exported data.
-
-![Pipelines](pipeline-locations.excalidraw.svg)
-
-The flexible combination of location and type of pipeline type enables multiple
-use cases:
-
-Location | Type   | Use case        | Example
----------|--------|-----------------|---------- -------------------------------
-Client   | Import | Enrichment      | Add community ID to flow telemetry
-Server   | Import | Compliance      | Anonymize PII data
-Client   | Export | Post-processing | Compute expensive function (e.g., string entropy)
-Server   | Export | Access control  | Remove sensitive fields
-
-Deploying a pipeline involves involves two separate configuration steps:
-
-1. Define the pipeline
-2. Trigger the pipeline
-
-The trigger determines when and where a pipeline executes. Here is an example
-configuration:
-
-```yaml
-vast:
-  pipelines:
-     example_pipeline: |
-       operator1
-       | operator2
-  pipeline-triggers:
-    import:
-      - pipeline: example_pipeline
-        location: server
-        events: [intel.ioc, zeek.conn]
-```
-
-Triggers are defined under configuration key `vast.pipeline-triggers`. The two
-subkeys `import` and `export` specify the pipeline type the trigger itself is a
-dictionary with three keys:
-
-1. `pipeline`: the name one of a previously defined pipeline
-2. `location`: either `server` or `client`
-3. `events`: a list of event types for which the pipeline fires
-
-The above example configures `example_pipeline` to run at on the server side
-during import for the two events `intel.ioc` and `zeek.conn`.
 
 ## Modify data at rest
 

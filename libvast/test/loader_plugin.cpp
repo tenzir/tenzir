@@ -8,16 +8,21 @@
 
 #include "vast/collect.hpp"
 #include "vast/detail/string_literal.hpp"
+#include "vast/file.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/stdin_file_inut.hpp"
 #include "vast/test/test.hpp"
 
+#include <arrow/record_batch.h>
+#include <caf/error.hpp>
 #include <caf/test/dsl.hpp>
 
-#include <fcntl.h>
-#include <unistd.h>
+#include <filesystem>
 
 using namespace vast;
+
+using test::stdin_file_input;
 
 namespace {
 
@@ -60,34 +65,14 @@ struct fixture {
     // than one loader type.
     loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
     REQUIRE(loader_plugin);
-    current_loader = unbox(loader_plugin->make_loader({}, control_plane));
+    current_loader = [this] {
+      return unbox(loader_plugin->make_loader({}, control_plane));
+    };
   }
 
   const vast::loader_plugin* loader_plugin;
-  vast::loader_plugin::loader current_loader;
+  std::function<auto()->generator<chunk_ptr>> current_loader;
   mock_control_plane control_plane;
-};
-
-// Helper struct that, as long as it is alive, redirects stdin to the output of
-// a file.
-template <detail::string_literal FileName = "">
-struct stdin_file_input {
-  stdin_file_input() {
-    old_stdin_fd = ::dup(fileno(stdin));
-    REQUIRE_NOT_EQUAL(old_stdin_fd, -1);
-    auto input_file_fd = ::open(
-      fmt::format("{}{}", VAST_TEST_PATH, FileName.str()).c_str(), O_RDONLY);
-    REQUIRE_NOT_EQUAL(input_file_fd, -1);
-    ::dup2(input_file_fd, fileno(stdin));
-    ::close(input_file_fd);
-  }
-
-  ~stdin_file_input() {
-    auto old_stdin_status = ::dup2(old_stdin_fd, fileno(stdin));
-    REQUIRE_NOT_EQUAL(old_stdin_status, -1);
-    ::close(old_stdin_fd);
-  }
-  int old_stdin_fd;
 };
 
 } // namespace
@@ -156,5 +141,61 @@ TEST(stdin loader - one complete chunk) {
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
                      str_chunk->begin(), str_chunk->end()));
 }
+
+TEST(file loader - parser deduction) {
+  loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
+  REQUIRE(loader_plugin);
+  auto [parser, _] = loader_plugin->default_parser(
+    std::vector<std::string>{"--timeout", "1s", "foo.csv"});
+  REQUIRE_EQUAL(parser, std::string{"csv"});
+  parser = loader_plugin
+             ->default_parser(
+               std::vector<std::string>{"--timeout", "1s", "foo.ndjson"})
+             .first;
+  REQUIRE_EQUAL(parser, std::string{"json"});
+  parser = loader_plugin
+             ->default_parser(
+               std::vector<std::string>{"--timeout", "1s", "eve.json"})
+             .first;
+  REQUIRE_EQUAL(parser, std::string{"suricata"});
+  parser = loader_plugin
+             ->default_parser(
+               std::vector<std::string>{"-", "--timeout", "1s", "eve.json"})
+             .first;
+  REQUIRE_EQUAL(parser, std::string{"json"});
+  parser = loader_plugin
+             ->default_parser(std::vector<std::string>{"-", "--timeout", "1s"})
+             .first;
+  REQUIRE_EQUAL(parser, std::string{"json"});
+}
+
+TEST(file loader - nonexistent file) {
+  loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
+  auto args = std::vector<std::string>{"no-file-oops"};
+  REQUIRE(loader_plugin);
+  REQUIRE_ERROR(loader_plugin->make_loader(args, control_plane));
+}
+
+// TODO: Does not run unter Ubuntu CI unit test step.
+/*
+TEST(file loader - unreadable file) {
+  auto current_epoch = std::time(nullptr);
+  auto unique_temp_file
+    = fmt::format("{}/read_restricted_{}.json",
+                  std::filesystem::temp_directory_path(), current_epoch);
+  file f{unique_temp_file};
+  REQUIRE(f.open(file::write_only));
+  REQUIRE(f.handle() > 0);
+  std::filesystem::permissions(unique_temp_file,
+                               std::filesystem::perms::group_write
+                                 | std::filesystem::perms::owner_write
+                                 | std::filesystem::perms::others_write);
+  loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
+  auto args = std::vector<std::string>{unique_temp_file};
+  REQUIRE(loader_plugin);
+  REQUIRE_ERROR(loader_plugin->make_loader(args, control_plane));
+  REQUIRE(f.close());
+  CHECK(std::filesystem::remove_all(unique_temp_file));
+}*/
 
 FIXTURE_SCOPE_END()

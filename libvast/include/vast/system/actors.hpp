@@ -268,7 +268,7 @@ using index_actor = typed_actor_fwd<
   // the original ones and returns the new partition infos. When
   // keep_original_partition is no: does an in-place pipeline keeping the old
   // ids, and makes new partitions preserving them.
-  auto(atom::apply, pipeline_ptr, std::vector<vast::partition_info>,
+  auto(atom::apply, pipeline, std::vector<vast::partition_info>,
        keep_original_partition)
     ->caf::result<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
@@ -310,7 +310,7 @@ using filesystem_actor = typed_actor_fwd<
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// The interface of an BULK PARTITION actor.
+/// The interface of a PARTITION TRANSFORMER actor.
 using partition_transformer_actor = typed_actor_fwd<
   // Persist the transformed partitions and return the generated
   // partition synopses.
@@ -481,7 +481,6 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::pipeline_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::http_request)
 #undef vast_uuid_synopsis_map
 

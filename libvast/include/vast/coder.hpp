@@ -87,7 +87,7 @@ namespace vast {
 //   auto& storage() const;
 // };
 
-/// A coder that wraps a single bitmap (and can thus only stores 2 values).
+/// A coder that wraps a single bitmap (and can thus only store 2 values).
 template <class Bitmap>
 class singleton_coder : detail::equality_comparable<singleton_coder<Bitmap>> {
 public:

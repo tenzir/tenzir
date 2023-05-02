@@ -548,12 +548,6 @@ caf::error index_state::load_from_disk() {
   // (although it was unlikely to happen with default settings).
   for (const auto& id : oversized_partitions) {
     VAST_INFO("{} recovers corrupted partition {}", *self, id);
-    auto pipeline = std::make_shared<vast::legacy_pipeline>(
-      "recover", std::vector<std::string>{});
-    auto pass_operator = make_pipeline_operator("pass", {});
-    if (!pass_operator)
-      return pass_operator.error();
-    pipeline->add_operator(std::move(*pass_operator));
     auto store_id = std::string{store_actor_plugin->name()};
     // For this recovery we don't use the 'markers' mechanism
     // and store the output directly in the index directory.
@@ -561,7 +555,7 @@ caf::error index_state::load_from_disk() {
     auto direct_synopsis_path = dir.string() + "/{:l}.mdx";
     auto transformer
       = self->spawn(partition_transformer, store_id, synopsis_opts, index_opts,
-                    accountant, catalog, filesystem, pipeline,
+                    accountant, catalog, filesystem, pipeline{},
                     direct_store_path, direct_synopsis_path);
     auto index = static_cast<index_actor>(self);
     auto store_path = dir / ".." / "archive" / fmt::format("{:u}.store", id);
@@ -1738,7 +1732,7 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       return rp;
     },
-    [self](atom::apply, pipeline_ptr pipeline,
+    [self](atom::apply, pipeline pipe,
            std::vector<partition_info> selected_partitions,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
@@ -1753,7 +1747,7 @@ index(index_actor::stateful_pointer<index_state> self,
           return false;
         }
         VAST_WARN("{} skips unknown partition {} for pipeline {}", *self,
-                  entry.uuid, pipeline->name());
+                  entry.uuid, pipe.to_string());
         return true;
       });
       auto corrected_partitions = catalog_lookup_result{};
@@ -1771,7 +1765,7 @@ index(index_actor::stateful_pointer<index_state> self,
           // synchronize.
           VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
                     "because it is currently being transformed",
-                    *self, pipeline->name(), partition.uuid);
+                    *self, pipe.to_string(), partition.uuid);
         }
       }
       if (corrected_partitions.empty())
@@ -1784,21 +1778,21 @@ index(index_actor::stateful_pointer<index_state> self,
       partition_transformer_actor partition_transfomer = self->spawn(
         system::partition_transformer, store_id, self->state.synopsis_opts,
         self->state.index_opts, self->state.accountant, self->state.catalog,
-        self->state.filesystem, pipeline, std::move(partition_path_template),
+        self->state.filesystem, pipe, std::move(partition_path_template),
         std::move(partition_synopsis_path_template));
       // match_everything == '"" in #type'
       static const auto match_everything
         = vast::predicate{meta_extractor{meta_extractor::type},
                           relational_operator::ni, data{""}};
       auto query_context = query_context::make_extract(
-        pipeline->name(), partition_transfomer, match_everything);
+        pipe.to_string(), partition_transfomer, match_everything);
       auto transform_id = self->state.pending_queries.create_query_id();
       query_context.id = transform_id;
       // We set the query priority for partition transforms to zero so they
       // always get less priority than queries.
       query_context.priority = 0;
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
-                 pipeline->name());
+                 pipe.to_string());
       auto query_contexts = query_state::type_query_context_map{};
       for (const auto& [type, _] : corrected_partitions.candidate_infos) {
         query_contexts[type] = query_context;

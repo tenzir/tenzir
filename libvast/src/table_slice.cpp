@@ -600,6 +600,25 @@ split(const table_slice& slice, size_t partition_point) {
   };
 }
 
+auto subslice(const table_slice& slice, size_t begin, size_t end)
+  -> table_slice {
+  VAST_ASSERT(begin <= end);
+  VAST_ASSERT(end <= slice.rows());
+  if (begin == 0 && end == slice.rows()) {
+    return slice;
+  }
+  auto offset = slice.offset();
+  auto batch = to_record_batch(slice);
+  auto sub_slice = table_slice{
+    batch->Slice(detail::narrow_cast<int64_t>(begin - offset),
+                 detail::narrow_cast<int64_t>(end - begin)),
+    slice.schema(),
+  };
+  sub_slice.offset(offset + begin);
+  sub_slice.import_time(slice.import_time());
+  return sub_slice;
+}
+
 uint64_t rows(const std::vector<table_slice>& slices) {
   auto result = uint64_t{0};
   for (const auto& slice : slices)
@@ -696,6 +715,111 @@ table_slice resolve_enumerations(table_slice slice) {
     std::move(transform_result).second,
     std::move(transform_result).first,
     table_slice::serialize::no,
+  };
+}
+
+auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
+  -> view<data> {
+  if (slice.encoding() == table_slice_encoding::none)
+    return {};
+  switch (ex.kind) {
+    case meta_extractor::type: {
+      return slice.schema().name();
+    }
+    case meta_extractor::import_time: {
+      const auto import_time = slice.import_time();
+      if (import_time == time{}) {
+        // The table slice API returns the epoch timestamp if no import
+        // time was set, so we convert that to null.
+        return {};
+      }
+      return import_time;
+    }
+  }
+  die("unhandled meta extractor kind");
+}
+
+auto resolve_operand(const table_slice& slice, const operand& op)
+  -> std::pair<type, std::shared_ptr<arrow::Array>> {
+  if (slice.encoding() == table_slice_encoding::none)
+    return {};
+  const auto batch = to_record_batch(slice);
+  const auto& layout = caf::get<record_type>(slice.schema());
+  auto inferred_type = type{};
+  auto array = std::shared_ptr<arrow::Array>{};
+  // Helper function that binds a fixed value.
+  auto bind_value = [&](const data& value) {
+    inferred_type = type::infer(value);
+    if (not inferred_type) {
+      inferred_type = type{string_type{}};
+      // VAST has no N/A type equivalent for Arrow, so we just use a string type
+      // here.
+      auto builder
+        = string_type::make_arrow_builder(arrow::default_memory_pool());
+      const auto append_result = builder->AppendNulls(batch->num_rows());
+      VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+      array = builder->Finish().ValueOrDie();
+      return;
+    }
+    auto g = [&]<concrete_type Type>(const Type& inferred_type) {
+      auto builder
+        = inferred_type.make_arrow_builder(arrow::default_memory_pool());
+      for (int i = 0; i < batch->num_rows(); ++i) {
+        const auto append_result
+          = append_builder(inferred_type, *builder,
+                           make_view(caf::get<type_to_data_t<Type>>(value)));
+        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+      }
+      array = builder->Finish().ValueOrDie();
+    };
+    caf::visit(g, inferred_type);
+  };
+  // Helper function that binds an existing array.
+  auto bind_array = [&](const offset& index) {
+    inferred_type = layout.field(index).type;
+    array = arrow::FieldPath{index}.Get(*batch).ValueOrDie();
+  };
+  auto f = detail::overload{
+    [&](const data& value) {
+      bind_value(value);
+    },
+    [&](const field_extractor& ex) {
+      for (const auto& index :
+           layout.resolve_key_suffix(ex.field, slice.schema().name())) {
+        bind_array(index);
+        return;
+      }
+      bind_value({});
+    },
+    [&](const type_extractor& ex) {
+      for (const auto& [field, index] : layout.leaves()) {
+        bool match = field.type == ex.type;
+        if (not match) {
+          for (auto name : field.type.names()) {
+            if (name == ex.type.name()) {
+              match = true;
+              break;
+            }
+          }
+        }
+        if (match) {
+          bind_array(index);
+          return;
+        }
+      }
+      bind_value({});
+    },
+    [&](const meta_extractor& ex) {
+      bind_value(materialize(resolve_meta_extractor(slice, ex)));
+    },
+    [&](const data_extractor& ex) {
+      bind_array(layout.resolve_flat_index(ex.column));
+    },
+  };
+  caf::visit(f, op);
+  return {
+    std::move(inferred_type),
+    std::move(array),
   };
 }
 

@@ -255,26 +255,6 @@ public:
 
 // -- transform plugin ---------------------------------------------------------
 
-/// A base class for plugins that add new pipeline operators.
-class pipeline_operator_plugin : public virtual plugin {
-public:
-  /// Creates a new pipeline operator that maps input to output table
-  /// slices. This will be called when constructing pipelines from the
-  /// VAST configuration.
-  /// @param options The settings configured for this operator.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<legacy_pipeline_operator>>
-  make_pipeline_operator(const vast::record& options) const = 0;
-
-  /// Creates a new pipeline operator that maps input to output table
-  /// slices. This will be called when constructing pipelines from the command
-  /// line.
-  /// @param pipeline The entire remaining pipeline.
-  /// @returns the remaining pipeline, and the parsed operator (or an error).
-  [[nodiscard]] virtual std::pair<
-    std::string_view, caf::expected<std::unique_ptr<legacy_pipeline_operator>>>
-  make_pipeline_operator(std::string_view pipeline) const = 0;
-};
-
 class operator_plugin : public virtual plugin {
 public:
   virtual auto make_operator(std::string_view pipeline) const
@@ -293,6 +273,172 @@ public:
   /// function.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<aggregation_function>>
   make_aggregation_function(const type& input_type) const = 0;
+};
+
+// -- language plugin ---------------------------------------------------
+
+/// A language parser to pass query in a custom language to VAST.
+/// @relates plugin
+class language_plugin : public virtual plugin {
+public:
+  /// Parses a query string into a pipeline object.
+  /// @param query The string representing the custom query.
+  virtual auto parse_query(std::string_view query) const
+    -> caf::expected<pipeline>
+    = 0;
+};
+
+// -- rest endpoint plugin -----------------------------------------------------
+
+// A rest endpoint plugin declares a set of routes on which it can respond
+// to HTTP requests, together with a `handler` actor that is responsible
+// for doing that. A server (usually the `web` plugin) can then accept
+// incoming requests and dispatch them to the correct handler according to the
+// request path.
+class rest_endpoint_plugin : public virtual plugin {
+public:
+  /// A path prefix to prepend to all routes declared by this plugin.
+  /// Defaults to the plugin name.
+  [[nodiscard]] virtual std::string prefix() const {
+    return fmt::format("/{}", name());
+  }
+
+  /// OpenAPI spec for the plugin endpoints.
+  /// @returns A `vast::data` object that is a record containing entries for
+  /// the `paths` element of an OpenAPI spec.
+  [[nodiscard]] virtual data
+  openapi_specification(api_version version = api_version::latest) const
+    = 0;
+
+  /// List of API endpoints provided by this plugin.
+  [[nodiscard]] virtual const std::vector<rest_endpoint>& rest_endpoints() const
+    = 0;
+
+  /// Actor that will handle this endpoint.
+  //  TODO: This should get some integration with component_plugin so that
+  //  the component can be used to answer requests directly.
+  [[nodiscard]] virtual system::rest_handler_actor
+  handler(caf::actor_system& system, system::node_actor node) const
+    = 0;
+};
+
+// -- loader plugin -----------------------------------------------------------
+
+/// A loader plugin transfers input data into a stream of chunks.
+/// @relates plugin
+class loader_plugin : public virtual plugin {
+public:
+  /// Returns the loader.
+  virtual auto make_loader(std::span<std::string const> args,
+                           operator_control_plane& ctrl) const
+    -> caf::expected<generator<chunk_ptr>>
+    = 0;
+
+  /// Returns the default parser for this loader.
+  virtual auto default_parser(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>>
+    = 0;
+};
+
+// -- parser plugin -----------------------------------------------------------
+
+/// A parser plugin transfers a stream of chunks to a stream of table slices.
+/// @relates plugin
+class parser_plugin : public virtual plugin {
+public:
+  using parser = generator<table_slice>;
+
+  virtual auto
+  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
+              operator_control_plane& ctrl) const -> caf::expected<parser>
+    = 0;
+
+  virtual auto default_loader(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>>
+    = 0;
+};
+
+// -- printer plugin ----------------------------------------------------------
+
+/// A printer plugin formats and transfers output data into a stream of chunks.
+/// @relates plugin
+class printer_plugin : public virtual plugin {
+public:
+  class printer_base {
+  public:
+    virtual ~printer_base() = default;
+
+    virtual auto process(table_slice slice) -> generator<chunk_ptr> = 0;
+
+    virtual auto finish() -> generator<chunk_ptr> {
+      return {};
+    }
+  };
+
+  using printer = std::unique_ptr<printer_base>;
+
+  template <class F>
+  static auto to_printer(F f) -> printer {
+    class func_printer : public printer_base {
+    public:
+      explicit func_printer(F f) : f_{std::move(f)} {
+      }
+
+      auto process(table_slice slice) -> generator<chunk_ptr> override {
+        return f_(std::move(slice));
+      }
+
+    private:
+      F f_;
+    };
+    return std::make_unique<func_printer>(std::move(f));
+  }
+
+  /// Returns a printer for a specified schema. If `printer_allows_joining()`,
+  /// then `input_schema`can also be `type{}`, which means that the printer
+  /// should expect a hetergenous input instead.
+  virtual auto
+  make_printer(std::span<std::string const> args, type input_schema,
+               operator_control_plane& ctrl) const -> caf::expected<printer>
+    = 0;
+
+  /// Returns the default saver for this printer.
+  virtual auto default_saver(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>>
+    = 0;
+
+  /// Returns whether the printer allows for joining output streams into a
+  /// single saver.
+  virtual auto printer_allows_joining() const -> bool = 0;
+};
+
+// -- saver plugin ------------------------------------------------------------
+
+/// A saver plugin transfers a stream of chunks to a sink.
+/// @relates plugin
+class saver_plugin : public virtual plugin {
+public:
+  struct printer_info {
+    type input_schema{};
+    std::string format{};
+  };
+  // Alias for the byte chunk dumping function.
+  using saver = std::function<auto(chunk_ptr)->void>;
+
+  /// Returns the saver.
+  virtual auto make_saver(std::span<std::string const> args, printer_info info,
+                          operator_control_plane& ctrl) const
+    -> caf::expected<saver>
+    = 0;
+
+  /// Returns the default printer for this saver.
+  virtual auto default_printer(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>>
+    = 0;
+
+  /// Returns whether the saver joins output from its preceding
+  /// printer.
+  virtual auto saver_does_joining() const -> bool = 0;
 };
 
 // -- store plugin ------------------------------------------------------------
@@ -339,7 +485,9 @@ public:
 };
 
 /// A base class for plugins that add new store backends.
-class store_plugin : public virtual store_actor_plugin {
+class store_plugin : public virtual store_actor_plugin,
+                     public virtual parser_plugin,
+                     public virtual printer_plugin {
 public:
   /// Create a store for passive partitions.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
@@ -348,7 +496,7 @@ public:
   /// Create a store for active partitions.
   /// @param vast_config The vast node configuration.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
-  make_active_store(const caf::settings& vast_config) const = 0;
+  make_active_store() const = 0;
 
 private:
   [[nodiscard]] caf::expected<builder_and_header>
@@ -359,131 +507,23 @@ private:
   [[nodiscard]] caf::expected<system::store_actor>
   make_store(system::accountant_actor accountant, system::filesystem_actor fs,
              std::span<const std::byte> header) const final;
-};
 
-// -- language plugin ---------------------------------------------------
+  auto
+  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
+              operator_control_plane& ctrl) const
+    -> caf::expected<parser> final;
 
-/// A language parser to pass query in a custom language to VAST.
-/// @relates plugin
-class language_plugin : public virtual plugin {
-public:
-  /// Parses a query expression string into a VAST expression.
-  /// @param The string representing the custom query.
-  /// In the future, we may want to let this plugin return a substrait query
-  /// plan instead of a VAST expression.
-  [[nodiscard]] virtual caf::expected<
-    std::pair<expression, std::optional<legacy_pipeline>>>
-  make_query(std::string_view query) const = 0;
-};
+  auto default_loader(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> final;
 
-// -- rest endpoint plugin -----------------------------------------------------
+  auto make_printer(std::span<std::string const> args, type input_schema,
+                    operator_control_plane& ctrl) const
+    -> caf::expected<printer> final;
 
-// A rest endpoint plugin declares a set of routes on which it can respond
-// to HTTP requests, together with a `handler` actor that is responsible
-// for doing that. A server (usually the `web` plugin) can then accept
-// incoming requests and dispatch them to the correct handler according to the
-// request path.
-class rest_endpoint_plugin : public virtual plugin {
-public:
-  /// A path prefix to prepend to all routes declared by this plugin.
-  /// Defaults to the plugin name.
-  [[nodiscard]] virtual std::string prefix() const {
-    return fmt::format("/{}", name());
-  }
+  auto default_saver(std::span<std::string const> args) const
+    -> std::pair<std::string, std::vector<std::string>> final;
 
-  /// OpenAPI spec for the plugin endpoints.
-  /// @returns A `vast::data` object that is a record containing entries for
-  /// the `paths` element of an OpenAPI spec.
-  [[nodiscard]] virtual data
-  openapi_specification(api_version version = api_version::latest) const
-    = 0;
-
-  /// List of API endpoints provided by this plugin.
-  [[nodiscard]] virtual const std::vector<rest_endpoint>& rest_endpoints() const
-    = 0;
-
-  /// Actor that will handle this endpoint.
-  //  TODO: This should get some integration with component_plugin so that
-  //  the component can be used to answer requests directly.
-  [[nodiscard]] virtual system::rest_handler_actor
-  handler(caf::actor_system& system, system::node_actor node) const
-    = 0;
-};
-
-// -- loader plugin -----------------------------------------------------
-
-/// A loader plugin transfers input data into a stream of chunks.
-/// @relates plugin
-class loader_plugin : public virtual plugin {
-public:
-  // Alias for the byte chunk generation function.
-  using loader = std::function<auto()->generator<chunk_ptr>>;
-
-  // Alias for the byte chunk -> table_slice transformation function.
-  using parser
-    = std::function<auto(generator<chunk_ptr>)->generator<table_slice>>;
-
-  /// Returns the loader.
-  [[nodiscard]] virtual auto
-  make_loader(const record&, operator_control_plane&) const
-    -> caf::expected<loader>
-    = 0;
-
-  /// Returns the default parser for this loader.
-  [[nodiscard]] virtual auto
-  make_default_parser(const record&, operator_control_plane&) const
-    -> caf::expected<parser>
-    = 0;
-};
-
-// -- printer plugin -----------------------------------------------------
-
-/// A printer plugin formats and transfers output data into a stream of chunks.
-/// @relates plugin
-class printer_plugin : public virtual plugin {
-public:
-  // Alias for the byte chunk generation function.
-  using printer = std::function<auto(table_slice)->generator<chunk_ptr>>;
-
-  /// Returns a printer for a specified schema.
-  [[nodiscard]] virtual auto
-  make_printer(const record&, type input_schema, operator_control_plane&) const
-    -> caf::expected<printer>
-    = 0;
-
-  /// Returns the default dumper for this printer.
-  [[nodiscard]] virtual auto make_default_dumper() const
-    -> std::optional<std::pair<std::string, record>>
-    = 0;
-
-  /// Returns whether the printer allows for joining output streams into a
-  /// single dumper.
-  [[nodiscard]] virtual auto printer_allows_joining() const -> bool = 0;
-};
-
-// -- dumper plugin -----------------------------------------------------
-
-/// A dumper plugin transfers a stream of chunks to a sink.
-/// @relates plugin
-class dumper_plugin : public virtual plugin {
-public:
-  // Alias for the byte chunk dumping function.
-  using dumper = std::function<auto(chunk_ptr)->void>;
-
-  /// Returns the dumper.
-  [[nodiscard]] virtual auto
-  make_dumper(const record&, type input_schema, operator_control_plane&) const
-    -> caf::expected<dumper>
-    = 0;
-
-  /// Returns the default printer for this dumper.
-  [[nodiscard]] virtual auto make_default_printer() const
-    -> std::optional<std::pair<std::string, record>>
-    = 0;
-
-  /// Returns whether the dumper requires that the output from its preceding
-  /// printer can be joined.
-  [[nodiscard]] virtual auto dumper_requires_joining() const -> bool = 0;
+  auto printer_allows_joining() const -> bool final;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------
@@ -641,7 +681,7 @@ extern const char* VAST_PLUGIN_VERSION;
       auto_register_plugin() {                                                 \
         static_cast<void>(flag);                                               \
       }                                                                        \
-      static bool init() {                                                     \
+      static auto init() -> bool {                                             \
         ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
           new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \
           +[](::vast::plugin* plugin) noexcept {                               \
@@ -658,7 +698,7 @@ extern const char* VAST_PLUGIN_VERSION;
       auto_register_type_id_##name() {                                         \
         static_cast<void>(flag);                                               \
       }                                                                        \
-      static bool init() {                                                     \
+      static auto init() -> bool {                                             \
         ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name::begin,           \
                                        ::caf::id_block::name::end},            \
@@ -677,44 +717,44 @@ extern const char* VAST_PLUGIN_VERSION;
 #else
 
 #  define VAST_REGISTER_PLUGIN(name)                                           \
-    extern "C" ::vast::plugin* vast_plugin_create() {                          \
+    extern "C" auto vast_plugin_create()->::vast::plugin* {                    \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       return new (name);                                                       \
     }                                                                          \
-    extern "C" void vast_plugin_destroy(class ::vast::plugin* plugin) {        \
+    extern "C" auto vast_plugin_destroy(class ::vast::plugin* plugin)->void {  \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       delete plugin;                                                           \
     }                                                                          \
-    extern "C" const char* vast_plugin_version() {                             \
+    extern "C" auto vast_plugin_version()->const char* {                       \
       return VAST_PLUGIN_VERSION;                                              \
     }                                                                          \
-    extern "C" const char* vast_libvast_version() {                            \
+    extern "C" auto vast_libvast_version()->const char* {                      \
       return ::vast::version::version;                                         \
     }                                                                          \
-    extern "C" const char* vast_libvast_build_tree_hash() {                    \
+    extern "C" auto vast_libvast_build_tree_hash()->const char* {              \
       return ::vast::version::build::tree_hash;                                \
     }
 
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
-    extern "C" void vast_plugin_register_type_id_block() {                     \
-      caf::init_global_meta_objects<::caf::id_block::name>();                  \
-    }                                                                          \
-    extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {      \
-      return {::caf::id_block::name::begin, ::caf::id_block::name::end};       \
+#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                            \
+    extern "C" auto vast_plugin_register_type_id_block()->void {                \
+      caf::init_global_meta_objects<::caf::id_block::name>();                   \
+    }                                                                           \
+    extern "C" auto vast_plugin_type_id_block()->::vast::plugin_type_id_block { \
+      return {::caf::id_block::name::begin, ::caf::id_block::name::end};        \
     }
 
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                   \
-    extern "C" void vast_plugin_register_type_id_block() {                     \
-      caf::init_global_meta_objects<::caf::id_block::name1>();                 \
-      caf::init_global_meta_objects<::caf::id_block::name2>();                 \
-    }                                                                          \
-    extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {      \
-      return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin    \
-                ? ::caf::id_block::name1::begin                                \
-                : ::caf::id_block::name2::begin,                               \
-              ::caf::id_block::name1::end > ::caf::id_block::name2::end        \
-                ? ::caf::id_block::name1::end                                  \
-                : ::caf::id_block::name2::end};                                \
+#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                    \
+    extern "C" auto vast_plugin_register_type_id_block()->void {                \
+      caf::init_global_meta_objects<::caf::id_block::name1>();                  \
+      caf::init_global_meta_objects<::caf::id_block::name2>();                  \
+    }                                                                           \
+    extern "C" auto vast_plugin_type_id_block()->::vast::plugin_type_id_block { \
+      return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin     \
+                ? ::caf::id_block::name1::begin                                 \
+                : ::caf::id_block::name2::begin,                                \
+              ::caf::id_block::name1::end > ::caf::id_block::name2::end         \
+                ? ::caf::id_block::name1::end                                   \
+                : ::caf::id_block::name2::end};                                 \
     }
 
 #endif

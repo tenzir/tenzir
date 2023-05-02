@@ -15,16 +15,15 @@
 #include <vast/concept/printable/vast/json.hpp>
 #include <vast/detail/weak_run_delayed.hpp>
 #include <vast/format/json.hpp>
-#include <vast/legacy_pipeline.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
-#include <vast/system/parse_query.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/table_slice.hpp>
 
+#include <arrow/record_batch.h>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -40,10 +39,10 @@ static auto const* SPEC_V0 = R"_(
         name: query
         schema:
           type: string
-        example: ":ip in 10.42.0.0/16 | head 100"
+        example: "where :ip in 10.42.0.0/16 | head 100"
         required: true
         description: |
-          The query used, optionally including an open pipeline.
+          The query used in the form of a pipeline.
       - in: query
         name: ttl
         schema:
@@ -469,6 +468,7 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   ops.insert(ops.begin(), std::make_unique<query_source>(self));
   ops.push_back(std::make_unique<query_sink>(self));
   auto result = pipeline{std::move(ops)};
+  VAST_DEBUG("final query pipeline: {}", result.to_string());
   // We already checked that the original pipeline was `events -> events`.
   // Thus, we know that we now have a valid `void -> void` pipeline.
   VAST_ASSERT(result.is_closed());
@@ -522,9 +522,9 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   };
 }
 
-request_multiplexer_actor::behavior_type request_multiplexer(
+auto request_multiplexer(
   request_multiplexer_actor::stateful_pointer<request_multiplexer_state> self,
-  const system::node_actor& node) {
+  const system::node_actor& node) -> request_multiplexer_actor::behavior_type {
   self
     ->request(node, caf::infinite, atom::get_v, atom::label_v,
               std::vector<std::string>{"index"})
@@ -587,21 +587,25 @@ request_multiplexer_actor::behavior_type request_multiplexer(
           VAST_ASSERT(caf::holds_alternative<std::string>(param));
           query_string = caf::get<std::string>(param);
         } else {
-          return rq.response->abort(422, "missing parameter 'query'\n");
+          return rq.response->abort(422, "missing parameter 'query'\n",
+                                    caf::error{});
         }
         auto parse_result = pipeline::parse(*query_string);
         if (!parse_result)
-          return rq.response->abort(400, fmt::format("unparseable query: {}\n",
-                                                     parse_result.error()));
+          return rq.response->abort(400, "invalid query\n",
+                                    parse_result.error());
         auto pipeline = std::move(*parse_result);
-        auto output = pipeline.test_instantiate<generator<table_slice>>();
+        auto output = pipeline.infer_type<table_slice>();
         if (!output) {
-          return rq.response->abort(
-            400,
-            fmt::format("pipeline instantiation failed: {}", output.error()));
+          return rq.response->abort(400, "pipeline instantiation failed\n",
+                                    output.error());
         }
-        if (!std::holds_alternative<generator<table_slice>>(*output)) {
-          return rq.response->abort(400, "query must return events as output");
+        if (!output->is<table_slice>()) {
+          return rq.response->abort(
+            400, "query must return events as output\n",
+            caf::make_error(ec::type_clash,
+                            fmt::format("the given pipeline returns {}",
+                                        operator_type_name(*output))));
         }
         // TODO: Consider replacing this with an empty conjunction.
         auto& trivially_true = trivially_true_expression();
@@ -614,8 +618,8 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         VAST_ASSERT(expr != expression{});
         auto normalized_expr = normalize_and_validate(expr);
         if (!normalized_expr)
-          return rq.response->abort(400, fmt::format("invalid query: {}\n",
-                                                     normalized_expr.error()));
+          return rq.response->abort(400, "invalid query\n",
+                                    normalized_expr.error());
         auto handler
           = self->spawn<caf::monitored>(query_manager, self->state.index_,
                                         std::move(new_pipeline), expand, ttl,
@@ -634,27 +638,25 @@ request_multiplexer_actor::behavior_type request_multiplexer(
               response->append(fmt::format("{{\"id\": \"{}\"}}\n", id_string));
             },
             [response = rq.response](const caf::error& e) {
-              response->abort(500, fmt::format("received error response from "
-                                               "index: {}\n",
-                                               e));
+              response->abort(500, "index evaluation failed\n", e);
             });
       } else {
         VAST_ASSERT_CHEAP(endpoint_id == QUERY_NEXT_ENDPOINT);
         if (!rq.params.contains("id"))
-          return rq.response->abort(400, "missing id\n");
+          return rq.response->abort(400, "missing id\n", caf::error{});
         if (!rq.params.contains("n"))
-          return rq.response->abort(400, "missing parameter 'n'\n");
+          return rq.response->abort(400, "missing parameter 'n'\n",
+                                    caf::error{});
         auto id = caf::get<std::string>(rq.params["id"]);
         auto n = caf::get<uint64_t>(rq.params["n"]);
         auto it = self->state.live_queries_.find(id);
         if (it == self->state.live_queries_.end())
-          return rq.response->abort(422, "unknown id\n");
+          return rq.response->abort(422, "unknown id\n", caf::error{});
         auto& handler = it->second;
         self->request(handler, caf::infinite, atom::next_v, std::move(rq), n)
           .then([](atom::done) { /* nop */ },
                 [response = rq.response](const caf::error& e) {
-                  response->abort(
-                    500, fmt::format("internal server error: {}\n", e));
+                  response->abort(500, "internal server error\n", e);
                 });
       }
     },
@@ -662,8 +664,7 @@ request_multiplexer_actor::behavior_type request_multiplexer(
 }
 
 class plugin final : public virtual rest_endpoint_plugin {
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return {};
   }
 
@@ -717,8 +718,8 @@ class plugin final : public virtual rest_endpoint_plugin {
     return endpoints;
   }
 
-  system::rest_handler_actor
-  handler(caf::actor_system& system, system::node_actor node) const override {
+  auto handler(caf::actor_system& system, system::node_actor node) const
+    -> system::rest_handler_actor override {
     return system.spawn(request_multiplexer, node);
   }
 };

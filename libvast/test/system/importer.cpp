@@ -62,8 +62,7 @@ struct importer_fixture : Base {
     MESSAGE("spawn importer");
     auto dir = this->directory / "importer";
     importer = this->self->spawn(system::importer, dir, system::index_actor{},
-                                 system::accountant_actor{},
-                                 std::vector<vast::legacy_pipeline>{});
+                                 system::accountant_actor{});
   }
 
   ~importer_fixture() {
@@ -93,8 +92,7 @@ struct importer_fixture : Base {
     return this->self->spawn(system::source, std::move(reader), slice_size,
                              std::nullopt, vast::system::catalog_actor{},
                              vast::module{}, std::string{},
-                             vast::system::accountant_actor{},
-                             std::vector<vast::legacy_pipeline>{});
+                             vast::system::accountant_actor{});
   }
 
   void verify(const std::vector<table_slice>& result,

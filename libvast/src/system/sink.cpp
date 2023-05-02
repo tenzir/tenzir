@@ -37,16 +37,6 @@ void process_slice(caf::stateful_actor<sink_state>* self, table_slice slice) {
     VAST_INFO("{} received first result with a latency of {}", self->state.name,
               to_string(time_since_flush));
   }
-  if (auto err = self->state.executor.add(std::move(slice))) {
-    VAST_ERROR("sink failed to add slice: {}", err);
-    return;
-  }
-  auto transformed = self->state.executor.finish();
-  if (!transformed) {
-    VAST_WARN("discarding slice; error in output transformation: {}",
-              transformed.error());
-    return;
-  }
   auto reached_max_events = [&] {
     VAST_INFO("{} reached limit of {} events", *self, self->state.max_events);
     self->state.writer->flush();
@@ -55,28 +45,26 @@ void process_slice(caf::stateful_actor<sink_state>* self, table_slice slice) {
   };
   auto t = timer::start(self->state.measurement);
   table_slice::size_type starting_rows = self->state.processed;
-  for (auto& slice : *transformed) {
-    // Drop excess elements.
-    auto remaining = self->state.max_events - self->state.processed;
-    if (remaining == 0) {
-      t.stop(self->state.processed - starting_rows);
-      return reached_max_events();
-    }
-    if (slice.rows() > remaining)
-      slice = head(std::move(slice), remaining);
-    // Handle events.
-    if (auto err = self->state.writer->write(slice)) {
-      VAST_ERROR("{} {}", *self, render(err));
-      t.stop(self->state.processed - starting_rows);
-      self->quit(std::move(err));
-      return;
-    }
-    // Stop when reaching configured limit.
-    self->state.processed += slice.rows();
-    if (self->state.processed >= self->state.max_events) {
-      t.stop(self->state.processed - starting_rows);
-      return reached_max_events();
-    }
+  // Drop excess elements.
+  auto remaining = self->state.max_events - self->state.processed;
+  if (remaining == 0) {
+    t.stop(self->state.processed - starting_rows);
+    return reached_max_events();
+  }
+  if (slice.rows() > remaining)
+    slice = head(std::move(slice), remaining);
+  // Handle events.
+  if (auto err = self->state.writer->write(slice)) {
+    VAST_ERROR("{} {}", *self, render(err));
+    t.stop(self->state.processed - starting_rows);
+    self->quit(std::move(err));
+    return;
+  }
+  // Stop when reaching configured limit.
+  self->state.processed += slice.rows();
+  if (self->state.processed >= self->state.max_events) {
+    t.stop(self->state.processed - starting_rows);
+    return reached_max_events();
   }
   t.stop(self->state.processed - starting_rows);
   // Force flush if necessary.
@@ -104,20 +92,10 @@ void sink_state::send_report() {
 
 caf::behavior sink(caf::stateful_actor<sink_state>* self,
                    format::writer_ptr&& writer, uint64_t max_events) {
-  return transforming_sink(self, std::move(writer),
-                           std::vector<legacy_pipeline>{}, max_events);
-}
-
-caf::behavior transforming_sink(caf::stateful_actor<sink_state>* self,
-                                format::writer_ptr&& writer,
-                                std::vector<legacy_pipeline>&& pipelines,
-                                uint64_t max_events) {
   VAST_DEBUG("{} spawned ({}, {})", *self, writer->name(),
              VAST_ARG(max_events));
   using namespace std::chrono;
   self->state.writer = std::move(writer);
-  self->state.executor = pipeline_executor{std::move(pipelines)};
-  self->state.name = self->state.writer->name();
   self->state.last_flush = steady_clock::now();
   if (max_events > 0) {
     VAST_DEBUG("{} caps event export at {} events", *self, max_events);
@@ -147,9 +125,8 @@ caf::behavior transforming_sink(caf::stateful_actor<sink_state>* self,
                  process_slice(state.self_ptr, std::move(slice));
                },
                [](stream_state& state, const caf::error& err) {
-                 if (err)
-                   VAST_ERROR("{} got error during streaming: {}",
-                              *state.self_ptr, err);
+                 // There's no need to warn here, as we already print the error
+                 // in the down handler of the sink command.
                  state.self_ptr->state.writer->flush();
                  state.self_ptr->state.send_report();
                  state.self_ptr->quit(err);

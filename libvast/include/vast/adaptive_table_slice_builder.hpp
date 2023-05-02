@@ -12,45 +12,57 @@
 #include "vast/detail/series_builders.hpp"
 #include "vast/table_slice.hpp"
 
-#include <arrow/record_batch.h>
+#include <variant>
 
 namespace vast {
 
 class adaptive_table_slice_builder {
 public:
+  adaptive_table_slice_builder() = default;
+  explicit adaptive_table_slice_builder(type starting_schema,
+                                        bool allow_fields_discovery = false);
+  struct row_guard {
+  public:
+    explicit row_guard(adaptive_table_slice_builder& builder);
+    /// @brief removes the values and fields added within the scope of this
+    /// row_guard.
+    auto cancel() -> void;
+
+    /// @brief Adds a field to a row.
+    /// @param field_name Field name.
+    /// @return Object that allows the caller to add new values to a given
+    /// field. The row_guard object must outlive the returned object.
+    auto push_field(std::string_view field_name) -> detail::field_guard;
+    ~row_guard() noexcept;
+
+  private:
+    adaptive_table_slice_builder& builder_;
+    detail::arrow_length_type starting_rows_count_ = 0;
+  };
+
   /// @brief Inserts a row to the output table slice.
   /// @return An object used to manipulate fields of an inserted row. The
   /// returned object must be destroyed beforore calling this method again.
-  auto push_row() -> detail::record_guard {
-    return {root_builder_, root_builder_.length()};
-  }
+  auto push_row() -> row_guard;
 
-  /// @brief Combines all the pushed rows into a table slice.
+  /// @brief Combines all the pushed rows into a table slice. This can be safely
+  /// called multipled times only when constructed with a fixed schema (no
+  /// fields discovery)
   /// @return Finalized table slice.
-  auto finish() && -> table_slice {
-    auto final_array = std::move(root_builder_).finish();
-    if (not final_array)
-      return table_slice{};
-    auto schema = root_builder_.type();
-    auto schema_name = schema.make_fingerprint();
-    auto slice_schema = vast::type{std::move(schema_name), std::move(schema)};
-    const auto& struct_array
-      = static_cast<const arrow::StructArray&>(*final_array);
-    auto batch
-      = arrow::RecordBatch::Make(slice_schema.to_arrow_schema(),
-                                 struct_array.length(), struct_array.fields());
-    VAST_ASSERT(batch);
-    return table_slice{batch, std::move(slice_schema)};
-  }
+  auto finish() -> table_slice;
 
   /// @brief Calculates the currently occupied rows.
   /// @return count of currently occupied rows.
-  auto rows() const {
-    return root_builder_.length();
-  }
+  auto rows() const -> detail::arrow_length_type;
 
 private:
-  detail::concrete_series_builder<record_type> root_builder_;
+  auto get_schema() const -> type;
+  auto finish_impl() -> std::shared_ptr<arrow::Array>;
+
+  std::variant<detail::concrete_series_builder<record_type>,
+               detail::fixed_fields_record_builder>
+    root_builder_;
+  type start_schema_;
 };
 
 } // namespace vast

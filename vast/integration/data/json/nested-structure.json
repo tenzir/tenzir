@@ -1,0 +1,132 @@
+{
+  "ts": "2011-08-13T11:43:55.070162Z",
+  "uid": [
+    [],
+    [],
+    [
+      [
+        [
+          [
+            [
+              42
+            ]
+          ]
+        ]
+      ]
+    ],
+    [
+      [
+        [
+          [
+            [
+              43,
+              null
+            ]
+          ]
+        ]
+      ]
+    ]
+  ],
+  "id.orig_h": "208.86.166.68",
+  "id.orig_p": 21684,
+  "id.resp_h": "147.32.84.165",
+  "id.resp_p": [
+    1,
+    2,
+    3,
+    3389
+  ],
+  "cookie": "a",
+  "result": "Success",
+  "security_protocol": "RDP",
+  "keyboard_layout": "English - United States",
+  "client_build": "RDP 5.1",
+  "client_name": "a",
+  "client_dig_product_id": "",
+  "desktop_width": {
+    "amount": 10
+  },
+  "desktop_height": [
+    [
+      2,
+      3
+    ],
+    [
+      2,
+      3,
+      4
+    ]
+  ],
+  "requested_color_depth": "8bit",
+  "cert_type": "RSA",
+  "cert_count": 1,
+  "cert_permanent": true,
+  "encryption_level": "Client compatible",
+  "encryption_method": "128bit"
+}
+{
+  "ts": null,
+  "uid": [
+    [],
+    [],
+    [
+      [
+        [
+          [
+            [
+              42
+            ]
+          ]
+        ]
+      ]
+    ],
+    [
+      [
+        [
+          [
+            [
+              43,
+              null
+            ]
+          ]
+        ]
+      ]
+    ]
+  ],
+  "id.orig_h": "208.86.166.68",
+  "id.orig_p": 21684,
+  "id.resp_h": "147.32.84.165",
+  "id.resp_p": [
+    1,
+    2,
+    3,
+    3389
+  ],
+  "cookie": "a",
+  "result": "Success",
+  "security_protocol": "RDP",
+  "keyboard_layout": "English - United States",
+  "client_build": "RDP 5.1",
+  "client_name": "a",
+  "client_dig_product_id": "",
+  "desktop_width": {
+    "amount": 10
+  },
+  "desktop_height": [
+    [
+      2,
+      3
+    ],
+    [
+      2,
+      3,
+      4
+    ]
+  ],
+  "requested_color_depth": "8bit",
+  "cert_type": "RSA",
+  "cert_count": 1,
+  "cert_permanent": true,
+  "encryption_level": "Client compatible",
+  "encryption_method": "128bit"
+}

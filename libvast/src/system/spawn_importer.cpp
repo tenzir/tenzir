@@ -13,7 +13,6 @@
 #include "vast/logger.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/importer.hpp"
-#include "vast/system/make_legacy_pipelines.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/uuid.hpp"
@@ -34,14 +33,9 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   auto store_backend
     = caf::get_or(args.inv.options, "vast.store-backend",
                   std::string{defaults::system::store_backend});
-  auto pipelines
-    = make_pipelines(pipelines_location::server_import, args.inv.options);
-  if (!pipelines)
-    return pipelines.error();
   if (!index)
     return caf::make_error(ec::missing_component, "index");
-  auto handle = self->spawn(importer, args.dir / args.label, index, accountant,
-                            std::move(*pipelines));
+  auto handle = self->spawn(importer, args.dir / args.label, index, accountant);
   VAST_VERBOSE("{} spawned the importer", *self);
   for (auto& source : self->state.registry.find_by_type("source")) {
     VAST_DEBUG("{} connects source to new importer", *self);

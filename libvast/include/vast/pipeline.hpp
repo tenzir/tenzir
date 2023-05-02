@@ -11,6 +11,7 @@
 #include "vast/expression.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/tag.hpp"
 
 #include <fmt/core.h>
 
@@ -29,73 +30,42 @@ using operator_output
   = std::variant<generator<std::monostate>, generator<table_slice>,
                  generator<chunk_ptr>>;
 
-/// Variant of all operator batch types.
-struct operator_batch : std::variant<std::monostate, table_slice, chunk_ptr> {
-  using variant::variant;
-
-  auto empty() const -> bool {
-    auto f = detail::overload{
-      [](std::monostate) {
-        return true;
-      },
-      [](const table_slice& slice) {
-        return slice.rows() == 0;
-      },
-      [](const chunk_ptr& chunk) {
-        if (chunk) {
-          return chunk->size() == 0;
-        }
-        return true;
-      },
-    };
-    return std::visit(f, *this);
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, operator_batch& x) {
-    if constexpr (Inspector::is_loading) {
-      auto i = size_t{};
-      if (!f.apply(i)) {
-        return false;
-      }
-      switch (i) {
-        case 0: {
-          x.emplace<0>();
-          return true;
-        }
-        case 1: {
-          auto& y = x.emplace<1>();
-          return f.apply(y);
-        }
-        case 2: {
-          auto& y = x.emplace<2>();
-          return f.apply(y);
-        }
-        default:
-          return false;
-      }
-    } else {
-      auto i = x.index();
-      if (!f.apply(i)) {
-        return false;
-      }
-      auto g = detail::overload{
-        [](std::monostate&) {
-          return true;
-        },
-        [&](auto& y) {
-          return f.apply(y);
-        },
-      };
-      return std::visit(g, x);
-    }
-  }
-};
+/// Variant of all types that can be used for operators.
+///
+/// @note During instantiation, a type `T` normally corresponds to
+/// `generator<T>`. However, an input type of `void` corresponds to
+/// sources (which receive a `std::monostate`) and an otuput type of `void`
+/// corresponds to sinks (which return a `generator<std::monostate>`).
+using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 
 /// Concept for pipeline operator input element types.
 template <class T>
 concept operator_input_batch
   = std::is_same_v<T, table_slice> || std::is_same_v<T, chunk_ptr>;
+
+inline auto to_operator_type(const operator_input& x) -> operator_type {
+  return std::visit(
+    []<class T>(const T&) -> operator_type {
+      if constexpr (std::is_same_v<T, std::monostate>) {
+        return tag_v<void>;
+      } else {
+        return tag_v<typename T::value_type>;
+      }
+    },
+    x);
+}
+
+inline auto to_operator_type(const operator_output& x) -> operator_type {
+  return std::visit(
+    []<class T>(const generator<T>&) -> operator_type {
+      if constexpr (std::is_same_v<T, std::monostate>) {
+        return tag_v<void>;
+      } else {
+        return tag_v<T>;
+      }
+    },
+    x);
+}
 
 /// User-friendly name for the given pipeline batch type.
 template <class T>
@@ -109,6 +79,25 @@ constexpr auto operator_type_name() -> std::string_view {
   } else {
     static_assert(detail::always_false_v<T>, "not a valid element type");
   }
+}
+
+/// @see `operator_type_name<T>()`.
+inline auto operator_type_name(operator_type type) -> std::string_view {
+  return std::visit(
+    []<class T>(tag<T>) {
+      return operator_type_name<T>();
+    },
+    type);
+}
+
+/// @see `operator_type_name<T>()`.
+inline auto operator_type_name(const operator_input& x) -> std::string_view {
+  return operator_type_name(to_operator_type(x));
+}
+
+/// @see `operator_type_name<T>()`.
+inline auto operator_type_name(const operator_output& x) -> std::string_view {
+  return operator_type_name(to_operator_type(x));
 }
 
 /// Returns a trivially-true expression. This is a workaround for having no
@@ -151,20 +140,15 @@ public:
     -> caf::expected<operator_output>
     = 0;
 
-  /// Tests the instantiation of the operator for a given input.
-  ///
-  /// Note: The returned generator just a marker and always empty. We could
-  /// improve this interface in the future.
-  template <class T>
-  auto test_instantiate() const -> caf::expected<operator_output> {
-    return test_instantiate_impl(operator_input{T{}});
-  }
-
   /// Copies the underlying pipeline operator.
   virtual auto copy() const -> operator_ptr = 0;
 
-  /// Returns a textual representation of this operator for display and
-  /// debugging purposes. Not necessarily roundtrippable.
+  /// Returns a textual representation of this operator for display, debugging
+  /// purposes, and roundtripping if the operator is not executed locally.
+  ///
+  /// NOTE: If `location() != operator_location::local`, then
+  /// `pipeline::parse(to_string(), {})` must succeed and be semantically
+  /// equivalent to `*this`.
   virtual auto to_string() const -> std::string = 0;
 
   /// Tries to perform predicate pushdown with the given expression.
@@ -185,8 +169,41 @@ public:
   }
 
 private:
-  auto test_instantiate_impl(operator_input input) const
-    -> caf::expected<operator_output>;
+  /// Retrieve the output type of this operator for a given input.
+  ///
+  /// The default implementation will try to instantiate the operator and then
+  /// discard the generator if successful. If instantiation has a side-effect
+  /// that happens outside of the associated coroutine function, the
+  /// `operator_base::infer_type_impl` function should be overwritten.
+  template <class T>
+  auto infer_type() const -> caf::expected<operator_type> {
+    return infer_type(tag_v<T>);
+  }
+
+  /// @see `operator_base::infer_type<T>()`.
+  auto infer_type(operator_type input) const -> caf::expected<operator_type> {
+    return infer_type_impl(input);
+  }
+
+  /// Returns an error if this is not an `In -> Out` operator.
+  template <class In, class Out>
+  [[nodiscard]] auto check_type() const -> caf::expected<void> {
+    auto out = infer_type<In>();
+    if (!out) {
+      return out.error();
+    }
+    if (!out->template is<Out>()) {
+      return caf::make_error(ec::type_clash,
+                             fmt::format("expected {} as output but got {}",
+                                         operator_type_name<Out>(),
+                                         operator_type_name(*out)));
+    }
+    return {};
+  }
+
+protected:
+  virtual auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type>;
 };
 
 /// A pipeline is a sequence of pipeline operators.
@@ -204,9 +221,26 @@ public:
   /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
   explicit pipeline(std::vector<operator_ptr> operators);
 
-  /// Parses a logical pipeline from its textual representation. It is *not*
-  /// guaranteed that `parse(to_string())` succeeds.
+  /// Parses a pipeline from its definition.
+  ///
+  /// NOTE: If `location() != operator_location::local`, then
+  /// `pipeline::parse(to_string(), {})` must succeed and be semantically
+  /// equivalent to `*this`.
   static auto parse(std::string_view repr) -> caf::expected<pipeline>;
+
+  /// @copydoc parse
+  static auto parse_as_operator(std::string_view repr)
+    -> caf::expected<operator_ptr>;
+
+  /// Adds an operator at the end of this pipeline.
+  void append(operator_ptr op) {
+    operators_.push_back(std::move(op));
+  }
+
+  /// Adds an operator at the start of this pipeline.
+  void prepend(operator_ptr op) {
+    operators_.insert(operators_.begin(), std::move(op));
+  }
 
   /// Returns the sequence of operators that this pipeline was built from.
   auto unwrap() && -> std::vector<operator_ptr> {
@@ -284,9 +318,9 @@ public:
                       "ambiguous operator definition: callable with both "
                       "`op()` and `op(ctrl)`");
         if constexpr (source) {
-          return self()();
+          return convert_output(self()());
         } else if constexpr (source_ctrl) {
-          return self()(ctrl);
+          return convert_output(self()(ctrl));
         } else {
           return caf::make_error(ec::type_clash,
                                  fmt::format("'{}' cannot be used as a source",
@@ -296,25 +330,39 @@ public:
       [&]<class Input>(
         generator<Input> input) -> caf::expected<operator_output> {
         constexpr auto one = std::is_invocable_v<Self&, Input>;
+        constexpr auto one_ctrl
+          = std::is_invocable_v<Self&, Input, operator_control_plane&>;
         constexpr auto gen = std::is_invocable_v<Self&, generator<Input>>;
         constexpr auto gen_ctrl = std::is_invocable_v<Self&, generator<Input>,
                                                       operator_control_plane&>;
-        static_assert(one + gen + gen_ctrl <= 1,
+        static_assert(one + one_ctrl + gen + gen_ctrl <= 1,
                       "ambiguous operator definition: callable with more than "
-                      "one of `op(x)`, `op(gen)` and `op(gen, ctrl)`");
+                      "one of `op(x)`, `op(x, ctrl)`, `op(gen)` and `op(gen, "
+                      "ctrl)`");
         if constexpr (one) {
           return std::invoke(
-            [this](generator<Input> input)
+            [](generator<Input> input, const Self& self)
               -> generator<std::invoke_result_t<Self&, Input>> {
               for (auto&& x : input) {
-                co_yield self()(std::move(x));
+                co_yield self(std::move(x));
               }
             },
-            std::move(input));
+            std::move(input), self());
+        } else if constexpr (one_ctrl) {
+          return std::invoke(
+            [](generator<Input> input, operator_control_plane& ctrl,
+               const Self& self)
+              -> generator<
+                std::invoke_result_t<Self&, Input, operator_control_plane&>> {
+              for (auto&& x : input) {
+                co_yield self(std::move(x), ctrl);
+              }
+            },
+            std::move(input), ctrl, self());
         } else if constexpr (gen) {
-          return self()(std::move(input));
+          return convert_output(self()(std::move(input)));
         } else if constexpr (gen_ctrl) {
-          return self()(std::move(input), ctrl);
+          return convert_output(self()(std::move(input), ctrl));
         } else {
           return caf::make_error(ec::type_clash,
                                  fmt::format("'{}' does not accept {} as input",
@@ -335,6 +383,24 @@ private:
     static_assert(std::is_final_v<Self>);
     static_assert(std::is_base_of_v<crtp_operator, Self>);
     return static_cast<const Self&>(*this);
+  }
+
+  /// Converts the possible return types to `caf::expected<operator_output>`.
+  ///
+  /// This is mainly needed because `caf::expected` does not do implicit
+  /// conversions for us.
+  template <class T>
+  static auto convert_output(caf::expected<generator<T>> x)
+    -> caf::expected<operator_output> {
+    if (!x) {
+      return x.error();
+    }
+    return std::move(*x);
+  }
+
+  template <class T>
+  static auto convert_output(T x) -> caf::expected<operator_output> {
+    return x;
   }
 };
 
@@ -395,7 +461,7 @@ public:
           ctrl.abort(state.error());
           break;
         }
-        it = states.try_emplace(it, slice.schema(), *state);
+        it = states.try_emplace(it, slice.schema(), std::move(*state));
       }
       auto result = process(std::move(slice), it->second);
       if constexpr (std::is_same_v<remove_generator_t<output_type>,

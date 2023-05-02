@@ -9,15 +9,16 @@
 #include "vast/system/import_command.hpp"
 
 #include "vast/command.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/make_legacy_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/node_control.hpp"
-#include "vast/system/parse_query.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/uuid.hpp"
 
@@ -54,26 +55,24 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   if (!importer)
     return caf::make_message(caf::make_error( //
       ec::missing_component, "importer"));
-  auto pipelines
-    = make_pipelines(pipelines_location::client_source, inv.options);
-  if (!pipelines)
-    return caf::make_message(pipelines.error());
-  expression expr;
+  expression expr = trivially_true_expression();
   if (!inv.arguments.empty()) {
-    auto parse_result = parse_query(inv.arguments);
+    if (inv.arguments.size() > 1) {
+      return caf::make_message(caf::make_error(
+        ec::invalid_argument,
+        fmt::format("{} expected at most one argument, but got [{}]",
+                    inv.full_name, fmt::join(inv.arguments, ", "))));
+    }
+    auto parse_result = to<expression>(inv.arguments[0]);
     if (!parse_result) {
       return caf::make_message(parse_result.error());
     }
-    auto [parsed_expr, pipeline] = std::move(*parse_result);
-    expr = parsed_expr;
-    if (pipeline) {
-      pipelines->push_back(std::move(*pipeline));
-    }
+    expr = std::move(*parse_result);
   }
   const auto format = std::string{inv.name()};
   // Start the source.
   auto src_result = make_source(sys, format, inv, accountant, catalog, importer,
-                                std::move(*pipelines), std::move(expr));
+                                std::move(expr));
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(*src_result);

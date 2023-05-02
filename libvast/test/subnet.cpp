@@ -14,6 +14,8 @@
 #include "vast/subnet.hpp"
 #include "vast/test/test.hpp"
 
+#include <caf/test/dsl.hpp>
+
 using namespace vast;
 using namespace std::string_literals;
 
@@ -24,10 +26,10 @@ TEST(subnets) {
   CHECK(to_string(p) == "::/0");
 
   auto a = *to<ip>("192.168.0.1");
-  subnet q{a, 24};
+  subnet q{a, 24 + 96};
   CHECK(q.network() == *to<ip>("192.168.0.0"));
-  CHECK(q.length() == 24);
-  CHECK(to_string(q) == "192.168.0.0/24");
+  CHECK(q.length() == 24 + 96);
+  CHECK_EQUAL(to_string(q), "192.168.0.0/24");
   CHECK(q.contains(*to<ip>("192.168.0.73")));
   CHECK(!q.contains(*to<ip>("192.168.244.73")));
 
@@ -53,27 +55,19 @@ TEST(containment) {
 }
 
 TEST(printable) {
-  auto sn = subnet{*to<ip>("10.0.0.0"), 8};
-  CHECK_EQUAL(to_string(sn), "10.0.0.0/8");
+  auto snv4 = subnet{*to<ip>("10.0.0.0"), 8 + 96};
+  CHECK_EQUAL(to_string(snv4), "10.0.0.0/8");
+  auto snv6 = subnet{*to<ip>("10.0.0.0"), 8};
+  CHECK_EQUAL(to_string(snv6), to_string(unbox(to<subnet>("::ffff:a00:0/8"))));
 }
 
 TEST(subnet) {
-  auto p = make_parser<subnet>{};
   MESSAGE("IPv4");
-  auto str = "192.168.0.0/24"s;
-  auto f = str.begin();
-  auto l = str.end();
-  subnet s;
-  CHECK(p(f, l, s));
-  CHECK(f == l);
-  CHECK((s == subnet{*to<ip>("192.168.0.0"), 24}));
+  auto s = unbox(to<subnet>("192.168.0.0/24"));
+  CHECK_EQUAL(s, (subnet{unbox(to<ip>("192.168.0.0")), 120}));
   CHECK(s.network().is_v4());
   MESSAGE("IPv6");
-  str = "beef::cafe/40";
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, s));
-  CHECK(f == l);
-  CHECK((s == subnet{*to<ip>("beef::cafe"), 40}));
+  s = unbox(to<subnet>("beef::cafe/40"));
+  CHECK_EQUAL(s, (subnet{*to<ip>("beef::cafe"), 40}));
   CHECK(s.network().is_v6());
 }

@@ -426,6 +426,7 @@ TEST(get_if) {
   CHECK(baz);
   auto qux = get_if<int64_t>(&x, "baz.qux");
   REQUIRE(qux);
+  REQUIRE(*qux);
   CHECK_EQUAL(*qux, 42);
   auto quux = get_if<record>(&x, "baz.quux");
   CHECK(quux);

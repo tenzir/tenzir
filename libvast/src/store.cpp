@@ -58,11 +58,13 @@ handle_query(const auto& self, const query_context& query_context) {
   auto rp = self->template make_response_promise<uint64_t>();
   auto f = detail::overload{
     [&](const count_query_context& count) -> void {
-      if (count.mode == count_query_context::estimate) {
-        rp.deliver(caf::make_error(ec::logic_error, "estimate counts must "
-                                                    "not evaluate "
-                                                    "expressions"));
-        return;
+      if constexpr (std::is_same_v<Actor, system::default_passive_store_actor>) {
+        if (count.mode == count_query_context::estimate) {
+          rp.deliver(caf::make_error(ec::logic_error, "estimate counts must "
+                                                      "not evaluate "
+                                                      "expressions"));
+          return;
+        }
       }
       self->monitor(count.sink);
       auto [state, inserted] = self->state.running_counts.try_emplace(

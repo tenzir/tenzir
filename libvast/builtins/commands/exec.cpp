@@ -14,7 +14,7 @@ namespace vast::plugins::exec {
 
 namespace {
 
-caf::expected<void> exec_command(std::span<const std::string> args) {
+auto exec_command(std::span<const std::string> args) -> caf::expected<void> {
   if (args.size() != 1)
     return caf::make_error(
       ec::invalid_argument,
@@ -41,22 +41,21 @@ public:
   plugin() = default;
   ~plugin() override = default;
 
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return caf::none;
   }
 
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "exec";
   }
 
-  [[nodiscard]] std::pair<std::unique_ptr<command>, command::factory>
-  make_command() const override {
+  auto make_command() const
+    -> std::pair<std::unique_ptr<command>, command::factory> override {
     auto exec = std::make_unique<command>("exec", "execute a pipeline locally",
                                           command::opts("?vast.exec"));
     auto factory = command::factory{
       {"exec",
-       [](const invocation& inv, caf::actor_system&) -> caf::message {
+       [=](const invocation& inv, caf::actor_system&) -> caf::message {
          auto result = exec_command(inv.arguments);
          if (not result)
            return caf::make_message(result.error());
@@ -66,7 +65,6 @@ public:
     return {std::move(exec), std::move(factory)};
   };
 };
-
 } // namespace
 
 } // namespace vast::plugins::exec

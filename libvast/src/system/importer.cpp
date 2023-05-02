@@ -55,30 +55,16 @@ public:
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
     for (auto&& slice : std::exchange(slices, {})) {
-      if (auto err = state.executor.add(std::move(slice))) {
-        VAST_ERROR("importer can not add slice to pipeline executor - data "
-                   "loss due to error: {}",
-                   err);
-      }
-    }
-    auto transformed_slices = state.executor.finish();
-    if (!transformed_slices) {
-      VAST_ERROR("importer can not transform slices in pipeline - data "
-                 "loss due to error: {}",
-                 transformed_slices.error());
-    } else {
-      for (auto&& slice : *transformed_slices) {
-        auto rows = slice.rows();
-        events += rows;
-        auto name = slice.schema().name();
-        if (auto it = state.schema_counters.find(name);
-            it != state.schema_counters.end())
-          it.value() += rows;
-        else
-          state.schema_counters.emplace(std::string{name}, rows);
-        slice.import_time(time::clock::now());
-        out.push(std::move(slice));
-      }
+      auto rows = slice.rows();
+      events += rows;
+      auto name = slice.schema().name();
+      if (auto it = state.schema_counters.find(name);
+          it != state.schema_counters.end())
+        it.value() += rows;
+      else
+        state.schema_counters.emplace(std::string{name}, rows);
+      slice.import_time(time::clock::now());
+      out.push(std::move(slice));
     }
     t.stop(events);
   }
@@ -199,11 +185,8 @@ void importer_state::send_report() {
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, index_actor index,
-         accountant_actor accountant,
-         std::vector<legacy_pipeline>&& input_transformations) {
+         accountant_actor accountant) {
   VAST_TRACE_SCOPE("importer {} {}", VAST_ARG(self->id()), VAST_ARG(dir));
-  for (const auto& x : input_transformations)
-    VAST_VERBOSE("{} loaded import transformation {}", *self, x.name());
   if (auto ec = std::error_code{};
       std::filesystem::exists(dir / "current_id_block", ec))
     std::filesystem::remove(dir / "current_id_block", ec);
@@ -216,7 +199,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
-  self->state.executor = pipeline_executor{std::move(input_transformations)};
   if (index) {
     self->state.index = std::move(index);
     self->state.stage->add_outbound_path(self->state.index);

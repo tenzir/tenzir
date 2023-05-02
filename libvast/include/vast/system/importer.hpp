@@ -13,7 +13,6 @@
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/heterogeneous_string_hash.hpp"
-#include "vast/legacy_pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice.hpp"
@@ -86,9 +85,6 @@ struct importer_state {
 
   accountant_actor accountant;
 
-  /// The executor for transforming table slices in a pipeline.
-  pipeline_executor executor;
-
   /// Name of this actor in log events.
   static inline const char* name = "importer";
 };
@@ -99,11 +95,9 @@ struct importer_state {
 /// @param index A handle to the INDEX.
 /// @param accountant A handle to the ACCOUNTANT.
 /// @param batch_size The initial number of IDs to request when replenishing.
-/// @param input_transformations The input transformations to apply.
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, index_actor index,
-         accountant_actor accountant,
-         std::vector<legacy_pipeline>&& input_pipelines = {});
+         accountant_actor accountant);
 
 } // namespace vast::system

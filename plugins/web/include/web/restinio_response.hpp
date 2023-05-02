@@ -29,7 +29,7 @@ using route_params_t = restinio::router::route_params_t;
 class restinio_response final : public vast::http_response {
 public:
   restinio_response(request_handle_t&& handle, route_params_t&& route_params,
-                    const rest_endpoint&);
+                    bool enable_detailed_errors, const rest_endpoint&);
   ~restinio_response() override;
 
   restinio_response(restinio_response&&) = default;
@@ -39,7 +39,8 @@ public:
 
   void append(std::string body) override;
 
-  void abort(uint16_t error_code, std::string message) override;
+  void
+  abort(uint16_t error_code, std::string message, caf::error detail) override;
 
   // Add a custom response header.
   void add_header(std::string field, std::string value);
@@ -53,6 +54,7 @@ public:
 private:
   request_handle_t request_;
   route_params_t route_params_;
+  bool enable_detailed_errors_ = false;
   response_t response_;
   size_t body_size_ = {};
 };
