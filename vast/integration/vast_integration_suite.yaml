@@ -786,26 +786,26 @@ tests:
     steps:
       - command: exec 'from file @./data/json/record-in-list.json read json | write json to stdout'
 
-  Inspect Events:
+  Measure Events:
     tags: [pipelines]
     steps:
-      - command: exec 'read json | inspect | drop timestamp | write json'
+      - command: exec 'read json | measure | drop timestamp | write json'
         input: data/json/files.log.json.gz
-      - command: exec 'read json | inspect | inspect | drop timestamp | write json'
+      - command: exec 'read json | measure | measure | drop timestamp | write json'
         input: data/json/files.log.json.gz
-      - command: exec 'read json | inspect --real-time | drop timestamp | write json'
+      - command: exec 'read json | measure --real-time | drop timestamp | write json'
         input: data/json/files.log.json.gz
-      - command: exec 'read json | inspect --real-time | inspect | drop timestamp | write json'
+      - command: exec 'read json | measure --real-time | measure | drop timestamp | write json'
         input: data/json/files.log.json.gz
 
-  Inspect Bytes:
+  Measure Bytes:
     tags: [pipelines]
     steps:
-      - command: exec 'load stdin | inspect | drop timestamp | write json'
+      - command: exec 'load stdin | measure | drop timestamp | write json'
         input: data/json/conn.log.json.gz
-      - command: exec 'load stdin | inspect | inspect | drop timestamp | write json'
+      - command: exec 'load stdin | measure | measure | drop timestamp | write json'
         input: data/json/conn.log.json.gz
-      - command: exec 'load stdin | inspect --real-time | drop timestamp | write json'
+      - command: exec 'load stdin | measure --real-time | drop timestamp | write json'
         input: data/json/conn.log.json.gz
-      - command: exec 'load stdin | inspect --real-time | inspect | drop timestamp | write json'
+      - command: exec 'load stdin | measure --real-time | measure | drop timestamp | write json'
         input: data/json/conn.log.json.gz

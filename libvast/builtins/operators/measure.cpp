@@ -6,24 +6,23 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/pipeline.hpp"
-
 #include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 
 #include <arrow/type.h>
 
-namespace vast::plugins::inspect {
+namespace vast::plugins::measure {
 
 namespace {
 
-class inspect_operator final : public crtp_operator<inspect_operator> {
+class measure_operator final : public crtp_operator<measure_operator> {
 public:
-  inspect_operator(uint64_t batch_size, bool real_time)
+  measure_operator(uint64_t batch_size, bool real_time)
     : batch_size_{batch_size}, real_time_{real_time} {
   }
 
@@ -95,7 +94,7 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return real_time_ ? "inspect --real-time" : "inspect";
+    return real_time_ ? "measure --real-time" : "measure";
   }
 
 private:
@@ -114,7 +113,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "inspect";
+    return "measure";
   };
 
   auto make_operator(std::string_view pipeline) const
@@ -133,13 +132,13 @@ public:
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "inspect operator: '{}'",
+                                                      "measure operator: '{}'",
                                                       pipeline)),
       };
     }
     return {
       std::string_view{f, l},
-      std::make_unique<inspect_operator>(batch_size_, real_time),
+      std::make_unique<measure_operator>(batch_size_, real_time),
     };
   }
 
@@ -149,6 +148,6 @@ private:
 
 } // namespace
 
-} // namespace vast::plugins::inspect
+} // namespace vast::plugins::measure
 
-VAST_REGISTER_PLUGIN(vast::plugins::inspect::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::measure::plugin)
