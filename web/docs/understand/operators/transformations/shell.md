@@ -63,3 +63,19 @@ Now you can use `jsonize` as a custom operator in a pipeline:
 ```bash
 vast exec 'read csv | where field > 42 | jsonize' < file.csv
 ```
+
+Another example is instrumentation and benchmarking via the `pv`. You can
+measure how fast VAST reads bytes on stdin:
+
+```c
+load stdin | shell pv | save stdout
+```
+
+Or benchmark how fast VAST can produce JSON:
+
+```c
+read csv | where field > 42 | print json | shell pv | save stdout
+```
+
+VAST also has a native [measure](measure.md) operator that works on structured
+data.
