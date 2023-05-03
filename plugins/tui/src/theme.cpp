@@ -94,7 +94,7 @@ auto theme::menu_option(Direction direction) const -> MenuOption {
     if (horizontal)
       e |= center;
     e |= flex;
-      e |= bold;
+    e |= bold;
     if (entry.focused)
       e |= focus_color();
     if (entry.active)

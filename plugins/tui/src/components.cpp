@@ -82,11 +82,14 @@ auto Explorer(ui_state* state) -> Component {
         fingerprints_,
       });
       auto split = ResizableSplit({
-          .main = lhs,
-          .back = tab_,
-          .direction = Direction::Left,
-          .main_size = &menu_width_,
-          .separator_func = [&] { return state_->theme.separator(); },
+        .main = lhs,
+        .back = tab_,
+        .direction = Direction::Left,
+        .main_size = &menu_width_,
+        .separator_func =
+          [&] {
+            return state_->theme.separator();
+          },
       });
       Add(split);
     }
