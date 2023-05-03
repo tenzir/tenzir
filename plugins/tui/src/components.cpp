@@ -39,6 +39,8 @@ auto Help() -> Component {
       {"j", "↓", "move focus one window down"},
       {"h", "←", "move focus one window to the left"},
       {"l", "→", "move focus one window to the right"},
+      {"K", "p", "move up in schema navigator"},
+      {"J", "n", "move down in schema navigator"},
       {"?", "", "show this help"},
       {"q", "", "quit the UI"},
     });
@@ -75,14 +77,12 @@ auto Explorer(ui_state* state) -> Component {
       });
       tab_ = Container::Tab({loading}, &index_); // to be filled
       auto style = state_->theme.menu_option(Direction::Down);
-      auto menu = Menu(&schemas_, &index_, style);
+      menu_ = Menu(&schemas_, &index_, style);
       auto lhs = Container::Horizontal({
-        menu,
+        menu_,
         component(state_->theme.separator()),
         fingerprints_,
       });
-      // The menu width is 0 initially, which means the menu is not shown. Once
-      // we have more than one schema, we'll change that.
       auto split = ResizableSplitLeft(lhs, tab_, &menu_width_);
       Add(split);
     }
@@ -115,6 +115,18 @@ auto Explorer(ui_state* state) -> Component {
       if (schemas_.size() == 1)
         menu_width_ = 0;
       return ComponentBase::Render();
+    }
+
+    auto OnEvent(Event event) -> bool override {
+      if (event == Event::Character('J') || event == Event::Character('n')) {
+        menu_->TakeFocus();
+        return menu_->OnEvent(Event::ArrowDown);
+      }
+      if (event == Event::Character('K') || event == Event::Character('p')) {
+        menu_->TakeFocus();
+        return menu_->OnEvent(Event::ArrowUp);
+      }
+      return ComponentBase::OnEvent(event);
     }
 
   private:
@@ -163,6 +175,9 @@ auto Explorer(ui_state* state) -> Component {
 
     /// The menu items for the navigator. In sync with the tab.
     std::vector<std::string> schemas_;
+
+    /// The schema menu.
+    Component menu_;
 
     /// The component that shows the fingerprints.
     Component fingerprints_ = Container::Vertical({});
