@@ -6,19 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/adaptive_table_slice_builder.hpp"
+#include "vast/cast.hpp"
 #include "vast/concept/parseable/string/any.hpp"
-#include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/parseable/vast/pipeline.hpp"
-#include "vast/concept/printable/string/escape.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/to_xsv_sep.hpp"
 #include "vast/detail/zeekify.hpp"
-#include "vast/detail/zip_iterator.hpp"
 #include "vast/generator.hpp"
-#include "vast/module.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/to_lines.hpp"
 
@@ -30,6 +26,8 @@
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
+#include <caf/expected.hpp>
+#include <caf/none.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
 
@@ -45,7 +43,7 @@ namespace {
 // The type name prefix to preprend to zeek log names when transleting them
 // into VAST types.
 constexpr std::string_view type_name_prefix = "zeek.";
-constexpr auto separator = '\x09';
+constexpr auto default_sep = '\x09';
 constexpr auto default_set_sep = ',';
 constexpr std::string_view default_empty_val = "(empty)";
 constexpr std::string_view default_unset_val = "-";
@@ -55,97 +53,95 @@ template <class Iterator, class Attribute>
 struct zeek_parser_factory {
   using result_type = rule<Iterator, Attribute>;
 
-  zeek_parser_factory(const std::string& set_separator)
-    : set_separator_{set_separator} {
+  zeek_parser_factory(const std::string& set_sep) : set_sep_{set_sep} {
   }
 
   template <class T>
-  result_type operator()(const T&) const {
+  auto operator()(const T&) const -> result_type {
     return {};
   }
 
-  result_type operator()(const bool_type&) const {
+  auto operator()(const bool_type&) const -> result_type {
     return parsers::tf;
   }
 
-  result_type operator()(const double_type&) const {
+  auto operator()(const double_type&) const -> result_type {
     return parsers::real->*[](double x) {
       return x;
     };
   }
 
-  result_type operator()(const int64_type&) const {
+  auto operator()(const int64_type&) const -> result_type {
     return parsers::i64->*[](int64_t x) {
       return int64_t{x};
     };
   }
 
-  result_type operator()(const uint64_type&) const {
+  auto operator()(const uint64_type&) const -> result_type {
     return parsers::u64->*[](uint64_t x) {
       return x;
     };
   }
 
-  result_type operator()(const time_type&) const {
+  auto operator()(const time_type&) const -> result_type {
     return parsers::real->*[](double x) {
       auto i = std::chrono::duration_cast<duration>(double_seconds(x));
       return time{i};
     };
   }
 
-  result_type operator()(const duration_type&) const {
+  auto operator()(const duration_type&) const -> result_type {
     return parsers::real->*[](double x) {
       return std::chrono::duration_cast<duration>(double_seconds(x));
     };
   }
 
-  result_type operator()(const string_type&) const {
-    if (set_separator_.empty())
+  auto operator()(const string_type&) const -> result_type {
+    if (set_sep_.empty())
       return +parsers::any->*[](std::string x) {
         return detail::byte_unescape(x);
       };
-    else
-      return +(parsers::any - set_separator_)->*[](std::string x) {
-        return detail::byte_unescape(x);
-      };
+    return +(parsers::any - set_sep_)->*[](std::string x) {
+      return detail::byte_unescape(x);
+    };
   }
 
-  result_type operator()(const ip_type&) const {
+  auto operator()(const ip_type&) const -> result_type {
     return parsers::ip->*[](ip x) {
       return x;
     };
   }
 
-  result_type operator()(const subnet_type&) const {
+  auto operator()(const subnet_type&) const -> result_type {
     return parsers::net->*[](subnet x) {
       return x;
     };
   }
 
-  result_type operator()(const list_type& t) const {
-    return (caf::visit(*this, t.value_type()) % set_separator_)
+  auto operator()(const list_type& t) const -> result_type {
+    return (caf::visit(*this, t.value_type()) % set_sep_)
              ->*[](std::vector<Attribute> x) {
                    return list(std::move(x));
                  };
   }
 
-  const std::string& set_separator_;
+  const std::string& set_sep_;
 };
 
 /// Constructs a Zeek data parser from a type and set separator.
 template <class Iterator, class Attribute = data>
-rule<Iterator, Attribute>
-make_zeek_parser(const type& t, const std::string& set_separator = ",") {
+auto make_zeek_parser(const type& t, const std::string& set_sep = ",")
+  -> rule<Iterator, Attribute> {
   rule<Iterator, Attribute> r;
-  auto sep = is_container(t) ? set_separator : "";
+  auto sep = is_container(t) ? set_sep : "";
   return caf::visit(zeek_parser_factory<Iterator, Attribute>{sep}, t);
 }
 
 // Creates a VAST type from an ASCII Zeek type in a log header.
 auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
   type t;
-  if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file"
-      || zeek_type == "pattern")
+  if (zeek_type == "enum" or zeek_type == "string" or zeek_type == "file"
+      or zeek_type == "pattern")
     t = type{string_type{}};
   else if (zeek_type == "bool")
     t = type{bool_type{}};
@@ -170,14 +166,14 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
     // - src/format/pcap.cpp
     t = type{"port", uint64_type{}};
   if (!t
-      && (zeek_type.starts_with("vector") || zeek_type.starts_with("set")
-          || zeek_type.starts_with("table"))) {
+      && (zeek_type.starts_with("vector") or zeek_type.starts_with("set")
+          or zeek_type.starts_with("table"))) {
     // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
     // safely assume that we're dealing with a basic type inside the brackets.
     // If this will ever change, we'll have to enhance this simple parser.
     auto open = zeek_type.find('[');
     auto close = zeek_type.rfind(']');
-    if (open == std::string::npos || close == std::string::npos)
+    if (open == std::string::npos or close == std::string::npos)
       return caf::make_error(ec::format_error, "missing container brackets:",
                              std::string{zeek_type});
     auto elem = parse_type(zeek_type.substr(open + 1, close - open - 1));
@@ -196,29 +192,30 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
 struct zeek_metadata {
   using iterator_type = std::string_view::const_iterator;
 
-  auto is_unset(auto i) -> bool {
-    return std::equal(unset_field.begin(), unset_field.end(), fields[i].begin(),
-                      fields[i].end());
+  auto is_unset(std::string_view field) -> bool {
+    return std::equal(unset_field.begin(), unset_field.end(), field.begin(),
+                      field.end());
   }
 
-  auto is_empty(auto i) -> bool {
-    return std::equal(empty_field.begin(), empty_field.end(), fields[i].begin(),
-                      fields[i].end());
+  auto is_empty(std::string_view field) -> bool {
+    return std::equal(empty_field.begin(), empty_field.end(), field.begin(),
+                      field.end());
   }
 
   auto parse_header(generator<std::optional<std::string_view>>::iterator it,
                     const generator<std::optional<std::string_view>>& lines,
-                    operator_control_plane& ctrl) {
+                    operator_control_plane& ctrl) -> caf::expected<void> {
     auto sep_parser
       = "#separator" >> ignore(+(parsers::space)) >> +(parsers::any);
-    auto separator_option = std::string{};
+    auto sep_option = std::string{};
 
-    if (not sep_parser((*it).value(), separator_option)
-        or not separator_option.starts_with("\\x")) {
-      die("WTF NO SEP!!!!!!");
-      // ctrl.abort(caf::make_error(ec::syntax_error, fmt::format("")))
+    if (not sep_parser((*it).value(), sep_option)
+        or not sep_option.starts_with("\\x")) {
+      return caf::make_error(
+        ec::syntax_error, fmt::format("Invalid #separator option while parsing "
+                                      "Zeek TSV file - aborting"));
     }
-    auto sep_char = std::stoi(separator_option.substr(2, 2), nullptr, 16);
+    auto sep_char = std::stoi(sep_option.substr(2, 2), nullptr, 16);
     VAST_ASSERT(sep_char >= 0 && sep_char <= 255);
     sep.push_back(sep_char);
     auto prefix_options = std::array<std::string_view, 7>{
@@ -229,36 +226,51 @@ struct zeek_metadata {
     auto header = std::string{};
     for (const auto& prefix : prefix_options) {
       ++it;
-      if (it == lines.end()) {
-        die("END TOO EARLY WTF");
+      if (not *it or it == lines.end()) {
+        return caf::make_error(ec::syntax_error,
+                               fmt::format("Zeek TSV file header ended too "
+                                           "early - aborting"));
       }
       header = (*it).value();
       auto pos = header.find(prefix);
       if (pos != 0)
-        die("invalid header line, expected");
+        return caf::make_error(ec::syntax_error,
+                               fmt::format("Invalid header line: prefix '{}' "
+                                           "not beginning at line "
+                                           "beginning or not found",
+                                           prefix));
       pos = header.find(sep);
       if (pos == std::string::npos)
-        die("invalid separator");
+        return caf::make_error(ec::syntax_error,
+                               fmt::format("Invalid header line: separator "
+                                           "{} not found",
+                                           sep));
       if (pos + 1 >= header.size())
-        die("missing header content");
+        return caf::make_error(ec::syntax_error,
+                               fmt::format("Missing Zeek TSV header line "
+                                           "content: {}",
+                                           header));
       parsed_options.emplace_back(header.substr(pos + 1));
     }
-
     set_sep = std::string{parsed_options[0][0]};
     empty_field = parsed_options[1];
     unset_field = parsed_options[2];
     path = parsed_options[3];
-    open = parsed_options[4];
-    fields = detail::split(parsed_options[5], sep);
-    types = detail::split(parsed_options[6], sep);
+    fields_str = parsed_options[5];
+    types_str = parsed_options[6];
+    fields = detail::split(fields_str, sep);
+    types = detail::split(types_str, sep);
     if (fields.size() != types.size())
-      die("SIZE MISMATCH :(");
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("Zeek TSV header types mismatch: "
+                                         "expected {} fields but got {}",
+                                         fields.size(), types.size()));
 
     std::vector<struct record_type::field> record_fields;
-    for (auto i = 0u; i < fields.size(); ++i) {
+    for (auto i = size_t{0}; i < fields.size(); ++i) {
       auto t = parse_type(types[i]);
       if (!t)
-        die("t.error()");
+        return std::move(t.error());
       record_fields.push_back({
         std::string{fields[i]},
         *t,
@@ -271,7 +283,14 @@ struct zeek_metadata {
     record_schema = detail::zeekify(record_schema);
     for (const auto& ctrl_schema : ctrl.schemas()) {
       if (ctrl_schema.name() == name) {
-        schema = ctrl_schema;
+        auto is_castable = can_cast(schema, ctrl_schema);
+        if (!is_castable) {
+          VAST_WARN("zeek-reader ignores incompatible schema '{}': {}",
+                    ctrl_schema, is_castable.error());
+        } else {
+          schema = ctrl_schema;
+        }
+        break;
       }
     }
     if (not schema) {
@@ -284,6 +303,7 @@ struct zeek_metadata {
     parsers.resize(record_schema.num_fields());
     for (size_t i = 0; i < record_schema.num_fields(); i++)
       parsers[i] = make_parser(record_schema.field(i).type, set_sep);
+    return {};
   }
 
   std::string sep{};
@@ -291,7 +311,8 @@ struct zeek_metadata {
   std::string empty_field{};
   std::string unset_field{};
   std::string path{};
-  std::string open{};
+  std::string fields_str{};
+  std::string types_str{};
   std::vector<std::string_view> fields{};
   std::vector<std::string_view> types{};
   std::string name{};
@@ -301,18 +322,16 @@ struct zeek_metadata {
 
 struct zeek_printer {
   zeek_printer(char set_sep, std::string_view empty = "",
-               std::string_view unset = "", bool show_timestamp_tags = false)
-    : set_separator{set_sep},
+               std::string_view unset = "", bool disable_timestamp_tags = false)
+    : set_sep{set_sep},
       empty_field{empty},
       unset_field{unset},
-      show_timestamp_tags{show_timestamp_tags} {
+      disable_timestamp_tags{disable_timestamp_tags} {
+    auto now = std::chrono::system_clock::now();
+    timestamp = fmt::format("{:%Y-%m-%d-%H-%M-%S}", now);
   }
 
-  struct time_factory {
-    const char* fmt = "%Y-%m-%d-%H-%M-%S";
-  };
-
-  std::string to_zeek_string(const type& t) const {
+  auto to_zeek_string(const type& t) const -> std::string {
     auto f = detail::overload{
       [](const bool_type&) -> std::string {
         return "bool";
@@ -359,16 +378,15 @@ struct zeek_printer {
 
   template <typename It>
   auto print_header(It& out, const type& t) const noexcept -> bool {
-    auto header
-      = fmt::format("#separator \\x{0:02x}\n"
-                    "#set_separator{0}{1}\n"
-                    "#empty_field{0}{2}\n"
-                    "#unset_field{0}{3}\n"
-                    "#path{0}{4}\n",
-                    sep, set_separator, empty_field, unset_field, t.name());
-    if (show_timestamp_tags)
-      header.append(fmt::format("#open{} TIME", sep));
-    header.append("#fields");
+    auto header = fmt::format("#separator \\x{0:02x}\n"
+                              "#set_separator{0}{1}\n"
+                              "#empty_field{0}{2}\n"
+                              "#unset_field{0}{3}\n"
+                              "#path{0}{4}",
+                              sep, set_sep, empty_field, unset_field, t.name());
+    if (not disable_timestamp_tags)
+      header.append(fmt::format("\n#open{}{}", sep, timestamp));
+    header.append("\n#fields");
     auto r = caf::get<record_type>(t);
     for (const auto& [_, offset] : r.leaves())
       header.append(fmt::format("{}{}", sep, to_string(r.key(offset))));
@@ -392,6 +410,14 @@ struct zeek_printer {
     }
     return true;
   }
+
+  template <typename It>
+  auto print_closing_line(It& out) const noexcept -> void {
+    if (not disable_timestamp_tags) {
+      out = fmt::format_to(out, "#close{}{}\n", sep, timestamp);
+    }
+  }
+
   template <class Iterator>
   struct visitor {
     visitor(Iterator& out, const zeek_printer& printer)
@@ -425,7 +451,7 @@ struct zeek_printer {
 
     auto operator()(view<std::string> x) noexcept -> bool {
       for (auto c : x)
-        if (std::iscntrl(c) || c == printer.sep || c == printer.set_separator) {
+        if (std::iscntrl(c) or c == printer.sep or c == printer.set_sep) {
           auto hex = detail::byte_to_hex(c);
           *out++ = '\\';
           *out++ = 'x';
@@ -447,7 +473,7 @@ struct zeek_printer {
       if (!print(out, *i))
         return false;
       for (++i; i != x.end(); ++i) {
-        *out++ = printer.set_separator;
+        *out++ = printer.set_sep;
         if (!print(out, *i))
           return false;
       }
@@ -464,43 +490,44 @@ struct zeek_printer {
   };
 
   char sep{'\t'};
-  char set_separator{','};
+  char set_sep{','};
   std::string empty_field{};
   std::string unset_field{};
-  bool show_timestamp_tags{false};
+  bool disable_timestamp_tags{false};
+  std::string timestamp{};
 };
 } // namespace
 
 class plugin : public virtual parser_plugin, public virtual printer_plugin {
 public:
   auto
-  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
-              operator_control_plane& ctrl) const
+  make_parser([[maybe_unused]] std::span<std::string const> args,
+              generator<chunk_ptr> loader, operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     return std::invoke(
       [](generator<std::optional<std::string_view>> lines,
          operator_control_plane& ctrl) -> generator<table_slice> {
         // Parse header.
         auto it = lines.begin();
-        auto header = std::string_view{};
         while (it != lines.end()) {
-          header = (*it).value();
-          if (!header.empty())
+          auto header_line = *it;
+          if (header_line and not header_line->empty())
             break;
           co_yield {};
         }
-        if (header.empty())
-          co_return;
-
         auto metadata = zeek_metadata{};
-        metadata.parse_header(it, lines, ctrl);
-        auto split_parser = ((+(parsers::any - metadata.sep)) % metadata.sep);
+        auto parsed = metadata.parse_header(it, lines, ctrl);
+        if (not parsed) {
+          ctrl.abort(parsed.error());
+          co_return;
+        }
         ++it;
         auto closed = false;
+        auto b = table_slice_builder{metadata.schema};
+        std::vector<data> xs(metadata.fields.size());
         for (; it != lines.end(); ++it) {
-          auto b = table_slice_builder{metadata.schema};
           auto line = *it;
-          if (!line->empty()) {
+          if (not line) {
             co_yield {};
             continue;
           }
@@ -509,54 +536,73 @@ public:
             continue;
           }
           if (line->starts_with("#close")) {
-            if (closed)
-              die("redundant closing");
+            if (closed) {
+              ctrl.abort(caf::make_error(
+                ec::syntax_error, fmt::format("Parsing Zeek TSV failed: "
+                                              "duplicate #close found")));
+              co_return;
+            }
             closed = true;
             co_yield {};
             continue;
           }
           if (line->starts_with("#separator")) {
-            if (not closed)
-              die("previous log is not closed");
+            if (not closed) {
+              ctrl.abort(caf::make_error(
+                ec::syntax_error, fmt::format("Parsing Zeek TSV failed: "
+                                              "previous logs are still open")));
+              co_return;
+            }
             closed = false;
+            co_yield b.finish();
             metadata = zeek_metadata{};
-            metadata.parse_header(it, lines, ctrl);
-            split_parser = ((+(parsers::any - metadata.sep)) % metadata.sep);
+            auto parsed = metadata.parse_header(it, lines, ctrl);
+            if (not parsed) {
+              ctrl.abort(parsed.error());
+              co_return;
+            }
+            xs.resize(metadata.fields.size());
+            b = table_slice_builder{metadata.schema};
             ++it;
           }
-          auto values = std::vector<std::string>{};
-          if (!split_parser((*it).value(), values)) {
-            ctrl.warn(caf::make_error(
-              ec::parse_error, fmt::format("zeek tsv parser skipped line: "
-                                           "parsing line failed")));
-            continue;
-          }
+          auto values = detail::split((*it).value(), metadata.sep);
           if (values.size() != metadata.fields.size()) {
             ctrl.warn(caf::make_error(
               ec::parse_error,
-              fmt::format("zeek tsv parser skipped line: "
+              fmt::format("Zeek TSV parser skipped line: "
                           "expected {} fields but got "
                           "{}",
                           metadata.fields.size(), values.size())));
             continue;
           }
-          for (auto i = size_t{0}; i << values.size(); ++i) {
+          for (auto i = size_t{0}; i < values.size(); ++i) {
             auto value = values[i];
-            auto added = false;
-            if (metadata.is_unset(i))
-              added = b.add(caf::none);
-            else if (metadata.is_empty(i))
-              added = b.add(caf::get<record_type>(metadata.schema)
-                              .field(i)
-                              .type.construct());
-            else if (!metadata.parsers[i](metadata.fields[i], values[i]))
-              die("failed to parse");
-            added = b.add(value);
-            if (!added)
-              die("die?");
+            if (metadata.is_unset(value)) {
+              xs[i] = caf::none;
+            } else if (metadata.is_empty(value)) {
+              xs[i] = caf::get<record_type>(metadata.schema)
+                        .field(i)
+                        .type.construct();
+            } else if (!metadata.parsers[i](values[i], xs[i])) {
+              ctrl.warn(caf::make_error(ec::parse_error,
+                                        fmt::format("Zeek TSV parser skipped "
+                                                    "line: failed"
+                                                    "to parse value '{}'",
+                                                    value)));
+              continue;
+            }
           }
-          co_yield b.finish();
+          for (auto&& x : xs) {
+            if (not b.add(x)) {
+              ctrl.abort(caf::make_error(ec::parse_error,
+                                         fmt::format("Zeek TSV parser failed "
+                                                     "to finalize value '{}'",
+                                                     x)));
+              co_return;
+            }
+          }
         }
+        co_yield b.finish();
       },
       to_lines(std::move(loader)), ctrl);
   }
@@ -581,7 +627,7 @@ public:
     auto unset_field = default_unset_val;
     if (args.size() == 3) {
       auto parsed_set_sep = to_xsv_sep(args[0]);
-      if (!parsed_set_sep) {
+      if (not parsed_set_sep) {
         return std::move(parsed_set_sep.error());
       }
       if (*parsed_set_sep == '\t') {
@@ -592,7 +638,7 @@ public:
       empty_field = args[1];
       auto conflict
         = std::any_of(empty_field.begin(), empty_field.end(), [&](auto ch) {
-            return ch == separator || ch == parsed_set_sep;
+            return ch == default_sep or ch == parsed_set_sep;
           });
       if (conflict) {
         return caf::make_error(ec::invalid_argument, "empty value must not "
@@ -602,7 +648,7 @@ public:
       unset_field = args[2];
       conflict
         = std::any_of(unset_field.begin(), unset_field.end(), [&](auto ch) {
-            return ch == separator || ch == parsed_set_sep;
+            return ch == default_sep or ch == parsed_set_sep;
           });
       if (conflict) {
         return caf::make_error(ec::invalid_argument, "unset value must not "
@@ -610,8 +656,8 @@ public:
                                                      "separator");
       }
     }
-    auto printer
-      = zeek_printer{set_sep, empty_field, unset_field, show_timestamp_tags};
+    auto printer = zeek_printer{set_sep, empty_field, unset_field,
+                                disable_timestamp_tags_};
     return to_printer(
       [printer = std::move(printer), input_schema = std::move(input_schema)](
         table_slice slice) -> generator<chunk_ptr> {
@@ -633,8 +679,7 @@ public:
           VAST_ASSERT_CHEAP(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        if (printer.show_timestamp_tags)
-          out_iter = fmt::format_to(out_iter, "#close{}TIME", separator);
+        printer.print_closing_line(out_iter);
         auto chunk = chunk::make(std::move(buffer));
         co_yield std::move(chunk);
       });
@@ -651,9 +696,9 @@ public:
 
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
-    show_timestamp_tags
+    disable_timestamp_tags_
       = get_or(global_config, "vast.export.zeek.disable-timestamp-tags",
-               show_timestamp_tags);
+               disable_timestamp_tags_);
 
     return caf::none;
   }
@@ -662,7 +707,8 @@ public:
     return "zeek";
   }
 
-  bool show_timestamp_tags{false};
+private:
+  bool disable_timestamp_tags_{false};
 };
 
 } // namespace vast::plugins::zeek
