@@ -17,6 +17,7 @@
 #include "vast/generator.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/to_lines.hpp"
+#include "vast/type.hpp"
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/printable/vast/json.hpp>
@@ -208,7 +209,6 @@ struct zeek_metadata {
     auto sep_parser
       = "#separator" >> ignore(+(parsers::space)) >> +(parsers::any);
     auto sep_option = std::string{};
-
     if (not sep_parser((*it).value(), sep_option)
         or not sep_option.starts_with("\\x")) {
       return caf::make_error(
@@ -217,6 +217,8 @@ struct zeek_metadata {
     }
     auto sep_char = std::stoi(sep_option.substr(2, 2), nullptr, 16);
     VAST_ASSERT(sep_char >= 0 && sep_char <= 255);
+    if (not sep.empty())
+      sep.clear();
     sep.push_back(sep_char);
     auto prefix_options = std::array<std::string_view, 7>{
       "#set_separator", "#empty_field", "#unset_field", "#path",
@@ -243,8 +245,8 @@ struct zeek_metadata {
       if (pos == std::string::npos)
         return caf::make_error(ec::syntax_error,
                                fmt::format("Invalid header line: separator "
-                                           "{} not found",
-                                           sep));
+                                           "'{}' not found",
+                                           sep_option));
       if (pos + 1 >= header.size())
         return caf::make_error(ec::syntax_error,
                                fmt::format("Missing Zeek TSV header line "
@@ -281,21 +283,21 @@ struct zeek_metadata {
     // module precedence.
     auto record_schema = record_type{record_fields};
     record_schema = detail::zeekify(record_schema);
+    output_slice_schema = {};
     for (const auto& ctrl_schema : ctrl.schemas()) {
       if (ctrl_schema.name() == name) {
-        auto is_castable = can_cast(schema, ctrl_schema);
+        auto is_castable = can_cast(record_schema, ctrl_schema);
         if (!is_castable) {
-          VAST_WARN("zeek-reader ignores incompatible schema '{}': {}",
+          VAST_WARN("zeek-reader ignores incompatible schema '{}' from schema "
+                    "files: {}",
                     ctrl_schema, is_castable.error());
         } else {
-          schema = ctrl_schema;
+          output_slice_schema = ctrl_schema;
+          break;
         }
-        break;
       }
     }
-    if (not schema) {
-      schema = type{name, record_schema};
-    }
+    temp_slice_schema = type{name, record_schema};
     // Create Zeek parsers.
     auto make_parser = [](const auto& type, const auto& set_sep) {
       return make_zeek_parser<iterator_type>(type, set_sep);
@@ -316,7 +318,8 @@ struct zeek_metadata {
   std::vector<std::string_view> fields{};
   std::vector<std::string_view> types{};
   std::string name{};
-  type schema{};
+  type output_slice_schema{};
+  type temp_slice_schema{};
   std::vector<rule<iterator_type, data>> parsers{};
 };
 
@@ -525,7 +528,7 @@ public:
         }
         ++it;
         auto closed = false;
-        auto b = table_slice_builder{metadata.schema};
+        auto b = table_slice_builder{metadata.temp_slice_schema};
         std::vector<data> xs(metadata.fields.size());
         for (; it != lines.end(); ++it) {
           auto line = *it;
@@ -556,15 +559,19 @@ public:
               co_return;
             }
             closed = false;
-            co_yield b.finish();
-            metadata = zeek_metadata{};
+
+            auto finished = b.finish();
+            if (metadata.output_slice_schema)
+              finished
+                = cast(std::move(finished), metadata.output_slice_schema);
+            co_yield finished;
             auto parsed = metadata.parse_header(it, lines, ctrl);
             if (not parsed) {
               ctrl.abort(parsed.error());
               co_return;
             }
             xs.resize(metadata.fields.size());
-            b = table_slice_builder{metadata.schema};
+            b = table_slice_builder{metadata.temp_slice_schema};
             ++it;
           }
           auto values = detail::split((*it).value(), metadata.sep);
@@ -582,7 +589,7 @@ public:
             if (metadata.is_unset(value)) {
               xs[i] = caf::none;
             } else if (metadata.is_empty(value)) {
-              xs[i] = caf::get<record_type>(metadata.schema)
+              xs[i] = caf::get<record_type>(metadata.temp_slice_schema)
                         .field(i)
                         .type.construct();
             } else if (!metadata.parsers[i](values[i], xs[i])) {
@@ -594,7 +601,8 @@ public:
               continue;
             }
           }
-          for (auto&& x : xs) {
+          for (auto i = size_t{0}; i < xs.size(); ++i) {
+            auto&& x = xs[i];
             if (not b.add(x)) {
               ctrl.abort(caf::make_error(ec::parse_error,
                                          fmt::format("Zeek TSV parser failed "
@@ -604,7 +612,10 @@ public:
             }
           }
         }
-        co_yield b.finish();
+        auto finished = b.finish();
+        if (metadata.output_slice_schema)
+          finished = cast(std::move(finished), metadata.output_slice_schema);
+        co_yield finished;
       },
       to_lines(std::move(loader)), ctrl);
   }

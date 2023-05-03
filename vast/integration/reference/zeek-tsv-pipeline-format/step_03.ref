@@ -3,9 +3,9 @@
 #empty_field	empty
 #unset_field	NULLVAL
 #path	zeek.conn
-#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents
-#types	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	count	string	count	count	count	count	vector[string]
-2009-11-18T08:00:21.486539	Pii6cUUq1v4	192.168.1.102	68	192.168.1.1	67	udp	NULLVAL	163.82ms	301	300	SF	NULLVAL	0	Dd	1	329	1	328	empty
-2009-11-18T08:08:00.237253	nkCxlvNN8pi	192.168.1.103	137	192.168.1.255	137	udp	dns	3.78s	350	0	S0	NULLVAL	0	D	7	546	0	0	empty
-2009-11-18T08:08:13.816224	9VdICMMnxQ7	192.168.1.102	137	192.168.1.255	137	udp	dns	3.75s	350	0	S0	NULLVAL	0	D	7	546	0	0	empty
-2009-11-18T08:07:15.800932	bEgBnkI31Vf	192.168.1.103	138	192.168.1.255	138	udp	NULLVAL	46.73s	560	0	S0	NULLVAL	0	D	3	644	0	0	empty
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	community_id	_write_ts
+#types	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	vector[string]	string	time
+2009-11-18T08:00:21.486539	Pii6cUUq1v4	<"orig_h": 192.168.1.102, "orig_p": 68, "resp_h": 192.168.1.1, "resp_p": 67>	udp	NULLVAL	163.82ms	301	300	SF	NULLVAL	NULLVAL	0	Dd	1	329	1	328	empty	NULLVAL	NULLVAL
+2009-11-18T08:08:00.237253	nkCxlvNN8pi	<"orig_h": 192.168.1.103, "orig_p": 137, "resp_h": 192.168.1.255, "resp_p": 137>	udp	dns	3.78s	350	0	S0	NULLVAL	NULLVAL	0	D	7	546	0	0	empty	NULLVAL	NULLVAL
+2009-11-18T08:08:13.816224	9VdICMMnxQ7	<"orig_h": 192.168.1.102, "orig_p": 137, "resp_h": 192.168.1.255, "resp_p": 137>	udp	dns	3.75s	350	0	S0	NULLVAL	NULLVAL	0	D	7	546	0	0	empty	NULLVAL	NULLVAL
+2009-11-18T08:07:15.800932	bEgBnkI31Vf	<"orig_h": 192.168.1.103, "orig_p": 138, "resp_h": 192.168.1.255, "resp_p": 138>	udp	NULLVAL	46.73s	560	0	S0	NULLVAL	NULLVAL	0	D	3	644	0	0	empty	NULLVAL	NULLVAL
