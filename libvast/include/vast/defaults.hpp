@@ -31,7 +31,7 @@ inline constexpr size_t max_recursion = 100;
 namespace import {
 
 /// Maximum size for sources that generate table slices.
-inline constexpr size_t table_slice_size = 65'536; // 64 Ki
+inline constexpr uint64_t table_slice_size = 65'536; // 64 Ki
 
 /// The default table slice type when arrow is available.
 inline constexpr auto table_slice_type = table_slice_encoding::arrow;
