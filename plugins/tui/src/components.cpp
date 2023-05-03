@@ -78,7 +78,7 @@ auto Explorer(ui_state* state) -> Component {
       menu_ = Menu(&schemas_, &index_, style);
       auto lhs = Container::Horizontal({
         Container::Vertical({menu_, component(filler())}),
-        component(state_->theme.separator()),
+        component(text(" ")),
         fingerprints_,
       });
       auto split = ResizableSplitLeft(lhs, tab_, &menu_width_);
