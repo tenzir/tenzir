@@ -514,6 +514,8 @@ public:
           if (header_line and not header_line->empty())
             break;
           co_yield {};
+          if (header_line and header_line->empty())
+            ++it;
         }
         auto metadata = zeek_metadata{};
         auto parsed = metadata.parse_header(it, lines, ctrl);

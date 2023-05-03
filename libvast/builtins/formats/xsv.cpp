@@ -207,6 +207,9 @@ public:
             break;
           }
           co_yield {};
+          if (header and header->empty()) {
+            ++it;
+          }
         }
         if (!header || header->empty())
           co_return;
