@@ -94,9 +94,11 @@ auto theme::menu_option(Direction direction) const -> MenuOption {
     if (horizontal)
       e |= center;
     e |= flex;
-    e |= bold;
+      e |= bold;
     if (entry.focused)
-      e |= inverted;
+      e |= focus_color();
+    if (entry.active)
+      e |= color(palette.link_hover);
     return e;
   };
   result.underline.enabled = horizontal;
@@ -109,6 +111,10 @@ auto theme::menu_option(Direction direction) const -> MenuOption {
 
 auto theme::border() const -> ftxui::Decorator {
   return borderStyled(ROUNDED, palette.border_inactive);
+}
+
+auto theme::focus_color() const -> ftxui::Decorator {
+  return color(palette.cursor_text) | bgcolor(palette.cursor);
 }
 
 auto theme::separator() const -> ftxui::Element {

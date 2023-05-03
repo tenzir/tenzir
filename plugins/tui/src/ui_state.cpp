@@ -22,86 +22,81 @@ using namespace ftxui;
 
 namespace {
 
-/// Renders a data view according to a given kheme.
-auto render(data_view v, const struct theme& theme) -> Element {
-  auto align_left = [](const auto& x) {
-    return text(to_string(x));
-  };
-  auto align_center = [](const auto& x) {
-    return hbox({filler(), text(to_string(x)), filler()});
-  };
-  auto align_right = [](const auto& x) {
-    return hbox({filler(), text(to_string(x))});
-  };
-  auto f = detail::overload{
-    [&](const auto& x) {
-      return align_left(x) | color(theme.palette.color0);
-    },
-    [&](caf::none_t) {
-      return align_center("∅") | color(theme.palette.subtle);
-    },
-    [&](view<bool> x) {
-      return align_left(x) | color(theme.palette.number);
-    },
-    [&](view<int64_t> x) {
-      return align_right(x) | color(theme.palette.number);
-    },
-    [&](view<uint64_t> x) {
-      return align_right(x) | color(theme.palette.number);
-    },
-    [&](view<double> x) {
-      return align_right(x) | color(theme.palette.number);
-    },
-    [&](view<duration> x) {
-      return align_right(x) | color(theme.palette.operator_);
-    },
-    [&](view<time> x) {
-      return align_left(x) | color(theme.palette.operator_);
-    },
-    [&](view<std::string> x) {
-      return align_left(x) | color(theme.palette.string);
-    },
-    [&](view<pattern> x) {
-      return align_left(x) | color(theme.palette.string);
-    },
-    [&](view<ip> x) {
-      return align_left(x) | color(theme.palette.type);
-    },
-    [&](view<subnet> x) {
-      return align_left(x) | color(theme.palette.type);
-    },
-  };
-  return caf::visit(f, v);
-}
-
 /// A table header component.
 auto Header(std::string top, std::string bottom, int height,
             const struct theme& theme) -> Component {
-  return Renderer(
-    [height, top_text = std::move(top), bottom_text = std::move(bottom),
-     top_color = color(theme.palette.text),
-     bottom_color = color(theme.palette.comment)](bool focused) mutable {
-      auto header = text(top_text) | bold | center | top_color;
-      if (focused)
-        header = header | inverted | focus;
-      auto element = vbox({
-                       filler(),
-                       std::move(header),
-                       text(bottom_text) | center | bottom_color,
-                       filler(),
-                     })
-                     | size(HEIGHT, EQUAL, height);
-      return element;
-    });
+  return Renderer([height, &theme, top_text = std::move(top),
+                   bottom_text = std::move(bottom)](bool focused) mutable {
+    auto header = text(top_text) | bold | center;
+    header |= focused ? theme.focus_color() : color(theme.palette.text);
+    auto element = vbox({
+                     filler(),
+                     std::move(header),
+                     text(bottom_text) | center | color(theme.palette.comment),
+                     filler(),
+                   })
+                   | size(HEIGHT, EQUAL, height);
+    return element;
+  });
 }
 
 /// A cell in the table body.
-auto Cell(view<data> x, const struct theme& theme) -> Component {
-  return Renderer([element = render(x, theme)](bool focused) mutable {
-    if (focused)
-      return element | inverted | focus;
-    return element;
-  });
+auto Cell(view<data> v, const struct theme& theme) -> Component {
+  enum alignment { left, center, right };
+  auto make_cell = [&](const auto& x, alignment align, auto data_color) {
+    auto focus_color = theme.focus_color();
+    return Renderer([=, element = text(to_string(x)),
+                     normal_color = color(data_color)](bool focused) {
+      auto value = focused ? element | focus_color : element | normal_color;
+      switch (align) {
+        case left:
+          return value;
+        case center:
+          return hbox({filler(), std::move(value), filler()});
+        case right:
+          return hbox({std::move(value), filler()});
+      }
+    });
+  };
+  auto f = detail::overload{
+    [&](const auto& x) {
+      return make_cell(x, left, theme.palette.color0);
+    },
+    [&](caf::none_t) {
+      return make_cell("∅", center, theme.palette.subtle);
+    },
+    [&](view<bool> x) {
+      return make_cell(x, left, theme.palette.number);
+    },
+    [&](view<int64_t> x) {
+      return make_cell(x, right, theme.palette.number);
+    },
+    [&](view<uint64_t> x) {
+      return make_cell(x, right, theme.palette.number);
+    },
+    [&](view<double> x) {
+      return make_cell(x, right, theme.palette.number);
+    },
+    [&](view<duration> x) {
+      return make_cell(x, right, theme.palette.operator_);
+    },
+    [&](view<time> x) {
+      return make_cell(x, left, theme.palette.operator_);
+    },
+    [&](view<std::string> x) {
+      return make_cell(x, left, theme.palette.string);
+    },
+    [&](view<pattern> x) {
+      return make_cell(x, left, theme.palette.string);
+    },
+    [&](view<ip> x) {
+      return make_cell(x, left, theme.palette.type);
+    },
+    [&](view<subnet> x) {
+      return make_cell(x, left, theme.palette.type);
+    },
+  };
+  return caf::visit(f, v);
 }
 
 /// A table column consisting of header and body.

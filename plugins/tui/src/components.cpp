@@ -58,14 +58,12 @@ auto Help() -> Component {
 
 /// A single-row focusable cell in the table header.
 auto RecordHeader(std::string top, const struct theme& theme) -> Component {
-  return Renderer(
-    [top_text = std::move(top),
-     top_color = color(theme.palette.text)](bool focused) mutable {
-      auto header = text(top_text) | bold | center | top_color;
-      if (focused)
-        header = header | inverted | focus;
-      return header;
-    });
+  return Renderer([top_text = std::move(top),
+                   top_color = color(theme.palette.text),
+                   focus_color = theme.focus_color()](bool focused) mutable {
+    auto header = text(top_text) | bold | center;
+    return focused ? header | focus_color : header | top_color;
+  });
 }
 
 auto Explorer(ui_state* state) -> Component {
@@ -79,7 +77,7 @@ auto Explorer(ui_state* state) -> Component {
       auto style = state_->theme.menu_option(Direction::Down);
       menu_ = Menu(&schemas_, &index_, style);
       auto lhs = Container::Horizontal({
-        menu_,
+        Container::Vertical({menu_, component(filler())}),
         component(state_->theme.separator()),
         fingerprints_,
       });

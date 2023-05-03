@@ -76,6 +76,9 @@ struct theme {
   /// A themed FTXUI border.
   auto border() const -> ftxui::Decorator;
 
+  /// The focus color.
+  auto focus_color() const -> ftxui::Decorator;
+
   /// Returns a themed separator.
   auto separator() const -> ftxui::Element;
 
