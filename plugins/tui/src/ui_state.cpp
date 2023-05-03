@@ -28,7 +28,7 @@ auto Header(std::string top, std::string bottom, int height,
   return Renderer([height, &theme, top_text = std::move(top),
                    bottom_text = std::move(bottom)](bool focused) mutable {
     auto header = text(top_text) | bold | center;
-    header |= focused ? theme.focus_color() : color(theme.palette.text);
+    header |= focused ? focus | theme.focus_color() : color(theme.palette.text);
     auto element = vbox({
                      filler(),
                      std::move(header),
@@ -47,7 +47,8 @@ auto Cell(view<data> v, const struct theme& theme) -> Component {
     auto focus_color = theme.focus_color();
     return Renderer([=, element = text(to_string(x)),
                      normal_color = color(data_color)](bool focused) {
-      auto value = focused ? element | focus_color : element | normal_color;
+      auto value
+        = focused ? element | focus | focus_color : element | normal_color;
       switch (align) {
         case left:
           return value;

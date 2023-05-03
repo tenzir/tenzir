@@ -62,7 +62,7 @@ auto RecordHeader(std::string top, const struct theme& theme) -> Component {
                    top_color = color(theme.palette.text),
                    focus_color = theme.focus_color()](bool focused) mutable {
     auto header = text(top_text) | bold | center;
-    return focused ? header | focus_color : header | top_color;
+    return focused ? header | focus | focus_color : header | top_color;
   });
 }
 
