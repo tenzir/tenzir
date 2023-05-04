@@ -436,8 +436,8 @@ struct zeek_printer {
     }
 
     auto operator()(auto x) noexcept -> bool {
-      // TODO: Avoid the data_view cast.
-      return data_view_printer{}.print(out, make_data_view(x));
+      make_printer<decltype(x)> p;
+      return p.print(out, x);
     }
 
     auto operator()(view<bool> x) noexcept -> bool {
@@ -485,7 +485,18 @@ struct zeek_printer {
 
     auto operator()(const view<record>& x) noexcept -> bool {
       auto flattened = flatten(materialize(x));
-      return data_view_printer{}.print(out, make_data_view(flattened));
+      auto first = true;
+      for (const auto& [_, v] : flattened) {
+        if (not first) {
+          ++out = printer.sep;
+        } else {
+          first = false;
+        }
+        auto flattened_value_printed = (*this)(v);
+        if (not flattened_value_printed)
+          return false;
+      }
+      return true;
     }
 
     Iterator& out;
@@ -603,7 +614,7 @@ public:
           }
           for (auto i = size_t{0}; i < xs.size(); ++i) {
             auto&& x = xs[i];
-            if (not b.add(x)) {
+            if (not b.add(make_data_view(x))) {
               ctrl.abort(caf::make_error(ec::parse_error,
                                          fmt::format("Zeek TSV parser failed "
                                                      "to finalize value '{}'",
