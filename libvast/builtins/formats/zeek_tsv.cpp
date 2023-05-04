@@ -6,24 +6,23 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/arrow_table_slice.hpp"
 #include "vast/cast.hpp"
 #include "vast/concept/parseable/string/any.hpp"
 #include "vast/concept/parseable/vast/pipeline.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/detail/string_literal.hpp"
 #include "vast/detail/to_xsv_sep.hpp"
 #include "vast/detail/zeekify.hpp"
 #include "vast/generator.hpp"
+#include "vast/plugin.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/to_lines.hpp"
 #include "vast/type.hpp"
-
-#include <vast/arrow_table_slice.hpp>
-#include <vast/concept/printable/vast/json.hpp>
-#include <vast/detail/string_literal.hpp>
-#include <vast/plugin.hpp>
-#include <vast/view.hpp>
+#include "vast/view.hpp"
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
