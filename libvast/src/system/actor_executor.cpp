@@ -347,9 +347,6 @@ auto execution_node(
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.ctrl = std::make_unique<actor_control_plane>(*self);
-  self->attach_functor([str = self->state.op->to_string()] {
-    VAST_WARN("-> {}", str);
-  });
   return {
     [self](atom::run, std::vector<caf::actor> next) -> caf::result<void> {
       VAST_DEBUG("source execution node received atom::run");
