@@ -31,12 +31,13 @@ public:
     using namespace binary_byte_literals;
     namespace bp = boost::process;
     // Spawn child process and connect stdin and stdout.
-    bp::ipstream in;
-    bp::opstream out;
+    bp::ipstream child_stdout;
+    bp::opstream child_stdin;
     std::error_code ec;
     bp::child child;
     try {
-      child = bp::child{command_, bp::std_out > in, bp::std_in < out};
+      child = bp::child{command_, bp::std_out > child_stdout,
+                        bp::std_in < child_stdin};
     } catch (const bp::process_error& e) {
       ctrl.abort(caf::make_error(ec::filesystem_error, e.what()));
       co_return;
@@ -47,19 +48,20 @@ public:
           VAST_DEBUG(ec);
         else
           VAST_ERROR(ec);
+        co_yield {};
         break;
       }
       // Shove operator input into the child's stdin.
       auto chunk_data = reinterpret_cast<const char*>(chunk->data());
-      if (!out.write(chunk_data, chunk->size()))
+      if (!child_stdin.write(chunk_data, chunk->size()))
         ctrl.abort(caf::make_error(
           ec::unspecified, fmt::format("failed to write into child's stdin")));
       // Read child's stdout in chunks and relay them downstream.
-      constexpr auto buffer_size = 16_KiB;
-      std::vector<char> buffer(buffer_size);
+      constexpr auto block_size = 16_KiB;
+      std::vector<char> buffer(block_size);
       while (true) {
-        in.read(buffer.data(), buffer_size);
-        auto bytes_read = detail::narrow_cast<size_t>(in.gcount());
+        child_stdout.read(buffer.data(), block_size);
+        auto bytes_read = detail::narrow_cast<size_t>(child_stdout.gcount());
         if (bytes_read == 0) {
           // No output from child, come back next time.
           co_yield {};
