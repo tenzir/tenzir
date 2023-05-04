@@ -330,8 +330,6 @@ struct zeek_printer {
       empty_field{empty},
       unset_field{unset},
       disable_timestamp_tags{disable_timestamp_tags} {
-    auto now = std::chrono::system_clock::now();
-    timestamp = fmt::format("{:%Y-%m-%d-%H-%M-%S}", now);
   }
 
   auto to_zeek_string(const type& t) const -> std::string {
@@ -379,6 +377,11 @@ struct zeek_printer {
     return t ? caf::visit(f, t) : "none";
   }
 
+  auto generate_timestamp() const -> std::string {
+    auto now = std::chrono::system_clock::now();
+    return fmt::format(timestamp_format, now);
+  }
+
   template <typename It>
   auto print_header(It& out, const type& t) const noexcept -> bool {
     auto header = fmt::format("#separator \\x{0:02x}\n"
@@ -388,7 +391,7 @@ struct zeek_printer {
                               "#path{0}{4}",
                               sep, set_sep, empty_field, unset_field, t.name());
     if (not disable_timestamp_tags)
-      header.append(fmt::format("\n#open{}{}", sep, timestamp));
+      header.append(fmt::format("\n#open{}{}", sep, generate_timestamp()));
     header.append("\n#fields");
     auto r = caf::get<record_type>(t);
     for (const auto& [_, offset] : r.leaves())
@@ -417,7 +420,7 @@ struct zeek_printer {
   template <typename It>
   auto print_closing_line(It& out) const noexcept -> void {
     if (not disable_timestamp_tags) {
-      out = fmt::format_to(out, "#close{}{}\n", sep, timestamp);
+      out = fmt::format_to(out, "#close{}{}\n", sep, generate_timestamp());
     }
   }
 
@@ -503,12 +506,12 @@ struct zeek_printer {
     const zeek_printer& printer;
   };
 
+  static constexpr auto timestamp_format{"{:%Y-%m-%d-%H-%M-%S}"};
   char sep{'\t'};
   char set_sep{','};
   std::string empty_field{};
   std::string unset_field{};
   bool disable_timestamp_tags{false};
-  std::string timestamp{};
 };
 } // namespace
 
