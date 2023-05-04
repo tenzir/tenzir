@@ -78,8 +78,8 @@ struct xsv_printer {
 
     auto operator()(auto x) noexcept -> bool {
       sequence_empty = false;
-      // TODO: Avoid the data_view cast.
-      return data_view_printer{}.print(out, make_data_view(x));
+      make_printer<decltype(x)> p;
+      return p.print(out, x);
     }
 
     auto operator()(view<pattern>) noexcept -> bool {
