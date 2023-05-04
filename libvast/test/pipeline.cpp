@@ -410,19 +410,19 @@ TEST(predicate pushdown select conflict) {
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
 }
 
-TEST(to - stdout) {
+TEST(to -) {
   auto to_pipeline = pipeline::parse("to stdout");
   REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "print json | save stdout");
+  REQUIRE_EQUAL(to_pipeline->to_string(), "local print json | save stdout");
 }
 
-TEST(to - to stdout write json) {
+TEST(to - write json) {
   auto to_pipeline = pipeline::parse("to stdout write json");
   REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "print json | save stdout");
+  REQUIRE_EQUAL(to_pipeline->to_string(), "local print json | save stdout");
 }
 
-TEST(to - invalid inputs) {
+TEST(to with invalid inputs) {
   REQUIRE_ERROR(pipeline::parse("to json write stdout"));
 }
 
