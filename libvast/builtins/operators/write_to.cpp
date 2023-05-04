@@ -33,7 +33,6 @@ auto print_save(auto&& printer, auto&& printer_args, auto&& saver,
   auto expanded = fmt::format("print {} {} | save {} {}", printer,
                               escape_operator_args(printer_args), saver,
                               escape_operator_args(saver_args));
-  VAST_INFO("write/to expanded to '{}'", expanded);
   return pipeline::parse_as_operator(expanded);
 }
 
@@ -81,6 +80,10 @@ public:
       state.saver(std::move(x));
     }
     return {};
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
   }
 
   auto to_string() const noexcept -> std::string override {

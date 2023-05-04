@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/actor_executor.hpp"
 #include "vast/atoms.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
@@ -735,9 +736,26 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       VAST_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
-    [](atom::spawn,
-       pipeline&) -> caf::result<std::vector<execution_node_actor>> {
-      return ec::unimplemented;
+    [self](atom::spawn, pipeline& pipeline)
+      -> caf::result<std::vector<execution_node_actor>> {
+      auto ops = std::move(pipeline).unwrap();
+      auto result = std::vector<execution_node_actor>{};
+      result.reserve(ops.size());
+      for (auto&& op : ops) {
+        if (op->location() == operator_location::local) {
+          return caf::make_error(ec::logic_error,
+                                 fmt::format("{} cannot spawn pipeline with "
+                                             "local operator '{}'",
+                                             *self, op));
+        }
+        if (op->detached()) {
+          result.push_back(
+            self->spawn<caf::detached>(execution_node, std::move(op)));
+        } else {
+          result.push_back(self->spawn(execution_node, std::move(op)));
+        }
+      }
+      return result;
     },
   };
 }

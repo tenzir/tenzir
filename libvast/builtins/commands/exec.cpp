@@ -39,7 +39,7 @@ auto exec_command(std::span<const std::string> args, caf::actor_system& sys)
   self->request(executor, caf::infinite, atom::run_v)
     .receive(
       [] {
-        // no-op
+        VAST_DEBUG("exec command finished pipeline execution");
       },
       [&](caf::error& error) {
         result = std::move(error);

@@ -32,6 +32,10 @@ public:
     return loader_plugin_.make_loader(args_, ctrl);
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
   auto to_string() const -> std::string override {
     return fmt::format("load {}{}{}", loader_plugin_.name(),
                        args_.empty() ? "" : " ", escape_operator_args(args_));

@@ -119,9 +119,10 @@ public:
     return is_done;
   }
 
-  void finalize(const caf::error& err) override {
-    VAST_DEBUG("finalizing source: {}", err);
-    host_.shutdown(host_, err);
+  void finalize(const caf::error& error) override {
+    VAST_DEBUG("finalizing source: {}", error);
+    host_.shutdown(host_, error);
+    host_.self->quit(error);
   }
 
 private:
@@ -230,6 +231,7 @@ public:
     }
     // TODO: There could have already been an error. Is this okay?
     host_.shutdown(host_, {});
+    host_.self->quit(error);
   }
 
 private:
@@ -286,6 +288,7 @@ public:
       ++it;
     }
     host_.shutdown(host_, {});
+    host_.self->quit(error);
   }
 
 private:
@@ -395,8 +398,7 @@ void pipeline_executor_state::spawn_execution_nodes(
       case operator_location::remote: {
         // Spawn and collect execution nodes until the first local operator.
         auto begin = it;
-        ++it;
-        while (it != ops.end()) {
+        while (++it != ops.end()) {
           if ((*it)->location() == operator_location::local) {
             break;
           }
@@ -405,7 +407,7 @@ void pipeline_executor_state::spawn_execution_nodes(
         --it;
         VAST_ASSERT(remote);
         auto subpipe
-          = pipeline{{std::move_iterator{begin}, std::move_iterator{it}}};
+          = pipeline{{std::move_iterator{begin}, std::move_iterator{end}}};
         // Allocate a slot in `hosts`, saving its index.
         auto host = hosts.size();
         hosts.emplace_back();
@@ -430,13 +432,15 @@ void pipeline_executor_state::spawn_execution_nodes(
               for (auto& node : execution_nodes) {
                 self->monitor(node);
                 nodes_alive += 1;
+                // FIXME: Make the node return this as well.
+                node_descriptions.emplace(node.address(), "<remote>");
                 hosts[host].push_back(caf::actor_cast<caf::actor>(node));
               }
               remote_spawn_count -= 1;
               continue_if_done_spawning();
             },
-            [](caf::error&) {
-              VAST_WARN("failed spawn request");
+            [](caf::error& err) {
+              VAST_WARN("failed spawn request: {}", err);
               die("todo");
             });
         break;
@@ -466,6 +470,7 @@ auto pipeline_executor_state::run() -> caf::result<void> {
         caf::expected<system::node_actor> node) mutable {
         if (!node) {
           rp_complete.deliver(node.error());
+          self->quit(node.error());
           return;
         }
         spawn_execution_nodes(*node, std::move(*ops));
@@ -496,7 +501,8 @@ void pipeline_executor_state::continue_if_done_spawning() {
           VAST_DEBUG("finished pipeline executor initialization");
         },
         [=](caf::error& err) {
-          rp_complete.deliver(std::move(err));
+          rp_complete.deliver(err);
+          self->quit(std::move(err));
         });
   }
 }
@@ -521,9 +527,11 @@ auto pipeline_executor(
       if (msg.reason && msg.reason != caf::exit_reason::unreachable) {
         VAST_DEBUG("delivering error after down: {}", msg.reason);
         self->state.rp_complete.deliver(msg.reason);
+        self->quit(msg.reason);
       } else if (self->state.nodes_alive == 0) {
         VAST_DEBUG("all execution nodes are done, delivering success");
         self->state.rp_complete.deliver();
+        self->quit();
       } else {
         VAST_DEBUG("not all execution nodes are done, waiting");
       }
