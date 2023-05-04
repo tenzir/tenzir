@@ -844,6 +844,12 @@ configure_package_config_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
   INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
+
+configure_file("${PROJECT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
+               ${CMAKE_BINARY_DIR} COPYONLY)
+configure_file("${PROJECT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
+               ${CMAKE_BINARY_DIR} COPYONLY)
+
 install(
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
