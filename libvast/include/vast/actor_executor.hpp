@@ -44,6 +44,7 @@ struct pipeline_executor_state {
   size_t nodes_alive{0};
   caf::typed_response_promise<void> rp_complete;
   std::vector<std::vector<caf::actor>> hosts;
+  std::unordered_map<caf::actor_addr, std::string> node_descriptions;
   size_t remote_spawn_count{0};
 
   void continue_if_done_spawning();

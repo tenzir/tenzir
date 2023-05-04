@@ -372,6 +372,7 @@ void pipeline_executor_state::spawn_execution_nodes(
         // Spawn and collect execution nodes until the first remote operator.
         auto& v = hosts.emplace_back();
         while (true) {
+          auto description = (*it)->to_string();
           if ((*it)->detached()) {
             v.push_back(caf::actor_cast<caf::actor>(
               self->spawn<caf::monitored + caf::detached>(execution_node,
@@ -380,6 +381,7 @@ void pipeline_executor_state::spawn_execution_nodes(
             v.push_back(caf::actor_cast<caf::actor>(
               self->spawn<caf::monitored>(execution_node, std::move(*it))));
           }
+          node_descriptions.emplace(v.back().address(), std::move(description));
           nodes_alive += 1;
           ++it;
           if (it == ops.end()
@@ -509,6 +511,12 @@ auto pipeline_executor(
                msg.reason);
     VAST_ASSERT(self->state.nodes_alive > 0);
     self->state.nodes_alive -= 1;
+    auto description = self->state.node_descriptions.find(msg.source);
+    VAST_ASSERT(description != self->state.node_descriptions.end(),
+                "pipeline executor received down message from unknown "
+                "execution node");
+    VAST_DEBUG("received down message from '{}': {}", description->second,
+               msg.reason);
     if (self->state.rp_complete.pending()) {
       if (msg.reason && msg.reason != caf::exit_reason::unreachable) {
         VAST_DEBUG("delivering error after down: {}", msg.reason);
