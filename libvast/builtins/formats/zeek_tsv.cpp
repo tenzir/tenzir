@@ -555,9 +555,10 @@ public:
           }
           if (line->starts_with("#close")) {
             if (closed) {
-              ctrl.abort(caf::make_error(
-                ec::syntax_error, fmt::format("Parsing Zeek TSV failed: "
-                                              "duplicate #close found")));
+              ctrl.abort(caf::make_error(ec::syntax_error,
+                                         fmt::format("Parsing Zeek TSV failed: "
+                                                     "#close without previous "
+                                                     "#open header found")));
               co_return;
             }
             closed = true;
@@ -572,7 +573,6 @@ public:
               co_return;
             }
             closed = false;
-
             auto finished = b.finish();
             if (metadata.output_slice_schema)
               finished
@@ -586,6 +586,14 @@ public:
             xs.resize(metadata.fields.size());
             b = table_slice_builder{metadata.temp_slice_schema};
             ++it;
+          }
+          if (closed) {
+            ctrl.abort(caf::make_error(ec::syntax_error,
+                                       fmt::format("Parsing Zeek TSV failed: "
+                                                   "additional data after "
+                                                   "#close should be "
+                                                   "preceded by Zeek header")));
+            co_return;
           }
           auto values = detail::split((*it).value(), metadata.sep);
           if (values.size() != metadata.fields.size()) {
@@ -658,7 +666,8 @@ public:
       }
       if (*parsed_set_sep == '\t') {
         return caf::make_error(ec::invalid_argument,
-                               "separator and set separator must be different");
+                               "separator and set separator must be "
+                               "different");
       }
       set_sep = *parsed_set_sep;
       empty_field = args[1];

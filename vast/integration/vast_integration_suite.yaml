@@ -848,3 +848,9 @@ tests:
       - command: exec 'from stdin read zeek | write zeek to stdout'
         input: data/zeek/broken5.log
         expected_result: error
+      - command: exec 'from stdin read zeek | write zeek to stdout'
+        input: data/zeek/broken6.log
+        expected_result: error
+      - command: exec 'from stdin read zeek | write zeek to stdout'
+        input: data/zeek/broken7.log
+        expected_result: error
