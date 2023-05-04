@@ -110,8 +110,7 @@ auto adaptive_table_slice_builder::row_guard::push_field(
   auto provider
     = std::visit(detail::overload{
                    [field_name](detail::fixed_fields_record_builder& b) {
-                     return detail::builder_provider{
-                       std::ref(b.get_field_builder(field_name))};
+                     return b.get_field_builder_provider(field_name);
                    },
                    [field_name, len = starting_rows_count_](
                      detail::concrete_series_builder<record_type>& b) {

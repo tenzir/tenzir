@@ -47,7 +47,7 @@ auto try_create_field_builder_for_fixed_builder(
     &record_builder_provider.provide());
   if (not fixed_builder)
     return {};
-  return field_guard{{std::ref(fixed_builder->get_field_builder(field_name))},
+  return field_guard{fixed_builder->get_field_builder_provider(field_name),
                      starting_fields_length};
 }
 
@@ -199,6 +199,10 @@ auto field_guard::push_list() -> list_guard {
   };
 
   return list_guard{{std::move(provider)}, nullptr, type{}};
+}
+
+auto field_guard::field_exists() const -> bool {
+  return builder_provider_.is_builder_constructed();
 }
 
 } // namespace vast::detail
