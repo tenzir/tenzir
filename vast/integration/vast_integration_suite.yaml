@@ -823,36 +823,36 @@ tests:
   Zeek TSV Pipeline Format:
     tags: [pipelines, zeek]
     steps:
-      - command: exec 'from stdin read zeek | write json to stdout'
+      - command: exec 'from stdin read zeek-tsv | write json to stdout'
         input: data/zeek/merge.log
-      - command: exec 'from stdin read zeek | write json to stdout'
+      - command: exec 'from stdin read zeek-tsv | write json to stdout'
         input: data/zeek/merge_with_whitespace_separation.log
-      - command: exec 'from stdin read zeek | write zeek to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/dns.log.gz
-      - command: exec 'from stdin read zeek | write csv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write csv to stdout'
         input: data/zeek/dns.log.gz
-      - command: exec 'from stdin read zeek | write zeek ; empty NULLVAL to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv ; empty NULLVAL to stdout'
         input: data/zeek/whitespace_start.log
-      - command: exec 'from stdin read json | write zeek to stdout'
+      - command: exec 'from stdin read json | write zeek-tsv to stdout'
         input: data/json/snmp.log.json.gz
-      - command: exec 'from stdin read zeek | write zeek to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken1.log
         expected_result: error
-      - command: exec 'from stdin read zeek | write zeek to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken2.log
         expected_result: error
-      - command: exec 'from stdin read zeek | write zeek to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken3.log
         expected_result: error
-      - command: exec 'from stdin read zeek | write zeek to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken4.log
         expected_result: error
-      - command: exec 'from stdin read zeek | write zeek to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken5.log
         expected_result: error
-      - command: exec 'from stdin read zeek | write zeek to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken6.log
         expected_result: error
-      - command: exec 'from stdin read zeek | write zeek to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken7.log
         expected_result: error

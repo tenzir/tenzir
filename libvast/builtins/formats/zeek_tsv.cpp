@@ -37,7 +37,7 @@
 #include <string>
 #include <string_view>
 
-namespace vast::plugins::zeek {
+namespace vast::plugins::zeek_tsv {
 
 namespace {
 // The type name prefix to preprend to zeek log names when transleting them
@@ -739,13 +739,13 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "zeek";
+    return "zeek-tsv";
   }
 
 private:
   bool disable_timestamp_tags_{false};
 };
 
-} // namespace vast::plugins::zeek
+} // namespace vast::plugins::zeek_tsv
 
-VAST_REGISTER_PLUGIN(vast::plugins::zeek::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::zeek_tsv::plugin)
