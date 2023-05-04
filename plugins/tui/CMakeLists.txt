@@ -18,7 +18,13 @@ VASTRegisterPlugin(
   SOURCES ${tui_sources}
   INCLUDE_DIRECTORIES include)
 
-find_package(ftxui REQUIRED)
+if (NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/aux/ftxui/.git")
+  message(
+    FATAL_ERROR
+      "submodule '${CMAKE_CURRENT_LIST_DIR}/aux/ftxui' is not initialized")
+endif ()
+
+add_subdirectory(aux/ftxui)
 
 target_link_libraries(tui PUBLIC vast::libvast vast::internal)
 target_link_libraries(tui PUBLIC ftxui::screen ftxui::dom ftxui::component)

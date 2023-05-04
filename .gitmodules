@@ -16,3 +16,6 @@
 [submodule "libvast/aux/caf"]
 	path = libvast/aux/caf
 	url = https://github.com/tenzir/actor-framework
+[submodule "plugins/tui/aux/ftxui"]
+	path = plugins/tui/aux/ftxui
+	url = https://github.com/ArthurSonzogni/FTXUI.git
