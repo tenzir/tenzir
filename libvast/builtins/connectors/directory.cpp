@@ -50,8 +50,22 @@ class plugin : public virtual saver_plugin {
         / fmt::format("{}.{}.{}", info.input_schema.name(),
                       info.input_schema.make_fingerprint(), info.format);
     auto new_args = std::vector<std::string>{file_path.string()};
-    // TODO: handle overwrite semantics
-    return saver_plugin_->make_saver(new_args, std::move(info), ctrl);
+    auto file_saver
+      = saver_plugin_->make_saver(new_args, std::move(info), ctrl);
+    if (not file_saver)
+      return std::move(file_saver.error());
+    auto guard = caf::detail::make_scope_guard([=] {
+      // We also print this when the operator fails at runtime, but then again
+      // this also means that we did create the file, so that's probably alright.
+      fmt::print(stdout, "{}\n", file_path.string());
+    });
+    return [file_saver = std::move(*file_saver),
+            guard = std::make_shared<decltype(guard)>(std::move(guard))](
+             chunk_ptr input) {
+      (void)guard;
+      // TODO: handle overwrite semantics
+      return file_saver(std::move(input));
+    };
   }
 
   auto default_printer([[maybe_unused]] std::span<std::string const> args) const
