@@ -271,9 +271,10 @@ if (NOT simdjson_FOUND)
         "simdjson library not found. Initialize the libvast/aux/simdjson submodule"
     )
   endif ()
-  # TODO: Think about it.
+  # This parallelizes lookahead for structure validation in one additional
+  # thread, which is generally a good thing to have.
   set(SIMDJSON_ENABLE_THREADS
-      OFF
+      ON
       CACHE BOOL "")
   set(SIMDJSON_GOOGLE_BENCHMARKS
       OFF

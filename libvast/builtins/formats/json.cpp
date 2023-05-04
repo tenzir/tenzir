@@ -26,148 +26,214 @@ namespace vast::plugins::json {
 
 namespace {
 
-auto parse_impl(simdjson::ondemand::value val, auto& pusher, size_t depth)
-  -> simdjson::error_code;
+// The simdjson suggests to initialize the padding part to either 0s or spaces.
+using json_buffer = detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'>;
 
-auto parse_number(simdjson::ondemand::value val, auto& pusher)
-  -> simdjson::error_code {
-  switch (val.get_number_type().value_unsafe()) {
-    case simdjson::ondemand::number_type::floating_point_number: {
-      auto result = val.get_double();
-      if (result.error())
-        return result.error();
-      pusher.add(result.value_unsafe());
-      return {};
+caf::error
+make_generic_parser_err(simdjson::error_code err, std::string_view faulty_json,
+                        std::string_view faulty_json_description) {
+  return caf::make_error(
+    ec::parse_error,
+    fmt::format("failed to parse '{}' and skips JSON '{}': {}",
+                faulty_json_description, faulty_json, error_message(err)));
+}
+
+class doc_parser {
+public:
+  doc_parser(std::string_view parsed_document, operator_control_plane& ctrl)
+    : parsed_document_{parsed_document}, ctrl_{ctrl} {
+  }
+
+  auto parse_object(simdjson::ondemand::value v, auto&& field_pusher,
+                    size_t depth = 0u) -> void {
+    auto obj = v.get_object().value_unsafe();
+    for (auto pair : obj) {
+      if (pair.error()) {
+        report_parse_err(v, "key value pair");
+        return;
+      }
+      auto maybe_key = pair.unescaped_key();
+      if (maybe_key.error()) {
+        report_parse_err(v, "key in an object");
+        return;
+      }
+      auto key = maybe_key.value_unsafe();
+      auto val = pair.value();
+      if (val.error()) {
+        report_parse_err(val, fmt::format("object value at key {}", key));
+        return;
+      }
+      auto field = field_pusher.push_field(key);
+      parse_impl(val.value_unsafe(), field, depth + 1);
     }
-    case simdjson::ondemand::number_type::signed_integer: {
-      auto result = val.get_int64();
-      if (result.error())
-        return result.error();
-      pusher.add(result.value_unsafe());
-      return {};
+  }
+
+private:
+  auto report_parse_err(auto& v, std::string description) -> void {
+    ctrl_.warn(caf::make_error(
+      ec::parse_error,
+      fmt::format("unable to parse {} from an input: {} located in line: {}",
+                  std::move(description), v.current_location().value_unsafe(),
+                  parsed_document_)));
+  }
+
+  auto parse_number(simdjson::ondemand::value val, auto& pusher) -> void {
+    switch (val.get_number_type().value_unsafe()) {
+      case simdjson::ondemand::number_type::floating_point_number: {
+        auto result = val.get_double();
+        if (result.error()) {
+          report_parse_err(val, "a number");
+          return;
+        }
+        pusher.add(result.value_unsafe());
+        return;
+      }
+      case simdjson::ondemand::number_type::signed_integer: {
+        auto result = val.get_int64();
+        if (result.error()) {
+          report_parse_err(val, "a number");
+          return;
+        }
+        pusher.add(result.value_unsafe());
+        return;
+      }
+      case simdjson::ondemand::number_type::unsigned_integer: {
+        auto result = val.get_uint64();
+        if (result.error()) {
+          report_parse_err(val, "a number");
+          return;
+        }
+        pusher.add(result.value_unsafe());
+        return;
+      }
     }
-    case simdjson::ondemand::number_type::unsigned_integer: {
-      auto result = val.get_uint64();
-      if (result.error())
-        return result.error();
-      pusher.add(result.value_unsafe());
-      return {};
+  }
+
+  auto parse_string(simdjson::ondemand::value val, auto& pusher) -> void {
+    auto maybe_str = val.get_string();
+    if (maybe_str.error()) {
+      report_parse_err(val, "a string");
+      return;
+    }
+    auto str = val.get_string().value_unsafe();
+    using namespace parser_literals;
+    static constexpr auto parser
+      = parsers::time | parsers::duration | parsers::net | parsers::ip;
+    data result;
+    if (parser(str, result)) {
+      pusher.add(make_view(result));
+      return;
+    }
+    // Take the input as-is if nothing worked.
+    pusher.add(str);
+  }
+
+  auto parse_array(simdjson::ondemand::array arr, auto& pusher, size_t depth)
+    -> void {
+    auto list = pusher.push_list();
+    for (auto element : arr) {
+      if (element.error()) {
+        report_parse_err(element, "an array element");
+        continue;
+      }
+      parse_impl(element.value_unsafe(), list, depth + 1);
     }
   }
-  die("unhandled json number type in switch statement");
-}
 
-auto parse_string(simdjson::ondemand::value val, auto& pusher)
-  -> simdjson::error_code {
-  auto maybe_str = val.get_string();
-  if (maybe_str.error())
-    return maybe_str.error();
-  auto str = val.get_string().value_unsafe();
-  using namespace parser_literals;
-  static constexpr auto parser
-    = parsers::time | parsers::duration | parsers::net | parsers::ip
-      | as<caf::none_t>("nil"_p) | as<caf::none_t>(parsers::ch<'_'>);
-  data result;
-  if (parser(str, result)) {
-    pusher.add(make_view(result));
-    return {};
-  }
-  // Take the input as-is if nothing worked.
-  pusher.add(str);
-  return {};
-}
-
-auto parse_array(simdjson::ondemand::value val, auto& pusher, size_t depth)
-  -> simdjson::error_code {
-  auto result = val.get_array();
-  if (result.error())
-    return result.error();
-  auto lst = result.value_unsafe();
-  auto list = pusher.push_list();
-  for (auto element : lst) {
-    if (element.error())
-      return element.error();
-    if (auto parsed_element
-        = parse_impl(element.value_unsafe(), list, depth + 1))
-      return parsed_element;
-  }
-  return {};
-}
-
-auto parse_object(simdjson::ondemand::value val, auto&& field_pusher,
-                  size_t depth) -> simdjson::error_code {
-  auto result = val.get_object();
-  if (result.error())
-    return result.error();
-  auto obj = result.value_unsafe();
-  for (auto pair : obj) {
-    if (pair.error())
-      return pair.error();
-    auto key = pair.unescaped_key();
-    if (key.error())
-      return key.error();
-    auto val = pair.value();
-    if (val.error())
-      return val.error();
-    auto field = field_pusher.push_field(key.value_unsafe());
-    if (auto err = parse_impl(val.value_unsafe(), field, depth + 1))
-      return err;
-  }
-  return {};
-}
-
-auto parse_impl(simdjson::ondemand::value val, auto& pusher, size_t depth)
-  -> simdjson::error_code {
-  if (depth > defaults::max_recursion)
-    die("nesting too deep in json_parser parse");
-  auto type = val.type();
-  if (type.error())
-    return type.error();
-  // The type can be retrieved successfully while getting the exact value can
-  // still return an error. The simdjson only checks the first character of a
-  // value to check the type (
-  // https://github.com/simdjson/simdjson/blob/f435fddda148bec9e798dd3bdb1988af569d40af/singleheader/simdjson.h#L29098-L29117)
-  // E.g a value 32958329532; would yield a double type while getting the value
-  // would raise an error.
-  switch (val.type().value_unsafe()) {
-    case simdjson::ondemand::json_type::null:
-      return {};
-    case simdjson::ondemand::json_type::number:
-      return parse_number(val, pusher);
-    case simdjson::ondemand::json_type::boolean: {
-      auto result = val.get_bool();
-      if (result.error())
-        return result.error();
-      pusher.add(result.value_unsafe());
-      return {};
+  auto parse_impl(simdjson::ondemand::value val, auto& pusher, size_t depth)
+    -> void {
+    if (depth > defaults::max_recursion)
+      die("nesting too deep in json_parser parse");
+    auto type = val.type();
+    if (type.error())
+      return;
+    switch (val.type().value_unsafe()) {
+      case simdjson::ondemand::json_type::null:
+        return;
+      case simdjson::ondemand::json_type::number:
+        parse_number(val, pusher);
+        return;
+      case simdjson::ondemand::json_type::boolean: {
+        auto result = val.get_bool();
+        if (result.error()) {
+          report_parse_err(val, "a boolean value");
+          return;
+        }
+        pusher.add(result.value_unsafe());
+        return;
+      }
+      case simdjson::ondemand::json_type::string:
+        parse_string(val, pusher);
+        return;
+      case simdjson::ondemand::json_type::array:
+        parse_array(val.get_array().value_unsafe(), pusher, depth + 1);
+        return;
+      case simdjson::ondemand::json_type::object:
+        parse_object(val, pusher.push_record(), depth + 1);
+        return;
     }
-    case simdjson::ondemand::json_type::string:
-      return parse_string(val, pusher);
-    case simdjson::ondemand::json_type::array:
-      return parse_array(val, pusher, depth + 1);
-    case simdjson::ondemand::json_type::object:
-      return parse_object(val, pusher.push_record(), depth + 1);
   }
-  die("unhandled json object type in switch statement");
-}
 
-auto parse(simdjson::simdjson_result<simdjson::ondemand::document_reference> doc,
-           adaptive_table_slice_builder& builder) -> simdjson::error_code {
-  if (doc.error())
-    return doc.error();
-  auto val = doc.get_value();
-  if (val.error())
-    return val.error();
-  auto row = builder.push_row();
-  if (auto err = parse_object(val.value_unsafe(), row, 0u)) {
-    row.cancel();
+  std::string_view parsed_document_;
+  operator_control_plane& ctrl_;
+};
+
+class line_by_line_parser {
+public:
+  line_by_line_parser(simdjson::ondemand::parser& parser, json_buffer& buffer,
+                      adaptive_table_slice_builder& builder,
+                      operator_control_plane& ctrl_plane)
+    : parser_{parser},
+      buffer_{buffer},
+      builder_{builder},
+      ctrl_plane_{ctrl_plane} {
+  }
+
+  void parse_next_line() {
+    auto view = buffer_.view();
+    auto bytes_to_parse = view.length();
+    auto end = view.find('\n');
+    auto str_to_parse
+      = std::string_view{view.begin(), end == std::string_view::npos
+                                         ? view.end()
+                                         : view.begin() + end + 1};
+    auto padded_str = simdjson::padded_string{str_to_parse};
+    auto doc = parser_.iterate(padded_str);
+    buffer_.truncate(bytes_to_parse - str_to_parse.size());
+
+    if (auto err = doc.error()) {
+      ctrl_plane_.warn(make_generic_parser_err(err, view, "string"));
+      return;
+    }
+
+    auto val = doc.get_value();
+    if (auto err = val.error()) {
+      ctrl_plane_.warn(make_generic_parser_err(err, view, "string"));
+      return;
+    }
+    auto row = builder_.push_row();
+    doc_parser{view, ctrl_plane_}.parse_object(val.value_unsafe(), row);
+  }
+
+private:
+  simdjson::ondemand::parser& parser_;
+  json_buffer& buffer_;
+  adaptive_table_slice_builder& builder_;
+  operator_control_plane& ctrl_plane_;
+};
+
+auto parse(simdjson::ondemand::document_stream::iterator doc_it,
+           adaptive_table_slice_builder& builder, operator_control_plane& ctrl)
+  -> simdjson::error_code {
+  // val.error() will inherit all errors from *doc_it and and get_value so no
+  // need to check after each operation.
+  auto val = (*doc_it).get_value();
+  if (auto err = val.error()) {
     return err;
   }
+  auto row = builder.push_row();
+  doc_parser{doc_it.source(), ctrl}.parse_object(val.value_unsafe(), row);
   return {};
-}
-
-void emit_warning(operator_control_plane& ctrl, simdjson::error_code err) {
-  ctrl.warn(caf::make_error(ec::parse_error, error_message(err)));
 }
 
 } // namespace
@@ -186,13 +252,12 @@ class plugin final : public virtual parser_plugin,
     };
     return [](generator<chunk_ptr> json_chunk_generator,
               operator_control_plane& ctrl) -> generator<table_slice> {
+      // TODO: change max table slice size to be fetched from options.
+      constexpr auto max_table_slice_rows = defaults::import::table_slice_size;
       auto parser = simdjson::ondemand::parser{};
       auto stream = simdjson::ondemand::document_stream{};
       auto slice_builder = adaptive_table_slice_builder{};
-      // The simdjson suggests to initialize the padding part to either 0s or
-      // spaces.
-      auto json_to_parse_buffer
-        = detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'>{};
+      auto json_to_parse_buffer = json_buffer{};
       for (auto chnk : json_chunk_generator) {
         if (!chnk || chnk->size() == 0u) {
           co_yield std::move(slice_builder).finish();
@@ -211,22 +276,42 @@ class plugin final : public virtual parser_plugin,
           // returned here so it is hard to understand if we can recover from
           // it somehow.
           json_to_parse_buffer.reset();
-          emit_warning(ctrl, err);
+          ctrl.warn(caf::make_error(ec::parse_error, error_message(err)));
           continue;
         }
-        for (auto doc : stream) {
-          if (auto err = parse(doc, slice_builder)) {
-            emit_warning(ctrl, err);
+        for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
+          if (auto err = parse(doc_it, slice_builder, ctrl)) {
+            ctrl.warn(caf::make_error(
+              ec::parse_error, fmt::format("failed to fully parse '{}' : {}. "
+                                           "Some events can be skipped.",
+                                           view, error_message(err))));
             continue;
           }
-          // TODO: change max table slice size to be fetched from options.
-          if (slice_builder.rows() == defaults::import::table_slice_size) {
+          if (slice_builder.rows() == max_table_slice_rows) {
             co_yield std::move(slice_builder).finish();
             slice_builder = {};
           }
         }
         if (auto trunc = stream.truncated_bytes(); trunc == 0) {
           json_to_parse_buffer.reset();
+        }
+        // Simdjson returns that more bytes are left unparsed than the
+        // input. It is hard to reason what it means that a parser didn't manage
+        // to parse more bytes than the input had. These type of return values
+        // only seemed to sometimes occur where the input json couldn't be split
+        // into documents. We don't have any hint where we should resume the
+        // JSON from. We can either skip the whole input or try parsing it line
+        // by line, which can still extract some events
+        else if (trunc > view.size()) {
+          auto line_parser = line_by_line_parser{parser, json_to_parse_buffer,
+                                                 slice_builder, ctrl};
+          while (json_to_parse_buffer) {
+            line_parser.parse_next_line();
+            if (slice_builder.rows() == max_table_slice_rows) {
+              co_yield std::move(slice_builder).finish();
+              slice_builder = {};
+            }
+          }
         } else {
           json_to_parse_buffer.truncate(trunc);
         }

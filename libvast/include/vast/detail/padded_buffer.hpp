@@ -22,7 +22,9 @@ public:
         available_bytes < input.size()) {
       const auto bytes_missing = input.size() - available_bytes;
       if (begin_ >= bytes_missing) {
-        std::shift_left(buffer_.get() + begin_, buffer_.get() + end_, begin_);
+        // copy the [begin_, end_] to the buffer start and later on append the
+        // input after the end_.
+        std::copy(buffer_.get() + begin_, buffer_.get() + end_, buffer_.get());
         end_ -= begin_;
         begin_ = 0u;
       } else {
@@ -42,7 +44,7 @@ public:
   }
 
   constexpr explicit operator bool() const {
-    return end_ != 0u;
+    return begin_ != end_;
   }
 
   // Reuse the already allocated buffer.
