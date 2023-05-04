@@ -276,13 +276,16 @@ public:
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override;
 
+  auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type> override;
+
   /// Support the CAF type inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, pipeline& x) -> bool {
     if constexpr (Inspector::is_loading) {
       auto repr = std::string{};
       if (not f.object(x)
-                .pretty_name("vast.logical-pipeline")
+                .pretty_name("vast.pipeline")
                 .fields(f.field("repr", repr)))
         return false;
       auto result = pipeline::parse(repr);
@@ -295,7 +298,7 @@ public:
     } else {
       auto repr = x.to_string();
       return f.object(x)
-        .pretty_name("vast.logical-pipeline")
+        .pretty_name("vast.pipeline")
         .fields(f.field("repr", repr));
     }
   }

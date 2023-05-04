@@ -128,8 +128,6 @@ class int64_type;
 class ip_type;
 class ip;
 class legacy_abstract_type;
-class legacy_pipeline_operator;
-class legacy_pipeline;
 class legacy_type;
 class list_type;
 class map_type;
@@ -190,7 +188,6 @@ struct meta_extractor;
 struct model;
 struct negation;
 struct offset;
-struct operator_batch;
 struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
@@ -403,7 +400,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
   VAST_ADD_TYPE_ID((vast::rest_endpoint))
-  VAST_ADD_TYPE_ID((vast::operator_batch))
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice_column))
   VAST_ADD_TYPE_ID((vast::table_slice))

@@ -233,7 +233,7 @@ auto pipeline::is_closed() const -> bool {
 auto pipeline::infer_type_impl(operator_type input) const
   -> caf::expected<operator_type> {
   auto current = input;
-  for (auto& op : operators_) {
+  for (const auto& op : operators_) {
     auto first = &op == &operators_.front();
     if (!first && current.is<void>()) {
       return caf::make_error(
