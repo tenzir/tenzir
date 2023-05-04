@@ -253,6 +253,7 @@ class plugin final : public virtual parser_plugin,
     };
     return to_printer([](table_slice slice) -> generator<chunk_ptr> {
       if (slice.rows() == 0) {
+        co_yield {};
         co_return;
       }
       // JSON printer should output NDJSON, see:
