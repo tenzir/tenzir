@@ -829,6 +829,8 @@ tests:
         input: data/zeek/merge_with_whitespace_separation.log
       - command: exec 'from stdin read zeek | write zeek to stdout'
         input: data/zeek/dns.log.gz
+      - command: exec 'from stdin read zeek | write csv to stdout'
+        input: data/zeek/dns.log.gz
       - command: exec 'from stdin read zeek | write zeek ; empty NULLVAL to stdout'
         input: data/zeek/whitespace_start.log
       - command: exec 'from stdin read json | write zeek to stdout'
