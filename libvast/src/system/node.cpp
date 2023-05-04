@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/actor_executor.hpp"
 #include "vast/atoms.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
@@ -25,6 +24,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/execution_node.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/json/default_selector.hpp"
@@ -737,9 +737,9 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       return std::move(caf::get<record>(result));
     },
     [self](atom::spawn, pipeline& pipeline)
-      -> caf::result<std::vector<execution_node_actor>> {
+      -> caf::result<std::vector<std::pair<execution_node_actor, std::string>>> {
       auto ops = std::move(pipeline).unwrap();
-      auto result = std::vector<execution_node_actor>{};
+      auto result = std::vector<std::pair<execution_node_actor, std::string>>{};
       result.reserve(ops.size());
       for (auto&& op : ops) {
         if (op->location() == operator_location::local) {
@@ -748,11 +748,14 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
                                              "local operator '{}'",
                                              *self, op));
         }
+        auto description = op->to_string();
         if (op->detached()) {
-          result.push_back(
-            self->spawn<caf::detached>(execution_node, std::move(op)));
+          result.emplace_back(self->spawn<caf::detached>(execution_node,
+                                                         std::move(op)),
+                              std::move(description));
         } else {
-          result.push_back(self->spawn(execution_node, std::move(op)));
+          result.emplace_back(self->spawn(execution_node, std::move(op)),
+                              std::move(description));
         }
       }
       return result;

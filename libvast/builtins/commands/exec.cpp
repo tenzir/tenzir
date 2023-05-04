@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/actor_executor.hpp>
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
+#include <vast/pipeline_executor.hpp>
 #include <vast/plugin.hpp>
 
 #include <caf/scoped_actor.hpp>

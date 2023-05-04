@@ -12,6 +12,7 @@
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/detail/pp.hpp>
 #include <vast/pipeline.hpp>
+#include <vast/pipeline_executor.hpp>
 #include <vast/plugin.hpp>
 #include <vast/test/fixtures/actor_system.hpp>
 #include <vast/test/fixtures/actor_system_and_events.hpp>
@@ -130,6 +131,27 @@ struct sink final : public crtp_operator<sink> {
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() : deterministic_actor_system_and_events{VAST_PP_STRINGIFY(SUITE)} {
   }
+
+  auto execute(pipeline p) -> caf::expected<void> {
+    auto result = std::optional<caf::expected<void>>{};
+    sys.spawn([&](caf::event_based_actor* self) -> caf::behavior {
+      auto executor = self->spawn(pipeline_executor, std::move(p));
+      self->request(executor, caf::infinite, atom::run_v)
+        .then(
+          [&, executor] {
+            (void)executor;
+            result.emplace();
+          },
+          [&, executor](caf::error& error) {
+            (void)executor;
+            result.emplace(std::move(error));
+          });
+      return {};
+    });
+    run();
+    REQUIRE(result.has_value());
+    return std::move(*result);
+  }
 };
 
 FIXTURE_SCOPE(pipeline_fixture, fixture)
@@ -146,13 +168,7 @@ TEST(actor executor success) {
       actual += 1;
     }));
     auto p = pipeline{std::move(v)};
-    sys.spawn([&](caf::event_based_actor* self) -> caf::behavior {
-      start_actor_executor(self, p, [](caf::expected<void> result) {
-        REQUIRE_NOERROR(result);
-      });
-      return {};
-    });
-    run();
+    REQUIRE_NOERROR(execute(p));
     CHECK_EQUAL(actual, std::min(num, 4));
   }
 }
@@ -179,17 +195,7 @@ TEST(actor executor execution error) {
     CHECK(input.rows() == 0);
   }));
   auto pipe = pipeline{std::move(ops)};
-  auto called = false;
-  sys.spawn([&](caf::event_based_actor* self) -> caf::behavior {
-    start_actor_executor(self, std::move(pipe),
-                         [&](caf::expected<void> result) {
-                           called = true;
-                           REQUIRE_ERROR(result);
-                         });
-    return {};
-  });
-  run();
-  CHECK(called);
+  REQUIRE_ERROR(execute(pipe));
 }
 
 TEST(actor executor instantiation error) {
@@ -213,17 +219,7 @@ TEST(actor executor instantiation error) {
     CHECK(false);
   }));
   auto pipe = pipeline{std::move(ops)};
-  auto called = false;
-  sys.spawn([&](caf::event_based_actor* self) -> caf::behavior {
-    start_actor_executor(self, std::move(pipe),
-                         [&](caf::expected<void> result) {
-                           called = true;
-                           REQUIRE_ERROR(result);
-                         });
-    return {};
-  });
-  run();
-  CHECK(called);
+  REQUIRE_ERROR(execute(pipe));
 }
 
 TEST(taste 42) {

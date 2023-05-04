@@ -427,9 +427,11 @@ using node_actor = typed_actor_fwd<
   auto(atom::get, atom::version)->caf::result<record>,
   // Retrieve the configuration of the NODE.
   auto(atom::config)->caf::result<record>,
-  // TODO
+  // Spawn a set of execution nodes for a given pipeline. Does not start the
+  // execution nodes.
   auto(atom::spawn, pipeline)
-    ->caf::result<std::vector<execution_node_actor>>>::unwrap;
+    ->caf::result<std::vector<std::pair<execution_node_actor, std::string>>>>::
+  unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.
@@ -448,7 +450,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((std::filesystem::path))
   VAST_ADD_TYPE_ID(
     (std::vector<std::pair<std::filesystem::path, std::filesystem::path>>))
-  VAST_ADD_TYPE_ID((std::vector<vast::system::execution_node_actor>))
+  VAST_ADD_TYPE_ID(
+    (std::vector<std::pair<vast::system::execution_node_actor, std::string>>))
 
   VAST_ADD_TYPE_ID((vast::system::accountant_actor))
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))
