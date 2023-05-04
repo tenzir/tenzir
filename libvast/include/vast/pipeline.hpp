@@ -117,8 +117,12 @@ inline auto trivially_true_expression() -> const expression& {
 /// Uniquely owned pipeline operator.
 using operator_ptr = std::unique_ptr<operator_base>;
 
-///
-enum class operator_location { local, remote, anywhere };
+/// The operator location.
+enum class operator_location {
+  local,    ///< Run this operator in a local process, e.g., `vast exec`.
+  remote,   ///< Run this operator at a node.
+  anywhere, ///< Run this operator where the previous operator ran.
+};
 
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
@@ -163,12 +167,12 @@ public:
     return {};
   }
 
-  /// FIXME: docs
+  /// Returns the location of the operator.
   virtual auto location() const -> operator_location {
     return operator_location::anywhere;
   }
 
-  /// FIXME: docs
+  /// Returns whether the operator should be spawned in its own thread.
   virtual auto detached() const -> bool {
     return false;
   }
