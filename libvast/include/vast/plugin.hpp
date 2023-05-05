@@ -656,14 +656,14 @@ generator<const Plugin*> get() noexcept {
 // -- helper macros ------------------------------------------------------------
 
 #if defined(VAST_ENABLE_BUILTINS)
-#  define VAST_PLUGIN_VERSION "builtin"
+#  define VAST_PLUGIN_VERSION nullptr
 #else
 extern const char* VAST_PLUGIN_VERSION;
 #endif
 
 #if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_BUILTINS)
 
-#  error "Plugins cannot be both static and native"
+#  error "Plugins cannot be both static and builtin"
 
 #elif defined(VAST_ENABLE_STATIC_PLUGINS) || defined(VAST_ENABLE_BUILTINS)
 

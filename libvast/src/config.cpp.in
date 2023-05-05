@@ -57,9 +57,9 @@ bool has_assertions = false;
 #undef VAST_ENABLE_ASAN
 #cmakedefine01 VAST_ENABLE_ASAN
 #if VAST_ENABLE_ASAN
-bool has_address_santiizer = true;
+bool has_address_sanitizer = true;
 #else
-bool has_address_santiizer = false;
+bool has_address_sanitizer = false;
 #endif
 
 #undef VAST_ENABLE_UBSAN
