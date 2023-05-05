@@ -24,6 +24,10 @@
 
 #include <yaml-cpp/yaml.h>
 
+#if VAST_ENABLE_JEMALLOC
+#  include <jemalloc/jemalloc.h>
+#endif
+
 namespace vast::plugins::version {
 
 namespace {
