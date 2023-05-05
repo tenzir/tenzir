@@ -402,10 +402,10 @@ using execution_node_actor = system::typed_actor_fwd<
   // source
   auto(atom::run, std::vector<caf::actor> next)->caf::result<void>,
   // stage / sink
-  auto(caf::stream<table_slice> in, std::vector<caf::actor> next)
-    ->caf::result<caf::inbound_stream_slot<table_slice>>,
-  auto(caf::stream<chunk_ptr> in, std::vector<caf::actor> next)
-    ->caf::result<caf::inbound_stream_slot<chunk_ptr>>>::unwrap;
+  auto(caf::stream<framed<table_slice>> in, std::vector<caf::actor> next)
+    ->caf::result<caf::inbound_stream_slot<framed<table_slice>>>,
+  auto(caf::stream<framed<chunk_ptr>> in, std::vector<caf::actor> next)
+    ->caf::result<caf::inbound_stream_slot<framed<chunk_ptr>>>>::unwrap;
 
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<

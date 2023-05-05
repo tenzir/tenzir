@@ -8,6 +8,7 @@
 
 #include "vast/execution_node.hpp"
 
+#include "vast/framed.hpp"
 #include "vast/modules.hpp"
 #include "vast/operator_control_plane.hpp"
 
@@ -40,7 +41,7 @@ public:
   auto abort(caf::error error) noexcept -> void override {
     VAST_DEBUG("{} called actor_control_plane::abort({})", self_, error);
     VAST_ASSERT(error != caf::none);
-    (*self_.state.shutdown)(std::move(error));
+    self_.quit(std::move(error));
   }
 
   auto warn(caf::error err) noexcept -> void override {
@@ -74,17 +75,15 @@ auto empty(const chunk_ptr& chunk) -> bool {
 template <class Output>
   requires(!std::same_as<Output, std::monostate>)
 class source_driver final
-  : public caf::stream_source_driver<caf::broadcast_downstream_manager<Output>> {
+  : public caf::stream_source_driver<
+      caf::broadcast_downstream_manager<framed<Output>>> {
 public:
   source_driver(operator_ptr op, generator<Output> gen,
                 execution_node_state& host)
-    : op_(std::move(op)),
-      gen_(std::move(gen)),
-      self_{host.self},
-      shutdown_{host.shutdown} {
+    : op_(std::move(op)), gen_(std::move(gen)), self_{host.self} {
   }
 
-  void pull(caf::downstream<Output>& out, size_t num) override {
+  void pull(caf::downstream<framed<Output>>& out, size_t num) override {
     // TODO: use num and timeout logic?
     // auto num_events = num * 10000 / 100;
     auto it = gen_.unsafe_current();
@@ -96,6 +95,7 @@ public:
     for (size_t i = 0; i < num; ++i) {
       ++it;
       if (it == gen_.end()) {
+        out.push(std::nullopt);
         return;
       }
       auto next = std::move(*it);
@@ -109,15 +109,13 @@ public:
     auto is_done = gen_.unsafe_current() == gen_.end();
     if (is_done) {
       VAST_DEBUG("source is done");
-      (*shutdown_)({});
     }
     return is_done;
   }
 
   void finalize(const caf::error& error) override {
     VAST_DEBUG("finalizing source: {}", error);
-    (*shutdown_)({});
-    self_->send_exit(self_->address(), error);
+    self_->quit();
   }
 
 private:
@@ -128,15 +126,17 @@ private:
   operator_ptr op_;
   generator<Output> gen_;
   system::execution_node_actor::pointer self_;
-  std::shared_ptr<std::function<auto(caf::error)->void>> shutdown_;
 };
 
 template <class Input>
 auto generator_for_queue(std::shared_ptr<std::deque<Input>> queue,
                          std::shared_ptr<bool> stop) -> generator<Input> {
   VAST_ASSERT(queue);
-  while (!*stop) {
+  while (true) {
     if (queue->empty()) {
+      if (*stop) {
+        co_return;
+      }
       co_yield Input{};
       continue;
     }
@@ -153,14 +153,14 @@ template <class Input, class Output>
   requires(!std::same_as<Input, std::monostate>
            && !std::same_as<Output, std::monostate>)
 class stage_driver final
-  : public caf::stream_stage_driver<Input,
-                                    caf::broadcast_downstream_manager<Output>> {
-  using super
-    = caf::stream_stage_driver<Input, caf::broadcast_downstream_manager<Output>>;
+  : public caf::stream_stage_driver<
+      framed<Input>, caf::broadcast_downstream_manager<framed<Output>>> {
+  using super = caf::stream_stage_driver<
+    framed<Input>, caf::broadcast_downstream_manager<framed<Output>>>;
 
 public:
-  stage_driver(caf::broadcast_downstream_manager<Output>& out, operator_ptr op,
-               std::shared_ptr<std::deque<Input>> queue,
+  stage_driver(caf::broadcast_downstream_manager<framed<Output>>& out,
+               operator_ptr op, std::shared_ptr<std::deque<Input>> queue,
                std::shared_ptr<bool> stop, generator<Output> gen,
                execution_node_state& host)
     : super{out},
@@ -168,30 +168,37 @@ public:
       queue_{std::move(queue)},
       stop_{std::move(stop)},
       gen_{std::move(gen)},
-      self_{host.self},
-      shutdown_{host.shutdown} {
+      self_{host.self} {
   }
 
-  void process(caf::downstream<Output>& out, std::vector<Input>& in) override {
+  void process(caf::downstream<framed<Output>>& out,
+               std::vector<framed<Input>>& in) override {
     VAST_DEBUG("stage driver received input ({})", op_->to_string());
     auto it = gen_.unsafe_current();
     if (it == gen_.end()) {
-      (*shutdown_)({});
+      out.push(std::nullopt);
       return;
     }
     VAST_ASSERT(queue_->empty());
     VAST_ASSERT(std::none_of(in.begin(), in.end(), [](auto& x) {
-      return empty(x);
+      return not x.is_sentinel() && empty(x.value());
     }));
-    std::move(in.begin(), in.end(), std::back_inserter(*queue_));
+    for (auto&& elem : in) {
+      if (elem.is_sentinel()) {
+        VAST_ASSERT(&elem == &in.back());
+        *stop_ = true;
+        break;
+      }
+      queue_->push_back(std::move(elem.value()));
+    }
     while (true) {
       ++it;
       if (it == gen_.end()) {
-        (*shutdown_)({});
+        out.push(std::nullopt);
         return;
       }
       auto batch = std::move(*it);
-      if (empty(batch) && queue_->empty()) {
+      if (empty(batch) && queue_->empty() && !*stop_) {
         return;
       }
       if (!empty(batch)) {
@@ -203,32 +210,7 @@ public:
   void finalize(const caf::error& error) override {
     VAST_DEBUG("finalizing stage driver for ({}), error = {}", op_->to_string(),
                error);
-    if (error) {
-      // If there is an error, we drop the generator without running it to
-      // completion.
-      (*shutdown_)({});
-      self_->send_exit(self_->address(), error);
-      return;
-    }
-    // Run the generator until completion.
-    *stop_ = true;
-    auto it = gen_.unsafe_current();
-    if (it == gen_.end()) {
-      (*shutdown_)({});
-      self_->send_exit(self_->address(), error);
-      return;
-    }
-    while (true) {
-      ++it;
-      if (it == gen_.end()) {
-        break;
-      }
-      if (!empty(*it)) {
-        this->out_.push(std::move(*it));
-      }
-    }
-    (*shutdown_)({});
-    self_->send_exit(self_->address(), error);
+    self_->quit(error);
   }
 
 private:
@@ -237,13 +219,12 @@ private:
   std::shared_ptr<bool> stop_;
   generator<Output> gen_;
   system::execution_node_actor::pointer self_;
-  std::shared_ptr<std::function<auto(caf::error)->void>> shutdown_;
 };
 
 // We need this to get access to `out` when finalizing.
 template <class Input>
   requires(!std::same_as<Input, std::monostate>)
-class sink_driver final : public caf::stream_sink_driver<Input> {
+class sink_driver final : public caf::stream_sink_driver<framed<Input>> {
 public:
   sink_driver(operator_ptr op, std::shared_ptr<std::deque<Input>> queue,
               std::shared_ptr<bool> stop, generator<std::monostate> gen,
@@ -252,43 +233,37 @@ public:
       queue_{std::move(queue)},
       stop_{std::move(stop)},
       gen_{std::move(gen)},
-      self_{host.self},
-      shutdown_{host.shutdown} {
+      self_{host.self} {
   }
 
-  void process(std::vector<Input>& in) override {
+  void process(std::vector<framed<Input>>& in) override {
     VAST_DEBUG("sink driver received input");
     auto it = gen_.unsafe_current();
     if (it == gen_.end()) {
-      (*shutdown_)({});
+      self_->quit();
       return;
     }
     VAST_ASSERT(queue_->empty());
-    std::move(in.begin(), in.end(), std::back_inserter(*queue_));
-    while (!queue_->empty()) {
+    for (auto&& elem : in) {
+      if (elem.is_sentinel()) {
+        VAST_ASSERT(&elem == &in.back());
+        *stop_ = true;
+        break;
+      }
+      queue_->push_back(std::move(elem.value()));
+    }
+    while (!queue_->empty() || *stop_) {
       ++it;
       if (it == gen_.end()) {
-        (*shutdown_)({});
+        self_->quit();
         return;
       }
     }
   }
 
   void finalize(const caf::error& error) override {
-    VAST_DEBUG("finalizing sink driver");
-    if (error) {
-      (*shutdown_)({});
-      self_->send_exit(self_->address(), error);
-      return;
-    }
-    // Run generator until completion.
-    *stop_ = true;
-    auto it = gen_.unsafe_current();
-    while (it != gen_.end()) {
-      ++it;
-    }
-    (*shutdown_)({});
-    self_->send_exit(self_->address(), error);
+    VAST_DEBUG("finalizing sink driver: {}", error);
+    self_->quit();
   }
 
 private:
@@ -297,59 +272,7 @@ private:
   std::shared_ptr<bool> stop_;
   generator<std::monostate> gen_;
   system::execution_node_actor::pointer self_;
-  std::shared_ptr<std::function<auto(caf::error)->void>> shutdown_;
 };
-
-template <class Stream>
-void shutdown_func(Stream& x, caf::error error) {
-  if (!x) {
-    if (error) {
-      VAST_WARN("execution node ignores error because it is already shutting "
-                "down: {}",
-                error);
-    }
-    return;
-  }
-  x->shutdown();
-  // Then, we copy all data from the global input buffer to each
-  // path-specific output buffer.
-  if constexpr (requires { x->out().fan_out_flush(); }) {
-    x->out().fan_out_flush();
-  }
-  // Next, we `close()` the outbound paths to notify downstream
-  // connections that this stage is closed.
-  // This will remove all clean outbound paths, so we need to call
-  // `fan_out_flush()` before, but it will keep all paths that still
-  // have data. No new data will be pushed from the global buffer to
-  // closing paths.
-  if (error) {
-    x->out().abort(std::move(error));
-  } else {
-    x->out().close();
-  }
-  // Finally we call `force_emit_batches()` to move messages from the
-  // outbound path buffers to the inboxes of the receiving actors.
-  // The 'force_' here means that caf should ignore the batch size
-  // and capacity of the channel and push both overfull and underfull
-  // batches. Technically just `emit_batches()` would have the same
-  // effect since the buffered downstream manager always forces batches
-  // if all paths are closing.
-  x->out().force_emit_batches();
-  // Ensure that we don't call this function again.
-  x = nullptr;
-}
-
-auto make_shutdown_func() {
-  return std::make_shared<std::function<auto(caf::error)->void>>();
-}
-
-template <class Stream>
-auto emplace_shutdown_func(std::function<auto(caf::error)->void>& fun,
-                           Stream& x) {
-  fun = [=](caf::error error) mutable {
-    return shutdown_func(x, std::move(error));
-  };
-}
 
 } // namespace
 
@@ -387,10 +310,8 @@ auto execution_node_state::start(std::vector<caf::actor> next)
             ec::logic_error, "pipeline is still open after last operator '{}'",
             current_op->to_string());
         }
-        shutdown = make_shutdown_func();
         auto source = caf::detail::make_stream_source<source_driver<T>>(
           self, std::move(current_op), std::move(gen), *this);
-        emplace_shutdown_func(*shutdown, source);
         auto dest = std::move(next.front());
         next.erase(next.begin());
         source->add_outbound_path(dest, std::make_tuple(std::move(next)));
@@ -400,9 +321,9 @@ auto execution_node_state::start(std::vector<caf::actor> next)
 }
 
 template <class Input>
-auto execution_node_state::start(caf::stream<Input> in,
+auto execution_node_state::start(caf::stream<framed<Input>> in,
                                  std::vector<caf::actor> next)
-  -> caf::result<caf::inbound_stream_slot<Input>> {
+  -> caf::result<caf::inbound_stream_slot<framed<Input>>> {
   if (!op) {
     return caf::make_error(ec::logic_error,
                            fmt::format("{} was already started", *self));
@@ -417,8 +338,8 @@ auto execution_node_state::start(caf::stream<Input> in,
     return {};
   }
   return std::visit(
-    [&]<class Output>(
-      generator<Output> gen) -> caf::expected<caf::inbound_stream_slot<Input>> {
+    [&]<class Output>(generator<Output> gen)
+      -> caf::expected<caf::inbound_stream_slot<framed<Input>>> {
       if constexpr (std::is_same_v<Output, std::monostate>) {
         if (!next.empty()) {
           return caf::make_error(
@@ -427,11 +348,9 @@ auto execution_node_state::start(caf::stream<Input> in,
                         "operators ({}) afterwards",
                         current_op->to_string(), next.size()));
         }
-        shutdown = make_shutdown_func();
         auto sink = caf::detail::make_stream_sink<sink_driver<Input>>(
           self, std::move(current_op), std::move(queue), std::move(stop),
           std::move(gen), *this);
-        emplace_shutdown_func(*shutdown, sink);
         return sink->add_inbound_path(in);
       } else {
         if (next.empty()) {
@@ -439,12 +358,10 @@ auto execution_node_state::start(caf::stream<Input> in,
             ec::logic_error, "pipeline is still open after last operator '{}'",
             current_op->to_string());
         }
-        shutdown = make_shutdown_func();
         auto stage
           = caf::detail::make_stream_stage<stage_driver<Input, Output>>(
             self, std::move(current_op), std::move(queue), std::move(stop),
             std::move(gen), *this);
-        emplace_shutdown_func(*shutdown, stage);
         auto slot = stage->add_inbound_path(in);
         auto dest = std::move(next.front());
         next.erase(next.begin());
@@ -466,10 +383,10 @@ auto execution_node(
       VAST_DEBUG("source execution node received atom::run");
       return self->state.start(std::move(next));
     },
-    [self](caf::stream<table_slice> in, std::vector<caf::actor> next) {
+    [self](caf::stream<framed<table_slice>> in, std::vector<caf::actor> next) {
       return self->state.start(in, std::move(next));
     },
-    [self](caf::stream<chunk_ptr> in, std::vector<caf::actor> next) {
+    [self](caf::stream<framed<chunk_ptr>> in, std::vector<caf::actor> next) {
       return self->state.start(in, std::move(next));
     },
   };

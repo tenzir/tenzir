@@ -23,9 +23,6 @@ struct execution_node_state {
   /// which allows operators to control this actor.
   std::unique_ptr<operator_control_plane> ctrl;
 
-  /// A helper function that enables shutting down.
-  std::shared_ptr<std::function<void(caf::error)>> shutdown;
-
   /// Entry point for the source.
   auto start(std::vector<caf::actor> next) -> caf::result<void>;
 
@@ -33,8 +30,8 @@ struct execution_node_state {
   /// @note This function is defined for all possible inputs in the
   /// corresponding execution_node.cpp file.
   template <class Input>
-  auto start(caf::stream<Input> in, std::vector<caf::actor> next)
-    -> caf::result<caf::inbound_stream_slot<Input>>;
+  auto start(caf::stream<framed<Input>> in, std::vector<caf::actor> next)
+    -> caf::result<caf::inbound_stream_slot<framed<Input>>>;
 };
 
 /// Start an execution node that wraps an operator for asynchronous execution.

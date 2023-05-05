@@ -218,6 +218,9 @@ class arrow_table_slice;
 
 inline constexpr size_t dynamic_extent = std::numeric_limits<size_t>::max();
 
+template <class>
+class framed;
+
 template <class... Types>
 class projection;
 
@@ -225,9 +228,6 @@ template <class>
 class scope_linked;
 
 namespace detail {
-
-template <class>
-class framed;
 
 class legacy_deserializer;
 
@@ -428,12 +428,16 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::system::accountant_config))
   VAST_ADD_TYPE_ID((vast::system::send_initial_dbstate))
 
+  VAST_ADD_TYPE_ID((vast::framed<vast::chunk_ptr>))
+  VAST_ADD_TYPE_ID((vast::framed<vast::table_slice>))
   VAST_ADD_TYPE_ID((std::pair<std::string, vast::data>))
   VAST_ADD_TYPE_ID((std::vector<uint32_t>))
   VAST_ADD_TYPE_ID((std::vector<uint64_t>))
   VAST_ADD_TYPE_ID((std::vector<std::string>))
   VAST_ADD_TYPE_ID((std::vector<vast::chunk_ptr>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>))
+  VAST_ADD_TYPE_ID((std::vector<vast::framed<vast::chunk_ptr>>))
+  VAST_ADD_TYPE_ID((std::vector<vast::framed<vast::table_slice>>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>))
   VAST_ADD_TYPE_ID((std::vector<vast::uuid>))
   VAST_ADD_TYPE_ID((std::vector<vast::partition_info>))
@@ -449,9 +453,13 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((caf::stream<vast::chunk_ptr>))
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>))
+  VAST_ADD_TYPE_ID((caf::stream<vast::framed<vast::chunk_ptr>>))
+  VAST_ADD_TYPE_ID((caf::stream<vast::framed<vast::table_slice>>))
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>))
   VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::chunk_ptr>))
   VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::table_slice>))
+  VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::framed<vast::chunk_ptr>>))
+  VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::framed<vast::table_slice>>))
   VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::table_slice_column>))
   VAST_ADD_TYPE_ID((caf::outbound_stream_slot<vast::table_slice>))
 

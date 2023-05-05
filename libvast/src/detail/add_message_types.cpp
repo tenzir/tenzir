@@ -16,6 +16,7 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/die.hpp"
 #include "vast/expression.hpp"
+#include "vast/framed.hpp"
 #include "vast/http_api.hpp"
 #include "vast/ip.hpp"
 #include "vast/module.hpp"
