@@ -242,19 +242,13 @@ public:
     -> caf::expected<operator_ptr>;
 
   /// Adds an operator at the end of this pipeline.
-  void append(operator_ptr op) {
-    operators_.push_back(std::move(op));
-  }
+  void append(operator_ptr op);
 
   /// Adds an operator at the start of this pipeline.
-  void prepend(operator_ptr op) {
-    operators_.insert(operators_.begin(), std::move(op));
-  }
+  void prepend(operator_ptr op);
 
   /// Returns the sequence of operators that this pipeline was built from.
-  auto unwrap() && -> std::vector<operator_ptr> {
-    return std::move(operators_);
-  }
+  auto unwrap() && -> std::vector<operator_ptr>;
 
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;

@@ -95,6 +95,30 @@ auto pipeline::parse_as_operator(std::string_view repr)
   return std::make_unique<pipeline>(std::move(*result));
 }
 
+void pipeline::append(operator_ptr op) {
+  if (auto* sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
+    auto sub_ops = std::move(*sub_pipeline).unwrap();
+    operators_.insert(operators_.end(), std::move_iterator{sub_ops.begin()},
+                      std::move_iterator{sub_ops.end()});
+  } else {
+    operators_.push_back(std::move(op));
+  }
+}
+
+void pipeline::prepend(operator_ptr op) {
+  if (auto* sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
+    auto sub_ops = std::move(*sub_pipeline).unwrap();
+    operators_.insert(operators_.begin(), std::move_iterator{sub_ops.begin()},
+                      std::move_iterator{sub_ops.end()});
+  } else {
+    operators_.insert(operators_.begin(), std::move(op));
+  }
+}
+
+auto pipeline::unwrap() && -> std::vector<operator_ptr> {
+  return std::move(operators_);
+}
+
 auto pipeline::copy() const -> operator_ptr {
   auto copied = std::make_unique<pipeline>();
   copied->operators_.reserve(operators_.size());
