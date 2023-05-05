@@ -23,8 +23,8 @@
 #include <chrono>
 #include <filesystem>
 #include <map>
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 
 namespace vast::system {
 
@@ -84,7 +84,6 @@ struct node_state {
 
   /// Counters for multi-instance components.
   std::unordered_map<std::string, uint64_t> label_counters = {};
-
 
   /// Flag to signal if the node received an exit message.
   bool tearing_down = false;

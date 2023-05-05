@@ -535,7 +535,7 @@ node_state::spawn_command(const invocation& inv,
 }
 
 auto node_state::get_endpoint_handler(const http_request_description& desc)
- -> const handler_and_endpoint& {
+  -> const handler_and_endpoint& {
   static const auto empty_response = handler_and_endpoint{};
   auto it = rest_handlers.find(desc.canonical_path);
   if (it != rest_handlers.end())
@@ -547,10 +547,10 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   // TODO: Monitor the spawned handler and restart if it goes down.
   auto handler = plugin->handler(self->system(), self);
   for (auto const& endpoint : plugin->rest_endpoints())
-    rest_handlers[endpoint.canonical_path()] = std::make_pair(handler, endpoint);
+    rest_handlers[endpoint.canonical_path()]
+      = std::make_pair(handler, endpoint);
   return rest_handlers.at(desc.canonical_path);
 }
-
 
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::string name,
@@ -673,7 +673,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       VAST_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler)
-        return caf::make_error(ec::system_error, "failed to spawn rest handler");
+        return caf::make_error(ec::system_error,
+                               "failed to spawn rest handler");
       auto rp = self->make_response_promise<std::string>();
       auto response = std::make_shared<detail::internal_http_response>(rp);
       auto params = parse_endpoint_parameters(endpoint, desc.params);
@@ -693,8 +694,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
           [response](const caf::error& e) mutable {
             // TODO: Should we switch to a request/response pattern for the
             // handlers so they can just return strings or errors? The downside
-            // will be that it's going to be much harder to implement support for
-            // chunked or streaming transfers that way.
+            // will be that it's going to be much harder to implement support
+            // for chunked or streaming transfers that way.
             response->abort(500, "internal server error", e);
           });
       return rp;

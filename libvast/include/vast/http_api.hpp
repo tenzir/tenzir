@@ -10,8 +10,8 @@
 
 #include <vast/data.hpp>
 #include <vast/detail/inspection_common.hpp>
-#include <vast/type.hpp>
 #include <vast/detail/stable_map.hpp>
+#include <vast/type.hpp>
 
 #include <caf/actor_addr.hpp>
 #include <caf/optional.hpp>
@@ -100,11 +100,12 @@ struct rest_endpoint {
   }
 };
 
-/// Go through the provided parameters; discard those that are not understood by the endpoint
-/// and attempt to parse the rest to the expected type.
+/// Go through the provided parameters; discard those that are not understood by
+/// the endpoint and attempt to parse the rest to the expected type.
 auto parse_endpoint_parameters(
   const vast::rest_endpoint& endpoint,
-  const detail::stable_map<std::string, std::string>& params) -> caf::expected<vast::record>;
+  const detail::stable_map<std::string, std::string>& params)
+  -> caf::expected<vast::record>;
 
 // We use the virtual inheritance as a compilation firewall to
 // avoid having the dependency on restinio creep into main VAST
