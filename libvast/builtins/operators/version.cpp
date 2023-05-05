@@ -85,7 +85,7 @@ public:
       const auto version_string = std::string{(version)}; /*NOLINT*/           \
       if (version_string.empty()) {                                            \
         auto version_field = name##_record.push_field("version");              \
-        version_field.add(version_string);                                     \
+        version_field.add(std::string_view{version_string});                   \
       }                                                                        \
     }                                                                          \
   } while (false)
