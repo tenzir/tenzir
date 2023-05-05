@@ -20,10 +20,31 @@ auto exec_command(std::span<const std::string> args) -> caf::expected<void> {
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
   auto pipeline = pipeline::parse(args[0]);
-  if (not pipeline)
+  if (not pipeline) {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("failed to parse pipeline: {}",
                                        pipeline.error()));
+  }
+  // If the pipeline ends with events, we implicitly write the output as JSON to
+  // stdout, and if it ends with bytes, we implicitly write those bytes to stdout.
+  if (pipeline->check_type<void, table_slice>()) {
+    auto op = pipeline::parse_as_operator("write json --pretty");
+    if (not op) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("failed to append implicit 'write "
+                                         "json --pretty': {}",
+                                         op.error()));
+    }
+    pipeline->append(std::move(*op));
+  } else if (pipeline->check_type<void, chunk_ptr>()) {
+    auto op = pipeline::parse_as_operator("save file -");
+    if (not op) {
+      return caf::make_error(
+        ec::invalid_argument,
+        fmt::format("failed to append implicit 'save file -': {}", op.error()));
+    }
+    pipeline->append(std::move(*op));
+  }
   auto executor = make_local_executor(std::move(*pipeline));
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This will

@@ -45,6 +45,12 @@ spawn_counter(node_actor::stateful_pointer<node_state> self,
     if (not args.inv.arguments[0].empty()) {
       auto parse_result = to<expression>(args.inv.arguments[0]);
       if (!parse_result)
+        return caf::make_error(
+          ec::parse_error,
+          fmt::format("failed to parse expression '{}': {}",
+                      args.inv.arguments[0], parse_result.error()));
+      parse_result = normalize_and_validate(std::move(*parse_result));
+      if (!parse_result)
         return parse_result.error();
       expr = std::move(*parse_result);
     }

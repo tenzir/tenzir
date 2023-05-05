@@ -331,19 +331,22 @@ class plugin final : public virtual parser_plugin,
                     operator_control_plane&) const
     -> caf::expected<printer> override {
     (void)input_schema;
-    if (!args.empty()) {
+    bool pretty = false;
+    if (args.size() == 1 && args.front() == "--pretty") {
+      pretty = true;
+    } else if (!args.empty()) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("json printer received unexpected "
                                          "arguments: {}",
                                          fmt::join(args, ", ")));
     };
-    return to_printer([](table_slice slice) -> generator<chunk_ptr> {
+    return to_printer([pretty](table_slice slice) -> generator<chunk_ptr> {
       if (slice.rows() == 0) {
         co_return;
       }
       // JSON printer should output NDJSON, see:
       // https://github.com/ndjson/ndjson-spec
-      auto printer = vast::json_printer{{.oneline = true}};
+      auto printer = vast::json_printer{{.oneline = not pretty}};
       // TODO: Since this printer is per-schema we can write an optimized
       // version of it that gets the schema ahead of time and only expects data
       // corresponding to exactly that schema.
