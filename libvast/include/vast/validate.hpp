@@ -9,6 +9,7 @@
 #pragma once
 
 #include <vast/data.hpp>
+#include <vast/type.hpp>
 
 #include <caf/error.hpp>
 
@@ -25,6 +26,13 @@ enum class validate {
   // All fields are treated as required. Mostly useful for tests.
   exhaustive,
 };
+
+/// A convenience type for using the `opaque` attribute defined below.
+static const auto opaque_record
+  = type{record_type{
+           {"dummy", string_type{}}, // Record types may not be empty
+         },
+         {{"opaque"}}};
 
 /// Check that all keys in `data` are found in `configuration::schema` with
 /// the correct type.
