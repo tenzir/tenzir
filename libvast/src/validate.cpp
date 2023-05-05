@@ -103,7 +103,7 @@ auto validate_(const vast::data& data, const vast::type& type,
         return caf::error{};
       },
       [&](const vast::record_type& record_type) {
-        auto const* record = caf::get_if<vast::record>(&data);
+        const auto* record = caf::get_if<vast::record>(&data);
         if (!record)
           return caf::make_error(ec::invalid_configuration,
                                  fmt::format("expected record at {}", prefix));
