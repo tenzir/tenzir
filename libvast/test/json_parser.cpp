@@ -37,10 +37,6 @@ public:
     FAIL("Unexpected call to operator_control_plane::emit");
   }
 
-  auto demand(type) const noexcept -> size_t override {
-    FAIL("Unexpected call to operator_control_plane::demand");
-  }
-
   auto schemas() const noexcept -> const std::vector<type>& override {
     FAIL("Unexpected call to operator_control_plane::schemas");
   }

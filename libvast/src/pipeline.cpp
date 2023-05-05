@@ -37,10 +37,6 @@ public:
     die("not implemented");
   }
 
-  auto demand(type = {}) const noexcept -> size_t override {
-    die("not implemented");
-  }
-
   auto schemas() const noexcept -> const std::vector<type>& override {
     return vast::modules::schemas();
   }
