@@ -117,7 +117,7 @@ public:
   void finalize(const caf::error& error) override {
     VAST_DEBUG("finalizing source: {}", error);
     (*shutdown_)({});
-    self_->quit(error);
+    self_->send_exit(self_->address(), error);
   }
 
 private:
@@ -207,7 +207,7 @@ public:
       // If there is an error, we drop the generator without running it to
       // completion.
       (*shutdown_)({});
-      self_->quit(error);
+      self_->send_exit(self_->address(), error);
       return;
     }
     // Run the generator until completion.
@@ -215,7 +215,7 @@ public:
     auto it = gen_.unsafe_current();
     if (it == gen_.end()) {
       (*shutdown_)({});
-      self_->quit(error);
+      self_->send_exit(self_->address(), error);
       return;
     }
     while (true) {
@@ -228,7 +228,7 @@ public:
       }
     }
     (*shutdown_)({});
-    self_->quit(error);
+    self_->send_exit(self_->address(), error);
   }
 
 private:
@@ -278,7 +278,7 @@ public:
     VAST_DEBUG("finalizing sink driver");
     if (error) {
       (*shutdown_)({});
-      self_->quit(error);
+      self_->send_exit(self_->address(), error);
       return;
     }
     // Run generator until completion.
@@ -288,7 +288,7 @@ public:
       ++it;
     }
     (*shutdown_)({});
-    self_->quit(error);
+    self_->send_exit(self_->address(), error);
   }
 
 private:
