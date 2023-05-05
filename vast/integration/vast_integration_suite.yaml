@@ -809,3 +809,13 @@ tests:
         input: data/json/conn.log.json.gz
       - command: exec 'load stdin | measure --real-time | measure | drop timestamp | write json'
         input: data/json/conn.log.json.gz
+
+  Empty Record in Pipeline:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from - read json| write json to stdout'
+        input: data/json/empty-record.json
+      - command: exec 'from - read json | write csv to stdout'
+        input: data/json/empty-record.json
+      - command: exec 'from - read json | write xsv to stdout'
+        input: data/json/empty-record.json
