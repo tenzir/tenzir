@@ -30,7 +30,7 @@ record {
 ### `--dev`
 
 Add additional, developer-facing information to the output of the operator. With
-`--dev` set, the operator's output ahs the following schema:
+`--dev` set, the operator's output has the following schema:
 
 ```
 record {
