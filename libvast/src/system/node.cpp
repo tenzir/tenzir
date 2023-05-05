@@ -82,29 +82,6 @@ auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(caf::make_error(code, std::move(msg)));
 }
 
-using plugin_and_endpoint
-  = std::pair<const rest_endpoint_plugin*, rest_endpoint>;
-
-auto find_endpoint_handler(const http_request_description& desc)
-  -> plugin_and_endpoint {
-  // FIXME: Move this map into the node state.
-  static std::unordered_map<std::string, plugin_and_endpoint> cache = {};
-  if (cache.empty()) {
-    for (auto const& plugin : plugins::get()) {
-      auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
-      if (!rest_plugin)
-        continue;
-      for (auto const& endpoint : rest_plugin->rest_endpoints())
-        cache[endpoint.canonical_path()]
-          = std::make_pair(rest_plugin, endpoint);
-    }
-  }
-  auto it = cache.find(desc.canonical_path);
-  if (it == cache.end())
-    return {nullptr, rest_endpoint{}};
-  return it->second;
-}
-
 /// A list of components that are essential for importing and exporting data
 /// from the node.
 std::set<const char*> core_components = {
@@ -164,6 +141,19 @@ caf::message send_command(const invocation& inv, caf::actor_system&) {
     return send(atom::run_v);
   return make_error_msg(ec::unimplemented,
                         "trying to send unsupported atom: " + *(first + 1));
+}
+
+auto find_endpoint_plugin(const http_request_description& desc)
+  -> const rest_endpoint_plugin* {
+  for (auto const& plugin : plugins::get()) {
+    auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
+    if (!rest_plugin)
+      continue;
+    for (auto&& endpoint : rest_plugin->rest_endpoints())
+      if (endpoint.canonical_path() == desc.canonical_path)
+        return rest_plugin;
+  }
+  return nullptr;
 }
 
 void collect_component_status(node_actor::stateful_pointer<node_state> self,
@@ -544,6 +534,27 @@ node_state::spawn_command(const invocation& inv,
   return caf::make_message(*component);
 }
 
+using plugin_and_endpoint
+  = std::pair<const rest_endpoint_plugin*, rest_endpoint>;
+
+auto node_state::get_endpoint_handler(const http_request_description& desc)
+ -> const handler_and_endpoint& {
+  static const auto empty_response = handler_and_endpoint{};
+  auto it = rest_handlers.find(desc.canonical_path);
+  if (it != rest_handlers.end())
+    return it->second;
+  // Spawn handler on first usage
+  auto const* plugin = find_endpoint_plugin(desc);
+  if (!plugin)
+    return empty_response;
+  // TODO: Monitor the spawned handler and restart if it goes down.
+  auto handler = plugin->handler(self->system(), self);
+  for (auto const& endpoint : plugin->rest_endpoints())
+    rest_handlers[endpoint.canonical_path()] = std::make_pair(handler, endpoint);
+  return rest_handlers.at(desc.canonical_path);
+}
+
+
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::string name,
      std::filesystem::path dir, detach_components detach_filesystem) {
@@ -661,19 +672,14 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       return run(inv, self->system(), node_state::command_factory);
     },
     [self](atom::proxy,
-           const http_request_description& desc) -> caf::result<std::string> {
-      // FIXME: verbose -> debug
-      VAST_VERBOSE("proxying request to {}", desc.canonical_path);
-      auto [rest_plugin, endpoint] = find_endpoint_handler(desc);
-      if (!rest_plugin)
-        return caf::make_error(ec::invalid_argument, "unknown endpoint");
-      auto& handler = self->state.rest_handlers[rest_plugin];
+           http_request_description& desc) -> caf::result<std::string> {
+      VAST_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);
+      auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler)
-        // TODO: Monitor the spawned handler and restart if it goes down.
-        handler = rest_plugin->handler(self->system(), self);
+        return caf::make_error(ec::system_error, "failed to spawn rest handler");
       auto rp = self->make_response_promise<std::string>();
       auto response = std::make_shared<detail::internal_http_response>(rp);
-      auto params = parse_endpoint_parameters(endpoint, desc.params);
+      auto params = parse_endpoint_parameters(endpoint, std::move(desc.params));
       if (!params)
         return caf::make_error(ec::invalid_argument, "invalid parameters");
       auto request = http_request{
@@ -689,9 +695,9 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
           },
           [response](const caf::error& e) mutable {
             // TODO: Should we switch to a request/response pattern for the
-            // handlers so they can just return strings or errors? On the other
-            // hand, the downside will be extra copies and we will not be able
-            // to use chunked or streaming transfers that way.
+            // handlers so they can just return strings or errors? The downside
+            // will be that it's going to be much harder to implement support for
+            // chunked or streaming transfers that way.
             response->abort(500, "internal server error", e);
           });
       return rp;

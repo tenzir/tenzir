@@ -55,6 +55,17 @@ struct node_state {
   /// Maps command names to functions.
   inline static command::factory command_factory = {};
 
+  // -- rest handling infrastructure -------------------------------------------
+
+  using handler_and_endpoint = std::pair<rest_handler_actor, rest_endpoint>;
+
+  /// Retrieve or spawn the handler actor for the given request. 
+  auto get_endpoint_handler(const http_request_description& desc)
+    -> const handler_and_endpoint&;
+
+  /// The REST endpoint handlers for this node. Spawned on demand.
+  std::unordered_map<std::string, handler_and_endpoint> rest_handlers = {};
+
   // -- actor facade -----------------------------------------------------------
 
   /// The name of the NODE actor.
@@ -74,8 +85,6 @@ struct node_state {
   /// Counters for multi-instance components.
   std::unordered_map<std::string, uint64_t> label_counters = {};
 
-  ///
-  std::unordered_map<const rest_endpoint_plugin*, rest_handler_actor> rest_handlers = {};
 
   /// Flag to signal if the node received an exit message.
   bool tearing_down = false;

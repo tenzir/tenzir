@@ -188,12 +188,11 @@ connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
           std::optional<std::chrono::steady_clock::time_point> deadline) {
-  if (!retry_delay)
-    return make_no_retry_behavior(std::move(self), deadline);
-  VAST_ASSERT(self->system().has_openssl_manager()); // FIXME
   self->state.middleman = self->system().has_openssl_manager()
                             ? self->system().openssl_manager().actor_handle()
                             : self->system().middleman().actor_handle();
+  if (!retry_delay)
+    return make_no_retry_behavior(std::move(self), deadline);
   return {
     [self, delay = *retry_delay, deadline](
       atom::connect, connect_request request) -> caf::result<node_actor> {
