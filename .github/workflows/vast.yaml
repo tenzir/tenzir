@@ -215,7 +215,7 @@ jobs:
           run_if_changed changelog "changelog/" "web/" "python/"
           VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json)
           run_if_changed vast "${VAST_SOURCES[@]}"
-          run_if_changed vast-plugins "plugins/" "contrib/vast-plugins/"
+          run_if_changed_default vast-plugins $run_vast "plugins/" "contrib/vast-plugins/"
           # The vast-plugins job downloads the VAST artifact from GCS, so we
           # need to run the vast job in case it is missing.
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
