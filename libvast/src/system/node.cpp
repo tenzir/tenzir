@@ -149,7 +149,7 @@ auto find_endpoint_plugin(const http_request_description& desc)
     auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
     if (!rest_plugin)
       continue;
-    for (auto&& endpoint : rest_plugin->rest_endpoints())
+    for (const auto& endpoint : rest_plugin->rest_endpoints())
       if (endpoint.canonical_path() == desc.canonical_path)
         return rest_plugin;
   }
@@ -534,9 +534,6 @@ node_state::spawn_command(const invocation& inv,
   return caf::make_message(*component);
 }
 
-using plugin_and_endpoint
-  = std::pair<const rest_endpoint_plugin*, rest_endpoint>;
-
 auto node_state::get_endpoint_handler(const http_request_description& desc)
  -> const handler_and_endpoint& {
   static const auto empty_response = handler_and_endpoint{};
@@ -679,7 +676,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
         return caf::make_error(ec::system_error, "failed to spawn rest handler");
       auto rp = self->make_response_promise<std::string>();
       auto response = std::make_shared<detail::internal_http_response>(rp);
-      auto params = parse_endpoint_parameters(endpoint, std::move(desc.params));
+      auto params = parse_endpoint_parameters(endpoint, desc.params);
       if (!params)
         return caf::make_error(ec::invalid_argument, "invalid parameters");
       auto request = http_request{

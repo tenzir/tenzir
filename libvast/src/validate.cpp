@@ -43,8 +43,6 @@ auto validate_(const vast::data& data, const vast::type& type,
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("expected type for non-null value at {}",
                                        prefix));
-  // Note that only the `record_type` needs to have special logic
-  // depending on `mode`.
   return caf::visit(
     vast::detail::overload{
       [&]<vast::basic_type T>(const T& type) -> caf::error {

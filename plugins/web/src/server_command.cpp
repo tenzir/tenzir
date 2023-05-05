@@ -197,8 +197,6 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       // Note that the handler should abort the response by itself if
       // possible (ie. invalid arguments), the error handler is to catch
       // timeouts and real internal errors.
-      // TODO: Send the request to the node via `atom::proxy` instead,
-      // to unify the code paths for incoming requests as far as possible.
       self
         ->request(handler, caf::infinite, atom::http_request_v,
                   endpoint.endpoint_id, std::move(vast_request))

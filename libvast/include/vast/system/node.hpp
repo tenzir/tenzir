@@ -59,7 +59,7 @@ struct node_state {
 
   using handler_and_endpoint = std::pair<rest_handler_actor, rest_endpoint>;
 
-  /// Retrieve or spawn the handler actor for the given request. 
+  /// Retrieve or spawn the handler actor for the given request.
   auto get_endpoint_handler(const http_request_description& desc)
     -> const handler_and_endpoint&;
 
