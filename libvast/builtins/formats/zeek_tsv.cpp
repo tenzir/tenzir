@@ -430,10 +430,8 @@ struct zeek_printer {
     }
 
     auto operator()(caf::none_t) noexcept -> bool {
-      if (not printer.unset_field.empty()) {
-        out = std::copy(printer.unset_field.begin(), printer.unset_field.end(),
-                        out);
-      }
+      out = std::copy(printer.unset_field.begin(), printer.unset_field.end(),
+                      out);
       return true;
     }
 
@@ -455,6 +453,11 @@ struct zeek_printer {
     }
 
     auto operator()(view<std::string> x) noexcept -> bool {
+      if (x.empty()) {
+        out = std::copy(printer.unset_field.begin(), printer.unset_field.end(),
+                        out);
+        return true;
+      }
       for (auto c : x)
         if (std::iscntrl(c) or c == printer.sep or c == printer.set_sep) {
           auto hex = detail::byte_to_hex(c);
@@ -470,33 +473,18 @@ struct zeek_printer {
 
     auto operator()(const view<list>& x) noexcept -> bool {
       if (x.empty()) {
-        for (auto c : std::string_view(printer.empty_field))
-          *out++ = c;
+        out = std::copy(printer.empty_field.begin(), printer.empty_field.end(),
+                        out);
         return true;
       }
-      auto i = x.begin();
-      if (!print(out, *i))
-        return false;
-      for (++i; i != x.end(); ++i) {
-        *out++ = printer.set_sep;
-        if (!print(out, *i))
-          return false;
-      }
-      return true;
-    }
-
-    auto operator()(const view<record>& x) noexcept -> bool {
-      auto flattened = flatten(materialize(x));
       auto first = true;
-      for (const auto& [_, v] : flattened) {
+      for (const auto& v : x) {
         if (not first) {
-          ++out = printer.sep;
+          ++out = printer.set_sep;
         } else {
           first = false;
         }
-        auto flattened_value_printed = (*this)(v);
-        if (not flattened_value_printed)
-          return false;
+        caf::visit(*this, v);
       }
       return true;
     }
@@ -577,7 +565,7 @@ public:
             if (metadata.output_slice_schema)
               finished
                 = cast(std::move(finished), metadata.output_slice_schema);
-            co_yield finished;
+            co_yield std::move(finished);
             auto parsed = metadata.parse_header(it, lines, ctrl);
             if (not parsed) {
               ctrl.abort(parsed.error());
@@ -636,7 +624,7 @@ public:
         auto finished = b.finish();
         if (metadata.output_slice_schema)
           finished = cast(std::move(finished), metadata.output_slice_schema);
-        co_yield finished;
+        co_yield std::move(finished);
       },
       to_lines(std::move(loader)), ctrl);
   }
@@ -646,7 +634,8 @@ public:
     return {"stdin", {}};
   }
 
-  auto make_printer(std::span<std::string const> args, type input_schema,
+  auto make_printer(std::span<std::string const> args,
+                    [[maybe_unused]] type input_schema,
                     operator_control_plane&) const
     -> caf::expected<printer> override {
     if (not args.empty() and args.size() != 3) {
@@ -693,31 +682,32 @@ public:
     }
     auto printer = zeek_printer{set_sep, empty_field, unset_field,
                                 disable_timestamp_tags_};
-    return to_printer(
-      [printer = std::move(printer), input_schema = std::move(input_schema)](
-        table_slice slice) -> generator<chunk_ptr> {
-        auto input_type = caf::get<record_type>(input_schema);
-        auto buffer = std::vector<char>{};
-        auto out_iter = std::back_inserter(buffer);
-        auto resolved_slice = resolve_enumerations(slice);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-        auto first = true;
-        for (const auto& row : values(input_type, *array)) {
-          VAST_ASSERT_CHEAP(row);
-          if (first) {
-            printer.print_header(out_iter, input_schema);
-            first = false;
-            out_iter = fmt::format_to(out_iter, "\n");
-          }
-          const auto ok = printer.print_values(out_iter, *row);
-          VAST_ASSERT_CHEAP(ok);
+    return to_printer([printer = std::move(printer)](
+                        table_slice slice) -> generator<chunk_ptr> {
+      auto buffer = std::vector<char>{};
+      auto out_iter = std::back_inserter(buffer);
+      auto resolved_slice = resolve_enumerations(slice);
+      resolved_slice = flatten(resolved_slice).slice;
+      auto input_schema = resolved_slice.schema();
+      auto array
+        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto first = true;
+      for (const auto& row :
+           values(caf::get<record_type>(input_schema), *array)) {
+        VAST_ASSERT_CHEAP(row);
+        if (first) {
+          printer.print_header(out_iter, input_schema);
+          first = false;
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        printer.print_closing_line(out_iter);
-        auto chunk = chunk::make(std::move(buffer));
-        co_yield std::move(chunk);
-      });
+        const auto ok = printer.print_values(out_iter, *row);
+        VAST_ASSERT_CHEAP(ok);
+        out_iter = fmt::format_to(out_iter, "\n");
+      }
+      printer.print_closing_line(out_iter);
+      auto chunk = chunk::make(std::move(buffer));
+      co_yield std::move(chunk);
+    });
   }
 
   auto default_saver(std::span<std::string const>) const
