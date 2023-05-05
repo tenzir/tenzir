@@ -26,6 +26,13 @@ enum class validate {
   exhaustive,
 };
 
+/// A convenience type for using the `opaque` attribute defined below.
+static const auto opaque_record
+  = type{record_type{
+           {"dummy", string_type{}}, // Record types may not be empty
+         },
+         {{"opaque"}}};
+
 /// Check that all keys in `data` are found in `configuration::schema` with
 /// the correct type.
 /// The `validate` behavior can be adjusted using type attributes:
