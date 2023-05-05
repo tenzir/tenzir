@@ -28,7 +28,7 @@ enum class validate {
 };
 
 /// A convenience type for using the `opaque` attribute defined below.
-static const auto opaque_record
+static inline const auto opaque_record
   = type{record_type{
            {"dummy", string_type{}}, // Record types may not be empty
          },
