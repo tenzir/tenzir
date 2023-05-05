@@ -357,7 +357,13 @@ const std::vector<std::filesystem::path>& loaded_config_files() {
 
 bool plugin::enabled(const record&, const record& plugin_config) const {
   auto default_value = true;
-  return get_or(plugin_config, "enabled", default_value);
+  auto result = try_get_or(plugin_config, "enabled", default_value);
+  if (!result) {
+    VAST_WARN("config option {}.enabled is ignored: expected a boolean",
+              this->name());
+    return default_value;
+  }
+  return *result;
 }
 
 // -- component plugin --------------------------------------------------------
