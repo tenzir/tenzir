@@ -190,7 +190,8 @@ using accountant_actor = typed_actor_fwd<
 
 /// The interface of a PIPELINE EXECUTOR actor.
 using pipeline_executor_actor = system::typed_actor_fwd<
-  // Execute a logical pipeline, returning the result asynchronously.
+  // Execute a pipeline, returning the result asynchronously. This must be
+  // called at most once per executor.
   auto(atom::run)->caf::result<void>>::unwrap;
 
 /// The PARTITION CREATION LISTENER actor interface.

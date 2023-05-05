@@ -13,19 +13,28 @@ namespace vast {
 struct execution_node_state {
   static constexpr auto name = "execution-node";
 
+  /// A pointer to the parent actor.
+  system::execution_node_actor::pointer self;
+
+  /// The operator owned by this execution node.
+  operator_ptr op;
+
+  /// A pointer to the control plane passed to this operator during execution,
+  /// which allows operators to control this actor.
+  std::unique_ptr<operator_control_plane> ctrl;
+
+  /// A helper function that enables shutting down.
+  std::shared_ptr<std::function<void(caf::error)>> shutdown;
+
   /// Entry point for the source.
   auto start(std::vector<caf::actor> next) -> caf::result<void>;
 
   /// Entry point for stages and the sink.
+  /// @note This function is defined for all possible inputs in the
+  /// corresponding execution_node.cpp file.
   template <class Input>
   auto start(caf::stream<Input> in, std::vector<caf::actor> next)
     -> caf::result<caf::inbound_stream_slot<Input>>;
-
-  operator_ptr op;
-  system::execution_node_actor::pointer self;
-  std::unique_ptr<operator_control_plane> ctrl;
-  std::function<void(execution_node_state&, caf::error)> shutdown;
-  bool is_shutting_down = false;
 };
 
 /// Start an execution node that wraps an operator for asynchronous execution.
