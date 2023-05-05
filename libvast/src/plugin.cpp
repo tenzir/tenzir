@@ -264,6 +264,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
   }
   VAST_DEBUG("collected {} global options for plugin initialization",
              global_config.size());
+  std::vector<std::string> disabled_plugins;
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
     // First, try to read the configurations from the merged VAST configuration.
@@ -318,6 +319,13 @@ caf::error initialize(caf::actor_system_config& cfg) {
         return std::move(opts.error());
       }
     }
+    // Allow the plugin to control whether it should be loaded based on
+    // its configuration.
+    if (!plugin->enabled(merged_config, global_config)) {
+      VAST_VERBOSE("disabling plugin {}", plugin->name());
+      disabled_plugins.push_back(plugin->name());
+      continue;
+    }
     // Third, initialize the plugin with the merged configuration.
     VAST_VERBOSE("initializing the {} plugin with options: {}", plugin->name(),
                  merged_config);
@@ -327,6 +335,15 @@ caf::error initialize(caf::actor_system_config& cfg) {
                                          "the {} plugin: {} ",
                                          plugin->name(), err));
   }
+  for (auto const& plugin_name : disabled_plugins) {
+    auto& plugins = get_mutable();
+    auto position
+      = std::find_if(plugins.begin(), plugins.end(), [=](const plugin_ptr& p) {
+          return p->name() == plugin_name;
+        });
+    VAST_ASSERT_CHEAP(position != plugins.end());
+    plugins.erase(position);
+  }
   return caf::none;
 }
 
@@ -335,6 +352,25 @@ const std::vector<std::filesystem::path>& loaded_config_files() {
 }
 
 } // namespace plugins
+
+// -- plugin base class -------------------------------------------------------
+
+bool plugin::enabled(const record&, const record& plugin_config) const {
+  auto default_value = true;
+  auto result = try_get_or(plugin_config, "enabled", default_value);
+  if (!result) {
+    VAST_WARN("config option {}.enabled is ignored: expected a boolean",
+              this->name());
+    return default_value;
+  }
+  return *result;
+}
+
+// -- component plugin --------------------------------------------------------
+
+std::string component_plugin::component_name() const {
+  return this->name();
+}
 
 // -- analyzer plugin ---------------------------------------------------------
 

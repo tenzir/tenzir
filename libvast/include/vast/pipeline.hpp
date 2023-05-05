@@ -183,19 +183,20 @@ public:
   /// discard the generator if successful. If instantiation has a side-effect
   /// that happens outside of the associated coroutine function, the
   /// `operator_base::infer_type_impl` function should be overwritten.
+  inline auto infer_type(operator_type input) const
+    -> caf::expected<operator_type> {
+    return infer_type_impl(input);
+  }
+
+  /// @see `operator_base::infer_type(operator_type)`.
   template <class T>
   auto infer_type() const -> caf::expected<operator_type> {
     return infer_type(tag_v<T>);
   }
 
-  /// @see `operator_base::infer_type<T>()`.
-  auto infer_type(operator_type input) const -> caf::expected<operator_type> {
-    return infer_type_impl(input);
-  }
-
   /// Returns an error if this is not an `In -> Out` operator.
   template <class In, class Out>
-  [[nodiscard]] auto check_type() const -> caf::expected<void> {
+  [[nodiscard]] inline auto check_type() const -> caf::expected<void> {
     auto out = infer_type<In>();
     if (!out) {
       return out.error();

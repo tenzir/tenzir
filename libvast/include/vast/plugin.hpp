@@ -111,6 +111,13 @@ public:
   plugin(plugin&&) noexcept = default;
   plugin& operator=(plugin&&) noexcept = default;
 
+  /// Allow the plugin to have its own logic for when it should be loaded.
+  /// The plugin will no be initialized if `enabled()` returns false.
+  /// The default implementation looks for a key named 'enabled' in the
+  /// plugin config, and defaults to `true` if that does not exist.
+  [[nodiscard]] virtual bool
+  enabled(const record& plugin_config, const record& global_config) const;
+
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param plugin_config The relevant subsection of the configuration.
@@ -132,9 +139,7 @@ class component_plugin : public virtual plugin {
 public:
   /// The name for this component in the registry.
   /// Defaults to the plugin name.
-  virtual std::string component_name() const {
-    return this->name();
-  }
+  virtual std::string component_name() const;
 
   /// Creates an actor as a component in the NODE.
   /// @param node A stateful pointer to the NODE actor.
@@ -656,14 +661,14 @@ generator<const Plugin*> get() noexcept {
 // -- helper macros ------------------------------------------------------------
 
 #if defined(VAST_ENABLE_BUILTINS)
-#  define VAST_PLUGIN_VERSION "builtin"
+#  define VAST_PLUGIN_VERSION nullptr
 #else
 extern const char* VAST_PLUGIN_VERSION;
 #endif
 
 #if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_BUILTINS)
 
-#  error "Plugins cannot be both static and native"
+#  error "Plugins cannot be both static and builtin"
 
 #elif defined(VAST_ENABLE_STATIC_PLUGINS) || defined(VAST_ENABLE_BUILTINS)
 

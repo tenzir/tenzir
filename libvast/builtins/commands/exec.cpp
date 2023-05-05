@@ -24,17 +24,39 @@ auto exec_command(std::span<const std::string> args, caf::actor_system& sys)
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
   auto pipeline = pipeline::parse(args[0]);
-  if (not pipeline)
+  if (not pipeline) {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("failed to parse pipeline: {}",
                                        pipeline.error()));
-
+  }
+  // If the pipeline ends with events, we implicitly write the output as JSON
+  // to stdout, and if it ends with bytes, we implicitly write those bytes to
+  // stdout.
+  if (pipeline->check_type<void, table_slice>()) {
+    auto op = pipeline::parse_as_operator("write json --pretty");
+    if (not op) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("failed to append implicit 'write "
+                                         "json --pretty': {}",
+                                         op.error()));
+    }
+    pipeline->append(std::move(*op));
+  } else if (pipeline->check_type<void, chunk_ptr>()) {
+    auto op = pipeline::parse_as_operator("save file -");
+    if (not op) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("failed to append implicit 'save "
+                                         "file -': {}",
+                                         op.error()));
+    }
+    pipeline->append(std::move(*op));
+  }
   caf::scoped_actor self{sys};
   auto executor = self->spawn(pipeline_executor, std::move(*pipeline));
   auto result = caf::expected<void>{};
   // TODO: This command should probably implement signal handling, and check
-  // whether a signal was raised in every iteration over the executor. This will
-  // likely be easier to implement once we switch to the actor-based
+  // whether a signal was raised in every iteration over the executor. This
+  // will likely be easier to implement once we switch to the actor-based
   // asynchronous executor, so we may as well wait until then.
   self->request(executor, caf::infinite, atom::run_v)
     .receive(
@@ -76,6 +98,7 @@ public:
     return {std::move(exec), std::move(factory)};
   };
 };
+
 } // namespace
 
 } // namespace vast::plugins::exec

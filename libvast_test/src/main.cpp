@@ -119,11 +119,16 @@ int main(int argc, char** argv) {
       std::make_move_iterator(std::end(test_args)),
     };
   }
+  // TODO: Only initialize built-in endpoints here by default,
+  // and allow the unit tests to specify a list of required
+  // plugins and their config.
   for (auto& plugin : vast::plugins::get_mutable()) {
-    if (auto err = plugin->initialize({}, {})) {
-      fmt::print(stderr, "failed to initialize plugin {}: {}", plugin->name(),
-                 err);
-      return EXIT_FAILURE;
+    if (plugin->enabled({}, {})) {
+      if (auto err = plugin->initialize({}, {})) {
+        fmt::print(stderr, "failed to initialize plugin {}: {}", plugin->name(),
+                   err);
+        return EXIT_FAILURE;
+      }
     }
   }
   caf::settings log_settings;

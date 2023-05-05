@@ -6,12 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/pipeline.hpp"
-
 #include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 
 #include <arrow/type.h>
@@ -40,13 +39,13 @@ public:
 
 class plugin final : public virtual operator_plugin {
 public:
-  // plugin API
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize([[maybe_unused]] const record& plugin_config,
+                  [[maybe_unused]] const record& global_config)
+    -> caf::error override {
     return {};
   }
 
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "pass";
   };
 

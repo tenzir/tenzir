@@ -61,7 +61,7 @@ extern const char* tree_hash;
 
 /// Whether assertions, ASan, and UBSan are enabled respectively.
 extern bool has_assertions;
-extern bool has_address_santiizer;
+extern bool has_address_sanitizer;
 extern bool has_undefined_behavior_sanitizer;
 
 } // namespace build

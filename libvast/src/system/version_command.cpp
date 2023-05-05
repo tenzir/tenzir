@@ -44,7 +44,7 @@ record retrieve_versions() {
     {"Type", version::build::type},
     {"Tree Hash", version::build::tree_hash},
     {"Assertions", version::build::has_assertions},
-    {"Address Sanitizer", version::build::has_address_santiizer},
+    {"Address Sanitizer", version::build::has_address_sanitizer},
     {"Undefined Behavior Sanitizer",
      version::build::has_undefined_behavior_sanitizer},
   };

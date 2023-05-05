@@ -14,6 +14,7 @@
 #include "vast/system/connect_request.hpp"
 
 #include <caf/io/middleman.hpp>
+#include <caf/io/network/interfaces.hpp>
 #include <caf/openssl/all.hpp>
 #include <fmt/format.h>
 
@@ -136,11 +137,15 @@ std::string format_time(caf::timespan timespan) {
   return fmt::to_string(data{timespan});
 }
 
-void log_connection_failed(caf::timespan remaining_time,
+void log_connection_failed(connect_request request,
+                           caf::timespan remaining_time,
                            caf::timespan retry_delay) {
-  VAST_INFO("remote node connection failed; attempting to "
+  VAST_INFO("client faild to connect to remote node {} ({}):{}; attempting to "
             "reconnect in {} (remaining time: {})",
-            format_time(retry_delay), format_time(remaining_time));
+            request.host,
+            caf::io::network::interfaces::native_address(request.host)->first,
+            request.port, format_time(retry_delay),
+            format_time(remaining_time));
 }
 
 connector_actor::behavior_type make_no_retry_behavior(
@@ -198,6 +203,10 @@ connector(connector_actor::stateful_pointer<connector_state> self,
                                fmt::format("{} couldn't connect to VAST node "
                                            "within a given deadline",
                                            *self));
+      VAST_INFO(
+        "client connects to {} ({}):{}", request.host,
+        caf::io::network::interfaces::native_address(request.host)->first,
+        request.port);
       auto rp = self->make_response_promise<node_actor>();
       self
         ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
@@ -212,7 +221,7 @@ connector(connector_actor::stateful_pointer<connector_state> self,
           [self, rp, request, delay, deadline](caf::error& err) mutable {
             const auto remaining_time = calculate_remaining_time(deadline);
             if (should_retry(err, remaining_time, delay)) {
-              log_connection_failed(*remaining_time, delay);
+              log_connection_failed(request, *remaining_time, delay);
               detail::weak_run_delayed(
                 self, delay, [self, rp, request]() mutable {
                   rp.delegate(static_cast<connector_actor>(self),
