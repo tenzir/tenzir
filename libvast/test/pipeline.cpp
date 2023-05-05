@@ -129,22 +129,21 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   auto execute(pipeline p) -> caf::expected<void> {
-    auto result = std::optional<caf::expected<void>>{};
-    sys.spawn([&](caf::event_based_actor* self) -> caf::behavior {
-      auto executor = self->spawn(pipeline_executor, std::move(p));
-      self->request(executor, caf::infinite, atom::run_v)
-        .then(
-          [&, executor] {
-            (void)executor;
-            result.emplace();
-          },
-          [&, executor](caf::error& error) {
-            (void)executor;
-            result.emplace(std::move(error));
-          });
-      return {};
-    });
+    MESSAGE("executing pipeline: " << p.to_string());
+    auto self = caf::scoped_actor{sys};
+    auto executor = self->spawn(pipeline_executor, std::move(p));
+    auto handle = self->request(executor, caf::infinite, atom::run_v);
     run();
+    auto result = std::optional<caf::expected<void>>{};
+    std::move(handle).receive(
+      [&, executor] {
+        (void)executor;
+        result.emplace();
+      },
+      [&, executor](caf::error& error) {
+        (void)executor;
+        result.emplace(std::move(error));
+      });
     REQUIRE(result.has_value());
     return std::move(*result);
   }
