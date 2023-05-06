@@ -86,6 +86,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ca-certificates \
       gnupg2 \
+      libarchive13 \
       libasan6 \
       libc++1 \
       libc++abi1 \

@@ -11,6 +11,7 @@ brew install \
     fmt \
     gnu-sed \
     http-parser \
+    libarchive \
     libpcap \
     libunwind-headers \
     llvm \

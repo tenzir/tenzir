@@ -349,6 +349,12 @@ else ()
 endif ()
 target_link_libraries(libvast PRIVATE FastFloat::fast_float)
 
+# Link against LibArchive.
+find_package(LibArchive REQUIRED)
+#string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(LibArchive REQUIRED)")
+target_link_libraries(libvast PUBLIC LibArchive::LibArchive)
+dependency_summary("libarchive" LibArchive::LibArchive "Dependencies")
+
 # Link against a backtrace library.
 option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
 add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE

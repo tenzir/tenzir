@@ -16,6 +16,7 @@ apt-get -y --no-install-recommends install \
     git-core \
     gnupg2 gnupg-agent\
     jq \
+    libarchive-dev \
     libboost1.81-dev \
     libflatbuffers-dev \
     libfmt-dev \

@@ -23,6 +23,7 @@
     simdjson,
     robin-map,
     jemalloc,
+    libarchive,
     libunwind,
     xxHash,
     re2,
@@ -108,6 +109,7 @@
           boost
           fast_float
           libpcap
+          libarchive
           libunwind
           libyamlcpp
           re2
