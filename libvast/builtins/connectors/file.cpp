@@ -18,6 +18,8 @@
 
 #include <caf/error.hpp>
 
+#include <archive.h>
+#include <archive_entry.h>
 #include <chrono>
 #include <cstdio>
 #include <fcntl.h>
@@ -154,34 +156,57 @@ public:
     }
     return std::invoke(
       [](auto timeout, auto fd, auto following) -> generator<chunk_ptr> {
-        auto in_buf = detail::fdinbuf(*fd, max_chunk_size);
-        in_buf.read_timeout() = timeout;
-        auto current_data = std::vector<std::byte>{};
-        current_data.reserve(max_chunk_size);
-        auto eof_reached = false;
-        while (following or not eof_reached) {
-          auto current_char = in_buf.sbumpc();
-          if (current_char != detail::fdinbuf::traits_type::eof()) {
-            current_data.emplace_back(static_cast<std::byte>(current_char));
-          }
-          if (current_char == detail::fdinbuf::traits_type::eof()
-              or current_data.size() == max_chunk_size) {
-            eof_reached = (current_char == detail::fdinbuf::traits_type::eof()
-                           and not in_buf.timed_out());
-            if (eof_reached and current_data.empty() and not following) {
-              break;
+        struct archive_entry* entry = nullptr;
+        auto* a = archive_read_new();
+        archive_read_support_filter_all(a);
+        archive_read_support_format_raw(a);
+        auto r = archive_read_open_fd(a, *fd, max_chunk_size);
+        if (r == ARCHIVE_OK) {
+          VAST_INFO("Using libarchive");
+          while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+            const void* buf = nullptr;
+            size_t len = 0;
+            off_t offset = {};
+            while (archive_read_data_block(a, &buf, &len, &offset)
+                   != ARCHIVE_EOF) {
+              auto view = std::span{static_cast<const std::byte*>(buf), len};
+              auto chunk = chunk::copy(view);
+              VAST_INFO("produced chunk of {} bytes", chunk->size());
+              co_yield std::move(chunk);
             }
-            auto chunk = chunk::make(std::exchange(current_data, {}));
-            co_yield std::move(chunk);
-            if (eof_reached and not following) {
-              break;
-            }
-            current_data.reserve(max_chunk_size);
           }
+          if (archive_read_free(a) != ARCHIVE_OK)
+            VAST_WARN("???");
+          co_return;
         }
+        // auto in_buf = detail::fdinbuf(*fd, max_chunk_size);
+        // in_buf.read_timeout() = timeout;
+        // auto current_data = std::vector<std::byte>{};
+        // current_data.reserve(max_chunk_size);
+        // auto eof_reached = false;
+        // while (following or not eof_reached) {
+        //   auto current_char = in_buf.sbumpc();
+        //   if (current_char != detail::fdinbuf::traits_type::eof()) {
+        //     current_data.emplace_back(static_cast<std::byte>(current_char));
+        //   }
+        //   if (current_char == detail::fdinbuf::traits_type::eof()
+        //       or current_data.size() == max_chunk_size) {
+        //     eof_reached = (current_char == detail::fdinbuf::traits_type::eof()
+        //                    and not in_buf.timed_out());
+        //     if (eof_reached and current_data.empty() and not following) {
+        //       break;
+        //     }
+        //     auto chunk = chunk::make(std::exchange(current_data, {}));
+        //     co_yield std::move(chunk);
+        //     if (eof_reached and not following) {
+        //       break;
+        //     }
+        //     current_data.reserve(max_chunk_size);
+        //   }
+        // }
         co_return;
       },
-      read_timeout, std::move(fd), following);
+      read_timeout, fd, following);
   }
 
   auto default_parser(std::span<std::string const> args) const
