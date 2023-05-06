@@ -22,7 +22,7 @@ namespace {
 
 auto load_parse(auto&& loader, auto&& loader_args, auto&& parser,
                 auto&& parser_args) -> caf::expected<operator_ptr> {
-  auto expanded = fmt::format("load {} {} | parse {} {}", loader,
+  auto expanded = fmt::format("load {} {} | local parse {} {}", loader,
                               escape_operator_args(loader_args), parser,
                               escape_operator_args(parser_args));
   VAST_DEBUG("from/read expanded to '{}'", expanded);

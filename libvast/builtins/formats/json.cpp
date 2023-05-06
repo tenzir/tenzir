@@ -259,8 +259,7 @@ class plugin final : public virtual parser_plugin,
       auto slice_builder = adaptive_table_slice_builder{};
       auto json_to_parse_buffer = json_buffer{};
       for (auto chnk : json_chunk_generator) {
-        VAST_ASSERT(chnk);
-        if (chnk->size() == 0u) {
+        if (!chnk || chnk->size() == 0u) {
           co_yield std::move(slice_builder).finish();
           slice_builder = {};
           continue;
@@ -342,6 +341,7 @@ class plugin final : public virtual parser_plugin,
     };
     return to_printer([pretty](table_slice slice) -> generator<chunk_ptr> {
       if (slice.rows() == 0) {
+        co_yield {};
         co_return;
       }
       // JSON printer should output NDJSON, see:

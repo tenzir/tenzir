@@ -197,7 +197,7 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return "version";
+    return dev_mode_ ? "version --dev" : "version";
   }
 
 private:
@@ -218,12 +218,12 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::str;
+    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
+      parsers::end_of_pipeline_operator, parsers::str;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     auto dev_mode = std::string{};
-    const auto p = optional_ws_or_comment >> -str{"--dev"}
+    const auto p = -(required_ws_or_comment >> str{"--dev"})
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     if (!p(f, l, dev_mode)) {
       return {

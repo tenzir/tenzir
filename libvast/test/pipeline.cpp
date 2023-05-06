@@ -6,15 +6,16 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/parseable/vast/pipeline.hpp"
-
-#include "vast/aliases.hpp"
-
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
+#include <vast/detail/pp.hpp>
 #include <vast/pipeline.hpp>
+#include <vast/pipeline_executor.hpp>
 #include <vast/plugin.hpp>
+#include <vast/test/fixtures/actor_system.hpp>
+#include <vast/test/fixtures/actor_system_and_events.hpp>
 #include <vast/test/fixtures/events.hpp>
 #include <vast/test/stdin_file_inut.hpp>
 #include <vast/test/test.hpp>
@@ -32,7 +33,7 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> caf::event_based_actor& override {
+  auto self() noexcept -> caf::scheduled_actor& override {
     die("not implemented");
   }
 
@@ -46,10 +47,6 @@ public:
   }
 
   auto emit(table_slice) noexcept -> void override {
-    die("not implemented");
-  }
-
-  auto demand(type = {}) const noexcept -> size_t override {
     die("not implemented");
   }
 
@@ -127,27 +124,114 @@ struct sink final : public crtp_operator<sink> {
   std::function<void(table_slice)> callback_;
 };
 
-struct fixture : fixtures::events {};
+struct fixture : fixtures::deterministic_actor_system_and_events {
+  fixture() : deterministic_actor_system_and_events{VAST_PP_STRINGIFY(SUITE)} {
+  }
+
+  auto execute(pipeline p) -> caf::expected<void> {
+    MESSAGE("executing pipeline: " << p.to_string());
+    auto self = caf::scoped_actor{sys};
+    auto executor = self->spawn(pipeline_executor, std::move(p));
+    auto handle = self->request(executor, caf::infinite, atom::run_v);
+    run();
+    auto result = std::optional<caf::expected<void>>{};
+    std::move(handle).receive(
+      [&, executor] {
+        (void)executor;
+        result.emplace();
+      },
+      [&, executor](caf::error& error) {
+        (void)executor;
+        result.emplace(std::move(error));
+      });
+    REQUIRE(result.has_value());
+    return std::move(*result);
+  }
+};
 
 FIXTURE_SCOPE(pipeline_fixture, fixture)
 
-TEST(taste 42) {
-  {
-    auto v = unbox(pipeline::parse("taste 42")).unwrap();
+TEST(actor executor success) {
+  for (auto num : {0, 1, 4, 5}) {
+    auto v = unbox(pipeline::parse(fmt::format("head {}", num))).unwrap();
     v.insert(v.begin(),
              std::make_unique<source>(std::vector<table_slice>{
                head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
                head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
-    auto count = 0;
+    auto actual = 0;
     v.push_back(std::make_unique<sink>([&](table_slice) {
-      count += 1;
+      actual += 1;
     }));
     auto p = pipeline{std::move(v)};
-    for (auto&& result : make_local_executor(std::move(p))) {
-      REQUIRE_NOERROR(result);
-    }
-    CHECK_GREATER(count, 0);
+    REQUIRE_NOERROR(execute(p));
+    CHECK_EQUAL(actual, std::min(num, 4));
   }
+}
+
+TEST(actor executor execution error) {
+  class execution_error_operator final
+    : public crtp_operator<execution_error_operator> {
+  public:
+    auto operator()(generator<table_slice>, operator_control_plane& ctrl) const
+      -> generator<table_slice> {
+      ctrl.abort(caf::make_error(ec::unspecified));
+      co_return;
+    }
+
+    auto to_string() const -> std::string override {
+      return "error";
+    }
+  };
+
+  auto ops = std::vector<operator_ptr>{};
+  ops.push_back(std::make_unique<source>(zeek_conn_log));
+  ops.push_back(std::make_unique<execution_error_operator>());
+  ops.push_back(std::make_unique<sink>([](table_slice input) {
+    CHECK(input.rows() == 0);
+  }));
+  auto pipe = pipeline{std::move(ops)};
+  REQUIRE_ERROR(execute(pipe));
+}
+
+TEST(actor executor instantiation error) {
+  class instantiation_error_operator final
+    : public crtp_operator<instantiation_error_operator> {
+  public:
+    auto operator()(generator<table_slice>, operator_control_plane&) const
+      -> caf::expected<generator<table_slice>> {
+      return caf::make_error(ec::unspecified);
+    }
+
+    auto to_string() const -> std::string override {
+      return "error";
+    }
+  };
+
+  auto ops = std::vector<operator_ptr>{};
+  ops.push_back(std::make_unique<source>(zeek_conn_log));
+  ops.push_back(std::make_unique<instantiation_error_operator>());
+  ops.push_back(std::make_unique<sink>([](table_slice) {
+    CHECK(false);
+  }));
+  auto pipe = pipeline{std::move(ops)};
+  REQUIRE_ERROR(execute(pipe));
+}
+
+TEST(taste 42) {
+  auto v = unbox(pipeline::parse("taste 42")).unwrap();
+  v.insert(v.begin(),
+           std::make_unique<source>(std::vector<table_slice>{
+             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+  auto count = 0;
+  v.push_back(std::make_unique<sink>([&](table_slice) {
+    count += 1;
+  }));
+  auto p = pipeline{std::move(v)};
+  for (auto&& result : make_local_executor(std::move(p))) {
+    REQUIRE_NOERROR(result);
+  }
+  CHECK_GREATER(count, 0);
 }
 
 TEST(source | where #type == "zeek.conn" | sink) {
@@ -321,19 +405,19 @@ TEST(predicate pushdown select conflict) {
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
 }
 
-TEST(to - stdout) {
+TEST(to -) {
   auto to_pipeline = pipeline::parse("to stdout");
   REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "print json | save stdout");
+  REQUIRE_EQUAL(to_pipeline->to_string(), "local print json | save stdout");
 }
 
-TEST(to - to stdout write json) {
+TEST(to - write json) {
   auto to_pipeline = pipeline::parse("to stdout write json");
   REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "print json | save stdout");
+  REQUIRE_EQUAL(to_pipeline->to_string(), "local print json | save stdout");
 }
 
-TEST(to - invalid inputs) {
+TEST(to with invalid inputs) {
   REQUIRE_ERROR(pipeline::parse("to json write stdout"));
 }
 

@@ -20,7 +20,7 @@
 
 namespace vast::system {
 
-caf::timespan node_connection_timeout(const caf::settings& options) {
+auto node_connection_timeout(const caf::settings& options) -> caf::timespan {
   auto timeout_value
     = system::get_or_duration(options, "vast.connection-timeout",
                               defaults::system::node_connection_timeout);

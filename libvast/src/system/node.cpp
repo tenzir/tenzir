@@ -24,6 +24,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/execution_node.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/json/default_selector.hpp"
@@ -734,6 +735,30 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       auto result = to_data(self->config().content);
       VAST_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
+    },
+    [self](atom::spawn, pipeline& pipeline)
+      -> caf::result<std::vector<std::pair<execution_node_actor, std::string>>> {
+      auto ops = std::move(pipeline).unwrap();
+      auto result = std::vector<std::pair<execution_node_actor, std::string>>{};
+      result.reserve(ops.size());
+      for (auto&& op : ops) {
+        if (op->location() == operator_location::local) {
+          return caf::make_error(ec::logic_error,
+                                 fmt::format("{} cannot spawn pipeline with "
+                                             "local operator '{}'",
+                                             *self, op));
+        }
+        auto description = op->to_string();
+        if (op->detached()) {
+          result.emplace_back(self->spawn<caf::detached>(execution_node,
+                                                         std::move(op)),
+                              std::move(description));
+        } else {
+          result.emplace_back(self->spawn(execution_node, std::move(op)),
+                              std::move(description));
+        }
+      }
+      return result;
     },
   };
 }

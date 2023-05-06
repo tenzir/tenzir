@@ -92,6 +92,10 @@ vast:
   # Spawn a node instead of connecting to one.
   node: false
 
+  # Allow unsafe location overrides for pipelines with the 'local' and 'remote'
+  # keywords, e.g., remotely reading from a file.
+  allow-unsafe-pipelines: false
+
   # The size of an index shard, expressed in number of events. This should
   # be a power of 2.
   max-partition-size: 4194304

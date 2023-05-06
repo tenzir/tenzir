@@ -50,6 +50,10 @@ public:
     }
   }
 
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
   auto to_string() const -> std::string override {
     return fmt::format("save {}{}{}", saver_plugin_.name(),
                        args_.empty() ? "" : " ", escape_operator_args(args_));

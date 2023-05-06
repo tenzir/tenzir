@@ -21,7 +21,7 @@ public:
   explicit operator_control_plane_mock(OnWarnCallable on_warn)
     : on_warn_{std::move(on_warn)} {
   }
-  auto self() noexcept -> caf::event_based_actor& override {
+  auto self() noexcept -> caf::scheduled_actor& override {
     FAIL("Unexpected call to operator_control_plane::self");
   }
 
@@ -35,10 +35,6 @@ public:
 
   auto emit(table_slice) noexcept -> void override {
     FAIL("Unexpected call to operator_control_plane::emit");
-  }
-
-  auto demand(type) const noexcept -> size_t override {
-    FAIL("Unexpected call to operator_control_plane::demand");
   }
 
   auto schemas() const noexcept -> const std::vector<type>& override {

@@ -30,7 +30,7 @@ namespace {
 // TODO: Perhaps unify this with `from_read.cpp::load_parse`.
 auto print_save(auto&& printer, auto&& printer_args, auto&& saver,
                 auto&& saver_args) -> caf::expected<operator_ptr> {
-  auto expanded = fmt::format("print {} {} | save {} {}", printer,
+  auto expanded = fmt::format("local print {} {} | save {} {}", printer,
                               escape_operator_args(printer_args), saver,
                               escape_operator_args(saver_args));
   return pipeline::parse_as_operator(expanded);
@@ -80,6 +80,10 @@ public:
       state.saver(std::move(x));
     }
     return {};
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
   }
 
   auto to_string() const noexcept -> std::string override {

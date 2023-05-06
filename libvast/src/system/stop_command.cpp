@@ -9,6 +9,7 @@
 #include "vast/system/stop_command.hpp"
 
 #include "vast/command.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -43,7 +44,9 @@ caf::message stop_command(const invocation& inv, caf::actor_system& sys) {
     [&](const caf::down_msg&) {
       VAST_INFO("remote node terminated successfully");
     },
-    [&](caf::error& e) { err = std::move(e); });
+    [&](caf::error& e) {
+      err = std::move(e);
+    });
   if (err)
     return caf::make_message(std::move(err));
   return {};

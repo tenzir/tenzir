@@ -20,7 +20,7 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> caf::event_based_actor& override {
+  auto self() noexcept -> caf::scheduled_actor& override {
     die("not implemented");
   }
 
@@ -34,10 +34,6 @@ public:
   }
 
   auto emit(table_slice) noexcept -> void override {
-    die("not implemented");
-  }
-
-  auto demand(type = {}) const noexcept -> size_t override {
     die("not implemented");
   }
 
@@ -97,6 +93,30 @@ auto pipeline::parse_as_operator(std::string_view repr)
   if (not result)
     return std::move(result.error());
   return std::make_unique<pipeline>(std::move(*result));
+}
+
+void pipeline::append(operator_ptr op) {
+  if (auto* sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
+    auto sub_ops = std::move(*sub_pipeline).unwrap();
+    operators_.insert(operators_.end(), std::move_iterator{sub_ops.begin()},
+                      std::move_iterator{sub_ops.end()});
+  } else {
+    operators_.push_back(std::move(op));
+  }
+}
+
+void pipeline::prepend(operator_ptr op) {
+  if (auto* sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
+    auto sub_ops = std::move(*sub_pipeline).unwrap();
+    operators_.insert(operators_.begin(), std::move_iterator{sub_ops.begin()},
+                      std::move_iterator{sub_ops.end()});
+  } else {
+    operators_.insert(operators_.begin(), std::move(op));
+  }
+}
+
+auto pipeline::unwrap() && -> std::vector<operator_ptr> {
+  return std::move(operators_);
 }
 
 auto pipeline::copy() const -> operator_ptr {
@@ -233,7 +253,7 @@ auto pipeline::is_closed() const -> bool {
 auto pipeline::infer_type_impl(operator_type input) const
   -> caf::expected<operator_type> {
   auto current = input;
-  for (auto& op : operators_) {
+  for (const auto& op : operators_) {
     auto first = &op == &operators_.front();
     if (!first && current.is<void>()) {
       return caf::make_error(

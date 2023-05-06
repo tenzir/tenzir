@@ -23,7 +23,7 @@ struct operator_control_plane {
   virtual ~operator_control_plane() noexcept = default;
 
   /// Returns the hosting actor.
-  [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor& = 0;
+  [[nodiscard]] virtual auto self() noexcept -> caf::scheduled_actor& = 0;
 
   /// Stop the execution of the operator.
   /// @pre error != caf::none
@@ -36,12 +36,6 @@ struct operator_control_plane {
 
   /// Emit events to the executor's side-channel, e.g., metrics.
   virtual auto emit(table_slice metrics) noexcept -> void = 0;
-
-  /// Returns the downstream demand for a given schema in terms of number of
-  /// elements. If no schema is provided, returns general demand for all
-  /// schemas.
-  [[nodiscard]] virtual auto demand(type schema = {}) const noexcept -> size_t
-    = 0;
 
   /// Access available schemas.
   [[nodiscard]] virtual auto schemas() const noexcept

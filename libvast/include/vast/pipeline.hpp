@@ -117,6 +117,13 @@ inline auto trivially_true_expression() -> const expression& {
 /// Uniquely owned pipeline operator.
 using operator_ptr = std::unique_ptr<operator_base>;
 
+/// The operator location.
+enum class operator_location {
+  local,    ///< Run this operator in a local process, e.g., `vast exec`.
+  remote,   ///< Run this operator at a node.
+  anywhere, ///< Run this operator where the previous operator ran.
+};
+
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
 public:
@@ -158,6 +165,16 @@ public:
     -> std::optional<std::pair<expression, operator_ptr>> {
     (void)expr;
     return {};
+  }
+
+  /// Returns the location of the operator.
+  virtual auto location() const -> operator_location {
+    return operator_location::anywhere;
+  }
+
+  /// Returns whether the operator should be spawned in its own thread.
+  virtual auto detached() const -> bool {
+    return false;
   }
 
   /// Retrieve the output type of this operator for a given input.
@@ -225,19 +242,13 @@ public:
     -> caf::expected<operator_ptr>;
 
   /// Adds an operator at the end of this pipeline.
-  void append(operator_ptr op) {
-    operators_.push_back(std::move(op));
-  }
+  void append(operator_ptr op);
 
   /// Adds an operator at the start of this pipeline.
-  void prepend(operator_ptr op) {
-    operators_.insert(operators_.begin(), std::move(op));
-  }
+  void prepend(operator_ptr op);
 
   /// Returns the sequence of operators that this pipeline was built from.
-  auto unwrap() && -> std::vector<operator_ptr> {
-    return std::move(operators_);
-  }
+  auto unwrap() && -> std::vector<operator_ptr>;
 
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;
@@ -245,6 +256,14 @@ public:
   /// Same as `predicate_pushdown`, but returns a `pipeline` object directly.
   auto predicate_pushdown_pipeline(expression const& expr) const
     -> std::optional<std::pair<expression, pipeline>>;
+
+  auto location() const -> operator_location override {
+    die("pipeline::location() must not be called");
+  }
+
+  auto detached() const -> bool override {
+    die("pipeline::detached() must not be called");
+  }
 
   auto instantiate(operator_input input, operator_control_plane& control) const
     -> caf::expected<operator_output> override;
@@ -256,6 +275,10 @@ public:
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override;
 
+  auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type> override;
+
+  /// Support the CAF type inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, pipeline& x) -> bool {
     if constexpr (Inspector::is_loading) {
@@ -278,10 +301,6 @@ public:
         .fields(f.field("repr", repr));
     }
   }
-
-protected:
-  auto infer_type_impl(operator_type) const
-    -> caf::expected<operator_type> override;
 
 private:
   std::vector<operator_ptr> operators_;

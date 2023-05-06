@@ -362,6 +362,10 @@ auto make_root_command(std::string_view path) {
                    "autoloading (this may only be used on the command line)")
         .add<bool>("detach-components", "create dedicated threads for some "
                                         "components")
+        .add<bool>("allow-unsafe-pipelines",
+                   "allow unsafe location overrides for pipelines with the "
+                   "'local' and 'remote' keywords, e.g., remotely reading from "
+                   "a file")
         .add<std::string>("console-verbosity", "output verbosity level on the "
                                                "console")
         .add<std::string>("console-format", "format string for logging to the "
