@@ -1,6 +1,6 @@
 # xsv
 
-Parses and prints lines with separated values.
+Reads and writes lines with separated values.
 
 ## Synopsis
 

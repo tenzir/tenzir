@@ -1,13 +1,13 @@
 # json
 
-Prints and parses JSON.
+Reads and writes JSON.
 
 ## Synopsis
 
 Parser:
 
 ```
-json
+json [--selector=field[:prefix]]
 ```
 
 Printer:
@@ -26,7 +26,17 @@ The default loader for the `json` parser is [`stdin`](../connectors/stdin.md).
 
 The default saver for the `json` printer is [`stdout`](../connectors/stdout.md).
 
-### `--pretty`
+### `--selector=field[:prefix]` (Parser)
+
+Designates a field value as schema name, optionally with an added dot-separated
+prefix.
+
+For example, the [Suricata EVE JSON](suricata.md) format includes a field
+`event_type` that signifies the log type. If we pass
+`--selector=event_type:suricata`, a field value of `flow` will create a schema
+with the name `suricata.flow`.
+
+### `--pretty` (Printer)
 
 VAST defaults to line-delimited JSON output (JSONL or NDJSON). The `--pretty`
 flag switches to a tree-structured representation.
