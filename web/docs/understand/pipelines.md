@@ -185,7 +185,7 @@ Let's consider an example of a logical pipeline with the source consisting of
 ![Logical Plan](operator-logical.excalidraw.svg)
 
 A given `from`-`read` and `write`-`to` combination often directly maps to its
-physical counterpart, the `load`-`parse` and `print`-`dump` operators that do
+physical counterpart, the `load`-`parse` and `print`-`save` operators that do
 the actual work with the help of a connector and format:
 
 ![Physical Plan](operator-physical.excalidraw.svg)
