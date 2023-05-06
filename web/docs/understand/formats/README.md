@@ -4,13 +4,14 @@ sidebar_position: 0
 
 # Formats
 
-A format specifies the encoding of data using two abstractions.
+A format is the bridge between raw bytes and structured data. A format provides
+a *parser* and/or *printer*:
 
-1. **Parser**: a component that turns raw bytes into structured event data
-2. **Printer**: a component that turns structured events into raw bytes
+1. **Parser**: translates raw bytes into structured event data
+2. **Printer**: translates structured events into raw bytes
 
 Parsers and printers interact with their corresponding dual from a
-[connector](connectors), as the diagram below shows:
+[connector](connectors):
 
 ![Format](format.excalidraw.svg)
 
@@ -31,7 +32,7 @@ supports:
 |`null`|A null sink discards all data|❌|✅|
 |`test`|Random event generator|✅|❌|
 
-The list below covers all formats that VAST supports.
+VAST ships with the following formats:
 
 import DocCardList from '@theme/DocCardList';
 
