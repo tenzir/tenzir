@@ -4,11 +4,6 @@ Reads events from a Parquet file. Writes events to a [Parquet][parquet] file.
 
 [parquet]: https://parquet.apache.org/
 
-:::caution Limitation
-The `parquet` parser currently supports only Parquet files written with VAST. We
-will remove this limitation in the future.
-:::
-
 ## Synopsis
 
 ```
@@ -41,3 +36,8 @@ Read a Parquet file via the [`from`](../operators/sources/from.md) operator:
 ```
 from file --mmap /tmp/data.prq read parquet
 ```
+:::caution Limitation
+The `parquet` parser currently supports only Parquet files written with VAST. We
+will remove this limitation in the future.
+:::
+
