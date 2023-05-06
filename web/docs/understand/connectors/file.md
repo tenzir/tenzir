@@ -43,7 +43,12 @@ This flag has the semantics of the "tail -f" idiom in Unix.
 ### `-m|--mmap` (Loader)
 
 Use the `mmap(2)` system call to map the file and produce only one single chunk
-of bytes, instead of producing data piecemeal via `read(2)`.
+of bytes, instead of producing data piecemeal via `read(2)`. This option
+effectively gives the downstream parser full control over reads.
+
+For the [`feather`](../formats/feather.md) and
+[`parquet`](../formats/parquet.md) parsers, this significantly reduces memory
+usage and improves performance.
 
 ### `-t|--timeout=<duration>` (Loader)
 
