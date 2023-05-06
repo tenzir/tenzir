@@ -1,19 +1,31 @@
----
-description: Open source NSM and IDS/IPS
----
+# suricata
 
-# Suricata
+Reads [Suricata][suricata]'s [EVE JSON][eve-json] output. The parser is an alias
+for [`json`](json.md) with the option `--selector=event_type:suricata`.
 
-The [Suricata](https://suricata.io) network security monitor converts network
+## Synopsis
+
+```
+suricata
+```
+
+## Description
+
+The [Suricata][suricata] network security monitor converts network
 traffic into a stream of metadata events and provides a rule matching engine to
-generate alerts.
+generate alerts. Suricata emits events in the [EVE JSON][eve-json] format. The
+output is a single stream of events where the `event_type` field disambiguates
+the event type.
 
-Suricata emits events in the [EVE JSON][eve-json] format, which is [line-delimited
-JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON)
-according to a fixed schema. The output is a single stream of events where the
-`event_type` field disambiguates the event type.
-
+[suricata]: https://suricata.io
 [eve-json]: https://suricata.readthedocs.io/en/latest/output/eve/eve-json-output.html
+
+VAST's [`json`](json.md) can handle EVE JSON correctly, but for the schema names
+to match the value from the `event_type` field, we need to pass the option
+`--selector=event_type:suricata`. The `suricata` parser does this by default.
+
+The default loader for the `suricata` parser is
+[`stdin`](../connectors/stdin.md).
 
 ## Parser
 
@@ -34,10 +46,11 @@ Import the log as follows:
 vast import suricata < eve.log
 ```
 
-### Ingest from a UNIX domain socket
+### Read from a UNIX domain socket
 
 Instead of writing to a file, Suricata can also log to a UNIX domain socket that
-VAST reads from. This requires the following settings in your `suricata.yaml`:
+VAST can then read from. This saves a filesystem round-trip. This requires the
+following settings in your `suricata.yaml`:
 
 ```yaml
 outputs:
@@ -47,8 +60,15 @@ outputs:
     filename: eve.sock
 ```
 
-To import from a UNIX domain socket, combine netcat with a `vast import`:
+Suricata creates `eve.sock` upon startup. Thereafter, you can read from the
+socket via netcat:
 
 ```bash
-nc -vlkU eve.sock | vast import suricata
+nc -vlkU eve.sock | vast exec 'read suricata | ...'
+```
+
+Or natively via this VAST pipeline:
+
+```
+from file --uds eve.sock read suricata
 ```
