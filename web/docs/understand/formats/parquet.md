@@ -1,6 +1,8 @@
 # parquet
 
-Reads events from a Parquet file. Writes events to a Parquet file.
+Reads events from a Parquet file. Writes events to a [Parquet][parquet] file.
+
+[parquet]: https://parquet.apache.org/
 
 :::caution Limitation
 The `parquet` parser currently supports only Parquet files written with VAST. We
@@ -17,8 +19,8 @@ parquet
 
 The `parquet` format provides both a parser and a printer for Parquet files.
 
-[Apache Parquet](https://parquet.apache.org/) is a columnar storage format that
-a variety of data tools support.
+[Apache Parquet][parquet] is a columnar storage format that a variety of data
+tools support.
 
 :::tip MMAP Parsing
 When using the parser with the [`file`](../connectors/file.md), we recommend

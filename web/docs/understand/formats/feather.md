@@ -1,6 +1,8 @@
 # feather
 
-Reads events from a Feather file. Writes events to a Feather file.
+Reads and writes the [Feather][feather] file format.
+
+[feather]: https://arrow.apache.org/docs/python/feather.html
 
 ## Synopsis
 
@@ -12,8 +14,8 @@ feather
 
 The `feather` format provides both a parser and a printer for Feather files.
 
-[Feather](https://arrow.apache.org/docs/python/feather.html) is a thin layer on
-top of [Arrow IPC](https://arrow.apache.org/docs/python/ipc.html#ipc), making it
+[Feather][feather] is a thin layer on top of [Arrow
+IPC](https://arrow.apache.org/docs/python/ipc.html#ipc), making it
 conducive for memory mapping and zero-copy usage scenarios.
 
 :::tip MMAP Parsing
