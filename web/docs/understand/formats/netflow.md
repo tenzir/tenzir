@@ -10,9 +10,9 @@ netflow
 
 ## Description
 
-import CommercialPlugin from '@site/presets/CommercialPlugin.md';
+import CommunityEdition from '@site/presets/CommunityEdition.md';
 
-<CommercialPlugin/>
+<CommunityEdition/>
 
 [NetFlow](https://en.wikipedia.org/wiki/NetFlow) is suite of protocols for
 computing and relaying flow-level statistics. An *exporter*, such as a router or
