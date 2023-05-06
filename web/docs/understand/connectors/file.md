@@ -25,7 +25,13 @@ The default parser for the `file` loader is [`json`](../formats/json.md).
 
 The default printer for the `file` saver is [`json`](../formats/json.md).
 
-You can also use `-` as an alias for `stdin`.
+### `<path>` (Loader, Saver)
+
+The path to the file to load/save. If intermediate directories do not exist, the
+saver will create them.
+
+The path `-` is a reserved value and means stdin for the loader and stdout for
+the saver.
 
 ### `-f|--follow` (Loader)
 
