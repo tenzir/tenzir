@@ -23,6 +23,9 @@ struct execution_node_state {
   /// which allows operators to control this actor.
   std::unique_ptr<operator_control_plane> ctrl;
 
+  /// The node actor (iff available).
+  system::node_actor node;
+
   /// Entry point for the source.
   auto start(std::vector<caf::actor> next) -> caf::result<void>;
 
@@ -39,6 +42,7 @@ struct execution_node_state {
 /// spawn the actor as a detached actor if desired.
 auto execution_node(
   system::execution_node_actor::stateful_pointer<execution_node_state> self,
-  operator_ptr op) -> system::execution_node_actor::behavior_type;
+  operator_ptr op, system::node_actor node)
+  -> system::execution_node_actor::behavior_type;
 
 } // namespace vast

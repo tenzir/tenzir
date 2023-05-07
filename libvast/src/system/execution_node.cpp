@@ -34,8 +34,12 @@ public:
     : self_{self} {
   }
 
-  auto self() noexcept -> caf::scheduled_actor& override {
+  auto self() noexcept -> system::execution_node_actor::base& override {
     return self_;
+  }
+
+  auto node() noexcept -> system::node_actor override {
+    return self_.state.node;
   }
 
   auto abort(caf::error error) noexcept -> void override {
@@ -359,10 +363,12 @@ auto execution_node_state::start(caf::stream<framed<Input>> in,
 
 auto execution_node(
   system::execution_node_actor::stateful_pointer<execution_node_state> self,
-  operator_ptr op) -> system::execution_node_actor::behavior_type {
+  operator_ptr op, system::node_actor node)
+  -> system::execution_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.ctrl = std::make_unique<actor_control_plane>(*self);
+  self->state.node = std::move(node);
   return {
     [self](atom::run, std::vector<caf::actor> next) -> caf::result<void> {
       VAST_DEBUG("source execution node received atom::run");

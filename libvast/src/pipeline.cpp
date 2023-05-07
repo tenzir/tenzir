@@ -20,7 +20,11 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> caf::scheduled_actor& override {
+  auto self() noexcept -> system::execution_node_actor::base& override {
+    die("not implemented");
+  }
+
+  auto node() noexcept -> system::node_actor override {
     die("not implemented");
   }
 

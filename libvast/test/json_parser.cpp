@@ -27,8 +27,12 @@ public:
     : on_abort_{std::move(on_abort)} {
   }
 
-  auto self() noexcept -> caf::scheduled_actor& override {
-    FAIL("Unexpected call to operator_control_plane::self");
+  auto self() noexcept -> system::execution_node_actor::base& override {
+    FAIL("no mock implementation available");
+  }
+
+  auto node() noexcept -> system::node_actor override {
+    FAIL("no mock implementation available");
   }
 
   auto abort(caf::error) noexcept -> void override {
