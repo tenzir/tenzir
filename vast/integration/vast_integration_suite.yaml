@@ -722,26 +722,16 @@ tests:
     tags: [server, import-export, cef]
     fixture: ServerTester
     steps:
-      - command: import -b cef
+      - command: exec 'read cef | import'
         input: data/cef/cynet.log
-      - command: import -b cef
+      - command: exec 'read cef | import'
         input: data/cef/checkpoint.log
-      - command: import -b cef
+      - command: exec 'read cef | import'
         input: data/cef/forcepoint.log
       - command: export json 'where cef_version >= 0 && device_vendor == "Cynet"'
       - command: export json 'where 172.31.5.93'
       - command: export json 'where act == /Accept|Bypass/'
-
-  From CEF:
-    tags: [cef]
-    fixture: ServerTester
-    steps:
-      - command: exec 'read cef | write json'
-        input: data/cef/cynet.log
-      - command: exec 'read cef | write json'
-        input: data/cef/checkpoint.log
-      - command: exec 'read cef | write json'
-        input: data/cef/forcepoint.log
+      - command: export json 'where dvc == 10.1.1.8'
 
   Patterns:
     fixture: ServerTester
@@ -825,6 +815,22 @@ tests:
         input: data/json/empty-record.json
       - command: exec 'from - read json | write xsv to stdout'
         input: data/json/empty-record.json
+
+  Repeat:
+    tags: [pipelines, repeat]
+    steps:
+      - command: exec 'load file - | parse cef | write json'
+        input: data/cef/forcepoint.log
+      - command: exec 'load file - | repeat 5 | parse cef | write json'
+        input: data/cef/forcepoint.log
+      - command: exec 'load file - | parse cef | repeat 5 | write json'
+        input: data/cef/forcepoint.log
+      - command: exec 'load file - | parse cef | measure | summarize sum(events) by schema | write json'
+        input: data/cef/forcepoint.log
+      - command: exec 'load file - | repeat 5 | parse cef | measure | summarize sum(events) by schema | write json'
+        input: data/cef/forcepoint.log
+      - command: exec 'load file - | parse cef | repeat 5 | measure | summarize sum(events) by schema | write json'
+        input: data/cef/forcepoint.log
 
   Zeek TSV Pipeline Format:
     tags: [pipelines, zeek]

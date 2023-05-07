@@ -814,11 +814,13 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
         }
         auto description = op->to_string();
         if (op->detached()) {
-          result.emplace_back(self->spawn<caf::detached>(execution_node,
-                                                         std::move(op)),
-                              std::move(description));
+          result.emplace_back(
+            self->spawn<caf::detached>(execution_node, std::move(op),
+                                       caf::actor_cast<node_actor>(self)),
+            std::move(description));
         } else {
-          result.emplace_back(self->spawn(execution_node, std::move(op)),
+          result.emplace_back(self->spawn(execution_node, std::move(op),
+                                          caf::actor_cast<node_actor>(self)),
                               std::move(description));
         }
       }

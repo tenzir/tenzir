@@ -33,8 +33,12 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> caf::scheduled_actor& override {
-    die("not implemented");
+  auto self() noexcept -> system::execution_node_actor::base& override {
+    FAIL("no mock implementation available");
+  }
+
+  auto node() noexcept -> system::node_actor override {
+    FAIL("no mock implementation available");
   }
 
   auto abort(caf::error error) noexcept -> void override {
@@ -43,19 +47,19 @@ public:
   }
 
   auto warn(caf::error) noexcept -> void override {
-    die("not implemented");
+    FAIL("not implemented");
   }
 
   auto emit(table_slice) noexcept -> void override {
-    die("not implemented");
+    FAIL("not implemented");
   }
 
   auto schemas() const noexcept -> const std::vector<type>& override {
-    die("not implemented");
+    FAIL("not implemented");
   }
 
   auto concepts() const noexcept -> const concepts_map& override {
-    die("not implemented");
+    FAIL("not implemented");
   }
 
 private:

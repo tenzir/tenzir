@@ -66,8 +66,9 @@ get_node_components(caf::scoped_actor& self, const node_actor& node) {
       },
       [&](caf::error& err) { //
         result = caf::make_error(ec::lookup_error,
-                                 "failed to get components {} from node: {}",
-                                 labels, std::move(err));
+                                 fmt::format("failed to get components {} from "
+                                             "node: {}",
+                                             labels, std::move(err)));
       });
   return result;
 }
