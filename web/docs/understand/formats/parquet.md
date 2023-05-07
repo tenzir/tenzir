@@ -40,4 +40,3 @@ from file --mmap /tmp/data.prq read parquet
 The `parquet` parser currently supports only Parquet files written with VAST. We
 will remove this limitation in the future.
 :::
-
