@@ -30,7 +30,6 @@ compression.
 
 [parquet-and-feather-blog]: ../../../../blog/parquet-and-feather-writing-security-telemetry/
 
-
 ## Examples
 
 Read a Feather file via the [`from`](../operators/sources/from.md) operator:
