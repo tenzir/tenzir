@@ -18,6 +18,10 @@
 
 namespace {
 
+// TODO: Build a test that uses convert() to go form `caf::settings`
+// to `vast::record`, to make the logic closer to what's actually
+// used in the plugin code.
+
 vast::record extract_config(const std::string& config) {
   auto data = vast::from_yaml(config);
   REQUIRE_NOERROR(data);
@@ -32,21 +36,22 @@ vast::record extract_config(const std::string& config) {
 TEST(dev mode config validation) {
   auto record = extract_config(R"_(
 web:
-  bind: 127.0.0.1
-  port: 8000
+  bind: localhost
+  port: +8000
   mode: dev
   )_");
   auto config = vast::plugins::web::configuration{};
+  VAST_INFO("{}", record);
   CHECK_EQUAL(validate(record, vast::plugins::web::configuration::schema(),
                        vast::validate::strict),
               caf::error{});
   REQUIRE_EQUAL(convert(record, config), caf::error{});
-  CHECK_EQUAL(config.bind_address, "127.0.0.1");
+  CHECK_EQUAL(config.bind_address, "localhost");
   CHECK_EQUAL(config.port, 8000);
   CHECK_EQUAL(config.mode, "dev");
   auto server_config = convert_and_validate(config);
   REQUIRE_NOERROR(server_config);
-  CHECK_EQUAL(server_config->bind_address, "127.0.0.1");
+  CHECK_EQUAL(server_config->bind_address, "localhost");
   CHECK_EQUAL(server_config->port, 8000);
   CHECK_EQUAL(server_config->require_tls, false);
   CHECK_EQUAL(server_config->require_localhost, false);
@@ -75,15 +80,18 @@ web:
 TEST(tls mode config validation) {
   auto data = extract_config(R"_(
 web:
-  bind: 0.0.0.0
-  port: 443
+  bind: localhost
+  port: +443
   mode: server
   certfile: server.pem
   keyfile: server.key
   )_");
   auto config = vast::plugins::web::configuration{};
+  CHECK_EQUAL(validate(data, vast::plugins::web::configuration::schema(),
+                       vast::validate::strict),
+              caf::error{});
   REQUIRE_EQUAL(convert(data, config), caf::error{});
-  CHECK_EQUAL(config.bind_address, "0.0.0.0");
+  CHECK_EQUAL(config.bind_address, "localhost");
   CHECK_EQUAL(config.port, 443);
   CHECK_EQUAL(config.mode, "server");
   // TODO: Create temporary files for `server.pem` and `server.key`
