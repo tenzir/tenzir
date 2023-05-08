@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <string_view>
+#include <filesystem>
 
 namespace vast::detail {
 
@@ -17,6 +17,6 @@ namespace vast::detail {
 /// that stripped extension as a parser.
 /// @param path The path to determine the parser for.
 /// @returns A string determining the default parser for a file.
-auto file_path_to_parser(std::string_view path) -> std::string;
+auto file_path_to_parser(const std::filesystem::path& path) -> std::string;
 
 } // namespace vast::detail
