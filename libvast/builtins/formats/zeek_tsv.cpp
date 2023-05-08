@@ -489,6 +489,23 @@ struct zeek_printer {
       return true;
     }
 
+    auto operator()(const view<record>& x) noexcept -> bool {
+      // TODO: This won't be needed when flatten() for table_slices is in the
+      // codebase.
+      VAST_WARN("Printing records as Zeek data is currently a work in "
+                "progress; printing null instead");
+      auto first = true;
+      for (const auto& v : x) {
+        if (not first) {
+          ++out = printer.sep;
+        } else {
+          first = false;
+        }
+        (*this)(caf::none);
+      }
+      return true;
+    }
+
     Iterator& out;
     const zeek_printer& printer;
   };
@@ -682,32 +699,31 @@ public:
     }
     auto printer = zeek_printer{set_sep, empty_field, unset_field,
                                 disable_timestamp_tags_};
-    return to_printer([printer = std::move(printer)](
-                        table_slice slice) -> generator<chunk_ptr> {
-      auto buffer = std::vector<char>{};
-      auto out_iter = std::back_inserter(buffer);
-      auto resolved_slice = resolve_enumerations(slice);
-      resolved_slice = flatten(resolved_slice).slice;
-      auto input_schema = resolved_slice.schema();
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto first = true;
-      for (const auto& row :
-           values(caf::get<record_type>(input_schema), *array)) {
-        VAST_ASSERT_CHEAP(row);
-        if (first) {
-          printer.print_header(out_iter, input_schema);
-          first = false;
+    return to_printer(
+      [printer = std::move(printer), input_schema = std::move(input_schema)](
+        table_slice slice) -> generator<chunk_ptr> {
+        auto input_type = caf::get<record_type>(input_schema);
+        auto buffer = std::vector<char>{};
+        auto out_iter = std::back_inserter(buffer);
+        auto resolved_slice = resolve_enumerations(slice);
+        auto array
+          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto first = true;
+        for (const auto& row : values(input_type, *array)) {
+          VAST_ASSERT_CHEAP(row);
+          if (first) {
+            printer.print_header(out_iter, input_schema);
+            first = false;
+            out_iter = fmt::format_to(out_iter, "\n");
+          }
+          const auto ok = printer.print_values(out_iter, *row);
+          VAST_ASSERT_CHEAP(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        const auto ok = printer.print_values(out_iter, *row);
-        VAST_ASSERT_CHEAP(ok);
-        out_iter = fmt::format_to(out_iter, "\n");
-      }
-      printer.print_closing_line(out_iter);
-      auto chunk = chunk::make(std::move(buffer));
-      co_yield std::move(chunk);
-    });
+        printer.print_closing_line(out_iter);
+        auto chunk = chunk::make(std::move(buffer));
+        co_yield std::move(chunk);
+      });
   }
 
   auto default_saver(std::span<std::string const>) const
