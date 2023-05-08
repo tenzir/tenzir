@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/plugin.hpp>
+#include <vast/system/builtin_rest_endpoints.hpp>
 #include <vast/system/node.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
@@ -147,6 +148,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   rest_endpoints() const override {
     static const auto endpoints = std::vector<rest_endpoint>{
       {
+        .endpoint_id = static_cast<uint64_t>(system::status_endpoints::status),
         .method = http_method::get,
         .path = "/status",
         .params = record_type{

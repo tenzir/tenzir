@@ -19,6 +19,7 @@
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
+#include <vast/system/builtin_rest_endpoints.hpp>
 #include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/table_slice.hpp>
@@ -158,9 +159,6 @@ static auto const* SPEC_V0 = R"_(
       422:
         description: Invalid arguments.
     )_";
-
-static constexpr auto QUERY_NEW_ENDPOINT = 0;
-static constexpr auto QUERY_NEXT_ENDPOINT = 1;
 
 /// An actor to help with handling a single query.
 using query_manager_actor = system::typed_actor_fwd<
@@ -553,111 +551,121 @@ auto request_multiplexer(
     self->state.live_queries_.erase(it);
   });
   return {
-    [self](atom::http_request, uint64_t endpoint_id, http_request rq) {
+    [self](atom::http_request, uint64_t endpoint_id_raw, http_request rq) {
       VAST_VERBOSE("{} handles /query request for endpoint id {} with params "
                    "{}",
-                   *self, endpoint_id, rq.params);
-      if (endpoint_id == QUERY_NEW_ENDPOINT) {
-        auto query_string = std::optional<std::string>{};
-        auto expand = false;
-        if (rq.params.contains("expand"))
-          expand = caf::get<bool>(rq.params["expand"]);
-        auto ttl = duration{std::chrono::minutes{5}};
-        if (rq.params.contains("ttl"))
-          ttl = caf::get<duration>(rq.params["ttl"]);
-        auto format_opts = query_format_options{};
-        if (rq.params.contains("flatten")) {
-          auto& param = rq.params.at("flatten");
-          VAST_ASSERT(caf::holds_alternative<bool>(param));
-          format_opts.flatten = caf::get<bool>(param);
+                   *self, endpoint_id_raw, rq.params);
+      auto endpoint_id = static_cast<system::query_endpoints>(endpoint_id_raw);
+      switch (endpoint_id) {
+        case system::query_endpoints::new_: {
+          auto query_string = std::optional<std::string>{};
+          auto expand = false;
+          if (rq.params.contains("expand"))
+            expand = caf::get<bool>(rq.params["expand"]);
+          auto ttl = duration{std::chrono::minutes{5}};
+          if (rq.params.contains("ttl"))
+            ttl = caf::get<duration>(rq.params["ttl"]);
+          auto format_opts = query_format_options{};
+          if (rq.params.contains("flatten")) {
+            auto& param = rq.params.at("flatten");
+            VAST_ASSERT(caf::holds_alternative<bool>(param));
+            format_opts.flatten = caf::get<bool>(param);
+          }
+          if (rq.params.contains("omit-nulls")) {
+            auto& param = rq.params.at("omit-nulls");
+            VAST_ASSERT(caf::holds_alternative<bool>(param));
+            format_opts.omit_nulls = caf::get<bool>(param);
+          }
+          if (rq.params.contains("numeric-durations")) {
+            auto& param = rq.params.at("numeric-durations");
+            VAST_ASSERT(caf::holds_alternative<bool>(param));
+            format_opts.numeric_durations = caf::get<bool>(param);
+          }
+          if (rq.params.contains("query")) {
+            auto& param = rq.params.at("query");
+            // Should be type-checked by the server.
+            VAST_ASSERT(caf::holds_alternative<std::string>(param));
+            query_string = caf::get<std::string>(param);
+          } else {
+            return rq.response->abort(422, "missing parameter 'query'\n",
+                                      caf::error{});
+          }
+          auto parse_result = pipeline::parse(*query_string);
+          if (!parse_result)
+            return rq.response->abort(400, "invalid query\n",
+                                      parse_result.error());
+          auto pipeline = std::move(*parse_result);
+          auto output = pipeline.infer_type<table_slice>();
+          if (!output) {
+            return rq.response->abort(400, "pipeline instantiation failed\n",
+                                      output.error());
+          }
+          if (!output->is<table_slice>()) {
+            return rq.response->abort(
+              400, "query must return events as output\n",
+              caf::make_error(ec::type_clash,
+                              fmt::format("the given pipeline returns {}",
+                                          operator_type_name(*output))));
+          }
+          // TODO: Consider replacing this with an empty conjunction.
+          auto& trivially_true = trivially_true_expression();
+          auto pushdown = pipeline.predicate_pushdown_pipeline(trivially_true);
+          if (!pushdown) {
+            pushdown.emplace(trivially_true, std::move(pipeline));
+          }
+          VAST_DEBUG("query: push down result: {}", *pushdown);
+          auto [expr, new_pipeline] = std::move(*pushdown);
+          VAST_ASSERT(expr != expression{});
+          auto normalized_expr = normalize_and_validate(expr);
+          if (!normalized_expr)
+            return rq.response->abort(400, "invalid query\n",
+                                      normalized_expr.error());
+          auto handler
+            = self->spawn<caf::monitored>(query_manager, self->state.index_,
+                                          std::move(new_pipeline), expand, ttl,
+                                          std::move(format_opts));
+          auto query = vast::query_context::make_extract(
+            "http-request", handler, std::move(*normalized_expr));
+          query.taste = 0;
+          self
+            ->request(self->state.index_, caf::infinite, atom::evaluate_v,
+                      query)
+            .then(
+              [self, handler,
+               response = rq.response](system::query_cursor cursor) {
+                auto id_string = fmt::format("{:l}", cursor.id);
+                self->state.live_queries_[id_string] = handler;
+                self->send(handler, atom::provision_v, cursor);
+                response->append(
+                  fmt::format("{{\"id\": \"{}\"}}\n", id_string));
+              },
+              [response = rq.response](const caf::error& e) {
+                response->abort(500, "index evaluation failed\n", e);
+              });
+          break;
         }
-        if (rq.params.contains("omit-nulls")) {
-          auto& param = rq.params.at("omit-nulls");
-          VAST_ASSERT(caf::holds_alternative<bool>(param));
-          format_opts.omit_nulls = caf::get<bool>(param);
+        case system::query_endpoints::next: {
+          if (!rq.params.contains("id"))
+            return rq.response->abort(400, "missing id\n", caf::error{});
+          if (!rq.params.contains("n"))
+            return rq.response->abort(400, "missing parameter 'n'\n",
+                                      caf::error{});
+          auto id = caf::get<std::string>(rq.params["id"]);
+          auto n = caf::get<uint64_t>(rq.params["n"]);
+          auto it = self->state.live_queries_.find(id);
+          if (it == self->state.live_queries_.end())
+            return rq.response->abort(422, "unknown id\n", caf::error{});
+          auto& handler = it->second;
+          self->request(handler, caf::infinite, atom::next_v, std::move(rq), n)
+            .then([](atom::done) { /* nop */ },
+                  [response = rq.response](const caf::error& e) {
+                    response->abort(500, "internal server error\n", e);
+                  });
+          break;
         }
-        if (rq.params.contains("numeric-durations")) {
-          auto& param = rq.params.at("numeric-durations");
-          VAST_ASSERT(caf::holds_alternative<bool>(param));
-          format_opts.numeric_durations = caf::get<bool>(param);
-        }
-        if (rq.params.contains("query")) {
-          auto& param = rq.params.at("query");
-          // Should be type-checked by the server.
-          VAST_ASSERT(caf::holds_alternative<std::string>(param));
-          query_string = caf::get<std::string>(param);
-        } else {
-          return rq.response->abort(422, "missing parameter 'query'\n",
-                                    caf::error{});
-        }
-        auto parse_result = pipeline::parse(*query_string);
-        if (!parse_result)
-          return rq.response->abort(400, "invalid query\n",
-                                    parse_result.error());
-        auto pipeline = std::move(*parse_result);
-        auto output = pipeline.infer_type<table_slice>();
-        if (!output) {
-          return rq.response->abort(400, "pipeline instantiation failed\n",
-                                    output.error());
-        }
-        if (!output->is<table_slice>()) {
-          return rq.response->abort(
-            400, "query must return events as output\n",
-            caf::make_error(ec::type_clash,
-                            fmt::format("the given pipeline returns {}",
-                                        operator_type_name(*output))));
-        }
-        // TODO: Consider replacing this with an empty conjunction.
-        auto& trivially_true = trivially_true_expression();
-        auto pushdown = pipeline.predicate_pushdown_pipeline(trivially_true);
-        if (!pushdown) {
-          pushdown.emplace(trivially_true, std::move(pipeline));
-        }
-        VAST_DEBUG("query: push down result: {}", *pushdown);
-        auto [expr, new_pipeline] = std::move(*pushdown);
-        VAST_ASSERT(expr != expression{});
-        auto normalized_expr = normalize_and_validate(expr);
-        if (!normalized_expr)
-          return rq.response->abort(400, "invalid query\n",
-                                    normalized_expr.error());
-        auto handler
-          = self->spawn<caf::monitored>(query_manager, self->state.index_,
-                                        std::move(new_pipeline), expand, ttl,
-                                        std::move(format_opts));
-        auto query = vast::query_context::make_extract(
-          "http-request", handler, std::move(*normalized_expr));
-        query.taste = 0;
-        self
-          ->request(self->state.index_, caf::infinite, atom::evaluate_v, query)
-          .then(
-            [self, handler,
-             response = rq.response](system::query_cursor cursor) {
-              auto id_string = fmt::format("{:l}", cursor.id);
-              self->state.live_queries_[id_string] = handler;
-              self->send(handler, atom::provision_v, cursor);
-              response->append(fmt::format("{{\"id\": \"{}\"}}\n", id_string));
-            },
-            [response = rq.response](const caf::error& e) {
-              response->abort(500, "index evaluation failed\n", e);
-            });
-      } else {
-        VAST_ASSERT_CHEAP(endpoint_id == QUERY_NEXT_ENDPOINT);
-        if (!rq.params.contains("id"))
-          return rq.response->abort(400, "missing id\n", caf::error{});
-        if (!rq.params.contains("n"))
-          return rq.response->abort(400, "missing parameter 'n'\n",
-                                    caf::error{});
-        auto id = caf::get<std::string>(rq.params["id"]);
-        auto n = caf::get<uint64_t>(rq.params["n"]);
-        auto it = self->state.live_queries_.find(id);
-        if (it == self->state.live_queries_.end())
-          return rq.response->abort(422, "unknown id\n", caf::error{});
-        auto& handler = it->second;
-        self->request(handler, caf::infinite, atom::next_v, std::move(rq), n)
-          .then([](atom::done) { /* nop */ },
-                [response = rq.response](const caf::error& e) {
-                  response->abort(500, "internal server error\n", e);
-                });
+        default:
+          // If we get here there's a bug in the server.
+          VAST_ASSERT_CHEAP(false, "unknown endpoint id");
       }
     },
   };
@@ -689,7 +697,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   rest_endpoints() const override {
     static auto endpoints = std::vector<vast::rest_endpoint>{
       {
-        .endpoint_id = QUERY_NEW_ENDPOINT,
+        .endpoint_id = static_cast<uint64_t>(system::query_endpoints::new_),
         .method = http_method::post,
         .path = "/query/new",
         .params = vast::record_type{
@@ -704,7 +712,7 @@ class plugin final : public virtual rest_endpoint_plugin {
         .content_type = http_content_type::json,
       },
       {
-        .endpoint_id = QUERY_NEXT_ENDPOINT,
+        .endpoint_id = static_cast<uint64_t>(system::query_endpoints::next),
         .method = http_method::get,
         .path = "/query/:id/next",
         .params = vast::record_type{

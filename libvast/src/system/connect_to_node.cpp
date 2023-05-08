@@ -106,10 +106,47 @@ auto get_deadline(caf::timespan timeout)
              local_version.at("plugins"));
   return true;
 }
+
 } // namespace details
 
-auto connect_to_node(caf::scoped_actor& self, const caf::settings& opts)
-  -> caf::expected<node_actor> {
+std::optional<std::chrono::steady_clock::time_point>
+get_deadline(caf::timespan timeout) {
+  if (caf::is_infinite(timeout))
+    return {};
+  return {std::chrono::steady_clock::now() + timeout};
+}
+
+std::optional<caf::timespan> get_retry_delay(const caf::settings& settings) {
+  auto retry_delay
+    = caf::get_or<caf::timespan>(settings, "vast.connection-retry-delay",
+                                 defaults::system::node_connection_retry_delay);
+  if (retry_delay == caf::timespan::zero())
+    return {};
+  return retry_delay;
+}
+
+caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
+  endpoint node_endpoint;
+  auto endpoint_str
+    = get_or(opts, "vast.endpoint", defaults::system::endpoint.data());
+  if (!parsers::endpoint(endpoint_str, node_endpoint))
+    return caf::make_error(ec::parse_error, "invalid endpoint",
+                           endpoint_str.data());
+  // Default to port 5158/tcp if none is set.
+  if (!node_endpoint.port)
+    node_endpoint.port = port{defaults::system::endpoint_port, port_type::tcp};
+  if (node_endpoint.port->type() == port_type::unknown)
+    node_endpoint.port->type(port_type::tcp);
+  if (node_endpoint.port->type() != port_type::tcp)
+    return caf::make_error(ec::invalid_configuration, "invalid protocol",
+                           *node_endpoint.port);
+  if (node_endpoint.host.empty())
+    node_endpoint.host = defaults::system::endpoint_host;
+  return node_endpoint;
+}
+
+caf::expected<node_actor>
+connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto node_endpoint = details::get_node_endpoint(opts);
   if (!node_endpoint)
@@ -118,6 +155,8 @@ auto connect_to_node(caf::scoped_actor& self, const caf::settings& opts)
   auto connector_actor = self->spawn(connector, details::get_retry_delay(opts),
                                      details::get_deadline(timeout));
   auto result = caf::expected<node_actor>{caf::error{}};
+  // `get_node_endpoint()` will add a default value.
+  VAST_ASSERT_CHEAP(node_endpoint->port.has_value());
   self
     ->request(connector_actor, caf::infinite, atom::connect_v,
               connect_request{node_endpoint->port->number(),

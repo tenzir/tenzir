@@ -11,6 +11,7 @@
 #include "vast/aliases.hpp"
 #include "vast/command.hpp"
 #include "vast/error.hpp"
+#include "vast/plugin.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/component_registry.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -23,6 +24,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <unordered_map>
 
 namespace vast::system {
 
@@ -52,6 +54,17 @@ struct node_state {
 
   /// Maps command names to functions.
   inline static command::factory command_factory = {};
+
+  // -- rest handling infrastructure -------------------------------------------
+
+  using handler_and_endpoint = std::pair<rest_handler_actor, rest_endpoint>;
+
+  /// Retrieve or spawn the handler actor for the given request.
+  auto get_endpoint_handler(const http_request_description& desc)
+    -> const handler_and_endpoint&;
+
+  /// The REST endpoint handlers for this node. Spawned on demand.
+  std::unordered_map<std::string, handler_and_endpoint> rest_handlers = {};
 
   // -- actor facade -----------------------------------------------------------
 

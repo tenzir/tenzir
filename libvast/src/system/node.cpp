@@ -22,6 +22,7 @@
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/internal_http_response.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/execution_node.hpp"
@@ -140,6 +141,19 @@ caf::message send_command(const invocation& inv, caf::actor_system&) {
     return send(atom::run_v);
   return make_error_msg(ec::unimplemented,
                         "trying to send unsupported atom: " + *(first + 1));
+}
+
+auto find_endpoint_plugin(const http_request_description& desc)
+  -> const rest_endpoint_plugin* {
+  for (auto const& plugin : plugins::get()) {
+    auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
+    if (!rest_plugin)
+      continue;
+    for (const auto& endpoint : rest_plugin->rest_endpoints())
+      if (endpoint.canonical_path() == desc.canonical_path)
+        return rest_plugin;
+  }
+  return nullptr;
 }
 
 void collect_component_status(node_actor::stateful_pointer<node_state> self,
@@ -520,6 +534,24 @@ node_state::spawn_command(const invocation& inv,
   return caf::make_message(*component);
 }
 
+auto node_state::get_endpoint_handler(const http_request_description& desc)
+  -> const handler_and_endpoint& {
+  static const auto empty_response = handler_and_endpoint{};
+  auto it = rest_handlers.find(desc.canonical_path);
+  if (it != rest_handlers.end())
+    return it->second;
+  // Spawn handler on first usage
+  auto const* plugin = find_endpoint_plugin(desc);
+  if (!plugin)
+    return empty_response;
+  // TODO: Monitor the spawned handler and restart if it goes down.
+  auto handler = plugin->handler(self->system(), self);
+  for (auto const& endpoint : plugin->rest_endpoints())
+    rest_handlers[endpoint.canonical_path()]
+      = std::make_pair(handler, endpoint);
+  return rest_handlers.at(desc.canonical_path);
+}
+
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::string name,
      std::filesystem::path dir, detach_components detach_filesystem) {
@@ -635,6 +667,38 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       // Run the command.
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
+    },
+    [self](atom::proxy,
+           http_request_description& desc) -> caf::result<std::string> {
+      VAST_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);
+      auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
+      if (!handler)
+        return caf::make_error(ec::system_error,
+                               "failed to spawn rest handler");
+      auto rp = self->make_response_promise<std::string>();
+      auto response = std::make_shared<detail::internal_http_response>(rp);
+      auto params = parse_endpoint_parameters(endpoint, desc.params);
+      if (!params)
+        return caf::make_error(ec::invalid_argument, "invalid parameters");
+      auto request = http_request{
+        .params = *params,
+        .response = response,
+      };
+      self
+        ->request(handler, caf::infinite, atom::http_request_v,
+                  endpoint.endpoint_id, std::move(request))
+        .then(
+          []() mutable {
+            /* nop */
+          },
+          [response](const caf::error& e) mutable {
+            // TODO: Should we switch to a request/response pattern for the
+            // handlers so they can just return strings or errors? The downside
+            // will be that it's going to be much harder to implement support
+            // for chunked or streaming transfers that way.
+            response->abort(500, "internal server error", e);
+          });
+      return rp;
     },
     [self](atom::internal, atom::spawn, atom::plugin) -> caf::result<void> {
       // Add all plugins to the component registry.

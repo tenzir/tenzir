@@ -191,7 +191,6 @@ connector(connector_actor::stateful_pointer<connector_state> self,
   self->state.middleman = self->system().has_openssl_manager()
                             ? self->system().openssl_manager().actor_handle()
                             : self->system().middleman().actor_handle();
-
   if (!retry_delay)
     return make_no_retry_behavior(std::move(self), deadline);
   return {

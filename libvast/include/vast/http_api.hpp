@@ -10,6 +10,7 @@
 
 #include <vast/data.hpp>
 #include <vast/detail/inspection_common.hpp>
+#include <vast/detail/stable_map.hpp>
 #include <vast/type.hpp>
 
 #include <caf/actor_addr.hpp>
@@ -35,7 +36,7 @@ enum class http_status_code : uint16_t {
 };
 
 enum class api_version : uint8_t {
-  v0,
+  v0 = 0,
   latest = v0,
 };
 
@@ -55,7 +56,14 @@ auto inspect(Inspector& f, api_version& x) {
 }
 
 struct rest_endpoint {
+  /// A string that uniquely identifies this endpoint.
+  //  e.g. "POST /query/:id/next (v0)"
+  [[nodiscard]] auto canonical_path() const -> std::string;
+
   /// Arbitrary id for endpoint identification
+  //  The node will add the correct value to incoming requests based
+  //  on the canonical path; this allows plugin to use a switch
+  //  statement to ensure they cover all their endpoints.
   uint64_t endpoint_id = 0ull;
 
   /// The HTTP verb of this endpoint
@@ -92,6 +100,13 @@ struct rest_endpoint {
   }
 };
 
+/// Go through the provided parameters; discard those that are not understood by
+/// the endpoint and attempt to parse the rest to the expected type.
+auto parse_endpoint_parameters(
+  const vast::rest_endpoint& endpoint,
+  const detail::stable_map<std::string, std::string>& params)
+  -> caf::expected<vast::record>;
+
 // We use the virtual inheritance as a compilation firewall to
 // avoid having the dependency on restinio creep into main VAST
 // until we gained a bit more implementation experience and are
@@ -119,6 +134,25 @@ public:
   std::shared_ptr<http_response> response;
 };
 
+/// Used for serializing an incoming request to be able to send it as a caf
+/// message.
+class http_request_description {
+public:
+  // /// The name of the plugin to handle the request.
+  std::string canonical_path;
+
+  /// Request parameters. (unvalidated)
+  detail::stable_map<std::string, std::string> params;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, http_request_description& e) {
+    return f.object(e)
+      .pretty_name("vast.http_request_description")
+      .fields(f.field("canonical_path", e.canonical_path),
+              f.field("params", e.params));
+  }
+};
+
 } // namespace vast
 
 template <>
@@ -137,6 +171,25 @@ struct fmt::formatter<vast::http_method> {
         break;
       case vast::http_method::post:
         value_string = "POST";
+        break;
+    }
+    return formatter<std::string_view>{}.format(value_string, ctx);
+  }
+};
+
+template <>
+struct fmt::formatter<vast::api_version> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::api_version& value, FormatContext& ctx) const {
+    std::string value_string;
+    switch (value) {
+      case vast::api_version::v0:
+        value_string = "v0";
         break;
     }
     return formatter<std::string_view>{}.format(value_string, ctx);
