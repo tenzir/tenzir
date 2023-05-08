@@ -83,9 +83,10 @@ public:
           co_yield std::move(chunk);
         }
       }
-      for (auto&& chunk : state->first->finish()) {
-        co_yield std::move(chunk);
-      }
+      if (state)
+        for (auto&& chunk : state->first->finish()) {
+          co_yield std::move(chunk);
+        }
     }
   }
 
