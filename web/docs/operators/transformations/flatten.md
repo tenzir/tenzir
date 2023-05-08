@@ -5,7 +5,7 @@ Flattens nested data structures.
 ## Synopsis
 
 ```
-flatten [<seperator>]
+flatten [<separator>]
 ```
 
 ## Description
