@@ -27,6 +27,11 @@
     {
       "name": "vast-ce",
       "target": "vast-ce",
+      "registries": []
+    },
+    {
+      "name": "vast-demo",
+      "target": "vast-demo",
       "registries": [
         "622024652768.dkr.ecr.eu-west-1.amazonaws.com"
       ]
