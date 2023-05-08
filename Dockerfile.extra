@@ -44,6 +44,21 @@ COPY --from=plugins --chown=vast:vast /plugin/cloud /
 COPY --from=plugins --chown=vast:vast /plugin/matcher /
 COPY --from=plugins --chown=vast:vast /plugin/netflow /
 
+# -- vast-demo --------------------------------------------------------------
+
+FROM vast-ce AS vast-demo
+
+USER root:root
+COPY demo-node /demo-node
+RUN apt-get update && \
+    apt install -y \
+        curl \
+        bc \
+        zstd && \
+        rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT ["/demo-node/entrypoint.bash"]
+
 # -- vast-ee -------------------------------------------------------------------
 
 FROM vast-ce AS vast-ee
