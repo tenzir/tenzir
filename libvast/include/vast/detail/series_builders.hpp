@@ -291,8 +291,9 @@ private:
                    new_builder.add(view);
                    *this = std::move(new_builder);
                  },
-                 [](auto&) {
-                   die("cast not implemented");
+                 [view](auto&) {
+                   VAST_WARN("cast not implemented: ignoring value {}",
+                             data{materialize(view)});
                  },
                },
                *this);
