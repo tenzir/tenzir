@@ -65,5 +65,5 @@ gunzip -c *.gz | vast exec 'read zeek-tsv | ...'
 Write Zeek TSV into a directory, one file per schema:
 
 ```
-write zeek-tsv to dir /tmp/results
+write zeek-tsv to directory /tmp/results
 ```
