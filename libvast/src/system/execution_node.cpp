@@ -78,9 +78,8 @@ class source_driver final
   : public caf::stream_source_driver<
       caf::broadcast_downstream_manager<framed<Output>>> {
 public:
-  source_driver(operator_ptr op, generator<Output> gen,
-                execution_node_state& host)
-    : op_(std::move(op)), gen_(std::move(gen)), self_{host.self} {
+  source_driver(generator<Output> gen, const execution_node_state& state)
+    : gen_(std::move(gen)), state_{state} {
   }
 
   void pull(caf::downstream<framed<Output>>& out, size_t num) override {
@@ -115,17 +114,12 @@ public:
 
   void finalize(const caf::error& error) override {
     VAST_DEBUG("finalizing source: {}", error);
-    self_->quit();
+    state_.self->quit();
   }
 
 private:
-  // The order here is important. Because the generator is derived from the
-  // operator, we want to destroy the operator only after the generator has been
-  // destroyed. Thus, `op` must be declared before `gen`. The same holds true
-  // for the other stream drivers.
-  operator_ptr op_;
   generator<Output> gen_;
-  system::execution_node_actor::pointer self_;
+  const execution_node_state& state_;
 };
 
 template <class Input>
@@ -160,20 +154,19 @@ class stage_driver final
 
 public:
   stage_driver(caf::broadcast_downstream_manager<framed<Output>>& out,
-               operator_ptr op, std::shared_ptr<std::deque<Input>> queue,
+               std::shared_ptr<std::deque<Input>> queue,
                std::shared_ptr<bool> stop, generator<Output> gen,
-               execution_node_state& host)
+               const execution_node_state& state)
     : super{out},
-      op_{std::move(op)},
       queue_{std::move(queue)},
       stop_{std::move(stop)},
       gen_{std::move(gen)},
-      self_{host.self} {
+      state_{state} {
   }
 
   void process(caf::downstream<framed<Output>>& out,
                std::vector<framed<Input>>& in) override {
-    VAST_DEBUG("stage driver received input ({})", op_->to_string());
+    VAST_DEBUG("stage driver received input ({})", state_.op->to_string());
     auto it = gen_.unsafe_current();
     if (it == gen_.end()) {
       out.push(std::nullopt);
@@ -208,17 +201,16 @@ public:
   }
 
   void finalize(const caf::error& error) override {
-    VAST_DEBUG("finalizing stage driver for ({}), error = {}", op_->to_string(),
-               error);
-    self_->quit(error);
+    VAST_DEBUG("finalizing stage driver for ({}), error = {}",
+               state_.op->to_string(), error);
+    state_.self->quit(error);
   }
 
 private:
-  operator_ptr op_;
   std::shared_ptr<std::deque<Input>> queue_;
   std::shared_ptr<bool> stop_;
   generator<Output> gen_;
-  system::execution_node_actor::pointer self_;
+  const execution_node_state& state_;
 };
 
 // We need this to get access to `out` when finalizing.
@@ -226,21 +218,20 @@ template <class Input>
   requires(!std::same_as<Input, std::monostate>)
 class sink_driver final : public caf::stream_sink_driver<framed<Input>> {
 public:
-  sink_driver(operator_ptr op, std::shared_ptr<std::deque<Input>> queue,
+  sink_driver(std::shared_ptr<std::deque<Input>> queue,
               std::shared_ptr<bool> stop, generator<std::monostate> gen,
-              execution_node_state& host)
-    : op_{std::move(op)},
-      queue_{std::move(queue)},
+              const execution_node_state& state)
+    : queue_{std::move(queue)},
       stop_{std::move(stop)},
       gen_{std::move(gen)},
-      self_{host.self} {
+      state_{state} {
   }
 
   void process(std::vector<framed<Input>>& in) override {
     VAST_DEBUG("sink driver received input");
     auto it = gen_.unsafe_current();
     if (it == gen_.end()) {
-      self_->quit();
+      state_.self->quit();
       return;
     }
     VAST_ASSERT(queue_->empty());
@@ -255,7 +246,7 @@ public:
     while (!queue_->empty() || *stop_) {
       ++it;
       if (it == gen_.end()) {
-        self_->quit();
+        state_.self->quit();
         return;
       }
     }
@@ -263,15 +254,14 @@ public:
 
   void finalize(const caf::error& error) override {
     VAST_DEBUG("finalizing sink driver: {}", error);
-    self_->quit();
+    state_.self->quit();
   }
 
 private:
-  operator_ptr op_;
   std::shared_ptr<std::deque<Input>> queue_;
   std::shared_ptr<bool> stop_;
   generator<std::monostate> gen_;
-  system::execution_node_actor::pointer self_;
+  const execution_node_state& state_;
 };
 
 } // namespace
@@ -282,8 +272,7 @@ auto execution_node_state::start(std::vector<caf::actor> next)
     return caf::make_error(ec::logic_error,
                            fmt::format("{} was already started", *self));
   }
-  auto current_op = std::move(op);
-  auto result = current_op->instantiate(std::monostate{}, *ctrl);
+  auto result = op->instantiate(std::monostate{}, *ctrl);
   if (!result) {
     self->quit(std::move(result.error()));
     return {};
@@ -293,11 +282,11 @@ auto execution_node_state::start(std::vector<caf::actor> next)
       [&](generator<std::monostate>&) -> caf::result<void> {
         // This case corresponds to a `void -> void` operator.
         if (!next.empty()) {
-          return caf::make_error(
-            ec::logic_error,
-            fmt::format("pipeline was already closed by '{}', but has more "
-                        "operators ({}) afterwards",
-                        current_op->to_string(), next.size()));
+          return caf::make_error(ec::logic_error,
+                                 fmt::format("pipeline was already closed by "
+                                             "'{}', but has more "
+                                             "operators ({}) afterwards",
+                                             op->to_string(), next.size()));
         }
         // TODO: void -> void not implemented
         return caf::make_error(ec::unimplemented,
@@ -308,10 +297,10 @@ auto execution_node_state::start(std::vector<caf::actor> next)
         if (next.empty()) {
           return caf::make_error(
             ec::logic_error, "pipeline is still open after last operator '{}'",
-            current_op->to_string());
+            op->to_string());
         }
         auto source = caf::detail::make_stream_source<source_driver<T>>(
-          self, std::move(current_op), std::move(gen), *this);
+          self, std::move(gen), *this);
         auto dest = std::move(next.front());
         next.erase(next.begin());
         source->add_outbound_path(dest, std::make_tuple(std::move(next)));
@@ -328,11 +317,9 @@ auto execution_node_state::start(caf::stream<framed<Input>> in,
     return caf::make_error(ec::logic_error,
                            fmt::format("{} was already started", *self));
   }
-  auto current_op = std::move(op);
   auto queue = std::make_shared<std::deque<Input>>();
   auto stop = std::make_shared<bool>();
-  auto result
-    = current_op->instantiate(generator_for_queue(queue, stop), *ctrl);
+  auto result = op->instantiate(generator_for_queue(queue, stop), *ctrl);
   if (!result) {
     self->quit(std::move(result.error()));
     return {};
@@ -342,26 +329,24 @@ auto execution_node_state::start(caf::stream<framed<Input>> in,
       -> caf::expected<caf::inbound_stream_slot<framed<Input>>> {
       if constexpr (std::is_same_v<Output, std::monostate>) {
         if (!next.empty()) {
-          return caf::make_error(
-            ec::logic_error,
-            fmt::format("pipeline was already closed by '{}', but has more "
-                        "operators ({}) afterwards",
-                        current_op->to_string(), next.size()));
+          return caf::make_error(ec::logic_error,
+                                 fmt::format("pipeline was already closed by "
+                                             "'{}', but has more "
+                                             "operators ({}) afterwards",
+                                             op->to_string(), next.size()));
         }
         auto sink = caf::detail::make_stream_sink<sink_driver<Input>>(
-          self, std::move(current_op), std::move(queue), std::move(stop),
-          std::move(gen), *this);
+          self, std::move(queue), std::move(stop), std::move(gen), *this);
         return sink->add_inbound_path(in);
       } else {
         if (next.empty()) {
           return caf::make_error(
             ec::logic_error, "pipeline is still open after last operator '{}'",
-            current_op->to_string());
+            op->to_string());
         }
         auto stage
           = caf::detail::make_stream_stage<stage_driver<Input, Output>>(
-            self, std::move(current_op), std::move(queue), std::move(stop),
-            std::move(gen), *this);
+            self, std::move(queue), std::move(stop), std::move(gen), *this);
         auto slot = stage->add_inbound_path(in);
         auto dest = std::move(next.front());
         next.erase(next.begin());
