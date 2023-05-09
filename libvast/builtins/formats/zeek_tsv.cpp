@@ -40,7 +40,7 @@
 namespace vast::plugins::zeek_tsv {
 
 namespace {
-// The type name prefix to preprend to zeek log names when transleting them
+// The type name prefix to prepend to Zeek log names when translating them
 // into VAST types.
 constexpr std::string_view type_name_prefix = "zeek.";
 constexpr auto default_sep = '\x09';
@@ -210,9 +210,9 @@ struct zeek_metadata {
     auto sep_option = std::string{};
     if (not sep_parser((*it).value(), sep_option)
         or not sep_option.starts_with("\\x")) {
-      return caf::make_error(
-        ec::syntax_error, fmt::format("Invalid #separator option while parsing "
-                                      "Zeek TSV file - aborting"));
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("zeek-tsv parser failed: invalid "
+                                         "#separator option encountered"));
     }
     auto sep_char = std::stoi(sep_option.substr(2, 2), nullptr, 16);
     VAST_ASSERT(sep_char >= 0 && sep_char <= 255);
@@ -229,28 +229,30 @@ struct zeek_metadata {
       ++it;
       if (not *it or it == lines.end()) {
         return caf::make_error(ec::syntax_error,
-                               fmt::format("Zeek TSV file header ended too "
-                                           "early - aborting"));
+                               fmt::format(
+                                 "zeek-tsv parser failed: header ended too "
+                                 "early"));
       }
       header = (*it).value();
       auto pos = header.find(prefix);
       if (pos != 0)
         return caf::make_error(ec::syntax_error,
-                               fmt::format("Invalid header line: prefix '{}' "
-                                           "not beginning at line "
-                                           "beginning or not found",
+                               fmt::format("zeek-tsv parser encountered "
+                                           "invalid header line: prefix '{}' "
+                                           "not found at beginning of line",
                                            prefix));
       pos = header.find(sep);
       if (pos == std::string::npos)
         return caf::make_error(ec::syntax_error,
-                               fmt::format("Invalid header line: separator "
+                               fmt::format("zeek-tsv parser encountered "
+                                           "invalid header line: separator "
                                            "'{}' not found",
                                            sep_option));
       if (pos + 1 >= header.size())
-        return caf::make_error(ec::syntax_error,
-                               fmt::format("Missing Zeek TSV header line "
-                                           "content: {}",
-                                           header));
+        return caf::make_error(
+          ec::syntax_error, fmt::format("zeek-tsv detected missing header line "
+                                        "content: {}",
+                                        header));
       parsed_options.emplace_back(header.substr(pos + 1));
     }
     set_sep = std::string{parsed_options[0][0]};
@@ -263,7 +265,8 @@ struct zeek_metadata {
     types = detail::split(types_str, sep);
     if (fields.size() != types.size())
       return caf::make_error(ec::syntax_error,
-                             fmt::format("Zeek TSV header types mismatch: "
+                             fmt::format("zeek-tsv parser detected header "
+                                         "types mismatch: "
                                          "expected {} fields but got {}",
                                          fields.size(), types.size()));
 
@@ -287,8 +290,8 @@ struct zeek_metadata {
       if (ctrl_schema.name() == name) {
         auto is_castable = can_cast(record_schema, ctrl_schema);
         if (!is_castable) {
-          VAST_WARN("zeek-reader ignores incompatible schema '{}' from schema "
-                    "files: {}",
+          VAST_WARN("zeek-tsv parser ignores incompatible schema '{}' from "
+                    "schema files: {}",
                     ctrl_schema, is_castable.error());
         } else {
           output_slice_schema = ctrl_schema;
@@ -492,7 +495,7 @@ struct zeek_printer {
     auto operator()(const view<record>& x) noexcept -> bool {
       // TODO: This won't be needed when flatten() for table_slices is in the
       // codebase.
-      VAST_WARN("Printing records as Zeek data is currently a work in "
+      VAST_WARN("printing records as zeek-tsv data is currently a work in "
                 "progress; printing null instead");
       auto first = true;
       for (const auto& v : x) {
@@ -542,6 +545,7 @@ public:
         auto parsed = metadata.parse_header(it, lines, ctrl);
         if (not parsed) {
           ctrl.abort(parsed.error());
+          VAST_ERROR("aborting Zeek metadata parsing");
           co_return;
         }
         ++it;
@@ -555,13 +559,13 @@ public:
             continue;
           }
           if (line->empty()) {
-            VAST_DEBUG("Zeek TSV parser ignored empty line");
+            VAST_DEBUG("zeek-tsv parser ignored empty line");
             continue;
           }
           if (line->starts_with("#close")) {
             if (closed) {
               ctrl.abort(caf::make_error(ec::syntax_error,
-                                         fmt::format("Parsing Zeek TSV failed: "
+                                         fmt::format("zeek-tsv parser failed: "
                                                      "#close without previous "
                                                      "#open header found")));
               co_return;
@@ -573,7 +577,7 @@ public:
           if (line->starts_with("#separator")) {
             if (not closed) {
               ctrl.abort(caf::make_error(
-                ec::syntax_error, fmt::format("Parsing Zeek TSV failed: "
+                ec::syntax_error, fmt::format("zeek-tsv parser failed: "
                                               "previous logs are still open")));
               co_return;
             }
@@ -594,7 +598,7 @@ public:
           }
           if (closed) {
             ctrl.abort(caf::make_error(ec::syntax_error,
-                                       fmt::format("Parsing Zeek TSV failed: "
+                                       fmt::format("zeek-tsv parser failed: "
                                                    "additional data after "
                                                    "#close should be "
                                                    "preceded by Zeek header")));
@@ -604,7 +608,7 @@ public:
           if (values.size() != metadata.fields.size()) {
             ctrl.warn(caf::make_error(
               ec::parse_error,
-              fmt::format("Zeek TSV parser skipped line: "
+              fmt::format("zeek-tsv parser skipped line: "
                           "expected {} fields but got "
                           "{}",
                           metadata.fields.size(), values.size())));
@@ -620,7 +624,7 @@ public:
                         .type.construct();
             } else if (!metadata.parsers[i](values[i], xs[i])) {
               ctrl.warn(caf::make_error(ec::parse_error,
-                                        fmt::format("Zeek TSV parser skipped "
+                                        fmt::format("zeek-tsv parser skipped "
                                                     "line: failed"
                                                     "to parse value '{}'",
                                                     value)));
@@ -631,7 +635,7 @@ public:
             auto&& x = xs[i];
             if (not b.add(make_data_view(x))) {
               ctrl.abort(caf::make_error(ec::parse_error,
-                                         fmt::format("Zeek TSV parser failed "
+                                         fmt::format("zeek-tsv parser failed "
                                                      "to finalize value '{}'",
                                                      x)));
               co_return;

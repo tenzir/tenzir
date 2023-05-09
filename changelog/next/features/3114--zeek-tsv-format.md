@@ -1,2 +1,2 @@
-The `zeek-tsv` format enables the user to parse and print Zeek TSV logs inside
-a pipeline.
+The `zeek-tsv` format parses and prints Zeek's native tab-separated value (TSV)
+representation of logs.
