@@ -45,7 +45,7 @@ The [`print`](../transformations/print.md) operator produces raw bytes and
 fits right in the middle:
 
 ```c
-print json | shell jq | save stdout
+print json | shell "jq" | save stdout
 ```
 
 Using [user-defined operators](../user-defined.md), we can expose this
@@ -55,7 +55,7 @@ Using [user-defined operators](../user-defined.md), we can expose this
 vast:
   operators:
     jsonize: >
-      print json | shell jq | save stdout
+      print json | shell "jq" | save stdout
 ```
 
 Now you can use `jsonize` as a custom operator in a pipeline:
@@ -68,13 +68,13 @@ Another example is instrumentation and benchmarking via the `pv`. You can
 measure how fast VAST reads bytes on stdin:
 
 ```c
-load stdin | shell pv | save stdout
+load stdin | shell "pv" | save stdout
 ```
 
 Or benchmark how fast VAST can produce JSON:
 
 ```c
-read csv | where field > 42 | print json | shell pv | save stdout
+read csv | where field > 42 | print json | shell "pv" | save stdout
 ```
 
 VAST also has a native [measure](measure.md) operator that works on structured

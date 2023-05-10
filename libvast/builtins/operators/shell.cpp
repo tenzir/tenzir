@@ -15,6 +15,7 @@
 #include <vast/plugin.hpp>
 #include <vast/si_literals.hpp>
 
+#include <boost/asio.hpp>
 #include <boost/process.hpp>
 
 namespace vast::plugins::shell {
@@ -36,8 +37,12 @@ public:
     std::error_code ec;
     bp::child child;
     try {
+      auto exit_handler = [this](int exit, std::error_code ec) {
+        VAST_DEBUG("child \"{}\" exited with code {}: {}", command_, exit,
+                   ec.message());
+      };
       child = bp::child{command_, bp::std_out > child_stdout,
-                        bp::std_in < child_stdin};
+                        bp::std_in < child_stdin, bp::on_exit(exit_handler)};
     } catch (const bp::process_error& e) {
       ctrl.abort(caf::make_error(ec::filesystem_error, e.what()));
       co_return;
@@ -53,15 +58,19 @@ public:
       }
       // Shove operator input into the child's stdin.
       auto chunk_data = reinterpret_cast<const char*>(chunk->data());
-      if (!child_stdin.write(chunk_data, chunk->size()))
+      VAST_DEBUG("writing {} bytes to child's stdin", chunk->size());
+      if (!child_stdin.write(chunk_data, chunk->size())) {
         ctrl.abort(caf::make_error(
           ec::unspecified, fmt::format("failed to write into child's stdin")));
-      // Read child's stdout in chunks and relay them downstream.
+        break;
+      }
+      // Read child's stdout in blocks and relay them downstream.
       constexpr auto block_size = 16_KiB;
       std::vector<char> buffer(block_size);
       while (true) {
         child_stdout.read(buffer.data(), block_size);
         auto bytes_read = detail::narrow_cast<size_t>(child_stdout.gcount());
+        VAST_DEBUG("read {} bytes", bytes_read);
         if (bytes_read == 0) {
           // No output from child, come back next time.
           co_yield {};
@@ -72,6 +81,7 @@ public:
       }
     }
     // FIXME: do this RAII-style.
+    VAST_DEBUG("awaiting child");
     child.wait(ec);
     if (ec)
       VAST_DEBUG(ec);
