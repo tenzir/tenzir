@@ -53,8 +53,7 @@ template <class Iterator, class Attribute>
 struct zeek_parser_factory {
   using result_type = rule<Iterator, Attribute>;
 
-  zeek_parser_factory(const std::string& sep, const std::string& set_sep)
-    : sep_{sep}, set_sep_{set_sep} {
+  explicit zeek_parser_factory(const std::string& set_sep) : set_sep_{set_sep} {
   }
 
   template <class T>
@@ -99,10 +98,10 @@ struct zeek_parser_factory {
 
   auto operator()(const string_type&) const -> result_type {
     if (set_sep_.empty())
-      return +(parsers::any - sep_)->*[](std::string x) {
+      return +parsers::any->*[](std::string x) {
         return detail::byte_unescape(x);
       };
-    return +(parsers::any - sep_ - set_sep_)->*[](std::string x) {
+    return +(parsers::any - set_sep_)->*[](std::string x) {
       return detail::byte_unescape(x);
     };
   }
@@ -126,19 +125,16 @@ struct zeek_parser_factory {
                  };
   }
 
-  const std::string& sep_;
   const std::string& set_sep_;
 };
 
 /// Constructs a Zeek data parser from a type and set separator.
 template <class Iterator, class Attribute = data>
-auto make_zeek_parser(const type& t, const std::string& sep,
-                      const std::string& set_sep) -> rule<Iterator, Attribute> {
+auto make_zeek_parser(const type& t, const std::string& set_sep = ",")
+  -> rule<Iterator, Attribute> {
   rule<Iterator, Attribute> r;
-  return caf::visit(
-    zeek_parser_factory<Iterator, Attribute>{
-      sep, is_container(t) ? set_sep : std::string{}},
-    t);
+  auto sep = is_container(t) ? set_sep : "";
+  return caf::visit(zeek_parser_factory<Iterator, Attribute>{sep}, t);
 }
 
 // Creates a VAST type from an ASCII Zeek type in a log header.
@@ -305,8 +301,8 @@ struct zeek_metadata {
     }
     temp_slice_schema = type{name, record_schema};
     // Create Zeek parsers.
-    auto make_parser = [this](const auto& type, const auto& set_sep) {
-      return make_zeek_parser<iterator_type>(type, sep, set_sep);
+    auto make_parser = [](const auto& type, const auto& set_sep) {
+      return make_zeek_parser<iterator_type>(type, set_sep);
     };
     parsers.resize(record_schema.num_fields());
     for (size_t i = 0; i < record_schema.num_fields(); i++)
