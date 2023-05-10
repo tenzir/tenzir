@@ -72,7 +72,7 @@
               Env = [
                 # When changing these, make sure to also update the entries in the
                 # Dockerfile.
-                "VAST_ENDPOINT=0.0.0.0:5158"
+                "VAST_ENDPOINT=0.0.0.0"
                 "VAST_DB_DIRECTORY=${vast-dir}"
                 "VAST_LOG_FILE=/var/log/vast/server.log"
               ];
