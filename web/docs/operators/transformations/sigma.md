@@ -4,17 +4,22 @@ Filter the input with [Sigma rules][sigma] and output matching events.
 
 [sigma]: https://github.com/SigmaHQ/sigma
 
+:::caution Experimental
+This operator is experimental and subject to change without notice, even in
+minor or patch releases.
+:::
+
 ## Synopsis
 
 ```
-sigma <rule.yaml>
-sigma <directory>
+sigma <rule> [--refresh-interval <refresh-interval>]
+sigma <directory> [--refresh-interval <refresh-interval>]
 ```
 
 ## Description
 
 The `sigma` operator executes [Sigma rules](https://github.com/SigmaHQ/sigma) on
-its input. If a rule matches, the operator emits a `tenzir.sighting` event that
+its input. If a rule matches, the operator emits a `tenzir.sigma` event that
 wraps the input record into a new record along with the matching rule. The
 operator discards all events that do not match the provided rules.
 
@@ -100,6 +105,13 @@ The directory to watch.
 This invocation watches a directory and attempts to parse each contained file as
 a Sigma rule. The `sigma` operator matches if *any* of the contained rules
 match, effectively creating a disjunction of all rules inside the directory.
+
+### `--refresh-interval <refresh-interval>`
+
+How often the Sigma operator looks at the specified rule or directory of rules
+to update its internal state.
+
+Defaults to 5 seconds.
 
 ## Examples
 
