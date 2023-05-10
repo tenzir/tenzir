@@ -24,7 +24,9 @@ if (NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/aux/ftxui/.git")
       "submodule '${CMAKE_CURRENT_LIST_DIR}/aux/ftxui' is not initialized")
 endif ()
 
+set(CMAKE_CXX_STANDARD 20)
 add_subdirectory(aux/ftxui)
+unset(CMAKE_CXX_STANDARD)
 
 target_link_libraries(tui PUBLIC vast::libvast vast::internal)
 target_link_libraries(tui PUBLIC ftxui::screen ftxui::dom ftxui::component)
