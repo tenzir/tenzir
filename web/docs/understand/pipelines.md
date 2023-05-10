@@ -106,8 +106,8 @@ example:
 Here is how you write this pipeline in the VAST language:
 
 ```cpp
-/* 1. Get data from VAST */
-from vast
+/* 1. Get data from a VAST node */
+export
 /* 2. Filter out a subset of events */
 | where #type == "zeek.weird" && note == "SSL::Invalid_Server_Cert"
 /* 3. Aggregate them by destination IP */
