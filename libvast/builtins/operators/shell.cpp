@@ -34,7 +34,13 @@ public:
     bp::ipstream in;
     bp::opstream out;
     std::error_code ec;
-    bp::child child{command_, bp::std_out > in, bp::std_in < out};
+    bp::child child;
+    try {
+      child = bp::child{command_, bp::std_out > in, bp::std_in < out};
+    } catch (const bp::process_error& e) {
+      ctrl.abort(caf::make_error(ec::filesystem_error, e.what()));
+      co_return;
+    }
     for (auto&& chunk : input) {
       if (!child.running(ec)) {
         if (ec)
@@ -87,7 +93,7 @@ public:
     return {};
   }
 
-  [[nodiscard]] std::string name() const override {
+  [[nodiscard]] auto name() const -> std::string override {
     return "shell";
   };
 
