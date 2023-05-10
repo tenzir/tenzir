@@ -15,19 +15,24 @@ using namespace vast;
 
 namespace {
 
-template <class OnWarnCallable = decltype([]() {})>
+template <class OnWarnCallable = decltype([](caf::error) {})>
 class operator_control_plane_mock : public operator_control_plane {
 public:
   explicit operator_control_plane_mock(OnWarnCallable on_warn,
                                        std::vector<type> schemas = {})
     : on_warn_{std::move(on_warn)}, schemas_{std::move(schemas)} {
   }
+
+  explicit operator_control_plane_mock(std::function<void()> on_abort)
+    : on_abort_{std::move(on_abort)} {
+  }
+
   auto self() noexcept -> caf::scheduled_actor& override {
     FAIL("Unexpected call to operator_control_plane::self");
   }
 
   auto abort(caf::error) noexcept -> void override {
-    FAIL("Unexpected call to operator_control_plane::abort");
+    on_abort_();
   }
 
   auto warn(caf::error warning) noexcept -> void override {
@@ -49,15 +54,15 @@ public:
 private:
   OnWarnCallable on_warn_;
   std::vector<type> schemas_;
+  std::function<void()> on_abort_ = []() {
+    FAIL("Unexpected call to operator_control_plane::abort");
+  };
 };
 
 auto create_sut(generator<chunk_ptr> json_chunk_gen,
                 operator_control_plane& control_plane,
-                std::string selector = {}) -> generator<table_slice> {
+                std::vector<std::string> args = {}) -> generator<table_slice> {
   auto const* plugin = vast::plugins::find<vast::parser_plugin>("json");
-  std::vector<std::string> args;
-  if (not selector.empty())
-    args.push_back(selector);
   auto sut
     = plugin->make_parser(args, std::move(json_chunk_gen), control_plane);
   REQUIRE(sut);
@@ -77,6 +82,7 @@ struct unknown_schema_fixture {
     FAIL(fmt::format("Unexpected call to operator_control_plane::warn with {}",
                      e));
   };
+  std::function<void(caf::error)> ignore_warn = [](caf::error) {};
   operator_control_plane_mock<decltype(default_on_warn)> control_plane_mock{
     default_on_warn};
 };
@@ -352,12 +358,13 @@ TEST(null in the input json results in the value being missing in the schema) {
 
 // This test may be used to test malformed JSON handling in the future.
 // Currently we cannot handle such scenarios so the expected slices is 0.
-TEST(0 slices from event that is properly formatted JSON among multiple invalid
-       JSONs in a single chunk) {
-  auto warns_count = 0u;
-  auto mock = operator_control_plane_mock{[&warns_count](auto&&) {
-    ++warns_count;
-  }};
+TEST(0 slices and abort from event that is properly formatted JSON among
+       multiple invalid JSONs in a single chunk) {
+  auto abort_issued = false;
+  auto mock
+    = operator_control_plane_mock{std::function<void()>{[&abort_issued] {
+        abort_issued = true;
+      }}};
   auto sut = create_sut(make_chunk_generator({R"(
       {"1"{}{"dekh234rfweKKKKKKKKkkXDDDDDDDDDrjgbf} : 1}
       {"d}{}{"}|SDG:SDIKT83753
@@ -371,16 +378,18 @@ TEST(0 slices from event that is properly formatted JSON among multiple invalid
     output_slices.push_back(std::move(slice));
   }
   REQUIRE(output_slices.empty());
-  CHECK(warns_count >= 1);
+  CHECK(abort_issued);
 }
 
 FIXTURE_SCOPE_END()
 
-struct known_schema_fixture : public unknown_schema_fixture {
-  std::string selector{"--selector=field_to_chose:modulee"};
+struct known_schema_no_infer_fixture : public unknown_schema_fixture {
+  std::vector<std::string> args{"--selector=field_to_chose:modulee",
+                                "--no-infer"};
 };
 
-FIXTURE_SCOPE(known_schema_json_parser_tests, known_schema_fixture)
+FIXTURE_SCOPE(no_infer_known_schema_json_parser_tests,
+              known_schema_no_infer_fixture)
 
 TEST(simple slice) {
   const auto fixed_schema
@@ -394,7 +403,7 @@ TEST(simple slice) {
   auto sut = create_sut(
     make_chunk_generator(
       {R"({"a": 5, "field_to_chose" : "great_field", "b": {"b.a" : "str"}, "c" : ["10ns", "20ns"]})"}),
-    cp_mock, selector);
+    cp_mock, args);
   auto output_slices = std::vector<vast::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
@@ -426,7 +435,7 @@ TEST(ignore fields not present in schema and issue a warning) {
   auto sut = create_sut(
     make_chunk_generator(
       {R"({"field_to_chose" : "great_field", "b": "will_i_be_ignored?"})"}),
-    mock, selector);
+    mock, args);
   auto output_slices = std::vector<vast::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
@@ -459,7 +468,7 @@ TEST(yield slice for each schema) {
     make_chunk_generator(
       {R"({"field_to_chose" : "great_field", "a": 10})",
        R"({"field_to_chose" : "even_greater_field", "b": "str"})"}),
-    cp_mock, selector);
+    cp_mock, args);
   auto output_slices = std::vector<vast::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
@@ -482,7 +491,7 @@ TEST(yield slice for each schema) {
 
 TEST(yield empty slice when input chunk generator returns empty chunk) {
   auto cp_mock = operator_control_plane_mock{default_on_warn};
-  auto sut = create_sut(make_chunk_generator({""}), cp_mock, selector);
+  auto sut = create_sut(make_chunk_generator({""}), cp_mock, args);
   auto output_slices = std::vector<vast::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
@@ -502,7 +511,7 @@ TEST(yield two slices of the same schema due to receiving empty chunk in between
   auto sut = create_sut(
     make_chunk_generator({R"({"field_to_chose" : "great_field", "a": 10})", "",
                           R"({"field_to_chose" : "great_field", "a": 10})"}),
-    cp_mock, selector);
+    cp_mock, args);
   auto output_slices = std::vector<vast::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
@@ -528,7 +537,7 @@ TEST(
   auto sut
     = create_sut(make_chunk_generator(
                    {R"({"a": 10,)", R"("field_to_chose" : "great_field"})"}),
-                 cp_mock, selector);
+                 cp_mock, args);
   auto output_slices = std::vector<vast::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
@@ -555,13 +564,99 @@ TEST(issue a warning and dont output a slice when no schema can be found) {
   auto sut
     = create_sut(make_chunk_generator(
                    {R"({"a": 10,)", R"("field_to_chose" : "great_field"})"}),
-                 mock, selector);
+                 mock, args);
   auto output_slices = std::vector<vast::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE(output_slices.empty());
   CHECK_EQUAL(warns_count, 1u);
+}
+
+FIXTURE_SCOPE_END()
+
+struct known_schema_fixture : public unknown_schema_fixture {
+  std::vector<std::string> args{"--selector=field_to_chose:modulee"};
+};
+
+FIXTURE_SCOPE(known_schema_json_parser_tests, known_schema_fixture)
+
+TEST(
+  infer type for fields not within the schema) {
+  const auto fixed_schema
+    = type{"modulee.great_field", record_type{
+                                    {"field_to_chose", string_type{}},
+                                    {"a", int64_type{}},
+                                  }};
+  auto cp_mock = operator_control_plane_mock{ignore_warn, {fixed_schema}};
+  auto sut = create_sut(
+    make_chunk_generator(
+      {R"({"a" : 10, "field_to_chose" : "great_field", "b": "some_str"})"}),
+    cp_mock, args);
+  auto output_slices = std::vector<vast::table_slice>{};
+  for (auto slice : sut) {
+    output_slices.push_back(std::move(slice));
+  }
+  REQUIRE_EQUAL(output_slices.size(), 1u);
+  const auto expected_schema = make_expected_schema(vast::type{record_type{
+    {"field_to_chose", string_type{}},
+    {"a", int64_type{}},
+    {"b", string_type{}},
+  }});
+  CHECK_EQUAL(output_slices.front().schema(), expected_schema);
+  CHECK_EQUAL(output_slices.front().rows(), 1u);
+  CHECK_EQUAL(output_slices.front().columns(), 3u);
+  CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), "great_field");
+  CHECK_EQUAL(materialize(output_slices.front().at(0u, 1u)), int64_t{10});
+  CHECK_EQUAL(materialize(output_slices.front().at(0u, 2u)), "some_str");
+}
+
+TEST(events with
+     : no schema->schema->no schema results in 3 table slices with different
+         schemas) {
+  const auto fixed_schema
+    = type{"modulee.great_field", record_type{
+                                    {"field_to_chose", string_type{}},
+                                    {"a", int64_type{}},
+                                  }};
+  auto cp_mock = operator_control_plane_mock{ignore_warn, {fixed_schema}};
+  auto sut = create_sut(
+    make_chunk_generator(
+      {R"({"d" : [1, 2], "field_to_chose" : "no_schema_field"})",
+       R"({"a" : 100, "field_to_chose" : "great_field"})",
+       R"({"g" : "some_str", "field_to_chose" : "no_schema_field"})"}),
+    cp_mock, args);
+  auto output_slices = std::vector<vast::table_slice>{};
+  for (auto slice : sut) {
+    output_slices.push_back(std::move(slice));
+  }
+  REQUIRE_EQUAL(output_slices.size(), 3u);
+  CHECK_EQUAL(output_slices.at(0).schema(),
+              make_expected_schema(vast::type{record_type{
+                {"d", list_type{int64_type{}}},
+                {"field_to_chose", string_type{}},
+              }}));
+  CHECK_EQUAL(output_slices.at(0).rows(), 1u);
+  CHECK_EQUAL(output_slices.at(0).columns(), 2u);
+  CHECK_EQUAL(materialize(output_slices.at(0).at(0u, 0u)),
+              (list{int64_t{1}, int64_t{2}}));
+  CHECK_EQUAL(materialize(output_slices.at(0).at(0u, 1u)), "no_schema_field");
+
+  CHECK_EQUAL(output_slices.at(1).schema(), fixed_schema);
+  CHECK_EQUAL(output_slices.at(1).rows(), 1u);
+  CHECK_EQUAL(output_slices.at(1).columns(), 2u);
+  CHECK_EQUAL(materialize(output_slices.at(1).at(0u, 0u)), "great_field");
+  CHECK_EQUAL(materialize(output_slices.at(1).at(0u, 1u)), int64_t{100});
+
+  CHECK_EQUAL(output_slices.at(2).schema(),
+              make_expected_schema(vast::type{record_type{
+                {"g", string_type{}},
+                {"field_to_chose", string_type{}},
+              }}));
+  CHECK_EQUAL(output_slices.at(2).rows(), 1u);
+  CHECK_EQUAL(output_slices.at(2).columns(), 2u);
+  CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 0u)), "some_str");
+  CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 1u)), "no_schema_field");
 }
 
 FIXTURE_SCOPE_END()

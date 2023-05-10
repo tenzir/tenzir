@@ -32,6 +32,12 @@ namespace {
 // The simdjson suggests to initialize the padding part to either 0s or spaces.
 using json_buffer = detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'>;
 
+enum class parser_action {
+  skip_chunk = 0,
+  yield = 1,
+  pass = 2,
+};
+
 struct selector {
   std::string prefix;
   std::string selector_field;
@@ -39,9 +45,11 @@ struct selector {
 
 struct parser_state {
   std::unordered_map<std::string_view, adaptive_table_slice_builder>
-    builders_per_schema;
+    builders_per_schema{};
   adaptive_table_slice_builder* last_used_builder = nullptr;
-  adaptive_table_slice_builder unknown_schema_builder;
+  adaptive_table_slice_builder unknown_schema_builder{};
+  bool infer_types = false;
+  std::optional<table_slice> slice_to_yield{};
 };
 
 template <class FieldValidator>
@@ -212,9 +220,9 @@ auto parse_doc(const FieldValidator& validator,
   return {};
 }
 
-auto create_field_validator(bool has_selector)
+auto create_field_validator(bool has_selector, bool infer_types)
   -> std::function<caf::expected<void>(const detail::field_guard&)> {
-  if (has_selector) {
+  if (has_selector and not infer_types) {
     return [](const detail::field_guard& guard) -> caf::expected<void> {
       if (guard.field_exists())
         return {};
@@ -226,83 +234,78 @@ auto create_field_validator(bool has_selector)
   };
 }
 
-auto create_empty_chunk_handler(parser_state& state, bool has_selector)
-  -> std::function<table_slice()> {
+auto handle_empty_chunk(parser_state& state, bool has_selector) -> table_slice {
   if (has_selector) {
-    return [&state] {
-      if (state.last_used_builder)
-        return state.last_used_builder->finish();
-      return table_slice{};
-    };
+    if (state.last_used_builder)
+      return state.last_used_builder->finish();
+    return table_slice{};
   }
-  return [&state] {
-    return std::exchange(state.unknown_schema_builder, {}).finish();
-  };
+  return std::exchange(state.unknown_schema_builder, {}).finish();
 }
 
-auto emit_warning(operator_control_plane& control_plane,
-                  simdjson::error_code err) -> void {
-  control_plane.warn(caf::make_error(ec::parse_error, error_message(err)));
-}
-
-auto get_full_schema_name(const std::string& prefix,
-                          std::string_view selector_field_value)
-  -> std::string {
-  if (prefix.empty()) {
-    return std::string{selector_field_value};
-  }
-  return fmt::format("{}.{}", prefix, selector_field_value);
-}
-
-auto get_schema(simdjson::ondemand::document_reference doc,
-                const selector& selector, operator_control_plane& ctrl,
-                const std::vector<type>& schemas) -> const type* {
+auto get_schema_name(simdjson::ondemand::document_reference doc,
+                     const selector& selector) -> caf::expected<std::string> {
   auto type = doc[selector.selector_field];
   if (auto err = type.error()) {
     if (err != simdjson::error_code::NO_SUCH_FIELD)
-      emit_warning(ctrl, err);
-    return nullptr;
+      return caf::make_error(ec::parse_error, error_message(err));
+    return "";
   }
   doc.rewind();
   auto maybe_schema_name = type.value_unsafe().get_string();
   if (auto err = maybe_schema_name.error()) {
-    emit_warning(ctrl, err);
-    return nullptr;
+    return caf::make_error(ec::parse_error, error_message(err));
   }
-  auto full_schema_name
-    = get_full_schema_name(selector.prefix, maybe_schema_name.value_unsafe());
-  auto schema_it
-    = std::find_if(schemas.begin(), schemas.end(), [&](const auto& schema) {
-        return schema.name() == full_schema_name;
-      });
-  if (schema_it == schemas.end()) {
-    ctrl.warn(caf::make_error(
-      ec::parse_error,
-      fmt::format("json parser failed to find schema for '{}' and skips the "
-                  "JSON object '{}'",
-                  full_schema_name, doc.current_location().value_unsafe())));
-    return nullptr;
+  if (selector.prefix.empty()) {
+    return std::string{maybe_schema_name.value_unsafe()};
   }
-  return std::addressof(*schema_it);
+  return fmt::format("{}.{}", selector.prefix,
+                     maybe_schema_name.value_unsafe());
 }
 
-auto handle_schema_change(parser_state& state, const type& schema)
-  -> std::optional<table_slice> {
-  if (not state.builders_per_schema.contains(schema.name())) {
-    state.builders_per_schema[schema.name()]
-      = adaptive_table_slice_builder{schema};
-  }
-  if (not state.last_used_builder) {
+auto handle_builder_change(adaptive_table_slice_builder& builder_to_use,
+                           parser_state& state) -> std::optional<table_slice> {
+  if (not state.last_used_builder)
     return {};
-  }
-  if (state.last_used_builder
-      != std::addressof(state.builders_per_schema[schema.name()])) {
-    if (auto slice = state.last_used_builder->finish(); slice.rows() > 0)
+  if (state.last_used_builder != std::addressof(builder_to_use)) {
+    if (auto slice = state.last_used_builder->finish(); slice.rows() > 0) {
+      if (state.last_used_builder
+          == std::addressof(state.unknown_schema_builder))
+        state.unknown_schema_builder = {};
       return slice;
+    }
   }
   return {};
 }
 
+auto handle_no_matching_schema_found(parser_state& state,
+                                     std::string_view schema_name,
+                                     std::string_view parsed_doc)
+  -> caf::expected<std::optional<table_slice>> {
+  if (not state.infer_types) {
+    return caf::make_error(ec::parse_error,
+                           fmt::format("json parser failed to find schema for "
+                                       "'{}' and skips the "
+                                       "JSON object '{}'",
+                                       schema_name, parsed_doc));
+  }
+  auto maybe_slice_to_yield
+    = handle_builder_change(state.unknown_schema_builder, state);
+  state.last_used_builder = std::addressof(state.unknown_schema_builder);
+  return {std::move(maybe_slice_to_yield)};
+}
+
+auto handle_schema_found(parser_state& state, const type& schema)
+  -> std::optional<table_slice> {
+  if (not state.builders_per_schema.contains(schema.name())) {
+    state.builders_per_schema[schema.name()]
+      = adaptive_table_slice_builder{schema, state.infer_types};
+  }
+  auto& current_builder = state.builders_per_schema[schema.name()];
+  auto maybe_slice_to_yield = handle_builder_change(current_builder, state);
+  state.last_used_builder = std::addressof(current_builder);
+  return maybe_slice_to_yield;
+}
 auto finalize(adaptive_table_slice_builder* last_used_builder)
   -> std::optional<table_slice> {
   if (not last_used_builder)
@@ -312,25 +315,83 @@ auto finalize(adaptive_table_slice_builder* last_used_builder)
   return {};
 }
 
-auto get_schemas(bool schema_is_known, operator_control_plane& ctrl)
-  -> const std::vector<type>* {
-  if (not schema_is_known)
-    return nullptr;
+auto handle_schema_name_found(const std::vector<type>& schemas,
+                              std::string_view schema_name, parser_state& state,
+                              std::string_view parsed_doc)
+  -> caf::expected<std::optional<table_slice>> {
+  auto schema_it
+    = std::find_if(schemas.begin(), schemas.end(), [&](const auto& schema) {
+        return schema.name() == schema_name;
+      });
+  if (schema_it == schemas.end()) {
+    return handle_no_matching_schema_found(state, schema_name, parsed_doc);
+  }
+  return {handle_schema_found(state, *schema_it)};
+}
 
-  return std::addressof(ctrl.schemas());
+auto handle_truncated_bytes(size_t truncated_bytes, json_buffer& buffer,
+                            operator_control_plane& ctrl) {
+  if (truncated_bytes == 0) {
+    buffer.reset();
+    return;
+  }
+  // trunc > view.size() branch can ocurr when we have malformed JSON that
+  // triggers some UB in the simdjson parser. The simdjson parser is supposed
+  // to be used with well formed JSON or truncated JSON. In this case we don't
+  // know how to recover. It might be possible to use different parser or our
+  // custom logic to try recover as much data as possible.
+  if (truncated_bytes > buffer.view().size()) {
+    ctrl.abort(caf::make_error(ec::parse_error,
+                               fmt::format("detected malformed JSON and "
+                                           "aborts partsing: '{}'",
+                                           buffer.view())));
+    return;
+  }
+  buffer.truncate(truncated_bytes);
+}
+
+auto handle_known_schema(simdjson::ondemand::document_stream::iterator doc_it,
+                         selector& selector, parser_state& state,
+                         const std::vector<type>& schemas,
+                         operator_control_plane& ctrl) -> parser_action {
+  auto maybe_schema_name = get_schema_name(*doc_it, selector);
+  if (not maybe_schema_name) {
+    ctrl.warn(std::move(maybe_schema_name.error()));
+    if (not state.infer_types)
+      return parser_action::skip_chunk;
+    auto maybe_slice_to_yield
+      = handle_builder_change(state.unknown_schema_builder, state);
+    state.last_used_builder = std::addressof(state.unknown_schema_builder);
+    if (maybe_slice_to_yield) {
+      state.slice_to_yield = std::move(maybe_slice_to_yield);
+      return parser_action::yield;
+    }
+    return parser_action::pass;
+  }
+  auto maybe_slice_to_yield = handle_schema_name_found(
+    schemas, *maybe_schema_name, state, doc_it.source());
+  if (maybe_slice_to_yield) {
+    if (auto slice = *maybe_slice_to_yield) {
+      state.slice_to_yield = std::move(slice);
+      return parser_action::yield;
+    }
+    return parser_action::pass;
+  }
+  ctrl.warn(std::move(maybe_slice_to_yield.error()));
+  return parser_action::skip_chunk;
 }
 
 auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
                       operator_control_plane& ctrl,
-                      std::optional<selector> selector)
+                      std::optional<selector> selector, bool infer_types)
   -> generator<table_slice> {
   const auto schema_is_known = selector.has_value();
-  const auto schemas = get_schemas(schema_is_known, ctrl);
-  auto state = parser_state{};
+  const auto schemas
+    = schema_is_known ? std::addressof(ctrl.schemas()) : nullptr;
+  auto state = parser_state{.infer_types = infer_types};
   if (not schema_is_known)
     state.last_used_builder = std::addressof(state.unknown_schema_builder);
-  auto field_validator = create_field_validator(schema_is_known);
-  auto empty_chunk_handler = create_empty_chunk_handler(state, schema_is_known);
+  auto field_validator = create_field_validator(schema_is_known, infer_types);
   // TODO: change max table slice size to be fetched from options.
   constexpr auto max_table_slice_rows = defaults::import::table_slice_size;
   auto parser = simdjson::ondemand::parser{};
@@ -338,7 +399,7 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
   auto json_to_parse_buffer = json_buffer{};
   for (auto chnk : json_chunk_generator) {
     if (not chnk or chnk->size() == 0u) {
-      co_yield empty_chunk_handler();
+      co_yield handle_empty_chunk(state, schema_is_known);
       continue;
     }
     json_to_parse_buffer.append(
@@ -358,13 +419,15 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
     }
     for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
       if (schema_is_known) {
-        auto* schema = get_schema(*doc_it, *selector, ctrl, *schemas);
-        if (not schema)
-          continue;
-        if (auto slice = handle_schema_change(state, *schema))
-          co_yield std::move(*slice);
-        state.last_used_builder
-          = std::addressof(state.builders_per_schema[schema->name()]);
+        switch (handle_known_schema(doc_it, *selector, state, *schemas, ctrl)) {
+          case parser_action::pass:
+            break;
+          case parser_action::skip_chunk:
+            continue;
+          case parser_action::yield:
+            VAST_ASSERT(state.slice_to_yield);
+            co_yield *std::exchange(state.slice_to_yield, {});
+        }
       }
       if (auto err = parse_doc(field_validator, doc_it,
                                *state.last_used_builder, ctrl)) {
@@ -380,23 +443,8 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
           state.unknown_schema_builder = {};
       }
     }
-    if (auto trunc = stream.truncated_bytes();
-        trunc == 0 or trunc > view.size()) {
-      json_to_parse_buffer.reset();
-    }
-    // trunc > view.size() branch can ocurr when we have malformed JSON that
-    // triggers some UB in the simdjson parser. The simdjson parser is supposed
-    // to be used with well formed JSON or truncated JSON. In this case we don't
-    // know how to recover. It might be possible to use different parser or our
-    // custom logic to try recover as much data as possible.
-    else if (trunc > view.size()) {
-      ctrl.abort(caf::make_error(ec::parse_error,
-                                 fmt::format("detected malformed JSON and "
-                                             "aborts partsing: '{}'",
-                                             view)));
-    } else {
-      json_to_parse_buffer.truncate(trunc);
-    }
+    handle_truncated_bytes(stream.truncated_bytes(), json_to_parse_buffer,
+                           ctrl);
   }
   if (auto slice = finalize(state.last_used_builder))
     co_yield std::move(*slice);
@@ -432,13 +480,15 @@ class plugin final : public virtual parser_plugin,
     caf::settings settings;
     config_options options;
     options.add<std::string>("selector", "");
+    options.add<bool>("no-infer", "");
     if (auto [ec, it] = options.parse(settings, args);
         ec != caf::pec::success) {
       return caf::make_error(ec,
                              fmt::format("failed to parse option '{}'", *it));
     }
     return make_parser_impl(std::move(json_chunk_generator), ctrl,
-                            get_selector(settings, ctrl));
+                            get_selector(settings, ctrl),
+                            not settings.contains("no-infer"));
   }
 
   auto default_loader(std::span<std::string const>) const
@@ -511,12 +561,6 @@ class selector_parser final : public virtual parser_plugin {
                    generator<chunk_ptr> json_chunk_generator,
                    operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
-    if (!args.empty()) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} parser received unexpected "
-                                         "arguments: {}",
-                                         Name.str(), fmt::join(args, ", ")));
-    };
     args.push_back(fmt::format("--selector={}", Selector.str()));
     return json_parser_->make_parser(std::move(args),
                                      std::move(json_chunk_generator), ctrl);
