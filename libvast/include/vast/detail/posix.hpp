@@ -19,6 +19,10 @@
 
 namespace vast::detail {
 
+// Returns a textual representation for `errno`. In contrast to `strerror`, this
+// function is thread-safe.
+auto describe_errno(int err = errno) -> std::string;
+
 enum class socket_type { datagram, stream, fd };
 
 /// Holds the necessary state to send unix datagrams to a destination socket.

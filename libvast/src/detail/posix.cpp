@@ -32,6 +32,15 @@
 
 namespace vast::detail {
 
+auto describe_errno(int err) -> std::string {
+  auto result = std::string(256, '\0');
+  if (strerror_r(err, result.data(), result.size()) != 0) {
+    return fmt::format("<errno = {}>", err);
+  }
+  result.erase(std::find(result.begin(), result.end(), '\0'), result.end());
+  return result;
+}
+
 int uds_listen(const std::string& path) {
   int fd;
   if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)

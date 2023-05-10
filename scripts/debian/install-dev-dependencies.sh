@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-apt-get update 
+apt-get update
 apt-get -y --no-install-recommends install \
     build-essential \
     ca-certificates \

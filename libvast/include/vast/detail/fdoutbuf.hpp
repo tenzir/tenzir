@@ -13,7 +13,7 @@
 namespace vast::detail {
 
 /// A streambuffer that proxies writes to an underlying POSIX file descriptor.
-class fdoutbuf : public std::streambuf {
+class [[deprecated]] fdoutbuf : public std::streambuf {
 public:
   /// Constructs an output streambuffer from a POSIX file descriptor.
   /// @param fd The file descriptor to construct the streambuffer for.
