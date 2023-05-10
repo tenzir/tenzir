@@ -76,7 +76,7 @@ public:
       auto field = field_pusher.push_field(key);
       if (auto success = field_validator_(field); not success) {
         ctrl_.warn(caf::make_error(ec::parse_error,
-                                   fmt::format("ignoring field {}. err: {}",
+                                   fmt::format("json parser field '{}': {}",
                                                key, success.error())));
         continue;
       }
@@ -88,9 +88,9 @@ private:
   auto report_parse_err(auto& v, std::string description) -> void {
     ctrl_.warn(caf::make_error(
       ec::parse_error,
-      fmt::format("unable to parse {} from an input: {} located in line: {}",
-                  std::move(description), v.current_location().value_unsafe(),
-                  parsed_document_)));
+      fmt::format("json parser failed to parse {} in line {} from '{}'",
+                  std::move(description), parsed_document_,
+                  v.current_location().value_unsafe())));
   }
 
   auto parse_number(simdjson::ondemand::value val, auto& pusher) -> void {
@@ -278,8 +278,8 @@ auto get_schema(simdjson::ondemand::document_reference doc,
   if (schema_it == schemas.end()) {
     ctrl.warn(caf::make_error(
       ec::parse_error,
-      fmt::format("no schema available for {}. The following JSON won't be "
-                  "parsed: '{}'",
+      fmt::format("json parser failed to find schema for '{}' and skips the "
+                  "JSON object '{}'",
                   full_schema_name, doc.current_location().value_unsafe())));
     return nullptr;
   }
@@ -391,8 +391,8 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
     // custom logic to try recover as much data as possible.
     else if (trunc > view.size()) {
       ctrl.abort(caf::make_error(ec::parse_error,
-                                 fmt::format("malformed JSON detected : '{}'. "
-                                             "The parsing will be aborted",
+                                 fmt::format("detected malformed JSON and "
+                                             "aborts partsing: '{}'",
                                              view)));
     } else {
       json_to_parse_buffer.truncate(trunc);
