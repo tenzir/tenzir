@@ -1115,8 +1115,9 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
     auto split = detail::split(*selector_opt, ":");
     VAST_ASSERT(!split.empty());
     if (split.size() > 2 || split[0].empty()) {
-      VAST_ERROR("{} failed to parse selector '{}': must contain at most one "
-                 "':' and field name must not be empty; ignoring option");
+      VAST_ERROR("failed to parse selector '{}': must contain at most one "
+                 "':' and field name must not be empty; ignoring option",
+                 *selector_opt);
       selector_ = std::make_unique<default_selector>();
     } else {
       auto field_name = std::string{split[0]};

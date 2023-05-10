@@ -438,7 +438,7 @@ store_plugin::make_store(system::accountant_actor accountant,
                                                  std::move(path), name());
 }
 
-auto store_plugin::make_parser(std::span<std::string const> args,
+auto store_plugin::make_parser(std::vector<std::string> args,
                                generator<chunk_ptr> loader,
                                operator_control_plane& ctrl) const
   -> caf::expected<parser> {

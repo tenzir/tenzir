@@ -40,8 +40,8 @@ public:
   }
 
   auto provide() -> series_builder&;
-  auto type() -> type;
-  auto is_builder_constructed() -> bool;
+  auto type() const -> type;
+  auto is_builder_constructed() const -> bool;
 
 private:
   std::variant<builder_provider_impl, std::reference_wrapper<series_builder>>
@@ -192,7 +192,8 @@ class fixed_fields_record_builder : public record_series_builder_base {
 public:
   explicit fixed_fields_record_builder(record_type type);
 
-  auto get_field_builder(std::string_view field_name) -> series_builder&;
+  auto get_field_builder_provider(std::string_view field_name)
+    -> builder_provider;
   auto get_arrow_builder() -> std::shared_ptr<arrow::StructBuilder>;
   auto type() const -> const vast::type&;
 
@@ -290,8 +291,9 @@ private:
                    new_builder.add(view);
                    *this = std::move(new_builder);
                  },
-                 [](auto&) {
-                   die("cast not implemented");
+                 [view](auto&) {
+                   VAST_WARN("cast not implemented: ignoring value {}",
+                             data{materialize(view)});
                  },
                },
                *this);
