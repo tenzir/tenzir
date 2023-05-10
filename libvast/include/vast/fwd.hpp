@@ -13,6 +13,7 @@
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>
 #include <caf/type_id.hpp>
+#include <flatbuffers/base.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -63,7 +64,19 @@ class RandomAccessFile;
 
 namespace flatbuffers {
 
+#if FLATBUFFERS_VERSION_MAJOR >= 23 && FLATBUFFERS_VERSION_MINOR >= 5          \
+  && FLATBUFFERS_VERSION_REVISION >= 9
+
+template <bool>
+class FlatBufferBuilderImpl;
+
+using FlatBufferBuilder = FlatBufferBuilderImpl<false>;
+
+#else
+
 class FlatBufferBuilder;
+
+#endif
 
 template <class T>
 struct Offset;
