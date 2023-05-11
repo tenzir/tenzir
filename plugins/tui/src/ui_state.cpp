@@ -169,18 +169,6 @@ auto ui_state::add(table_slice slice) -> void {
     state.leaves.push_back(column);
   }
   VAST_ASSERT(state.leaves.size() == schema.num_leaves());
-  // TODO: we want to get rid of this special casing of RIDs. Ideally, the user
-  // provides a dedicated 'enumerate' operator that adds the RIDs at the data
-  // level. Or this operator gets a flag to opt of that. But the special casing
-  // needs to go regardless.
-  state.rids = Container::Vertical({});
-  auto height = detail::narrow_cast<int>(schema.depth() * 2);
-  auto header = Header(" # ", "", height, theme);
-  state.rids->Add(header);
-  state.rids->Add(component(theme.separator()));
-  auto base = uint64_t{state.rids->ChildCount() - 2};
-  for (size_t j = 0; j < slice.rows(); ++j)
-    state.rids->Add(Cell(view<data>{base + j}, theme));
 }
 
 } // namespace vast::plugins::tui

@@ -23,9 +23,6 @@ namespace vast::plugins::tui {
 struct ui_state {
   /// The state for a table.
   struct table_state {
-    /// An extra column with row IDs.
-    ftxui::Component rids;
-
     /// The leaf columns.
     std::vector<ftxui::Component> leaves;
 

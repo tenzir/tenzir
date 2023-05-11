@@ -156,11 +156,6 @@ auto Explorer(ui_state* state) -> Component {
         } else {
           VAST_ASSERT(state_->tables.contains(schema));
           auto& table_state = state_->tables[schema];
-          // Prepend rids.
-          if (index == 0) {
-            result->Add(table_state.rids);
-            result->Add(component(state_->theme.separator()));
-          }
           // Fetch leaf column from UI state.
           VAST_ASSERT(index < table_state.leaves.size());
           auto column = table_state.leaves[index++];
