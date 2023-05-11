@@ -18,4 +18,12 @@ enum class status_endpoints : uint64_t {
   status,
 };
 
+enum class pipeline_endpoints : uint64_t {
+  update,
+  create,
+  delete_,
+  list,
+  serve
+};
+
 } // namespace vast::system

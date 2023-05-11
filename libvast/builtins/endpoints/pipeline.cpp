@@ -368,7 +368,60 @@ class plugin final : public virtual rest_endpoint_plugin {
   /// List of API endpoints provided by this plugin.
   [[nodiscard]] auto rest_endpoints() const
     -> const std::vector<rest_endpoint>& override {
-    die("unimplemented");
+    static auto endpoints = std::vector<vast::rest_endpoint>{
+      {
+        .endpoint_id
+        = static_cast<uint64_t>(system::pipeline_endpoints::update),
+        .method = http_method::post,
+        .path = "/pipeline/update",
+        .params = vast::record_type{{"id", vast::string_type{}},
+                                    {"state", vast::string_type{}},
+                                    {"name", vast::string_type{}},
+                                    {"restart_with_node", vast::bool_type{}}},
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id
+        = static_cast<uint64_t>(system::pipeline_endpoints::create),
+        .method = http_method::post,
+        .path = "/pipeline/create",
+        .params = vast::record_type{{"definition", vast::string_type{}},
+                                    {"autostart", vast::bool_type{}},
+                                    {"name", vast::string_type{}},
+                                    {"restart_with_node", vast::bool_type{}}},
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id
+        = static_cast<uint64_t>(system::pipeline_endpoints::delete_),
+        .method = http_method::post,
+        .path = "/pipeline/delete",
+        .params = vast::record_type{{"id", vast::string_type{}}},
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id = static_cast<uint64_t>(system::pipeline_endpoints::list),
+        .method = http_method::post,
+        .path = "/pipeline/list",
+        .params = {},
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+      {
+        .endpoint_id = static_cast<uint64_t>(system::pipeline_endpoints::serve),
+        .method = http_method::post,
+        .path = "/serve",
+        .params = vast::record_type{{"serve_id", vast::string_type{}},
+                                    {"continuation_token", vast::string_type{}},
+                                    {"max_events", vast::int64_type{}},
+                                    {"timeout", vast::string_type{}}},
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      }};
+    return endpoints;
   }
 
   auto handler([[maybe_unused]] caf::actor_system& system,
