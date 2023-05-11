@@ -51,6 +51,12 @@ auto exec_command(std::span<const std::string> args, caf::actor_system& sys)
     }
     pipeline->append(std::move(*op));
   }
+  if (not pipeline->is_closed()) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("cannot execute pipeline that is not "
+                                       "closed: {}",
+                                       pipeline->to_string()));
+  }
   caf::scoped_actor self{sys};
   auto executor = self->spawn(pipeline_executor, std::move(*pipeline));
   auto result = caf::expected<void>{};
