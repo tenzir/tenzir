@@ -382,10 +382,11 @@ auto partition_transformer(
             = caf::make_copy_on_write<partition_synopsis>();
         }
         auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
-        unshared_synopsis->min_import_time
-          = std::min(slice.import_time(), unshared_synopsis->min_import_time);
-        unshared_synopsis->max_import_time
-          = std::max(slice.import_time(), unshared_synopsis->max_import_time);
+        if (slice.import_time() == time{}) {
+          slice.import_time(self->state.min_import_time);
+        }
+        unshared_synopsis->min_import_time = self->state.min_import_time;
+        unshared_synopsis->max_import_time = self->state.max_import_time;
         partition_data.events += slice.rows();
         self->state.events += slice.rows();
         self->state.partition_buildup[partition_data.id].slices.push_back(
