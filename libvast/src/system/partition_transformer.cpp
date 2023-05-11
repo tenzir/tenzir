@@ -370,9 +370,6 @@ auto partition_transformer(
         }
       }
       for (auto& slice : *output) {
-        auto const& schema = slice.schema();
-        // TODO: Technically we'd only need to send *new* schemas here.
-        self->send(self->state.catalog, atom::put_v, schema);
         auto& partition_data = self->state.create_or_get_partition(slice);
         if (!partition_data.synopsis) {
           partition_data.id = vast::uuid::random();
