@@ -1,0 +1,11 @@
+#separator \x09
+#set_separator	;
+#empty_field	empty
+#unset_field	NULLVAL
+#path	zeek.conn
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	community_id	_write_ts
+#types	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	vector[string]	string	time
+2009-11-18T08:00:21.486539	Pii6cUUq1v4	NULLVAL	NULLVAL	NULLVAL	NULLVAL	udp	NULLVAL	163.82ms	301	300	SF	NULLVAL	NULLVAL	0	Dd	1	329	1	328	empty	NULLVAL	NULLVAL
+2009-11-18T08:08:00.237253	nkCxlvNN8pi	NULLVAL	NULLVAL	NULLVAL	NULLVAL	udp	dns	3.78s	350	0	S0	NULLVAL	NULLVAL	0	D	7	546	0	0	empty	NULLVAL	NULLVAL
+2009-11-18T08:08:13.816224	9VdICMMnxQ7	NULLVAL	NULLVAL	NULLVAL	NULLVAL	udp	dns	3.75s	350	0	S0	NULLVAL	NULLVAL	0	D	7	546	0	0	empty	NULLVAL	NULLVAL
+2009-11-18T08:07:15.800932	bEgBnkI31Vf	NULLVAL	NULLVAL	NULLVAL	NULLVAL	udp	NULLVAL	46.73s	560	0	S0	NULLVAL	NULLVAL	0	D	3	644	0	0	empty	NULLVAL	NULLVAL
