@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice.hpp>
+#include <vast/concept/parseable/vast/option_set.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
@@ -25,6 +26,9 @@ namespace {
 // between intra-schema and inter-schema processing.
 class enumerate_operator final : public crtp_operator<enumerate_operator> {
 public:
+  explicit enumerate_operator(std::string field) : field_{std::move(field)} {
+  }
+
   auto operator()(generator<table_slice> input) const
     -> generator<table_slice> {
     // Per-schema state.
@@ -54,7 +58,7 @@ public:
       // Replace first column with a pair of (RID, first).
       auto rid_array = builder->Finish().ValueOrDie();
       return {
-        {{"#", rid_type}, rid_array},
+        {{field_, rid_type}, rid_array},
         {field, array},
       };
     };
@@ -72,6 +76,9 @@ public:
   auto to_string() const -> std::string override {
     return "enumerate";
   }
+
+private:
+  std::string field_;
 };
 
 class plugin final : public virtual operator_plugin {
@@ -89,22 +96,41 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
+    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
+      parsers::optional_ws_or_comment;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
+
+    const auto options = option_set_parser{{{"field", 'f'}}};
+    const auto option_parser = (required_ws_or_comment >> options);
+    auto parsed_options = std::unordered_map<std::string, data>{};
+    if (!option_parser(f, l, parsed_options)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error,
+                        fmt::format("failed to parse enumerate operator "
+                                    "options: '{}'",
+                                    pipeline)),
+      };
+    }
     const auto p = optional_ws_or_comment >> end_of_pipeline_operator;
     if (!p(f, l, unused)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "unique operator: "
+                                                      "enumerate operator: "
                                                       "'{}'",
                                                       pipeline)),
       };
     }
+    std::string field;
+    for (auto& [key, value] : parsed_options)
+      if (key == "f" || key == "field")
+        if (auto* f = caf::get_if<std::string>(&value))
+          field = std::move(*f);
     return {
       std::string_view{f, l},
-      std::make_unique<enumerate_operator>(),
+      std::make_unique<enumerate_operator>(std::move(field)),
     };
   }
 };
