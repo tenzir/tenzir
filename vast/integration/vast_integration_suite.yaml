@@ -831,7 +831,7 @@ tests:
         input: data/zeek/dns.log.gz
       - command: exec 'from stdin read zeek-tsv | head 300 | write csv to stdout'
         input: data/zeek/dns.log.gz
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv ; empty NULLVAL to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --set-separator=";" --empty-field="empty" --unset-field="NULLVAL" to stdout'
         input: data/zeek/whitespace_start.log
       - command: exec 'from stdin read json | write zeek-tsv to stdout'
         input: data/json/snmp.log.json.gz

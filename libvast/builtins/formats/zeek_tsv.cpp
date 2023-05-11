@@ -9,6 +9,7 @@
 #include "vast/arrow_table_slice.hpp"
 #include "vast/cast.hpp"
 #include "vast/concept/parseable/string/any.hpp"
+#include "vast/concept/parseable/vast/option_set.hpp"
 #include "vast/concept/parseable/vast/pipeline.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
@@ -47,6 +48,9 @@ constexpr auto default_sep = '\x09';
 constexpr auto default_set_sep = ',';
 constexpr std::string_view default_empty_val = "(empty)";
 constexpr std::string_view default_unset_val = "-";
+constexpr auto set_separator_option = "set-separator";
+constexpr auto empty_field_option = "empty-field";
+constexpr auto unset_field_option = "unset-field";
 
 /// Constructs a polymorphic Zeek data parser.
 template <class Iterator, class Attribute>
@@ -659,18 +663,25 @@ public:
                     [[maybe_unused]] type input_schema,
                     operator_control_plane&) const
     -> caf::expected<printer> override {
-    if (not args.empty() and args.size() != 3) {
-      return caf::make_error(
-        ec::syntax_error,
-        fmt::format("{} printer requires 0 or 3 arguments but "
-                    "got {}: [{}]",
-                    name(), args.size(), fmt::join(args, ", ")));
-    }
     auto set_sep = default_set_sep;
     auto empty_field = default_empty_val;
     auto unset_field = default_unset_val;
-    if (args.size() == 3) {
-      auto parsed_set_sep = to_xsv_sep(args[0]);
+    auto options = option_set_parser{{{set_separator_option, 's'},
+                                      {empty_field_option, 'e'},
+                                      {unset_field_option, 'u'}}};
+    auto parsed_options = std::unordered_map<std::string, data>{};
+    for (std::string_view arg : args) {
+      const auto* f = arg.begin();
+      const auto* const l = arg.end();
+      options(f, l, parsed_options);
+    }
+    if (parsed_options.contains(set_separator_option)) {
+      auto* set_sep_option_val
+        = caf::get_if<std::string>(&parsed_options[set_separator_option]);
+      if (not set_sep_option_val)
+        return caf::make_error(ec::invalid_argument,
+                               "invalid set separator argument");
+      auto parsed_set_sep = to_xsv_sep(*set_sep_option_val);
       if (not parsed_set_sep) {
         return std::move(parsed_set_sep.error());
       }
@@ -680,25 +691,44 @@ public:
                                "different");
       }
       set_sep = *parsed_set_sep;
-      empty_field = args[1];
+    }
+    if (parsed_options.contains(empty_field_option)) {
+      auto* empty_field_option_val
+        = caf::get_if<std::string>(&parsed_options[empty_field_option]);
+      if (not empty_field_option_val)
+        return caf::make_error(ec::invalid_argument,
+                               "invalid set separator argument");
+      empty_field = *empty_field_option_val;
       auto conflict
         = std::any_of(empty_field.begin(), empty_field.end(), [&](auto ch) {
-            return ch == default_sep or ch == parsed_set_sep;
+            return ch == default_sep or ch == set_sep;
           });
       if (conflict) {
-        return caf::make_error(ec::invalid_argument, "empty value must not "
+        return caf::make_error(ec::invalid_argument, "empty field must not "
                                                      "contain separator or set "
                                                      "separator");
       }
-      unset_field = args[2];
-      conflict
+    }
+    if (parsed_options.contains(unset_field_option)) {
+      auto* unset_field_option_val
+        = caf::get_if<std::string>(&parsed_options[unset_field_option]);
+      if (not unset_field_option_val)
+        return caf::make_error(ec::invalid_argument,
+                               "invalid set separator argument");
+      unset_field = *unset_field_option_val;
+      auto conflict
         = std::any_of(unset_field.begin(), unset_field.end(), [&](auto ch) {
-            return ch == default_sep or ch == parsed_set_sep;
+            return ch == default_sep or ch == set_sep;
           });
       if (conflict) {
-        return caf::make_error(ec::invalid_argument, "unset value must not "
+        return caf::make_error(ec::invalid_argument, "unset field must not "
                                                      "contain separator or set "
                                                      "separator");
+      }
+      if (empty_field == unset_field) {
+        return caf::make_error(ec::invalid_argument,
+                               "unset field must not be equal to empty "
+                               "field");
       }
     }
     auto printer = zeek_printer{set_sep, empty_field, unset_field,
