@@ -35,7 +35,8 @@ ENV PREFIX="/opt/tenzir/vast" \
     CC="gcc-12" \
     CXX="g++-12" \
     VAST_DB_DIRECTORY="/var/lib/vast" \
-    VAST_LOG_FILE="/var/log/vast/server.log"
+    VAST_LOG_FILE="/var/log/vast/server.log" \
+    VAST_ENDPOINT="0.0.0.0"
 
 # Additional arguments to be passed to CMake.
 ARG VAST_BUILD_OPTIONS
@@ -75,7 +76,8 @@ FROM debian:bookworm-slim AS production
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}" \
     VAST_DB_DIRECTORY="/var/lib/vast" \
-    VAST_LOG_FILE="/var/log/vast/server.log"
+    VAST_LOG_FILE="/var/log/vast/server.log" \
+    VAST_ENDPOINT="0.0.0.0"
 
 RUN useradd --system --user-group vast
 COPY --from=development --chown=vast:vast $PREFIX/ $PREFIX/

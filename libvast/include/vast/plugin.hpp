@@ -354,7 +354,7 @@ public:
   using parser = generator<table_slice>;
 
   virtual auto
-  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
+  make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,
               operator_control_plane& ctrl) const -> caf::expected<parser>
     = 0;
 
@@ -427,6 +427,7 @@ public:
     type input_schema{};
     std::string format{};
   };
+
   // Alias for the byte chunk dumping function.
   using saver = std::function<auto(chunk_ptr)->void>;
 
@@ -513,9 +514,8 @@ private:
   make_store(system::accountant_actor accountant, system::filesystem_actor fs,
              std::span<const std::byte> header) const final;
 
-  auto
-  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
-              operator_control_plane& ctrl) const
+  auto make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,
+                   operator_control_plane& ctrl) const
     -> caf::expected<parser> final;
 
   auto default_loader(std::span<std::string const> args) const

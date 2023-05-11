@@ -39,6 +39,12 @@ auto test_layout2 = record_type{
     {"bar", string_type{}}
   }}};
 
+auto test_layout3 = record_type{
+  {"struct", type{record_type{
+    {"dummy", string_type{}}
+  }, {{"opaque"}}}},
+};
+
 // clang-format on
 
 } // namespace
@@ -120,6 +126,31 @@ TEST(required field) {
   CHECK_NOT_EQUAL(vast::validate(*data, test_layout2, validate::permissive),
                   valid);
   CHECK_NOT_EQUAL(vast::validate(*data, test_layout2, validate::strict), valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_layout2, validate::exhaustive),
+                  valid);
+}
+
+TEST(opaque fields) {
+  auto data = vast::from_yaml(R"_(
+    struct:
+      bar: no
+      baz: yes
+  )_");
+  REQUIRE_NOERROR(data);
+  auto valid = caf::error{};
+  CHECK_EQUAL(vast::validate(*data, test_layout3, validate::permissive), valid);
+  CHECK_EQUAL(vast::validate(*data, test_layout3, validate::strict), valid);
+  CHECK_EQUAL(vast::validate(*data, test_layout3, validate::exhaustive), valid);
+  auto data2 = vast::from_yaml(R"_(
+    # !! 'struct' should be a record
+    struct: foo
+  )_");
+  CHECK_NOT_EQUAL(vast::validate(*data2, test_layout3, validate::permissive),
+                  valid);
+  // Invalid, only records may have 'opaque' label.
+  auto invalid_layout = record_type{
+    {"struct", type{string_type{}, {{"opaque"}}}},
+  };
   CHECK_NOT_EQUAL(vast::validate(*data, test_layout2, validate::exhaustive),
                   valid);
 }

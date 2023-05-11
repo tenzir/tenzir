@@ -108,7 +108,11 @@ make_output_stream(const std::string& output, socket_type st) {
   auto remote_fd = uds.fd;
   if (st == socket_type::fd)
     remote_fd = uds.recv_fd();
+  // TODO
+  VAST_DIAGNOSTIC_PUSH
+  VAST_DIAGNOSTIC_IGNORE_DEPRECATED
   return std::make_unique<fdostream>(remote_fd);
+  VAST_DIAGNOSTIC_POP
 }
 
 caf::expected<std::unique_ptr<std::ostream>>
@@ -125,8 +129,13 @@ make_output_stream(const std::string& output,
       return caf::make_error(ec::unimplemented, "make_output_stream does not "
                                                 "support fifo yet");
     case std::filesystem::file_type::regular: {
-      if (output == "-")
+      if (output == "-") {
+        // TODO
+        VAST_DIAGNOSTIC_PUSH
+        VAST_DIAGNOSTIC_IGNORE_DEPRECATED
         return std::make_unique<fdostream>(1); // stdout
+        VAST_DIAGNOSTIC_POP
+      }
       return std::make_unique<std::ofstream>(output, mode);
     }
   }

@@ -6,6 +6,12 @@ WORKDIR /tmp/vast
 
 COPY contrib/vast-plugins ./contrib/vast-plugins
 
+RUN cmake -S contrib/vast-plugins/cloud -B build-cloud -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-cloud --parallel && \
+      DESTDIR=/plugin/cloud cmake --install build-cloud --strip --component Runtime && \
+      rm -rf build-cloud
+
 RUN cmake -S contrib/vast-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-compaction --parallel && \
@@ -34,8 +40,24 @@ RUN cmake -S contrib/vast-plugins/netflow -B build-netflow -G Ninja \
 
 FROM production AS vast-ce
 
+COPY --from=plugins --chown=vast:vast /plugin/cloud /
 COPY --from=plugins --chown=vast:vast /plugin/matcher /
 COPY --from=plugins --chown=vast:vast /plugin/netflow /
+
+# -- vast-demo --------------------------------------------------------------
+
+FROM vast-ce AS vast-demo
+
+USER root:root
+COPY demo-node /demo-node
+RUN apt-get update && \
+    apt install -y \
+        curl \
+        bc \
+        zstd && \
+        rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT ["/demo-node/entrypoint.bash"]
 
 # -- vast-ee -------------------------------------------------------------------
 

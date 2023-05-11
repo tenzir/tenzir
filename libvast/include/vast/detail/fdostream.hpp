@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/config.hpp"
 #include "vast/detail/fdoutbuf.hpp"
 
 #include <ostream>
@@ -15,12 +16,15 @@
 namespace vast::detail {
 
 /// An output stream which wraps a ::fdoutbuf.
-class fdostream : public std::ostream {
+class [[deprecated]] fdostream : public std::ostream {
 public:
   fdostream(int fd);
 
 private:
+  VAST_DIAGNOSTIC_PUSH
+  VAST_DIAGNOSTIC_IGNORE_DEPRECATED
   fdoutbuf buf_;
+  VAST_DIAGNOSTIC_POP
 };
 
 } // namespace vast::detail

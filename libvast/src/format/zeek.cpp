@@ -578,7 +578,11 @@ caf::error writer::write(const table_slice& slice) {
     if (writers_.empty()) {
       VAST_DEBUG("{} creates a new stream for STDOUT",
                  detail::pretty_type_name(this));
+      // TODO
+      VAST_DIAGNOSTIC_PUSH
+      VAST_DIAGNOSTIC_IGNORE_DEPRECATED
       auto out = std::make_unique<detail::fdostream>(1);
+      VAST_DIAGNOSTIC_POP
       writers_.emplace(schema.name(), std::make_unique<writer_child>(
                                         std::move(out), show_timestamp_tags_));
     }

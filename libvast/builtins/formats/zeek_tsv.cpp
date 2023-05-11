@@ -529,7 +529,7 @@ struct zeek_printer {
 class plugin : public virtual parser_plugin, public virtual printer_plugin {
 public:
   auto
-  make_parser([[maybe_unused]] std::span<std::string const> args,
+  make_parser([[maybe_unused]] std::vector<std::string> args,
               generator<chunk_ptr> loader, operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     return std::invoke(
@@ -659,8 +659,7 @@ public:
     return {"stdin", {}};
   }
 
-  auto make_printer(std::span<std::string const> args,
-                    [[maybe_unused]] type input_schema,
+  auto make_printer(std::span<std::string const> args, type input_schema,
                     operator_control_plane&) const
     -> caf::expected<printer> override {
     auto set_sep = default_set_sep;

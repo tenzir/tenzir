@@ -362,9 +362,8 @@ class plugin final : public virtual reader_plugin,
     return std::make_unique<reader>(options, in ? std::move(*in) : nullptr);
   }
 
-  auto
-  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
-              operator_control_plane& ctrl) const
+  auto make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,
+                   operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     if (!args.empty()) {
       return caf::make_error(ec::invalid_argument,

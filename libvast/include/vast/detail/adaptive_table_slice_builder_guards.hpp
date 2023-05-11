@@ -188,6 +188,13 @@ public:
   /// outlive the return value of this method.
   auto push_list() -> list_guard;
 
+  /// @brief The fields can exist in two scenarios. 1) The value was added to it
+  /// by the add or push_list/push_record with it's add. 2) The
+  /// adaptive_table_slice_builder was constructed with a known schema that
+  /// already contained the field.
+  /// @return true - field exist. false - doesn't exist.
+  auto field_exists() const -> bool;
+
 private:
   builder_provider builder_provider_;
   arrow_length_type starting_fields_length_ = 0u;

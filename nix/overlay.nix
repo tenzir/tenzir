@@ -39,6 +39,8 @@ in {
   # spdlog in nixpkgs uses `fmt_8` directly, but we want version 9, so we use a
   # little hack here.
   fmt_8 = prev.fmt;
+  # We need boost 1.8.1 at minimum for URL.
+  boost = prev.boost18x;
   http-parser =
     if !isStatic
     then prev.http-parser
@@ -153,6 +155,7 @@ in {
     };
   in
     pkg.withPlugins (ps: [
+      ps.cloud
       ps.matcher
       ps.netflow
     ]);
@@ -162,6 +165,7 @@ in {
     };
   in
     pkg.withPlugins (ps: [
+      ps.cloud
       ps.compaction
       #ps.inventory
       ps.matcher

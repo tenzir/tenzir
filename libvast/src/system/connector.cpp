@@ -24,6 +24,18 @@ namespace vast::system {
 
 namespace {
 
+auto formatted_resolved_host_suffix(const std::string& host) -> std::string {
+  const auto resolved_host
+    = caf::io::network::interfaces::native_address(host)->first;
+  if (std::equal(host.begin(), host.end(), resolved_host.begin(),
+                 resolved_host.end(), [](char lhs, char rhs) {
+                   return std::tolower(lhs) == std::tolower(rhs);
+                 })) {
+    return {};
+  }
+  return fmt::format(" ({})", resolved_host);
+}
+
 bool is_recoverable_error_enum(caf::sec err_enum) {
   switch (err_enum) {
     case caf::sec::none:
@@ -140,12 +152,11 @@ std::string format_time(caf::timespan timespan) {
 void log_connection_failed(connect_request request,
                            caf::timespan remaining_time,
                            caf::timespan retry_delay) {
-  VAST_INFO("client faild to connect to remote node {} ({}):{}; attempting to "
+  VAST_INFO("client faild to connect to remote node {}:{}{}; attempting to "
             "reconnect in {} (remaining time: {})",
-            request.host,
-            caf::io::network::interfaces::native_address(request.host)->first,
-            request.port, format_time(retry_delay),
-            format_time(remaining_time));
+            request.host, request.port,
+            formatted_resolved_host_suffix(request.host),
+            format_time(retry_delay), format_time(remaining_time));
 }
 
 connector_actor::behavior_type make_no_retry_behavior(
@@ -191,7 +202,6 @@ connector(connector_actor::stateful_pointer<connector_state> self,
   self->state.middleman = self->system().has_openssl_manager()
                             ? self->system().openssl_manager().actor_handle()
                             : self->system().middleman().actor_handle();
-
   if (!retry_delay)
     return make_no_retry_behavior(std::move(self), deadline);
   return {
@@ -203,10 +213,8 @@ connector(connector_actor::stateful_pointer<connector_state> self,
                                fmt::format("{} couldn't connect to VAST node "
                                            "within a given deadline",
                                            *self));
-      VAST_INFO(
-        "client connects to {} ({}):{}", request.host,
-        caf::io::network::interfaces::native_address(request.host)->first,
-        request.port);
+      VAST_INFO("client connects to {}:{}{}", request.host, request.port,
+                formatted_resolved_host_suffix(request.host));
       auto rp = self->make_response_promise<node_actor>();
       self
         ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,

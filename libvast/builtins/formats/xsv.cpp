@@ -157,9 +157,8 @@ struct xsv_printer {
 
 class xsv_plugin : public virtual parser_plugin, public virtual printer_plugin {
 public:
-  auto
-  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
-              operator_control_plane& ctrl) const
+  auto make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,
+                   operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     if (args.size() != 1) {
       return caf::make_error(
@@ -348,9 +347,8 @@ template <detail::string_literal Name, char Sep, char ListSep,
           detail::string_literal Null>
 class configured_xsv_plugin final : public virtual xsv_plugin {
 public:
-  auto
-  make_parser(std::span<std::string const> args, generator<chunk_ptr> loader,
-              operator_control_plane& ctrl) const
+  auto make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,
+                   operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     if (!args.empty()) {
       return caf::make_error(ec::invalid_argument,
