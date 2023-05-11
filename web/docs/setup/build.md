@@ -43,9 +43,9 @@ Every [release](https://github.com/tenzir/vast/releases) of VAST includes an
 |✓|[xxHash](https://github.com/Cyan4973/xxHash)|>= 0.8.0|Required for computing fast hash digests.|
 |✓|[robin-map](https://github.com/Tessil/robin-map)|>= 0.6.3|Fast hash map and hash set using robin hood hashing. (Bundled as subtree.)|
 |✓|[fast_float](https://github.com/FastFloat/fast_float)|>= 3.2.0|Required for parsing floating point numbers. (Bundled as submodule.)|
-||[yarn](https://yarnpkg.com)||Required for building the web frontend.|
-||[libpcap](https://www.tcpdump.org)||Required for PCAP import, export, and pivoting to and from PCAP traces.|
-||[restinio](https://stiffstream.com/en/products/restinio.html)||Required for providing a REST API|
+||[libpcap](https://www.tcpdump.org)||Required for building the `pcap` plugin.|
+||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
+||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libvast.|
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for VAST.|
 
@@ -59,13 +59,14 @@ Building VAST involves the following steps:
 1. [Download the latest release](download.md) or clone the repository
    recursively:
   ```bash
-  git clone --recursive https://github.com/tenzir/vast
+  git clone https://github.com/tenzir/vast
+  cd vast
+  git submodule update --init --recursive -- libvast plugins
   ```
 
 2. Configure the build with CMake. For faster builds, we recommend passing
   `-G Ninja` to `cmake`.
   ```bash
-  cd vast
   cmake -B build
   # CMake defaults to a "Debug" build. When performance matters, use "Release"
   cmake -B build -DCMAKE_BUILD_TYPE=Release  
