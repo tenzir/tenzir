@@ -103,10 +103,10 @@ struct partition_transformer_state {
   size_t events = 0ull;
 
   /// Oldest import timestamp of the input data.
-  vast::time min_import_time = {};
+  vast::time min_import_time = vast::time::max();
 
   /// Newest import timestamp of the input data.
-  vast::time max_import_time = {};
+  vast::time max_import_time = vast::time::min();
 
   /// The data of the newly created partition(s).
   std::multimap<type, active_partition_state::serialization_data> data = {};
