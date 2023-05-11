@@ -370,9 +370,6 @@ auto partition_transformer(
         }
       }
       for (auto& slice : *output) {
-        auto const& schema = slice.schema();
-        // TODO: Technically we'd only need to send *new* schemas here.
-        self->send(self->state.catalog, atom::put_v, schema);
         auto& partition_data = self->state.create_or_get_partition(slice);
         if (!partition_data.synopsis) {
           partition_data.id = vast::uuid::random();
@@ -382,10 +379,11 @@ auto partition_transformer(
             = caf::make_copy_on_write<partition_synopsis>();
         }
         auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
-        unshared_synopsis->min_import_time
-          = std::min(slice.import_time(), unshared_synopsis->min_import_time);
-        unshared_synopsis->max_import_time
-          = std::max(slice.import_time(), unshared_synopsis->max_import_time);
+        if (slice.import_time() == time{}) {
+          slice.import_time(self->state.min_import_time);
+        }
+        unshared_synopsis->min_import_time = self->state.min_import_time;
+        unshared_synopsis->max_import_time = self->state.max_import_time;
         partition_data.events += slice.rows();
         self->state.events += slice.rows();
         self->state.partition_buildup[partition_data.id].slices.push_back(

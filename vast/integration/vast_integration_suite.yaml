@@ -825,3 +825,40 @@ tests:
         input: data/json/empty-record.json
       - command: exec 'from - read json | write xsv to stdout'
         input: data/json/empty-record.json
+
+  Zeek TSV Pipeline Format:
+    tags: [pipelines, zeek]
+    steps:
+      - command: exec 'from stdin read zeek-tsv | write json to stdout'
+        input: data/zeek/merge.log
+      - command: exec 'from stdin read zeek-tsv | write json to stdout'
+        input: data/zeek/merge_with_whitespace_separation.log
+      - command: exec 'from stdin read zeek-tsv | head 300 | write zeek-tsv to stdout'
+        input: data/zeek/dns.log.gz
+      - command: exec 'from stdin read zeek-tsv | head 300 | write csv to stdout'
+        input: data/zeek/dns.log.gz
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --set-separator=";" --empty-field="empty" --unset-field="NULLVAL" to stdout'
+        input: data/zeek/whitespace_start.log
+      - command: exec 'from stdin read json | write zeek-tsv to stdout'
+        input: data/json/snmp.log.json.gz
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/broken_no_separator_header.log
+        expected_result: error
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/broken_no_set_separator_header.log
+        expected_result: error
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/broken_no_separator_value.log
+        expected_result: error
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/broken_no_empty_and_unset_fields.log
+        expected_result: error
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/broken_unequal_fields_types_length.log
+        expected_result: error
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/broken_duplicate_close_tag.log
+        expected_result: error
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/broken_data_after_close_tag.log
+        expected_result: error

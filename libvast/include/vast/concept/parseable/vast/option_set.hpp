@@ -71,7 +71,8 @@ private:
   }
   template <class Attribute>
   bool parse_long_form(auto& f, const auto& l, Attribute& x) const {
-    static const auto long_form_key_parser = "--" >> +(parsers::alpha);
+    static const auto long_form_key_parser
+      = "--" >> +(parsers::alpha | parsers::chr{'-'});
     auto long_form_opt_key = std::string{};
     auto f_previous = f;
     if (long_form_key_parser(f_previous, l, long_form_opt_key)) {
