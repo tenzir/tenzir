@@ -203,7 +203,8 @@ struct rebuilder_state {
          {"total", run->statistics.num_total},
          {"transforming", run->statistics.num_rebuilding},
          {"transformed", run->statistics.num_completed},
-         {"remaining", run->remaining_partitions.size()},
+         {"remaining",
+          run->statistics.num_total - run->statistics.num_completed},
          {"results", run->statistics.num_results},
        }},
       {"options",
@@ -272,7 +273,6 @@ struct rebuilder_state {
       for (auto&& rp : std::exchange(run->stop_requests, {}))
         rp.deliver();
       run.reset();
-      emit_telemetry();
       if (run->options.detached)
         return;
       if (err) {
@@ -306,13 +306,6 @@ struct rebuilder_state {
                   return true;
                 });
             }
-            if (result.partition_infos.size() == 1
-                && result.partition_infos.front().version
-                     < version::current_partition_version) {
-              // Edge case: we can't do anything if we have a single underiszed
-              // partition for a given schema.
-              result.partition_infos.clear();
-            }
             if (run->options.max_partitions < result.partition_infos.size()) {
               std::stable_sort(result.partition_infos.begin(),
                                result.partition_infos.end(),
@@ -323,11 +316,12 @@ struct rebuilder_state {
                 result.partition_infos.begin()
                   + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
                 result.partition_infos.end());
-              if (result.partition_infos.empty()) {
-                lookup_result.candidate_infos.erase(type);
-                if (lookup_result.candidate_infos.empty()) {
-                  return finish({});
-                }
+              if (result.partition_infos.size() == 1
+                  && result.partition_infos.front().version
+                       < version::current_partition_version) {
+                // Edge case: we can't do anything if we have a single
+                // undersized partition for a given schema.
+                result.partition_infos.clear();
               }
             }
             run->statistics.num_total += result.partition_infos.size();
@@ -335,14 +329,10 @@ struct rebuilder_state {
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
           }
-          const auto all_empty = std::all_of(
-            lookup_result.candidate_infos.begin(),
-            lookup_result.candidate_infos.end(),
-            [](const auto& candidate_info) {
-              return candidate_info.second.partition_infos.empty();
-            });
-          if (all_empty)
+          if (run->statistics.num_total == 0) {
+            VAST_DEBUG("{} ignores rebuild request for 0 partitions", *self);
             return finish({}, true);
+          }
           if (run->options.automatic)
             VAST_VERBOSE("{} triggered an automatic run for {} candidate "
                          "partitions with {} threads",
@@ -581,7 +571,7 @@ private:
       return;
     auto report = system::report {
       .data = {
-        {"rebuilder.partitions.remaining", run ? run->remaining_partitions.size() : 0u},
+        {"rebuilder.partitions.remaining", run ? run->statistics.num_total - run->statistics.num_completed : 0u},
         {"rebuilder.partitions.rebuilding", run ? run->statistics.num_rebuilding : 0u},
         {"rebuilder.partitions.completed", run ? run->statistics.num_completed : 0u},
       },
