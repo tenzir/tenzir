@@ -32,3 +32,10 @@ dakostu:
   url: https://github.com/dakostu
   image_url: https://github.com/dakostu.png
   email: daniel@tenzir.com
+
+tobim:
+  name: Tobias Mayer
+  title: Software Architect
+  url: https://github.com/tobim
+  image_url: https://github.com/tobim.png
+  email: tobias@tenzir.com
