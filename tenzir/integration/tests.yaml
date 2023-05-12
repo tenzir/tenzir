@@ -1068,6 +1068,14 @@ tests:
       - command: exec 'read suricata | head 1 | flatten | write json --omit-empty'
         input: data/suricata/rrdata-eve.json
 
+  YAML:
+    tags: [pipeline]
+    steps:
+      - command: exec 'from file @./tests.yaml | put tags=tests.YAML.tags, steps=tests.YAML.steps'
+      - command: exec 'show config | drop tenzir.config | write yaml'
+      - command: exec 'from file @./data/zeek/zeek.json read zeek-json | head 5 | write yaml'
+      - command: exec 'show plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
+
   PCAP Format:
     tags: [pipelines, parser, printer, pcap]
     steps:

@@ -17,11 +17,15 @@ namespace tenzir::detail {
 constexpr inline auto fallback_parser = "json";
 
 const auto filename_to_parser_list
-  = std::array<std::pair<std::filesystem::path, std::string>, 1>{
-    {{"eve.json", "suricata"}}};
+  = std::array<std::pair<std::filesystem::path, std::string>, 1>{{
+    {"eve.json", "suricata"},
+  }};
 
 const auto extension_to_parser_list
-  = std::array<std::pair<std::string, std::string>, 1>{{{".ndjson", "json"}}};
+  = std::array<std::pair<std::string, std::string>, 2>{{
+    {".ndjson", "json"},
+    {".yml", "yml"},
+  }};
 
 auto file_path_to_parser(const std::filesystem::path& path) -> std::string {
   for (const auto& [filename, parser] : filename_to_parser_list) {
@@ -42,9 +46,8 @@ auto file_path_to_parser(const std::filesystem::path& path) -> std::string {
   if (plugins::find<parser_parser_plugin>(fallback_ext)) {
     return fallback_ext;
   }
-  TENZIR_VERBOSE("Could not find default parser for path {} - falling back "
-                 "to "
-                 "{}",
+  TENZIR_VERBOSE("failed to find default parser for path `{}`; falling back to "
+                 "`{}`",
                  path, fallback_parser);
   return fallback_parser;
 }
