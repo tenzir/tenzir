@@ -1,14 +1,13 @@
 ---
 title: VAST v3.1
-description: Spring Codebase Cleaning
 authors: [tobim]
 image: /img/blog/vast-v3.1.excalidraw.svg
 date: 2023-04-25
 tags: [release, pipelines, operators]
 ---
 
-[VAST v3.1](https://github.com/tenzir/vast/releases/tag/v3.1) is out. This is a
-small checkpointing release that brings a few new changes and fixes.
+[VAST v3.1](https://github.com/tenzir/vast/releases/tag/v3.1.0) is out. This is
+a small checkpointing release that brings a few new changes and fixes.
 
 <!--truncate-->
 
@@ -36,7 +35,7 @@ We introduced several new operators:
   by reading from the `file` [connector](/docs/next/understand/connectors).
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
-work with selectors and extractors. Check out the [full list of growing
+work with selectors and extractors. Check out the [growing list of
 operators](/docs/next/understand/operators/).
 
 ## Operator aliases
