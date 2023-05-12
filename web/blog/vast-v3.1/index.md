@@ -1,46 +1,49 @@
 ---
-draft: true
 title: VAST v3.1
 description: Spring Codebase Cleaning
 authors: [tobim]
-image: /img/blog/building-blocks.excalidraw.svg
+image: /img/blog/vast-v3.1.excalidraw.svg
 date: 2023-04-25
 tags: [release, pipelines, operators]
 ---
 
-<!--
-TODO: Outstanding tasks for the blog post before we can publish
-- Remove this comment
-- Create an iamge for the blog post
---->
+[VAST v3.1](https://github.com/tenzir/vast/releases/tag/v3.1) is out. This is a
+small checkpointing release that brings a few new changes and fixes.
 
-[VAST v3.1][github-vast-release] is out.
+<!--truncate-->
 
 ## Pipelines reloaded
 
-The old pipeline execution engine has been removed and updated VAST to use
-the new engine everywhere. Most notably in the `export` command, for the
-compaction engine and in the `query` REST interface.
+The old pipeline execution engine is now gone and we updated VAST to use
+the new engine everywhere. Most notably this applies to the `export` command,
+the compaction engine, and the `query` REST interface.
 
-The transition process is not quite completed yet. For this release, we removed
-support for configuration level export and import pipelines. This feature will
-make a return in the next major release.
+For this release, we removed support for configuration level export and import
+pipelines. This feature will make a return in the next major release.
 
-We also removed the deprecated YAML based pipeline syntax to fully concentrate
+We also removed the deprecated YAML-based pipeline syntax to fully concentrate
 on the VAST Language.
 
-Several new operators have been introduced, namely `tail`, `unique`, `from file`
-The `put`, `replace`, and `extend` operators have been updated to work
-with selectors and extractors. You are always invited to look at the docs for
-our constantly growing [list of new operators][operators].
+## Operators updates
 
-[operators]: /docs/understand/language/operators/
+We introduced several new operators:
+
+- [`tail`](/docs/next/understand/operators/transformations/tail): limits the
+  input to the last N events.
+- [`unique`](/docs/next/understand/operators/transformations/unique): removes
+  adjacent duplicates
+- [`from file`](/docs/next/understand/operators/sources/from): produces events
+  by reading from the `file` [connector](/docs/next/understand/connectors).
+
+Additionally, the `put`, `replace`, and `extend` operators have been updated to
+work with selectors and extractors. Check out the [full list of growing
+operators](/docs/next/understand/language/operators/).
 
 ## Operator aliases
 
-You can now define aliases for operators in the configuration file. You
-can use it to assign a short and reusable name for operators that would
-otherwise require several arguments. A nice illustrative example is:
+You can now define aliases for operators in the configuration file. Use it to
+assign a short and reusable name for operators that would otherwise require
+several arguments. For example:
 
 ```yaml
 vast:
@@ -61,14 +64,19 @@ vast:
          10 mins
 ```
 
-You can then use it just like the builtin operators.
+Now use it like a regular operator in a pipeline:
 
-## Notable Fixes
+```
+from file read suricata | aggregate_flows
+```
+
+## Notable fixes
 
 ### Improved IPv6 subnet handling
 
 The handling of subnets in the IPv6 space received multiple fixes:
-- The query `where :ip !in ::ffff:0:0/96` now finds all events that
+
+- The expression `:ip !in ::ffff:0:0/96` now finds all events that
   contain IPs that cannot be represented as IPv4 addresses.
 - Subnets with a prefix above 32 are now correctly formatted with
   an IPv6 network part, even if the address is representable as IPv4.
