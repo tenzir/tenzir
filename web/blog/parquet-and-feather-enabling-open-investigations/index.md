@@ -99,7 +99,7 @@ batches to disk. The diagram below illustrates the architecture:
 
 [arrow-table]: https://arrow.apache.org/docs/python/data.html#tables
 [arrow-record-batch]: https://arrow.apache.org/docs/python/data.html#record-batches
-[store-plugin]: /docs/understand/architecture/plugins#store
+[store-plugin]: /docs/VAST%20v3.0/understand/architecture/plugins#store
 
 This architecture makes it easy to point an analytics application directly to
 the store files, without the need for ETLing it into a dedicated warehouse, such

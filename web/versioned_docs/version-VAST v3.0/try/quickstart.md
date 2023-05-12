@@ -296,7 +296,7 @@ vast export json --omit-nulls '#type == "suricata.alert" | head 3'
 {"timestamp": "2021-11-17T14:39:24.485595", "flow_id": 368772671891675, "pcap_cnt": 723, "src_ip": "167.94.138.20", "src_port": 36086, "dest_ip": "198.71.247.91", "dest_port": 5683, "proto": "UDP", "event_type": "alert", "alert": {"action": "allowed", "gid": 1, "signature_id": 2200075, "rev": 2, "signature": "SURICATA UDPv4 invalid checksum", "category": "Generic Protocol Command Decode", "severity": 3, "source": {}, "target": {}}, "flow": {"pkts_toserver": 1, "pkts_toclient": 0, "bytes_toserver": 45, "bytes_toclient": 0, "start": "2021-11-17T14:39:24.485595"}, "packet_info": {}}
 ```
 
-Certainly less noisy. The [`select`](/docs/understand/language/operators/select)
+Certainly less noisy. The [`select`](../understand/language/operators/select.md)
 operator helps selecting fields of interest:
 
 ```bash
@@ -354,7 +354,7 @@ easy to specify fields in nested records. The fully qualified field name is
 
 :::info Extractors
 Aside from using field names, VAST offers powerful
-[extractors](/docs/understand/language/expressions#extractors) locating data.
+[extractors](../understand/language/expressions.md#extractors) locating data.
 If you don't know a field name, you can go through the type system, e.g., to
 apply a query over all fields of the `ip` type by writing `:ip == 172.17.2.163`.
 
@@ -391,13 +391,13 @@ vast export ascii '172.17.2.163 | head 10'
 <2021-11-18T10:32:37.045171, "CZKTgq2jm6IGsHyEQ2", 172.17.2.163, 63536, 172.17.2.17, 445, nil, nil, "\\TRASHYHOUSES-DC.trashyhouses.com\IPC$", nil, nil, "PIPE">
 ```
 
-The [`ascii`](/docs/understand/formats/ascii) format displays the raw data
+The [`ascii`](../understand/formats/ascii.md) format displays the raw data
 without field names, for experiencing maximum data density.
 
 ### Extract data with rich expressions
 
 Finally, let's get a feel for the [expression
-language](/docs/understand/language/expressions). VAST comes with native types
+language](../understand/language/expressions.md). VAST comes with native types
 for IP addresses, subnets, timestamps, and durations. These come in handy
 to succinctly describe what you want:
 
@@ -421,5 +421,5 @@ matches exactly.
 ## Going deeper
 
 This was just a brief summary of how you could sift through the data. Take a
-look at various [operators](/docs/understand/language/operators) VAST has to
-offer and start writing pipelines!
+look at various [operators](../understand/language/operators/README.md) VAST has
+to offer and start writing pipelines!
