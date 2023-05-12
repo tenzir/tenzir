@@ -82,12 +82,8 @@ public:
         return;
       }
       auto field = field_pusher.push_field(key);
-      if (auto success = field_validator_(field); not success) {
-        ctrl_.warn(caf::make_error(ec::parse_error,
-                                   fmt::format("json parser field '{}': {}",
-                                               key, success.error())));
+      if (not field_validator_(field))
         continue;
-      }
       parse_impl(val.value_unsafe(), field, depth + 1);
     }
   }
@@ -221,16 +217,14 @@ auto parse_doc(const FieldValidator& validator,
 }
 
 auto create_field_validator(bool has_selector, bool infer_types)
-  -> std::function<caf::expected<void>(const detail::field_guard&)> {
+  -> std::function<bool(const detail::field_guard&)> {
   if (has_selector and not infer_types) {
-    return [](const detail::field_guard& guard) -> caf::expected<void> {
-      if (guard.field_exists())
-        return {};
-      return caf::make_error(ec::parse_error, "field not present in a schema");
+    return [](const detail::field_guard& guard) {
+      return guard.field_exists();
     };
   }
-  return [](const detail::field_guard&) -> caf::expected<void> {
-    return caf::expected<void>{};
+  return [](const detail::field_guard&) {
+    return true;
   };
 }
 

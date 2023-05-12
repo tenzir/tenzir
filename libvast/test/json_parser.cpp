@@ -421,17 +421,13 @@ TEST(simple slice) {
                     caf::timespan{std::chrono::nanoseconds{20}}}));
 }
 
-TEST(ignore fields not present in schema and issue a warning) {
+TEST(ignore fields not present in a schema) {
   const auto fixed_schema
     = type{"modulee.great_field", record_type{
                                     {"field_to_chose", string_type{}},
                                     {"a", int64_type{}},
                                   }};
-  auto warns_count = 0u;
-  auto mock = operator_control_plane_mock{[&warns_count](auto&&) {
-                                            ++warns_count;
-                                          },
-                                          {fixed_schema}};
+  auto mock = operator_control_plane_mock{default_on_warn, {fixed_schema}};
   auto sut = create_sut(
     make_chunk_generator(
       {R"({"field_to_chose" : "great_field", "b": "will_i_be_ignored?"})"}),
@@ -447,7 +443,6 @@ TEST(ignore fields not present in schema and issue a warning) {
   CHECK_EQUAL(output_slices.front().columns(), 2u);
   CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), "great_field");
   CHECK_EQUAL(materialize(output_slices.front().at(0u, 1u)), caf::none);
-  CHECK_EQUAL(warns_count, 1u);
 }
 
 TEST(yield slice for each schema) {
