@@ -5,7 +5,7 @@ sidebar_position: 1
 # Quickstart
 
 This guide illustrates how you can use VAST from the command line interface.
-We're assuming that you have [installed VAST](/docs/setup/install) and that
+We're assuming that you have [installed VAST](../setup/install/README.md) and that
 you have a `vast` binary in your path.
 
 ## Start a VAST node
@@ -83,7 +83,7 @@ tar xOzf suricata.tar.gz | vast import suricata '#type == "suricata.alert"'
 ```
 
 We've added the import filter
-[expression](/docs/understand/language/expressions) `#type == "suricata.alert"`
+[expression](../understand/language/expressions.md) `#type == "suricata.alert"`
 because we're want the alerts from Suricata and the metadata from Zeek.
 
 :::note Multi-schema Zeek TSV Parser
@@ -143,21 +143,21 @@ bunch of logs to `vast import zeek` Just Works.
 ## Export data
 
 With Zeek and Suricata data in the VAST node, let's run some query pipelines.
-We're going to show the data in [JSON format](/docs/understand/formats/json),
-but you could display it in [other formats](/docs/understand/formats) as well.
+We're going to show the data in [JSON format](../understand/formats/json.md),
+but you could display it in [other formats](../understand/formats/README.md) as well.
 
 :::info Pipelines
 As of VAST v3.0, the VAST language supports ad-hoc
-[pipelines](/docs/understand/language/pipelines) for flexible transformation in
+[pipelines](../understand/language/pipelines.md) for flexible transformation in
 addition to plain search. A pipeline consists of a chain of
-[operators](/docs/understand/language/operators) and must begin with *source*
+[operators](../understand/language/operators/README.md) and must begin with *source*
 operator, the producer emitting data, and end with a *sink* operator, the
 consumer receiving data. If a pipeline has source and sink, we call it *closed*.
 The `export` command implicitly closes a pipeline by adding the VAST node as
 source and standard output as sink.
 
 Concretely, `export` takes a pipeline of the form `EXPR | OP | OP` where `EXPR`
-is an [expression](/docs/understand/language/expressions) followed by zero or
+is an [expression](../understand/language/expressions.md) followed by zero or
 more operators. The full pipeline would be:
 
 ```
@@ -215,14 +215,14 @@ various fields as list of key-value pairs under the `record` key. Note the
 nested record `id` that has type alias called `zeek.conn_id`.
 
 :::info Schemas
-In VAST, a [schema](/docs/understand/data-model/schemas) is just a record [type
-definition](/docs/understand/data-model/type-system). You would touch schemas
+In VAST, a [schema](../understand/data-model/schemas.md) is just a record [type
+definition](../understand/data-model/type-system.md). You would touch schemas
 when the defaults are not enough. In future versions of VAST, you will interact less and less with schemas because VAST can actually infer them reasonably well.
 :::
 
 Now that you know a little bit about available schemas of the data, you could
 start referencing record fields in expressions. But VAST can also give you a
-taste of actual events. The [`taste`](/docs/understand/language/operators/taste)
+taste of actual events. The [`taste`](../understand/language/operators/taste.md)
 operator limits the number of events per unique schema:
 
 ```bash

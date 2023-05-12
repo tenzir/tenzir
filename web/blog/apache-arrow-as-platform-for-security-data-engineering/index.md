@@ -101,7 +101,7 @@ worth pointing out:
    conversation boundary exists when data leaves the system, e.g., when a user
    wants a query result shown in JSON, CSV, or some custom format. Source and
    sink data formats are [exchangeable
-   plugins](/docs/understand/architecture/plugins).
+   plugins](/docs/VAST%20v3.0/understand/architecture/plugins).
 
 2. **Read/Write Path Separation**: one design goal of VAST is a strict
    separation of read and write path, in order to scale them independently. The
@@ -143,13 +143,13 @@ tools from the Arrow ecosystem, plus all other embeddable Arrow engines that are
 emerging, we have a modular architecture to can cover a very wide spectrum of
 use cases.
 
-[compute]: https://arrow.apache.org/docs/cpp/compute.html
-[extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
-[flight]: https://arrow.apache.org/docs/format/Flight.html
+[compute]: https://arrow.apache.org/docs/VAST%20v3.0/cpp/compute.html
+[extension-types]: https://arrow.apache.org/docs/VAST%20v3.0/format/Columnar.html#extension-types
+[flight]: https://arrow.apache.org/docs/VAST%20v3.0/format/Flight.html
 [substrait]: https://substrait.io/
 [datafusion]: https://arrow.apache.org/datafusion/
 [msgpack]: https://msgpack.org/index.html
 [duckdb]: https://duckdb.org/
 [sigma]: https://github.com/SigmaHQ/sigma
-[sigma-plugin]: /docs/understand/language/frontends/sigma
+[sigma-plugin]: /docs/VAST%20v3.0/understand/language/frontends/sigma
 [zeek]: https://zeek.org
