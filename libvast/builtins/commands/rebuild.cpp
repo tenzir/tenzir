@@ -320,7 +320,7 @@ struct rebuilder_state {
                   && result.partition_infos.front().version
                        < version::current_partition_version) {
                 // Edge case: we can't do anything if we have a single
-                // underiszed partition for a given schema.
+                // undersized partition for a given schema.
                 result.partition_infos.clear();
               }
             }
@@ -330,7 +330,7 @@ struct rebuilder_state {
                                              result.partition_infos.end());
           }
           if (run->statistics.num_total == 0) {
-            VAST_DEBUG("{} ignores requested rebuild for 0 partitions", *self);
+            VAST_DEBUG("{} ignores rebuild request for 0 partitions", *self);
             return finish({}, true);
           }
           if (run->options.automatic)
