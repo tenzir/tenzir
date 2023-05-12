@@ -34,7 +34,7 @@ chained operators.
 
 While pipelines are not yet available at the query layer, they soon will be.
 Until then, you can deploy pipelines at load-time to [transform data in motion
-or data at rest](/docs/use/transform).
+or data at rest](/docs/VAST%20v3.0/use/transform).
 
 From a user perspective, the configuration keys associated with transforms have
 changed. Here's the updated example from our previous [VAST v1.0 release
@@ -95,4 +95,4 @@ summarize:
 
 In SQL, this would be the `AS` token: `SELECT min(ts) AS min_ts`.
 
-[summarize]: /docs/understand/language/operators/summarize
+[summarize]: /docs/VAST%20v3.0/understand/language/operators/summarize

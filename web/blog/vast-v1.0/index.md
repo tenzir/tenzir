@@ -40,8 +40,8 @@ embedded in the data itself. However, the import time  is not part of the event
 data itself, but rather part of metadata of every batch of events that VAST
 creates.
 
-[docs-meta-extractor]: https://vast.io/docs/understand/language/expressions#meta-extractor
-[docs-type-extractor]: https://vast.io/docs/understand/language/expressions#type-extractor
+[docs-meta-extractor]: https://vast.io/docs/VAST%20v3.0/understand/language/expressions#meta-extractor
+[docs-type-extractor]: https://vast.io/docs/VAST%20v3.0/understand/language/expressions#type-extractor
 
 ## Omit `null` fields in the JSON export
 
@@ -72,7 +72,7 @@ vast:
 In [VAST v2.2](/blog/vast-v2.2), we renamed *transforms* to *pipelines*, and
 *transform steps* to *pipeline operators*. This caused several configuration key
 changes. Please keep this in mind when reading the example below and consult the
-[documentation](/docs/understand/language/pipelines) for the
+[documentation](/docs/VAST%20v3.0/understand/language/pipelines) for the
 up-to-date syntax.
 :::
 
