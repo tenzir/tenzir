@@ -23,7 +23,7 @@ pipelines. This feature will make a return in the next major release.
 We also removed the deprecated YAML-based pipeline syntax to fully concentrate
 on the VAST Language.
 
-## Operators updates
+## Operator updates
 
 We introduced several new operators:
 
@@ -31,8 +31,18 @@ We introduced several new operators:
   input to the last N events.
 - [`unique`](/docs/next/understand/operators/transformations/unique): removes
   adjacent duplicates
-- [`from file`](/docs/next/understand/operators/sources/from): produces events
-  by reading from the `file` [connector](/docs/next/understand/connectors).
+- [`measure`](/docs/next/understand/operators/transformations/measure): replaces
+  the input with incremental metrics describing the input.
+- [`version`](/docs/next/understand/operators/sources/version): returns a single
+  event displaying version information of VAST.
+- [`from`](/docs/next/understand/operators/sources/from): produces events by
+  combining a connector and a format.
+- [`read`](/docs/next/understand/operators/sources/read): a short form of `from`
+  that allows for omitting the connector.
+- [`to`](/docs/next/understand/operators/sinks/to): consumes events by combining
+  a connector and format.
+- [`write`](/docs/next/understand/operators/sinks/write): a short form of `to`
+  that allows for omitting the connector.
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
 work with selectors and extractors. Check out the [growing list of
