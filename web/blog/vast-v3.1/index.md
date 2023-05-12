@@ -2,7 +2,7 @@
 title: VAST v3.1
 authors: [tobim]
 image: /img/blog/vast-v3.1.excalidraw.svg
-date: 2023-04-25
+date: 2023-05-12
 tags: [release, pipelines, operators]
 ---
 
@@ -11,7 +11,7 @@ a small checkpointing release that brings a few new changes and fixes.
 
 <!--truncate-->
 
-## Pipelines reloaded
+## Pipelines Reloaded
 
 The old pipeline execution engine is now gone and we updated VAST to use
 the new engine everywhere. Most notably this applies to the `export` command,
@@ -23,7 +23,7 @@ pipelines. This feature will make a return in the next major release.
 We also removed the deprecated YAML-based pipeline syntax to fully concentrate
 on the VAST Language.
 
-## Operator updates
+## Operator Updates
 
 We introduced several new operators:
 
@@ -48,7 +48,7 @@ Additionally, the `put`, `replace`, and `extend` operators have been updated to
 work with selectors and extractors. Check out the [growing list of
 operators](/docs/next/understand/operators/).
 
-## Operator aliases
+## Operator Aliases
 
 You can now define aliases for operators in the configuration file. Use it to
 assign a short and reusable name for operators that would otherwise require
@@ -79,9 +79,9 @@ Now use it like a regular operator in a pipeline:
 from file read suricata | aggregate_flows
 ```
 
-## Notable fixes
+## Notable Fixes
 
-### Improved IPv6 subnet handling
+### Improved IPv6 Subnet Handling
 
 The handling of subnets in the IPv6 space received multiple fixes:
 
@@ -90,7 +90,7 @@ The handling of subnets in the IPv6 space received multiple fixes:
 - Subnets with a prefix above 32 are now correctly formatted with
   an IPv6 network part, even if the address is representable as IPv4.
 
-### A more resilient systemd service
+### A More Resilient Systemd Service
 
 The systemd unit for VAST now automatically restarts the node in case the
 process went down.
