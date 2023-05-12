@@ -37,7 +37,7 @@ We introduced several new operators:
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
 work with selectors and extractors. Check out the [full list of growing
-operators](/docs/next/understand/language/operators/).
+operators](/docs/next/understand/operators/).
 
 ## Operator aliases
 
