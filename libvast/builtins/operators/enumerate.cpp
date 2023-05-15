@@ -18,6 +18,8 @@
 
 #include <arrow/type.h>
 
+#include <unordered_set>
+
 namespace vast::plugins::enumerate {
 
 namespace {
@@ -31,7 +33,8 @@ public:
       field_ = "#";
   }
 
-  auto operator()(generator<table_slice> input) const
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     // Per-schema state.
     auto current_type = type{};
@@ -68,10 +71,21 @@ public:
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
-        continue;
-      };
-      current_type = slice.schema();
-      co_yield transform_columns(slice, transformations);
+      } else if (skipped_schemas_.contains(slice.schema())) {
+        co_yield slice;
+      } else if (caf::get<record_type>(slice.schema())
+                   .resolve_key(field_)
+                   .has_value()) {
+        ctrl.warn(caf::make_error(ec::unspecified,
+                                  fmt::format("ignoring schema {} with already "
+                                              "existing enumeration key {}",
+                                              slice.schema().name(), field_)));
+        skipped_schemas_.insert(slice.schema());
+        co_yield slice;
+      } else {
+        current_type = slice.schema();
+        co_yield transform_columns(slice, transformations);
+      }
     }
   }
 
@@ -81,6 +95,7 @@ public:
 
 private:
   std::string field_;
+  mutable std::unordered_set<type> skipped_schemas_;
 };
 
 class plugin final : public virtual operator_plugin {

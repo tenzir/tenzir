@@ -871,3 +871,4 @@ tests:
       - command: -N import -n 10 zeek
         input: data/zeek/dns.log.gz
       - command: -N export json 'select uid | enumerate index'
+      - command: -N export json 'select uid | enumerate uid'
