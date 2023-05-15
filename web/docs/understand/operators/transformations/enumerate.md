@@ -45,5 +45,5 @@ from file eve.json read suricata | select event_type | enumerate | write json
 Use `index` as field name instead of the default:
 
 ```
-enumerate -f "index"
+enumerate index
 ```
