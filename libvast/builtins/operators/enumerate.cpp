@@ -10,6 +10,8 @@
 #include <vast/concept/parseable/vast/option_set.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/narrow.hpp>
+#include <vast/detail/string.hpp>
+#include <vast/detail/escapers.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
@@ -27,10 +29,12 @@ namespace {
 // TODO: refactor this once we have a modifier that allows for toggling
 // between intra-schema and inter-schema processing.
 class enumerate_operator final : public crtp_operator<enumerate_operator> {
+  static constexpr auto default_field_name = "#";
+
 public:
   explicit enumerate_operator(std::string field) : field_{std::move(field)} {
     if (field_.empty())
-      field_ = "#";
+      field_ = default_field_name;
   }
 
   auto
@@ -90,7 +94,28 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return "enumerate";
+    if (field_ == default_field_name)
+      return "enumerate";
+    // We may want to factor this so that it can be used by other operators.
+    auto escaper = [](auto& f, auto out) {
+      auto escape_char = [](char c, auto out) {
+        *out++ = '\\';
+        *out++ = c;
+      };
+      switch (*f) {
+        default:
+          *out++ = *f++;
+          return;
+        case '\\':
+          escape_char('\\', out);
+          break;
+        case '\f':
+          escape_char('"', out);
+          break;
+      }
+      ++f;
+    };
+    return fmt::format("enumerate \"{}\"", detail::escape(field_, escaper));
   }
 
 private:
