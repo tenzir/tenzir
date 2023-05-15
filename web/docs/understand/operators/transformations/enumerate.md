@@ -5,7 +5,7 @@ Prepend a column with row numbers.
 ## Synopsis
 
 ```
-enumerate [-f|--field=<string>]
+enumerate [<field>]
 ```
 
 ## Description
@@ -15,11 +15,11 @@ of the input record.
 
 The operator counts row numbers per schema separately.
 
-### `-f|--field=<string>`
+### `<field>`
 
 Sets the name of the output field.
 
-Defaults to `#` in order to avoid conflicts with existing field names.
+Defaults to `#` to avoid conflicts with existing field names.
 
 ## Examples
 

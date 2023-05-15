@@ -27,6 +27,8 @@ namespace {
 class enumerate_operator final : public crtp_operator<enumerate_operator> {
 public:
   explicit enumerate_operator(std::string field) : field_{std::move(field)} {
+    if (field_.empty())
+      field_ = "#";
   }
 
   auto operator()(generator<table_slice> input) const
@@ -97,24 +99,13 @@ public:
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
-      parsers::optional_ws_or_comment;
+      parsers::optional_ws_or_comment, parsers::extractor;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-
-    const auto options = option_set_parser{{{"field", 'f'}}};
-    const auto option_parser = (required_ws_or_comment >> options);
-    auto parsed_options = std::unordered_map<std::string, data>{};
-    if (!option_parser(f, l, parsed_options)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse enumerate operator "
-                                    "options: '{}'",
-                                    pipeline)),
-      };
-    }
-    const auto p = optional_ws_or_comment >> end_of_pipeline_operator;
-    if (!p(f, l, unused)) {
+    const auto p = -(required_ws_or_comment >> extractor)
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
+    std::string field;
+    if (!p(f, l, field)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -123,11 +114,6 @@ public:
                                                       pipeline)),
       };
     }
-    std::string field;
-    for (auto& [key, value] : parsed_options)
-      if (key == "f" || key == "field")
-        if (auto* f = caf::get_if<std::string>(&value))
-          field = std::move(*f);
     return {
       std::string_view{f, l},
       std::make_unique<enumerate_operator>(std::move(field)),
