@@ -36,9 +36,9 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    // Per-schema state.
     auto current_type = type{};
     std::unordered_map<type, uint64_t> offsets;
+    std::unordered_set<type> skipped_schemas;
     // Create transformation to prepend  column to slice.
     auto transformations = std::vector<indexed_transformation>{};
     auto function = [&](struct record_type::field field,
@@ -71,7 +71,7 @@ public:
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
-      } else if (skipped_schemas_.contains(slice.schema())) {
+      } else if (skipped_schemas.contains(slice.schema())) {
         co_yield slice;
       } else if (caf::get<record_type>(slice.schema())
                    .resolve_key(field_)
@@ -80,7 +80,7 @@ public:
                                   fmt::format("ignoring schema {} with already "
                                               "existing enumeration key {}",
                                               slice.schema().name(), field_)));
-        skipped_schemas_.insert(slice.schema());
+        skipped_schemas.insert(slice.schema());
         co_yield slice;
       } else {
         current_type = slice.schema();
@@ -95,7 +95,6 @@ public:
 
 private:
   std::string field_;
-  mutable std::unordered_set<type> skipped_schemas_;
 };
 
 class plugin final : public virtual operator_plugin {
