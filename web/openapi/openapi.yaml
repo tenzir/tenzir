@@ -311,7 +311,7 @@ paths:
                           description: The schema definition in JSON format.
                     description: The schemas that the served events are based on.
                     example:
-                      - schema-ref: c631d301e4b18f4
+                      - schema_id: c631d301e4b18f4
                         definition:
                           record:
                             - timestamp: time
