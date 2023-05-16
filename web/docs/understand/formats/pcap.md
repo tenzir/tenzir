@@ -1,27 +1,27 @@
-# packets
+# pcap
 
-Reads and writes raw network packets.
+Reads and writes raw network packets in libpcap format.
 
 ## Synopsis
 
 Parser:
 
 ```
-packets [--disable-community-id] 
-        [-c|--cutoff=<uint64t>] [-m|--max-flows=<uint64t>]
-        [-a|--max-flow-age=<duration>] [-e|--flow-expiry=<uint64t>]
+pcap [--disable-community-id] 
+     [-c|--cutoff=<uint64t>] [-m|--max-flows=<uint64t>]
+     [-a|--max-flow-age=<duration>] [-e|--flow-expiry=<uint64t>]
 ```
 
 Printer:
 
 ```
-packets
+pcap
 ```
 
 ## Description
 
-The `packets` parser converts raw bytes representing packets into events, and
-the `packets` printer generates packet bytes streams from events.
+The `pcap` parser converts raw bytes representing libpcap packets into events,
+and the `pcap` printer generates libpcap streams from events.
 
 The format abstracts away the concrete packet representation. Currently, the
 only supported representation is [PCAP](http://www.tcpdump.org). The concrete
@@ -54,9 +54,9 @@ vast.packet:
           skip: ~
 ```
 
-The default loader for the `packets` parser is [`stdin`](../connectors/stdin.md).
+The default loader for the `pcap` parser is [`stdin`](../connectors/stdin.md).
 
-The default saver for the `packets` printer is [`stdout`](../connectors/stdout.md).
+The default saver for the `pcap` printer is [`stdout`](../connectors/stdout.md).
 
 ### VLAN Tags
 
@@ -69,10 +69,10 @@ Special values include `0` (frame does not carry a VLAN ID) and `0xFFF`
 
 ### Flow Management
 
-The `packets` format has a few tuning knows for controlling the amount of data
+The `pcap` format has a few tuning knows for controlling the amount of data
 to keep per flow. Naive approaches, such as sampling or using a "snapshot"
 (`tcpdump -s`) make analysis that requires flow reassembly impractical due to
-incomplete byte streams. Inspired by the [Time Machine][tm], the `packets`
+incomplete byte streams. Inspired by the [Time Machine][tm], the `pcap`
 format supports recording only the first *N* bytes of a connection (the
 *cutoff*) and skipping the bulk of the flow data. This allows for recording most
 connections in their entirety while achieving a large space reduction by
@@ -80,7 +80,7 @@ forgoing the heavy tail of the traffic distribution.
 
 [tm]: http://www.icir.org/vern/papers/time-machine-sigcomm08.pdf
 
-In addition to cutoff configuration, the `packets` parser has other knobs
+In addition to cutoff configuration, the `pcap` parser has other knobs
 to tune management of the flow table managmenet that keeps the per-flow state.
 The `--max-flows`/`-m` option specifies an upper bound on the flow table size in
 number of connections. After a certain amount of inactivity of a flow,
@@ -103,7 +103,7 @@ computation of the Community ID, e.g., to save resources.
 Sets the cutoff in number of bytes per TCP byte stream.
 
 For example, to only record the first 1,024 bytes of every connection, pass
-`--cutoff=1024` as option to the `packets` parser. Note that the cut-off is
+`--cutoff=1024` as option to the `pcap` parser. Note that the cut-off is
 *bi-directional*, i.e., it applies to both the originator and responder TCP
 streams and flows get evicted only after both sides have reached their cutoff
 value.
@@ -144,14 +144,14 @@ Defaults to 10 seconds.
 Read packets from a PCAP file:
 
 ```
-from file /tmp/trace.pcap read packets
+from file /tmp/trace.pcap read pcap
 ```
 
 Filter a PCAP trace with VAST:
 
 ```bash
 tcpdump -r trace.pcap -w - |
-  vast exec 'read packets | where vast.packet.time > 5 mins ago | write packets' |
+  vast exec 'read pcap | where vast.packet.time > 5 mins ago | write pcap' |
   tcpdump -r - -nl
 ```
 
@@ -159,19 +159,19 @@ Extract packets as JSON that have the address 6.6.6.6 as source or destination,
 and destination port 5158:
 
 ```
-read packets | where 6.6.6.6 && dport == 5158 | write json
+read pcap | where 6.6.6.6 && dport == 5158 | write json
 ```
 
 Query VLAN IDs using `vlan.outer` and `vlan.inner`:
 
 ```bash
-read packets | where vlan.outer > 0 || vlan.inner in [1, 2, 3]
+read pcap | where vlan.outer > 0 || vlan.inner in [1, 2, 3]
 ```
 
 Filter packets by Community ID:
 
 ```
-read packets 
+read pcap 
 | where community_id == "1:wCb3OG7yAFWelaUydu0D+125CLM=" 
-| write packets
+| write pcap
 ```
