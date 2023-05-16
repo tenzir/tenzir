@@ -19,9 +19,9 @@ IPC](https://arrow.apache.org/docs/python/ipc.html#ipc), making it
 conducive for memory mapping and zero-copy usage scenarios.
 
 :::tip MMAP Parsing
-When using the parser with the [`file`](../connectors/file.md), we recommend
-passing the `--mmap` option to `file` to give the parser full control over the
-reads, which leads to better performance and memory usage.
+When using the parser with the [`file`](../connectors/file.md) connector, we
+recommend passing the `--mmap` option to `file` to give the parser full control
+over the reads, which leads to better performance and memory usage.
 :::
 
 VAST writes Feather files with Zstd compression enables. Our blog has a [post
