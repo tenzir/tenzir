@@ -109,7 +109,7 @@ public:
         case '\\':
           escape_char('\\', out);
           break;
-        case '\f':
+        case '"':
           escape_char('"', out);
           break;
       }
