@@ -71,7 +71,7 @@ public:
         {field, array},
       };
     };
-    transformations.emplace_back(offset{0}, std::move(function));
+    transformations.push_back({offset{0}, std::move(function)});
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
