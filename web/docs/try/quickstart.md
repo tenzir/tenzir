@@ -395,8 +395,8 @@ vast export ascii '172.17.2.163 | head 10'
 <2021-11-18T10:32:37.045171, "CZKTgq2jm6IGsHyEQ2", 172.17.2.163, 63536, 172.17.2.17, 445, nil, nil, "\\TRASHYHOUSES-DC.trashyhouses.com\IPC$", nil, nil, "PIPE">
 ```
 
-The [`ascii`](../understand/formats/ascii.md) format displays the raw data
-without field names, for experiencing maximum data density.
+The `ascii` format displays the raw data without field names, for experiencing
+maximum data density.
 
 ### Extract data with rich expressions
 
