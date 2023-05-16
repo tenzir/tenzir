@@ -31,7 +31,7 @@
     mode: '0640'
     owner: "{{ ansible_user_id }}"
     group: "{{ ansible_user_id }}"
-  register: download
+  register: vast_download
 
 - name: Create /var/lib/vast
   ansible.builtin.file:
