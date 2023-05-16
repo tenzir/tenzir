@@ -21,9 +21,13 @@ file [-a|--append] [-r|--real-time] [--uds] <path>
 The `file` loader acquires raw bytes from a file. The `file` saver writes bytes
 to a file or a Unix domain socket.
 
-The default parser for the `file` loader is [`json`](../formats/json.md).
+VAST uses the following heuristics to infer the format based on the filename:
 
-The default printer for the `file` saver is [`json`](../formats/json.md).
+- If the filename is `eve.json`, use [`suricata`](../formats/suricata.md)
+- If the file extension is `ndjson` or `json`, use [`json`](../formats/json.md).
+
+If none of the heuristics match, the `file` connector will use
+[`json`](../formats/json.md) as default format.
 
 ### `<path>` (Loader, Saver)
 
