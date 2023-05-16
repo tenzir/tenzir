@@ -610,7 +610,7 @@ auto subslice(const table_slice& slice, size_t begin, size_t end)
   auto offset = slice.offset();
   auto batch = to_record_batch(slice);
   auto sub_slice = table_slice{
-    batch->Slice(detail::narrow_cast<int64_t>(begin - offset),
+    batch->Slice(detail::narrow_cast<int64_t>(begin),
                  detail::narrow_cast<int64_t>(end - begin)),
     slice.schema(),
   };
