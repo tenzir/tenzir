@@ -8,14 +8,16 @@ Reads and writes lines with separated values.
 csv
 ssv
 tsv
+xsv <field-sep> <list-sep> <null-value>
 ```
 
 ## Description
 
 The `xsv` format is a generalization of [comma-separated values (CSV)][csv] data
-in tabular form with a more flexible separator specification supporting tabs, commas, and spaces. The first line in an XSV file is the header that describes the
-field names. The remaining lines contain concrete values. One line corresponds
-to one event, minus the header.
+in tabular form with a more flexible separator specification supporting tabs,
+commas, and spaces. The first line in an XSV file is the header that describes
+the field names. The remaining lines contain concrete values. One line
+corresponds to one event, minus the header.
 
 The following table juxtaposes the available XSV configurations:
 
@@ -52,6 +54,18 @@ Note that nested records have dot-separated field names.
 The default loader for the `xsv` parser is [`stdin`](../connectors/stdin.md).
 
 The default saver for the `xsv` printer is [`stdout`](../connectors/stdout.md).
+
+### `<field-sep>`
+
+Specifies the string that separates fields.
+
+### `<list-sep>`
+
+Specifies the string that separates list elements *within* a field.
+
+### `<null-value>`
+
+Specifies the string that denotes an absent value.
 
 ## Examples
 
