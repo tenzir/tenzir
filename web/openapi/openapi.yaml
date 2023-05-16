@@ -303,7 +303,7 @@ paths:
                     items:
                       type: object
                       properties:
-                        schema-ref:
+                        schema_id:
                           type: string
                           description: The unique schema identifier.
                         definition:
