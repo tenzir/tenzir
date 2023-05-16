@@ -30,6 +30,9 @@ The default printer for the `file` saver is [`json`](../formats/json.md).
 The path to the file to load/save. If intermediate directories do not exist, the
 saver will create them.
 
+When `~` is the first character, it will be substituted with the value of the
+`$HOME` environment variable.
+
 The path `-` is a reserved value and means stdin for the loader and stdout for
 the saver.
 
