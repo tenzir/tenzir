@@ -13,8 +13,8 @@ json [--selector=field[:prefix]]
 Printer:
 
 ```
-json [--pretty] [--numeric-durations] 
-     [--omit-nulls] [--omit-empty-records] [--omit-empty-lists] [--omit-empty]
+json [--pretty] [--omit-nulls] [--omit-empty-records] [--omit-empty-lists]
+     [--omit-empty]
 ```
 
 ## Description
@@ -40,15 +40,6 @@ with the name `suricata.flow`.
 
 VAST defaults to line-delimited JSON output (JSONL or NDJSON). The `--pretty`
 flag switches to a tree-structured representation.
-
-### `--numeric-durations` (Printer)
-
-Render durations as fractional seconds (like Unix timestamps, e.g.,
-`62.12`) as opposed to strings with unit (e.g., `1.04 mins`).
-
-This comes in handy when downstream processing involves arithmetic on time
-durations. Performing this with the SI suffix notation would require additional
-parsing.
 
 ### `--omit-nulls` (Printer)
 
