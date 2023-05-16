@@ -4,8 +4,17 @@ Reads and writes Zeek tab-separated values.
 
 ## Synopsis
 
+Parser:
+
 ```
 zeek-tsv
+```
+
+Printer:
+
+```
+zeek-tsv [-s|--set-separator=<string>] [-e|--empty-field=<string>]
+         [-u|--unset-field=<string>]
 ```
 
 ## Description
@@ -47,6 +56,24 @@ Here's an example of a typical Zeek `conn.log` in TSV form:
 1258532203.657268 feNcvrZfDbf 192.168.1.104 1174  192.168.1.1 53  udp dns 0.1709…62 36  215 SF  - 0 Dd  1 64  1 243 (empty)
 1258532331.365294 aLsTcZJHAwa 192.168.1.1 5353  224.0.0.251 5353  udp dns 0.1003…81 273 0 S0  - 0 D 2 329 0 0 (empty)
 ```
+
+### `-s|--set-separator=<string>` (Printer)
+
+Specifies the set separator.
+
+Defaults to `\x09`.
+
+### `-e|--empty-field=<string>` (Printer)
+
+Specifies the separator for empty fields.
+
+Defaults to `(empty)`.
+
+### `-u|--unset-field=<string>` (Printer)
+
+Specifies the separator for unset "null" fields.
+
+Defaults to `-`.
 
 ## Examples
 
