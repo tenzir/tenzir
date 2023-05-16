@@ -9,9 +9,9 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/parseable/vast/option_set.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
+#include <vast/detail/escapers.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/string.hpp>
-#include <vast/detail/escapers.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
