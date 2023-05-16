@@ -1,4 +1,3 @@
-
 # directory
 
 Saves bytes to one file per schema into a directory.
