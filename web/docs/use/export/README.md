@@ -224,7 +224,7 @@ vast export [options] <format> [options] [expr]
 The [format](../../understand/formats/README.md) defines how VAST renders the
 query results. Text formats include [JSON](../../understand/formats/json.md),
 [CSV](../../understand/formats/csv.md), or tool-specific data encodings like
-[Zeek](../../understand/formats/zeek.md).
+[Zeek](../../understand/formats/zeek-tsv.md).
 [PCAP](../../understand/formats/pcap.md) is an example for a binary format.
 
 For example, to run query that exports the results as JSON, run:

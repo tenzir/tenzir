@@ -15,7 +15,7 @@ vast import [options] <format> [options] [expr]
 The [format](../../understand/formats/README.md) defines the encoding of data.
 Text formats include [JSON](../../understand/formats/json.md),
 [CSV](../../understand/formats/csv.md), or tool-specific data encodings like
-[Zeek](../../understand/formats/zeek.md). Examples for binary formats are
+[Zeek](../../understand/formats/zeek-tsv.md). Examples for binary formats are
 [PCAP](../../understand/formats/pcap.md) and
 [NetFlow](../../understand/formats/netflow.md).
 
