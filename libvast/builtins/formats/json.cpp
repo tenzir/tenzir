@@ -44,11 +44,19 @@ struct selector {
 };
 
 struct parser_state {
+  // Cache of table slice builder for each schema. These objects can be reused
+  // and there is no need to recreate them each time we parse an event.
   std::unordered_map<std::string_view, adaptive_table_slice_builder>
     builders_per_schema{};
+  // Used to check if the parser must yield in case the parser was seeded with a
+  // known schema. The parses must yield the table_slice of previously parsed
+  // schema when it parses an event of a different one.
   adaptive_table_slice_builder* last_used_builder = nullptr;
+  // Table slice builder used when the schema is not known.
   adaptive_table_slice_builder unknown_schema_builder{};
+  // A flag used to enable/disable type inference.
   bool infer_types = false;
+  // Slice to yield from the parser on the next synchronization (yield) point.
   std::optional<table_slice> slice_to_yield{};
 };
 
