@@ -21,13 +21,12 @@ file [-a|--append] [-r|--real-time] [--uds] <path>
 The `file` loader acquires raw bytes from a file. The `file` saver writes bytes
 to a file or a Unix domain socket.
 
-VAST uses the following heuristics to infer the format based on the filename:
+When used as `from file <path> | ...` or `... | to file <path>`, VAST uses the following heuristics to infer the format based on the filename:
 
 - If the filename is `eve.json`, use [`suricata`](../formats/suricata.md)
-- If the file extension is `ndjson` or `json`, use [`json`](../formats/json.md).
-
-If none of the heuristics match, the `file` connector will use
-[`json`](../formats/json.md) as default format.
+- If the file extension is `ndjson`, use [`json`](../formats/json.md).
+- Otherwise, if the filename has an extension, try to use this as the format  (this will produce an error if there is no such format)
+- If the filename has no extension (that includes the reserved path `-`), the default format is JSON.
 
 ### `<path>` (Loader, Saver)
 
