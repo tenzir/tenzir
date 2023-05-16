@@ -35,5 +35,5 @@ compression.
 Read a Feather file via the [`from`](../operators/sources/from.md) operator:
 
 ```
-from file --mmap /tmp/data.fth read feather
+from file --mmap /tmp/data.feather read feather
 ```
