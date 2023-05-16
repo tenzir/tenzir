@@ -47,7 +47,7 @@ Render durations as fractional seconds (like Unix timestamps, e.g.,
 `62.12`) as opposed to strings with unit (e.g., `1.04 mins`).
 
 This comes in handy when downstream processing involves arithmetic on time
-durations. Performing this with the SI suffix notation would require addional
+durations. Performing this with the SI suffix notation would require additional
 parsing.
 
 ### `--omit-nulls` (Printer)
