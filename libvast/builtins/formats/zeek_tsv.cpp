@@ -540,10 +540,15 @@ public:
         while (it != lines.end()) {
           auto header_line = *it;
           if (header_line and not header_line->empty())
+            // Encountered the first non-empty header line.
             break;
           co_yield {};
           if (header_line and header_line->empty())
             ++it;
+        }
+        if (it == lines.end()) {
+          // Empty input.
+          co_return;
         }
         auto metadata = zeek_metadata{};
         auto parsed = metadata.parse_header(it, lines, ctrl);

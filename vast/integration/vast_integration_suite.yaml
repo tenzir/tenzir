@@ -842,6 +842,8 @@ tests:
       - command: exec 'from stdin read json | write zeek-tsv to stdout'
         input: data/json/snmp.log.json.gz
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/empty.log
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken_no_separator_header.log
         expected_result: error
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
