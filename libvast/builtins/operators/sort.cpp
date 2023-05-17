@@ -215,15 +215,22 @@ public:
     auto key = std::string{};
     auto sort_options = arrow::compute::ArraySortOptions::Defaults();
     const auto p
-      = *ignore(required_ws_or_comment
-                >> (str{"--ascending"}.then([&](std::string) {
-                    sort_options.order = arrow::compute::SortOrder::Ascending;
-                  }) | str{"--descending"}.then([&](std::string) {
-                    sort_options.order = arrow::compute::SortOrder::Descending;
-                  })))
-        >> required_ws_or_comment >> extractor >> optional_ws_or_comment
-        >> end_of_pipeline_operator;
-    if (!p(f, l, key)) {
+      = required_ws_or_comment >> extractor >> ignore(
+          -(required_ws_or_comment
+            >> (str{"asc"} | str{"desc"}).then([&](std::string sort_order) {
+                return sort_order == "asc"
+                         ? arrow::compute::SortOrder::Ascending
+                         : arrow::compute::SortOrder::Descending;
+              }))
+          >> -(required_ws_or_comment
+               >> (str{"nulls-first"} | str{"nulls-last"})
+                    .then([&](std::string null_placement) {
+                      return null_placement == "nulls-first"
+                               ? arrow::compute::NullPlacement::AtStart
+                               : arrow::compute::NullPlacement::AtEnd;
+                    })))
+        >> optional_ws_or_comment >> end_of_pipeline_operator;
+    if (!p(f, l, key, sort_options.order, sort_options.null_placement)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
