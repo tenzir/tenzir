@@ -5,7 +5,7 @@ Sorts events.
 ## Synopsis
 
 ```
-sort [--ascending|--descending] <field>
+sort <field> [<asc>|<desc>] [<nulls-first>|<nulls-last>]
 ```
 
 ## Description
@@ -23,11 +23,17 @@ currently compound and extension types (`ip`, `subnet`, `enum`).
 
 The name of the field to sort by.
 
-### `--ascending|--descending`
+### `<asc>|<desc>`
 
 Specifies the sort order.
 
-Defaults to `--ascending` when not specified.
+Defaults to `asc`.
+
+### `<nulls-first>|<nulls-last>`
+
+Specifies how to order null values.
+
+Defaults to `nulls-last`.
 
 ## Examples
 
@@ -40,5 +46,17 @@ sort timestamp
 Sort by the `timestamp` field in descending order.
 
 ```
-sort --descending timestamp
+sort timestamp desc
+```
+
+Arrange by field `foo` and put null values first:
+
+```
+sort foo nulls-first
+```
+
+Arrange by field `foo` in descending order and put null values first:
+
+```
+sort foo desc nulls-first
 ```
