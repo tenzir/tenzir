@@ -806,6 +806,18 @@ tests:
       - command: exec 'load stdin | measure --real-time | measure | drop timestamp | write json'
         input: data/json/conn.log.json.gz
 
+  Measure Incremental:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read cef | repeat 10 | measure --cumulative | drop timestamp | write json'
+        input: data/cef/checkpoint.log
+      - command: exec 'read cef | repeat 10 | measure --cumulative --real-time | drop timestamp | write json'
+        input: data/cef/checkpoint.log
+      - command: exec 'load stdin | repeat 10 | measure --cumulative | drop timestamp | write json'
+        input: data/zeek/conn.log.gz
+      - command: exec 'load stdin | repeat 10 | measure --cumulative --real-time | drop timestamp | write json'
+        input: data/zeek/conn.log.gz
+
   Empty Record in Pipeline:
     tags: [pipelines]
     steps:

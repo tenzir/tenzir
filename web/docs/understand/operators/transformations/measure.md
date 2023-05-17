@@ -1,11 +1,11 @@
 # measure
 
-Replaces the input with incremental metrics describing the input.
+Replaces the input with metrics describing the input.
 
 ## Synopsis
 
 ```
-measure [--real-time]
+measure [--real-time] [--cumulative]
 ```
 
 ## Description
@@ -35,6 +35,11 @@ Emit metrics immediately with every batch, rather than buffering until the
 upstream operator stalls, i.e., is idle or waiting for further input.
 
 The --real-time option is useful when inspect should emit data without latency.
+
+### `--cumulative`
+
+Emit running totals for the `events` and `bytes` fields rather than per-batch
+statistics.
 
 ## Examples
 

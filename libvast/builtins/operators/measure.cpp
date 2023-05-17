@@ -22,8 +22,8 @@ namespace {
 
 class measure_operator final : public crtp_operator<measure_operator> {
 public:
-  measure_operator(uint64_t batch_size, bool real_time)
-    : batch_size_{batch_size}, real_time_{real_time} {
+  measure_operator(uint64_t batch_size, bool real_time, bool cumulative)
+    : batch_size_{batch_size}, real_time_{real_time}, cumulative_{cumulative} {
   }
 
   auto operator()(generator<table_slice> input) const
@@ -38,6 +38,7 @@ public:
       },
     };
     auto builder = table_slice_builder{schema};
+    auto counters = std::unordered_map<type, uint64_t>{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         if (builder.rows() == 0) {
@@ -47,8 +48,10 @@ public:
         co_yield builder.finish();
         continue;
       }
+      auto& events = counters[slice.schema()];
+      events = cumulative_ ? events + slice.rows() : slice.rows();
       const auto ok
-        = builder.add(time{std::chrono::system_clock::now()}, slice.rows(),
+        = builder.add(time{std::chrono::system_clock::now()}, events,
                       slice.schema().name(), slice.schema().make_fingerprint());
       VAST_ASSERT(ok);
       if (real_time_ || builder.rows() == batch_size_) {
@@ -70,6 +73,7 @@ public:
       },
     };
     auto builder = table_slice_builder{schema};
+    auto counter = uint64_t{};
     for (auto&& chunk : input) {
       if (!chunk || chunk->size() == 0) {
         if (builder.rows() == 0) {
@@ -79,9 +83,10 @@ public:
         co_yield builder.finish();
         continue;
       }
+      counter = cumulative_ ? counter + chunk->size() : chunk->size();
       const auto ok = builder.add(std::chrono::time_point_cast<time::duration>(
                                     std::chrono::system_clock::now()),
-                                  chunk->size());
+                                  counter);
       VAST_ASSERT(ok);
       if (real_time_ || builder.rows() == batch_size_) {
         co_yield builder.finish();
@@ -94,12 +99,14 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return real_time_ ? "measure --real-time" : "measure";
+    return fmt::format("measure{}{}", real_time_ ? " --real-time" : "",
+                       cumulative_ ? " --cumulative" : "");
   }
 
 private:
   uint64_t batch_size_ = {};
   bool real_time_ = {};
+  bool cumulative_ = {};
 };
 
 class plugin final : public virtual operator_plugin {
@@ -118,17 +125,22 @@ public:
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
+    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
+      parsers::str, parsers::end_of_pipeline_operator;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto real_time_parser
-      = (-string_parser{"--real-time"}).then([](std::string in) {
-          return not in.empty();
-        });
-    const auto p = optional_ws_or_comment >> real_time_parser
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
     bool real_time = false;
-    if (!p(f, l, real_time)) {
+    bool cumulative = false;
+    const auto p = *ignore((required_ws_or_comment
+                            >> str{"--real-time"}.then([&](std::string) {
+                                real_time = true;
+                              }))
+                           | (required_ws_or_comment
+                              >> str{"--cumulative"}.then([&](std::string) {
+                                  cumulative = true;
+                                })))
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
+    if (!p(f, l, unused)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -138,7 +150,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<measure_operator>(batch_size_, real_time),
+      std::make_unique<measure_operator>(batch_size_, real_time, cumulative),
     };
   }
 
