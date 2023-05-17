@@ -318,6 +318,9 @@ public:
   /// Assigns the metadata of another type to this type.
   void assign_metadata(const type& other) noexcept;
 
+  /// Returns a copy of this type without metadata at any level.
+  auto prune() const noexcept -> type;
+
   /// Returns the name of this type.
   /// @note The result is empty if the contained type is unnammed. Built-in
   /// types have no name. Use the {fmt} API to render a type's signature.

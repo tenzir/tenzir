@@ -1013,6 +1013,32 @@ void type::assign_metadata(const type& other) noexcept {
   table_ = chunk::make(std::move(result));
 }
 
+auto type::prune() const noexcept -> type {
+  auto f = detail::overload{
+    [](const basic_type auto& bt) -> type {
+      return type{bt};
+    },
+    [](const enumeration_type& et) -> type {
+      return type{et};
+    },
+    [](const list_type& lt) -> type {
+      return type{list_type{lt.value_type().prune()}};
+    },
+    [](const map_type&) -> type {
+      die("unreachable");
+    },
+    [](const record_type& rt) -> type {
+      auto fields = std::vector<record_type::field_view>{};
+      fields.reserve(rt.num_fields());
+      for (const auto& field : rt.fields()) {
+        fields.emplace_back(field.name, field.type.prune());
+      }
+      return type{record_type{fields}};
+    },
+  };
+  return caf::visit(f, *this);
+}
+
 std::string_view type::name() const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {

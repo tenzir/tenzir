@@ -1,43 +1,62 @@
 # sort
 
-Sort events.
-
-:::caution Not Yet Implemented
-The `sort` operator is still under development but will be available shortly.
-:::
+Sorts events.
 
 ## Synopsis
 
 ```
-sort <operand>...
+sort <field> [<asc>|<desc>] [<nulls-first>|<nulls-last>]
 ```
 
 ## Description
 
-Sorts events by the specified metadata, fields, or computed values.
+Sorts events by a provided field.
 
-### `<operand>...`
+:::caution Work in Progress
+The implementation of the `sort` operator currently only works with field names.
+We plan to support sorting by meta data, and more generally, entire expressions.
+To date, the operator also lacks support for all data types. Unsupported are
+currently compound and extension types (`ip`, `subnet`, `enum`).
+:::
 
-A list of extractors, selectors, or functions to sort by in ascending order.
-Prefix operands with `-` to sort in descending order.
+### `<field>`
+
+The name of the field to sort by.
+
+### `<asc>|<desc>`
+
+Specifies the sort order.
+
+Defaults to `asc`.
+
+### `<nulls-first>|<nulls-last>`
+
+Specifies how to order null values.
+
+Defaults to `nulls-last`.
 
 ## Examples
 
-Sort by the timestamp field in ascending order.
+Sort by the `timestamp` field in ascending order.
 
 ```
 sort timestamp
 ```
 
-Sort by the timestamp field in descending order.
+Sort by the `timestamp` field in descending order.
 
 ```
-sort -timestamp
+sort timestamp desc
 ```
 
-Sort by schema name in alphabetical, and secondarily by the time events arrived
-at VAST's storage engine showing the latest events first.
+Arrange by field `foo` and put null values first:
 
 ```
-sort #type, -#import_time
+sort foo nulls-first
+```
+
+Arrange by field `foo` in descending order and put null values first:
+
+```
+sort foo desc nulls-first
 ```

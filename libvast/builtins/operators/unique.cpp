@@ -31,7 +31,8 @@ public:
       };
       // The first row could be equal to the last row of the previous batch.
       auto begin = size_t{0};
-      if (previous.rows() > 0 && slice.schema() == previous.schema()) {
+      if (previous.rows() > 0
+          && slice.schema().prune() == previous.schema().prune()) {
         if (is_duplicate(slice, 0, previous, previous.rows() - 1)) {
           begin += 1;
         }
@@ -58,7 +59,7 @@ private:
   /// @pre `a.schema() == b.schema()`
   static auto is_duplicate(const table_slice& a, size_t a_row,
                            const table_slice& b, size_t b_row) -> bool {
-    VAST_ASSERT_EXPENSIVE(a.schema() == b.schema());
+    VAST_ASSERT_EXPENSIVE(a.schema().prune() == b.schema().prune());
     for (auto col = size_t{0}; col < a.columns(); ++col) {
       if (a.at(a_row, col) != b.at(b_row, col)) {
         return false;
