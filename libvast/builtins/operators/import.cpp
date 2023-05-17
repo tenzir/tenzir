@@ -36,7 +36,11 @@ public:
   void pull(caf::downstream<table_slice>& out, size_t num) override {
     auto it = input_.unsafe_current();
     for (size_t i = 0; i < num; ++i) {
-      auto next = std::move(*++it);
+      VAST_ASSERT(it != input_.end());
+      ++it;
+      if (it == input_.end())
+        return;
+      auto next = std::move(*it);
       if (next.rows() == 0) {
         return;
       }
