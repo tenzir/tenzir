@@ -182,12 +182,14 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("sort {} {}",
-                       sort_options_.order
-                           == arrow::compute::SortOrder::Ascending
-                         ? "--ascending"
-                         : "--descending",
-                       key_);
+    return fmt::format(
+      "sort {}{}{}", key_,
+      sort_options_.order == arrow::compute::SortOrder::Ascending ? ""
+                                                                  : " desc",
+      sort_options_.null_placement == arrow::compute::NullPlacement::AtEnd
+        ? ""
+        : " nulls-first",
+      key_);
   }
 
 private:
