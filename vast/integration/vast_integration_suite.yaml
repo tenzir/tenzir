@@ -862,3 +862,11 @@ tests:
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken_data_after_close_tag.log
         expected_result: error
+
+  Sort:
+    tags: [pipelines, zeek]
+    steps:
+      - command: exec 'read zeek-tsv | select ts, uid | sort ts | write json'
+        input: data/zeek/merge.log
+      - command: exec 'read zeek-tsv | select uid | sort uid desc | write json'
+        input: data/zeek/merge.log
