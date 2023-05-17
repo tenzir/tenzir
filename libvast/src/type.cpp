@@ -1013,7 +1013,7 @@ void type::assign_metadata(const type& other) noexcept {
   table_ = chunk::make(std::move(result));
 }
 
-auto type::pruned() const noexcept -> type {
+auto type::prune() const noexcept -> type {
   auto f = detail::overload{
     [](const basic_type auto& bt) -> type {
       return type{bt};
@@ -1022,7 +1022,7 @@ auto type::pruned() const noexcept -> type {
       return type{et};
     },
     [](const list_type& lt) -> type {
-      return type{list_type{lt.value_type().pruned()}};
+      return type{list_type{lt.value_type().prune()}};
     },
     [](const map_type&) -> type {
       die("unreachable");
@@ -1031,7 +1031,7 @@ auto type::pruned() const noexcept -> type {
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(rt.num_fields());
       for (const auto& field : rt.fields()) {
-        fields.emplace_back(field.name, field.type.pruned());
+        fields.emplace_back(field.name, field.type.prune());
       }
       return type{record_type{fields}};
     },
