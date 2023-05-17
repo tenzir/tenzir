@@ -750,7 +750,7 @@ TEST(Add nulls to fields that didnt have values added when adaptive builder is
                                           }}}};
   auto sut = adaptive_table_slice_builder{schema};
   sut.push_row().push_field("int1").add(int64_t{5238592});
-  auto out = sut.finish();
+  auto out = sut.finish(schema.name());
   REQUIRE_EQUAL(schema, out.schema());
 
   REQUIRE_EQUAL(out.rows(), 1u);
@@ -793,7 +793,7 @@ TEST(Add enumeration type from a string representation to a basic field) {
 
   auto sut = adaptive_table_slice_builder{starting_schema};
   sut.push_row().push_field("enum").add("enum2");
-  auto out = sut.finish();
+  auto out = sut.finish(starting_schema.name());
   CHECK_EQUAL(starting_schema, out.schema());
 
   REQUIRE_EQUAL(out.rows(), 1u);
@@ -815,7 +815,7 @@ TEST(Add enumeration type from a string representation to a list of enums) {
     list.add("enum7");
     list.add("enum5");
   }
-  auto out = sut.finish();
+  auto out = sut.finish(starting_schema.name());
   CHECK_EQUAL(starting_schema, out.schema());
 
   REQUIRE_EQUAL(out.rows(), 1u);
@@ -835,7 +835,7 @@ TEST(Add enumeration type from an enum representation to a basic field) {
   const auto input
     = detail::narrow_cast<enumeration>(*enum_type.resolve("enum2"));
   sut.push_row().push_field("enum").add(input);
-  auto out = sut.finish();
+  auto out = sut.finish(starting_schema.name());
   CHECK_EQUAL(starting_schema, out.schema());
 
   REQUIRE_EQUAL(out.rows(), 1u);
@@ -846,7 +846,7 @@ TEST(Add enumeration type from an enum representation to a basic field) {
 TEST(Add enumeration type from an enum representation to a list of enums) {
   const auto enum_type = enumeration_type{{"enum5"}, {"enum6"}, {"enum7"}};
   const auto starting_schema
-    = vast::type{"a nice name", record_type{{"list", list_type{enum_type}}}};
+    = vast::type{record_type{{"list", list_type{enum_type}}}};
 
   const auto input_1
     = detail::narrow_cast<enumeration>(*enum_type.resolve("enum7"));
@@ -861,7 +861,8 @@ TEST(Add enumeration type from an enum representation to a list of enums) {
     list.add(input_2);
   }
   auto out = sut.finish();
-  CHECK_EQUAL(starting_schema, out.schema());
+  CHECK_EQUAL((type{starting_schema.make_fingerprint(), starting_schema}),
+              out.schema());
 
   REQUIRE_EQUAL(out.rows(), 1u);
   REQUIRE_EQUAL(out.columns(), 1u);
@@ -876,7 +877,7 @@ TEST(Add none for enumerations that dont exist)
 
   auto sut = adaptive_table_slice_builder{starting_schema};
   sut.push_row().push_field("enum").add("enum4");
-  auto out = sut.finish();
+  auto out = sut.finish(starting_schema.name());
   CHECK_EQUAL(starting_schema, out.schema());
 
   REQUIRE_EQUAL(out.rows(), 1u);
@@ -895,7 +896,7 @@ TEST(Fixed fields builder can be reused after finish call) {
     row.push_field("int1").add(int64_t{1});
     row.push_field("str1").add("str");
   }
-  auto out = sut.finish();
+  auto out = sut.finish(schema.name());
   REQUIRE_EQUAL(schema, out.schema());
 
   REQUIRE_EQUAL(out.rows(), 1u);
@@ -908,7 +909,7 @@ TEST(Fixed fields builder can be reused after finish call) {
     row.push_field("int1").add(int64_t{2});
     row.push_field("str1").add("str2");
   }
-  out = sut.finish();
+  out = sut.finish(schema.name());
   REQUIRE_EQUAL(schema, out.schema());
 
   REQUIRE_EQUAL(out.rows(), 1u);
@@ -966,7 +967,7 @@ TEST(Fixed fields builder add record type) {
       nested_list.add(int64_t{100});
     }
   }
-  auto out = sut.finish();
+  auto out = sut.finish(schema.name());
   REQUIRE_EQUAL(schema, out.schema());
   REQUIRE_EQUAL(out.rows(), 2u);
   REQUIRE_EQUAL(out.columns(), 2u);
@@ -1042,7 +1043,7 @@ TEST(Fixed fields builder remove record type row) {
       nested_list.add(int64_t{100});
     }
   }
-  auto out = sut.finish();
+  auto out = sut.finish(schema.name());
   REQUIRE_EQUAL(schema, out.schema());
   REQUIRE_EQUAL(out.rows(), 1u);
   REQUIRE_EQUAL(out.columns(), 2u);

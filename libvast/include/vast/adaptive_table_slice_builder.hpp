@@ -48,21 +48,22 @@ public:
   /// @brief Combines all the pushed rows into a table slice. This can be safely
   /// called multipled times only when constructed with a fixed schema (no
   /// fields discovery)
+  /// @param slice_schema_name The schema name of the output table slice. The
+  /// schema name will be a type::fingerprint() if empty.
   /// @return Finalized table slice.
-  auto finish() -> table_slice;
+  auto finish(std::string_view slice_schema_name = {}) -> table_slice;
 
   /// @brief Calculates the currently occupied rows.
   /// @return count of currently occupied rows.
   auto rows() const -> detail::arrow_length_type;
 
 private:
-  auto get_schema() const -> type;
+  auto get_schema(std::string_view slice_schema_name) const -> type;
   auto finish_impl() -> std::shared_ptr<arrow::Array>;
 
   std::variant<detail::concrete_series_builder<record_type>,
                detail::fixed_fields_record_builder>
     root_builder_;
-  type start_schema_;
 };
 
 } // namespace vast

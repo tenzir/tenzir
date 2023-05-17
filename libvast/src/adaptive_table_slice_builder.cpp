@@ -27,19 +27,19 @@ auto init_root_builder(const type& start_schema, bool allow_fields_discovery)
 
 adaptive_table_slice_builder::adaptive_table_slice_builder(
   type start_schema, bool allow_fields_discovery)
-  : root_builder_{init_root_builder(start_schema, allow_fields_discovery)},
-    start_schema_{std::move(start_schema)} {
+  : root_builder_{init_root_builder(start_schema, allow_fields_discovery)} {
 }
 
 auto adaptive_table_slice_builder::push_row() -> row_guard {
   return row_guard{*this};
 }
 
-auto adaptive_table_slice_builder::finish() -> table_slice {
+auto adaptive_table_slice_builder::finish(std::string_view slice_schema_name)
+  -> table_slice {
   auto final_array = finish_impl();
   if (not final_array)
     return table_slice{};
-  auto slice_schema = get_schema();
+  auto slice_schema = get_schema(slice_schema_name);
   const auto& struct_array
     = static_cast<const arrow::StructArray&>(*final_array);
   const auto batch
@@ -57,25 +57,14 @@ auto adaptive_table_slice_builder::rows() const -> detail::arrow_length_type {
     root_builder_);
 }
 
-auto adaptive_table_slice_builder::get_schema() const -> type {
+auto adaptive_table_slice_builder::get_schema(
+  std::string_view slice_schema_name) const -> type {
   return std::visit(
-    detail::overload{
-      [this](const detail::fixed_fields_record_builder&) -> vast::type {
-        return start_schema_;
-      },
-      [this](
-        const detail::concrete_series_builder<record_type>& b) -> vast::type {
-        auto schema = b.type();
-        // If the builder was constructed with the start schema and no types
-        // were discovered then we return the start schema to preserve it's
-        // original name.
-        if (start_schema_
-            and caf::get<record_type>(schema)
-                  == caf::get<record_type>(start_schema_))
-          return start_schema_;
-        auto schema_name = schema.make_fingerprint();
-        return type{std::move(schema_name), std::move(schema)};
-      },
+    [slice_schema_name](const auto& builder) -> vast::type {
+      auto schema = builder.type();
+      if (slice_schema_name.empty())
+        return type{schema.make_fingerprint(), schema};
+      return type{slice_schema_name, std::move(schema)};
     },
     root_builder_);
 }
