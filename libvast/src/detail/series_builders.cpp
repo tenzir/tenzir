@@ -258,8 +258,8 @@ auto fixed_fields_record_builder::get_arrow_builder()
 series_builder::series_builder(const vast::type& type, bool are_fields_fixed) {
   caf::visit(
     detail::overload{
-      [this]<class Type>(const Type& t) {
-        *this = concrete_series_builder<Type>{t};
+      [this, &type]<class Type>(const Type&) {
+        *this = concrete_series_builder<Type>{type};
       },
       [this, are_fields_fixed](const record_type& t) {
         if (are_fields_fixed) {
@@ -298,10 +298,7 @@ std::shared_ptr<arrow::ArrayBuilder> series_builder::get_arrow_builder() {
 vast::type series_builder::type() const {
   return std::visit(
     [](const auto& actual) {
-      if constexpr (std::is_same_v<vast::type, decltype(actual.type())>)
         return actual.type();
-      else
-        return vast::type{actual.type()};
     },
     *this);
 }
