@@ -1,43 +1,44 @@
 # sort
 
-Sort events.
-
-:::caution Not Yet Implemented
-The `sort` operator is still under development but will be available shortly.
-:::
+Sorts events.
 
 ## Synopsis
 
 ```
-sort <operand>...
+sort [--ascending|--descending] <field>
 ```
 
 ## Description
 
-Sorts events by the specified metadata, fields, or computed values.
+Sorts events by a provided field.
 
-### `<operand>...`
+:::caution Work in Progress
+The implementation of the `sort` operator currently only works with field names.
+We plan to support sorting by meta data, and more generally, entire expressions.
+To date, the operator also lacks support for all data types. Unsupported are
+currently compound and extension types (`ip`, `subnet`, `enum`).
+:::
 
-A list of extractors, selectors, or functions to sort by in ascending order.
-Prefix operands with `-` to sort in descending order.
+### `<field>`
+
+The name of the field to sort by.
+
+### `--ascending|--descending`
+
+Specifies the sort order.
+
+Defaults to `--ascending` when not specified.
 
 ## Examples
 
-Sort by the timestamp field in ascending order.
+Sort by the `timestamp` field in ascending order.
 
 ```
 sort timestamp
 ```
 
-Sort by the timestamp field in descending order.
+Sort by the `timestamp` field in descending order.
 
 ```
-sort -timestamp
-```
-
-Sort by schema name in alphabetical, and secondarily by the time events arrived
-at VAST's storage engine showing the latest events first.
-
-```
-sort #type, -#import_time
+sort --descending timestamp
 ```
