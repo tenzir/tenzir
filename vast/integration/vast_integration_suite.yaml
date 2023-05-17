@@ -870,3 +870,7 @@ tests:
         input: data/zeek/merge.log
       - command: exec 'read zeek-tsv | select uid | sort uid desc | write json'
         input: data/zeek/merge.log
+      - command: exec 'read zeek-tsv | head | select service | sort service | write json'
+        input: data/zeek/conn.log.gz
+      - command: exec 'read zeek-tsv | head | select service | sort service nulls-first | write json'
+        input: data/zeek/conn.log.gz
