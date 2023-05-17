@@ -1,2 +1,2 @@
-The `measure` operator now returns running totals with the `--incremental`
+The `measure` operator now returns running totals with the `--cumulative`
 option.
