@@ -16,7 +16,7 @@
     mode: '0644'
     owner: root
     group: root
-  register: config
+  register: vast_config
 
 - name: Ensure directory /etc/systemd/system/vast.service.d exists
   ansible.builtin.file:
@@ -33,21 +33,21 @@
     mode: '0644'
     owner: root
     group: root
-  register: overrides
+  register: vast_overrides
 
 - name: Deploy the Debian Package
   ansible.builtin.include_tasks: debian.yaml
   when: ansible_pkg_mgr == "apt"
-  register: package
+  register: vast_package
 
 - name: Deploy the static binary tarball
   ansible.builtin.include_tasks: static.yaml
   when: ansible_pkg_mgr != "apt"
-  register: package
+  register: vast_package
 
 - name: Restart if config changed
   # Handler notification can't express conjuncion or negation, so we use a task.
-  when: config.changed or overrides.changed and not package.changed  # noqa no-handler
+  when: vast_config.changed or vast_overrides.changed and not vast_package.changed  # noqa no-handler
   ansible.builtin.systemd:
     name: vast
     state: restarted
@@ -61,4 +61,4 @@
 
 - name: Propagate variables to the calling context
   ansible.builtin.set_fact:
-    vast_package_status: "{{ package }}"
+    vast_package_status: "{{ vast_package }}"

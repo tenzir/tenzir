@@ -106,8 +106,8 @@ example:
 Here is how you write this pipeline in the VAST language:
 
 ```cpp
-/* 1. Get data from VAST */
-from vast
+/* 1. Get data from a VAST node */
+export
 /* 2. Filter out a subset of events */
 | where #type == "zeek.weird" && note == "SSL::Invalid_Server_Cert"
 /* 3. Aggregate them by destination IP */
@@ -185,7 +185,7 @@ Let's consider an example of a logical pipeline with the source consisting of
 ![Logical Plan](operator-logical.excalidraw.svg)
 
 A given `from`-`read` and `write`-`to` combination often directly maps to its
-physical counterpart, the `load`-`parse` and `print`-`dump` operators that do
+physical counterpart, the `load`-`parse` and `print`-`save` operators that do
 the actual work with the help of a connector and format:
 
 ![Physical Plan](operator-physical.excalidraw.svg)

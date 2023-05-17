@@ -24,8 +24,10 @@
 #include <algorithm>
 #include <cctype>
 #include <iterator>
+
 namespace vast::plugins::xsv {
 namespace {
+
 struct xsv_printer {
   xsv_printer(char sep, char list_sep, std::string null)
     : sep{sep}, list_sep{list_sep}, null{std::move(null)} {

@@ -38,10 +38,10 @@ attributes.
 :::note Why factor types?
 Many data sources emit more than one event in the form of a record, and often
 contain nested records shared across multiple event types. For example, the
-majority of [Zeek](../formats/zeek.md) logs have the connection
-record in common. Factoring this shared record into its own type, and then
-reusing across all other occurrences makes it easy to perform cross-event
-connection analysis later on.
+majority of [Zeek](../formats/zeek-tsv.md) logs have the connection record in
+common. Factoring this shared record into its own type, and then reusing across
+all other occurrences makes it easy to perform cross-event connection analysis
+later on.
 :::
 
 You can write schemas manually by providing a [module](modules.md). To find out

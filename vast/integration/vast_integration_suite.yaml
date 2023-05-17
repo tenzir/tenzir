@@ -863,6 +863,16 @@ tests:
         input: data/zeek/broken_data_after_close_tag.log
         expected_result: error
 
+  Enumerate:
+    tags: [pipelines]
+    steps:
+      - command: -N import -n 10 zeek
+        input: data/zeek/conn.log.gz
+      - command: -N import -n 10 zeek
+        input: data/zeek/dns.log.gz
+      - command: -N export json 'select uid | enumerate index'
+      - command: -N export json 'select uid | enumerate uid'
+
   Sort:
     tags: [pipelines, zeek]
     steps:
