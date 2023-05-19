@@ -507,4 +507,62 @@ TEST(roundtrip) {
   CHECK_EQUAL(slice, slice_copy);
 }
 
+TEST(unflatten - order of columns) {
+  auto flat_schema
+    = type{"test.unflatten",
+           record_type{
+             {"foo.a", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+             {"a", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+             {"foo.b", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+           }};
+  auto input = make_random_table_slices(1, 1, flat_schema)->front();
+  auto output = unflatten(input, ".");
+  REQUIRE_EQUAL(output.schema(),
+                (type{flat_schema.name(), record_type{
+                                            {"foo",
+                                             record_type{
+                                               {"a", int64_type{}},
+                                               {"b", int64_type{}},
+                                             }},
+                                            {"a", int64_type{}},
+                                          }}));
+  REQUIRE_EQUAL(output.rows(), input.rows());
+  REQUIRE_EQUAL(output.columns(), input.columns());
+  CHECK_EQUAL(materialize(input.at(0, 0)), materialize(output.at(0, 0)));
+  CHECK_EQUAL(materialize(input.at(0, 1)), materialize(output.at(0, 2)));
+  CHECK_EQUAL(materialize(input.at(0, 2)), materialize(output.at(0, 1)));
+}
+
+TEST(unflatten - unflattened field names are part of nested field names) {
+  auto flat_schema = type{
+    "test.unflatten",
+    record_type{
+      {"foo.bar.x.z", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+      {"foo.bar.x", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+      {"rand", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+      {"foo.bar.y", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+      {"foo", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+    }};
+  auto input = make_random_table_slices(1, 1, flat_schema)->front();
+  auto output = unflatten(input, ".");
+  REQUIRE_EQUAL(output.schema(),
+                (type{flat_schema.name(), record_type{
+                                            {"foo.bar.x.z", int64_type{}},
+                                            {"foo.bar",
+                                             record_type{
+                                               {"x", int64_type{}},
+                                               {"y", int64_type{}},
+                                             }},
+                                            {"rand", int64_type{}},
+                                            {"foo", int64_type{}},
+                                          }}));
+  REQUIRE_EQUAL(output.rows(), input.rows());
+  REQUIRE_EQUAL(output.columns(), input.columns());
+  CHECK_EQUAL(materialize(input.at(0, 0)), materialize(output.at(0, 0)));
+  CHECK_EQUAL(materialize(input.at(0, 1)), materialize(output.at(0, 1)));
+  CHECK_EQUAL(materialize(input.at(0, 2)), materialize(output.at(0, 3)));
+  CHECK_EQUAL(materialize(input.at(0, 3)), materialize(output.at(0, 2)));
+  CHECK_EQUAL(materialize(input.at(0, 4)), materialize(output.at(0, 4)));
+}
+
 FIXTURE_SCOPE_END()
