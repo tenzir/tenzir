@@ -18,15 +18,29 @@ VASTRegisterPlugin(
   SOURCES ${tui_sources}
   INCLUDE_DIRECTORIES include)
 
-if (NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/aux/ftxui/.git")
-  message(
-    FATAL_ERROR
-      "submodule '${CMAKE_CURRENT_LIST_DIR}/aux/ftxui' is not initialized")
+option(VAST_ENABLE_BUNDLED_FTXUI "Always use the bundled ftxui" OFF)
+add_feature_info("VAST_ENABLE_BUNDLED_FTXUI" VAST_ENABLE_BUNDLED_FTXUI
+                 "always use the bundled ftxui.")
+  if (NOT VAST_ENABLE_BUNDLED_FTXUI)
+  find_package(ftxui QUIET)
+  if (ftxui_FOUND)
+    string(APPEND VAST_FIND_DEPENDENCY_LIST
+           "\nfind_package(ftxui REQUIRED)")
+    dependency_summary("ftxui" ftxui::screen "Dependencies")
+  endif ()
 endif ()
-
-set(CMAKE_CXX_STANDARD 20)
-add_subdirectory(aux/ftxui)
-unset(CMAKE_CXX_STANDARD)
-
+if (NOT ftxui_FOUND)
+  if (NOT VAST_ENABLE_BUNDLED_FTXUI)
+    message(
+      STATUS
+        "Cannot find installed ftxui; falling back to bundled version")
+  endif ()
+  set(CMAKE_CXX_STANDARD 20)
+  add_subdirectory(aux/ftxui)
+  unset(CMAKE_CXX_STANDARD)
+  dependency_summary("ftxui" "${CMAKE_CURRENT_SOURCE_DIR}/aux/ftxui"
+                     "Dependencies")
+endif ()
+                   
 target_link_libraries(tui PUBLIC vast::libvast vast::internal)
 target_link_libraries(tui PUBLIC ftxui::screen ftxui::dom ftxui::component)

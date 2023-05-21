@@ -39,6 +39,17 @@ in {
   # spdlog in nixpkgs uses `fmt_8` directly, but we want version 9, so we use a
   # little hack here.
   fmt_8 = prev.fmt;
+  ftxui =
+    if !isStatic
+    then prev.ftxui
+    else
+      prev.ftxui.overrideAttrs (orig: {
+        cmakeFlags = [
+          "-DFTXUI_BUILD_EXAMPLES=OFF"
+          "-DFTXUI_BUILD_DOCS=OFF"
+          "-DFTXUI_BUILD_TESTS=OFF"
+        ];
+      });
   # We need boost 1.8.1 at minimum for URL.
   boost = prev.boost18x;
   rapidjson = prev.rapidjson.overrideAttrs (_: {

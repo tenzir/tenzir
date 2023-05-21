@@ -4,8 +4,8 @@
     lib,
     stdenv,
     callPackage,
-    pname,
-    tenzir-source,
+    pname ? "vast",
+    vast-source,
     cmake,
     cmake-format,
     poetry,
@@ -18,6 +18,7 @@
     arrow-cpp,
     fast_float,
     flatbuffers,
+    ftxui,
     spdlog,
     libyamlcpp,
     simdjson,
@@ -25,7 +26,6 @@
     jemalloc,
     libunwind,
     xxHash,
-    rdkafka,
     re2,
     dpkg,
     restinio,
@@ -36,7 +36,7 @@
     runCommand,
     makeWrapper,
     extraCmakeFlags ? [],
-    tenzir-integration-test-deps,
+    vast-integration-test-deps,
     disableTests ? true,
     pkgsBuildHost,
   }: let
@@ -44,7 +44,7 @@
 
     versionLongOverride' = lib.removePrefix "v" versionLongOverride;
     versionShortOverride' = lib.removePrefix "v" versionShortOverride;
-    versionFallback = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version-fallback;
+    versionFallback = (builtins.fromJSON (builtins.readFile ./../../version.json)).vast-version-fallback;
     versionLong =
       if (versionLongOverride != null)
       then versionLongOverride'
@@ -57,9 +57,11 @@
     extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
     bundledPlugins =
       [
-        "plugins/kafka"
-        "plugins/nic"
+        "plugins/cef"
         "plugins/parquet"
+        "plugins/pcap"
+        "plugins/sigma"
+        "plugins/tui"
         "plugins/web"
       ]
       ++ extraPlugins';
@@ -67,7 +69,7 @@
     stdenv.mkDerivation ({
         inherit pname;
         version = versionLong;
-        src = tenzir-source;
+        src = vast-source;
 
         postUnpack = ''
           mkdir -p source/extra-plugins
@@ -90,10 +92,10 @@
         buildInputs = [
           boost
           fast_float
+          ftxui
           libpcap
           libunwind
           libyamlcpp
-          rdkafka
           re2
           restinio
         ];
@@ -112,7 +114,7 @@
           [
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
             "-DCAF_ROOT_DIR=${caf}"
-            "-DTENZIR_EDITION_NAME=${lib.toUpper pname}"
+            "-DVAST_EDITION_NAME=${lib.toUpper pname}"
             "-DVAST_VERSION_TAG=v${versionLong}"
             "-DVAST_VERSION_SHORT=v${versionShort}"
             "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${
@@ -171,7 +173,7 @@
         dontStrip = true;
 
         doInstallCheck = false;
-        installCheckInputs = tenzir-integration-test-deps;
+        installCheckInputs = vast-integration-test-deps;
         # TODO: Investigate why the disk monitor test fails in the build sandbox.
         installCheckPhase = ''
           python ../vast/integration/integration.py \
@@ -180,7 +182,7 @@
         '';
 
         passthru = rec {
-          plugins = callPackage ./plugins {tenzir = self;};
+          plugins = callPackage ./plugins {vast = self;};
           withPlugins = plugins': let
             actualPlugins = plugins' plugins;
           in
@@ -191,11 +193,11 @@
               }
             else let
               pluginDir = symlinkJoin {
-                name = "tenzir-plugin-dir";
+                name = "vast-plugin-dir";
                 paths = [actualPlugins];
               };
             in
-              runCommand "tenzir-with-plugins"
+              runCommand "vast-with-plugins"
               {
                 nativeBuildInputs = [makeWrapper];
               } ''
@@ -206,7 +208,7 @@
 
         meta = with lib; {
           description = "Visibility Across Space and Time";
-          homepage = "https://www.tenzir.com/";
+          homepage = "https://vast.io/";
           # Set mainProgram so that all editions work with `nix run`.
           mainProgram = "tenzir-ctl";
           license = licenses.bsd3;
@@ -229,7 +231,7 @@
             "-UCMAKE_INSTALL_LIBDIR"
             "-UCMAKE_INSTALL_LIBEXECDIR"
             "-UCMAKE_INSTALL_LOCALEDIR"
-            "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
+            "-DCMAKE_INSTALL_PREFIX=/opt/vast"
           )
           echo "cmake flags: $cmakeFlags ''${cmakeFlagsArray[@]}"
           cmake "$cmakeDir" $cmakeFlags "''${cmakeFlagsArray[@]}"
