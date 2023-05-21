@@ -17,9 +17,13 @@
 
 #include <boost/asio.hpp>
 #include <boost/process.hpp>
+#include <caf/detail/scope_guard.hpp>
+
+#include <mutex>
+#include <queue>
+#include <thread>
 
 namespace vast::plugins::shell {
-
 namespace {
 
 class shell_operator final : public crtp_operator<shell_operator> {
@@ -47,7 +51,45 @@ public:
       ctrl.abort(caf::make_error(ec::filesystem_error, e.what()));
       co_return;
     }
+    // Read from child in separate thread because co-routine based async I/O is
+    // not yet feasible. The thread hands over protected chunks
+    std::queue<chunk_ptr> chunks;
+    std::mutex chunk_mutex;
+    constexpr auto block_size = 16_KiB;
+    auto thread = std::thread([&] {
+      while (!child_stdout.eof()) {
+        VAST_DEBUG("trying to read {} bytes", block_size);
+        std::vector<char> buffer(block_size);
+        child_stdout.read(buffer.data(), block_size);
+        auto bytes_read = child_stdout.gcount();
+        VAST_DEBUG("read {} bytes", bytes_read);
+        if (bytes_read > 0) {
+          buffer.resize(bytes_read);
+          auto chk = chunk::make(std::move(buffer));
+          std::lock_guard lock{chunk_mutex};
+          chunks.push(std::move(chk));
+        }
+      }
+    });
+    // Coroutines require RAII-style exit handling.
+    auto at_exit = caf::detail::make_scope_guard([&] {
+      VAST_DEBUG("sending EOF to child's stdin");
+      child_stdin.close();
+      child_stdin.pipe().close();
+      //VAST_DEBUG("awaiting child");
+      //child.wait(ec);
+      //if (ec)
+      //  VAST_DEBUG(ec);
+      //else
+      //  VAST_ERROR(ec);
+      VAST_DEBUG("joining thread");
+      thread.join();
+    });
     for (auto&& chunk : input) {
+      if (!chunk || chunk->size() == 0)
+        co_yield {};
+      continue;
+      // Stop if the child is no longer running.
       if (!child.running(ec)) {
         if (ec)
           VAST_DEBUG(ec);
@@ -56,41 +98,43 @@ public:
         co_yield {};
         break;
       }
-      // Shove operator input into the child's stdin.
-      auto chunk_data = reinterpret_cast<const char*>(chunk->data());
-      VAST_DEBUG("writing {} bytes to child's stdin", chunk->size());
-      if (!child_stdin.write(chunk_data, chunk->size())) {
+      // Pass operator input into the child's stdin.
+      const auto* chunk_data = reinterpret_cast<const char*>(chunk->data());
+      auto chunk_size = detail::narrow_cast<std::streamsize>(chunk->size());
+      VAST_DEBUG("writing {} bytes to child's stdin", chunk_size);
+      if (!child_stdin.write(chunk_data, chunk_size)) {
         ctrl.abort(caf::make_error(
           ec::unspecified, fmt::format("failed to write into child's stdin")));
         break;
       }
-      // Read child's stdout in blocks and relay them downstream.
-      constexpr auto block_size = 16_KiB;
-      std::vector<char> buffer(block_size);
-      while (true) {
-        child_stdout.read(buffer.data(), block_size);
-        auto bytes_read = detail::narrow_cast<size_t>(child_stdout.gcount());
-        VAST_DEBUG("read {} bytes", bytes_read);
-        if (bytes_read == 0) {
-          // No output from child, come back next time.
-          co_yield {};
-          break;
+      // Try yielding all buffered data.
+      {
+        std::unique_lock lock{chunk_mutex, std::try_to_lock};
+        if (lock.owns_lock()) {
+          while (!chunks.empty()) {
+            auto chk = chunks.front();
+            VAST_DEBUG("yield chunk of {} bytes", chk->size());
+            co_yield chk;
+            chunks.pop();
+          }
         }
-        buffer.resize(bytes_read);
-        co_yield chunk::make(std::vector<char>{buffer});
       }
     }
-    // FIXME: do this RAII-style.
-    VAST_DEBUG("awaiting child");
-    child.wait(ec);
-    if (ec)
-      VAST_DEBUG(ec);
-    else
-      VAST_ERROR(ec);
   }
 
   auto to_string() const -> std::string override {
     return fmt::format("shell \"{}\"", command_);
+  }
+
+  auto location() const -> operator_location override {
+    // The user expectation is that shell executes relative to the currently
+    // executing process.
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    // We may execute blocking syscalls.
+    return true;
   }
 
 private:
@@ -100,8 +144,9 @@ private:
 class plugin final : public virtual operator_plugin {
 public:
   // plugin API
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize([[maybe_unused]] const record& plugin_config,
+                  [[maybe_unused]] const record& global_config)
+    -> caf::error override {
     return {};
   }
 
@@ -134,7 +179,6 @@ public:
 };
 
 } // namespace
-
 } // namespace vast::plugins::shell
 
 VAST_REGISTER_PLUGIN(vast::plugins::shell::plugin)
