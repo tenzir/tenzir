@@ -515,7 +515,7 @@ class plugin final : public virtual parser_plugin,
     caf::settings settings;
     config_options options;
     options.add<std::string>("selector", "");
-    options.add<std::string>("separator", "");
+    options.add<std::string>("unnest-separator", "");
     options.add<bool>("no-infer", "");
     if (auto [ec, it] = options.parse(settings, args);
         ec != caf::pec::success) {
@@ -525,7 +525,7 @@ class plugin final : public virtual parser_plugin,
     return make_parser_impl(
       std::move(json_chunk_generator), ctrl, get_selector(settings, ctrl),
       not settings.contains("no-infer"),
-      caf::get_or<std::string>(settings, "separator", ""));
+      caf::get_or<std::string>(settings, "unnest-separator", ""));
   }
 
   auto default_loader(std::span<std::string const>) const
@@ -600,7 +600,7 @@ class selector_parser final : public virtual parser_plugin {
                    operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     args.push_back(fmt::format("--selector={}", Selector.str()));
-    args.push_back(fmt::format("--separator={}", Separator.str()));
+    args.push_back(fmt::format("--unnest-separator={}", Separator.str()));
     return json_parser_->make_parser(std::move(args),
                                      std::move(json_chunk_generator), ctrl);
   }
