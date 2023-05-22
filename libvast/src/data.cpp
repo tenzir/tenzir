@@ -759,7 +759,8 @@ caf::expected<data> from_json(std::string_view x) {
   simdjson::dom::element doc;
   auto error = parser.parse(padded_string).get(doc);
   if (error)
-    return caf::make_error(ec::parse_error, fmt::format("{}", error));
+    return caf::make_error(ec::parse_error,
+                           fmt::format("{}", error_message(error)));
   try {
     return parse(doc);
   } catch (const simdjson::simdjson_error& e) {

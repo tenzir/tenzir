@@ -507,6 +507,25 @@ struct formatter<vast::meta_extractor> {
 };
 
 template <>
+struct formatter<enum vast::meta_extractor::kind> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(enum vast::meta_extractor::kind value, FormatContext& ctx) const {
+    switch (value) {
+      case vast::meta_extractor::kind::type:
+        return format_to(ctx.out(), "#type");
+      case vast::meta_extractor::kind::import_time:
+        return format_to(ctx.out(), "#import_time");
+    }
+    vast::die("unreachable");
+  }
+};
+
+template <>
 struct formatter<vast::relational_operator> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {

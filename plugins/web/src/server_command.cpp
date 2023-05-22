@@ -152,7 +152,8 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           if (!json_params.is_object()) {
             return response->abort(
               400, "invalid JSON body\n",
-              caf::make_error(ec::invalid_query, fmt::to_string(json_params)));
+              caf::make_error(ec::invalid_query,
+                              simdjson::to_string(json_params)));
           }
           body_params = json_params.get_object();
         } else {
