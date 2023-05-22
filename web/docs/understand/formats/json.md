@@ -7,7 +7,7 @@ Reads and writes JSON.
 Parser:
 
 ```
-json [--selector=field[:prefix]]
+json [--selector=field[:prefix]] [--unnest-separator=<string>]
 ```
 
 Printer:
@@ -35,6 +35,48 @@ For example, the [Suricata EVE JSON](suricata.md) format includes a field
 `event_type` that signifies the log type. If we pass
 `--selector=event_type:suricata`, a field value of `flow` will create a schema
 with the name `suricata.flow`.
+
+### `--unnest-separator=<string>` (Parser)
+
+Designates a string that will unnest the fields if possible.
+
+For example, the [Zeek JSON](zeek-json.md) includes a field `id` in many of
+it's events. The `id` is composed of `orig_h`, `orig_p`, `resp_h`,`resp_p`
+nested fields. The Zeek JSON outputs the `id` field as a 4 individual key-value
+pairs instead of an JSON object. This can be represented as:
+```json
+{
+  "id.orig_h" : "1.1.1.1",
+  "id.orig_p" : 10,
+  "id.resp_h" : "1.1.1.2",
+  "id.resp_p" : 5
+}
+```
+
+The `--unnest-separator` for Zeek JSON is a `.`.
+Each `.` in a field name will be treated as separator between nested fields.
+Input in the example above will be transformed into:
+```json
+{
+  "id" : {
+    "orig_h" : "1.1.1.1",
+    "orig_p" : 10,
+    "resp_h" : "1.1.1.2",
+    "resp_p" : 5
+  }
+}
+```
+
+Sometimes the separator will stay as a part of a field name. For example the:
+```json
+{
+  "cpu" : "cpu01",
+  "cpu.logger" : "logger1"
+}
+```
+
+will not be transformed. The "cpu" field has a a value so it can't be unnested
+into a JSON object.
 
 ### `--pretty` (Printer)
 
