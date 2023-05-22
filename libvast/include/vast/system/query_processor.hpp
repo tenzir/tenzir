@@ -157,3 +157,29 @@ protected:
 std::string to_string(query_processor::state_name x);
 
 } // namespace vast::system
+
+namespace fmt {
+
+template <>
+struct formatter<enum vast::system::query_processor::state_name> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(enum vast::system::query_processor::state_name value,
+              FormatContext& ctx) const {
+    switch (value) {
+      case vast::system::query_processor::state_name::idle:
+        return format_to(ctx.out(), "idle");
+      case vast::system::query_processor::state_name::await_query_id:
+        return format_to(ctx.out(), "await_query_id");
+      case vast::system::query_processor::state_name::await_results_until_done:
+        return format_to(ctx.out(), "await_results_until_done");
+    }
+    vast::die("unreachable");
+  }
+};
+
+} // namespace fmt

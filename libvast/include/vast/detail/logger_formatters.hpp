@@ -24,6 +24,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 
+#include <boost/core/detail/string_view.hpp>
 #include <caf/deep_to_string.hpp>
 #include <caf/detail/pretty_type_name.hpp>
 #include <fmt/chrono.h>
@@ -209,6 +210,8 @@ struct formatter<caf::optional<T>> {
   }
 };
 
+#if FMT_VERSION / 10000 < 10
+
 template <class T>
 struct formatter<std::optional<T>> {
   template <class ParseContext>
@@ -223,6 +226,8 @@ struct formatter<std::optional<T>> {
     return format_to(ctx.out(), "{}", *value);
   }
 };
+
+#endif
 
 template <class T>
 struct formatter<caf::expected<T>> {
@@ -239,6 +244,34 @@ struct formatter<caf::expected<T>> {
   }
 };
 
+template <class T>
+struct formatter<caf::inbound_stream_slot<T>> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto
+  format(const caf::inbound_stream_slot<T>& value, FormatContext& ctx) const {
+    return format_to(ctx.out(), "in:{}", value.value());
+  }
+};
+
+template <class T>
+struct formatter<caf::outbound_stream_slot<T>> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto
+  format(const caf::outbound_stream_slot<T>& value, FormatContext& ctx) const {
+    return format_to(ctx.out(), "out:{}", value.value());
+  }
+};
+
 template <>
 struct formatter<caf::error> {
   template <class ParseContext>
@@ -249,6 +282,15 @@ struct formatter<caf::error> {
   template <class FormatContext>
   auto format(const caf::error& value, FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", vast::render(value));
+  }
+};
+
+template <>
+struct formatter<boost::core::string_view> : formatter<std::string_view> {
+  template <class FormatContext>
+  constexpr auto format(boost::core::string_view value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return formatter<std::string_view>::format(std::string_view{value}, ctx);
   }
 };
 
