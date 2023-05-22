@@ -597,11 +597,12 @@ TEST(
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
-  const auto expected_schema = make_expected_schema(vast::type{record_type{
-    {"field_to_chose", string_type{}},
-    {"a", int64_type{}},
-    {"b", string_type{}},
-  }});
+  const auto expected_schema
+    = vast::type{"modulee.great_field", record_type{
+                                          {"field_to_chose", string_type{}},
+                                          {"a", int64_type{}},
+                                          {"b", string_type{}},
+                                        }};
   CHECK_EQUAL(output_slices.front().schema(), expected_schema);
   CHECK_EQUAL(output_slices.front().rows(), 1u);
   CHECK_EQUAL(output_slices.front().columns(), 3u);
@@ -631,10 +632,11 @@ TEST(events with
   }
   REQUIRE_EQUAL(output_slices.size(), 3u);
   CHECK_EQUAL(output_slices.at(0).schema(),
-              make_expected_schema(vast::type{record_type{
-                {"d", list_type{int64_type{}}},
-                {"field_to_chose", string_type{}},
-              }}));
+              vast::type("modulee.no_schema_field",
+                         record_type{
+                           {"d", list_type{int64_type{}}},
+                           {"field_to_chose", string_type{}},
+                         }));
   CHECK_EQUAL(output_slices.at(0).rows(), 1u);
   CHECK_EQUAL(output_slices.at(0).columns(), 2u);
   CHECK_EQUAL(materialize(output_slices.at(0).at(0u, 0u)),
@@ -648,10 +650,11 @@ TEST(events with
   CHECK_EQUAL(materialize(output_slices.at(1).at(0u, 1u)), int64_t{100});
 
   CHECK_EQUAL(output_slices.at(2).schema(),
-              make_expected_schema(vast::type{record_type{
-                {"g", string_type{}},
-                {"field_to_chose", string_type{}},
-              }}));
+              vast::type("modulee.no_schema_field",
+                         record_type{
+                           {"g", string_type{}},
+                           {"field_to_chose", string_type{}},
+                         }));
   CHECK_EQUAL(output_slices.at(2).rows(), 1u);
   CHECK_EQUAL(output_slices.at(2).columns(), 2u);
   CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 0u)), "some_str");

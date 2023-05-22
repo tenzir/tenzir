@@ -52,6 +52,7 @@ struct parser_state {
   // known schema. The parses must yield the table_slice of previously parsed
   // schema when it parses an event of a different one.
   adaptive_table_slice_builder* last_used_builder = nullptr;
+  std::string last_used_schema_name{};
   // Table slice builder used when the schema is not known.
   adaptive_table_slice_builder unknown_schema_builder{};
   // A flag used to enable/disable type inference.
@@ -95,7 +96,6 @@ public:
       parse_impl(val.value_unsafe(), field, depth + 1);
     }
   }
-
 private:
   auto report_parse_err(auto& v, std::string description) -> void {
     ctrl_.warn(caf::make_error(
@@ -239,7 +239,7 @@ auto create_field_validator(bool has_selector, bool infer_types)
 auto handle_empty_chunk(parser_state& state, bool has_selector) -> table_slice {
   if (has_selector) {
     if (state.last_used_builder)
-      return state.last_used_builder->finish();
+      return state.last_used_builder->finish(state.last_used_schema_name);
     return table_slice{};
   }
   return std::exchange(state.unknown_schema_builder, {}).finish();
@@ -248,12 +248,12 @@ auto handle_empty_chunk(parser_state& state, bool has_selector) -> table_slice {
 auto get_schema_name(simdjson::ondemand::document_reference doc,
                      const selector& selector) -> caf::expected<std::string> {
   auto type = doc[selector.selector_field];
+  doc.rewind();
   if (auto err = type.error()) {
     if (err != simdjson::error_code::NO_SUCH_FIELD)
       return caf::make_error(ec::parse_error, error_message(err));
     return "";
   }
-  doc.rewind();
   auto maybe_schema_name = type.value_unsafe().get_string();
   if (auto err = maybe_schema_name.error()) {
     return caf::make_error(ec::parse_error, error_message(err));
@@ -270,7 +270,9 @@ auto handle_builder_change(adaptive_table_slice_builder& builder_to_use,
   if (not state.last_used_builder)
     return {};
   if (state.last_used_builder != std::addressof(builder_to_use)) {
-    if (auto slice = state.last_used_builder->finish(); slice.rows() > 0) {
+    if (auto slice
+        = state.last_used_builder->finish(state.last_used_schema_name);
+        slice.rows() > 0) {
       if (state.last_used_builder
           == std::addressof(state.unknown_schema_builder))
         state.unknown_schema_builder = {};
@@ -294,6 +296,7 @@ auto handle_no_matching_schema_found(parser_state& state,
   auto maybe_slice_to_yield
     = handle_builder_change(state.unknown_schema_builder, state);
   state.last_used_builder = std::addressof(state.unknown_schema_builder);
+  state.last_used_schema_name = std::string{schema_name};
   return {std::move(maybe_slice_to_yield)};
 }
 
@@ -306,13 +309,16 @@ auto handle_schema_found(parser_state& state, const type& schema)
   auto& current_builder = state.builders_per_schema[schema.name()];
   auto maybe_slice_to_yield = handle_builder_change(current_builder, state);
   state.last_used_builder = std::addressof(current_builder);
+  state.last_used_schema_name = std::string{schema.name()};
   return maybe_slice_to_yield;
 }
-auto finalize(adaptive_table_slice_builder* last_used_builder)
+auto finalize(adaptive_table_slice_builder* last_used_builder,
+              const std::string& last_used_schema_name)
   -> std::optional<table_slice> {
   if (not last_used_builder)
     return {};
-  if (auto slice = last_used_builder->finish(); slice.rows() > 0u)
+  if (auto slice = last_used_builder->finish(last_used_schema_name);
+      slice.rows() > 0u)
     return std::move(slice);
   return {};
 }
@@ -364,6 +370,7 @@ auto handle_known_schema(simdjson::ondemand::document_stream::iterator doc_it,
     auto maybe_slice_to_yield
       = handle_builder_change(state.unknown_schema_builder, state);
     state.last_used_builder = std::addressof(state.unknown_schema_builder);
+    state.last_used_schema_name.clear();
     if (maybe_slice_to_yield) {
       state.slice_to_yield = std::move(maybe_slice_to_yield);
       return parser_action::yield;
@@ -383,13 +390,34 @@ auto handle_known_schema(simdjson::ondemand::document_stream::iterator doc_it,
   return parser_action::skip_chunk;
 }
 
+std::vector<type> get_schemas(bool schema_is_known,
+                              operator_control_plane& ctrl, bool unflatten) {
+  if (not schema_is_known)
+    return {};
+  if (not unflatten)
+    return ctrl.schemas();
+  auto schemas = ctrl.schemas();
+  std::vector<type> ret;
+  std::transform(schemas.begin(), schemas.end(), std::back_inserter(ret),
+                 [](const auto& schema) {
+                   return flatten(schema);
+                 });
+  return ret;
+}
+
+auto unflatten_if_needed(std::string_view separator, table_slice slice) {
+  if (separator.empty())
+    return slice;
+  return unflatten(slice, separator);
+}
+
 auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
                       operator_control_plane& ctrl,
-                      std::optional<selector> selector, bool infer_types)
-  -> generator<table_slice> {
+                      std::optional<selector> selector, bool infer_types,
+                      std::string separator) -> generator<table_slice> {
   const auto schema_is_known = selector.has_value();
   const auto schemas
-    = schema_is_known ? std::addressof(ctrl.schemas()) : nullptr;
+    = get_schemas(schema_is_known, ctrl, not separator.empty());
   auto state = parser_state{.infer_types = infer_types};
   if (not schema_is_known)
     state.last_used_builder = std::addressof(state.unknown_schema_builder);
@@ -401,7 +429,8 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
   auto json_to_parse_buffer = json_buffer{};
   for (auto chnk : json_chunk_generator) {
     if (not chnk or chnk->size() == 0u) {
-      co_yield handle_empty_chunk(state, schema_is_known);
+      co_yield unflatten_if_needed(separator,
+                                   handle_empty_chunk(state, schema_is_known));
       continue;
     }
     json_to_parse_buffer.append(
@@ -421,18 +450,20 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
     }
     for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
       if (schema_is_known) {
-        switch (handle_known_schema(doc_it, *selector, state, *schemas, ctrl)) {
+        switch (handle_known_schema(doc_it, *selector, state, schemas, ctrl)) {
           case parser_action::pass:
             break;
           case parser_action::skip_chunk:
             continue;
           case parser_action::yield:
             VAST_ASSERT(state.slice_to_yield);
-            co_yield *std::exchange(state.slice_to_yield, {});
+            co_yield unflatten_if_needed(
+              separator, *std::exchange(state.slice_to_yield, {}));
         }
       }
-      if (auto err = parse_doc(field_validator, doc_it,
-                               *state.last_used_builder, ctrl)) {
+      auto err
+        = parse_doc(field_validator, doc_it, *state.last_used_builder, ctrl);
+      if (err) {
         ctrl.warn(caf::make_error(
           ec::parse_error, fmt::format("failed to fully parse '{}' : {}. "
                                        "Some events can be skipped.",
@@ -440,7 +471,8 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
         continue;
       }
       if (state.last_used_builder->rows() == max_table_slice_rows) {
-        co_yield state.last_used_builder->finish();
+        co_yield unflatten_if_needed(separator, state.last_used_builder->finish(
+                                                  state.last_used_schema_name));
         if (not schema_is_known)
           state.unknown_schema_builder = {};
       }
@@ -448,8 +480,9 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
     handle_truncated_bytes(stream.truncated_bytes(), json_to_parse_buffer,
                            ctrl);
   }
-  if (auto slice = finalize(state.last_used_builder))
-    co_yield std::move(*slice);
+  if (auto slice
+      = finalize(state.last_used_builder, state.last_used_schema_name))
+    co_yield unflatten_if_needed(separator, std::move(*slice));
 }
 
 auto get_selector(const caf::settings& settings, operator_control_plane& ctrl)
@@ -482,15 +515,17 @@ class plugin final : public virtual parser_plugin,
     caf::settings settings;
     config_options options;
     options.add<std::string>("selector", "");
+    options.add<std::string>("unnest-separator", "");
     options.add<bool>("no-infer", "");
     if (auto [ec, it] = options.parse(settings, args);
         ec != caf::pec::success) {
       return caf::make_error(ec,
                              fmt::format("failed to parse option '{}'", *it));
     }
-    return make_parser_impl(std::move(json_chunk_generator), ctrl,
-                            get_selector(settings, ctrl),
-                            not settings.contains("no-infer"));
+    return make_parser_impl(
+      std::move(json_chunk_generator), ctrl, get_selector(settings, ctrl),
+      not settings.contains("no-infer"),
+      caf::get_or<std::string>(settings, "unnest-separator", ""));
   }
 
   auto default_loader(std::span<std::string const>) const
@@ -557,13 +592,15 @@ class plugin final : public virtual parser_plugin,
   }
 };
 
-template <detail::string_literal Name, detail::string_literal Selector>
+template <detail::string_literal Name, detail::string_literal Selector,
+          detail::string_literal Separator = "">
 class selector_parser final : public virtual parser_plugin {
   auto make_parser(std::vector<std::string> args,
                    generator<chunk_ptr> json_chunk_generator,
                    operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     args.push_back(fmt::format("--selector={}", Selector.str()));
+    args.push_back(fmt::format("--unnest-separator={}", Separator.str()));
     return json_parser_->make_parser(std::move(args),
                                      std::move(json_chunk_generator), ctrl);
   }
@@ -590,7 +627,7 @@ private:
 };
 
 using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
-using zeek_parser = selector_parser<"zeek", "_path:zeek">;
+using zeek_parser = selector_parser<"zeek", "_path:zeek", ".">;
 
 } // namespace vast::plugins::json
 

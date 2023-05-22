@@ -7,7 +7,7 @@ Reads and writes JSON.
 Parser:
 
 ```
-json [--selector=field[:prefix]]
+json [--selector=field[:prefix]] [--unnest-separator=<string>]
 ```
 
 Printer:
@@ -35,6 +35,39 @@ For example, the [Suricata EVE JSON](suricata.md) format includes a field
 `event_type` that signifies the log type. If we pass
 `--selector=event_type:suricata`, a field value of `flow` will create a schema
 with the name `suricata.flow`.
+
+### `--unnest-separator=<string>` (Parser)
+
+A delimiter that, if present in keys, causes values to be treated as values of nested records.
+
+A popular example of this is the [Zeek JSON](zeek-json.md) format. It includes
+the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
+top-level. The data is best modeled as an `id` record with four nested fields
+`orig_h`, `orig_p`, `resp_h`, and `resp_p`.
+
+Without an unnest separator, the data looks like this:
+
+```json
+{
+  "id.orig_h" : "1.1.1.1",
+  "id.orig_p" : 10,
+  "id.resp_h" : "1.1.1.2",
+  "id.resp_p" : 5
+}
+```
+
+With the unnest separator set to `.`, VAST reads the events like this:
+
+```json
+{
+  "id" : {
+    "orig_h" : "1.1.1.1",
+    "orig_p" : 10,
+    "resp_h" : "1.1.1.2",
+    "resp_p" : 5
+  }
+}
+```
 
 ### `--pretty` (Printer)
 

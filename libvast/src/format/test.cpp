@@ -279,7 +279,7 @@ caf::error reader::module(vast::module mod) {
       return caf::make_error(ec::format_error, "failed to create blueprint", t);
     if (auto ptr = builder(t); ptr == nullptr)
       return caf::make_error(ec::format_error,
-                             "failed to create table slize builder", t);
+                             "failed to create table slice builder", t);
   }
   if (subset.empty())
     return caf::make_error(ec::format_error, "no test type in schema");
