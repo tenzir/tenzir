@@ -38,12 +38,15 @@ with the name `suricata.flow`.
 
 ### `--unnest-separator=<string>` (Parser)
 
-Designates a string that will unnest the fields if possible.
+A delimiter that, if present in keys, causes values to be treated as values of nested records.
 
-For example, the [Zeek JSON](zeek-json.md) includes a field `id` in many of
-it's events. The `id` is composed of `orig_h`, `orig_p`, `resp_h`,`resp_p`
-nested fields. The Zeek JSON outputs the `id` field as a 4 individual key-value
-pairs instead of an JSON object. This can be represented as:
+A popular example of this is the [Zeek JSON](zeek-json.md) format. It includes
+the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
+top-level. The data is best modeled as an `id` record with four nested fields
+`orig_h`, `orig_p`, `resp_h`, and `resp_p`.
+
+Without an unnest separator, the data looks like this:
+
 ```json
 {
   "id.orig_h" : "1.1.1.1",
@@ -53,9 +56,8 @@ pairs instead of an JSON object. This can be represented as:
 }
 ```
 
-The `--unnest-separator` for Zeek JSON is a `.`.
-Each `.` in a field name will be treated as separator between nested fields.
-Input in the example above will be transformed into:
+With the unnest separator set to `.`, VAST reads the events like this:
+
 ```json
 {
   "id" : {
@@ -66,17 +68,6 @@ Input in the example above will be transformed into:
   }
 }
 ```
-
-Sometimes the separator will stay as a part of a field name. For example the:
-```json
-{
-  "cpu" : "cpu01",
-  "cpu.logger" : "logger1"
-}
-```
-
-will not be transformed. The "cpu" field has a a value so it can't be unnested
-into a JSON object.
 
 ### `--pretty` (Printer)
 
