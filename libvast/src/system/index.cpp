@@ -1038,7 +1038,7 @@ std::size_t index_state::memusage() const {
 }
 
 caf::typed_response_promise<record>
-index_state::status(status_verbosity v) const {
+index_state::status(status_verbosity v, duration d) const {
   struct extra_state {
     size_t memory_usage = 0;
     void
@@ -1073,7 +1073,7 @@ index_state::status(status_verbosity v) const {
     rs->content["num-active-partitions"] = uint64_t{active_partitions.size()};
     rs->content["num-cached-partitions"] = uint64_t{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = uint64_t{unpersisted.size()};
-    const auto timeout = defaults::system::status_request_timeout / 5 * 4;
+    const auto timeout = d / 10 * 9;
     auto partitions = record{};
     auto partition_status
       = [&](const uuid& id, const partition_actor& pa, list& xs) {
@@ -1456,9 +1456,9 @@ index(index_actor::stateful_pointer<index_state> self,
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
       query_state::type_query_context_map query_contexts;
-      if (not caf::get_or(content(
-            self->system().config(),
-            "vast.experimental-disable-active-partition-queries", false))) {
+      if (not caf::get_or(content(self->system().config()),
+                          "vast.experimental-disable-active-partition-queries",
+                          false)) {
         for (const auto& [active_partition_type, active_partition] :
              self->state.active_partitions) {
           candidates.emplace_back(active_partition.id, active_partition_type);
@@ -2012,8 +2012,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity v) { //
-      return self->state.status(v);
+    [self](atom::status, status_verbosity v, duration d) { //
+      return self->state.status(v, d);
     },
   };
 }

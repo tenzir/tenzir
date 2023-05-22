@@ -454,8 +454,10 @@ TEST(active parquet store status) {
   auto slices = std::vector<table_slice>{slice};
   vast::detail::spawn_container_source(sys, slices, builder);
   run();
-  auto r = self->request(builder, std::chrono::milliseconds(100),
-                         atom::status_v, vast::system::status_verbosity::info);
+  auto timeout = std::chrono::milliseconds(100);
+  auto r = self->request(builder, timeout, atom::status_v,
+                         vast::system::status_verbosity::info,
+                         std::chrono::duration_cast<vast::duration>(timeout));
   run();
   r.receive(
     [uuid](record& status) {

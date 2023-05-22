@@ -556,7 +556,7 @@ partition_actor::behavior_type passive_partition(
           });
       return rp;
     },
-    [self](atom::status, status_verbosity) -> record {
+    [self](atom::status, status_verbosity, duration) -> record {
       record result;
       if (!self->state.partition_chunk) {
         result["state"] = "waiting for chunk";

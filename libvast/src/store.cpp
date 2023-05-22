@@ -443,7 +443,7 @@ system::default_active_store_actor::behavior_type default_active_store(
         });
       return attach_sink_result.inbound_slot();
     },
-    [self](atom::status, [[maybe_unused]] system::status_verbosity verbosity) {
+    [self](atom::status, system::status_verbosity, duration) {
       return record{
         {"events", self->state.store->num_events()},
         {"path", self->state.path.string()},

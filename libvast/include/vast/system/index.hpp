@@ -239,7 +239,7 @@ struct index_state {
 
   /// @returns various status metrics.
   [[nodiscard]] caf::typed_response_promise<record>
-  status(status_verbosity v) const;
+  status(status_verbosity v, duration d) const;
 
   size_t memusage() const;
 

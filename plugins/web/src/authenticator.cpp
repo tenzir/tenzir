@@ -195,7 +195,7 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
     [self](atom::validate, const token_t& token) -> bool {
       return self->state.authenticate(token);
     },
-    [](atom::status, system::status_verbosity) -> vast::record {
+    [](atom::status, system::status_verbosity, duration) -> vast::record {
       return record{};
     },
   };

@@ -64,7 +64,7 @@ auto mock_index(system::index_actor::stateful_pointer<mock_index_state>)
     [=](caf::stream<table_slice>) -> caf::inbound_stream_slot<table_slice> {
       FAIL("no mock implementation available");
     },
-    [=](atom::status, system::status_verbosity) -> record {
+    [=](atom::status, system::status_verbosity, duration) -> record {
       FAIL("no mock implementation available");
     },
     [=](atom::subscribe, atom::flush, system::flush_listener_actor&) {

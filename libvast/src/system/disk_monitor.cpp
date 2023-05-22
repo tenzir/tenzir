@@ -265,7 +265,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       }
       return {};
     },
-    [self](atom::status, status_verbosity sv) {
+    [self](atom::status, status_verbosity sv, duration) {
       auto result = record{};
       auto disk_monitor = record{};
       disk_monitor["blacklist-size"] = self->state.blacklist.size();

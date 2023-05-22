@@ -112,7 +112,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       return rp;
     },
     // -- status_client_actor -------------------------------------------------
-    [self](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v, duration) {
       return self->state.status(v);
     },
   };

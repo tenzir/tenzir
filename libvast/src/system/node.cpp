@@ -157,7 +157,7 @@ auto find_endpoint_plugin(const http_request_description& desc)
 }
 
 void collect_component_status(node_actor::stateful_pointer<node_state> self,
-                              status_verbosity v,
+                              status_verbosity v, duration timeout,
                               const std::vector<std::string>& components) {
   const auto has_component = [&](std::string_view name) {
     return components.empty()
@@ -221,7 +221,6 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     }
     rs->content["system"] = std::move(system);
   }
-  const auto timeout = defaults::system::status_request_timeout;
   // Send out requests and collects answers.
   for (const auto& [label, component] : self->state.registry.components()) {
     // Requests to busy remote sources and sinks can easily delay the combined
@@ -312,11 +311,20 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
     verbosity = status_verbosity::detailed;
   if (caf::get_or(inv.options, "vast.status.debug", false))
     verbosity = status_verbosity::debug;
+  auto timeout_value
+    = system::get_or_duration(inv.options, "vast.status.timeout",
+                              defaults::system::status_request_timeout);
+  if (!timeout_value) {
+    return caf::make_message(caf::make_error(
+      ec::parse_error,
+      fmt::format("failed to read status timeout: {}", timeout_value.error())));
+  }
+  auto timeout = *timeout_value;
   if (inv.arguments.empty())
     VAST_VERBOSE("{} collects status for all components", *self);
   else
     VAST_VERBOSE("{} collects status for components {}", *self, inv.arguments);
-  collect_component_status(self, verbosity, inv.arguments);
+  collect_component_status(self, verbosity, timeout, inv.arguments);
   return {};
 }
 

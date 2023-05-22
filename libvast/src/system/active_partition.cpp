@@ -589,8 +589,8 @@ active_partition_actor::behavior_type active_partition(
       return self->delegate(self->state.store_builder, atom::query_v,
                             std::move(query_context));
     },
-    [self](atom::status,
-           status_verbosity v) -> caf::typed_response_promise<record> {
+    [self](atom::status, status_verbosity v,
+           duration d) -> caf::typed_response_promise<record> {
       struct extra_state {
         size_t memory_usage = 0;
         void deliver(caf::typed_response_promise<record>&& promise,
@@ -604,7 +604,7 @@ active_partition_actor::behavior_type active_partition(
       // Reservation is necessary to make sure the entries don't get relocated
       // as the underlying vector grows - `ps` would refer to the wrong memory
       // otherwise.
-      const auto timeout = defaults::system::status_request_timeout / 5 * 3;
+      const auto timeout = d / 10 * 9;
       indexer_states.reserve(self->state.indexers.size());
       for (auto& i : self->state.indexers) {
         if (!i.second)

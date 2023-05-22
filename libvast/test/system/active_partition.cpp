@@ -61,7 +61,7 @@ dummy_filesystem(std::reference_wrapper<
        const std::filesystem::path&) -> caf::result<vast::atom::done> {
       return vast::atom::done_v;
     },
-    [](vast::atom::status, vast::system::status_verbosity) {
+    [](vast::atom::status, vast::system::status_verbosity, vast::duration) {
       return vast::record{};
     },
     [](vast::atom::move,
@@ -91,7 +91,8 @@ vast::system::store_builder_actor::behavior_type dummy_store(
       return vast::ec::no_error;
     },
     [](vast::atom::status,
-       [[maybe_unused]] vast::system::status_verbosity verbosity) {
+       [[maybe_unused]] vast::system::status_verbosity verbosity,
+       vast::duration) {
       return vast::record{
         {"foo", "bar"},
       };

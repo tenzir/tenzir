@@ -73,7 +73,7 @@ using receiver_actor = typename typed_actor_fwd<
 /// The STATUS CLIENT actor interface.
 using status_client_actor = typed_actor_fwd<
   // Reply to a status request from the NODE.
-  auto(atom::status, status_verbosity)->caf::result<record>>::unwrap;
+  auto(atom::status, status_verbosity, duration)->caf::result<record>>::unwrap;
 
 /// The TERMINATION HANDLER actor interface.
 using termination_handler_actor = typed_actor_fwd<

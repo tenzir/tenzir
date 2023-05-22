@@ -622,7 +622,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     self->quit(msg.reason);
   });
   return {
-    [self](atom::status, system::status_verbosity verbosity) {
+    [self](atom::status, system::status_verbosity verbosity, duration) {
       return self->state.status(verbosity);
     },
     [self](atom::start, start_options& options) {
