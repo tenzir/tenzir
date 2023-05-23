@@ -47,3 +47,4 @@
 {"path":["system","database-path"],"type":"string"}
 {"path":["system","in-memory-table-slices"],"type":"number"}
 {"path":["system","peak-memory-usage"],"type":"number"}
+{"path":["system","uptime"],"type":"string"}

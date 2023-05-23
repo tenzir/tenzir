@@ -193,6 +193,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   if (has_component("system")) {
     auto system = record{};
     if (v >= status_verbosity::info) {
+      system["uptime"] = to_string(time::clock::now() - self->state.start_time);
       system["in-memory-table-slices"] = uint64_t{table_slice::instances()};
       system["database-path"] = self->state.dir.string();
       merge(detail::get_status(), system, policy::merge_lists::no);
