@@ -79,12 +79,6 @@
 
         outputs = ["out"] ++ lib.optionals isStatic ["package"];
 
-        preConfigure = ''
-          substituteInPlace plugins/pcap/cmake/FindPCAP.cmake \
-            --replace /bin/sh "${stdenv.shell}" \
-            --replace nm "''${NM}"
-        '';
-
         nativeBuildInputs = [
           cmake
           cmake-format

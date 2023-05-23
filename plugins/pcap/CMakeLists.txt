@@ -18,8 +18,6 @@ VASTRegisterPlugin(
   TEST_SOURCES tests.cpp)
 
 # Link pcap plugin against libpcap.
-set(_CMAKE_MODULE_PATH_OLD "${CMAKE_MODULE_PATH}")
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-find_package(PCAP REQUIRED)
-set(CMAKE_MODULE_PATH "${_CMAKE_MODULE_PATH_OLD}")
-target_link_libraries(pcap PUBLIC pcap::pcap)
+find_package(PkgConfig REQUIRED QUIET)
+pkg_check_modules(pcap REQUIRED IMPORTED_TARGET libpcap)
+target_link_libraries(pcap PUBLIC PkgConfig::pcap)
