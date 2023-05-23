@@ -753,12 +753,13 @@ void index_state::decommission_active_partition(
   // Persist active partition asynchronously.
   const auto part_dir = partition_path(id);
   const auto synopsis_dir = partition_synopsis_path(id);
-  VAST_DEBUG("{} persists active partition {} to {}", *self, schema, part_dir);
+  VAST_VERBOSE("{} persists active partition {} to {}", *self, schema,
+               part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        VAST_DEBUG("{} successfully persisted partition {} {}", *self, schema,
-                   id);
+        VAST_VERBOSE("{} successfully persisted partition {} {}", *self, schema,
+                     id);
         // Send a metric to the accountant.
         if (accountant) {
           auto report = vast::system::report {
@@ -778,9 +779,8 @@ void index_state::decommission_active_partition(
         self->request(catalog, caf::infinite, atom::merge_v, id, ps)
           .then(
             [=, this](atom::ok) {
-              VAST_DEBUG("{} received ok for request to persist partition {} "
-                         "{}",
-                         *self, schema, id);
+              VAST_VERBOSE("{} inserted partition {} {} to the catalog", *self,
+                           schema, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
