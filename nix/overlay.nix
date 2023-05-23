@@ -44,6 +44,17 @@ in {
   rapidjson = prev.rapidjson.overrideAttrs (_: {
     doCheck = false;
   });
+  grpc =
+    if !isStatic
+    then prev.grpc
+    else
+      prev.grpc.overrideAttrs (orig: {
+        patches =
+          orig.patches
+          ++ [
+            ./grpc/drop-broken-cross-check.patch
+          ];
+      });
   http-parser =
     if !isStatic
     then prev.http-parser
