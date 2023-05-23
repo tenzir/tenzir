@@ -53,7 +53,7 @@ the pictured operators, formats, and connectors are not yet implemented.
 
 VAST comes with its own language to define pipelines, geared towards working
 with richly typed, structured event data across multiple schemas. There exist
-numerous dataflow languages out there, and drew inspiration from others to
+numerous dataflow languages out there, and we drew inspiration from others to
 achieve:
 
 - the *familiarity* of [splunk](https://splunk.com)
@@ -78,12 +78,12 @@ Second, our goal is to build an open system on top of Apache Arrow, allowing
 anyone to hook into a standardized data stream to deploy analytics at scale.
 None of the existing dataflow languages used by security people have this
 property. Neither did we encounter the capability to write operators that work
-across mulitple schemas in a rich type system. We do not want users to think of
+across multiple schemas in a rich type system. We do not want users to think of
 tables, but rather domain types. Finally, users should be able to express both
 streaming and batch workloads in a unified language.
 
 In summary, speed of iteration, the current data ecosystem state, the
-committment to an open data plane, the focus on types as opposed tables, and the
+commitment to an open data plane, the focus on types as opposed tables, and the
 unified execution of streaming and batch workloads drove us to devising a new
 language.
 :::
@@ -94,7 +94,7 @@ designing the language:
 1. Use natural language keywords where possible
 2. Lean on operator names that are familiar to Unix and Powershell users
 3. Avoid gratuitous syntax elements like brackets, braces, quotes, or
-   punctionations.
+   punctuations.
 4. Exploit symmetries for an intuitive learning experience, e.g., `from` and
    `to` have their duals `read` and `write`.
 
@@ -144,7 +144,7 @@ conjunction (logical AND), a disjunction (logical OR), and a negation (logical
 NOT). The expressiveness is equivalent to [boolean
 algebra](https://en.wikipedia.org/wiki/Boolean_algebra) and its laws.
 
-Expression occur predominatly as argument to the
+Expression occur predominantly as argument to the
 [where](operators/transformations/where.md) operator to filter the dataflow.
 Other expression elements, such as [extractors](expressions#extractors), also
 occur in other operators.
