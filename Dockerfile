@@ -118,7 +118,7 @@ WORKDIR /var/lib/vast
 VOLUME ["/var/lib/vast"]
 
 # Verify that VAST starts up correctly.
-RUN vast version
+RUN vast exec version
 
 ENTRYPOINT ["vast"]
 CMD ["--help"]

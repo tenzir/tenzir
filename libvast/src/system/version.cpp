@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/version_command.hpp"
+#include "vast/system/version.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -25,17 +25,6 @@
 #include <sstream>
 
 namespace vast::system {
-
-namespace {
-
-record combine(const record& lhs, const record& rhs) {
-  auto result = lhs;
-  for (const auto& field : rhs)
-    result.insert(field);
-  return result;
-}
-
-} // namespace
 
 record retrieve_versions() {
   record result;
@@ -72,18 +61,6 @@ record retrieve_versions() {
   }
   result["plugins"] = std::move(plugin_names);
   return result;
-}
-
-void print_version(const record& extra_content) {
-  auto version = retrieve_versions();
-  std::cout << to_json(combine(extra_content, version)) << std::endl;
-}
-
-caf::message
-version_command([[maybe_unused]] const invocation& inv, caf::actor_system&) {
-  VAST_TRACE_SCOPE("{}", inv);
-  print_version();
-  return {};
 }
 
 } // namespace vast::system

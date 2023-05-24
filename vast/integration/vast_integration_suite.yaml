@@ -118,7 +118,6 @@ tests:
       - command: show --yaml models
       - command: show schemas
   Arrow Full Data Model:
-    condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
     steps:
       - command: -N import --batch-encoding=arrow --schema-file="@./misc/schema/all-types.schema" --type=all_types json
@@ -126,7 +125,6 @@ tests:
       - command: '-N export arrow "where #type == \"all_types\""'
         transformation: python @./misc/scripts/print-arrow.py
   Arrow Export:
-    condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
     steps:
       - command: -N import --batch-encoding=arrow zeek
@@ -138,7 +136,6 @@ tests:
       - command: '-N export arrow "where #type == \"suricata.http\""'
         transformation: python @./misc/scripts/print-arrow.py
   Arrow Import:
-    condition: version | jq -e '."Apache Arrow"'
     tags: [import, arrow]
     fixture: ServerTester
     steps:
@@ -202,7 +199,6 @@ tests:
   Nested Records:
     tags: [import, json]
     steps:
-      - guard: version | jq -e '."Apache Arrow"'
       - command: '-N import --schema="type custom = record { a: list<record { b: string, c: uint64, }>, d: uint64, }" --type=custom --batch-encoding=arrow json'
         input: data/json/record-in-list.json
       - command: '-N export ascii "where #type == \"custom\""'
@@ -235,8 +231,8 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: version
-        transformation: sleep 4
+      - command: sleep 4
+        prepend_vast: false
       - command: count '#type == /zeek.*/'
   Export pipeline operator parsing everything but summarize:
     tags: [server, client, import-export, transforms]
@@ -398,7 +394,7 @@ tests:
     steps:
       - command: -N import zeek
         input: data/zeek/conn.log.gz
-      - command: version
+      - command: exec version
         transformation: "@./misc/scripts/break-sizelimit.sh"
       # We use an extra import step to trigger the repair because querying
       # directly would not wait for the repair step.

@@ -17,10 +17,4 @@ namespace vast::system {
 /// Puts the version information into a record.
 record retrieve_versions();
 
-/// Prints the version information to stdout.
-void print_version(const record& extra_content = {});
-
-/// Displays the software version to the user.
-caf::message version_command(const invocation& inv, caf::actor_system& sys);
-
 } // namespace vast::system

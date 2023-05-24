@@ -21,8 +21,8 @@ record {
   plugins: list<record {
     // The plugin name.
     name: string,
-    // The types of the plugins, e.g., printer and parser.
-    types: list<string>,
+    // The version of the plugin.
+    version: string,
   }>,
 }
 ```
@@ -56,12 +56,12 @@ record {
   plugins: list<record {
     // The plugin name.
     name: string,
+    // The version of the plugin.
+    version: string,
     // The types of the plugins, e.g., printer and parser.
     types: list<string>,
     // The kind of the plugin; one of static, dynamic, or builtin.
     kind: string,
-    // The version of the plugin.
-    version: string,
   }>,
 
 }
