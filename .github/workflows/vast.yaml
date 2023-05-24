@@ -286,7 +286,7 @@ jobs:
             $(git -C contrib/vast-plugins rev-parse HEAD) \
             $(git -C contrib/vast-plugins rev-parse origin/main)
       - name: Install Nix
-        uses: cachix/install-nix-action@v20
+        uses: cachix/install-nix-action@v21
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Verify Nix sources are synchronized
@@ -538,7 +538,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Nix
-        uses: cachix/install-nix-action@v20
+        uses: cachix/install-nix-action@v21
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Configure ssh-agent
