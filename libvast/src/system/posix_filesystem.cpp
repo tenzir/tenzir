@@ -183,7 +183,7 @@ filesystem_actor::behavior_type posix_filesystem(
       self->state.stats.erases.bytes += size;
       return atom::done_v;
     },
-    [self](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v, duration) {
       auto result = record{};
       if (v >= status_verbosity::info)
         result["type"] = "POSIX";

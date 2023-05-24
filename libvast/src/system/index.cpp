@@ -753,12 +753,13 @@ void index_state::decommission_active_partition(
   // Persist active partition asynchronously.
   const auto part_dir = partition_path(id);
   const auto synopsis_dir = partition_synopsis_path(id);
-  VAST_DEBUG("{} persists active partition {} to {}", *self, schema, part_dir);
+  VAST_VERBOSE("{} persists active partition {} to {}", *self, schema,
+               part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        VAST_DEBUG("{} successfully persisted partition {} {}", *self, schema,
-                   id);
+        VAST_VERBOSE("{} successfully persisted partition {} {}", *self, schema,
+                     id);
         // Send a metric to the accountant.
         if (accountant) {
           auto report = vast::system::report {
@@ -778,9 +779,8 @@ void index_state::decommission_active_partition(
         self->request(catalog, caf::infinite, atom::merge_v, id, ps)
           .then(
             [=, this](atom::ok) {
-              VAST_DEBUG("{} received ok for request to persist partition {} "
-                         "{}",
-                         *self, schema, id);
+              VAST_VERBOSE("{} inserted partition {} {} to the catalog", *self,
+                           schema, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
@@ -1038,7 +1038,7 @@ std::size_t index_state::memusage() const {
 }
 
 caf::typed_response_promise<record>
-index_state::status(status_verbosity v) const {
+index_state::status(status_verbosity v, duration d) const {
   struct extra_state {
     size_t memory_usage = 0;
     void
@@ -1073,7 +1073,7 @@ index_state::status(status_verbosity v) const {
     rs->content["num-active-partitions"] = uint64_t{active_partitions.size()};
     rs->content["num-cached-partitions"] = uint64_t{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = uint64_t{unpersisted.size()};
-    const auto timeout = defaults::system::status_request_timeout / 5 * 4;
+    const auto timeout = d / 10 * 9;
     auto partitions = record{};
     auto partition_status
       = [&](const uuid& id, const partition_actor& pa, list& xs) {
@@ -1456,13 +1456,19 @@ index(index_actor::stateful_pointer<index_state> self,
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
       query_state::type_query_context_map query_contexts;
-      for (const auto& [active_partition_type, active_partition] :
-           self->state.active_partitions) {
-        candidates.emplace_back(active_partition.id, active_partition_type);
-        query_contexts[active_partition_type] = query_context;
+      if (not caf::get_or(content(self->system().config()),
+                          "vast.experimental-disable-active-partition-queries",
+                          false)) {
+        for (const auto& [active_partition_type, active_partition] :
+             self->state.active_partitions) {
+          candidates.emplace_back(active_partition.id, active_partition_type);
+          query_contexts[active_partition_type] = query_context;
+        }
+        for (const auto& [id, schema_actor_pair] : self->state.unpersisted) {
+          candidates.emplace_back(id, schema_actor_pair.first);
+          query_contexts[schema_actor_pair.first] = query_context;
+        }
       }
-      for (const auto& [id, schema_actor_pair] : self->state.unpersisted)
-        candidates.emplace_back(id, schema_actor_pair.first);
       auto rp = self->make_response_promise<query_cursor>();
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
@@ -2006,8 +2012,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity v) { //
-      return self->state.status(v);
+    [self](atom::status, status_verbosity v, duration d) { //
+      return self->state.status(v, d);
     },
   };
 }

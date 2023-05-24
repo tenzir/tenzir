@@ -158,7 +158,7 @@ caf::behavior datagram_source(
     [self](atom::normalize, expression& expr) {
       self->state.filter = std::move(expr);
     },
-    [self](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v, duration) {
       auto rs = make_status_request_state(self);
       if (v >= status_verbosity::detailed) {
         record src;

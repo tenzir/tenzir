@@ -743,7 +743,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         vast::ec::lookup_error,
         fmt::format("unable to find partition with uuid: {}", uuid));
     },
-    [self](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v, duration) {
       record result;
       result["memory-usage"] = uint64_t{self->state.memusage()};
       auto num_events = uint64_t{};

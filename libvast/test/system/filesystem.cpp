@@ -118,7 +118,7 @@ TEST(status) {
       });
   self
     ->request(filesystem, caf::infinite, atom::status_v,
-              status_verbosity::debug)
+              status_verbosity::debug, duration{})
     .receive(
       [&](record& status) {
         auto ops = caf::get<record>(status["operations"]);

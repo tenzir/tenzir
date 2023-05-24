@@ -116,7 +116,7 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
                })
         .inbound_slot();
     },
-    [](atom::status, system::status_verbosity) -> record {
+    [](atom::status, system::status_verbosity, duration) -> record {
       // Return an arbitrary record here for use in the status command.
       auto result = record{};
       result["answer"] = uint64_t{42};

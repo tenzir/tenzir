@@ -107,14 +107,14 @@ template <class F, class Fe, class Ptr, class Result, class Extra, class Resp>
 requires(std::is_invocable_v<F, record&>)
 void collect_status(
   const std::shared_ptr<status_request_state<Ptr, Result, Extra>>& rs,
-  std::chrono::milliseconds timeout, status_verbosity verbosity, Resp responder,
+  duration timeout, status_verbosity verbosity, Resp responder,
   F&& f, Fe&& fe) {
   // The overload for 'request(...)' taking a 'std::chrono::duration' does not
   // respect the specified message priority, so we convert to 'caf::timespan' by
   // hand.
   rs->self
     ->template request<caf::message_priority::high>(
-      responder, caf::timespan{timeout}, atom::status_v, verbosity)
+      responder, caf::timespan{timeout}, atom::status_v, verbosity, timeout)
     .then(
       [rs, f = std::forward<F>(f)](record& response) mutable {
         f(response);
@@ -140,8 +140,8 @@ void collect_status(
 template <class Ptr, class Result, class Extra, class Resp>
 void collect_status(
   const std::shared_ptr<status_request_state<Ptr, Result, Extra>>& rs,
-  std::chrono::milliseconds timeout, status_verbosity verbosity, Resp responder,
-  record& s, std::string_view key) {
+  duration timeout, status_verbosity verbosity, Resp responder, record& s,
+  std::string_view key) {
   collect_status(
     rs, timeout, verbosity, responder,
     [key = std::string{key}, &s](record& response) {

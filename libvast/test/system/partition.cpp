@@ -87,7 +87,7 @@ mock_filesystem_actor::behavior_type mock_filesystem(
     [](vast::atom::erase, std::filesystem::path&) {
       return vast::atom::done_v;
     },
-    [](atom::status, system::status_verbosity) {
+    [](atom::status, system::status_verbosity, duration) {
       return record{};
     },
   };
@@ -121,7 +121,7 @@ TEST(passive_partition - load) {
   sched.run();
   // We don't expect any response, because the request should get deferred with
   // response promise.
-  self->send(aut, atom::status_v, system::status_verbosity::debug);
+  self->send(aut, atom::status_v, system::status_verbosity::debug, duration{});
   sched.run();
   self->receive(
     [&](atom::done&) {

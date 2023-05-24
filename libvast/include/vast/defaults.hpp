@@ -240,7 +240,7 @@ inline constexpr const char* store_backend = "feather";
 inline constexpr std::chrono::milliseconds telemetry_rate
   = std::chrono::milliseconds{10000};
 
-/// The timeout for the cascading requests of 'vast status'.
+/// The timeout for the cascading requests of 'vast status' in seconds.
 inline constexpr std::chrono::milliseconds status_request_timeout
   = std::chrono::seconds{10};
 

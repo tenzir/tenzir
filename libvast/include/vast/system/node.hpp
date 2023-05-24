@@ -85,6 +85,9 @@ struct node_state {
   /// Counters for multi-instance components.
   std::unordered_map<std::string, uint64_t> label_counters = {};
 
+  /// Startup timestamp.
+  time start_time = time::clock::now();
+
   /// Flag to signal if the node received an exit message.
   bool tearing_down = false;
 };

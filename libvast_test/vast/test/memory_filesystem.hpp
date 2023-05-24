@@ -74,7 +74,8 @@ inline vast::system::filesystem_actor::behavior_type memory_filesystem() {
       chunks->erase(path);
       return vast::atom::done_v;
     },
-    [](vast::atom::status, vast::system::status_verbosity) -> vast::record {
+    [](vast::atom::status, vast::system::status_verbosity,
+       vast::duration) -> vast::record {
       return {};
     },
   };

@@ -7,12 +7,12 @@
 [submodule "web/.github"]
 	path = web/.github
 	url = https://github.com/tenzir/.github.git
-[submodule "libvast/aux/caf"]
-	path = libvast/aux/caf
-	url = https://github.com/actor-framework/actor-framework
 [submodule "contrib/vast-plugins"]
 	path = contrib/vast-plugins
 	url = git@github.com:tenzir/vast-plugins
 [submodule "libvast/aux/simdjson"]
 	path = libvast/aux/simdjson
 	url = https://github.com/simdjson/simdjson
+[submodule "libvast/aux/caf"]
+	path = libvast/aux/caf
+	url = https://github.com/tenzir/actor-framework

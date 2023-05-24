@@ -396,6 +396,9 @@ vast:
   # node.
   status:
 
+    # The timeout for components to report their status.
+    timeout: 10s
+
     # Add more information to the output
     detailed: false
 

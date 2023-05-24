@@ -390,7 +390,7 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
         .inbound_slot();
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v, duration) {
       auto result = record{};
       if (v >= status_verbosity::info) {
         record exp;

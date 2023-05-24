@@ -86,7 +86,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
     [self](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown);
     },
-    [self](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v, duration /*d*/) {
       record result;
       result["memory-usage"] = uint64_t{self->state.idx->memusage()};
       if (v >= status_verbosity::debug)

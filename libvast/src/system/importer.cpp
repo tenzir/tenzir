@@ -248,7 +248,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity v) { //
+    [self](atom::status, status_verbosity v, duration) { //
       return self->state.status(v);
     },
   };

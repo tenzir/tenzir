@@ -442,7 +442,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         }
       }
     },
-    [self](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v, duration) {
       auto result = record{};
       if (v >= status_verbosity::detailed) {
         auto components = record{};

@@ -243,6 +243,7 @@ auto make_status_command() {
     "shows properties of a server process by component; optional positional "
     "arguments allow for filtering by component name",
     opts("?vast.status")
+      .add<std::string>("timeout", "how long to wait for components to report")
       .add<bool>("detailed", "add more information to the output")
       .add<bool>("debug", "include extra debug information"));
 }
