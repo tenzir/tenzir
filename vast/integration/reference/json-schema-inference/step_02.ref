@@ -1,1 +1,0 @@
-type json = record {a: string, b: ip, c: subnet, d: duration, e: string, f: time, g: time, h: duration, i: duration}

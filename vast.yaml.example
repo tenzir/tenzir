@@ -292,15 +292,6 @@ vast:
       # Flush to disk after this many packets.
       flush-interval: 10000
 
-  # The `vast infer` command tries to infer the schema from data.
-  infer:
-
-    # Path to read events from or "-" for reading from stdin.
-    read: '-'
-
-    # Maximum number of bytes to buffer.
-    buffer: 8192
-
   # The `vast import` command imports data from stdin, files or over the
   # network.
   import:

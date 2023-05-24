@@ -17,7 +17,6 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
 #include "vast/system/import_command.hpp"
-#include "vast/system/infer_command.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
 #include "vast/system/version_command.hpp"
@@ -110,14 +109,6 @@ auto make_export_command() {
     }
   }
   return export_;
-}
-
-auto make_infer_command() {
-  return std::make_unique<command>(
-    "infer", "infers the schema from data",
-    opts("?vast.infer")
-      .add<int64_t>("buffer,b", "maximum number of bytes to buffer")
-      .add<std::string>("read,r", "path to the input data"));
 }
 
 auto make_spawn_source_command() {
@@ -267,7 +258,6 @@ auto make_command_factory() {
     {"export null", make_writer_command("null")},
     {"export arrow", make_writer_command("arrow")},
     {"export zeek", make_writer_command("zeek")},
-    {"infer", infer_command},
     {"import csv", import_command},
     {"import json", import_command},
     {"import suricata", import_command},
@@ -378,7 +368,6 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
-  root->add_subcommand(make_infer_command());
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
   root->add_subcommand(make_status_command());
