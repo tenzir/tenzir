@@ -1,8 +1,7 @@
 {
   "url": "git@github.com:tenzir/vast-plugins",
-  "ref": "topic/status-timeout",
-  "rev": "30916088cab75007c54c5779ef24f625d914e51b",
+  "ref": "main",
+  "rev": "64261ee7c04c6b7a97b7144ea2404fbcf576df89",
   "submodules": true,
-  "shallow": true,
-  "allRefs": true
+  "shallow": true
 }
