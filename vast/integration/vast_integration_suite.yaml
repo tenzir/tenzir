@@ -1,22 +1,6 @@
 config-file: vast.yaml
 
 fixtures:
-  BiTopologyTester:
-    enter: | # python
-      node0 = Server(self.cmd,
-                     ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node0', 'start'],
-                     work_dir, name='node0', port=VAST_PORT,
-                     config_file=self.config_file)
-      node1 = Server(self.cmd,
-                     ['-e', '127.0.0.1:42124', '-i', 'node1', 'start'],
-                     work_dir, name='node1', port=42124,
-                     config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
-
-    exit: | # python
-      node0.stop()
-      node1.stop()
-
   ExampleConfigFileTester:
     enter: | # python
       node = Server(self.cmd,
@@ -327,13 +311,6 @@ tests:
       - command: -N import -t argus.record csv '--separator="\t"'
         input: data/csv/argus-reordered.tsv
       - command: -N export csv
-
-  Manual 2:
-    tags: [examples, disabled]
-    fixture: BiTopologyTester
-    steps:
-      - command: peer 'localhost:42124'
-      - command: status
 
   Multi addr query:
     tags: [import-export, zeek]

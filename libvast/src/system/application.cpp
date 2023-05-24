@@ -125,11 +125,6 @@ auto make_kill_command() {
                                    opts("?vast.kill"), false);
 }
 
-auto make_peer_command() {
-  return std::make_unique<command>("peer", "peers with another node",
-                                   opts("?vast.peer"), false);
-}
-
 auto make_send_command() {
   return std::make_unique<command>(
     "send", "sends a message to a registered actor", opts("?vast.send"), false);
@@ -292,7 +287,6 @@ auto make_command_factory() {
     {"import zeek-json", import_command},
     {"import arrow", import_command},
     {"kill", remote_command},
-    {"peer", remote_command},
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn eraser", remote_command},
@@ -398,7 +392,6 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_infer_command());
   root->add_subcommand(make_kill_command());
-  root->add_subcommand(make_peer_command());
   root->add_subcommand(make_send_command());
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
