@@ -48,9 +48,13 @@ struct pipeline_executor_state {
   /// remote execution nodes were spawned.
   void continue_if_done_spawning();
 
+  /// Flag for allowing unsafe pipelines (in this case, pipelines with local
+  /// operators)
+  bool allow_unsafe_pipelines{false};
+
   /// Start the pipeline execution. Assumes that all execution nodes were
   /// spawned successfully.
-  auto run() -> caf::result<void>;
+  auto run(system::node_actor remote_node = {}) -> caf::result<void>;
 };
 
 /// Start a pipeline executor for a given pipeline.

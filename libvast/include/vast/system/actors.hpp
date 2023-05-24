@@ -188,12 +188,6 @@ using accountant_actor = typed_actor_fwd<
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// The interface of a PIPELINE EXECUTOR actor.
-using pipeline_executor_actor = system::typed_actor_fwd<
-  // Execute a pipeline, returning the result asynchronously. This must be
-  // called at most once per executor.
-  auto(atom::run)->caf::result<void>>::unwrap;
-
 /// The PARTITION CREATION LISTENER actor interface.
 using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, partition_synopsis_pair)->caf::result<void>,
@@ -438,6 +432,13 @@ using node_actor = typed_actor_fwd<
   auto(atom::spawn, pipeline)
     ->caf::result<std::vector<std::pair<execution_node_actor, std::string>>>>::
   unwrap;
+
+/// The interface of a PIPELINE EXECUTOR actor.
+using pipeline_executor_actor = system::typed_actor_fwd<
+  // Execute a pipeline, returning the result asynchronously. This must be
+  // called at most once per executor.
+  auto(atom::run)->caf::result<void>,
+  auto(atom::run, node_actor)->caf::result<void>>::unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.
