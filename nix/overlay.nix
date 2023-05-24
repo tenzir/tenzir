@@ -7,7 +7,7 @@
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv =
     if final.stdenv.isDarwin
-    then final.llvmPackages_15.stdenv
+    then final.llvmPackages_16.stdenv
     else final.stdenv;
 in {
   abseil-cpp =
@@ -41,6 +41,20 @@ in {
   fmt_8 = prev.fmt;
   # We need boost 1.8.1 at minimum for URL.
   boost = prev.boost18x;
+  rapidjson = prev.rapidjson.overrideAttrs (_: {
+    doCheck = false;
+  });
+  grpc =
+    if !isStatic
+    then prev.grpc
+    else
+      prev.grpc.overrideAttrs (orig: {
+        patches =
+          orig.patches
+          ++ [
+            ./grpc/drop-broken-cross-check.patch
+          ];
+      });
   http-parser =
     if !isStatic
     then prev.http-parser
@@ -73,6 +87,13 @@ in {
         buildFlags = [];
         doCheck = false;
       });
+  libbacktrace =
+    if !isStatic
+    then prev.libbacktrace
+    else
+      prev.libbacktrace.overrideAttrs (old: {
+        doCheck = false;
+      });
   restinio = final.callPackage ./restinio {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
@@ -82,7 +103,7 @@ in {
         # fetchFromGitHub uses ellipsis in the parameter set to be hash method
         # agnostic. Because of that, callPackageWith does not detect that sha256
         # is a required argument, and it has to be passed explicitly instead.
-        src = lib.callPackageWith source final.fetchFromGitHub {inherit (source) sha256;};
+        src = prev.fetchFromGitHub {inherit (source) owner repo rev sha256;};
         inherit (source) version;
         # The OpenSSL dependency appears in the interface of CAF, so it has to
         # be propagated downstream.

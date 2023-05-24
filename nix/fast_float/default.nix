@@ -6,8 +6,8 @@
 }: let
   source = builtins.fromJSON (builtins.readFile ./source.json);
 in
-  stdenv.mkDerivation rec {
-    src = lib.callPackageWith source fetchFromGitHub {inherit (source) sha256;};
+  stdenv.mkDerivation {
+    src = fetchFromGitHub {inherit (source) owner repo rev sha256;};
     pname = "fast_float";
     inherit (source) version;
     nativeBuildInputs = [cmake];

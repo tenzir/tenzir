@@ -11,9 +11,9 @@ in
         ++ pkgs.vast-integration-test-deps
         ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
           # Make clang available as alternative compiler when it isn't the default.
-          pkgs.clang_15
+          pkgs.clang_16
           # Bintools come with a wrapped lld for faster linking.
-          pkgs.llvmPackages_15.bintools
+          pkgs.llvmPackages_16.bintools
         ];
       # To build libcaf_openssl with bundled CAF.
       buildInputs = [pkgs.openssl];

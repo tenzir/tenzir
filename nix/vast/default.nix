@@ -26,9 +26,6 @@
     libunwind,
     xxHash,
     re2,
-    python3,
-    jq,
-    tcpdump,
     dpkg,
     restinio,
     versionLongOverride ? null,
@@ -38,19 +35,11 @@
     runCommand,
     makeWrapper,
     extraCmakeFlags ? [],
+    vast-integration-test-deps,
     disableTests ? true,
     pkgsBuildHost,
   }: let
     inherit (stdenv.hostPlatform) isStatic;
-
-    py3 = python3.withPackages (ps:
-      with ps; [
-        coloredlogs
-        jsondiff
-        pyarrow
-        pyyaml
-        schema
-      ]);
 
     versionLongOverride' = lib.removePrefix "v" versionLongOverride;
     versionShortOverride' = lib.removePrefix "v" versionShortOverride;
@@ -89,12 +78,6 @@
         '';
 
         outputs = ["out"] ++ lib.optionals isStatic ["package"];
-
-        preConfigure = ''
-          substituteInPlace plugins/pcap/cmake/FindPCAP.cmake \
-            --replace /bin/sh "${stdenv.shell}" \
-            --replace nm "''${NM}"
-        '';
 
         nativeBuildInputs = [
           cmake
@@ -187,7 +170,7 @@
         dontStrip = true;
 
         doInstallCheck = false;
-        installCheckInputs = [py3 jq tcpdump];
+        installCheckInputs = vast-integration-test-deps;
         # TODO: Investigate why the disk monitor test fails in the build sandbox.
         installCheckPhase = ''
           python ../vast/integration/integration.py \

@@ -21,6 +21,8 @@ if (NOT _MAC_DEPENDENCY_PATHS)
       list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}")
       # Find OpenSSL correctly.
       list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}/opt/openssl")
+      # Find libpcap correctly.
+      list(INSERT CMAKE_PREFIX_PATH 0 "${HOMEBREW_PREFIX}/opt/libpcap")
       # Find libunwind-headers correctly. The headers must be installed
       # separately; the library is available as under the umbrealla framework
       # System.framework. Directly linking against libunwind at its location
