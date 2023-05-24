@@ -600,7 +600,8 @@ class selector_parser final : public virtual parser_plugin {
                    operator_control_plane& ctrl) const
     -> caf::expected<parser> override {
     args.push_back(fmt::format("--selector={}", Selector.str()));
-    args.push_back(fmt::format("--unnest-separator={}", Separator.str()));
+    if constexpr (not Separator.str().empty())
+      args.push_back(fmt::format("--unnest-separator={}", Separator.str()));
     return json_parser_->make_parser(std::move(args),
                                      std::move(json_chunk_generator), ctrl);
   }
