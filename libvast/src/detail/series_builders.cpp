@@ -298,7 +298,7 @@ std::shared_ptr<arrow::ArrayBuilder> series_builder::get_arrow_builder() {
 vast::type series_builder::type() const {
   return std::visit(
     [](const auto& actual) {
-        return actual.type();
+      return actual.type();
     },
     *this);
 }

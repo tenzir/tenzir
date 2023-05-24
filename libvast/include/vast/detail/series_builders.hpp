@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/cast.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
@@ -281,25 +282,122 @@ struct series_builder : series_builder_base {
   auto remove_last_row() -> void;
 
 private:
+  template <concrete_type ViewType>
+  auto
+  cast_to_duration(const ViewType& view_type,
+                   concrete_series_builder<duration_type>& builder, auto view) {
+    auto unit = builder.type().attribute("unit").value_or("s");
+    auto result = cast_value(view_type, view, duration_type{}, unit);
+    if constexpr (std::is_same_v<decltype(result), caf::expected<void>>) {
+      return std::move(result.error());
+    } else {
+      if (result) {
+        builder.add(*result);
+        return caf::error{};
+      }
+      return std::move(result.error());
+    }
+  }
+
+  auto cast_to_duration(const time_type& t,
+                        concrete_series_builder<duration_type>& builder,
+                        vast::time value) {
+    auto res = cast_value(t, value, duration_type{});
+    if (res) {
+      builder.add(*res);
+      return caf::error{};
+    }
+    return std::move(res.error());
+  }
+
+  auto
+  cast_to_duration(const string_type& t,
+                   concrete_series_builder<duration_type>& builder, auto view) {
+    auto result = cast_value(t, view, duration_type{});
+    // It is simpler to just try casting again with unit appended instead of
+    // validating if the unit is present.
+    if (not result) {
+      const auto& type = builder.type();
+      auto unit = type.attribute("unit").value_or("s");
+      result = cast_value(t, std::string{view} + std::string{unit},
+                          caf::get<duration_type>(type));
+    }
+    if (not result)
+      return std::move(result.error());
+    builder.add(*result);
+    return caf::error{};
+  }
+
+  template <concrete_type BuilderType, concrete_type ViewType>
+  auto cast_impl(auto& builder, auto view) {
+    if constexpr (std::is_same_v<BuilderType, duration_type>) {
+      return cast_to_duration(ViewType{}, builder, view);
+    } else {
+      auto maybe_new_value = cast_value(ViewType{}, view, BuilderType{});
+      if (not maybe_new_value)
+        return std::move(maybe_new_value.error());
+      if constexpr (not std::is_same_v<decltype(maybe_new_value),
+                                       caf::expected<void>>) {
+        builder.add(*maybe_new_value);
+      }
+      return caf::error{};
+    }
+  }
+
   template <concrete_type Type>
   auto add_impl(auto view) -> void {
-    std::visit(detail::overload{
-                 [view](concrete_series_builder<Type>& same_type_builder) {
-                   same_type_builder.add(view);
-                 },
-                 [this, view](unknown_type_builder& builder) {
-                   const auto nulls_to_prepend = builder.length();
-                   auto new_builder = concrete_series_builder<Type>{};
-                   new_builder.add_up_to_n_nulls(nulls_to_prepend);
-                   new_builder.add(view);
-                   *this = std::move(new_builder);
-                 },
-                 [view](auto&) {
-                   VAST_WARN("cast not implemented: ignoring value {}",
-                             data{materialize(view)});
-                 },
-               },
-               *this);
+    auto err = std::visit(
+      detail::overload{
+        [view](concrete_series_builder<Type>& same_type_builder) {
+          same_type_builder.add(view);
+          return caf::error{};
+        },
+        [this, view](unknown_type_builder& builder) {
+          const auto nulls_to_prepend = builder.length();
+          auto new_builder = concrete_series_builder<Type>{};
+          new_builder.add_up_to_n_nulls(nulls_to_prepend);
+          new_builder.add(view);
+          *this = std::move(new_builder);
+          return caf::error{};
+        },
+        [view, this]<class BuilderValueType>(
+          concrete_series_builder<BuilderValueType>& builder) {
+          if (auto maybe_err = can_cast(Type{}, BuilderValueType{});
+              not maybe_err) {
+            return maybe_err.error();
+          }
+          // macOS compilation errors here that this is not used.
+          return this->cast_impl<BuilderValueType, Type>(builder, view);
+        },
+        [view](concrete_series_builder<record_type>&) {
+          return caf::make_error(ec::convert_error,
+                                 fmt::format("casting to a record is not "
+                                             "implemented: ignoring value: {}",
+                                             data{materialize(view)}));
+        },
+        [view](concrete_series_builder<map_type>&) {
+          return caf::make_error(ec::convert_error,
+                                 fmt::format("casting to a map is not "
+                                             "implemented: ignoring value: {}",
+                                             data{materialize(view)}));
+        },
+        [view](concrete_series_builder<list_type>&) {
+          return caf::make_error(ec::convert_error,
+                                 fmt::format("casting to a list is not "
+                                             "implemented: ignoring value: {}",
+                                             data{materialize(view)}));
+        },
+        [view](auto&) {
+          return caf::make_error(ec::convert_error,
+                                 fmt::format("cast not implemented: ignoring "
+                                             "value: {}",
+                                             data{materialize(view)}));
+        },
+      },
+      *this);
+    // TODO: propagate outside of this function in next PR
+    if (err)
+      VAST_WARN("{}", err);
   }
 };
 
