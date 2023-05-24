@@ -51,8 +51,6 @@
 #include "vast/system/spawn_importer.hpp"
 #include "vast/system/spawn_index.hpp"
 #include "vast/system/spawn_node.hpp"
-#include "vast/system/spawn_sink.hpp"
-#include "vast/system/spawn_source.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/system/version.hpp"
@@ -331,30 +329,7 @@ auto make_component_factory() {
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
     {"spawn index", lift_component_factory<spawn_index>()},
-    {"spawn source", lift_component_factory<spawn_source>()},
-    {"spawn source arrow", lift_component_factory<spawn_source>()},
-    {"spawn source csv", lift_component_factory<spawn_source>()},
-    {"spawn source json", lift_component_factory<spawn_source>()},
-    {"spawn source suricata", lift_component_factory<spawn_source>()},
-    {"spawn source syslog", lift_component_factory<spawn_source>()},
-    {"spawn source test", lift_component_factory<spawn_source>()},
-    {"spawn source zeek", lift_component_factory<spawn_source>()},
-    {"spawn source zeek-json", lift_component_factory<spawn_source>()},
-    {"spawn sink zeek", lift_component_factory<spawn_sink>()},
-    {"spawn sink csv", lift_component_factory<spawn_sink>()},
-    {"spawn sink ascii", lift_component_factory<spawn_sink>()},
-    {"spawn sink json", lift_component_factory<spawn_sink>()},
   };
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<reader_plugin>()) {
-      auto command = fmt::format("spawn source {}", reader->reader_format());
-      result.emplace(command, lift_component_factory<spawn_source>());
-    }
-    if (const auto* writer = plugin.as<writer_plugin>()) {
-      auto command = fmt::format("spawn sink {}", writer->writer_format());
-      result.emplace(command, lift_component_factory<spawn_sink>());
-    }
-  }
   return result;
 }
 
@@ -370,30 +345,8 @@ auto make_command_factory() {
     {"spawn importer", node_state::spawn_command},
     {"spawn catalog", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
-    {"spawn sink ascii", node_state::spawn_command},
-    {"spawn sink csv", node_state::spawn_command},
-    {"spawn sink json", node_state::spawn_command},
-    {"spawn sink zeek", node_state::spawn_command},
-    {"spawn source arrow", node_state::spawn_command},
-    {"spawn source csv", node_state::spawn_command},
-    {"spawn source json", node_state::spawn_command},
-    {"spawn source suricata", node_state::spawn_command},
-    {"spawn source syslog", node_state::spawn_command},
-    {"spawn source test", node_state::spawn_command},
-    {"spawn source zeek", node_state::spawn_command},
-    {"spawn source zeek-json", node_state::spawn_command},
     {"status", status_command},
   };
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<reader_plugin>()) {
-      auto command = fmt::format("spawn source {}", reader->reader_format());
-      result.emplace(command, node_state::spawn_command);
-    }
-    if (const auto* writer = plugin.as<writer_plugin>()) {
-      auto command = fmt::format("spawn sink {}", writer->writer_format());
-      result.emplace(command, node_state::spawn_command);
-    }
-  }
   return result;
 }
 
@@ -440,16 +393,6 @@ node_state::spawn_command(const invocation& inv,
   }
   VAST_DEBUG("{} spawns a {} with the label {}", *self, comp_type, label);
   auto spawn_inv = inv;
-  if (comp_type == "source") {
-    auto spawn_opt
-      = caf::get_or(spawn_inv.options, "vast.spawn", caf::settings{});
-    auto source_opt = caf::get_or(spawn_opt, "source", caf::settings{});
-    auto import_opt
-      = caf::get_or(spawn_inv.options, "vast.import", caf::settings{});
-    detail::merge_settings(source_opt, import_opt, policy::merge_lists::no);
-    spawn_inv.options["import"] = import_opt;
-    caf::put(spawn_inv.options, "vast.import", import_opt);
-  }
   // Spawn our new VAST component.
   spawn_arguments args{spawn_inv, self->state.dir, label};
   auto component = spawn_component(self, args.inv, args);

@@ -203,16 +203,6 @@ tests:
         input: data/json/record-in-list.json
       - command: '-N export ascii "where #type == \"custom\""'
 
-  Spawn source:
-    tags: [import, spawn-source, zeek]
-    fixture: ServerTester
-    steps:
-      - command: spawn source -r @./data/suricata/eve.json suricata
-      - command: flush
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: count '#type == /suricata.*/'
-
   Example config file:
     tags: [import-export, zeek]
     fixture: ExampleConfigFileTester

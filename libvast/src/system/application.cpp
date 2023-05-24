@@ -110,107 +110,6 @@ auto make_export_command() {
   return export_;
 }
 
-auto make_spawn_source_command() {
-  auto spawn_source = std::make_unique<command>(
-    "source", "creates a new source inside the node",
-    opts("?vast.spawn.source")
-      .add<std::string>("batch-encoding", "encoding type of table slices")
-      .add<int64_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timeout after which batched "
-                                         "table slices are forwarded")
-      .add<std::string>("listen,l", "the endpoint to listen on "
-                                    "([host]:port/type)")
-      .add<int64_t>("max-events,n", "the maximum number of events to import")
-      .add<std::string>("read,r", "path to input where to read events from")
-      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
-      .add<std::string>("schema,S", "alternate schema as string")
-      .add<std::string>("schema-file,s", "path to alternate schema")
-      .add<std::string>("type,t", "filter event type based on prefix matching")
-      .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
-  spawn_source->add_subcommand("arrow",
-                               "creates a new Arrow IPC source inside the node",
-                               opts("?vast.spawn.source.arrow"));
-  spawn_source->add_subcommand(
-    "csv", "creates a new CSV source inside the node",
-    opts("?vast.spawn.source.csv")
-      .add<std::string>("separator", "the single-character separator (default: "
-                                     "',')"));
-  spawn_source->add_subcommand(
-    "json", "creates a new JSON source inside the node",
-    opts("?vast.spawn.source.json")
-      .add<std::string>("selector", "read the event type from the given field "
-                                    "(specify as '<field>[:<prefix>]')"));
-  spawn_source->add_subcommand("suricata",
-                               "creates a new Suricata source inside the node",
-                               opts("?vast.spawn.source.suricata"));
-  spawn_source->add_subcommand("syslog",
-                               "creates a new Syslog source inside the node",
-                               opts("?vast.spawn.source.syslog"));
-  spawn_source->add_subcommand(
-    "test", "creates a new test source inside the node",
-    opts("?vast.spawn.source.test").add<int64_t>("seed", "the PRNG seed"));
-  spawn_source->add_subcommand("zeek",
-                               "creates a new Zeek source inside the node",
-                               opts("?vast.spawn.source.zeek"));
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<reader_plugin>()) {
-      auto opts_category
-        = fmt::format("?vast.spawn.source.{}", reader->reader_format());
-      spawn_source->add_subcommand(reader->reader_format(),
-                                   reader->reader_help(),
-                                   reader->reader_options(opts(opts_category)));
-    }
-  }
-  return spawn_source;
-}
-
-auto make_spawn_sink_command() {
-  auto spawn_sink = std::make_unique<command>(
-    "sink", "creates a new sink",
-    opts("?vast.spawn.sink")
-      .add<std::string>("write,w", "path to write events to")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket"),
-    false);
-  spawn_sink->add_subcommand("zeek", "creates a new Zeek sink",
-                             opts("?vast.spawn.sink.zeek"));
-  spawn_sink->add_subcommand("ascii", "creates a new ASCII sink",
-                             opts("?vast.spawn.sink.ascii"));
-  spawn_sink->add_subcommand("csv", "creates a new CSV sink",
-                             opts("?vast.spawn.sink.csv"));
-  spawn_sink->add_subcommand("json", "creates a new JSON sink",
-                             opts("?vast.spawn.sink.json"));
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* writer = plugin.as<writer_plugin>()) {
-      auto opts_category
-        = fmt::format("?vast.spawn.sink.{}", writer->writer_format());
-      spawn_sink->add_subcommand(writer->writer_format(), writer->writer_help(),
-                                 writer->writer_options(opts(opts_category)));
-    }
-  }
-  return spawn_sink;
-}
-
-auto make_spawn_command() {
-  auto spawn = std::make_unique<command>("spawn", "creates a new component",
-                                         opts("?vast.spawn"));
-  spawn->add_subcommand("accountant", "spawns the accountant",
-                        opts("?vast.spawn.accountant"), false);
-  spawn->add_subcommand(
-    "exporter", "creates a new exporter",
-    opts("?vast.spawn.exporter")
-      .add<bool>("continuous,c", "marks a query as continuous")
-      .add<bool>("unified,u", "marks a query as unified")
-      .add<int64_t>("events,e", "maximum number of results"),
-    false);
-  spawn->add_subcommand("importer", "creates a new importer",
-                        opts("?vast.spawn.importer"), false);
-  spawn->add_subcommand("index", "creates a new index",
-                        add_index_opts(opts("?vast.spawn.index")), false);
-  spawn->add_subcommand(make_spawn_source_command());
-  spawn->add_subcommand(make_spawn_sink_command());
-  return spawn;
-}
-
 auto make_status_command() {
   return std::make_unique<command>(
     "status",
@@ -260,23 +159,6 @@ auto make_command_factory() {
     {"import zeek", import_command},
     {"import zeek-json", import_command},
     {"import arrow", import_command},
-    {"spawn accountant", remote_command},
-    {"spawn eraser", remote_command},
-    {"spawn exporter", remote_command},
-    {"spawn importer", remote_command},
-    {"spawn index", remote_command},
-    {"spawn sink ascii", remote_command},
-    {"spawn sink csv", remote_command},
-    {"spawn sink json", remote_command},
-    {"spawn sink zeek", remote_command},
-    {"spawn source arrow", remote_command},
-    {"spawn source csv", remote_command},
-    {"spawn source json", remote_command},
-    {"spawn source suricata", remote_command},
-    {"spawn source syslog", remote_command},
-    {"spawn source test", remote_command},
-    {"spawn source zeek", remote_command},
-    {"spawn source zeek-json", remote_command},
     {"start", start_command},
     {"status", remote_command},
   };
@@ -285,14 +167,10 @@ auto make_command_factory() {
     if (auto* reader = plugin.as<reader_plugin>()) {
       result.emplace(fmt::format("import {}", reader->reader_format()),
                      import_command);
-      result.emplace(fmt::format("spawn source {}", reader->reader_format()),
-                     remote_command);
     }
     if (auto* writer = plugin.as<writer_plugin>()) {
       result.emplace(fmt::format("export {}", writer->writer_format()),
                      make_writer_command(writer->writer_format()));
-      result.emplace(fmt::format("spawn sink {}", writer->writer_format()),
-                     remote_command);
     }
   }
   return result;
@@ -361,7 +239,6 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
-  root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
   root->add_subcommand(make_status_command());
   return root;

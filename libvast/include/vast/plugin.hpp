@@ -218,8 +218,7 @@ public:
   /// Returns the `vast import <format>` helptext.
   [[nodiscard]] virtual const char* reader_help() const = 0;
 
-  /// Returns the options for the `vast import <format>` and `vast spawn source
-  /// <format>` commands.
+  /// Returns the options for the `vast import <format>` command.
   [[nodiscard]] virtual config_options
   reader_options(command::opts_builder&& opts) const
     = 0;
@@ -244,8 +243,7 @@ public:
   /// Returns the `vast export <format>` helptext.
   [[nodiscard]] virtual const char* writer_help() const = 0;
 
-  /// Returns the options for the `vast export <format>` and `vast spawn sink
-  /// <format>` commands.
+  /// Returns the options for the `vast export <format>` command.
   [[nodiscard]] virtual config_options
   writer_options(command::opts_builder&& opts) const
     = 0;
