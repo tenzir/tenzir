@@ -222,21 +222,6 @@ register_component(node_actor::stateful_pointer<node_state> self,
   return caf::none;
 }
 
-/// Deregisters (and demonitors) a component through the node.
-caf::expected<caf::actor>
-deregister_component(node_actor::stateful_pointer<node_state> self,
-                     std::string_view label) {
-  auto component = self->state.registry.remove(label);
-  if (!component) {
-    auto msg // separate variable for clang-format only
-      = fmt::format("{} failed to deregister non-existent component: {}", *self,
-                    label);
-    return caf::make_error(ec::unspecified, std::move(msg));
-  }
-  self->demonitor(component->actor);
-  return component->actor;
-}
-
 /// Spawns the accountant actor.
 accountant_actor
 spawn_accountant(node_actor::stateful_pointer<node_state> self) {
@@ -319,35 +304,6 @@ spawn_component(node_actor::stateful_pointer<node_state> self,
   return i->second(self, args);
 }
 
-caf::message kill_command(const invocation& inv, caf::actor_system&) {
-  auto self = this_node;
-  auto first = inv.arguments.begin();
-  auto last = inv.arguments.end();
-  if (std::distance(first, last) != 1)
-    return make_error_msg(ec::syntax_error, "expected exactly one component "
-                                            "argument");
-  auto rp = self->make_response_promise();
-  auto& label = *first;
-  auto component = deregister_component(self, label);
-  if (!component) {
-    rp.deliver(caf::make_error(ec::unspecified,
-                               fmt::format("no such component: {}", label)));
-  } else {
-    terminate<policy::parallel>(self, std::move(*component))
-      .then(
-        [=](atom::done) mutable {
-          VAST_DEBUG("{} terminated component {}", *self, label);
-          rp.deliver(atom::ok_v);
-        },
-        [=](const caf::error& err) mutable {
-          VAST_WARN("{} failed to terminate component {}: {}", *self, label,
-                    err);
-          rp.deliver(err);
-        });
-  }
-  return {};
-}
-
 /// Lifts a factory function that accepts `local_actor*` as first argument
 /// to a function accpeting `node_actor::stateful_pointer<node_state>` instead.
 template <caf::expected<caf::actor> (*Fun)(caf::local_actor*, spawn_arguments&)>
@@ -406,7 +362,6 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
   auto result = command::factory{
-    {"kill", kill_command},
     {"spawn accountant", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},

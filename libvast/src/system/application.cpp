@@ -120,11 +120,6 @@ auto make_infer_command() {
       .add<std::string>("read,r", "path to the input data"));
 }
 
-auto make_kill_command() {
-  return std::make_unique<command>("kill", "terminates a component",
-                                   opts("?vast.kill"), false);
-}
-
 auto make_spawn_source_command() {
   auto spawn_source = std::make_unique<command>(
     "source", "creates a new source inside the node",
@@ -281,7 +276,6 @@ auto make_command_factory() {
     {"import zeek", import_command},
     {"import zeek-json", import_command},
     {"import arrow", import_command},
-    {"kill", remote_command},
     {"spawn accountant", remote_command},
     {"spawn eraser", remote_command},
     {"spawn exporter", remote_command},
@@ -385,7 +379,6 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_infer_command());
-  root->add_subcommand(make_kill_command());
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
   root->add_subcommand(make_status_command());
