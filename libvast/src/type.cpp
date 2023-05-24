@@ -3400,7 +3400,7 @@ int sum_type_access<arrow::DataType>::index_from_type(
                                            "for type '{}' is not in "
                                            "caf::sum_type_access<arrow::"
                                            "DataType>::types"),
-                          x.id(), x.ToString())
+                          static_cast<int>(x.id()), x.ToString())
                 .c_str());
   if (result == extension_id) {
     for (const auto& [id, index] : extension_table) {

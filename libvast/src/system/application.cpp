@@ -20,7 +20,6 @@
 #include "vast/system/infer_command.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
-#include "vast/system/stop_command.hpp"
 #include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
 
@@ -266,10 +265,6 @@ auto make_start_command() {
                                              "before re-checking size"));
 }
 
-auto make_stop_command() {
-  return std::make_unique<command>("stop", "stops a node", opts("?vast.stop"));
-}
-
 auto make_version_command() {
   return std::make_unique<command>("version", "prints the software version",
                                    opts("?vast.version"));
@@ -318,7 +313,6 @@ auto make_command_factory() {
     {"spawn source zeek-json", remote_command},
     {"start", start_command},
     {"status", remote_command},
-    {"stop", stop_command},
     {"version", version_command},
   };
   // clang-format on
@@ -409,7 +403,6 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
   root->add_subcommand(make_status_command());
-  root->add_subcommand(make_stop_command());
   root->add_subcommand(make_version_command());
   return root;
 }

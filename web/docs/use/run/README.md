@@ -37,12 +37,11 @@ Linux](../../setup/install/linux.md#systemd).
 
 ## Stop a server
 
-There exist 3 ways stop a server:
+There exist two ways stop a server:
 
 1. Hit CTRL+C in the same TTY where you started VAST.
 2. Send the process a SIGINT or SIGTERM signal, e.g., via `pkill -2 vast`.
    Sending VAST a SIGTERM is the same as (1).
-3. Run `vast stop`.
 
 Option (3) comes in handy when you are working with a remote VAST server.
 
