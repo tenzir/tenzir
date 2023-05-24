@@ -35,22 +35,6 @@ fixtures:
     exit: | # python
       node.stop()
 
-  AgingTester:
-    enter: | # python
-      node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}',
-                     '-i', 'node',
-                     '--aging-frequency=2000min',
-                     '--aging-query=:ip == 192.168.1.104',
-                     '--active-partition-timeout=5s',
-                     'start'],
-                    work_dir, name='node', port=VAST_PORT,
-                    config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
-
-    exit: | # python
-      node.stop()
-
   DiskMonitorTester:
     enter: | # python
       node = Server(self.cmd,
@@ -436,19 +420,6 @@ tests:
         input: data/json/record-in-list.json
       - command: '-N export ascii "where #type == \"custom\""'
 
-  Zeek conn log aging:
-    tags: [import-export, aging, zeek]
-    fixture: AgingTester
-    steps:
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: export ascii 'where resp_h == 192.168.1.104'
-      - command: version
-        transformation: sleep 15
-      - command: send eraser run
-      - command: version
-        transformation: sleep 2
-      - command: export ascii 'where resp_h == 192.168.1.104'
   Spawn source:
     tags: [import, spawn-source, zeek]
     fixture: ServerTester
@@ -458,6 +429,7 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: count '#type == /suricata.*/'
+
   Example config file:
     tags: [import-export, zeek]
     fixture: ExampleConfigFileTester
