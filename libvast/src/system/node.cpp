@@ -160,7 +160,8 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     auto system = record{};
     if (v >= status_verbosity::info) {
       auto now = time::clock::now();
-      system["timestamp"] = fmt::format("{:%FT%T%z}", fmt::localtime(now));
+      system["timestamp"] = fmt::format(
+        "{:%FT%T%z}", fmt::localtime(time::clock::to_time_t(now)));
       system["uptime"] = to_string(now - self->state.start_time);
       system["in-memory-table-slices"] = uint64_t{table_slice::instances()};
       system["database-path"] = self->state.dir.string();
