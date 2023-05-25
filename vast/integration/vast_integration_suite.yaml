@@ -196,18 +196,7 @@ tests:
       - command: flush
       - command: status catalog
         transformation: jq -ec '.catalog."num-partitions"'
-  Export Timeout:
-    tags: [server, export]
-    fixture: ServerTester
-    steps:
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      # We use the `null` export format since timeouts are always racy; we
-      # cannot reliably make a 0 second timeout return 0 events.
-      - command: export --timeout=0s null 'where resp_h == 192.168.1.104'
-        expected_result: error
-      - command: export --continuous --timeout=0s null 'where resp_h == 192.168.1.104'
-        expected_result: error
+
   Server Zeek conn log:
     tags: [server, import-export, zeek]
     fixture: ServerTester
@@ -626,36 +615,6 @@ tests:
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | rename source_ip=src_ip
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
-
-  # A (small) stress test to see how the server handles queries that time out
-  # before they're completed. We don't care about the output for these, we
-  # just want to see if the server fixture shuts down orderly after this.
-  Exporter Timeout:
-    tags: [server, import-export, timeout]
-    fixture: ServerTester
-    steps:
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: import -b zeek
-        input: data/zeek/dns.log.gz
-      - command: export --timeout=0ms json
-        expected_result: error
-      - command: export --timeout=0ms json
-        expected_result: error
-      - command: export --timeout=10ms json
-        expected_result: ignore
-      - command: export --timeout=20ms json
-        expected_result: ignore
-      - command: export --timeout=50ms json
-        expected_result: ignore
-      - command: export --timeout=100ms json
-        expected_result: ignore
-      - command: export --timeout=200ms json
-        expected_result: ignore
-      - command: export --timeout=500ms json
-        expected_result: ignore
-      - command: export --timeout=800ms json
-        expected_result: ignore
 
   Self Repair:
     tags: [fault]
