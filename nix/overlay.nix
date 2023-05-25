@@ -176,9 +176,9 @@ in {
     };
   in
     pkg.withPlugins (ps: [
-      ps.cloud
       ps.matcher
       ps.netflow
+      ps.platform
     ]);
   vast-ee = let
     pkg = final.vast.override {
@@ -186,11 +186,11 @@ in {
     };
   in
     pkg.withPlugins (ps: [
-      ps.cloud
       ps.compaction
       #ps.inventory
       ps.matcher
       ps.netflow
+      ps.platform
     ]);
   vast-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:

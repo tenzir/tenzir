@@ -1,7 +1,8 @@
 {
   "url": "git@github.com:tenzir/vast-plugins",
-  "ref": "main",
-  "rev": "66da9bf909e79127c2e6f1aea263a10eea88367c",
+  "ref": "topic/cloud-to-platform",
+  "rev": "6902430a014389dd8bbdc5c87b49eb35d62c728f",
   "submodules": true,
-  "shallow": true
+  "shallow": true,
+  "allRefs": true
 }
