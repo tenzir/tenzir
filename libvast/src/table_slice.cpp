@@ -629,7 +629,7 @@ select(const table_slice& slice, expression expr, const ids& hints) {
   // Start slicing and dicing.
   auto batch = to_record_batch(slice);
   for (const auto [first, last] : select_runs(selection)) {
-    co_yield subslice(slice, first, last);
+    co_yield subslice(slice, first - offset, last - offset);
   }
 }
 
@@ -668,6 +668,9 @@ auto subslice(const table_slice& slice, size_t begin, size_t end)
   VAST_ASSERT(end <= slice.rows());
   if (begin == 0 && end == slice.rows()) {
     return slice;
+  }
+  if (begin == end) {
+    return {};
   }
   auto offset = slice.offset();
   auto batch = to_record_batch(slice);
