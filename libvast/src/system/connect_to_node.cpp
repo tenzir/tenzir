@@ -18,7 +18,7 @@
 #include "vast/system/connect_request.hpp"
 #include "vast/system/connector.hpp"
 #include "vast/system/node_control.hpp"
-#include "vast/system/version_command.hpp"
+#include "vast/system/version.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>

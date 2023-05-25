@@ -10,11 +10,11 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/aliases.hpp"
+#include "vast/data.hpp"
 
 namespace vast::system {
 
-/// Infers a VAST schema from given input.
-caf::message infer_command(const invocation& inv, caf::actor_system& sys);
+/// Puts the version information into a record.
+record retrieve_versions();
 
 } // namespace vast::system

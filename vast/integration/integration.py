@@ -365,30 +365,13 @@ class Server:
 
     def stop(self):
         """Stops the server"""
-        command = [self.app, "--bare-mode"]
-        if self.config_arg:
-            command.append(self.config_arg)
-        command = command + ["-e", f":{self.port}", "stop"]
-        LOGGER.debug(f"stopping server fixture: {command}")
-        stop_out = open(self.cwd / "stop.out", "w")
-        stop_err = open(self.cwd / "stop.err", "w")
         try:
-            stop = spawn(
-                command,
-                cwd=self.cwd,
-                stdout=stop_out,
-                stderr=stop_err,
-            )
-            stop.wait(STEP_TIMEOUT)
-        except:
-            pass
-        else:
-            if isinstance(stop, subprocess.Popen):
-                stop.kill()
-        try:
-            self.process.wait(STEP_TIMEOUT)
-        except:
-            self.process.kill()
+            self.process.send_signal(signal.SIGINT)
+        except: 
+            try:
+                self.process.wait(STEP_TIMEOUT)
+            except:
+                self.process.kill()
 
 
 class Tester:
@@ -440,7 +423,8 @@ class Tester:
         work_dir = self.test_dir / normalized_test_name
         if work_dir.exists():
             LOGGER.debug(f"removing existing work directory {work_dir}")
-            shutil.rmtree(work_dir)
+            with suppress(OSError):
+                shutil.rmtree(work_dir)
         work_dir.mkdir(parents=True)
         summary = TestSummary(len(test.steps))
         step_i = 0
@@ -486,7 +470,8 @@ class Tester:
             LOGGER.info(f"ran all {summary.step_count} steps successfully")
             if not self.args.keep:
                 LOGGER.debug(f"removing working directory {work_dir}")
-                shutil.rmtree(work_dir)
+                with suppress(OSError):
+                    shutil.rmtree(work_dir)
             return Result.SUCCESS
         LOGGER.warning(
             f"ran {summary.succeeded}/{summary.step_count} steps successfully"
@@ -783,4 +768,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as err:
+        print(err)
+        raise err

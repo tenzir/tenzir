@@ -51,11 +51,9 @@
 #include "vast/system/spawn_importer.hpp"
 #include "vast/system/spawn_index.hpp"
 #include "vast/system/spawn_node.hpp"
-#include "vast/system/spawn_sink.hpp"
-#include "vast/system/spawn_source.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
-#include "vast/system/version_command.hpp"
+#include "vast/system/version.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
 
@@ -76,11 +74,6 @@ namespace {
 // send-command functions, whose interfaces are constrained by the command
 // factory.
 thread_local node_actor::stateful_pointer<node_state> this_node = nullptr;
-
-// Convenience function for wrapping an error into a CAF message.
-auto make_error_msg(ec code, std::string msg) {
-  return caf::make_message(caf::make_error(code, std::move(msg)));
-}
 
 /// A list of components that are essential for importing and exporting data
 /// from the node.
@@ -114,33 +107,6 @@ bool is_singleton(std::string_view type) {
     return x == type;
   };
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
-}
-
-// Sends an atom to a registered actor. Blocks until the actor responds.
-caf::message send_command(const invocation& inv, caf::actor_system&) {
-  auto first = inv.arguments.begin();
-  auto last = inv.arguments.end();
-  // Expect exactly two arguments.
-  if (std::distance(first, last) != 2)
-    return make_error_msg(ec::syntax_error, "expected two arguments: receiver "
-                                            "and message atom");
-  // Get destination actor from the registry.
-  auto dst = this_node->state.registry.find_by_label(*first);
-  if (dst == nullptr)
-    return make_error_msg(ec::syntax_error,
-                          "registry contains no actor named " + *first);
-  // Dispatch to destination.
-  auto f = caf::make_function_view(caf::actor_cast<caf::actor>(dst));
-  auto send = [&](auto atom_value) {
-    if (auto res = f(atom_value))
-      return std::move(*res);
-    else
-      return caf::make_message(std::move(res.error()));
-  };
-  if (*(first + 1) == "run")
-    return send(atom::run_v);
-  return make_error_msg(ec::unimplemented,
-                        "trying to send unsupported atom: " + *(first + 1));
 }
 
 auto find_endpoint_plugin(const http_request_description& desc)
@@ -193,7 +159,10 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   if (has_component("system")) {
     auto system = record{};
     if (v >= status_verbosity::info) {
-      system["uptime"] = to_string(time::clock::now() - self->state.start_time);
+      auto now = time::clock::now();
+      system["timestamp"] = fmt::format(
+        "{:%FT%T%z}", fmt::localtime(time::clock::to_time_t(now)));
+      system["uptime"] = to_string(now - self->state.start_time);
       system["in-memory-table-slices"] = uint64_t{table_slice::instances()};
       system["database-path"] = self->state.dir.string();
       merge(detail::get_status(), system, policy::merge_lists::no);
@@ -252,21 +221,6 @@ register_component(node_actor::stateful_pointer<node_state> self,
   }
   self->monitor(component);
   return caf::none;
-}
-
-/// Deregisters (and demonitors) a component through the node.
-caf::expected<caf::actor>
-deregister_component(node_actor::stateful_pointer<node_state> self,
-                     std::string_view label) {
-  auto component = self->state.registry.remove(label);
-  if (!component) {
-    auto msg // separate variable for clang-format only
-      = fmt::format("{} failed to deregister non-existent component: {}", *self,
-                    label);
-    return caf::make_error(ec::unspecified, std::move(msg));
-  }
-  self->demonitor(component->actor);
-  return component->actor;
 }
 
 /// Spawns the accountant actor.
@@ -351,35 +305,6 @@ spawn_component(node_actor::stateful_pointer<node_state> self,
   return i->second(self, args);
 }
 
-caf::message kill_command(const invocation& inv, caf::actor_system&) {
-  auto self = this_node;
-  auto first = inv.arguments.begin();
-  auto last = inv.arguments.end();
-  if (std::distance(first, last) != 1)
-    return make_error_msg(ec::syntax_error, "expected exactly one component "
-                                            "argument");
-  auto rp = self->make_response_promise();
-  auto& label = *first;
-  auto component = deregister_component(self, label);
-  if (!component) {
-    rp.deliver(caf::make_error(ec::unspecified,
-                               fmt::format("no such component: {}", label)));
-  } else {
-    terminate<policy::parallel>(self, std::move(*component))
-      .then(
-        [=](atom::done) mutable {
-          VAST_DEBUG("{} terminated component {}", *self, label);
-          rp.deliver(atom::ok_v);
-        },
-        [=](const caf::error& err) mutable {
-          VAST_WARN("{} failed to terminate component {}: {}", *self, label,
-                    err);
-          rp.deliver(err);
-        });
-  }
-  return {};
-}
-
 /// Lifts a factory function that accepts `local_actor*` as first argument
 /// to a function accpeting `node_actor::stateful_pointer<node_state>` instead.
 template <caf::expected<caf::actor> (*Fun)(caf::local_actor*, spawn_arguments&)>
@@ -407,30 +332,7 @@ auto make_component_factory() {
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
     {"spawn index", lift_component_factory<spawn_index>()},
-    {"spawn source", lift_component_factory<spawn_source>()},
-    {"spawn source arrow", lift_component_factory<spawn_source>()},
-    {"spawn source csv", lift_component_factory<spawn_source>()},
-    {"spawn source json", lift_component_factory<spawn_source>()},
-    {"spawn source suricata", lift_component_factory<spawn_source>()},
-    {"spawn source syslog", lift_component_factory<spawn_source>()},
-    {"spawn source test", lift_component_factory<spawn_source>()},
-    {"spawn source zeek", lift_component_factory<spawn_source>()},
-    {"spawn source zeek-json", lift_component_factory<spawn_source>()},
-    {"spawn sink zeek", lift_component_factory<spawn_sink>()},
-    {"spawn sink csv", lift_component_factory<spawn_sink>()},
-    {"spawn sink ascii", lift_component_factory<spawn_sink>()},
-    {"spawn sink json", lift_component_factory<spawn_sink>()},
   };
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<reader_plugin>()) {
-      auto command = fmt::format("spawn source {}", reader->reader_format());
-      result.emplace(command, lift_component_factory<spawn_source>());
-    }
-    if (const auto* writer = plugin.as<writer_plugin>()) {
-      auto command = fmt::format("spawn sink {}", writer->writer_format());
-      result.emplace(command, lift_component_factory<spawn_sink>());
-    }
-  }
   return result;
 }
 
@@ -438,8 +340,6 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
   auto result = command::factory{
-    {"kill", kill_command},
-    {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
@@ -448,30 +348,8 @@ auto make_command_factory() {
     {"spawn importer", node_state::spawn_command},
     {"spawn catalog", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
-    {"spawn sink ascii", node_state::spawn_command},
-    {"spawn sink csv", node_state::spawn_command},
-    {"spawn sink json", node_state::spawn_command},
-    {"spawn sink zeek", node_state::spawn_command},
-    {"spawn source arrow", node_state::spawn_command},
-    {"spawn source csv", node_state::spawn_command},
-    {"spawn source json", node_state::spawn_command},
-    {"spawn source suricata", node_state::spawn_command},
-    {"spawn source syslog", node_state::spawn_command},
-    {"spawn source test", node_state::spawn_command},
-    {"spawn source zeek", node_state::spawn_command},
-    {"spawn source zeek-json", node_state::spawn_command},
     {"status", status_command},
   };
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<reader_plugin>()) {
-      auto command = fmt::format("spawn source {}", reader->reader_format());
-      result.emplace(command, node_state::spawn_command);
-    }
-    if (const auto* writer = plugin.as<writer_plugin>()) {
-      auto command = fmt::format("spawn sink {}", writer->writer_format());
-      result.emplace(command, node_state::spawn_command);
-    }
-  }
   return result;
 }
 
@@ -518,16 +396,6 @@ node_state::spawn_command(const invocation& inv,
   }
   VAST_DEBUG("{} spawns a {} with the label {}", *self, comp_type, label);
   auto spawn_inv = inv;
-  if (comp_type == "source") {
-    auto spawn_opt
-      = caf::get_or(spawn_inv.options, "vast.spawn", caf::settings{});
-    auto source_opt = caf::get_or(spawn_opt, "source", caf::settings{});
-    auto import_opt
-      = caf::get_or(spawn_inv.options, "vast.import", caf::settings{});
-    detail::merge_settings(source_opt, import_opt, policy::merge_lists::no);
-    spawn_inv.options["import"] = import_opt;
-    caf::put(spawn_inv.options, "vast.import", import_opt);
-  }
   // Spawn our new VAST component.
   spawn_arguments args{spawn_inv, self->state.dir, label};
   auto component = spawn_component(self, args.inv, args);

@@ -8,7 +8,6 @@
 
 #include "vast/command.hpp"
 
-#include "vast/system/version_command.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -137,12 +136,6 @@ TEST(nested command invocation) {
   CHECK(is_error(exec("foo --flag -v 42", factory)));
   // Subcommands of course still work.
   CHECK_VARIANT_EQUAL(exec("foo --flag -v 42 bar", factory), "bar"s);
-}
-
-TEST(version command) {
-  command::factory factory{{"version", system::version_command}};
-  root.add_subcommand("version", "", command::opts());
-  CHECK_VARIANT_EQUAL(exec("version", factory), caf::none);
 }
 
 TEST(missing argument) {

@@ -144,6 +144,14 @@ public:
             name_field.add(plugin->name());
           }
           {
+            auto version_field = plugin_record.push_field("version");
+            if (const auto* version = plugin.version()) {
+              version_field.add(version);
+            } else {
+              version_field.add("bundled");
+            }
+          }
+          if (dev_mode_) {
             auto types_field = plugin_record.push_field("types");
             auto types = types_field.push_list();
 #define VAST_ADD_PLUGIN_TYPE(category)                                         \
@@ -180,14 +188,6 @@ public:
               case plugin_ptr::type::dynamic:
                 kind_field.add("dynamic");
                 break;
-            }
-          }
-          if (dev_mode_) {
-            auto version_field = plugin_record.push_field("version");
-            if (const auto* version = plugin.version()) {
-              version_field.add(version);
-            } else {
-              version_field.add("bundled");
             }
           }
         }

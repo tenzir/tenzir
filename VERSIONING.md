@@ -9,20 +9,30 @@ are versioned together, and the plugin C++ libraries are versioned individually.
 
 ## Version Identification
 
-Run the `vast version` command to get VAST's current version, and the versions
-of its major dependencies that it currently uses:
+Run `vast exec 'version'` operator to get VAST's current version, and the
+versions of its major dependencies that it currently uses:
 
 ```json
 {
-  "VAST": "v1.0.4-61-geed8cb41a3",
-  "VAST Build Tree Hash": "0eb048d0eeda5be7081f0c3a659ff17f",
-  "CAF": "0.17.6",
-  "Apache Arrow": "6.0.1",
-  "jemalloc": "5.2.1",
-  "plugins": {
-    "compaction": "v1.2.0-61-g9131346958",
-    "matcher": "v2.1.4-23-gfb69e84ade",
-  }
+  "version": "v3.1.0-132-g2987800ac5-dirty",
+  "plugins": [
+    {
+      "name": "parquet",
+      "version": "bundled"
+    },
+    {
+      "name": "pcap",
+      "version": "bundled"
+    },
+    {
+      "name": "sigma",
+      "version": "bundled"
+    },
+    {
+      "name": "web",
+      "version": "bundled"
+    }
+  ]
 }
 ```
 

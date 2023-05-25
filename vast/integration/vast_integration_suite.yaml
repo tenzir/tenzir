@@ -1,22 +1,6 @@
 config-file: vast.yaml
 
 fixtures:
-  BiTopologyTester:
-    enter: | # python
-      node0 = Server(self.cmd,
-                     ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node0', 'start'],
-                     work_dir, name='node0', port=VAST_PORT,
-                     config_file=self.config_file)
-      node1 = Server(self.cmd,
-                     ['-e', '127.0.0.1:42124', '-i', 'node1', 'start'],
-                     work_dir, name='node1', port=42124,
-                     config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
-
-    exit: | # python
-      node0.stop()
-      node1.stop()
-
   ExampleConfigFileTester:
     enter: | # python
       node = Server(self.cmd,
@@ -51,22 +35,6 @@ fixtures:
     exit: | # python
       node.stop()
 
-  AgingTester:
-    enter: | # python
-      node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}',
-                     '-i', 'node',
-                     '--aging-frequency=2000min',
-                     '--aging-query=:ip == 192.168.1.104',
-                     '--active-partition-timeout=5s',
-                     'start'],
-                    work_dir, name='node', port=VAST_PORT,
-                    config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
-
-    exit: | # python
-      node.stop()
-
   DiskMonitorTester:
     enter: | # python
       node = Server(self.cmd,
@@ -85,19 +53,6 @@ fixtures:
       node.stop()
 
 tests:
-  JSON schema inference:
-    tags: [schema, infer, json]
-    steps:
-      - command: infer
-        input: data/json/empty-object.json
-      - command: infer
-        input: data/json/basic-types.json
-      - command: infer
-        input: data/json/string-types.json
-      - command: infer
-        input: data/json/array-types.json
-      - command: infer
-        input: data/json/nested-object.json
   Conn log counting:
     tags: [node, counting, zeek]
     steps:
@@ -108,6 +63,7 @@ tests:
       - command: -N count "resp_p == 80"
       - command: -N count "resp_p != 80"
       - command: -N count 861237
+
   Node Zeek conn log:
     tags: [node, import-export, zeek]
     steps:
@@ -119,6 +75,7 @@ tests:
       - command: '-N export ascii "where #type == \"zeek.conn\" && resp_h == 192.168.1.104"'
       - command: '-N export ascii "where #type != \"zeek.conn\" && #type != \"vast.metrics\""'
       - command: '-N export ascii "where #type != \"foobar\" && resp_h == 192.168.1.104"'
+
   Node Zeek multiple imports:
     tags: [node, import-export, zeek]
     steps:
@@ -130,6 +87,7 @@ tests:
       - command: -N export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
       - command: '-N count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: -N count '#type == "zeek.conn"'
+
   Node Zeek dns log:
     tags: [node, import-export, zeek]
     steps:
@@ -140,18 +98,21 @@ tests:
         transformation: awk '!/^#(open|close)/'
       - command: -N count ':port == 53'
       - command: '-N count ":uint64 == 53 && #type == \"zeek.dns\""'
+
   Node Zeek http log:
     tags: [node, import-export, zeek]
     steps:
       - command: -N import zeek
         input: data/zeek/http.log.gz
       - command: -N export ascii 'where resp_h == 216.240.189.196'
+
   Node Zeek snmp log:
     tags: [node, import-export, zeek]
     steps:
       - command: -N import zeek
         input: data/zeek/snmp.log.gz
       - command: -N export ascii 'where duration >= 3s'
+
   Node Zeek JSON:
     tags: [node, import-export, zeek, json]
     steps:
@@ -159,6 +120,7 @@ tests:
         input: data/zeek/zeek.json
       - command: '-N export json "where \"zeek\" in #type"'
         transformation: jq -ec '.'
+
   Export json:
     tags: [json, zeek]
     steps:
@@ -168,6 +130,7 @@ tests:
         transformation: jq -ec '.'
       - command: -N export json --omit-nulls 'where resp_h == 192.168.1.104'
         transformation: jq -ec '.'
+
   Shutdown with Metrics:
     tags: [metrics, shutdown]
     fixture: ServerTesterMetricsEnabled
@@ -177,6 +140,7 @@ tests:
         # it's like a dummy check that confirms whether the server can be
         # connected to.
         transformation: jq -ec 'empty'
+
   Malformed Query:
     tags: [export]
     fixture: ServerTester
@@ -185,6 +149,7 @@ tests:
         expected_result: error
       - command: and that is not a command
         expected_result: error
+
   Flush:
     tags: [server, import, flush]
     fixture: ServerTester
@@ -220,6 +185,7 @@ tests:
         transformation: jq -ec 'del(.version) | del(.system."swap-space-usage") | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
       - command: status --detailed index importer
         transformation: jq -ec 'paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
+
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
@@ -234,6 +200,7 @@ tests:
       - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: count '#type == "zeek.conn"'
       - command: show schemas --yaml
+
   Query Operators:
     tags: [server, operator]
     fixture: ServerTester
@@ -248,6 +215,7 @@ tests:
       - command: export ascii 'where id.orig_h !in 192.168.1.0/24'
       - command: export ascii 'where id.orig_h in fe80:5074:1b53:7e7::/64'
       - command: export ascii 'where id.orig_h ni fe80:5074:1b53:7e7::/64'
+
   Expressions:
     tags: [server, expression]
     fixture: ServerTester
@@ -256,12 +224,14 @@ tests:
         input: data/zeek/conn.log.gz
       - command: export ascii 'where fe80::5074:1b53:7e7:ad4d || 169.254.225.22'
       - command: export ascii 'where "OrfTtuI5G4e" || fe80::5074:1b53:7e7:ad4d'
+
   Node Type Query:
     tags: [node, type, ch6104]
     steps:
       - command: -N import -n 20 zeek
         input: data/zeek/conn.log.gz
       - command: -N export ascii
+
   Type Query:
     tags: [server, type, ch5404]
     fixture: ServerTester
@@ -269,6 +239,7 @@ tests:
       - command: import -b -n 20 zeek
         input: data/zeek/conn.log.gz
       - command: 'export ascii "where #type == \"zeek.conn\""'
+
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
     steps:
@@ -277,6 +248,7 @@ tests:
       - command: -N export ascii 'where duration > 6s'
       - command: -N export ascii 'where :timestamp >= 2011-08-15T03:48'
       - command: -N export ascii 'where :time >= 2011-08-15T03:48'
+
   Node suricata alert:
     tags: [node, import-export, suricata, eve, import-filter]
     steps:
@@ -317,13 +289,6 @@ tests:
         input: data/csv/argus-reordered.tsv
       - command: -N export csv
 
-  Manual 2:
-    tags: [examples, disabled]
-    fixture: BiTopologyTester
-    steps:
-      - command: peer 'localhost:42124'
-      - command: status
-
   Multi addr query:
     tags: [import-export, zeek]
     steps:
@@ -359,7 +324,6 @@ tests:
       - command: show --yaml models
       - command: show schemas
   Arrow Full Data Model:
-    condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
     steps:
       - command: -N import --batch-encoding=arrow --schema-file="@./misc/schema/all-types.schema" --type=all_types json
@@ -367,7 +331,6 @@ tests:
       - command: '-N export arrow "where #type == \"all_types\""'
         transformation: python @./misc/scripts/print-arrow.py
   Arrow Export:
-    condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
     steps:
       - command: -N import --batch-encoding=arrow zeek
@@ -379,7 +342,6 @@ tests:
       - command: '-N export arrow "where #type == \"suricata.http\""'
         transformation: python @./misc/scripts/print-arrow.py
   Arrow Import:
-    condition: version | jq -e '."Apache Arrow"'
     tags: [import, arrow]
     fixture: ServerTester
     steps:
@@ -443,33 +405,10 @@ tests:
   Nested Records:
     tags: [import, json]
     steps:
-      - guard: version | jq -e '."Apache Arrow"'
       - command: '-N import --schema="type custom = record { a: list<record { b: string, c: uint64, }>, d: uint64, }" --type=custom --batch-encoding=arrow json'
         input: data/json/record-in-list.json
       - command: '-N export ascii "where #type == \"custom\""'
 
-  Zeek conn log aging:
-    tags: [import-export, aging, zeek]
-    fixture: AgingTester
-    steps:
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: export ascii 'where resp_h == 192.168.1.104'
-      - command: version
-        transformation: sleep 15
-      - command: send eraser run
-      - command: version
-        transformation: sleep 2
-      - command: export ascii 'where resp_h == 192.168.1.104'
-  Spawn source:
-    tags: [import, spawn-source, zeek]
-    fixture: ServerTester
-    steps:
-      - command: spawn source -r @./data/suricata/eve.json suricata
-      - command: flush
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: count '#type == /suricata.*/'
   Example config file:
     tags: [import-export, zeek]
     fixture: ExampleConfigFileTester
@@ -488,8 +427,8 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: version
-        transformation: sleep 4
+      - command: sleep 4
+        prepend_vast: false
       - command: count '#type == /zeek.*/'
   Export pipeline operator parsing everything but summarize:
     tags: [server, client, import-export, transforms]
@@ -621,7 +560,7 @@ tests:
     steps:
       - command: -N import zeek
         input: data/zeek/conn.log.gz
-      - command: version
+      - command: exec version
         transformation: "@./misc/scripts/break-sizelimit.sh"
       # We use an extra import step to trigger the repair because querying
       # directly would not wait for the repair step.
