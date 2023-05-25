@@ -37,6 +37,7 @@
 #include <restinio/request_handler.hpp>
 #include <restinio/tls.hpp>
 #include <restinio/websocket/websocket.hpp>
+#include <simdjson/error.h>
 
 // Needed to forward incoming requests to the request_dispatcher
 
@@ -150,6 +151,12 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         } else if (maybe_content_type == "application/json") {
           auto json_params = parser.parse(body);
           if (!json_params.is_object()) {
+            if (json_params.error() != simdjson::SUCCESS) {
+              return response->abort(
+                400, "encountered JSON parsing error\n",
+                caf::make_error(ec::invalid_query,
+                                simdjson::error_message(json_params.error())));
+            }
             return response->abort(
               400, "invalid JSON body\n",
               caf::make_error(ec::invalid_query,

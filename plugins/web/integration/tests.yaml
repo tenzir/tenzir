@@ -62,6 +62,27 @@ tests:
             http://127.0.0.1:42025/api/v0/query/new
         transformation: 'jq .id | xargs -I _ curl http://127.0.0.1:42025/api/v0/query/_/next?n=20 | jq .events'
         prepend_vast: false
+  Bad JSON Input:
+    tags: [rest, query]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/conn.log.gz
+      - command: flush
+      - command: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '[1,2,3]' \
+            http://127.0.0.1:42025/api/v0/query/new
+        transformation: 'head -n 1'
+        prepend_vast: false
+      - command: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '"query": "where 192.16"8.1.102"}' \
+            http://127.0.0.1:42025/api/v0/query/new
+        transformation: 'head -n 1'
+        prepend_vast: false
   Query Endpoint With Formatters:
     tags: [rest, query]
     fixture: ServerTester
