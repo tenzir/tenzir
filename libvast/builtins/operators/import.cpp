@@ -87,6 +87,15 @@ public:
     auto source = caf::detail::make_stream_source<import_source_driver>(
       &ctrl.self(), input, num_events, ctrl);
     source->add_outbound_path(index);
+    for (const auto& plugin : plugins::get<analyzer_plugin>()) {
+      // We can safely assert that the analyzer was already initialized. The
+      // pipeline API guarantees that remote operators run after the node was
+      // successfully initialized, which implies that analyzers have been
+      // initialized as well.
+      auto analyzer = plugin->analyzer();
+      VAST_ASSERT(analyzer);
+      source->add_outbound_path(analyzer);
+    }
     while (input.unsafe_current() != input.end()) {
       if (source->generate_messages()) {
         source->out().emit_batches();
