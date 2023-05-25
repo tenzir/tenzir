@@ -239,12 +239,14 @@ auto pipeline_executor(
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "vast.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
-  return {[self](atom::run) -> caf::result<void> {
-            return self->state.run();
-          },
-          [self](atom::run, system::node_actor node) -> caf::result<void> {
-            return self->state.run(std::move(node));
-          }};
+  return {
+    [self](atom::run) -> caf::result<void> {
+      return self->state.run();
+    },
+    [self](atom::run, system::node_actor node) -> caf::result<void> {
+      return self->state.run(std::move(node));
+    },
+  };
 }
 
 } // namespace vast
