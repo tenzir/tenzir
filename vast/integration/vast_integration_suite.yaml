@@ -904,3 +904,14 @@ tests:
         input: data/zeek/conn.log.gz
       - command: exec 'read zeek-tsv | head | select service | sort service nulls-first | write json'
         input: data/zeek/conn.log.gz
+
+  # This tests for a bug fixed by tenzir/vast#3171 that caused sliced nested
+  # arrays to be accessed incorrectly, resulting in a crash. The head 8 and tail
+  # 3 operators are intentionally chosen to slice in the middle of a batch.
+  Slice Regression Test:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read cef | select extension.dvc | head 8 | extend foo=extension.dvc | write json'
+        input: data/cef/forcepoint.log
+      - command: exec 'read cef | select extension.dvc | tail 3 | extend foo=extension.dvc | write json'
+        input: data/cef/forcepoint.log
