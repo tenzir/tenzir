@@ -119,8 +119,11 @@ auto validate_(const vast::data& data, const vast::type& type,
             continue;
           }
           auto field = record_type.field(*field_offset);
-          if (field.type.attribute("opaque"))
-            return validate_opaque_(v);
+          if (field.type.attribute("opaque")) {
+            if (auto error = validate_opaque_(v))
+              return error;
+            continue;
+          }
           auto nested_prefix = fmt::format("{}.{}", prefix, field.name);
           // Note that this currently can not happen for configuration parsed
           // from a YAML file, since the parser already overwrites duplicate
