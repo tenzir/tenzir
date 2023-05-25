@@ -320,19 +320,6 @@ vast rebuild start '#type == "suricata.flow" && #import_time < 2 weeks ago'
 
 To stop an ongoing rebuild, use the `vast rebuild stop` command.
 
-## Shutdown
-
-The `stop` command gracefully brings down a VAST server that has been started
-with the `start` command.
-
-It is also possible to send a signal `SIGINT(2)` to the `vast` process instead
-of using `vast stop`, but in only works on the same machine that runs the
-server process. We recommend using `vast stop`, as it also works over the wire.
-
-The `stop` command asks the server process to terminate gracefully, and returns
-a zero exit code upon success, making it suitable for use in launch system
-scripts.
-
 ## Logging
 
 The VAST server writes log files into a file named `server.log` in the database

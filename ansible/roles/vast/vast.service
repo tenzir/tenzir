@@ -45,7 +45,6 @@ SystemCallErrorNumber=EPERM
 # service specifics
 TimeoutStopSec=600
 WorkingDirectory=/var/lib/vast
-ExecStop=/opt/vast/bin/vast stop
 ExecStart=/opt/vast/bin/vast start
 
 [Install]

@@ -25,55 +25,6 @@ For example, to import a file in JSON, use the `json` format:
 vast import json < data.json
 ```
 
-## Infer a schema automatically
-
-:::caution Auto-inference coming soon
-Writing a schema will be optional in the future. For example, only when you want
-to tune the data semantics. Take a look at the [corresponding roadmap
-item](https://github.com/tenzir/public-roadmap/issues/5) to better understand
-when this capability lands in VAST.
-:::
-
-The `infer` command attempts to deduce a schema, given a sample of data. For
-example, consider this JSON data:
-
-```json
-{
-  "timestamp": "2011-08-14T07:38:53.914038+0200",
-  "src_ip": "147.32.84.165",
-  "src_port": 138,
-  "dest_ip": "147.32.84.255",
-  "dest_port": 138,
-  "proto": "UDP"
-}
-```
-
-To infer its schema, run:
-
-```bash
-jq -c < data.json | head -1 | vast infer
-```
-
-This prints:
-
-```
-type json = record {timestamp: time, src_ip: ip, src_port: int64, dest_ip: ip, dest_port: int, proto: string}
-```
-
-:::caution YAML Modules coming soon
-We are currently reworking VAST's schema language. The available
-[introspection capabilities](../../use/introspect/README.md) already show the
-new schema style. Track the [corresponding roadmap
-item](https://github.com/tenzir/public-roadmap/issues/15) to see when this
-rewrite lands.
-:::
-
-The idea is that `infer` jump-starts the schema writing process by providing a
-reasonable blueprint. You still need to provide the right name for the type and
-perform adjustments, such as replacing some generic types with more semantic
-aliases, e.g., using the `timestamp` alias instead of type `time` to designate
-the event timestamp.
-
 ## Write a schema manually
 
 If VAST does not ship with a [module][modules] for your data out of the box,
