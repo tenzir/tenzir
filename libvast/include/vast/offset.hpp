@@ -34,8 +34,21 @@ struct offset : detail::stack_vector<size_t, 64> {
   friend std::strong_ordering
   operator<=>(const offset& lhs, const offset& rhs) noexcept;
 
-  /// Convert an offset into it's Arrow-equivalent FieldPath.
-  explicit operator arrow::FieldPath() const noexcept;
+  /// Access a nested array in a table slice, record batch, or struct array. The
+  /// offset is assumed to be valid.
+  ///
+  /// NOTE: This function solely exists because the logically equivalent
+  /// arrow::FieldPath::Get(...) is fundamentally broken for arrays with a
+  /// non-zero offset (i.e., after calling Array::Slice(...) on them. The Arrow
+  /// function re-assembles the resulting array from the underlying array data,
+  /// discarding the offset and the length, and may as such return arrays longer
+  /// than the input data.
+  auto get(const table_slice& slice) const noexcept
+    -> std::pair<type, std::shared_ptr<arrow::Array>>;
+  auto get(const arrow::RecordBatch& batch) const noexcept
+    -> std::shared_ptr<arrow::Array>;
+  auto get(const arrow::StructArray& struct_array) const noexcept
+    -> std::shared_ptr<arrow::Array>;
 };
 
 } // namespace vast
