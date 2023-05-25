@@ -87,6 +87,9 @@ public:
     auto source = caf::detail::make_stream_source<import_source_driver>(
       &ctrl.self(), input, num_events, ctrl);
     source->add_outbound_path(index);
+    for (const auto& analyzer : plugins::get<analyzer_plugin>()) {
+      source->add_outbound_path(analyzer->analyzer());
+    }
     while (input.unsafe_current() != input.end()) {
       if (source->generate_messages()) {
         source->out().emit_batches();
