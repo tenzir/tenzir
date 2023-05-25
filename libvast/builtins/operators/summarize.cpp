@@ -602,9 +602,7 @@ private:
     auto result = arrow::ArrayVector{};
     result.reserve(group_by_columns.size());
     for (const auto& group_by_column : group_by_columns) {
-      auto array = static_cast<arrow::FieldPath>(group_by_column.input)
-                     .Get(batch)
-                     .ValueOrDie();
+      auto array = group_by_column.input.get(batch);
       if (group_by_column.time_resolution) {
         array = arrow::compute::FloorTemporal(
                   array,
@@ -627,8 +625,7 @@ private:
       auto sub_result = arrow::ArrayVector{};
       sub_result.reserve(column.inputs.size());
       for (const auto& input : column.inputs)
-        sub_result.push_back(
-          static_cast<arrow::FieldPath>(input).Get(batch).ValueOrDie());
+        sub_result.push_back(input.get(batch));
       result.push_back(std::move(sub_result));
     }
     return result;

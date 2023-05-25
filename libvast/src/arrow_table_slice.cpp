@@ -353,7 +353,8 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
           .fields = {},
           .arrays = caf::get<type_to_arrow_array_t<record_type>>(
                       *layer.arrays[index.back()])
-                      .fields(),
+                      .Flatten()
+                      .ValueOrDie(),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
@@ -390,7 +391,7 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{
     .fields = {},
-    .arrays = batch->columns(),
+    .arrays = batch->ToStructArray().ValueOrDie()->Flatten().ValueOrDie(),
   };
   const auto num_columns = detail::narrow_cast<size_t>(batch->num_columns());
   layer.fields.reserve(num_columns);
@@ -407,10 +408,15 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
   new_schema.assign_metadata(schema);
   auto arrow_schema = new_schema.to_arrow_schema();
   const auto num_rows = layer.arrays[0]->length();
+  auto new_batch = arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
+                                            std::move(layer.arrays));
+#if VAST_ENABLE_ASSERTIONS
+  auto validate_status = new_batch->ValidateFull();
+  VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+#endif // VAST_ENABLE_ASSERTIONS
   return {
     std::move(new_schema),
-    arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
-                             std::move(layer.arrays)),
+    std::move(new_batch),
   };
 }
 
@@ -485,7 +491,8 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
           .fields = {},
           .arrays = caf::get<type_to_arrow_array_t<record_type>>(
                       *layer.arrays[index.back()])
-                      .fields(),
+                      .Flatten()
+                      .ValueOrDie(),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :

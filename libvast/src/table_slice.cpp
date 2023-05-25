@@ -629,42 +629,24 @@ select(const table_slice& slice, expression expr, const ids& hints) {
   // Start slicing and dicing.
   auto batch = to_record_batch(slice);
   for (const auto [first, last] : select_runs(selection)) {
-    auto selected = table_slice{
-      batch->Slice(detail::narrow_cast<int64_t>(first - offset),
-                   detail::narrow_cast<int64_t>(last - first)),
-      slice.schema(),
-    };
-    selected.offset(offset + first);
-    selected.import_time(slice.import_time());
-    co_yield std::move(selected);
+    co_yield subslice(slice, first - offset, last - offset);
   }
 }
 
 table_slice head(table_slice slice, size_t num_rows) {
-  if (slice.encoding() == table_slice_encoding::none)
-    return {};
-  if (num_rows >= slice.rows())
-    return slice;
-  auto rb = to_record_batch(slice);
-  auto head = table_slice{rb->Slice(0, detail::narrow_cast<int64_t>(num_rows)),
-                          slice.schema()};
-  head.offset(slice.offset());
-  head.import_time(slice.import_time());
-  return head;
+  return subslice(
+    slice, 0,
+    std::min(slice.rows(),
+             detail::narrow_cast<table_slice::size_type>(num_rows)));
 }
 
 table_slice tail(table_slice slice, size_t num_rows) {
-  if (slice.encoding() == table_slice_encoding::none)
-    return {};
-  if (num_rows >= slice.rows())
-    return slice;
-  auto rb = to_record_batch(slice);
-  auto head = table_slice{
-    rb->Slice(detail::narrow_cast<int64_t>(slice.rows() - num_rows)),
-    slice.schema()};
-  head.offset(slice.offset());
-  head.import_time(slice.import_time());
-  return head;
+  return subslice(
+    slice,
+    slice.rows()
+      - std::min(slice.rows(),
+                 detail::narrow_cast<table_slice::size_type>(num_rows)),
+    slice.rows());
 }
 
 std::pair<table_slice, table_slice>
@@ -686,6 +668,9 @@ auto subslice(const table_slice& slice, size_t begin, size_t end)
   VAST_ASSERT(end <= slice.rows());
   if (begin == 0 && end == slice.rows()) {
     return slice;
+  }
+  if (begin == end) {
+    return {};
   }
   auto offset = slice.offset();
   auto batch = to_record_batch(slice);
@@ -857,7 +842,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
   // Helper function that binds an existing array.
   auto bind_array = [&](const offset& index) {
     inferred_type = layout.field(index).type;
-    array = arrow::FieldPath{index}.Get(*batch).ValueOrDie();
+    array = index.get(*batch);
   };
   auto f = detail::overload{
     [&](const data& value) {

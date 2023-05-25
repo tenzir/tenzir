@@ -232,8 +232,7 @@ struct cast_helper<record_type, record_type> {
         }
         // The field exists, so we can insert the casted column.
         children.push_back(cast_helper<type, type>::cast(
-          from_type.field(*index).type,
-          static_cast<arrow::FieldPath>(*index).Get(*from_array).ValueOrDie(),
+          from_type.field(*index).type, index->get(*from_array),
           to_field.type));
       }
       return type_to_arrow_array_t<record_type>::Make(children, fields)

@@ -48,7 +48,7 @@ public:
     }
     auto batch = to_record_batch(slice);
     VAST_ASSERT(batch);
-    sort_keys_.push_back(arrow::FieldPath{*path}.Get(*batch).ValueOrDie());
+    sort_keys_.push_back(path->get(*batch));
     offset_table_.push_back(offset_table_.back()
                             + detail::narrow_cast<int64_t>(slice.rows()));
     cache_.push_back(std::move(slice));

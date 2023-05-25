@@ -32,7 +32,7 @@ public:
     for (auto&& slice : input) {
       total_buffered += slice.rows();
       buffer.push_back(std::move(slice));
-      if (total_buffered - buffer.front().rows() >= limit_) {
+      while (total_buffered - buffer.front().rows() >= limit_) {
         total_buffered -= buffer.front().rows();
         buffer.erase(buffer.begin());
       }

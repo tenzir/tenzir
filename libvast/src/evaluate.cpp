@@ -414,10 +414,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
         return ids{offset + num_rows, false};
       const auto index
         = caf::get<record_type>(slice.schema()).resolve_flat_index(lhs.column);
-      const auto type = caf::get<record_type>(slice.schema()).field(index).type;
-      const auto array = static_cast<arrow::FieldPath>(index)
-                           .Get(*to_record_batch(slice))
-                           .ValueOrDie();
+      const auto [type, array] = index.get(slice);
       VAST_ASSERT(array);
       switch (op) {
 #define VAST_EVAL_DISPATCH(op)                                                 \
