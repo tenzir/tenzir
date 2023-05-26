@@ -181,10 +181,10 @@ public:
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::qqstr;
+      parsers::end_of_pipeline_operator, parsers::operator_arg;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = -(required_ws_or_comment >> qqstr) >> optional_ws_or_comment
+    const auto p = -(required_ws_or_comment >> operator_arg) >> optional_ws_or_comment
                    >> end_of_pipeline_operator;
     std::string command;
     if (not p(f, l, command)) {
