@@ -185,7 +185,7 @@ public:
       parsers::end_of_pipeline_operator, parsers::operator_arg;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = -(required_ws_or_comment >> operator_arg)
+    const auto p = required_ws_or_comment >> operator_arg
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     std::string command;
     if (not p(f, l, command)) {
