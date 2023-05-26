@@ -495,3 +495,15 @@ caf:
 
       # List of excluded actors from run-time metrics.
       excludes: []
+
+  # User-defined operators.
+  operators:
+    # The Zeek operator is an example that takes raw bytes in the form of a
+    # PCAP and then parses Zeek's output via the 'zeek-json` format to generate
+    # a stream of events.
+    zeek: >
+      shell "zeek -r - LogAscii::output_to_stdout=T
+             JSONStreaming::disable_default_logs=T
+             JSONStreaming::enable_log_rotation=F
+             json-streaming-logs"
+      | parse zeek-json
