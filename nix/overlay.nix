@@ -181,6 +181,15 @@ in {
       ps.pipeline_manager
       ps.platform
     ]);
+  vast-cm = let
+    pkg = final.vast.override {
+      pname = "vast-cm";
+    };
+  in
+    pkg.withPlugins (ps: [
+      ps.compaction
+      ps.matcher
+    ]);
   vast-ee = let
     pkg = final.vast.override {
       pname = "vast-ee";
