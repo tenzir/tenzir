@@ -126,7 +126,8 @@ public:
           while (not chunks.empty()) {
             auto chk = chunks.front();
             chunks.pop();
-            VAST_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total, chk->size());
+            VAST_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total,
+                       chk->size());
             co_yield chk;
           }
         } else {
@@ -184,8 +185,8 @@ public:
       parsers::end_of_pipeline_operator, parsers::operator_arg;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = -(required_ws_or_comment >> operator_arg) >> optional_ws_or_comment
-                   >> end_of_pipeline_operator;
+    const auto p = -(required_ws_or_comment >> operator_arg)
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
     std::string command;
     if (not p(f, l, command)) {
       return {
