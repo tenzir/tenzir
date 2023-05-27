@@ -37,7 +37,7 @@ set_target_properties(
 add_library(vast::test ALIAS libvast_test)
 install(
   TARGETS libvast_test
-  EXPORT VASTTargets
+  EXPORT libVASTTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Development)

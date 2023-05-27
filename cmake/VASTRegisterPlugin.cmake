@@ -181,9 +181,12 @@ function (VASTCompileFlatBuffers)
     )
   endif ()
 
-  if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+  #if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    set(VAST_FIND_DEPENDENCY_LIST
+        "${VAST_FIND_DEPENDENCY_LIST}\nfind_package(Flatbuffers REQUIRED)"
+        PARENT_SCOPE)
     dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
-  endif ()
+  #endif ()
 
   set(output_prefix "${CMAKE_CURRENT_BINARY_DIR}/${FBS_TARGET}/include")
   target_link_libraries(${FBS_TARGET} INTERFACE "${flatbuffers_target}")
@@ -555,9 +558,11 @@ function (VASTRegisterPlugin)
                              PRIVATE VAST_ENABLE_STATIC_PLUGINS)
 
   if (VAST_ENABLE_STATIC_PLUGINS)
+    message(STATUS "static")
     # Link our static library against the vast binary directly.
     VASTTargetLinkWholeArchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
   else ()
+    message(STATUS "shared")
     # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
     # depending on the plugin type. This must not be user-configurable for
     # plugins, as building external plugins should work without needing to enable

@@ -104,8 +104,7 @@ file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
 list(SORT flatbuffers_schemas)
 
 VASTCompileFlatBuffers(
-  TARGET libvast-fbs
-  EXPORT libVASTTargets
+  TARGET libvast-fbs EXPORT libVASTTargets
   SCHEMAS ${flatbuffers_schemas}
   INCLUDE_DIRECTORY "vast/fbs/")
 
@@ -137,7 +136,7 @@ string(
   "\n Snappy_INCLUDE_DIR"
   "\n Snappy_LIB"
   "\n ZSTD_LIB)")
-if (BUILD_SHARED_LIBS)
+if (NOT VAST_ENABLE_STATIC_EXECUTABLE)
   set(ARROW_LIBRARY arrow_shared)
 else ()
   set(ARROW_LIBRARY arrow_static)
@@ -380,6 +379,10 @@ dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
 target_link_libraries(libvast PRIVATE re2::re2)
+get_target_property(libvast_build_type libvast TYPE)
+if (NOT "${libvast_build_type}" STREQUAL "SHARED_LIBRARY")
+  string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
+endif ()
 dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against fast_float
@@ -405,6 +408,9 @@ else ()
   dependency_summary("fast_float" FastFloat::fast_float "Dependencies")
 endif ()
 target_link_libraries(libvast PRIVATE FastFloat::fast_float)
+if (NOT "${libvast_build_type}" STREQUAL "SHARED_LIBRARY")
+  string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(FastFloat 3.4.0 REQUIRED)")
+endif ()
 
 # Link against a backtrace library.
 option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
@@ -417,6 +423,10 @@ if (VAST_ENABLE_BACKTRACE)
   if (libunwind_FOUND)
     target_link_libraries(libvast PRIVATE unwind::unwind)
     dependency_summary("libunwind" unwind::unwind "Dependencies")
+    if (NOT "${libvast_build_type}" STREQUAL "SHARED_LIBRARY")
+      provide_find_module(libunwind)
+      string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(libunwind REQUIRED)")
+    endif ()
     set(VAST_ENABLE_LIBUNWIND ON)
   else ()
     find_package(Backtrace)
@@ -424,6 +434,9 @@ if (VAST_ENABLE_BACKTRACE)
       target_include_directories(libvast
                                  PRIVATE ${Backtrace_INCLUDE_DIRECTORIES})
       target_link_libraries(libvast PRIVATE ${Backtrace_LIBRARIES})
+      if (NOT "${libvast_build_type}" STREQUAL "SHARED_LIBRARY")
+        string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(Backtrace REQUIRED)")
+      endif ()
       if ("${Backtrace_HEADER}" STREQUAL "backtrace.h")
         dependency_summary("libbacktrace" "${Backtrace_INCLUDE_DIR}"
                            "Dependencies")
@@ -440,15 +453,9 @@ if (VAST_ENABLE_BACKTRACE)
   endif ()
 endif ()
 
-# Configure options-dependent code files.
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-  configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs_relocatable.cpp.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
-else ()
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
-endif ()
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs_relocatable.cpp.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/vast/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/vast/config.hpp")
@@ -532,19 +539,52 @@ install(
   FILES_MATCHING
   PATTERN "*.hpp")
 
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/libVASTConfigVersion.cmake"
+  VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}"
+  COMPATIBILITY ExactVersion)
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/VASTConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/libVASTConfig.cmake"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
+
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/VASTRegisterPlugin.cmake"
+               "${CMAKE_CURRENT_BINARY_DIR}/VASTRegisterPlugin.cmake" COPYONLY)
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/VASTMacDependencyPaths.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTMacDependencyPaths.cmake" COPYONLY)
+
+install(
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/VASTRegisterPlugin.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/VASTMacDependencyPaths.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/libVASTConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/libVASTConfigVersion.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
+  COMPONENT Development)
+
 add_subdirectory(test)
 
 function (_get_all_cmake_targets out_var current_dir)
-    get_property(targets DIRECTORY ${current_dir} PROPERTY BUILDSYSTEM_TARGETS)
-    get_property(subdirs DIRECTORY ${current_dir} PROPERTY SUBDIRECTORIES)
+  get_property(
+    targets
+    DIRECTORY ${current_dir}
+    PROPERTY BUILDSYSTEM_TARGETS)
+  get_property(
+    subdirs
+    DIRECTORY ${current_dir}
+    PROPERTY SUBDIRECTORIES)
 
-    foreach(subdir ${subdirs})
-        _get_all_cmake_targets(subdir_targets ${subdir})
-        list(APPEND targets ${subdir_targets})
-    endforeach()
+  foreach (subdir ${subdirs})
+    _get_all_cmake_targets(subdir_targets ${subdir})
+    list(APPEND targets ${subdir_targets})
+  endforeach ()
 
-    set(${out_var} ${targets} PARENT_SCOPE)
-endfunction()
+  set(${out_var}
+      ${targets}
+      PARENT_SCOPE)
+endfunction ()
 
 # Run at end of top-level CMakeLists
 _get_all_cmake_targets(all_targets ${CMAKE_CURRENT_LIST_DIR})

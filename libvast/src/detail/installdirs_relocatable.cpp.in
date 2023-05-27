@@ -16,7 +16,8 @@ namespace vast::detail {
 namespace {
 
 std::filesystem::path install_libdir() {
-  return detail::objectpath()->parent_path();
+  std::error_code ec;
+  return std::filesystem::read_symlink("/proc/self/exe", ec).parent_path().parent_path();
 }
 
 /// Returns the install prefix and a possible suffix for the current library
