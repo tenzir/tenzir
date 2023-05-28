@@ -34,7 +34,7 @@ using namespace vast::binary_byte_literals;
 /// The block size when reading from the child's stdin.
 constexpr auto block_size = 16_KiB;
 
-/// Wraps a child process for DRY.
+/// Wraps the logic for interacting with a child's stdin and stdout.
 class child {
 public:
   static auto make(std::string command) -> caf::expected<child> {
@@ -164,8 +164,9 @@ public:
       ctrl.abort(child.error());
       co_return;
     }
-    // Read from child in separate thread because co-routine based async I/O is
-    // not yet feasible. The thread hands over chunks.
+    // Read from child in separate thread because coroutine-based async I/O is
+    // not (yet) feasible. The thread writes the chunks into a queue such that
+    // to this coroutine can yield them.
     std::queue<chunk_ptr> chunks;
     std::mutex chunks_mutex;
     auto thread = std::thread([&child, &chunks, &chunks_mutex] {
@@ -195,7 +196,6 @@ public:
           continue;
         }
         // Pass operator input to the child's stdin.
-        VAST_DEBUG("writing {} bytes to child's stdin", chunk->size());
         if (auto err = child->write(as_bytes(*chunk))) {
           ctrl.abort(err);
           co_yield {};
