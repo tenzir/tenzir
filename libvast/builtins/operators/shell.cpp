@@ -31,6 +31,45 @@ public:
   explicit shell_operator(std::string command) : command_{std::move(command)} {
   }
 
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    using namespace binary_byte_literals;
+    namespace bp = boost::process;
+    bp::ipstream child_stdout;
+    bp::child child;
+    try {
+      auto exit_handler = [this](int exit, std::error_code ec) {
+        VAST_DEBUG("child \"{}\" exited with code {}: {}", command_, exit,
+                   ec.message());
+      };
+      child = bp::child{
+        command_,
+        bp::std_out > child_stdout,
+        bp::on_exit(exit_handler),
+      };
+    } catch (const bp::process_error& e) {
+      ctrl.abort(caf::make_error(ec::filesystem_error, e.what()));
+      co_return;
+    }
+    constexpr auto block_size = 16_KiB;
+    while (child.running() && not child_stdout.eof()) {
+      // Read from child in a blocking manner. This works because we're
+      // in our own thread.
+      VAST_DEBUG("trying to read {} bytes", block_size);
+      std::vector<char> buffer(block_size);
+      child_stdout.read(buffer.data(), block_size);
+      auto bytes_read = child_stdout.gcount();
+      VAST_DEBUG("read {} bytes", bytes_read);
+      if (bytes_read == 0) {
+        co_yield {};
+        continue;
+      }
+      buffer.resize(bytes_read);
+      auto chk = chunk::make(std::exchange(buffer, {}));
+      VAST_DEBUG("yielding chunk with {} bytes", bytes_read);
+      co_yield chk;
+    }
+  }
+
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     using namespace binary_byte_literals;
@@ -38,7 +77,6 @@ public:
     // Spawn child process and connect stdin and stdout.
     bp::ipstream child_stdout;
     bp::opstream child_stdin;
-    std::error_code ec;
     bp::child child;
     try {
       auto exit_handler = [this](int exit, std::error_code ec) {
@@ -56,7 +94,7 @@ public:
       co_return;
     }
     // Read from child in separate thread because co-routine based async I/O is
-    // not yet feasible. The thread hands over protected chunks
+    // not yet feasible. The thread hands over protected chunks.
     std::queue<chunk_ptr> chunks;
     std::mutex chunks_mutex;
     auto thread = std::thread([&child_stdout, &chunks, &chunks_mutex] {
@@ -83,29 +121,14 @@ public:
         VAST_DEBUG("sending EOF to child's stdin");
         child_stdin.close();
         child_stdin.pipe().close();
-        // VAST_DEBUG("awaiting child");
-        // child.wait(ec);
-        // if (ec)
-        //   VAST_DEBUG(ec);
-        // else
-        //   VAST_ERROR(ec);
         VAST_DEBUG("joining thread");
         thread.join();
       });
       // Loop over input chunks.
       for (auto&& chunk : input) {
-        if (not chunk || chunk->size() == 0) {
+        if (not chunk || chunk->size() == 0 || not child.running()) {
           co_yield {};
           continue;
-        }
-        // Stop if the child is no longer running.
-        if (not child.running(ec)) {
-          if (ec)
-            VAST_DEBUG(ec);
-          else
-            VAST_ERROR(ec);
-          co_yield {};
-          break;
         }
         // Pass operator input to the child's stdin.
         const auto* chunk_data = reinterpret_cast<const char*>(chunk->data());

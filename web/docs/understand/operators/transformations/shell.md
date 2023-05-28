@@ -17,6 +17,9 @@ input, it writes them to the child's standard input. In parallel, `shell`
 attempts to read from the child's stdout and copies new bytes into the operator
 output.
 
+You can also use [`shell` as source operator](../sources/shell.md) if you want
+to ignore stdin.
+
 ### `<command>`
 
 The command to execute and hook into the pipeline processing.
