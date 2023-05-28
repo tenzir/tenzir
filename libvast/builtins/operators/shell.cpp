@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/as_bytes.hpp>
 #include <vast/chunk.hpp>
 #include <vast/concept/parseable/string/quoted_string.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
@@ -23,8 +24,85 @@
 #include <queue>
 #include <thread>
 
+namespace bp = boost::process;
+
 namespace vast::plugins::shell {
 namespace {
+
+using namespace vast::binary_byte_literals;
+
+/// The block size when reading from the child's stdin.
+constexpr auto block_size = 16_KiB;
+
+/// Wraps a child process for DRY.
+class child {
+public:
+  static auto make(std::string command) -> caf::expected<child> {
+    auto result = child{std::move(command)};
+    try {
+      auto exit_handler = [](int exit, std::error_code ec) {
+        VAST_DEBUG("child exited with code {}: {}", exit, ec.message());
+      };
+      result.child_ = bp::child{
+        result.command_,
+        bp::std_out > result.stdout_,
+        bp::std_in < result.stdin_,
+        bp::on_exit(exit_handler),
+      };
+    } catch (const bp::process_error& e) {
+      return caf::make_error(ec::filesystem_error, e.what());
+    }
+    return result;
+  }
+
+  auto reading() -> bool {
+    return child_.running() && not stdout_.eof();
+  }
+
+  auto writing() -> bool {
+    return child_.running() && not stdin_.eof();
+  }
+
+  auto read(std::span<std::byte> buffer) -> caf::expected<size_t> {
+    VAST_ASSERT(!buffer.empty());
+    VAST_DEBUG("trying to read {} bytes", buffer.size());
+    auto* data = reinterpret_cast<char*>(buffer.data());
+    auto size = detail::narrow_cast<std::streamsize>(buffer.size());
+    stdout_.read(data, size);
+    auto bytes_read = stdout_.gcount();
+    VAST_DEBUG("read {} bytes", bytes_read);
+    return detail::narrow_cast<size_t>(bytes_read);
+  }
+
+  auto write(std::span<const std::byte> buffer) -> caf::error {
+    VAST_ASSERT(!buffer.empty());
+    VAST_DEBUG("writing {} bytes to child's stdin", buffer.size());
+    const auto* data = reinterpret_cast<const char*>(buffer.data());
+    auto size = detail::narrow_cast<std::streamsize>(buffer.size());
+    if (not stdin_.write(data, size))
+      return caf::make_error(ec::unspecified,
+                             "failed to write into child's stdin");
+    return caf::none;
+  }
+
+  void close_stdin() {
+    // See https://github.com/boostorg/process/issues/125 for why we
+    // seemingly double-close the pipe.
+    VAST_DEBUG("sending EOF to child's stdin");
+    stdin_.close();
+    stdin_.pipe().close();
+  }
+
+private:
+  explicit child(std::string command) : command_{std::move(command)} {
+    VAST_ASSERT(!command_.empty());
+  }
+
+  std::string command_;
+  bp::child child_;
+  bp::ipstream stdout_;
+  bp::opstream stdin_;
+};
 
 class shell_operator final : public crtp_operator<shell_operator> {
 public:
@@ -32,112 +110,67 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    using namespace binary_byte_literals;
-    namespace bp = boost::process;
-    bp::ipstream child_stdout;
-    bp::child child;
-    try {
-      auto exit_handler = [this](int exit, std::error_code ec) {
-        VAST_DEBUG("child \"{}\" exited with code {}: {}", command_, exit,
-                   ec.message());
-      };
-      child = bp::child{
-        command_,
-        bp::std_out > child_stdout,
-        bp::on_exit(exit_handler),
-      };
-    } catch (const bp::process_error& e) {
-      ctrl.abort(caf::make_error(ec::filesystem_error, e.what()));
+    auto child = child::make(command_);
+    if (!child) {
+      ctrl.abort(child.error());
       co_return;
     }
-    constexpr auto block_size = 16_KiB;
-    while (child.running() && not child_stdout.eof()) {
-      // Read from child in a blocking manner. This works because we're
-      // in our own thread.
-      VAST_DEBUG("trying to read {} bytes", block_size);
+    while (child->reading()) {
       std::vector<char> buffer(block_size);
-      child_stdout.read(buffer.data(), block_size);
-      auto bytes_read = child_stdout.gcount();
-      VAST_DEBUG("read {} bytes", bytes_read);
-      if (bytes_read == 0) {
-        co_yield {};
-        continue;
+      if (auto bytes_read = child->read(as_writeable_bytes(buffer))) {
+        if (bytes_read == 0) {
+          co_yield {};
+          continue;
+        }
+        buffer.resize(*bytes_read);
+        auto chk = chunk::make(std::exchange(buffer, {}));
+        VAST_DEBUG("yielding chunk with {} bytes", chk->size());
+        co_yield chk;
       }
-      buffer.resize(bytes_read);
-      auto chk = chunk::make(std::exchange(buffer, {}));
-      VAST_DEBUG("yielding chunk with {} bytes", bytes_read);
-      co_yield chk;
     }
   }
 
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    using namespace binary_byte_literals;
-    namespace bp = boost::process;
-    // Spawn child process and connect stdin and stdout.
-    bp::ipstream child_stdout;
-    bp::opstream child_stdin;
-    bp::child child;
-    try {
-      auto exit_handler = [this](int exit, std::error_code ec) {
-        VAST_DEBUG("child \"{}\" exited with code {}: {}", command_, exit,
-                   ec.message());
-      };
-      child = bp::child{
-        command_,
-        bp::std_out > child_stdout,
-        bp::std_in < child_stdin,
-        bp::on_exit(exit_handler),
-      };
-    } catch (const bp::process_error& e) {
-      ctrl.abort(caf::make_error(ec::filesystem_error, e.what()));
+    auto child = child::make(command_);
+    if (!child) {
+      ctrl.abort(child.error());
       co_return;
     }
     // Read from child in separate thread because co-routine based async I/O is
-    // not yet feasible. The thread hands over protected chunks.
+    // not yet feasible. The thread hands over chunks.
     std::queue<chunk_ptr> chunks;
     std::mutex chunks_mutex;
-    auto thread = std::thread([&child_stdout, &chunks, &chunks_mutex] {
-      constexpr auto block_size = 16_KiB;
-      while (not child_stdout.eof()) {
-        VAST_DEBUG("trying to read {} bytes", block_size);
+    auto thread = std::thread([&child, &chunks, &chunks_mutex] {
+      while (child->reading()) {
         std::vector<char> buffer(block_size);
-        child_stdout.read(buffer.data(), block_size);
-        auto bytes_read = child_stdout.gcount();
-        VAST_DEBUG("read {} bytes", bytes_read);
-        if (bytes_read > 0) {
-          buffer.resize(bytes_read);
-          auto chk = chunk::make(std::exchange(buffer, {}));
-          std::lock_guard lock{chunks_mutex};
-          chunks.push(std::move(chk));
+        if (auto bytes_read = child->read(as_writeable_bytes(buffer))) {
+          if (*bytes_read > 0) {
+            buffer.resize(*bytes_read);
+            auto chk = chunk::make(std::exchange(buffer, {}));
+            std::lock_guard lock{chunks_mutex};
+            chunks.push(std::move(chk));
+          }
         }
       }
     });
     {
       // Coroutines require RAII-style exit handling.
       auto at_exit = caf::detail::make_scope_guard([&] {
-        // See https://github.com/boostorg/process/issues/125 for why we
-        // seemingly double-close the pipe.
-        VAST_DEBUG("sending EOF to child's stdin");
-        child_stdin.close();
-        child_stdin.pipe().close();
+        child->close_stdin();
         VAST_DEBUG("joining thread");
         thread.join();
       });
       // Loop over input chunks.
       for (auto&& chunk : input) {
-        if (not chunk || chunk->size() == 0 || not child.running()) {
+        if (not chunk || chunk->size() == 0 || not child->writing()) {
           co_yield {};
           continue;
         }
         // Pass operator input to the child's stdin.
-        const auto* chunk_data = reinterpret_cast<const char*>(chunk->data());
-        auto chunk_size = detail::narrow_cast<std::streamsize>(chunk->size());
-        VAST_DEBUG("writing {} bytes to child's stdin", chunk_size);
-        if (not child_stdin.write(chunk_data, chunk_size)) {
-          ctrl.abort(
-            caf::make_error(ec::unspecified,
-                            fmt::format("failed to write into child's stdin")));
+        VAST_DEBUG("writing {} bytes to child's stdin", chunk->size());
+        if (auto err = child->write(as_bytes(*chunk))) {
+          ctrl.abort(err);
           co_yield {};
           break;
         }
