@@ -318,8 +318,9 @@ target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
-target_link_libraries(libvast PRIVATE Boost::headers Boost::filesystem)
-target_link_libraries(libvast_builtins PRIVATE Boost::headers Boost::filesystem)
+target_link_libraries(libvast PUBLIC Boost::headers Boost::filesystem)
+string(APPEND VAST_FIND_DEPENDENCY_LIST
+       "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem)")
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
