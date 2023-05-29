@@ -679,6 +679,11 @@ tests:
     steps:
       - command: exec 'from file @./data/suricata/eve.json read suricata | write json to stdout'
 
+  Read from zeek json file:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from file @./data/zeek/zeek.json read zeek | write json to stdout'
+
   Schema ID Extractor:
     tags: [pipelines, cef]
     steps:
