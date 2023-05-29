@@ -73,9 +73,10 @@ vast exec 'read csv | where field > 42 | jsonize' < file.csv
 This mechanism allows for wrapping also more complex invocation of tools.
 [Zeek](https://zeek.org), for example, converts packets into structured network
 logs. VAST already has support for consuming Zeek output with the formats
-[`zeek-json`](../formats/zeek-json.md) and [`zeek-tsv`](../formats/zeek-tsv.md).
-But that requires attaching yourself downstream of a Zeek instance. Sometimes
-you want instant Zeek analytics given a PCAP trace.
+[`zeek-json`](../../formats/zeek-json.md) and
+[`zeek-tsv`](../../formats/zeek-tsv.md). But that requires attaching yourself
+downstream of a Zeek instance. Sometimes you want instant Zeek analytics given a
+PCAP trace.
 
 With the `shell` operator, you can script a Zeek invocation and readily
 post-process the output with a rich set of operators, to filter, reshape,
