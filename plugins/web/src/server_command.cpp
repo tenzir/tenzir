@@ -37,7 +37,6 @@
 #include <restinio/request_handler.hpp>
 #include <restinio/tls.hpp>
 #include <restinio/websocket/websocket.hpp>
-#include <simdjson/error.h>
 
 // Needed to forward incoming requests to the request_dispatcher
 
