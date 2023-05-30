@@ -9,10 +9,14 @@
 #include "vast/pipeline.hpp"
 
 #include "vast/collect.hpp"
+#include "vast/detail/stack_vector.hpp"
+#include "vast/lazy.hpp"
 #include "vast/modules.hpp"
 #include "vast/plugin.hpp"
 
 namespace vast {
+
+namespace {
 
 class local_control_plane final : public operator_control_plane {
 public:
@@ -21,11 +25,15 @@ public:
   }
 
   auto self() noexcept -> system::execution_node_actor::base& override {
-    die("not implemented");
+    // TODO: Can we return an error from here instead?
+    die("operator_control_plane::self() must not be called for operators with "
+        "location::anywhere()");
   }
 
   auto node() noexcept -> system::node_actor override {
-    die("not implemented");
+    // TODO: Can we return an error from here instead?
+    die("operator_control_plane::node() must not be called for operators with "
+        "location::anywhere()");
   }
 
   auto abort(caf::error error) noexcept -> void override {
@@ -53,20 +61,60 @@ private:
   caf::error error_{};
 };
 
-pipeline::pipeline(std::vector<operator_ptr> operators) {
-  operators_.reserve(operators.size());
-  for (auto&& op : operators) {
-    if (auto sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
-      auto sub_ops = std::move(*sub_pipeline).unwrap();
-      operators_.insert(operators_.end(), std::move_iterator{sub_ops.begin()},
-                        std::move_iterator{sub_ops.end()});
-    } else {
-      operators_.push_back(std::move(op));
+auto make_local_executor_impl(pipeline self) -> generator<caf::expected<void>> {
+  for (const auto& [_, op] : self.unwrap()) {
+    if (op->location() != operator_location::anywhere) {
+      co_yield caf::make_error(ec::logic_error,
+                               fmt::format("operator '{}' must be run locally "
+                                           "or remotely, which is not allowed "
+                                           "in this context",
+                                           *op));
+      co_return;
     }
+    if (op->detached()) {
+      co_yield caf::make_error(
+        ec::logic_error, fmt::format("operator '{}' must be run detached, "
+                                     "which is not allowed in this context",
+                                     *op));
+      co_return;
+    }
+  }
+  local_control_plane ctrl;
+  auto dynamic_gen = self.instantiate(std::monostate{}, ctrl);
+  if (not dynamic_gen) {
+    co_yield std::move(dynamic_gen.error());
+    co_return;
+  }
+  auto* gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
+  if (not gen) {
+    co_yield caf::make_error(ec::logic_error,
+                             "right side of pipeline is not closed");
+    co_return;
+  }
+  for (auto monostate : *gen) {
+    if (auto error = ctrl.get_error()) {
+      co_yield std::move(error);
+      co_return;
+    }
+    (void)monostate;
+    co_yield {};
+  }
+  if (auto error = ctrl.get_error()) {
+    co_yield std::move(error);
   }
 }
 
-auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
+} // namespace
+
+pipeline::pipeline(std::vector<operator_ptr> operators,
+                   std::optional<std::string> definition)
+  : definition_{std::move(definition)
+                  .value_or(
+                    VAST_LAZY(fmt::to_string(fmt::join(operators, " | "))))},
+    operators_{std::move(operators)} {
+}
+
+auto pipeline::parse(std::string definition) -> caf::expected<pipeline> {
   // Get all query languages, but make sure that VAST is at the front.
   // TODO: let the user choose exactly one language instead.
   auto languages = collect(plugins::get<language_plugin>());
@@ -77,7 +125,7 @@ auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
   }
   auto first_error = caf::error{};
   for (const auto& language : languages) {
-    if (auto parsed = language->parse_query(repr))
+    if (auto parsed = language->parse_query(definition))
       return parsed;
     else {
       VAST_DEBUG("failed to parse query as {} language: {}", language->name(),
@@ -91,40 +139,54 @@ auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
                          fmt::format("invalid query: {}", first_error));
 }
 
-auto pipeline::parse_as_operator(std::string_view repr)
+auto pipeline::parse_as_operator(std::string definition)
   -> caf::expected<operator_ptr> {
-  auto result = parse(repr);
+  auto result = parse(std::move(definition));
   if (not result)
     return std::move(result.error());
+  if (result->operators_.size() == 1) {
+    return std::move(result->operators_.front());
+  }
   return std::make_unique<pipeline>(std::move(*result));
 }
 
-void pipeline::append(operator_ptr op) {
-  if (auto* sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
-    auto sub_ops = std::move(*sub_pipeline).unwrap();
-    operators_.insert(operators_.end(), std::move_iterator{sub_ops.begin()},
-                      std::move_iterator{sub_ops.end()});
-  } else {
-    operators_.push_back(std::move(op));
-  }
+void pipeline::push_back(operator_ptr op) {
+  definition_ = fmt::format("{} | {}", definition_, op);
+  operators_.push_back(std::move(op));
 }
 
-void pipeline::prepend(operator_ptr op) {
-  if (auto* sub_pipeline = dynamic_cast<pipeline*>(&*op)) {
-    auto sub_ops = std::move(*sub_pipeline).unwrap();
-    operators_.insert(operators_.begin(), std::move_iterator{sub_ops.begin()},
-                      std::move_iterator{sub_ops.end()});
-  } else {
-    operators_.insert(operators_.begin(), std::move(op));
-  }
+void pipeline::push_front(operator_ptr op) {
+  definition_ = fmt::format("{} | {}", op, definition_);
+  operators_.insert(operators_.begin(), std::move(op));
 }
 
-auto pipeline::unwrap() && -> std::vector<operator_ptr> {
-  return std::move(operators_);
+auto pipeline::unwrap()
+  const& -> generator<std::pair<offset, const operator_base*>> {
+  auto index = offset{0};
+  auto history = detail::stack_vector<const pipeline*, 64>{this};
+  while (not index.empty()) {
+    VAST_ASSERT(history.size() == index.size());
+    if (index.back() == history.back()->operators_.size()) {
+      index.pop_back();
+      index.back() += 1;
+      history.pop_back();
+      continue;
+    }
+    const auto& current = history.back()->operators_[index.back()];
+    if (const auto* nested_pipeline
+        = dynamic_cast<const pipeline*>(current.get())) {
+      index.push_back(0);
+      history.push_back(nested_pipeline);
+      continue;
+    }
+    co_yield {index, current.get()};
+    index.back() += 1;
+  }
 }
 
 auto pipeline::copy() const -> operator_ptr {
   auto copied = std::make_unique<pipeline>();
+  copied->definition_ = definition_;
   copied->operators_.reserve(operators_.size());
   for (const auto& op : operators_) {
     copied->operators_.push_back(op->copy());
@@ -133,10 +195,7 @@ auto pipeline::copy() const -> operator_ptr {
 }
 
 auto pipeline::to_string() const -> std::string {
-  if (operators_.empty()) {
-    return "pass";
-  }
-  return fmt::to_string(fmt::join(operators_, " | "));
+  return definition_.empty() ? "pass" : definition_;
 }
 
 auto pipeline::instantiate(operator_input input,
@@ -187,42 +246,40 @@ auto pipeline::predicate_pushdown(const expression& expr) const
   if (!result) {
     return {};
   }
-  return std::pair{std::move(result->first),
-                   std::make_unique<pipeline>(std::move(result->second))};
+  return std::pair{
+    std::move(result->first),
+    std::make_unique<pipeline>(std::move(result->second)),
+  };
 }
 
 auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
   -> std::optional<std::pair<expression, pipeline>> {
-  auto new_rev = std::vector<operator_ptr>{};
-
+  auto new_operators_ = std::vector<operator_ptr>{};
   auto current = expr;
   for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
     if (auto result = (*it)->predicate_pushdown(current)) {
       auto& [new_expr, replacement] = *result;
       if (replacement) {
-        new_rev.push_back(std::move(replacement));
+        new_operators_.push_back(std::move(replacement));
       }
       current = new_expr;
     } else {
       if (current != trivially_true_expression()) {
-        // TODO: We just want to create a `where current` operator. However, we
-        // currently only have the interface for parsing this from a string.
-        auto where_plugin = plugins::find<operator_plugin>("where");
-        auto string = fmt::format(" {}", current);
-        auto [rest, op] = where_plugin->make_operator(string);
-        VAST_ASSERT(rest.empty());
-        VAST_ASSERT(op);
-        new_rev.push_back(std::move(*op));
+        auto where = parse_as_operator(fmt::format("where {}", current));
+        VAST_ASSERT(where);
+        new_operators_.push_back(std::move(*where));
         current = trivially_true_expression();
       }
       auto copy = (*it)->copy();
       VAST_ASSERT(copy);
-      new_rev.push_back(std::move(copy));
+      new_operators_.push_back(std::move(copy));
     }
   }
-
-  std::reverse(new_rev.begin(), new_rev.end());
-  return std::pair{std::move(current), pipeline{std::move(new_rev)}};
+  std::reverse(new_operators_.begin(), new_operators_.end());
+  return std::pair{
+    std::move(current),
+    pipeline{std::move(new_operators_), definition_},
+  };
 }
 
 auto operator_base::infer_type_impl(operator_type input) const
@@ -258,11 +315,11 @@ auto pipeline::infer_type_impl(operator_type input) const
   -> caf::expected<operator_type> {
   auto current = input;
   for (const auto& op : operators_) {
-    auto first = &op == &operators_.front();
-    if (!first && current.is<void>()) {
+    const auto first = &op == &operators_.front();
+    if (not first && current.is<void>()) {
       return caf::make_error(
         ec::type_clash,
-        fmt::format("pipeline continues with {} after sink", op->to_string()));
+        fmt::format("pipeline continues with '{}' after sink", op));
     }
     auto next = op->infer_type(current);
     if (!next) {
@@ -273,33 +330,31 @@ auto pipeline::infer_type_impl(operator_type input) const
   return current;
 }
 
-auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
-  local_control_plane ctrl;
-  auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
-  if (!dynamic_gen) {
-    co_yield std::move(dynamic_gen.error());
-    co_return;
-  }
-  auto gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
-  if (!gen) {
-    co_yield caf::make_error(ec::logic_error,
-                             "right side of pipeline is not closed");
-    co_return;
-  }
-  for (auto monostate : *gen) {
-    if (auto error = ctrl.get_error()) {
-      co_yield std::move(error);
-      co_return;
-    }
-    (void)monostate;
-    co_yield {};
-  }
-  if (auto error = ctrl.get_error()) {
-    co_yield std::move(error);
-  }
+auto pipeline::make_local_executor() && -> generator<caf::expected<void>> {
+  return make_local_executor_impl(std::move(*this));
 }
 
-pipeline::pipeline(pipeline const& other) {
+auto pipeline::make_local_executor() const& -> generator<caf::expected<void>> {
+  return make_local_executor_impl(*this);
+}
+
+auto pipeline::optimize() -> caf::expected<void> {
+  VAST_ASSERT(is_closed());
+  auto result = predicate_pushdown_pipeline(trivially_true_expression());
+  if (not result) {
+    return caf::make_error(ec::logic_error, "failed to optimize pipeline");
+  }
+  if (result->first != trivially_true_expression()) {
+    return caf::make_error(
+      ec::logic_error, fmt::format("failed to optimize pipeline: first "
+                                   "operator pushed unexpected expression {}",
+                                   result->first));
+  }
+  *this = std::move(result->second);
+  return {};
+}
+
+pipeline::pipeline(pipeline const& other) : definition_{other.definition_} {
   operators_.reserve(other.operators_.size());
   for (const auto& op : other.operators_) {
     operators_.push_back(op->copy());

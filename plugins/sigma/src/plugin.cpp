@@ -27,7 +27,7 @@ class plugin final : public virtual language_plugin {
     return "sigma";
   }
 
-  auto parse_query(std::string_view query) const
+  auto parse_query(std::string query) const
     -> caf::expected<pipeline> override {
     if (auto yaml = from_yaml(query)) {
       auto parsed = parse_rule(*yaml);

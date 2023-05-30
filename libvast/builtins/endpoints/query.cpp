@@ -454,7 +454,7 @@ struct request_multiplexer_state {
 
 query_manager_actor::behavior_type
 query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
-              system::index_actor index, pipeline open_pipeline, bool expand,
+              system::index_actor index, pipeline pipe, bool expand,
               duration ttl, query_format_options format_opts) {
   VAST_VERBOSE("{} starts with a TTL of {}", *self, data{ttl});
   self->state.self = self;
@@ -462,15 +462,13 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   self->state.expand = expand;
   self->state.ttl = ttl;
   self->state.format_opts = format_opts;
-  auto ops = std::move(open_pipeline).unwrap();
-  ops.insert(ops.begin(), std::make_unique<query_source>(self));
-  ops.push_back(std::make_unique<query_sink>(self));
-  auto result = pipeline{std::move(ops)};
-  VAST_DEBUG("final query pipeline: {}", result.to_string());
+  pipe.push_front(std::make_unique<query_source>(self));
+  pipe.push_back(std::make_unique<query_sink>(self));
+  VAST_DEBUG("final query pipeline: {}", pipe.to_string());
   // We already checked that the original pipeline was `events -> events`.
   // Thus, we know that we now have a valid `void -> void` pipeline.
-  VAST_ASSERT(result.is_closed());
-  self->state.executor = make_local_executor(std::move(result));
+  VAST_ASSERT(pipe.is_closed());
+  self->state.executor = std::move(pipe).make_local_executor();
   self->state.executor_it = self->state.executor.begin();
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     while (!self->state.nexts.empty()) {

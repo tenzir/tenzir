@@ -679,24 +679,22 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     },
     [self](atom::spawn, pipeline& pipeline)
       -> caf::result<std::vector<std::pair<execution_node_actor, std::string>>> {
-      auto ops = std::move(pipeline).unwrap();
       auto result = std::vector<std::pair<execution_node_actor, std::string>>{};
-      result.reserve(ops.size());
-      for (auto&& op : ops) {
+      for (auto&& [_, op] : pipeline.unwrap()) {
         if (op->location() == operator_location::local) {
           return caf::make_error(ec::logic_error,
                                  fmt::format("{} cannot spawn pipeline with "
                                              "local operator '{}'",
-                                             *self, op));
+                                             *self, *op));
         }
         auto description = op->to_string();
         if (op->detached()) {
           result.emplace_back(
-            self->spawn<caf::detached>(execution_node, std::move(op),
+            self->spawn<caf::detached>(execution_node, op->copy(),
                                        caf::actor_cast<node_actor>(self)),
             std::move(description));
         } else {
-          result.emplace_back(self->spawn(execution_node, std::move(op),
+          result.emplace_back(self->spawn(execution_node, op->copy(),
                                           caf::actor_cast<node_actor>(self)),
                               std::move(description));
         }

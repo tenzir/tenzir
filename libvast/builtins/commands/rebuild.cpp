@@ -460,7 +460,8 @@ struct rebuilder_state {
               });
     const auto num_partitions = current_run_partitions.size();
     self
-      ->request(index, caf::infinite, atom::apply_v, pipeline{std::move(ops)},
+      ->request(index, caf::infinite, atom::apply_v,
+                pipeline{std::move(ops), "<rebuild>"},
                 std::move(current_run_partitions),
                 system::keep_original_partition::no)
       .then(

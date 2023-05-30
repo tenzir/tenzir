@@ -352,16 +352,16 @@ auto partition_transformer(
       if (!open) {
         return open.error();
       }
-      pipe.prepend(
+      pipe.push_front(
         std::make_unique<fixed_source>(std::move(self->state.input)));
       auto output = std::make_shared<std::vector<table_slice>>();
-      pipe.append(std::make_unique<collecting_sink>(output));
+      pipe.push_back(std::make_unique<collecting_sink>(output));
       auto closed = pipe.check_type<void, void>();
       if (!closed) {
         return caf::make_error(ec::logic_error, "internal error: {}",
                                closed.error());
       }
-      auto executor = make_local_executor(std::move(pipe));
+      auto executor = std::move(pipe).make_local_executor();
       for (auto&& result : executor) {
         if (!result) {
           VAST_ERROR("{} failed pipeline execution: {}", *self, result.error());

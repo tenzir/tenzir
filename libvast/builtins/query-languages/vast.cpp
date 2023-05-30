@@ -16,7 +16,7 @@ namespace vast::plugins::vast {
 
 namespace {
 
-auto parse(std::string_view repr, const record& config,
+auto parse(std::string definition, const record& config,
            std::unordered_set<std::string>& recursed)
   -> caf::expected<pipeline> {
   auto ops = std::vector<operator_ptr>{};
@@ -25,20 +25,21 @@ auto parse(std::string_view repr, const record& config,
     parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
   const auto operator_name_parser = optional_ws_or_comment >> plugin_name;
   // TODO: allow more empty string
-  while (!repr.empty()) {
+  auto remainder = std::string_view{definition};
+  while (!remainder.empty()) {
     // 1. parse a single word as operator plugin name
-    const auto* f = repr.begin();
-    const auto* const l = repr.end();
+    const auto* f = remainder.begin();
+    const auto* const l = remainder.end();
     auto operator_name = std::string{};
     if (!operator_name_parser(f, l, operator_name)) {
       return caf::make_error(ec::syntax_error,
                              fmt::format("failed to parse pipeline '{}': "
                                          "operator name is invalid",
-                                         repr));
+                                         remainder));
     }
     // 2a. find plugin using operator name
     const auto* plugin = plugins::find<operator_plugin>(operator_name);
-    // 2b. find alias definition in `vast.operators` (and `vast.operators`)
+    // 2b. find alias remainder in `vast.operators` (and `vast.operators`)
     auto new_config_prefix = "vast.operators";
     auto old_config_prefix = "vast.pipelines";
     auto definition = static_cast<const std::string*>(nullptr);
@@ -75,15 +76,15 @@ auto parse(std::string_view repr, const record& config,
       if (!op)
         return caf::make_error(ec::unspecified,
                                fmt::format("failed to parse pipeline '{}': {}",
-                                           repr, op.error()));
+                                           remainder, op.error()));
       ops.push_back(std::move(*op));
-      repr = remaining_repr;
+      remainder = remaining_repr;
     } else if (definition) {
-      // 3b. parse the definition of the operator recursively
+      // 3b. parse the remainder of the operator recursively
       auto [_, inserted] = recursed.emplace(operator_name);
       if (!inserted)
         return caf::make_error(ec::invalid_configuration,
-                               fmt::format("the definition of "
+                               fmt::format("the remainder of "
                                            "`{}` is recursive",
                                            used_config_key));
       auto result = parse(*definition, config, recursed);
@@ -95,18 +96,19 @@ auto parse(std::string_view repr, const record& config,
       ops.push_back(std::make_unique<pipeline>(std::move(*result)));
       auto rest = optional_ws_or_comment >> end_of_pipeline_operator;
       if (!rest(f, l, unused))
-        return caf::make_error(
-          ec::unspecified,
-          fmt::format("expected end of operator while parsing '{}'", repr));
-      repr = std::string_view{f, l};
+        return caf::make_error(ec::unspecified,
+                               fmt::format("expected end of operator while "
+                                           "parsing '{}'",
+                                           remainder));
+      remainder = std::string_view{f, l};
     } else {
       return caf::make_error(ec::syntax_error,
                              fmt::format("failed to parse pipeline '{}': "
                                          "operator '{}' does not exist",
-                                         repr, operator_name));
+                                         remainder, operator_name));
     }
   }
-  return pipeline{std::move(ops)};
+  return pipeline{std::move(ops), std::move(definition)};
 }
 
 class plugin final : public virtual language_plugin {
@@ -120,10 +122,10 @@ class plugin final : public virtual language_plugin {
     return "VAST";
   }
 
-  auto parse_query(std::string_view query) const
+  auto parse_query(std::string query) const
     -> caf::expected<pipeline> override {
     auto recursed = std::unordered_set<std::string>{};
-    return parse(query, config_, recursed);
+    return parse(std::move(query), config_, recursed);
   }
 
 private:

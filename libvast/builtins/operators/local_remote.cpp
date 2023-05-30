@@ -65,6 +65,10 @@ public:
     return location_;
   }
 
+  auto requires_node() const -> bool override {
+    return op_->requires_node();
+  }
+
   auto detached() const -> bool override {
     return op_->detached();
   }
@@ -132,16 +136,15 @@ public:
       return result;
     }
     if (auto* pipe = dynamic_cast<class pipeline*>(result.second->get())) {
-      auto ops = std::move(*pipe).unwrap();
-      for (auto& op : ops) {
-        op = std::make_unique<local_remote_operator>(std::move(op),
-                                                     std::string{Name.str()},
-                                                     Location,
-                                                     allow_unsafe_pipelines_);
+      auto ops = std::vector<operator_ptr>{};
+      for (auto&& [_, op] : pipe->unwrap()) {
+        ops.push_back(std::make_unique<local_remote_operator>(
+          op->copy(), std::string{Name.str()}, Location,
+          allow_unsafe_pipelines_));
       }
       return {
         result.first,
-        std::make_unique<class pipeline>(std::move(ops)),
+        std::make_unique<class pipeline>(std::move(ops), std::nullopt),
       };
     }
     return {

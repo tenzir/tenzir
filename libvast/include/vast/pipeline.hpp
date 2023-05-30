@@ -104,13 +104,11 @@ inline auto operator_type_name(const operator_output& x) -> std::string_view {
 /// empty conjunction (yet). It can also be used in a comparison to detect that
 /// an expression is trivially-true.
 inline auto trivially_true_expression() -> const expression& {
-  static auto expr = expression{
-    predicate{
-      meta_extractor{meta_extractor::kind::type},
-      relational_operator::not_equal,
-      data{std::string{"this expression matches everything"}},
-    },
-  };
+  static auto expr = expression{predicate{
+    meta_extractor{meta_extractor::kind::type},
+    relational_operator::not_equal,
+    data{""},
+  }};
   return expr;
 }
 
@@ -172,6 +170,11 @@ public:
     return operator_location::anywhere;
   }
 
+  /// Returns whether this operator requires access to the node.
+  virtual auto requires_node() const -> bool {
+    return location() == operator_location::remote;
+  }
+
   /// Returns whether the operator should be spawned in its own thread.
   virtual auto detached() const -> bool {
     return false;
@@ -215,43 +218,65 @@ protected:
     -> caf::expected<operator_type>;
 };
 
-/// A pipeline is a sequence of pipeline operators.
+/// A pipeline is a sequence of immutable operators with matching inputn and
+/// output element types.
 class pipeline final : public operator_base {
 public:
-  /// Constructs an empty pipeline.
+  /// Constructors, assignment operators, and a destructor.
   pipeline() = default;
-
+  ~pipeline() noexcept override = default;
   pipeline(pipeline const& other);
   pipeline(pipeline&& other) noexcept = default;
   auto operator=(pipeline const& other) -> pipeline&;
   auto operator=(pipeline&& other) noexcept -> pipeline& = default;
 
-  /// Constructs a pipeline from a sequence of operators. Flattens nested
-  /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
-  explicit pipeline(std::vector<operator_ptr> operators);
+  /// Constructs a pipeline from a sequence of operators, which themselves may
+  /// be pipelines. If the definition is omitted, it is inferred from the
+  /// list of operators.
+  /// TODO: Make definition optional.
+  explicit pipeline(std::vector<operator_ptr> operators,
+                    std::optional<std::string> definition);
 
   /// Parses a pipeline from its definition.
   ///
   /// NOTE: If `location() != operator_location::local`, then
   /// `pipeline::parse(to_string(), {})` must succeed and be semantically
   /// equivalent to `*this`.
-  static auto parse(std::string_view repr) -> caf::expected<pipeline>;
+  static auto parse(std::string definition) -> caf::expected<pipeline>;
 
   /// @copydoc parse
-  static auto parse_as_operator(std::string_view repr)
+  static auto parse_as_operator(std::string definition)
     -> caf::expected<operator_ptr>;
 
   /// Adds an operator at the end of this pipeline.
-  void append(operator_ptr op);
+  void push_back(operator_ptr op);
 
   /// Adds an operator at the start of this pipeline.
-  void prepend(operator_ptr op);
+  void push_front(operator_ptr op);
 
   /// Returns the sequence of operators that this pipeline was built from.
-  auto unwrap() && -> std::vector<operator_ptr>;
+  auto unwrap() const& -> generator<std::pair<offset, const operator_base*>>;
+  auto unwrap() && -> generator<std::pair<offset, const operator_base*>>
+    = delete;
 
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;
+
+  /// Returns a generator that, when advanced, incrementally executes a closed
+  /// pipeline on the current thread.
+  ///
+  /// NOTE: The local executor requires that none of the operators in the
+  /// pipeline are detached, or have a location other than anywhere. This is an
+  /// intentional limitation as it does not and cannot handle these properties
+  /// of operators correctly, because it runs all operators in the same thread.
+  /// Use with caution, and prefer spawning the actor-based pipeline executor
+  /// instead.
+  auto make_local_executor() && -> generator<caf::expected<void>>;
+  auto make_local_executor() const& -> generator<caf::expected<void>>;
+
+  /// Optimizes this pipeline.
+  /// @pre is_closed()
+  auto optimize() -> caf::expected<void>;
 
   /// Same as `predicate_pushdown`, but returns a `pipeline` object directly.
   auto predicate_pushdown_pipeline(expression const& expr) const
@@ -259,6 +284,13 @@ public:
 
   auto location() const -> operator_location override {
     die("pipeline::location() must not be called");
+  }
+
+  auto requires_node() const -> bool override {
+    return std::any_of(operators_.begin(), operators_.end(),
+                       [](const auto& op) {
+                         return op->requires_node();
+                       });
   }
 
   auto detached() const -> bool override {
@@ -282,28 +314,30 @@ public:
   template <class Inspector>
   friend auto inspect(Inspector& f, pipeline& x) -> bool {
     if constexpr (Inspector::is_loading) {
-      auto repr = std::string{};
+      auto definition = std::string{};
       if (not f.object(x)
                 .pretty_name("vast.pipeline")
-                .fields(f.field("repr", repr)))
+                .fields(f.field("definition", definition)))
         return false;
-      auto result = pipeline::parse(repr);
+      auto result = pipeline::parse(definition);
       if (not result) {
-        VAST_WARN("failed to parse pipeline '{}': {}", repr, result.error());
+        VAST_WARN("failed to parse pipeline '{}': {}", definition,
+                  result.error());
         return false;
       }
       x = std::move(*result);
       return true;
     } else {
-      auto repr = x.to_string();
+      auto definition = x.to_string();
       return f.object(x)
         .pretty_name("vast.pipeline")
-        .fields(f.field("repr", repr));
+        .fields(f.field("definition", definition));
     }
   }
 
 private:
-  std::vector<operator_ptr> operators_;
+  std::string definition_ = {};
+  std::vector<operator_ptr> operators_ = {};
 };
 
 /// Base class for defining operators using CRTP.
@@ -492,10 +526,6 @@ public:
     }
   }
 };
-
-/// Returns a generator that, when advanced, incrementally executes the given
-/// pipeline on the current thread.
-auto make_local_executor(pipeline p) -> generator<caf::expected<void>>;
 
 } // namespace vast
 

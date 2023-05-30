@@ -17,13 +17,14 @@ namespace vast::plugins::exec {
 
 namespace {
 
-auto exec_command(std::span<const std::string> args, caf::actor_system& sys)
+auto exec_command(const invocation& inv, caf::actor_system& sys)
   -> caf::expected<void> {
-  if (args.size() != 1)
-    return caf::make_error(
-      ec::invalid_argument,
-      fmt::format("expected exactly one argument, but got {}", args.size()));
-  auto pipeline = pipeline::parse(args[0]);
+  if (inv.arguments.size() != 1)
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("expected exactly one argument, but got "
+                                       "{}",
+                                       inv.arguments.size()));
+  auto pipeline = pipeline::parse(inv.arguments[0]);
   if (not pipeline) {
     return caf::make_error(ec::invalid_argument,
                            fmt::format("failed to parse pipeline: {}",
@@ -32,31 +33,58 @@ auto exec_command(std::span<const std::string> args, caf::actor_system& sys)
   // If the pipeline ends with events, we implicitly write the output as JSON
   // to stdout, and if it ends with bytes, we implicitly write those bytes to
   // stdout.
-  if (pipeline->check_type<void, table_slice>()) {
-    auto op = pipeline::parse_as_operator("write json --pretty");
-    if (not op) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to append implicit 'write "
-                                         "json --pretty': {}",
-                                         op.error()));
+  while (true) {
+    if (auto out = pipeline->infer_type<void>()) {
+      if (out->is<void>()) {
+        break;
+      }
+      if (out->is<table_slice>()) {
+        auto op = pipeline::parse_as_operator("write json --pretty");
+        if (not op) {
+          return caf::make_error(ec::invalid_argument,
+                                 fmt::format("failed to append implicit 'write "
+                                             "json --pretty': {}",
+                                             op.error()));
+        }
+        pipeline->push_back(std::move(*op));
+        break;
+      }
+      if (out->is<chunk_ptr>()) {
+        auto op = pipeline::parse_as_operator("save file -");
+        if (not op) {
+          return caf::make_error(ec::invalid_argument,
+                                 fmt::format("failed to append implicit 'save "
+                                             "file -': {}",
+                                             op.error()));
+        }
+        pipeline->push_back(std::move(*op));
+        break;
+      }
     }
-    pipeline->append(std::move(*op));
-  } else if (pipeline->check_type<void, chunk_ptr>()) {
-    auto op = pipeline::parse_as_operator("save file -");
-    if (not op) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to append implicit 'save "
-                                         "file -': {}",
-                                         op.error()));
+    if (auto out = pipeline->infer_type<table_slice>()) {
+      auto op = pipeline::parse_as_operator("read json");
+      if (not op) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("failed to prepend implicit 'read "
+                                           "json': {}",
+                                           op.error()));
+      }
+      pipeline->push_front(std::move(*op));
+      continue;
     }
-    pipeline->append(std::move(*op));
+    if (auto out = pipeline->infer_type<chunk_ptr>()) {
+      auto op = pipeline::parse_as_operator("load file -");
+      if (not op) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("failed to prepend implicit 'load "
+                                           "file -': {}",
+                                           op.error()));
+      }
+      pipeline->push_front(std::move(*op));
+      continue;
+    }
   }
-  if (not pipeline->is_closed()) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("cannot execute pipeline that is not "
-                                       "closed: {}",
-                                       pipeline->to_string()));
-  }
+  VAST_ASSERT(pipeline->is_closed());
   caf::scoped_actor self{sys};
   auto executor = self->spawn(pipeline_executor, std::move(*pipeline));
   auto result = caf::expected<void>{};
@@ -95,7 +123,7 @@ public:
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
-         auto result = exec_command(inv.arguments, sys);
+         auto result = exec_command(inv, sys);
          if (not result)
            return caf::make_message(result.error());
          return {};

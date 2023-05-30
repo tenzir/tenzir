@@ -8,11 +8,13 @@
 
 #include "vast/pipeline_executor.hpp"
 
+#include "vast/collect.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/execution_node.hpp"
 #include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/connect_to_node.hpp"
+#include "vast/system/spawn_node.hpp"
 
 #include <caf/attach_stream_sink.hpp>
 #include <caf/attach_stream_source.hpp>
@@ -83,8 +85,8 @@ void pipeline_executor_state::spawn_execution_nodes(
         auto end = it;
         --it;
         VAST_ASSERT(remote);
-        auto subpipe
-          = pipeline{{std::move_iterator{begin}, std::move_iterator{end}}};
+        auto subpipe = pipeline{
+          {std::move_iterator{begin}, std::move_iterator{end}}, std::nullopt};
         // Allocate a slot in `hosts`, saving its index.
         auto host = hosts.size();
         hosts.emplace_back();
@@ -132,12 +134,23 @@ auto pipeline_executor_state::run() -> caf::result<void> {
     return caf::make_error(ec::logic_error,
                            fmt::format("{} received run twice", *self));
   }
-  auto ops = (*std::exchange(pipe, std::nullopt)).unwrap();
-  if (ops.empty())
+  auto ops = std::vector<operator_ptr>{};
+  for (auto&& [_, op] : pipe->unwrap()) {
+    ops.push_back(op->copy());
+  }
+  if (ops.empty()) {
     return {}; // no-op; empty pipeline
+  }
   auto has_remote = std::any_of(ops.begin(), ops.end(), [](auto& op) {
     return op->location() == operator_location::remote;
   });
+  auto requires_local_node = std::any_of(ops.begin(), ops.end(), [](auto& op) {
+    return op->location() != operator_location::remote && op->requires_node();
+  });
+  if (has_remote && requires_local_node) {
+    return caf::make_error(ec::unimplemented,
+                           "pipeline requires both a remote and a local node");
+  }
   rp_complete = self->make_response_promise<void>();
   if (has_remote) {
     system::connect_to_node(
@@ -152,6 +165,9 @@ auto pipeline_executor_state::run() -> caf::result<void> {
         }
         spawn_execution_nodes(*node, std::move(*ops));
       });
+  } else if (requires_local_node) {
+    VAST_WARN("requires local node");
+    // system::spawn_node()
   } else {
     spawn_execution_nodes({}, std::move(ops));
   }

@@ -285,8 +285,8 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
     return exporter_actor::behavior_type::make_empty_behavior();
   }
   expr = std::move(*normalized);
-  pipe.prepend(std::make_unique<exporter_source>(self));
-  pipe.append(std::make_unique<exporter_sink>(self));
+  pipe.push_front(std::make_unique<exporter_source>(self));
+  pipe.push_back(std::make_unique<exporter_sink>(self));
   VAST_DEBUG("{} uses filter {} and pipeline {}", *self, expr, pipe);
   self->state.options = options;
   self->state.query_context
@@ -295,7 +295,7 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
     = has_low_priority_option(self->state.options)
         ? query_context::priority::low
         : query_context::priority::normal;
-  self->state.executor = make_local_executor(std::move(pipe));
+  self->state.executor = pipe.make_local_executor();
   self->state.index = std::move(index);
   if (has_continuous_option(options)) {
     VAST_DEBUG("{} has continuous query option", *self);

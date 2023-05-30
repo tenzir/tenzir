@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/collect.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
@@ -157,17 +158,15 @@ FIXTURE_SCOPE(pipeline_fixture, fixture)
 
 TEST(actor executor success) {
   for (auto num : {0, 1, 4, 5}) {
-    auto v = unbox(pipeline::parse(fmt::format("head {}", num))).unwrap();
-    v.insert(v.begin(),
-             std::make_unique<source>(std::vector<table_slice>{
-               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
-               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+    auto pipe = unbox(pipeline::parse(fmt::format("head {}", num)));
+    pipe.push_front(std::make_unique<source>(std::vector<table_slice>{
+      head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+      head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
     auto actual = 0;
-    v.push_back(std::make_unique<sink>([&](table_slice) {
+    pipe.push_back(std::make_unique<sink>([&](table_slice) {
       actual += 1;
     }));
-    auto p = pipeline{std::move(v)};
-    REQUIRE_NOERROR(execute(p));
+    REQUIRE_NOERROR(execute(pipe));
     CHECK_EQUAL(actual, std::min(num, 4));
   }
 }
@@ -193,7 +192,7 @@ TEST(actor executor execution error) {
   ops.push_back(std::make_unique<sink>([](table_slice input) {
     CHECK(input.rows() == 0);
   }));
-  auto pipe = pipeline{std::move(ops)};
+  auto pipe = pipeline{std::move(ops), ""};
   REQUIRE_ERROR(execute(pipe));
 }
 
@@ -210,29 +209,26 @@ TEST(actor executor instantiation error) {
       return "error";
     }
   };
-
   auto ops = std::vector<operator_ptr>{};
   ops.push_back(std::make_unique<source>(zeek_conn_log));
   ops.push_back(std::make_unique<instantiation_error_operator>());
   ops.push_back(std::make_unique<sink>([](table_slice) {
     CHECK(false);
   }));
-  auto pipe = pipeline{std::move(ops)};
+  auto pipe = pipeline{std::move(ops), "test"};
   REQUIRE_ERROR(execute(pipe));
 }
 
 TEST(taste 42) {
-  auto v = unbox(pipeline::parse("taste 42")).unwrap();
-  v.insert(v.begin(),
-           std::make_unique<source>(std::vector<table_slice>{
-             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
-             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+  auto pipe = unbox(pipeline::parse("taste 42"));
+  pipe.push_front(std::make_unique<source>(std::vector<table_slice>{
+    head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+    head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
   auto count = 0;
-  v.push_back(std::make_unique<sink>([&](table_slice) {
+  pipe.push_back(std::make_unique<sink>([&](table_slice) {
     count += 1;
   }));
-  auto p = pipeline{std::move(v)};
-  for (auto&& result : make_local_executor(std::move(p))) {
+  for (auto&& result : std::move(pipe).make_local_executor()) {
     REQUIRE_NOERROR(result);
   }
   CHECK_GREATER(count, 0);
@@ -240,17 +236,15 @@ TEST(taste 42) {
 
 TEST(source | where #type == "zeek.conn" | sink) {
   auto count = size_t{0};
-  auto v = unbox(pipeline::parse(R"(taste 42 | where #type == "zeek.conn")"))
-             .unwrap();
-  v.insert(v.begin(),
-           std::make_unique<source>(std::vector<table_slice>{
-             head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 2),
-             head(zeek_conn_log.at(0), 3), head(zeek_conn_log.at(0), 4)}));
-  v.push_back(std::make_unique<sink>([&](table_slice slice) {
-    MESSAGE("---- sink ----");
+  auto pipe
+    = unbox(pipeline::parse(R"(taste 42 | where #type == "zeek.conn")"));
+  pipe.push_front(std::make_unique<source>(std::vector<table_slice>{
+    head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 2),
+    head(zeek_conn_log.at(0), 3), head(zeek_conn_log.at(0), 4)}));
+  pipe.push_back(std::make_unique<sink>([&](table_slice slice) {
     count += slice.rows();
   }));
-  auto executor = make_local_executor(pipeline{std::move(v)});
+  auto executor = std::move(pipe).make_local_executor();
   for (auto&& result : executor) {
     REQUIRE_NOERROR(result);
   }
@@ -258,48 +252,42 @@ TEST(source | where #type == "zeek.conn" | sink) {
 }
 
 TEST(tail 5) {
-  {
-    auto v = unbox(pipeline::parse("tail 5")).unwrap();
-    v.insert(v.begin(),
-             std::make_unique<source>(std::vector<table_slice>{
-               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
-               head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
-    auto count = 0;
-    v.push_back(std::make_unique<sink>([&](table_slice) {
-      count += 1;
-    }));
-    auto p = pipeline{std::move(v)};
-    for (auto&& result : make_local_executor(std::move(p))) {
-      REQUIRE_NOERROR(result);
-    }
-    CHECK_GREATER(count, 0);
+  auto pipe = unbox(pipeline::parse("tail 5"));
+  pipe.push_front(std::make_unique<source>(std::vector<table_slice>{
+    head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
+    head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1)}));
+  auto count = 0;
+  pipe.push_back(std::make_unique<sink>([&](table_slice) {
+    count += 1;
+  }));
+  for (auto&& result : std::move(pipe).make_local_executor()) {
+    REQUIRE_NOERROR(result);
   }
+  CHECK_GREATER(count, 0);
 }
 
 TEST(unique) {
-  auto ops = unbox(pipeline::parse("select id.orig_h | unique")).unwrap();
-  ops.insert(ops.begin(), std::make_unique<source>(std::vector<table_slice>{
-                            head(zeek_conn_log.at(0), 1), // = 1
-                            head(zeek_conn_log.at(0), 1), // + 0
-                            head(zeek_conn_log.at(0), 5), // + 4
-                            head(zeek_conn_log.at(0), 0), // + 0
-                            head(zeek_conn_log.at(0), 5), // + 4
-                            head(zeek_conn_log.at(0), 7), // + 5
-                            head(zeek_conn_log.at(0), 7), // + 6
-                            head(zeek_conn_log.at(0), 8), // + 7
-                          }));
+  auto pipe = unbox(pipeline::parse("select id.orig_h | unique"));
+  pipe.push_front(std::make_unique<source>(std::vector<table_slice>{
+    head(zeek_conn_log.at(0), 1), // = 1
+    head(zeek_conn_log.at(0), 1), // + 0
+    head(zeek_conn_log.at(0), 5), // + 4
+    head(zeek_conn_log.at(0), 0), // + 0
+    head(zeek_conn_log.at(0), 5), // + 4
+    head(zeek_conn_log.at(0), 7), // + 5
+    head(zeek_conn_log.at(0), 7), // + 6
+    head(zeek_conn_log.at(0), 8), // + 7
+  }));
   auto count = size_t{0};
-  ops.push_back(std::make_unique<sink>([&](table_slice slice) {
+  pipe.push_back(std::make_unique<sink>([&](table_slice slice) {
     count += slice.rows();
   }));
-  auto executor = make_local_executor(pipeline{std::move(ops)});
+  auto executor = pipe.make_local_executor();
   for (auto&& error : executor) {
     REQUIRE_NOERROR(error);
   }
   CHECK_EQUAL(count, size_t{1 + 0 + 4 + 0 + 4 + 5 + 6 + 7});
 }
-
-FIXTURE_SCOPE_END()
 
 TEST(pipeline operator typing) {
   dummy_control_plane ctrl;
@@ -361,8 +349,8 @@ TEST(pipeline operator typing) {
 TEST(command) {
   std::vector<operator_ptr> ops;
   ops.push_back(std::make_unique<command>());
-  auto put = pipeline{std::move(ops)};
-  for (auto&& error : make_local_executor(std::move(put))) {
+  auto put = pipeline{std::move(ops), "test"};
+  for (auto&& error : std::move(put).make_local_executor()) {
     REQUIRE_EQUAL(error, caf::none);
   }
 }
@@ -391,7 +379,7 @@ TEST(predicate pushdown into empty pipeline) {
     = pipeline.predicate_pushdown_pipeline(unbox(to<expression>("z == 3")));
   REQUIRE(result);
   auto [expr, op] = std::move(*result);
-  CHECK(std::move(op).unwrap().empty());
+  CHECK(collect(op.unwrap()).empty());
   CHECK_EQUAL(unbox(normalize_and_validate(expr)),
               to<expression>("x == 1 && y == 2 && z == 3"));
 }
@@ -399,48 +387,34 @@ TEST(predicate pushdown into empty pipeline) {
 TEST(predicate pushdown select conflict) {
   auto pipeline = unbox(pipeline::parse("where x == 0 | select x, z | "
                                         "where y > 0 | where y < 5"));
-  auto result = pipeline.predicate_pushdown(unbox(to<expression>("z == 3")));
+  auto result
+    = pipeline.predicate_pushdown_pipeline(unbox(to<expression>("z == 3")));
   REQUIRE(result);
-  auto [expr, op] = std::move(*result);
-  CHECK_EQUAL(op->to_string(),
-              "select x, z | where (y > 0 && y < 5 && z == 3)");
-  auto expected_expr
-    = conjunction{unbox(to<expression>("x == 0")), trivially_true_expression()};
+  auto [expr, pipe] = std::move(*result);
+  auto ops = collect(pipe.unwrap());
+  REQUIRE_EQUAL(ops.size(), 2u);
+  CHECK_EQUAL(ops[0].second->to_string(), "select x, z");
+  CHECK_EQUAL(ops[1].second->to_string(), "where (y > 0 && y < 5 && z == 3)");
+  auto expected_expr = unbox(to<expression>("x == 0"));
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
 }
 
-TEST(to -) {
-  auto to_pipeline = pipeline::parse("to stdout");
-  REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "local print json | save stdout");
-}
-
-TEST(to - write json) {
-  auto to_pipeline = pipeline::parse("to stdout write json");
-  REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "local print json | save stdout");
-}
-
-TEST(to with invalid inputs) {
-  REQUIRE_ERROR(pipeline::parse("to json write stdout"));
-}
-
 TEST(stdin with json parser with all from and read combinations) {
-  auto definitions = {"from stdin",
-                      "from stdin --timeout 1s",
-                      "from stdin read json",
-                      "from stdin --timeout 1s read json",
-                      "read json from stdin",
-                      "read json from stdin --timeout 1s",
-                      "read json"};
-  for (auto definition : definitions) {
+  const auto definitions = {
+    "from stdin",
+    "from stdin --timeout 1s",
+    "from stdin read json",
+    "from stdin --timeout 1s read json",
+    "read json from stdin",
+    "read json from stdin --timeout 1s",
+    "read json",
+  };
+  for (const auto* definition : definitions) {
     MESSAGE("trying '" << definition << "'");
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
-    auto source = unbox(pipeline::parse(definition));
-    auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::make_unique<pipeline>(std::move(source)));
+    auto pipe = unbox(pipeline::parse(definition));
     auto sink_called = false;
-    ops.push_back(std::make_unique<sink>([&sink_called](table_slice slice) {
+    pipe.push_back(std::make_unique<sink>([&sink_called](table_slice slice) {
       sink_called = true;
       REQUIRE_EQUAL(slice.rows(), 2u);
       REQUIRE_EQUAL(slice.columns(), 2u);
@@ -449,9 +423,7 @@ TEST(stdin with json parser with all from and read combinations) {
       CHECK_EQUAL(materialize(slice.at(1u, 0u)), caf::none);
       CHECK_EQUAL(materialize(slice.at(1u, 1u)), "2");
     }));
-    for (auto&& x : make_local_executor(pipeline{std::move(ops)})) {
-      REQUIRE_NOERROR(x);
-    }
+    REQUIRE_NOERROR(execute(pipe));
     REQUIRE(sink_called);
   }
 }
@@ -491,8 +463,8 @@ vast:
     // The config makes `head` unusable, so we have to restore.
     test::reinit_vast_language(record{});
   });
-  auto ops
-    = unbox(pipeline::parse("anonymize_urls | aggregate_flows")).unwrap();
+  auto pipe = unbox(pipeline::parse("anonymize_urls | aggregate_flows"));
+  auto ops = collect(pipe.unwrap());
   REQUIRE_EQUAL(ops.size(), size_t{3});
   REQUIRE_ERROR(pipeline::parse("aggregate_urls"));
   REQUIRE_ERROR(pipeline::parse("self_recursive"));
@@ -500,26 +472,24 @@ vast:
   REQUIRE_ERROR(pipeline::parse("head"));
 }
 
-auto execute(pipeline pipe) -> caf::expected<void> {
-  for (auto&& result : make_local_executor(std::move(pipe))) {
-    if (!result) {
-      return result;
-    }
-  }
-  return {};
-}
-
-TEST(load_stdin_arguments) {
-  auto success = {"load stdin", "load stdin --timeout 1s"};
-  auto error = {"load stdin --timeout", "load stdin --timeout nope",
-                "load stdin --t1me0ut 1s", "load stdin --timeout 1s 2s"};
-  for (auto x : success) {
+TEST(load stdin arguments) {
+  const auto success = {
+    "load stdin",
+    "load stdin --timeout 1s",
+  };
+  const auto error = {
+    "load stdin --timeout",
+    "load stdin --timeout nope",
+    "load stdin --t1me0ut 1s",
+    "load stdin --timeout 1s 2s",
+  };
+  for (const auto* x : success) {
     MESSAGE(x);
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
     REQUIRE_NOERROR(
       execute(unbox(pipeline::parse(fmt::format("{} | save stdout", x)))));
   }
-  for (auto x : error) {
+  for (const auto* x : error) {
     MESSAGE(x);
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
     // This test shows that pipeline parsing still succeeds. This is because
@@ -596,6 +566,8 @@ TEST(file loader - arguments) {
       execute(unbox(pipeline::parse(fmt::format("{} | to stdout", x)))));
   }
 }
+
+FIXTURE_SCOPE_END()
 
 } // namespace
 } // namespace vast

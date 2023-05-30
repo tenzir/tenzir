@@ -82,6 +82,8 @@ public:
 
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override {
+    if (expr == trivially_true_expression())
+      return std::pair{expr_, nullptr};
     return std::pair{conjunction{expr_, expr}, nullptr};
   }
 
