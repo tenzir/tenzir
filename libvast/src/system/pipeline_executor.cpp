@@ -14,10 +14,12 @@
 #include "vast/system/actors.hpp"
 #include "vast/system/connect_to_node.hpp"
 
+#include <caf/actor_system_config.hpp>
 #include <caf/attach_stream_sink.hpp>
 #include <caf/attach_stream_source.hpp>
 #include <caf/attach_stream_stage.hpp>
 #include <caf/downstream.hpp>
+#include <caf/error.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -127,7 +129,8 @@ void pipeline_executor_state::spawn_execution_nodes(
   continue_if_done_spawning();
 }
 
-auto pipeline_executor_state::run() -> caf::result<void> {
+auto pipeline_executor_state::run(system::node_actor remote_node)
+  -> caf::result<void> {
   if (!pipe) {
     return caf::make_error(ec::logic_error,
                            fmt::format("{} received run twice", *self));
@@ -138,19 +141,28 @@ auto pipeline_executor_state::run() -> caf::result<void> {
   auto has_remote = std::any_of(ops.begin(), ops.end(), [](auto& op) {
     return op->location() == operator_location::remote;
   });
+  auto has_local = std::any_of(ops.begin(), ops.end(), [](auto& op) {
+    return op->location() == operator_location::local;
+  });
+  if (remote_node and has_local and not allow_unsafe_pipelines) {
+    return caf::make_error(ec::logic_error, "refusing to start unsafe pipeline "
+                                            "with local operators");
+  }
   rp_complete = self->make_response_promise<void>();
-  if (has_remote) {
+  if (remote_node) {
+    spawn_execution_nodes(remote_node, std::move(ops));
+  } else if (has_remote) {
     system::connect_to_node(
       self, content(self->system().config()),
       // We use a shared_ptr because of non-copyable operator_ptr.
-      [this, ops = std::make_shared<decltype(ops)>(std::move(ops))](
+      [this, shared_ops = std::make_shared<decltype(ops)>(std::move(ops))](
         caf::expected<system::node_actor> node) mutable {
         if (!node) {
           rp_complete.deliver(node.error());
           self->quit(node.error());
           return;
         }
-        spawn_execution_nodes(*node, std::move(*ops));
+        spawn_execution_nodes(*node, std::move(*shared_ops));
       });
   } else {
     spawn_execution_nodes({}, std::move(ops));
@@ -220,13 +232,19 @@ auto pipeline_executor(
         VAST_DEBUG("not all execution nodes are done, waiting");
       }
     } else {
-      VAST_DEBUG("promise ist not pending, discarding down message");
+      VAST_DEBUG("promise is not pending, discarding down message");
     }
   });
   self->state.pipe = std::move(p);
+  self->state.allow_unsafe_pipelines
+    = caf::get_or(self->system().config(), "vast.allow-unsafe-pipelines",
+                  self->state.allow_unsafe_pipelines);
   return {
     [self](atom::run) -> caf::result<void> {
       return self->state.run();
+    },
+    [self](atom::run, system::node_actor node) -> caf::result<void> {
+      return self->state.run(std::move(node));
     },
   };
 }
