@@ -59,7 +59,7 @@ public:
         return (ignore_esc >> ignore_esc) ->* [&] { x.push_back(Esc); return Esc; };
       // clang-format on
     }();
-    auto str_chr = esc_quote | esc_esc | (parsers::printable - quote);
+    auto str_chr = esc_quote | esc_esc | (parsers::any - quote);
     auto quoted_str = ignore_quote >> *str_chr >> ignore_quote;
     return quoted_str(f, l, x);
   }

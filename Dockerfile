@@ -89,6 +89,7 @@ RUN apt-get update && \
       ca-certificates \
       gnupg2 \
       libasan6 \
+      libboost-filesystem++1.81 \
       libc++1 \
       libc++abi1 \
       libflatbuffers2 \

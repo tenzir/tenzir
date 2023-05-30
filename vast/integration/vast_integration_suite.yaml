@@ -813,3 +813,10 @@ tests:
         input: data/cef/forcepoint.log
       - command: exec 'read cef | select extension.dvc | tail 3 | extend foo=extension.dvc | write json'
         input: data/cef/forcepoint.log
+
+  Shell:
+    tags: [pipelines, zeek]
+    steps:
+      - command: exec 'read zeek-tsv | head 1 | print json | shell rev'
+        input: data/zeek/conn.log.gz
+      - command: exec 'shell "echo foo"'

@@ -17,6 +17,7 @@ apt-get -y --no-install-recommends install \
     gnupg2 gnupg-agent\
     jq \
     libboost1.81-dev \
+    libboost-filesystem1.81-dev \
     libflatbuffers-dev \
     libfmt-dev \
     libhttp-parser-dev \
