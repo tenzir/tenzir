@@ -184,9 +184,11 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           if (body_params.has_value())
             if (auto maybe_value = body_params->at_key(name);
                 maybe_value.error() != simdjson::NO_SUCH_FIELD) {
-              maybe_param = simdjson::minify(maybe_value.value());
-              if (maybe_value.is_string())
-                maybe_param = detail::json_unescape(*maybe_param);
+              if (not maybe_value.value().is_null()) {
+                maybe_param = simdjson::minify(maybe_value.value());
+                if (maybe_value.is_string())
+                  maybe_param = detail::json_unescape(*maybe_param);
+              }
             }
           if (!maybe_param)
             continue;
