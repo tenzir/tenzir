@@ -817,5 +817,6 @@ tests:
   Shell:
     tags: [pipelines, zeek]
     steps:
-      - command: exec 'version | shell xxd'
+      - command: exec 'read zeek-tsv | head 1 | print json | shell rev'
+        input: data/zeek/conn.log.gz
       - command: exec 'shell "echo foo"'
