@@ -44,14 +44,13 @@ paths:
                   type: string
                   example: 7
                   description: The id of the pipeline to be updated.
-                state:
+                action:
                   type: string
                   enum:
-                    - starting
-                    - running
-                    - stopping
-                    - stopped
-                  example: running
+                    - start
+                    - stop
+                  description: The action that will change the pipeline's running state.
+                  example: start
                 name:
                   type: string
                   description: >-
@@ -70,7 +69,66 @@ paths:
             application/json:
               schema:
                 type: object
-                example: {}
+                description: The updated pipeline.
+                properties:
+                  pipeline:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: The pipeline ID.
+                      name:
+                        type: string
+                        description: The human-readable name of the pipeline to this value.
+                      definition:
+                        type: string
+                        description: The pipeline definition.
+                      state:
+                        type: string
+                        enum:
+                          - starting
+                          - running
+                          - stopping
+                          - stopped
+                      error:
+                        type: string
+                        description: >-
+                          The error that the pipeline may have encountered
+                          during running.
+                      operators:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: The pipeline operator ID.
+                            definition:
+                              type: string
+                              description: The pipeline operator definition.
+                            instrumented:
+                              type: boolean
+                              description: >-
+                                Flag that enables subscribing to this operator's
+                                metrics and warnings under
+                                /pipeline/(pipeline-id)/(operator-id).
+                example:
+                  pipeline:
+                    id: 7
+                    name: user-assigned-name
+                    definition: export | where foo | publish /bar
+                    state: starting
+                    error: null
+                    operators:
+                      - id: 0
+                        definition: export
+                        instrumented: false
+                      - id: 1
+                        definition: where foo
+                        instrumented: true
+                      - id: 2
+                        definition: publish /bar
+                        instrumented: true
         '400':
           description: Invalid arguments.
           content:
@@ -238,7 +296,7 @@ paths:
                                 description: >-
                                   Flag that enables subscribing to this
                                   operator's metrics and warnings under
-                                  /pipeline/<pipeline-id>/<operator-id>.
+                                  /pipeline/(pipeline-id)/(operator-id).
                 example:
                   pipelines:
                     - id: 7
@@ -559,6 +617,4 @@ paths:
                   num-partitions: 7092
                   memory-usage: 52781901584
                 version:
-                  VAST: v2.3.0-rc3-32-g8529a6c43f
-        '401':
-          description: Not authenticated.
+                  VAST: v2.3.0-rc3-32
