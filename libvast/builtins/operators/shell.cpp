@@ -130,33 +130,6 @@ public:
     }
   }
 
-  // auto
-  // operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-  //   -> generator<std::monostate> {
-  //   auto child = child::make(command_);
-  //   if (!child) {
-  //     ctrl.abort(child.error());
-  //     co_return;
-  //   }
-  //   auto at_exit = caf::detail::make_scope_guard([&] {
-  //     child->close_stdin();
-  //   });
-  //   // Loop over input chunks.
-  //   for (auto&& chunk : input) {
-  //     if (not chunk || chunk->size() == 0 || not child->writing()) {
-  //       co_yield {};
-  //       continue;
-  //     }
-  //     // Pass operator input to the child's stdin.
-  //     auto err = child->write(as_bytes(*chunk));
-  //     co_yield {};
-  //     if (err) {
-  //       ctrl.abort(err);
-  //       break;
-  //     }
-  //   }
-  // }
-
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto child = child::make(command_);
