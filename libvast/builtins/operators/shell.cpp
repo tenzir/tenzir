@@ -204,7 +204,7 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("shell \"{}\"", command_);
+    return fmt::format("shell {}", escape_operator_arg(command_));
   }
 
   auto location() const -> operator_location override {
