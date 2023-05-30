@@ -102,9 +102,9 @@ gunzip -c example.pcap.gz |
 ```
 
 ```json
-{"id.orig_h": null, "id.resp_h": null, "id.resp_p": null}
-{"id.orig_h": "192.168.168.100", "id.resp_h": "83.135.95.78", "id.resp_p": 0}
-{"id.orig_h": "192.168.168.100", "id.resp_h": "83.135.95.78", "id.resp_p": 22}
+{"id": {"orig_h": null, "resp_h": null, "resp_p": null}}
+{"id": {"orig_h": "192.168.168.100", "resp_h": "83.135.95.78", "resp_p": 0}}
+{"id": {"orig_h": "192.168.168.100", "resp_h": "83.135.95.78", "resp_p": 22}}
 ```
 
 NB: because `zeek` (= `shell`) reads bytes, we can drop the implicit `load
