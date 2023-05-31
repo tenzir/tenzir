@@ -196,28 +196,106 @@ struct serve_request {
   duration timeout = std::chrono::milliseconds{100};
 };
 
+/// A single serve operator as observed by the serve-manager.
+struct managed_serve_operator {
+  /// The actor address of the execution node of the serve operator; stored for
+  /// tracking purposes.
+  caf::actor_addr source = {};
+
+  /// The serve ID and next expected continuation token of the operator.
+  std::string serve_id = {};
+  std::string continuation_token = {};
+
+  /// The buffered table slice, and the configured buffer size and the number of
+  /// currently requested events (may exceed the buffer size).
+  std::vector<table_slice> buffer = {};
+  uint64_t buffer_size = 1 << 16;
+  uint64_t requested = {};
+
+  /// The number of delivered results. Tracked only for the status output and
+  /// not used otherwise.
+  uint64_t delivered = {};
+
+  /// Various handles for interfacing with the endpoint and the operator, and
+  /// throttling the pipeline leading into the operator.
+  caf::disposable delayed_attempt = {};
+  caf::typed_response_promise<void> put_rp = {};
+  caf::typed_response_promise<void> stop_rp = {};
+  caf::typed_response_promise<std::tuple<std::string, std::vector<table_slice>>>
+    get_rp = {};
+
+  /// Attempt to deliver up to the number of requested results.
+  /// @param force_underful Return underful result sets instead of failing when
+  /// not enough results are buffered.
+  /// @returns Whether the results were delivered.
+  auto try_deliver_results(bool force_underful) -> bool {
+    VAST_ASSERT(get_rp.pending());
+    // If we throttled the serve operator, then we can continue its operation
+    // again if we have less events buffered than desired.
+    if (put_rp.pending() && rows(buffer) < std::max(buffer_size, requested)) {
+      put_rp.deliver();
+    }
+    // Avoid delivering too early, i.e., when we don't yet have enough events.
+    const auto return_underful = stop_rp.pending() || force_underful;
+    if (not return_underful && rows(buffer) < requested) {
+      return false;
+    }
+    // Cut the results buffer.
+    auto split_it = buffer.begin();
+    auto split_offset = uint64_t{0};
+    while (split_it != buffer.end()) {
+      const auto num_rows = split_it->rows();
+      ++split_it;
+      if (num_rows >= requested) {
+        split_offset = requested - num_rows;
+        break;
+      }
+      requested -= num_rows;
+    }
+    auto results = std::vector<table_slice>{};
+    results.insert(results.begin(), buffer.begin(), split_it);
+    if (split_offset > 0 && split_it != buffer.end()) {
+      auto [head, tail] = split(results.back(), split_offset);
+      results.back() = std::move(head);
+      *split_it = std::move(tail);
+      VAST_ASSERT(split_it != buffer.begin());
+      buffer.erase(buffer.begin(), split_it - 1);
+    } else {
+      buffer.erase(buffer.begin(), split_it);
+    }
+    delivered += rows(results);
+    // Clear the delayed attempt and the continuatin token.
+    delayed_attempt.dispose();
+    continuation_token.clear();
+    requested = 0;
+    // If the pipeline is at its end then we must not assign a new token, but
+    // rather end here.
+    if (stop_rp.pending() && buffer.empty()) {
+      VAST_ASSERT(not put_rp.pending());
+      get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
+      stop_rp.deliver();
+      return true;
+    }
+    // If we throttled the serve operator, then we can continue its operation
+    // again if we have less events buffered than desired.
+    if (put_rp.pending() && rows(buffer) < buffer_size) {
+      put_rp.deliver();
+    }
+    continuation_token = fmt::to_string(uuid::random());
+    VAST_VERBOSE("serve for id {} is now available with continuation token {}",
+                 escape_operator_arg(serve_id), continuation_token);
+    get_rp.deliver(std::make_tuple(continuation_token, std::move(results)));
+    return true;
+  }
+};
+
 struct serve_manager_state {
   static constexpr auto name = "serve-manager";
 
   serve_manager_actor::pointer self = {};
 
-  struct managed_op {
-    caf::actor_addr source = {};
-    std::string serve_id = {};
-    std::string continuation_token = {};
-
-    uint64_t buffer_size = 1 << 16;
-    std::vector<table_slice> buffer = {};
-    uint64_t requested = {};
-
-    caf::disposable delayed_attempt = {};
-    caf::typed_response_promise<void> put_rp = {};
-    caf::typed_response_promise<void> stop_rp = {};
-    caf::typed_response_promise<std::tuple<std::string, std::vector<table_slice>>>
-      get_rp = {};
-  };
-
-  std::vector<managed_op> ops = {};
+  /// The serve operators currently observed by the serve-manager.
+  std::vector<managed_serve_operator> ops = {};
 
   auto handle_down_msg(const caf::down_msg& msg) -> void {
     const auto found
@@ -230,68 +308,11 @@ struct serve_manager_state {
       return;
     }
     if (not found->continuation_token.empty()) {
-      VAST_WARN("{} received premature DOWN for serve id {} with continuation "
-                "token {}",
-                *self, found->serve_id, found->continuation_token);
+      VAST_DEBUG("{} received premature DOWN for serve id {} with continuation "
+                 "token {}",
+                 *self, found->serve_id, found->continuation_token);
     }
     ops.erase(found);
-  }
-
-  static auto try_deliver_results(managed_op& op, bool force_underful) -> bool {
-    if (not op.get_rp.pending()) {
-      return false;
-    }
-    if (not op.stop_rp.pending() && not force_underful
-        && rows(op.buffer) < op.requested) {
-      VAST_WARN("attempted to deliver results for serve id {}, but there are "
-                "not enough results buffered ({}/{})",
-                escape_operator_arg(op.serve_id), rows(op.buffer),
-                op.requested);
-      return false;
-    }
-    VAST_ERROR("clearing delayed attempt and continuation token");
-    op.delayed_attempt.dispose();
-    op.continuation_token.clear();
-    // Cut the results buffer.
-    auto split_it = op.buffer.begin();
-    auto split_offset = uint64_t{0};
-    while (split_it != op.buffer.end()) {
-      const auto num_rows = split_it->rows();
-      ++split_it;
-      if (num_rows >= op.requested) {
-        op.requested = 0;
-        split_offset = op.requested - num_rows;
-        break;
-      }
-      op.requested -= num_rows;
-    }
-    auto results = std::vector<table_slice>{};
-    results.insert(results.begin(), op.buffer.begin(), split_it);
-    if (split_offset > 0 && split_it != op.buffer.end()) {
-      auto [head, tail] = split(results.back(), split_offset);
-      results.back() = std::move(head);
-      *split_it = std::move(tail);
-      VAST_ASSERT(split_it != op.buffer.begin());
-      op.buffer.erase(op.buffer.begin(), split_it - 1);
-    } else {
-      op.buffer.erase(op.buffer.begin(), split_it);
-    }
-    // If the pipeline is at its end then we must not assign a new token, but
-    // rather end here.
-    if (op.stop_rp.pending() && op.buffer.empty()) {
-      VAST_INFO("serve for id {} is completed",
-                escape_operator_arg(op.serve_id));
-      VAST_ASSERT(not op.put_rp.pending());
-      op.get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
-      op.stop_rp.deliver();
-      return true;
-    }
-    op.continuation_token = fmt::to_string(uuid::random());
-    VAST_INFO("serve for id {} is now available at {}",
-              escape_operator_arg(op.serve_id), op.continuation_token);
-    op.get_rp.deliver(
-      std::make_tuple(op.continuation_token, std::move(results)));
-    return true;
   }
 
   auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {
@@ -359,15 +380,13 @@ struct serve_manager_state {
     }
     found->buffer.push_back(std::move(slice));
     if (found->get_rp.pending()) {
-      VAST_WARN("try deliver from put");
-      const auto delivered = try_deliver_results(*found, false);
-      VAST_WARN("new token = {}", found->continuation_token);
+      const auto delivered = found->try_deliver_results(false);
       if (delivered) {
-        VAST_WARN("{} delivered results eagerly for serve id {}", *self,
-                  escape_operator_arg(serve_id));
+        VAST_DEBUG("{} delivered results eagerly for serve id {}", *self,
+                   escape_operator_arg(serve_id));
       }
     }
-    if (rows(found->buffer) < found->buffer_size) {
+    if (rows(found->buffer) < std::max(found->requested, found->buffer_size)) {
       return {};
     }
     found->put_rp = self->make_response_promise<void>();
@@ -398,24 +417,24 @@ struct serve_manager_state {
     found->get_rp = self->make_response_promise<
       std::tuple<std::string, std::vector<table_slice>>>();
     found->requested = request.limit;
-    VAST_WARN("try deliver from get");
-    const auto delivered = try_deliver_results(*found, false);
-    VAST_WARN("new token = {}", found->continuation_token);
+    const auto delivered = found->try_deliver_results(false);
+    if (delivered) {
+      return found->get_rp;
+    }
     const auto infinite_timeout = request.timeout == duration::zero();
-    if (not delivered and not infinite_timeout) {
+    if (not infinite_timeout) {
       found->delayed_attempt = detail::weak_run_delayed(
         self, request.timeout,
-        [*this, continuation_token = request.continuation_token]() mutable {
+        [this, continuation_token = request.continuation_token]() mutable {
           const auto found
             = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
                 return op.continuation_token == continuation_token;
               });
           if (found == ops.end()) {
+            VAST_DEBUG("unable to find serve request after timeout expired");
             return;
           }
-          VAST_WARN("try deliver from get with timeout");
-          try_deliver_results(*found, true);
-          VAST_WARN("new token = {}", found->continuation_token);
+          found->try_deliver_results(true);
         });
     }
     return found->get_rp;
@@ -433,6 +452,7 @@ struct serve_manager_state {
       entry.emplace("buffer_size", op.buffer_size);
       entry.emplace("num_buffered", rows(op.buffer));
       entry.emplace("num_requested", op.requested);
+      entry.emplace("num_delivered", op.delivered);
       if (verbosity >= system::status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
         entry.emplace("get_pending", op.get_rp.pending());
@@ -523,8 +543,6 @@ struct serve_handler_state {
     }
     if (*continuation_token) {
       result.continuation_token = std::move(**continuation_token);
-    } else {
-      VAST_WARN("no cont token");
     }
     auto max_events = try_get<uint64_t>(rq.params, "max_events");
     if (not max_events) {
@@ -614,9 +632,8 @@ struct serve_handler_state {
                              fmt::format("unepexted /serve endpoint id {}",
                                          endpoint_id));
     }
-    // TODO: -> debug
-    VAST_WARN("{} handles /serve request for endpoint id {} with params {}",
-              *self, endpoint_id, rq.params);
+    VAST_DEBUG("{} handles /serve request for endpoint id {} with params {}",
+               *self, endpoint_id, rq.params);
     auto request = try_parse_request(rq);
     if (not request) {
       rq.response->abort(
@@ -624,10 +641,6 @@ struct serve_handler_state {
       return {};
     }
     auto rp = self->make_response_promise<void>();
-    VAST_WARN("requesting get for serve_id={} continuation_token={} limit={} "
-              "timeout={}",
-              request->serve_id, request->continuation_token, request->limit,
-              request->timeout);
     self
       ->request(serve_manager, caf::infinite, atom::get_v, request->serve_id,
                 request->continuation_token, request->limit, request->timeout)
@@ -711,8 +724,8 @@ public:
                 buffer_size_)
       .receive(
         [&]() {
-          VAST_INFO("serve for id {} is now available",
-                    escape_operator_arg(serve_id_));
+          VAST_VERBOSE("serve for id {} is now available",
+                       escape_operator_arg(serve_id_));
         },
         [&](const caf::error& err) { //
           ctrl.abort(caf::make_error(
