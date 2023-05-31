@@ -971,6 +971,9 @@ jobs:
           - name: Netflow
             target: netflow
             path: contrib/vast-plugins/netflow
+          - name: Pipeline Manager
+            target: pipeline-manager
+            path: contrib/vast-plugins/pipeline_manager
           - name: Platform
             target: platform
             path: contrib/vast-plugins/platform
@@ -988,6 +991,7 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Inventory}}
           - {setup: {os: macos-latest}, plugin: {name: Matcher}}
           - {setup: {os: macos-latest}, plugin: {name: Netflow}}
+          - {setup: {os: macos-latest}, plugin: {name: Pipeline Manager}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
