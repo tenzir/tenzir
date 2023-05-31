@@ -3,7 +3,7 @@
     {
       "name": "vast",
       "static": true,
-      "copy-package": true,
+      "upload-package-to-github": true,
       "package-stores": [
         "gcs:tenzir-public-data/static-binary-builds"
       ],
@@ -15,7 +15,7 @@
     {
       "name": "vast-ce",
       "static": true,
-      "copy-package": false,
+      "upload-package-to-github": false,
       "package-stores": [
         "gcs:tenzir-vast/static-binary-builds"
       ],

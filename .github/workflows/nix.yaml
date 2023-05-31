@@ -61,7 +61,7 @@ jobs:
           ]]; then
             echo "needs-vast-plugins=true" >> "$GITHUB_OUTPUT"
           fi
-          jq '@sh "upload-to-github=\(.editions | any(."copy-package"))"' \
+          jq '@sh "upload-to-github=\(.editions | any(."upload-package-to-github"))"' \
                    <<< '${{ inputs.config }}' >> "$GITHUB_OUTPUT"
       - name: Configure ssh-agent
         if: steps.cfg.outputs.needs-vast-plugins == 'true'

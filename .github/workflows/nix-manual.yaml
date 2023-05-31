@@ -59,7 +59,7 @@ jobs:
                 {
                   "name": "vast",
                   "static": true,
-                  "copy-package": true,
+                  "upload-package-to-github": true,
                   "package-stores": [
                     "gcs:tenzir-public-data/static-binary-builds"
                   ],
@@ -75,7 +75,7 @@ jobs:
                 {
                   "name": "vast-ce",
                   "static": true,
-                  "copy-package": true,
+                  "upload-package-to-github": true,
                   "package-stores": [
                     "gcs:tenzir-vast/static-binary-builds"
                   ],
@@ -90,7 +90,7 @@ jobs:
                 {
                   "name": "vast-cm",
                   "static": true,
-                  "copy-package": true,
+                  "upload-package-to-github": true,
                   "package-stores": [
                     "gcs:tenzir-vast/static-binary-builds"
                   ],
@@ -103,7 +103,7 @@ jobs:
                 {
                   "name": "vast-ee",
                   "static": true,
-                  "copy-package": true,
+                  "upload-package-to-github": true,
                   "package-stores": [
                     "gcs:tenzir-vast/static-binary-builds"
                   ],

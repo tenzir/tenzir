@@ -5,7 +5,7 @@ let config = {
   editions: list<{
     name: string
     static: bool
-    copy-package: bool
+    upload-package-to-github: bool
     package-stores: list<string>
     image-registries: list<string>
   }>
@@ -90,7 +90,7 @@ export def run [
     editions: list<record<
       name: string
       static: bool
-      copy-package: bool
+      upload-package-to-github: bool
       package-stores: list<string>
       image-registries: list<string>
     >>
@@ -106,7 +106,7 @@ export def run [
   for e in $cfg.editions {
     let stores = (if ($e.package-stores? == null) {[]} else {$e.package-stores})
     let aliases = (if ($cfg.aliases? == null) {[]} else $cfg.aliases)
-    upload_packages (attribute_name $e) $stores $aliases $e.copy-package
+    upload_packages (attribute_name $e) $stores $aliases $e.upload-package-to-github
     let registries = (if ($e.image-registries? == null) {[]} else {$e.image-registries})
     let tags = (if ($cfg.tags? == null) {[]} else {$cfg.tags})
     push_images (attribute_name $e) $registries $tags
