@@ -178,6 +178,7 @@ in {
     pkg.withPlugins (ps: [
       ps.matcher
       ps.netflow
+      ps.pipeline_manager
       ps.platform
     ]);
   vast-ee = let
@@ -190,6 +191,7 @@ in {
       #ps.inventory
       ps.matcher
       ps.netflow
+      ps.pipeline_manager
       ps.platform
     ]);
   vast-integration-test-deps = let
