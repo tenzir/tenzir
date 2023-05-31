@@ -30,6 +30,12 @@ RUN cmake -S contrib/vast-plugins/netflow -B build-netflow -G Ninja \
       DESTDIR=/plugin/netflow cmake --install build-netflow --strip --component Runtime && \
       rm -rf build-netflow
 
+RUN cmake -S contrib/vast-plugins/pipeline_manager -B build-pipeline_manager -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-pipeline_manager --parallel && \
+      DESTDIR=/plugin/pipeline_manager cmake --install build-pipeline_manager --strip --component Runtime && \
+      rm -rf build-pipeline_manager
+
 RUN cmake -S contrib/vast-plugins/platform -B build-platform -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-platform --parallel && \
@@ -42,6 +48,7 @@ FROM production AS vast-ce
 
 COPY --from=plugins --chown=vast:vast /plugin/matcher /
 COPY --from=plugins --chown=vast:vast /plugin/netflow /
+COPY --from=plugins --chown=vast:vast /plugin/pipeline_manager /
 COPY --from=plugins --chown=vast:vast /plugin/platform /
 
 # -- vast-demo --------------------------------------------------------------
