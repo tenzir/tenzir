@@ -99,7 +99,8 @@ jobs:
         with:
           name: vast
           signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
-          pushFilter: "vast-ee"
+          # Avoid pushing any editions that are not fully open source.
+          pushFilter: "vast-[[:alnum:]]+-(static|slim|[[:digit:]])"
       - name: Build Nix Packages
         env:
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
