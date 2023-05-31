@@ -28,12 +28,17 @@
 // the operator is done, throttling the operator when events are being requested
 // too slowly, and managing request limits and timeouts.
 //
-// KNOWN ISSUES
+// KNOWN ISSUES & LIMITATIONS
 //
 // The serve operator must currently run detached because it uses blocking
 // communication for throttling. This would not be required if the operator API
 // used an awaitable coroutine like an async generator. We should revisit this
 // once the operator API supports awaiting non-blocking requests.
+//
+// The web is a lossy place—which is why the serve-manager caches its last
+// result set and the last continuation token. To also be able to cache the last
+// result set, we delay the removal of the managed serve operators in the
+// serve-manager by 1 minute.
 //
 // Technically, the serve-manager should not be needed. However, the current
 // architecture of the web plugin makes it so that the REST handler actor is not
@@ -196,6 +201,38 @@ struct serve_request {
   duration timeout = std::chrono::milliseconds{100};
 };
 
+/// Splits a vector of table slices into two vectors of table slices without
+/// copying data.
+auto split(std::vector<table_slice> events, uint64_t partition_point)
+  -> std::pair<std::vector<table_slice>, std::vector<table_slice>> {
+  auto split_it = events.begin();
+  auto offset = uint64_t{0};
+  while (split_it != events.end()) {
+    const auto num_rows = split_it->rows();
+    ++split_it;
+    if (num_rows >= partition_point) {
+      offset = partition_point - num_rows;
+      break;
+    }
+    partition_point -= num_rows;
+  }
+  auto lhs = std::vector<table_slice>{};
+  lhs.insert(lhs.begin(), events.begin(), split_it);
+  if (offset > 0 and split_it != events.end()) {
+    auto [head, tail] = split(lhs.back(), offset);
+    lhs.back() = std::move(head);
+    *split_it = std::move(tail);
+    VAST_ASSERT(split_it != events.begin());
+    events.erase(events.begin(), split_it - 1);
+  } else {
+    events.erase(events.begin(), split_it);
+  }
+  return {
+    std::move(lhs),
+    std::move(events),
+  };
+}
+
 /// A single serve operator as observed by the serve-manager.
 struct managed_serve_operator {
   /// The actor address of the execution node of the serve operator; stored for
@@ -205,6 +242,12 @@ struct managed_serve_operator {
   /// The serve ID and next expected continuation token of the operator.
   std::string serve_id = {};
   std::string continuation_token = {};
+
+  /// The web is a naturally lossy place, so we cache the last response in case
+  /// it didn't get delivered so the client can retry.
+  bool done = {};
+  std::string last_continuation_token = {};
+  std::vector<table_slice> last_results = {};
 
   /// The buffered table slice, and the configured buffer size and the number of
   /// currently requested events (may exceed the buffer size).
@@ -232,45 +275,26 @@ struct managed_serve_operator {
     VAST_ASSERT(get_rp.pending());
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
-    if (put_rp.pending() && rows(buffer) < std::max(buffer_size, requested)) {
+    if (put_rp.pending() and rows(buffer) < std::max(buffer_size, requested)) {
       put_rp.deliver();
     }
     // Avoid delivering too early, i.e., when we don't yet have enough events.
-    const auto return_underful = stop_rp.pending() || force_underful;
-    if (not return_underful && rows(buffer) < requested) {
+    const auto return_underful = stop_rp.pending() or force_underful;
+    if (not return_underful and rows(buffer) < requested) {
       return false;
     }
     // Cut the results buffer.
-    auto split_it = buffer.begin();
-    auto split_offset = uint64_t{0};
-    while (split_it != buffer.end()) {
-      const auto num_rows = split_it->rows();
-      ++split_it;
-      if (num_rows >= requested) {
-        split_offset = requested - num_rows;
-        break;
-      }
-      requested -= num_rows;
-    }
     auto results = std::vector<table_slice>{};
-    results.insert(results.begin(), buffer.begin(), split_it);
-    if (split_offset > 0 && split_it != buffer.end()) {
-      auto [head, tail] = split(results.back(), split_offset);
-      results.back() = std::move(head);
-      *split_it = std::move(tail);
-      VAST_ASSERT(split_it != buffer.begin());
-      buffer.erase(buffer.begin(), split_it - 1);
-    } else {
-      buffer.erase(buffer.begin(), split_it);
-    }
+    std::tie(results, buffer) = split(buffer, requested);
     delivered += rows(results);
-    // Clear the delayed attempt and the continuatin token.
+    // Clear the delayed attempt and the continuation token.
     delayed_attempt.dispose();
-    continuation_token.clear();
     requested = 0;
+    last_continuation_token = std::exchange(continuation_token, {});
+    last_results = results;
     // If the pipeline is at its end then we must not assign a new token, but
     // rather end here.
-    if (stop_rp.pending() && buffer.empty()) {
+    if (stop_rp.pending() and buffer.empty()) {
       VAST_ASSERT(not put_rp.pending());
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
@@ -278,7 +302,7 @@ struct managed_serve_operator {
     }
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
-    if (put_rp.pending() && rows(buffer) < buffer_size) {
+    if (put_rp.pending() and rows(buffer) < buffer_size) {
       put_rp.deliver();
     }
     continuation_token = fmt::to_string(uuid::random());
@@ -312,7 +336,19 @@ struct serve_manager_state {
                  "token {}",
                  *self, found->serve_id, found->continuation_token);
     }
-    ops.erase(found);
+    // We delay the actual removal by 1 minute because we support fetching the
+    // last set of events again by reusing the last continuation token.
+    found->done = true;
+    detail::weak_run_delayed(
+      self, std::chrono::minutes{1}, [this, source = msg.source]() {
+        const auto found
+          = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
+              return op.source == source;
+            });
+        if (found != ops.end()) {
+          ops.erase(found);
+        }
+      });
   }
 
   auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {
@@ -321,10 +357,13 @@ struct serve_manager_state {
           return op.serve_id == serve_id;
         });
     if (found != ops.end()) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} received duplicate serve id {}",
-                                         *self,
-                                         escape_operator_arg(found->serve_id)));
+      if (not found->done) {
+        return caf::make_error(
+          ec::invalid_argument,
+          fmt::format("{} received duplicate serve id {}", *self,
+                      escape_operator_arg(found->serve_id)));
+      }
+      ops.erase(found);
     }
     ops.push_back({
       .source = self->current_sender()->address(),
@@ -397,14 +436,24 @@ struct serve_manager_state {
     -> caf::result<std::tuple<std::string, std::vector<table_slice>>> {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.serve_id == request.serve_id
-                 && op.continuation_token == request.continuation_token;
+          return op.serve_id == request.serve_id;
         });
     if (found == ops.end()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} got request for events with "
+                                         "unknown for serve id {}",
+                                         *self, request.serve_id));
+    }
+    if ((found->done or not found->continuation_token.empty())
+        and found->last_continuation_token == request.continuation_token) {
+      return std::make_tuple(found->continuation_token,
+                             split(found->last_results, request.limit).first);
+    }
+    if (found->continuation_token != request.continuation_token) {
       return caf::make_error(
         ec::invalid_argument,
-        fmt::format("{} got request for events with "
-                    "unknown continuation token {} for serve id {}",
+        fmt::format("{} got request for events with unknown continuation token "
+                    "{} for serve id {}",
                     *self, request.continuation_token, request.serve_id));
     }
     if (found->get_rp.pending()) {
@@ -451,6 +500,7 @@ struct serve_manager_state {
       entry.emplace("num_buffered", rows(op.buffer));
       entry.emplace("num_requested", op.requested);
       entry.emplace("num_delivered", op.delivered);
+      entry.emplace("done", op.done);
       if (verbosity >= system::status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
         entry.emplace("get_pending", op.get_rp.pending());
@@ -458,6 +508,11 @@ struct serve_manager_state {
       }
       if (verbosity >= system::status_verbosity::debug) {
         entry.emplace("source", fmt::to_string(op.source));
+        entry.emplace("last_continuation_token",
+                      op.last_continuation_token.empty()
+                        ? data{}
+                        : op.last_continuation_token);
+        entry.emplace("last_num_results", rows(op.last_results));
       }
     }
     return record{
