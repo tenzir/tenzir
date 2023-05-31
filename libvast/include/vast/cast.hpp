@@ -292,7 +292,7 @@ struct cast_helper<uint64_type, int64_type> {
                          const int64_type&) noexcept -> caf::expected<int64_t> {
     if (value > std::numeric_limits<int64_t>::max())
       return caf::make_error(ec::convert_error,
-                             fmt::format("unable to convert {} into int64. The "
+                             fmt::format("unable to convert {} into int64: the "
                                          "value is above the int64_t limit",
                                          value));
     return static_cast<int64_t>(value);
@@ -318,8 +318,8 @@ struct cast_helper<int64_type, bool_type> {
     if (value < std::numeric_limits<bool>::min()
         or value > std::numeric_limits<bool>::max())
       return caf::make_error(ec::convert_error,
-                             fmt::format("unable to convert {} into int64. "
-                                         "Only '0' and '1' are supported.",
+                             fmt::format("unable to convert {} into int64: "
+                                         "only '0' and '1' are supported.",
                                          value));
     return static_cast<bool>(value);
   }
@@ -384,8 +384,8 @@ struct cast_helper<uint64_type, bool_type> {
                          const bool_type&) noexcept -> caf::expected<bool> {
     if (value > std::numeric_limits<bool>::max())
       return caf::make_error(ec::convert_error,
-                             fmt::format("unable to convert {} into uint64. "
-                                         "Only '0' and '1' are supported.",
+                             fmt::format("unable to convert {} into uint64: "
+                                         "only '0' and '1' are supported.",
                                          value));
     return static_cast<bool>(value);
   }
@@ -429,8 +429,8 @@ struct cast_helper<double_type, bool_type> {
                          const bool_type&) noexcept -> caf::expected<bool> {
     if (value != 0.0 and value != 1.0)
       return caf::make_error(ec::convert_error,
-                             fmt::format("unable to convert {} into a double. "
-                                         "Only '0.0' and '1.0' are supported.",
+                             fmt::format("unable to convert {} into a double: "
+                                         "only '0.0' and '1.0' are supported.",
                                          value));
     return static_cast<bool>(value);
   }
@@ -577,14 +577,14 @@ struct cast_helper<uint64_type, enumeration_type> {
     -> caf::expected<enumeration> {
     if (value > std::numeric_limits<uint32_t>::max())
       return caf::make_error(
-        ec::convert_error, fmt::format("unable to convert {} into {}"
-                                       "The value is out of enum value range.",
+        ec::convert_error, fmt::format("unable to convert {} into {}: "
+                                       "the value is out of enum value range.",
                                        value, enum_type));
     auto field = enum_type.field(static_cast<uint32_t>(value));
     if (field.empty())
       return caf::make_error(ec::convert_error,
-                             fmt::format("unable to convert {} into {}"
-                                         "The value doesn't correspond to any "
+                             fmt::format("unable to convert {} into {}: "
+                                         "the value doesn't correspond to any "
                                          "enum state",
                                          value, enum_type));
     return static_cast<enumeration>(value);
@@ -611,14 +611,14 @@ struct cast_helper<int64_type, enumeration_type> {
     if (value > std::numeric_limits<uint32_t>::max()
         or value < std::numeric_limits<uint32_t>::min())
       return caf::make_error(
-        ec::convert_error, fmt::format("unable to convert {} into {}"
-                                       "The value is out of enum value range.",
+        ec::convert_error, fmt::format("unable to convert {} into {}: "
+                                       "the value is out of enum value range.",
                                        value, enum_type));
     auto field = enum_type.field(static_cast<uint32_t>(value));
     if (field.empty())
       return caf::make_error(ec::convert_error,
-                             fmt::format("unable to convert {} into {}"
-                                         "The value doesn't correspond to any "
+                             fmt::format("unable to convert {} into {}: "
+                                         "the value doesn't correspond to any "
                                          "enum state",
                                          value, enum_type));
     return static_cast<enumeration>(value);
@@ -646,8 +646,8 @@ struct cast_helper<double_type, enumeration_type> {
       double_type{}, value, uint64_type{});
     if (not maybe_uint)
       return caf::make_error(ec::convert_error,
-                             fmt::format("unable to convert {} into {}."
-                                         "The value cannot be represented as "
+                             fmt::format("unable to convert {} into {}: "
+                                         "the value cannot be represented as "
                                          "unsigned integer: {}",
                                          value, enum_type, maybe_uint.error()));
     return cast_helper<uint64_type, enumeration_type>::cast_value(
