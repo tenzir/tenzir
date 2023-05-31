@@ -98,8 +98,8 @@ constexpr auto SPEC_V0 = R"_(
               timeout:
                 type: string
                 example: "100ms"
-                default: "100ms"
-                description: The maximum amount of time spent on the request. Hitting the timeout is not an error.
+                default: "100ms" 
+                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. Set to a zero duration to disable timeouts.
     responses:
       200:
         description: Success.
@@ -399,7 +399,8 @@ struct serve_manager_state {
     VAST_WARN("try deliver from get");
     const auto delivered = try_deliver_results(*found, false);
     VAST_WARN("new token = {}", found->continuation_token);
-    if (not delivered) {
+    const auto infinite_timeout = request.timeout == duration::zero();
+    if (not delivered and not infinite_timeout) {
       found->delayed_attempt = detail::weak_run_delayed(
         self, request.timeout,
         [*this, continuation_token = request.continuation_token]() mutable {
