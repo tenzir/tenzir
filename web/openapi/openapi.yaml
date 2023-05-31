@@ -337,7 +337,7 @@ paths:
                   type: string
                   example: 100.0ms
                   default: 100.0ms
-                  description: The maximum amount of time spent on the request. Hitting the timeout is not an error. Set to a zero duration to disable timeouts.
+                  description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
       responses:
         200:
           description: Success.

@@ -99,7 +99,7 @@ constexpr auto SPEC_V0 = R"_(
                 type: string
                 example: "100ms"
                 default: "100ms" 
-                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. Set to a zero duration to disable timeouts.
+                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
     responses:
       200:
         description: Success.
@@ -421,22 +421,20 @@ struct serve_manager_state {
     if (delivered) {
       return found->get_rp;
     }
-    const auto infinite_timeout = request.timeout == duration::zero();
-    if (not infinite_timeout) {
-      found->delayed_attempt = detail::weak_run_delayed(
-        self, request.timeout,
-        [this, continuation_token = request.continuation_token]() mutable {
-          const auto found
-            = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-                return op.continuation_token == continuation_token;
-              });
-          if (found == ops.end()) {
-            VAST_DEBUG("unable to find serve request after timeout expired");
-            return;
-          }
-          found->try_deliver_results(true);
-        });
-    }
+    found->delayed_attempt = detail::weak_run_delayed(
+      self, request.timeout,
+      [this, continuation_token = request.continuation_token]() mutable {
+        const auto found
+          = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
+              return op.continuation_token == continuation_token;
+            });
+        if (found == ops.end()) {
+          VAST_DEBUG("unable to find serve request after timeout expired");
+          return;
+        }
+        const auto delivered = found->try_deliver_results(true);
+        VAST_ASSERT(delivered);
+      });
     return found->get_rp;
   }
 
@@ -562,6 +560,12 @@ struct serve_handler_state {
                                          timeout.error(), rq.params));
     }
     if (*timeout) {
+      if (**timeout > std::chrono::seconds{5}) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("timeout parameter {} exceeds limit "
+                                           "of 5 seconds; got params {}",
+                                           data{**timeout}, rq.params));
+      }
       result.timeout = **timeout;
     }
     return result;
@@ -636,8 +640,10 @@ struct serve_handler_state {
                *self, endpoint_id, rq.params);
     auto request = try_parse_request(rq);
     if (not request) {
-      rq.response->abort(
-        400, fmt::format(R"({{"error":"{}"}}{})", request.error(), '\n'), {});
+      rq.response->abort(400,
+                         fmt::format(R"({{"error":{:?}}}{})",
+                                     fmt::to_string(request.error()), '\n'),
+                         {});
       return {};
     }
     auto rp = self->make_response_promise<void>();
@@ -653,7 +659,10 @@ struct serve_handler_state {
           rp.deliver();
         },
         [resp = rq.response, rp](caf::error& err) mutable {
-          resp->abort(400, fmt::format(R"({{"error":"{}"}}{})", err, '\n'), {});
+          resp->abort(400,
+                      fmt::format(R"({{"error":{:?}}}{})", fmt::to_string(err),
+                                  '\n'),
+                      {});
           rp.deliver();
         });
 
