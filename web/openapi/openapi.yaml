@@ -16,113 +16,6 @@ components:
       in: header
       name: X-VAST-Token
 paths:
-  /pipeline/update:
-    post:
-      summary: Update pipeline state
-      description: "Update the state of the pipeline.\nAll values that are not explicitly included in the request are left in their\nold state.\n"
-      requestBody:
-        description: Body for the update endpoint
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - id
-              properties:
-                id:
-                  type: string
-                  example: 7
-                  description: The id of the pipeline to be updated.
-                action:
-                  type: string
-                  enum:
-                    - start
-                    - stop
-                  description: The action that will change the pipeline's running state.
-                  example: start
-                name:
-                  type: string
-                  description: Update the human-readable name of the pipeline to this value.
-                  example: zeek-monitoring-pipeline
-                restart_with_node:
-                  type: boolean
-                  description: Check if the pipeline should be restarted when the VAST Node is restarted.
-      responses:
-        200:
-          description: Success.
-          content:
-            application/json:
-              schema:
-                type: object
-                description: The updated pipeline.
-                properties:
-                  pipeline:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        description: The pipeline ID.
-                      name:
-                        type: string
-                        description: The human-readable name of the pipeline to this value.
-                      definition:
-                        type: string
-                        description: The pipeline definition.
-                      state:
-                        type: string
-                        enum:
-                          - starting
-                          - running
-                          - stopping
-                          - stopped
-                      error:
-                        type: string
-                        description: The error that the pipeline may have encountered during running.
-                      operators:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              description: The pipeline operator ID.
-                            definition:
-                              type: string
-                              description: The pipeline operator definition.
-                            instrumented:
-                              type: boolean
-                              description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
-                example:
-                  pipeline:
-                    id: 7
-                    name: user-assigned-name
-                    definition: export | where foo | publish /bar
-                    state: starting
-                    error: ~
-                    operators:
-                      - id: 0
-                        definition: export
-                        instrumented: false
-                      - id: 1
-                        definition: where foo
-                        instrumented: true
-                      - id: 2
-                        definition: publish /bar
-                        instrumented: true
-        400:
-          description: Invalid arguments.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    example: Invalid arguments
-                    description: The error message.
   /pipeline/create:
     post:
       summary: Create a new pipeline
@@ -307,6 +200,113 @@ paths:
                     type: string
                     example: Invalid arguments
                     description: The error message.
+  /pipeline/update:
+    post:
+      summary: Update pipeline state
+      description: "Update the state of the pipeline.\nAll values that are not explicitly included in the request are left in their\nold state.\n"
+      requestBody:
+        description: Body for the update endpoint
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: string
+                  example: 7
+                  description: The id of the pipeline to be updated.
+                action:
+                  type: string
+                  enum:
+                    - start
+                    - stop
+                  description: The action that will change the pipeline's running state.
+                  example: start
+                name:
+                  type: string
+                  description: Update the human-readable name of the pipeline to this value.
+                  example: zeek-monitoring-pipeline
+                restart_with_node:
+                  type: boolean
+                  description: Check if the pipeline should be restarted when the VAST Node is restarted.
+      responses:
+        200:
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The updated pipeline.
+                properties:
+                  pipeline:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: The pipeline ID.
+                      name:
+                        type: string
+                        description: The human-readable name of the pipeline to this value.
+                      definition:
+                        type: string
+                        description: The pipeline definition.
+                      state:
+                        type: string
+                        enum:
+                          - starting
+                          - running
+                          - stopping
+                          - stopped
+                      error:
+                        type: string
+                        description: The error that the pipeline may have encountered during running.
+                      operators:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: The pipeline operator ID.
+                            definition:
+                              type: string
+                              description: The pipeline operator definition.
+                            instrumented:
+                              type: boolean
+                              description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
+                example:
+                  pipeline:
+                    id: 7
+                    name: user-assigned-name
+                    definition: export | where foo | publish /bar
+                    state: starting
+                    error: ~
+                    operators:
+                      - id: 0
+                        definition: export
+                        instrumented: false
+                      - id: 1
+                        definition: where foo
+                        instrumented: true
+                      - id: 2
+                        definition: publish /bar
+                        instrumented: true
+        400:
+          description: Invalid arguments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    example: Invalid arguments
+                    description: The error message.
   /serve:
     post:
       summary: Return data from a pipeline
@@ -332,12 +332,12 @@ paths:
                 max_events:
                   type: integer
                   example: 50
-                  description: The maximum number of events returned. If unset, the number is unlimited
+                  description: The maximum number of events returned. If unset, the number is unlimited.
                 timeout:
                   type: string
                   example: 100.0ms
                   default: 100.0ms
-                  description: The maximum amount of time spent on the request. Hitting the timeout is not an error.
+                  description: The maximum amount of time spent on the request. Hitting the timeout is not an error. Set to a zero duration to disable timeouts.
       responses:
         200:
           description: Success.
@@ -444,4 +444,6 @@ paths:
                   num-partitions: 7092
                   memory-usage: 52781901584
                 version:
-                  VAST: v2.3.0-rc3-32
+                  VAST: v2.3.0-rc3-32-g8529a6c43f
+        401:
+          description: Not authenticated.
