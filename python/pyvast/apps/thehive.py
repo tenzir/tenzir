@@ -129,7 +129,7 @@ async def run_async():
     vast_cli = VAST()
     await vast_cli.status(60, retry_delay=1)
     await wait_for_thehive("/api/v1/user/current", 180)
-    expr = '#type == "suricata.alert"'
+    expr = '#schema == "suricata.alert"'
     # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
     hist_iter = vast_cli.export(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)

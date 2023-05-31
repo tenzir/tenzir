@@ -72,9 +72,9 @@ tests:
       - command: -N export ascii 'where resp_h == 192.168.1.104'
       - command: -N export ascii 'where orig_bytes > 1k && orig_bytes < 1Ki'
       - command: -N export ascii 'where :string == "OrfTtuI5G4e" || :port == 67 || :uint64 == 67'
-      - command: '-N export ascii "where #type == \"zeek.conn\" && resp_h == 192.168.1.104"'
-      - command: '-N export ascii "where #type != \"zeek.conn\" && #type != \"vast.metrics\""'
-      - command: '-N export ascii "where #type != \"foobar\" && resp_h == 192.168.1.104"'
+      - command: '-N export ascii "where #schema == \"zeek.conn\" && resp_h == 192.168.1.104"'
+      - command: '-N export ascii "where #schema != \"zeek.conn\" && #schema != \"vast.metrics\""'
+      - command: '-N export ascii "where #schema != \"foobar\" && resp_h == 192.168.1.104"'
 
   Node Zeek multiple imports:
     tags: [node, import-export, zeek]
@@ -85,8 +85,8 @@ tests:
         input: data/zeek/dns.log.gz
       - command: -N export ascii 'where resp_h == 192.168.1.104'
       - command: -N export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
-      - command: '-N count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
-      - command: -N count '#type == "zeek.conn"'
+      - command: '-N count ":timestamp >= 1970-01-01 && #schema != \"vast.metrics\""'
+      - command: -N count '#schema == "zeek.conn"'
 
   Node Zeek dns log:
     tags: [node, import-export, zeek]
@@ -97,7 +97,7 @@ tests:
       - command: -N export zeek 'where resp_h == 192.168.1.104'
         transformation: awk '!/^#(open|close)/'
       - command: -N count ':port == 53'
-      - command: '-N count ":uint64 == 53 && #type == \"zeek.dns\""'
+      - command: '-N count ":uint64 == 53 && #schema == \"zeek.dns\""'
 
   Node Zeek http log:
     tags: [node, import-export, zeek]
@@ -118,7 +118,7 @@ tests:
     steps:
       - command: -N import -b zeek-json
         input: data/zeek/zeek.json
-      - command: '-N export json "where \"zeek\" in #type"'
+      - command: '-N export json "where \"zeek\" in #schema"'
         transformation: jq -ec '.'
 
   Export json:
@@ -197,8 +197,8 @@ tests:
         input: data/zeek/dns.log.gz
       - command: export ascii 'where resp_h == 192.168.1.104'
       - command: export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
-      - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
-      - command: count '#type == "zeek.conn"'
+      - command: 'count ":timestamp >= 1970-01-01 && #schema != \"vast.metrics\""'
+      - command: count '#schema == "zeek.conn"'
       - command: show schemas --yaml
 
   Query Operators:
@@ -238,7 +238,7 @@ tests:
     steps:
       - command: import -b -n 20 zeek
         input: data/zeek/conn.log.gz
-      - command: 'export ascii "where #type == \"zeek.conn\""'
+      - command: 'export ascii "where #schema == \"zeek.conn\""'
 
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
@@ -252,11 +252,11 @@ tests:
   Node suricata alert:
     tags: [node, import-export, suricata, eve, import-filter]
     steps:
-      - command: -N import suricata '#type != "suricata.stats" && event_type != "flow"'
+      - command: -N import suricata '#schema != "suricata.stats" && event_type != "flow"'
         input: data/suricata/eve.json
       - command: -N export ascii 'where src_ip == 147.32.84.165'
-      - command: '-N export csv "where #type == /suricata.*/"'
-      - command: '-N export zeek "where #type == /suricata.alert/"'
+      - command: '-N export csv "where #schema == /suricata.*/"'
+      - command: '-N export zeek "where #schema == /suricata.alert/"'
       - command: -N export json --omit-nulls --omit-empty-records
 
   Node suricata rrdata:
@@ -328,18 +328,18 @@ tests:
     steps:
       - command: -N import --batch-encoding=arrow --schema-file="@./misc/schema/all-types.schema" --type=all_types json
         input: data/json/all-types.json
-      - command: '-N export arrow "where #type == \"all_types\""'
+      - command: '-N export arrow "where #schema == \"all_types\""'
         transformation: python @./misc/scripts/print-arrow.py
   Arrow Export:
     tags: [export, arrow]
     steps:
       - command: -N import --batch-encoding=arrow zeek
         input: data/zeek/conn.log.gz
-      - command: '-N export -n 10 arrow "where #type == \"zeek.conn\""'
+      - command: '-N export -n 10 arrow "where #schema == \"zeek.conn\""'
         transformation: python @./misc/scripts/print-arrow.py
       - command: -N import --batch-encoding=arrow suricata
         input: data/suricata/eve.json
-      - command: '-N export arrow "where #type == \"suricata.http\""'
+      - command: '-N export arrow "where #schema == \"suricata.http\""'
         transformation: python @./misc/scripts/print-arrow.py
   Arrow Import:
     tags: [import, arrow]
@@ -348,9 +348,9 @@ tests:
       - command: import -b --batch-encoding=arrow arrow
         # the input corresponds to conn.log.gz + eve.json (see above)
         input: data/suricata/arrow_ipc.bin
-      - command: 'export -n 10 arrow "where #type == \"zeek.conn\""'
+      - command: 'export -n 10 arrow "where #schema == \"zeek.conn\""'
         transformation: python @./misc/scripts/print-arrow.py
-      - command: 'export arrow "where #type == \"suricata.http\""'
+      - command: 'export arrow "where #schema == \"suricata.http\""'
         transformation: python @./misc/scripts/print-arrow.py
       - command: count
   Import syslog:
@@ -358,7 +358,7 @@ tests:
     steps:
       - command: -N import syslog
         input: data/syslog/syslog.log
-      - command: '-N export ascii "where #type == /syslog.*/"'
+      - command: '-N export ascii "where #schema == /syslog.*/"'
   Heterogeneous JSONL import:
     tags: [import, json, sysmon]
     steps:
@@ -368,7 +368,7 @@ tests:
         input: data/suricata/eve.json
       - command: -N export json 'where "®" in :string'
         transformation: jq -ec '.'
-      - command: '-N export json "where #type ni \"suricata\""'
+      - command: '-N export json "where #schema ni \"suricata\""'
         transformation: jq -ec '.'
       - command: -N export json 'where ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/'
         transformation: jq -ec '.'
@@ -379,10 +379,10 @@ tests:
   # Import Time:
   #   tags: [import, json, suricata]
   #   steps:
-  #     - command: -N import suricata '#type == "suricata.stats"'
+  #     - command: -N import suricata '#schema == "suricata.stats"'
   #       input: data/suricata/eve.json
   #       transformation: sleep 5
-  #     - command: -N import suricata '#type == "suricata.stats"'
+  #     - command: -N import suricata '#schema == "suricata.stats"'
   #       input: data/suricata/eve.json
   #     - command: -N export json '#import_time < 5 seconds ago'
   #       transformation: jq -ec '.'
@@ -407,7 +407,7 @@ tests:
     steps:
       - command: '-N import --schema="type custom = record { a: list<record { b: string, c: uint64, }>, d: uint64, }" --type=custom --batch-encoding=arrow json'
         input: data/json/record-in-list.json
-      - command: '-N export ascii "where #type == \"custom\""'
+      - command: '-N export ascii "where #schema == \"custom\""'
 
   Example config file:
     tags: [import-export, zeek]
@@ -429,7 +429,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: sleep 4
         prepend_vast: false
-      - command: count '#type == /zeek.*/'
+      - command: count '#schema == /zeek.*/'
   Export pipeline operator parsing everything but summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -478,7 +478,7 @@ tests:
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | rename source_ip=src_ip
-                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+                               | where #schema ==\"suricata.alert\" || #schema == \"suricata.fileinfo\"'"
   Export pipeline operator parsing only summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -553,7 +553,7 @@ tests:
                                | drop flow_id
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | rename source_ip=src_ip
-                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+                               | where #schema ==\"suricata.alert\" || #schema == \"suricata.fileinfo\"'"
 
   Self Repair:
     tags: [fault]

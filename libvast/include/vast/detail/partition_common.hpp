@@ -42,7 +42,8 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
               relational_operator op, const data& x) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   ids row_ids;
-  if (ex.kind == meta_extractor::type) {
+  // TODO: Do we want to handle `meta_extractor::schema_id` here?
+  if (ex.kind == meta_extractor::schema) {
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.

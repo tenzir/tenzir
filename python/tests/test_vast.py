@@ -86,7 +86,7 @@ async def test_export_collect_pyarrow(endpoint):
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
     vast = VAST(endpoint)
-    result = vast.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
+    result = vast.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
     tables = await collect_pyarrow(result)
     assert set(tables.keys()) == {"suricata.alert"}
     alerts = tables["suricata.alert"]
@@ -113,7 +113,7 @@ async def test_export_historical_rows(endpoint):
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
     vast = VAST(endpoint)
-    result = vast.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
+    result = vast.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
     rows: list[VastRow] = []
     async for row in to_json_rows(result):
         rows.append(row)
@@ -130,7 +130,7 @@ async def test_export_continuous_rows(endpoint):
     vast = VAST(endpoint)
 
     async def run_export():
-        result = vast.export('#type == "suricata.alert"', ExportMode.CONTINUOUS)
+        result = vast.export('#schema == "suricata.alert"', ExportMode.CONTINUOUS)
         return await anext(to_json_rows(result))
 
     task = asyncio.create_task(run_export())

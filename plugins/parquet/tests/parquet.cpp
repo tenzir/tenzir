@@ -77,7 +77,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   std::vector<table_slice>
   query(const system::store_actor& actor, const ids& ids,
         const expression& expr = expression{
-          predicate{meta_extractor{meta_extractor::type},
+          predicate{meta_extractor{meta_extractor::schema},
                     relational_operator::not_equal, data{std::string{}}}}) {
     bool done = false;
     uint64_t tally = 0;
@@ -107,7 +107,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   // received_messages must match the number of table slices in the store
   uint64_t count(const system::store_actor& actor, const ids& ids,
                  const expression& expr = expression{predicate{
-                   meta_extractor{meta_extractor::type},
+                   meta_extractor{meta_extractor::schema},
                    relational_operator::not_equal, data{std::string{}}}}) {
     bool done = false;
     uint64_t tally = 0;

@@ -278,8 +278,8 @@ TEST(evaluate) {
         auto exp = unbox(to<expression>(expr));
         CHECK_EQUAL(evaluate(exp, sut, {}), ids);
       };
-  check_eval("#type == \"zeek.conn\"", {{0, 8}});
-  check_eval("#type != \"zeek.conn\"", {});
+  check_eval("#schema == \"zeek.conn\"", {{0, 8}});
+  check_eval("#schema != \"zeek.conn\"", {});
 }
 
 TEST(cast) {

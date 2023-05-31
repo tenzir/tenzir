@@ -245,7 +245,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
       auto extract_expr = detail::overload{
         [&](const meta_extractor& lhs,
             const data& d) -> catalog_lookup_result::candidate_info {
-          if (lhs.kind == meta_extractor::type) {
+          // TODO: What to do for `#schema_id` here?
+          if (lhs.kind == meta_extractor::schema) {
             // We don't have to look into the synopses for type queries, just
             // at the schema names.
             catalog_lookup_result::candidate_info result;
