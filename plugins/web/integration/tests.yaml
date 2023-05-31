@@ -80,3 +80,9 @@ tests:
       - command: curl -H @token.txt --cacert @./data/client.pem https://127.0.0.1:42025/api/v0/status
         transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
         prepend_vast: false
+  Serve Endpoint:
+    tags: [rest, status]
+    fixture: ServerTester
+    steps:
+      - command: "@./scripts/serve.sh"
+        prepend_vast: false
