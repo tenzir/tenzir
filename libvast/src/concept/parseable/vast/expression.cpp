@@ -150,8 +150,8 @@ auto make_operand_parser() {
   using namespace parser_literals;
   // clang-format off
   return (parsers::data >> !(make_field_char_parser() | '.')) ->* to_data_operand
-    | "#schema"_p  ->* [] { return meta_extractor{meta_extractor::schema}; }
     | "#schema_id"_p  ->* [] { return meta_extractor{meta_extractor::schema_id}; }
+    | "#schema"_p  ->* [] { return meta_extractor{meta_extractor::schema}; }
     | "#import_time"_p ->* [] { return meta_extractor{meta_extractor::import_time}; }
     | make_extractor_parser();
   // clang-format on

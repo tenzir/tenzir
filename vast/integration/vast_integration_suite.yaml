@@ -680,6 +680,16 @@ tests:
   #   steps:
   #     - command: exec 'from file @./data/suricata/eve.json read suricata | write json to stdout'
 
+  Schema ID Extractor:
+    tags: [pipelines, cef]
+    steps:
+      - command: 'exec "read cef | put fingerprint = #schema_id | write json"'
+        input: data/cef/forcepoint.log
+      - command: 'exec "read cef | where #schema_id == \"212b9111d2ee64a0\" | write json"'
+        input: data/cef/forcepoint.log
+      - command: 'exec "read cef | where #schema_id != \"212b9111d2ee64a0\" | write json"'
+        input: data/cef/forcepoint.log
+
   Measure Events:
     tags: [pipelines]
     steps:
