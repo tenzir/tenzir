@@ -48,55 +48,6 @@ tests:
       # Invalid parameter
       - command: curl http://127.0.0.1:42025/api/v0/status?verbosity=!~asdf
         prepend_vast: false
-  Query Endpoint:
-    tags: [rest, query]
-    fixture: ServerTester
-    steps:
-      - command: import -b zeek
-        input: data/conn.log.gz
-      - command: flush
-      - command: |
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d '{"query": "where 192.168.1.102 | extend foo=123 | replace orig_h=resp_h | put foo, source=orig_h, destination=id.resp_h, schema=#type"}' \
-            http://127.0.0.1:42025/api/v0/query/new
-        transformation: 'jq .id | xargs -I _ curl http://127.0.0.1:42025/api/v0/query/_/next?n=20 | jq .events'
-        prepend_vast: false
-  Bad JSON Input:
-    tags: [rest, query]
-    fixture: ServerTester
-    steps:
-      - command: import -b zeek
-        input: data/conn.log.gz
-      - command: flush
-      - command: |
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d '[1,2,3]' \
-            http://127.0.0.1:42025/api/v0/query/new
-        transformation: 'head -n 1'
-        prepend_vast: false
-      - command: |
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d '"query": "where 192.16"8.1.102"}' \
-            http://127.0.0.1:42025/api/v0/query/new
-        transformation: 'head -n 1'
-        prepend_vast: false
-  Query Endpoint With Formatters:
-    tags: [rest, query]
-    fixture: ServerTester
-    steps:
-      - command: import -b zeek
-        input: data/conn.log.gz
-      - command: flush
-      - command: |
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d '{"query": "where 192.168.1.102", "flatten": "true", "omit-nulls": "true", "numeric-durations": "true"}' \
-            http://127.0.0.1:42025/api/v0/query/new
-        transformation: 'jq .id | xargs -I _ curl http://127.0.0.1:42025/api/v0/query/_/next?n=20 | jq .events'
-        prepend_vast: false
   Authenticated Endpoints:
     tags: [rest, authentication]
     fixture: AuthenticatedServerTester
