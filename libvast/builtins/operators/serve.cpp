@@ -6,6 +6,40 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+// ARCHITECTURE
+//
+// The serve builtin contains three parts, namely the serve-manager component,
+// the serve operator, and the /serve endpoint.
+//
+// SERVE OPERATOR
+//
+// The serve operator is an event sink that exposes the events it receives
+// incrementally through a REST API.
+//
+// SERVE ENDPOINT
+//
+// The /serve endpoint allows for fetching events from a pipeline that ended in
+// the serve operator incrementally.
+//
+// SERVE-MANAGER COMPONENT
+//
+// The serve-manager component is invisible to the user. It is responsible for
+// bridging between the serve operator and the /serve endpoint, observing when
+// the operator is done, throttling the operator when events are being requested
+// too slowly, and managing request limits and timeouts.
+//
+// KNOWN ISSUES
+//
+// The serve operator must currently run detached because it uses blocking
+// communication for throttling. This would not be required if the operator API
+// used an awaitable coroutine like an async generator. We should revisit this
+// once the operator API supports awaiting non-blocking requests.
+//
+// Technically, the serve-manager should not be needed. However, the current
+// architecture of the web plugin makes it so that the REST handler actor is not
+// implicitly a component actor, and as such may run outside of the node or even
+// multiple times. We should revisit this in the future.
+
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/numeric.hpp>
