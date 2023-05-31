@@ -175,7 +175,8 @@ constexpr auto SPEC_V0 = R"_(
 
 using serve_manager_actor = system::typed_actor_fwd<
   // Register a new serve operator.
-  auto(atom::start, std::string serve_id)->caf::result<void>,
+  auto(atom::start, std::string serve_id, uint64_t buffer_size)
+    ->caf::result<void>,
   // Deregister a serve operator, waiting until it completed.
   auto(atom::stop, std::string serve_id)->caf::result<void>,
   // Put additional slices into the buffer for the given access token.
@@ -205,7 +206,7 @@ struct serve_manager_state {
     std::string serve_id = {};
     std::string continuation_token = {};
 
-    static constexpr uint64_t buffer_limit = 1 << 16;
+    uint64_t buffer_size = 1 << 16;
     std::vector<table_slice> buffer = {};
     uint64_t requested = {};
 
@@ -293,7 +294,7 @@ struct serve_manager_state {
     return true;
   }
 
-  auto start(std::string serve_id) -> caf::result<void> {
+  auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
           return op.serve_id == serve_id;
@@ -308,6 +309,7 @@ struct serve_manager_state {
       .source = self->current_sender()->address(),
       .serve_id = serve_id,
       .continuation_token = "",
+      .buffer_size = buffer_size,
     });
     self->monitor(ops.back().source);
     return {};
@@ -365,7 +367,7 @@ struct serve_manager_state {
                   escape_operator_arg(serve_id));
       }
     }
-    if (rows(found->buffer) < found->buffer_limit) {
+    if (rows(found->buffer) < found->buffer_size) {
       return {};
     }
     found->put_rp = self->make_response_promise<void>();
@@ -428,6 +430,7 @@ struct serve_manager_state {
       entry.emplace("continuation_token", op.continuation_token.empty()
                                             ? data{}
                                             : op.continuation_token);
+      entry.emplace("buffer_size", op.buffer_size);
       entry.emplace("num_buffered", rows(op.buffer));
       entry.emplace("num_requested", op.requested);
       if (verbosity >= system::status_verbosity::detailed) {
@@ -453,8 +456,9 @@ auto serve_manager(
     self->state.handle_down_msg(msg);
   });
   return {
-    [self](atom::start, std::string& serve_id) -> caf::result<void> {
-      return self->state.start(std::move(serve_id));
+    [self](atom::start, std::string& serve_id,
+           uint64_t buffer_size) -> caf::result<void> {
+      return self->state.start(std::move(serve_id), buffer_size);
     },
     [self](atom::stop, std::string& serve_id) -> caf::result<void> {
       return self->state.stop(std::move(serve_id));
@@ -672,8 +676,8 @@ auto serve_handler(
 
 class serve_operator final : public crtp_operator<serve_operator> {
 public:
-  explicit serve_operator(std::string serve_id)
-    : serve_id_{std::move(serve_id)} {
+  serve_operator(std::string serve_id, uint64_t buffer_size)
+    : serve_id_{std::move(serve_id)}, buffer_size_{buffer_size} {
   }
 
   auto
@@ -703,7 +707,8 @@ public:
     co_yield {};
     // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
     blocking_self
-      ->request(serve_manager, caf::infinite, atom::start_v, serve_id_)
+      ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
+                buffer_size_)
       .receive(
         [&]() {
           VAST_INFO("serve for id {} is now available",
@@ -748,7 +753,8 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("serve {}", escape_operator_arg(serve_id_));
+    return fmt::format("serve --buffer-size {} {}", buffer_size_,
+                       escape_operator_arg(serve_id_));
   }
 
   auto detached() const -> bool override {
@@ -761,6 +767,7 @@ public:
 
 private:
   std::string serve_id_ = {};
+  uint64_t buffer_size_ = {};
 };
 
 // -- serve plugin ------------------------------------------------------------
@@ -825,13 +832,16 @@ class plugin final : public virtual component_plugin,
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::operator_arg;
+      parsers::end_of_pipeline_operator, parsers::operator_arg, parsers::count;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> operator_arg
+    const auto p = -(required_ws_or_comment >> "--buffer-size"
+                     >> required_ws_or_comment >> count)
+                   >> required_ws_or_comment >> operator_arg
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
+    auto buffer_size = std::optional<uint64_t>{};
     auto serve_id = std::string{};
-    if (not p(f, l, serve_id)) {
+    if (not p(f, l, buffer_size, serve_id)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error,
@@ -841,7 +851,8 @@ class plugin final : public virtual component_plugin,
     }
     return {
       std::string_view{f, l},
-      std::make_unique<serve_operator>(std::move(serve_id)),
+      std::make_unique<serve_operator>(std::move(serve_id),
+                                       buffer_size.value_or(1 << 16)),
     };
   }
 };
