@@ -43,7 +43,7 @@ curl \
   -X POST \
   -H "Content-Type: application/json" \
   -d '{"serve_id": "zeek-conn-logs", "continuation_token": null, "timeout": "1s", max_events": 100}' \
-  http://localhost:42001/api/v0/serve
+  http://localhost:5160/api/v0/serve
 ```
 
 This will return up to 100 events, or less if the specified timeout of 1 second
