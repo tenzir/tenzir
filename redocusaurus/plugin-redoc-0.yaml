@@ -20,6 +20,179 @@ components:
       in: header
       name: X-VAST-Token
 paths:
+  /query/new:
+    post:
+      summary: Create new query
+      description: Create a new export query in VAST
+      parameters:
+        - in: query
+          name: query
+          schema:
+            type: string
+          example: where :ip in 10.42.0.0/16 | head 100
+          required: true
+          description: |
+            The query used in the form of a pipeline.
+        - in: query
+          name: ttl
+          schema:
+            type: string
+          example: 5.0m
+          required: false
+          description: |
+            The time after which a query is cancelled. Use the /query/:id/next
+            endpoint to refresh the TTL. To refresh the TTL without requesting
+            further events, request zero events.
+        - in: query
+          name: expand
+          schema:
+            type: boolean
+          example: false
+          required: false
+          description: |
+            Whether to use the expanded output schema.
+        - in: query
+          name: flatten
+          schema:
+            type: boolean
+            default: false
+          required: false
+          description: Flatten nested elements in the response data.
+          example: false
+        - in: query
+          name: omit-nulls
+          schema:
+            type: boolean
+            default: false
+          required: false
+          description: Omit null elements in the response data.
+          example: false
+        - in: query
+          name: numeric-durations
+          schema:
+            type: boolean
+            default: false
+          required: false
+          description: Render durations as numeric values.
+          example: false
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  id: c91019bf-21fe-4999-8323-4d28aeb111ab
+                properties:
+                  id:
+                    type: string
+        '401':
+          description: Not authenticated.
+        '422':
+          description: Invalid expression or invalid lifetime.
+  /query/{id}/next:
+    get:
+      summary: Get additional query results
+      description: Return `n` additional results from the specified query.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          example: e84308a2-1ba4-4559-9e0f-597dfea4fd3e
+          description: The query ID.
+        - in: query
+          name: 'n'
+          schema:
+            type: integer
+          required: false
+          example: 10
+          description: Maximum number of returned events
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+                    description: |
+                      The returned events, including a schema-ref that uniquely
+                      identifies the schema for each row.
+                  schemas:
+                    type: array
+                    items:
+                      type: object
+                    description: |
+                      The schemas referenced in the events section of the same
+                      reply, using the same format as the `vast show schemas`
+                      command.
+                example:
+                  events:
+                    - schema-ref: foobarbaz
+                      data:
+                        ts: '2009-11-18T22:11:04.011822'
+                        uid: iKxhjl8i1n3
+                        id:
+                          orig_h: 192.168.1.103
+                    - schema-ref: foobarbaz
+                      data:
+                        ts: '2009-11-18T22:11:04.011822'
+                        uid: iKxhjl8i1n3
+                        id:
+                          orig_h: 192.168.1.103
+                  schemas:
+                    - schema-ref: foobarbaz
+                      definition: <type-definition>
+        '401':
+          description: Not authenticated.
+        '422':
+          description: Invalid arguments.
+  /status:
+    get:
+      summary: Return current status
+      description: Returns the current status of the whole node.
+      parameters:
+        - in: query
+          name: component
+          schema:
+            type: string
+          required: false
+          description: If specified, return the status for that component only.
+          example: index
+        - in: query
+          name: verbosity
+          schema:
+            type: string
+            enum:
+              - info
+              - detailed
+              - debug
+            default: info
+          required: false
+          description: The verbosity level of the status response.
+          example: detailed
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                catalog:
+                  num-partitions: 7092
+                  memory-usage: 52781901584
+                version:
+                  VAST: v2.3.0-rc3-32-g8529a6c43f
+        '401':
+          description: Not authenticated.
   /pipeline/update:
     post:
       summary: Update pipeline state
@@ -336,285 +509,3 @@ paths:
                     type: string
                     example: Invalid arguments
                     description: The error message.
-  /serve:
-    post:
-      summary: Return data from a pipeline
-      description: >-
-        Returns events from an existing pipeline. The pipeline definition must
-        include a serve operator.
-      requestBody:
-        description: Body for the serve endpoint
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - serve_id
-              properties:
-                serve_id:
-                  type: string
-                  example: query1
-                  description: The id that was passed to the serve operator.
-                continuation_token:
-                  type: string
-                  example: 340ce2j
-                  description: >-
-                    The continuation token that was returned with the last
-                    response. For the initial request this is null.
-                max_events:
-                  type: integer
-                  example: 50
-                  description: >-
-                    The maximum number of events returned. If unset, the number
-                    is unlimited
-                timeout:
-                  type: string
-                  example: 100.0ms
-                  default: 100.0ms
-                  description: >-
-                    The maximum amount of time spent on the request. Hitting the
-                    timeout is not an error.
-      responses:
-        '200':
-          description: Success.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  next_continuation_token:
-                    type: string
-                    description: >-
-                      A token to access the next pipeline data batch, null if
-                      the pipeline is completed.
-                    example: 340ce2j
-                  schemas:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        schema_id:
-                          type: string
-                          description: The unique schema identifier.
-                        definition:
-                          type: object
-                          description: The schema definition in JSON format.
-                    description: The schemas that the served events are based on.
-                    example:
-                      - schema_id: c631d301e4b18f4
-                        definition:
-                          record:
-                            - timestamp: time
-                              schema: string
-                              schema_id: string
-                              events: uint64
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        schema_id:
-                          type: string
-                          description: The unique schema identifier.
-                        data:
-                          type: object
-                          description: The actual served data in JSON format.
-                    description: The served events.
-                    example:
-                      - schema_id: c631d301e4b18f4
-                        data:
-                          timestamp: '2023-04-26T12:00:00.000000'
-                          schema: zeek.conn
-                          schema_id: ab2371bas235f1
-                          events: 50
-                      - schema_id: c631d301e4b18f4
-                        data:
-                          timestamp: '2023-04-26T12:05:00.000000'
-                          schema: suricata.dns
-                          schema_id: cd4771bas235f1
-                          events: 50
-        '400':
-          description: Invalid arguments.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    example: Invalid arguments
-                    description: The error message.
-  /query/new:
-    post:
-      summary: Create new query
-      description: Create a new export query in VAST
-      parameters:
-        - in: query
-          name: query
-          schema:
-            type: string
-          example: where :ip in 10.42.0.0/16 | head 100
-          required: true
-          description: |
-            The query used in the form of a pipeline.
-        - in: query
-          name: ttl
-          schema:
-            type: string
-          example: 5.0m
-          required: false
-          description: |
-            The time after which a query is cancelled. Use the /query/:id/next
-            endpoint to refresh the TTL. To refresh the TTL without requesting
-            further events, request zero events.
-        - in: query
-          name: expand
-          schema:
-            type: boolean
-          example: false
-          required: false
-          description: |
-            Whether to use the expanded output schema.
-        - in: query
-          name: flatten
-          schema:
-            type: boolean
-            default: false
-          required: false
-          description: Flatten nested elements in the response data.
-          example: false
-        - in: query
-          name: omit-nulls
-          schema:
-            type: boolean
-            default: false
-          required: false
-          description: Omit null elements in the response data.
-          example: false
-        - in: query
-          name: numeric-durations
-          schema:
-            type: boolean
-            default: false
-          required: false
-          description: Render durations as numeric values.
-          example: false
-      responses:
-        '200':
-          description: Success.
-          content:
-            application/json:
-              schema:
-                type: object
-                example:
-                  id: c91019bf-21fe-4999-8323-4d28aeb111ab
-                properties:
-                  id:
-                    type: string
-        '401':
-          description: Not authenticated.
-        '422':
-          description: Invalid expression or invalid lifetime.
-  /query/{id}/next:
-    get:
-      summary: Get additional query results
-      description: Return `n` additional results from the specified query.
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: string
-          required: true
-          example: e84308a2-1ba4-4559-9e0f-597dfea4fd3e
-          description: The query ID.
-        - in: query
-          name: 'n'
-          schema:
-            type: integer
-          required: false
-          example: 10
-          description: Maximum number of returned events
-      responses:
-        '200':
-          description: Success.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  events:
-                    type: array
-                    items:
-                      type: object
-                    description: |
-                      The returned events, including a schema-ref that uniquely
-                      identifies the schema for each row.
-                  schemas:
-                    type: array
-                    items:
-                      type: object
-                    description: |
-                      The schemas referenced in the events section of the same
-                      reply, using the same format as the `vast show schemas`
-                      command.
-                example:
-                  events:
-                    - schema-ref: foobarbaz
-                      data:
-                        ts: '2009-11-18T22:11:04.011822'
-                        uid: iKxhjl8i1n3
-                        id:
-                          orig_h: 192.168.1.103
-                    - schema-ref: foobarbaz
-                      data:
-                        ts: '2009-11-18T22:11:04.011822'
-                        uid: iKxhjl8i1n3
-                        id:
-                          orig_h: 192.168.1.103
-                  schemas:
-                    - schema-ref: foobarbaz
-                      definition: <type-definition>
-        '401':
-          description: Not authenticated.
-        '422':
-          description: Invalid arguments.
-  /status:
-    get:
-      summary: Return current status
-      description: Returns the current status of the whole node.
-      parameters:
-        - in: query
-          name: component
-          schema:
-            type: string
-          required: false
-          description: If specified, return the status for that component only.
-          example: index
-        - in: query
-          name: verbosity
-          schema:
-            type: string
-            enum:
-              - info
-              - detailed
-              - debug
-            default: info
-          required: false
-          description: The verbosity level of the status response.
-          example: detailed
-      responses:
-        '200':
-          description: OK.
-          content:
-            application/json:
-              schema:
-                type: object
-              example:
-                catalog:
-                  num-partitions: 7092
-                  memory-usage: 52781901584
-                version:
-                  VAST: v2.3.0-rc3-32
