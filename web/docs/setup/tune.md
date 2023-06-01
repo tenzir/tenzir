@@ -315,7 +315,7 @@ example, to rebuild outdated partitions containing `suricata.flow` events
 older than 2 weeks, run the following command:
 
 ```bash
-vast rebuild start '#type == "suricata.flow" && #import_time < 2 weeks ago'
+vast rebuild start '#schema == "suricata.flow" && #import_time < 2 weeks ago'
 ```
 
 To stop an ongoing rebuild, use the `vast rebuild stop` command.

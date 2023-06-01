@@ -68,7 +68,7 @@ struct passive_partition_state {
   /// The combined type of all columns of this partition.
   std::optional<record_type> combined_schema_ = {};
 
-  /// Maps type names to ids. Used the answer #type queries.
+  /// Maps type names to ids. Used the answer #schema queries.
   std::unordered_map<std::string, ids> type_ids_ = {};
 
   /// A readable name for this partition.

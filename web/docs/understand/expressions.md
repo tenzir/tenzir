@@ -28,10 +28,10 @@ The following diagram shows an example expression in tree form:
 When written out, it looks like this:
 
 ```c
-(dport <= 1024 || :ip in 10.0.0.0/8) && ! (#type == /zeek.*/)
+(dport <= 1024 || :ip in 10.0.0.0/8) && ! (#schema == /zeek.*/)
 ```
 
-In this example, the predicate operands `dport`, `:ip`, and `#type` represent
+In this example, the predicate operands `dport`, `:ip`, and `#schema` represent
 [extractors](#extractors) that resolve to a set of matching fields at runtime.
 
 Let's take a look at the expression components in more depth.
@@ -109,8 +109,8 @@ VAST has the following extractor types:
 2. [Type](#type-extractor): extracts all event types that have a field of a
    given type.
 
-3. [Meta](#meta-extractor): matches on the type name or field name of a schema
-   instead of the values contained in actual events.
+3. [Meta](#meta-extractor): extracts metadata describing the event instead of
+   the actual values contained in it
 
 The diagram below illustrate how extractors relate to each other:
 
@@ -158,13 +158,14 @@ consider instances of type `port`. However, a `:port` query does not include
 Meta extractors have the form `#extractor`. They work on the event metadata
 (e.g., their schema) instead of the value domain.
 
-- `#type`: on the event name in a schema
-- `#import_time`: matches on the ingestion time when event arrived at the server
+- `#schema`: the human-readable name of the schema
+- `#schema_id`: the unique fingerprint for the schema
+- `#import_time`: the ingestion time when event arrived at the server
 
 ##### Examples
 
-- `#type == "zeek.conn"`: events of type `zeek.conn`
-- `"suricata" in #type`: events that have `suricata` in their type name
+- `#schema == "zeek.conn"`: events of type `zeek.conn`
+- `"suricata" in #schema`: events that have `suricata` in their schema name
 - `#import_time > 1 hour ago`: events that have been imported within the last
   hour
 

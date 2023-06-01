@@ -238,9 +238,9 @@ TEST(taste 42) {
   CHECK_GREATER(count, 0);
 }
 
-TEST(source | where #type == "zeek.conn" | sink) {
+TEST(source | where #schema == "zeek.conn" | sink) {
   auto count = size_t{0};
-  auto v = unbox(pipeline::parse(R"(taste 42 | where #type == "zeek.conn")"))
+  auto v = unbox(pipeline::parse(R"(taste 42 | where #schema == "zeek.conn")"))
              .unwrap();
   v.insert(v.begin(),
            std::make_unique<source>(std::vector<table_slice>{

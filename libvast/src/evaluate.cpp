@@ -43,8 +43,8 @@ struct cell_evaluator<relational_operator::equal> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-               { lhs == rhs } -> std::same_as<bool>;
-             }
+      { lhs == rhs } -> std::same_as<bool>;
+    }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_equal(lhs, rhs);
@@ -72,8 +72,8 @@ struct cell_evaluator<relational_operator::less> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-               { lhs < rhs } -> std::same_as<bool>;
-             }
+      { lhs < rhs } -> std::same_as<bool>;
+    }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_less(lhs, rhs);
@@ -90,8 +90,8 @@ struct cell_evaluator<relational_operator::less_equal> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-               { lhs <= rhs } -> std::same_as<bool>;
-             }
+      { lhs <= rhs } -> std::same_as<bool>;
+    }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_less_equal(lhs, rhs);
@@ -108,8 +108,8 @@ struct cell_evaluator<relational_operator::greater> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-               { lhs > rhs } -> std::same_as<bool>;
-             }
+      { lhs > rhs } -> std::same_as<bool>;
+    }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_greater(lhs, rhs);
@@ -126,8 +126,8 @@ struct cell_evaluator<relational_operator::greater_equal> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-               { lhs >= rhs } -> std::same_as<bool>;
-             }
+      { lhs >= rhs } -> std::same_as<bool>;
+    }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_greater_equal(lhs, rhs);
@@ -319,13 +319,37 @@ bool evaluate_meta_extractor(const table_slice& slice,
                              const meta_extractor& lhs, relational_operator op,
                              const data& rhs) {
   switch (lhs.kind) {
-    case meta_extractor::kind::type: {
+    case meta_extractor::kind::schema: {
       switch (op) {
 #define VAST_EVAL_DISPATCH(op)                                                 \
   case relational_operator::op: {                                              \
     auto f = [&](const auto& rhs) noexcept {                                   \
       return cell_evaluator<relational_operator::op>::evaluate(                \
         slice.schema().name(), rhs);                                           \
+    };                                                                         \
+    return caf::visit(f, rhs);                                                 \
+  }
+        VAST_EVAL_DISPATCH(equal);
+        VAST_EVAL_DISPATCH(not_equal);
+        VAST_EVAL_DISPATCH(in);
+        VAST_EVAL_DISPATCH(less);
+        VAST_EVAL_DISPATCH(not_in);
+        VAST_EVAL_DISPATCH(greater);
+        VAST_EVAL_DISPATCH(greater_equal);
+        VAST_EVAL_DISPATCH(less_equal);
+        VAST_EVAL_DISPATCH(ni);
+        VAST_EVAL_DISPATCH(not_ni);
+#undef VAST_EVAL_DISPATCH
+      }
+      die("unreachable");
+    }
+    case meta_extractor::kind::schema_id: {
+      switch (op) {
+#define VAST_EVAL_DISPATCH(op)                                                 \
+  case relational_operator::op: {                                              \
+    auto f = [&](const auto& rhs) noexcept {                                   \
+      return cell_evaluator<relational_operator::op>::evaluate(                \
+        slice.schema().make_fingerprint(), rhs);                               \
     };                                                                         \
     return caf::visit(f, rhs);                                                 \
   }

@@ -43,10 +43,10 @@ expression to_expr(T&& x) {
 
 struct fixture {
   fixture() {
-    // expr0 := !(x.y.z <= 42 && #type == "foo")
+    // expr0 := !(x.y.z <= 42 && #schema == "foo")
     auto p0 = predicate{field_extractor{"x.y.z"},
                         relational_operator::less_equal, data{int64_t{42}}};
-    auto p1 = predicate{meta_extractor{meta_extractor::type},
+    auto p1 = predicate{meta_extractor{meta_extractor::schema},
                         relational_operator::equal, data{"foo"}};
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
@@ -77,7 +77,7 @@ TEST(construction) {
   CHECK_EQUAL(get<data>(p0->rhs), int64_t{42});
   auto p1 = caf::get_if<predicate>(&c->at(1));
   REQUIRE(p1);
-  CHECK_EQUAL(get<meta_extractor>(p1->lhs).kind, meta_extractor::type);
+  CHECK_EQUAL(get<meta_extractor>(p1->lhs).kind, meta_extractor::schema);
   CHECK_EQUAL(p1->op, relational_operator::equal);
   CHECK(get<data>(p1->rhs) == data{"foo"});
 }
@@ -237,15 +237,15 @@ TEST(extractors) {
 }
 
 TEST(validation - meta extractor) {
-  MESSAGE("#type");
+  MESSAGE("#schema");
   // The "type" attribute extractor requires a string operand.
-  auto expr = to<expression>("#type == \"foo\"");
+  auto expr = to<expression>("#schema == \"foo\"");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("#type == 42");
+  expr = to<expression>("#schema == 42");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
-  expr = to<expression>("#type == zeek.conn");
+  expr = to<expression>("#schema == zeek.conn");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
 }
@@ -288,15 +288,15 @@ TEST(matcher) {
   CHECK(match("x < 4.2 && (y == false || :bool == false)", r));
   CHECK(!match("x < 4.2 && a == true", r));
   MESSAGE("attribute extractors");
-  CHECK(!match("#type == \"foo\"", r));
+  CHECK(!match("#schema == \"foo\"", r));
   r = type{"foo", r};
-  CHECK(match("#type == \"foo\"", r));
-  CHECK(match("#type != \"bar\"", r));
+  CHECK(match("#schema == \"foo\"", r));
+  CHECK(match("#schema != \"bar\"", r));
 }
 
 TEST(labeler) {
   auto str
-    = "(x == 5 && :bool == true) || (foo == /foo/ && !(x == 5 || #type == /bar/))"s;
+    = "(x == 5 && :bool == true) || (foo == /foo/ && !(x == 5 || #schema == /bar/))"s;
   auto expr = to_expr(str);
   // Create a visitor that records all offsets in order.
   detail::stable_map<expression, offset> offset_map;
@@ -309,26 +309,26 @@ TEST(labeler) {
     {to_expr("x == 5 && :bool == true"), {0, 0}},
     {to_expr("x == 5"), {0, 0, 0}},
     {to_expr(":bool == true"), {0, 0, 1}},
-    {to_expr("foo == /foo/ && !(x == 5 || #type == /bar/)"), {0, 1}},
+    {to_expr("foo == /foo/ && !(x == 5 || #schema == /bar/)"), {0, 1}},
     {to_expr("foo == /foo/"), {0, 1, 0}},
-    {to_expr("!(x == 5 || #type == /bar/)"), {0, 1, 1}},
-    {to_expr("x == 5 || #type == /bar/"), {0, 1, 1, 0}},
+    {to_expr("!(x == 5 || #schema == /bar/)"), {0, 1, 1}},
+    {to_expr("x == 5 || #schema == /bar/"), {0, 1, 1, 0}},
     {to_expr("x == 5"), {0, 1, 1, 0, 0}},
-    {to_expr("#type == /bar/"), {0, 1, 1, 0, 1}},
+    {to_expr("#schema == /bar/"), {0, 1, 1, 0, 1}},
   };
   CHECK_EQUAL(offset_map, expected_offset_map);
 }
 
 TEST(at) {
   auto str
-    = "(x == 5 && :bool == true) || (foo == /foo/ && !(x == 5 || #type == /bar/))"s;
+    = "(x == 5 && :bool == true) || (foo == /foo/ && !(x == 5 || #schema == /bar/))"s;
   auto expr = to_expr(str);
   CHECK_EQUAL(at(expr, {}), nullptr);  // invalid offset
   CHECK_EQUAL(at(expr, {0}), &expr);   // root node
   CHECK_EQUAL(at(expr, {1}), nullptr); // invalid root offset
   CHECK_EQUAL(*at(expr, {0, 0}), to_expr("x == 5 && :bool == true"));
   CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr("foo == /foo/"));
-  CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("#type == /bar/"));
+  CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("#schema == /bar/"));
   CHECK_EQUAL(at(expr, {0, 1, 1, 0, 1, 0}), nullptr); // offset too long
 }
 
@@ -370,21 +370,21 @@ TEST(parse print roundtrip) {
   MESSAGE("simple roundtrip");
   {
     auto str
-      = "((x == 5 && :bool == true) || (foo == /foo/ && ! (x == 5 || #type == /bar/)))"s;
+      = "((x == 5 && :bool == true) || (foo == /foo/ && ! (x == 5 || #schema == /bar/)))"s;
     auto expr = to_expr(str);
     CHECK_EQUAL(str, to_string(expr));
   }
 }
 
 TEST(expression parser composability) {
-  auto str = "x == 5 | :bool == true || #type == /bar/ | +3"s;
+  auto str = "x == 5 | :bool == true || #schema == /bar/ | +3"s;
   std::vector<expression> result;
   auto p = (parsers::expr % (*parsers::space >> '|' >> *parsers::space))
            >> parsers::eoi;
   REQUIRE(p(str, result));
   REQUIRE_EQUAL(result.size(), 3u);
   CHECK_EQUAL(result[0], to_expr("x == 5"));
-  CHECK_EQUAL(result[1], to_expr(":bool == true || #type == /bar/"));
+  CHECK_EQUAL(result[1], to_expr(":bool == true || #schema == /bar/"));
   CHECK_EQUAL(result[2], to_expr("+3"));
 }
 

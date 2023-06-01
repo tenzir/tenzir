@@ -69,7 +69,7 @@ struct active_partition_state {
     /// Opaque blob that is passed to the store backend on reading.
     chunk_ptr store_header = {};
 
-    /// Maps type names to IDs. Used the answer #type queries.
+    /// Maps type names to IDs. Used the answer #schema queries.
     std::unordered_map<std::string, ids> type_ids = {};
 
     /// Partition synopsis for this partition. This is built up in parallel

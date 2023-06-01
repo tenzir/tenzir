@@ -196,9 +196,9 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         for (const auto& [part_id, part_syn] : partition_synopses) {
           for (const auto& [field, syn] : part_syn->field_synopses_) {
             if (match(field)) {
-              // We need to prune the type's metadata here by converting it to a
-              // concrete type and back, because the type synopses are looked up
-              // independent from names and attributes.
+              // We need to prune the type's metadata here by converting it to
+              // a concrete type and back, because the type synopses are
+              // looked up independent from names and attributes.
               auto prune = [&]<concrete_type T>(const T& x) {
                 return type{x};
               };
@@ -245,7 +245,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
       auto extract_expr = detail::overload{
         [&](const meta_extractor& lhs,
             const data& d) -> catalog_lookup_result::candidate_info {
-          if (lhs.kind == meta_extractor::type) {
+          if (lhs.kind == meta_extractor::schema) {
             // We don't have to look into the synopses for type queries, just
             // at the schema names.
             catalog_lookup_result::candidate_info result;
@@ -260,6 +260,21 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                   result.partition_infos.emplace_back(part_id, *part_syn);
                   break;
                 }
+              }
+            }
+            VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                       result.partition_infos.end()));
+            return result;
+          }
+          if (lhs.kind == meta_extractor::schema_id) {
+            auto result = catalog_lookup_result::candidate_info{};
+            result.exp = expr;
+            for (const auto& [part_id, part_syn] : partition_synopses) {
+              VAST_ASSERT(part_syn->schema == schema);
+            }
+            if (evaluate(schema.make_fingerprint(), x.op, d)) {
+              for (const auto& [part_id, part_syn] : partition_synopses) {
+                result.partition_infos.emplace_back(part_id, *part_syn);
               }
             }
             VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
@@ -442,7 +457,8 @@ caf::error catalog_state::load_type_registry_from_disk() {
     const auto file_exists = std::filesystem::exists(fname, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed while trying to find file {}: "
+                             fmt::format("failed while trying to find file "
+                                         "{}: "
                                          "{}",
                                          fname, err.message()));
     if (file_exists) {
@@ -460,8 +476,8 @@ caf::error catalog_state::load_type_registry_from_disk() {
         type_data.emplace(k, entry);
       }
       VAST_DEBUG("{} loaded state from disk", *self);
-      // We save the new state already now before removing the old state just to
-      // be save against crashes.
+      // We save the new state already now before removing the old state just
+      // to be save against crashes.
       if (auto err = save_type_registry_to_disk())
         return err;
       if (!std::filesystem::remove(fname, err) || err)
@@ -475,7 +491,8 @@ caf::error catalog_state::load_type_registry_from_disk() {
     const auto file_exists = std::filesystem::exists(fname, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed while trying to find file {}: "
+                             fmt::format("failed while trying to find file "
+                                         "{}: "
                                          "{}",
                                          fname, err.message()));
     if (file_exists) {
@@ -506,8 +523,8 @@ void catalog_state::insert(vast::type schema) {
   // Insert into the existing bucket.
   auto [hint, success] = old_schemas.insert(std::move(schema));
   if (success) {
-    // Check whether the new schema is compatible with the latest, i.e., whether
-    // the new schema is a superset of it.
+    // Check whether the new schema is compatible with the latest, i.e.,
+    // whether the new schema is a superset of it.
     if (old_schemas.begin() != hint) {
       if (!is_subset(*old_schemas.begin(), *hint))
         VAST_WARN("{} detected an incompatible schema change for {}", *self,

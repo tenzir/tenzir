@@ -160,7 +160,7 @@ class VAST:
             logger.debug(stderr.decode())
             if proc.returncode == 0:
                 result = json.loads(stdout.decode("utf-8"))
-                assert isinstance(result, dict), 'Argument of wrong type!'
+                assert isinstance(result, dict), "Argument of wrong type!"
                 return result
             else:
                 duration = time.time() - start
@@ -172,7 +172,7 @@ class VAST:
     async def count(self, *args, **kwargs) -> int:
         """
         Executes the VAST count command and return the response number.
-        Examples: `count()`, `count("#type == /suricata.alert/", estimate=True)`.
+        Examples: `count()`, `count("#schema == /suricata.alert/", estimate=True)`.
         """
         proc = await self.cli.count(*args, **kwargs).exec()
         stdout, stderr = await proc.communicate()

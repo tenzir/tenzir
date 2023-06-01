@@ -42,13 +42,19 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
               relational_operator op, const data& x) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   ids row_ids;
-  if (ex.kind == meta_extractor::type) {
+  if (ex.kind == meta_extractor::schema) {
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
     for (auto& [name, ids] : state.type_ids()) {
       if (evaluate(name, op, x))
         row_ids |= ids;
+    }
+  } else if (ex.kind == meta_extractor::schema_id) {
+    // TODO: Actually take the schema fingerprint into account. For now, we just
+    // return all stored ids.
+    for (const auto& [_, ids] : state.type_ids()) {
+      row_ids |= ids;
     }
   } else if (ex.kind == meta_extractor::import_time) {
     // For a passive partition, this already went through a time synopsis in

@@ -6,7 +6,7 @@ include "segmented_file.fbs";
 namespace vast.fbs.partition.detail;
 
 /// Stores the ids of a given type in the current partition.
-/// Used to answer queries like `#type == "foo"`.
+/// Used to answer queries like `#schema == "foo"`.
 table LegacyTypeIDs {
   /// The type name.
   name: string;
@@ -18,7 +18,7 @@ table LegacyTypeIDs {
 /// Stores an id for the store implmentation and a block of bytes that
 /// passed to the initalization function.
 table StoreHeader {
-  /// The identifier of the store implementation that can read the data.        
+  /// The identifier of the store implementation that can read the data.
   id: string;
 
   /// The store metadata.

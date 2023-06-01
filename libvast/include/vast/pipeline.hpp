@@ -106,7 +106,7 @@ inline auto operator_type_name(const operator_output& x) -> std::string_view {
 inline auto trivially_true_expression() -> const expression& {
   static auto expr = expression{
     predicate{
-      meta_extractor{meta_extractor::kind::type},
+      meta_extractor{meta_extractor::kind::schema},
       relational_operator::not_equal,
       data{std::string{"this expression matches everything"}},
     },

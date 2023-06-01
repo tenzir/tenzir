@@ -55,13 +55,13 @@ TEST(parseable / printable - predicate) {
   CHECK((caf::get<data>(pred.rhs) == data{list{21u, 42u, 84u}}));
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
-  MESSAGE("#type != \"foo\"");
-  str = "#type != \"foo\"";
+  MESSAGE("#schema != \"foo\"");
+  str = "#schema != \"foo\"";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<meta_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<meta_extractor>(pred.lhs)
-        == meta_extractor{meta_extractor::type});
+        == meta_extractor{meta_extractor::schema});
   CHECK(pred.op == relational_operator::not_equal);
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
@@ -87,14 +87,14 @@ TEST(parseable / printable - predicate) {
   CHECK(caf::get<data>(pred.rhs) == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: typename
-  MESSAGE("\"zeek.\" in #type");
-  str = "\"zeek.\" in #type";
+  MESSAGE("\"zeek.\" in #schema");
+  str = "\"zeek.\" in #schema";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<meta_extractor>(pred.rhs));
   CHECK(pred.op == relational_operator::in);
   CHECK(caf::get<meta_extractor>(pred.rhs)
-        == meta_extractor{meta_extractor::type});
+        == meta_extractor{meta_extractor::schema});
   // LHS: schema, RHS: schema
   MESSAGE("x.a_b == y.c_d");
   str = "x.a_b == y.c_d";
@@ -157,7 +157,7 @@ TEST(parseable - expression) {
   MESSAGE("stray dot regression");
   // This should fail to parse because of the stray dot.
   CHECK(!parsers::expr(
-    "#type == \"suricata.http\" && .community_id == \"1:Y3MTSbNCzFAT3I5+i6xzSgrL59k=\""s,
+    "#schema == \"suricata.http\" && .community_id == \"1:Y3MTSbNCzFAT3I5+i6xzSgrL59k=\""s,
     expr));
 }
 
@@ -214,29 +214,29 @@ TEST(parseable - custom type extractor predicate) {
 TEST(parseable - comments in expressions) {
   expression expected_expr;
   CHECK(parsers::expr(
-    R"(#type == "foo" && (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
+    R"(#schema == "foo" && (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
     expected_expr));
   expression expr;
   CHECK(parsers::expr(
-    R"(#type == "foo" && (foo.bar != [1, 2, 3] /*/*fo* /*/|| baz != <_, 3.0>))"s,
+    R"(#schema == "foo" && (foo.bar != [1, 2, 3] /*/*fo* /*/|| baz != <_, 3.0>))"s,
     expr));
   CHECK_EQUAL(expr, expected_expr);
   CHECK(parsers::expr(
-    R"(#type/**/==/******/"foo" && (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
+    R"(#schema/**/==/******/"foo" && (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
     expr));
   CHECK_EQUAL(expr, expected_expr);
   CHECK(parsers::expr(
-    R"(#type == "foo"/* && x != null */&& (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
+    R"(#schema == "foo"/* && x != null */&& (foo.bar != [1, 2, 3] || baz != <_, 3.0>))"s,
     expr));
   // TODO: Comments within list and record literals are not currently allowed
   // because that parser is used in quite a few places that do not parse just an
   // expression or a pipeline.
   // CHECK(parsers::expr(
-  //   R"(#type ==/**/"foo" && (foo.bar != [1, 2,/*0,*/ 3] || baz !=
+  //   R"(#schema ==/**/"foo" && (foo.bar != [1, 2,/*0,*/ 3] || baz !=
   //   <_, 3.0>))"s, expr));
   // CHECK_EQUAL(expr, expected_expr);
   // CHECK(parsers::expr(
-  //   R"(#type ==/**/"foo" && (foo.bar != [1, 2,/*0,*/ 3] || baz != </**/_,
+  //   R"(#schema ==/**/"foo" && (foo.bar != [1, 2,/*0,*/ 3] || baz != </**/_,
   //   /**/3.0>))"s, expr));
   // CHECK_EQUAL(expr, expected_expr);
 }

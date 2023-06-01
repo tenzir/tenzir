@@ -102,7 +102,7 @@ grouped into 10 second buckets and looking at the minimum and the maximum
 latency, respectively, for all buckets.
 
 ```bash
-vast export json '#type == "vast.metrics.passive-store.init.runtime"
+vast export json '#schema == "vast.metrics.passive-store.init.runtime"
   | select ts, value
   | summarize min(value), max(value) by ts resolution 10s'
 ```

@@ -15,8 +15,8 @@ vast:
     # Aggregate suricata.flow events with matching source and destination IP
     # addresses.
     summarize-flows: >
-      where #type == "suricata.flow"
-      | summarize 
+      where #schema == "suricata.flow"
+      | summarize
           pkts_toserver=sum(flow.pkts_toserver),
           pkts_toclient=sum(flow.pkts_toclient),
           bytes_toserver=sum(flow.bytes_toserver),

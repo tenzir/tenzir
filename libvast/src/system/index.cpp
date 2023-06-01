@@ -1786,9 +1786,9 @@ index(index_actor::stateful_pointer<index_state> self,
         self->state.index_opts, self->state.accountant, self->state.catalog,
         self->state.filesystem, pipe, std::move(partition_path_template),
         std::move(partition_synopsis_path_template));
-      // match_everything == '"" in #type'
+      // match_everything == '"" in #schema'
       static const auto match_everything
-        = vast::predicate{meta_extractor{meta_extractor::type},
+        = vast::predicate{meta_extractor{meta_extractor::schema},
                           relational_operator::ni, data{""}};
       auto query_context = query_context::make_extract(
         pipe.to_string(), partition_transfomer, match_everything);

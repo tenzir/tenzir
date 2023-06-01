@@ -47,8 +47,8 @@ struct fixture : fixtures::events {
 
 FIXTURE_SCOPE(evaluation_tests, fixture)
 
-TEST(evaluation - meta extractor - #type) {
-  auto expr = make_expr("#type == \"zeek.conn\"");
+TEST(evaluation - meta extractor - #schema) {
+  auto expr = make_expr("#schema == \"zeek.conn\"");
   auto ids = evaluate(expr, zeek_conn_log_slice, {});
   CHECK_EQUAL(ids, make_ids({{0, zeek_conn_log_slice.rows()}}));
 }

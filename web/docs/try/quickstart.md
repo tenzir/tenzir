@@ -73,7 +73,7 @@ tar xOzf zeek.tar.gz | vast import zeek
 ```
 
 ```bash
-tar xOzf suricata.tar.gz | vast import suricata '#type == "suricata.alert"'
+tar xOzf suricata.tar.gz | vast import suricata '#schema == "suricata.alert"'
 ```
 
 ```
@@ -83,7 +83,7 @@ tar xOzf suricata.tar.gz | vast import suricata '#type == "suricata.alert"'
 ```
 
 We've added the import filter
-[expression](../understand/expressions.md) `#type == "suricata.alert"`
+[expression](../understand/expressions.md) `#schema == "suricata.alert"`
 because we're want the alerts from Suricata and the metadata from Zeek.
 
 :::note Multi-schema Zeek TSV Parser
@@ -229,7 +229,7 @@ taste of actual events. The
 number of events per unique schema:
 
 ```bash
-vast export json '#type == /(zeek|suricata).*/ | taste 1'
+vast export json '#schema == /(zeek|suricata).*/ | taste 1'
 ```
 
 ```json
@@ -277,7 +277,7 @@ There are many other ways to slice and dice the data. For example, we could pick
 a single schema:
 
 ```bash
-vast export json '#type == "suricata.alert" | head 3'
+vast export json '#schema == "suricata.alert" | head 3'
 ```
 
 ```json
@@ -290,7 +290,7 @@ There are a lot of `null` values in there. We can filter them out by passing
 `--omit-nulls` to the `json` printer:
 
 ```bash
-vast export json --omit-nulls '#type == "suricata.alert" | head 3'
+vast export json --omit-nulls '#schema == "suricata.alert" | head 3'
 ```
 
 ```json
@@ -304,7 +304,7 @@ Certainly less noisy. The
 selecting fields of interest:
 
 ```bash
-vast export json '#type == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
+vast export json '#schema == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
 ```
 
 ```json
@@ -319,7 +319,7 @@ Looking at the output, we see multiple alert severities. Let's understand their
 distribution:
 
 ```bash
-vast export json '#type == "suricata.alert" | summarize count=count(src_ip) by severity'
+vast export json '#schema == "suricata.alert" | summarize count=count(src_ip) by severity'
 ```
 
 ```json
