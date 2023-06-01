@@ -61,8 +61,15 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(const meta_extractor& e) const {
-      return printers::str(
-        out_, e.kind == meta_extractor::type ? "#type" : "#import_time");
+      switch (e.kind) {
+        case meta_extractor::schema:
+          return printers::str(out_, "#schema");
+        case meta_extractor::schema_id:
+          return printers::str(out_, "#schema_id");
+        case meta_extractor::import_time:
+          return printers::str(out_, "#import_time");
+      }
+      die("unreachable");
     }
 
     bool operator()(const type_extractor& e) const {

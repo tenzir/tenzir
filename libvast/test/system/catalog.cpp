@@ -298,13 +298,13 @@ TEST(attribute extractor - time) {
 TEST(attribute extractor - type) {
   auto foo = std::vector<uuid>{ids[0], ids[2]};
   auto foobar = std::vector<uuid>{ids[1], ids[3]};
-  CHECK_EQUAL(lookup("#type == \"foo\""), foo);
-  CHECK_EQUAL(lookup("#type == \"bar\""), empty());
-  CHECK_EQUAL(lookup("#type != \"foo\""), foobar);
-  CHECK_EQUAL(lookup("#type == /f.o/"), foo);
-  CHECK_EQUAL(lookup("#type == /f.*/"), ids);
-  CHECK_EQUAL(lookup("#type == /x/"), empty());
-  CHECK_EQUAL(lookup("#type != /x/"), ids);
+  CHECK_EQUAL(lookup("#schema == \"foo\""), foo);
+  CHECK_EQUAL(lookup("#schema == \"bar\""), empty());
+  CHECK_EQUAL(lookup("#schema != \"foo\""), foobar);
+  CHECK_EQUAL(lookup("#schema == /f.o/"), foo);
+  CHECK_EQUAL(lookup("#schema == /f.*/"), ids);
+  CHECK_EQUAL(lookup("#schema == /x/"), empty());
+  CHECK_EQUAL(lookup("#schema != /x/"), ids);
 }
 
 // Test the import timestamp meta extractor. Half the test data was set to

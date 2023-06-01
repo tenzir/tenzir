@@ -285,13 +285,20 @@ caf::expected<void> validator::operator()(const predicate& p) {
 
 caf::expected<void>
 validator::operator()(const meta_extractor& ex, const data& d) {
-  if (ex.kind == meta_extractor::type
+  if (ex.kind == meta_extractor::schema
       && !(caf::holds_alternative<std::string>(d)
            || caf::holds_alternative<pattern>(d)))
     return caf::make_error(ec::syntax_error,
-                           "type meta extractor requires string or pattern "
+                           "schema meta extractor requires string or pattern "
                            "operand",
-                           "#type", op_, d);
+                           "#schema", op_, d);
+  if (ex.kind == meta_extractor::schema_id
+      && !(caf::holds_alternative<std::string>(d)
+           || caf::holds_alternative<pattern>(d)))
+    return caf::make_error(ec::syntax_error,
+                           "schema_id meta extractor requires string or "
+                           "pattern operand",
+                           "#schema_id", op_, d);
   if (ex.kind == meta_extractor::import_time) {
     if (!caf::holds_alternative<time>(d)
         || !(op_ == relational_operator::less
@@ -387,7 +394,7 @@ caf::expected<expression> type_resolver::operator()(const predicate& p) {
 
 caf::expected<expression>
 type_resolver::operator()(const meta_extractor& ex, const data& d) {
-  // We're leaving all attributes alone, because both #type and #import_time
+  // We're leaving all attributes alone, because both #schema and #import_time
   // operate at a different granularity.
   return predicate{ex, op_, d};
 }
@@ -472,11 +479,15 @@ bool matcher::operator()(const predicate& p) {
 }
 
 bool matcher::operator()(const meta_extractor& e, const data& d) {
-  if (e.kind == meta_extractor::type) {
+  if (e.kind == meta_extractor::schema) {
     VAST_ASSERT(caf::holds_alternative<std::string>(d));
     // TODO: It's kind of non-sensical that evaluate operates on data rather
     // than data_view, forcing us to copy the type's name here.
     return evaluate(d, op_, std::string{type_.name()});
+  }
+  if (e.kind == meta_extractor::schema_id) {
+    VAST_ASSERT(caf::holds_alternative<std::string>(d));
+    return evaluate(d, op_, type_.make_fingerprint());
   }
   return false;
 }

@@ -438,7 +438,7 @@ TEST(query after transform) {
   CHECK(flush_ack);
   // Get the uuid of the partition
   auto matching_expression
-    = vast::to<vast::expression>("#type == \"zeek.conn\"");
+    = vast::to<vast::expression>("#schema == \"zeek.conn\"");
   auto rp1 = self->request(index, caf::infinite, vast::atom::resolve_v,
                            unbox(matching_expression));
   auto partition_uuid = vast::uuid{};
@@ -507,7 +507,7 @@ TEST(query after transform) {
     return total;
   };
   CHECK_EQUAL(count_results("id.orig_h == 192.168.1.102"), 8ull);
-  CHECK_EQUAL(count_results("#type == \"zeek.totally_not_conn\" &&"
+  CHECK_EQUAL(count_results("#schema == \"zeek.totally_not_conn\" &&"
                             " id.orig_h == 192.168.1.102"),
               8ull);
   CHECK_EQUAL(count_results("service == \"dns\""), 11ull);
@@ -562,7 +562,7 @@ TEST(select pipeline with an empty result set) {
   partition_info.uuid = partition_uuid;
   auto rp2 = self->request(
     index, caf::infinite, vast::atom::apply_v,
-    unbox(vast::pipeline::parse("where #type == \"does_not_exist\"")),
+    unbox(vast::pipeline::parse("where #schema == \"does_not_exist\"")),
     partition_infos, vast::system::keep_original_partition::no);
   run();
   rp2.receive(

@@ -32,7 +32,7 @@ sudo vast import pcap --interface=en0 --cutoff=65535
 The PCAP export format uses [libpcap][libpcap] to write PCAP events as a trace.
 
 This command only supports events of type `pcap.packet`. As a result, VAST
-transforms a provided query expression `E` into `#type == "pcap.packet" && E`.
+transforms a provided query expression `E` into `#schema == "pcap.packet" && E`.
 
 [libpcap]: https://www.tcpdump.org
 [community-id-spec]: https://github.com/corelight/community-id-spec

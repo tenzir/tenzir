@@ -385,7 +385,7 @@ filter(const table_slice& slice, const ids& hints);
 
 /// Resolve a meta extractor for a given table slice.
 auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
-  -> view<data>;
+  -> data;
 
 /// Resolve an operand into an Array for a given table slice.
 auto resolve_operand(const table_slice& slice, const operand& op)

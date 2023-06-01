@@ -123,7 +123,7 @@ the above schemas with a *meta extractor* to select a specific set of event
 types:
 
 ```c
-#type == /suricata.(http|flow)/
+#schema == /suricata.(http|flow)/
 ```
 
 This predicate restricts a query to the event types `suricata.flow` and

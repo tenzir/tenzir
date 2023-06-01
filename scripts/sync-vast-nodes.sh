@@ -4,11 +4,11 @@
 # for selectively synchronizing based on specific properties or types
 #
 # Usage examples:
-#   sync-vast-nodes.sh "#type == \"suricata.alert\""  10 :5158 :42001 vast
+#   sync-vast-nodes.sh "#schema == \"suricata.alert\""  10 :5158 :42001 vast
 #   sync-vast-nodes.sh "" 10 :5158 :42001 vast
 #
 # Arguments
-#   query: e.g. "#type == \"suricata.alert\"" - mind the quotes; can be empty ""
+#   query: e.g. "#schema == \"suricata.alert\"" - mind the quotes; can be empty ""
 #   seconds - sync interval in seconds - default 5
 #   VAST endpoint of source - default :5158
 #   VAST endpoint of sink   - default :42001
@@ -31,7 +31,7 @@ then
 else
   PREVIOUS_TIMESTAMP="1970-01-01T00:00:00+00:00"
   >&2 echo "no previous sync time stamp starting from $PREVIOUS_TIMESTAMP"
-fi 
+fi
 
 while true; do
   TIMESTAMP=`date -Iseconds`
