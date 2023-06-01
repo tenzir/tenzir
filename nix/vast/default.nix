@@ -157,7 +157,7 @@
         hardeningDisable = lib.optional isStatic "pic";
 
         postBuild = lib.optionalString isStatic ''
-          ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/vast
+          ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*
         '';
 
         fixupPhase = lib.optionalString isStatic ''
@@ -174,7 +174,7 @@
         # TODO: Investigate why the disk monitor test fails in the build sandbox.
         installCheckPhase = ''
           python ../vast/integration/integration.py \
-            --app ${placeholder "out"}/bin/vast \
+            --app ${placeholder "out"}/bin/tenzirctl \
             --disable "Disk Monitor"
         '';
 
@@ -198,7 +198,7 @@
               {
                 nativeBuildInputs = [makeWrapper];
               } ''
-                makeWrapper ${self}/bin/vast $out/bin/vast \
+                makeWrapper ${self}/bin/tenzirctl $out/bin/tenzirctl \
                   --set VAST_PLUGIN_DIRS "${pluginDir}/lib/vast/plugins"
               '';
         };

@@ -106,7 +106,6 @@ in {
       serviceConfig = {
         Type = "notify";
         ExecStart = "${cfg.package}/bin/vast --config=${configFile} start";
-        ExecStop = "${cfg.package}/bin/vast --config=${configFile} stop";
         DynamicUser = true;
         NoNewPrivileges = true;
         PIDFile = "${cfg.settings.vast.db-directory}/pid.lock";

@@ -132,7 +132,7 @@ def try_wait(process, timeout, expected_result):
 def run_flamegraph(args, svg_file):
     """Perform instrumentation and produce an output svg"""
     LOGGER.debug(f"writing flamegraph {args} to {svg_file}")
-    flamegraph = Path(args.flamegraph_path).resolve()
+    flamegraph = Path(args.flamegraph_path).absolute()
     with open(svg_file, "w") as svg:
         # refresh sudo credential cache in a blocking call to be sure to catch
         # the entire test run
@@ -380,7 +380,7 @@ class Tester:
     def __init__(self, args, fixtures, config_file):
         self.args = args
         self.app = args.app
-        self.cmd = Path(args.app).resolve()
+        self.cmd = Path(args.app).absolute()
         self.config_file = config_file
         self.fixtures = fixtures
         self.test_dir = args.directory
@@ -499,7 +499,7 @@ def validate(data):
     def absolute_path(path):
         absolute = Path(os.path.expanduser(path))
         if not absolute.is_absolute():
-            absolute = (SET_DIR / path).resolve()
+            absolute = (SET_DIR / path).absolute()
         return absolute
 
     def replace_path(raw_command):
@@ -730,8 +730,8 @@ def main():
     LOGGER.addHandler(sh)
     # Load test set.
     if not args.set:
-        args.set = Path(__file__).resolve().parent / "vast_integration_suite.yaml"
-    args.set = args.set.resolve()
+        args.set = Path(__file__).absolute().parent / "vast_integration_suite.yaml"
+    args.set = args.set.absolute()
     LOGGER.debug(f"resolved test set path to {args.set}")
     global SET_DIR
     SET_DIR = args.set.parent
