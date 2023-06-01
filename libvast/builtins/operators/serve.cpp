@@ -926,6 +926,24 @@ class plugin final : public virtual component_plugin,
                                     pipeline)),
       };
     }
+    if (serve_id.empty()) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error,
+                        fmt::format("failed to parse {} operator: serve-id "
+                                    "must not be empty",
+                                    pipeline)),
+      };
+    }
+    if (buffer_size && *buffer_size == 0) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error,
+                        fmt::format("failed to parse {} operator: buffer-size "
+                                    "must not be zero",
+                                    pipeline)),
+      };
+    }
     return {
       std::string_view{f, l},
       std::make_unique<serve_operator>(std::move(serve_id),
