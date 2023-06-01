@@ -18,6 +18,9 @@ auto openapi_record() -> record {
     for (auto& [key, value] : caf::get<record>(spec))
       paths.emplace(key, value);
   }
+  std::sort(paths.begin(), paths.end(), [](const auto& lhs, const auto& rhs) {
+    return lhs.first < rhs.first;
+  });
   // clang-format off
   auto openapi = record{
     {"openapi", "3.0.0"},
