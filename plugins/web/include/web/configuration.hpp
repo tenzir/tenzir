@@ -52,7 +52,7 @@ struct configuration {
   std::string bind_address = "127.0.0.1";
   std::string web_root = {};
   std::string cors_allowed_origin = {};
-  int port = 42001;
+  int port = 5160;
 };
 
 // The resolved and validated configuration that gets used at runtime.

@@ -12,9 +12,9 @@ services:
       - VAST_START__COMMANDS=web server
       - VAST_PLUGINS__WEB__MODE=dev
       - VAST_PLUGINS__WEB__BIND=0.0.0.0
-      - VAST_PLUGINS__WEB__PORT=42001
+      - VAST_PLUGINS__WEB__PORT=5160
     ports:
-      - ${VAST_WEB_PORT:-42001}:42001
+      - ${VAST_WEB_PORT:-5160}:5160
       - ${VAST_PORT:-5158}:5158
     command:
       - start
