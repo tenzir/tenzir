@@ -27,9 +27,6 @@ docker exec vast-regression \
   vast flush
 
 docker exec vast-regression \
-  vast export json '#schema == "suricata.alert"' \
-  > old.json \
-|| docker exec vast-regression \
   vast export json 'where #schema == "suricata.alert"' \
   > old.json
 
@@ -44,9 +41,6 @@ docker run \
 sleep 3
 
 docker exec vast-regression \
-  vast export json '#schema == "suricata.alert"' \
-  > new.json \
-|| docker exec vast-regression \
   vast export json 'where #schema == "suricata.alert"' \
   > new.json
 
