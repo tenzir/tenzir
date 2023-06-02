@@ -69,7 +69,7 @@ struct node_state {
   // -- actor facade -----------------------------------------------------------
 
   /// The name of the NODE actor.
-  std::string name = "node";
+  constexpr static inline auto name = "node";
 
   /// A pointer to the NODE actor handle.
   node_actor::pointer self = {};
