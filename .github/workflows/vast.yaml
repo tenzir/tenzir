@@ -824,7 +824,7 @@ jobs:
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
-            -DVAST_PLUGINS:STRING="" \
+            -DVAST_PLUGINS:STRING="plugins/web" \
             ${{ needs.configure.outputs.cmake-version-args }} \
             ${{ matrix.vast.cmake-extra-flags }}
       - name: Compile All Targets
@@ -958,13 +958,6 @@ jobs:
           - name: PCAP
             target: pcap
             path: plugins/pcap
-          - name: Web
-            target: web
-            path: plugins/web
-            debian-dependencies:
-              - libhttp-parser-dev
-            mac-dependencies:
-              - http-parser
           - name: Compaction
             target: compaction
             path: contrib/vast-plugins/compaction
@@ -977,7 +970,10 @@ jobs:
           - name: Netflow
             target: netflow
             path: contrib/vast-plugins/netflow
-          - name: Pipeline Manager
+          - # The pipeline manager integration tests require that the web
+            # plugin exists, which is why we're building the web plugin
+            # already in the main VAST job.
+            name: Pipeline Manager
             target: pipeline-manager
             path: contrib/vast-plugins/pipeline_manager
           - name: Platform
