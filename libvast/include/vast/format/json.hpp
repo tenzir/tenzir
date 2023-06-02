@@ -73,7 +73,7 @@ public:
 
   const char* name() const override;
 
-  vast::system::report status() const override;
+  vast::report status() const override;
 
 protected:
   caf::error

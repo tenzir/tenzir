@@ -27,11 +27,11 @@ public:
     : on_abort_{std::move(on_abort)} {
   }
 
-  auto self() noexcept -> system::execution_node_actor::base& override {
+  auto self() noexcept -> execution_node_actor::base& override {
     FAIL("no mock implementation available");
   }
 
-  auto node() noexcept -> system::node_actor override {
+  auto node() noexcept -> node_actor override {
     FAIL("no mock implementation available");
   }
 

@@ -7,25 +7,25 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice.hpp>
+#include <vast/catalog.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/fwd.hpp>
+#include <vast/index.hpp>
+#include <vast/node.hpp>
+#include <vast/node_control.hpp>
 #include <vast/partition_synopsis.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
-#include <vast/system/catalog.hpp>
-#include <vast/system/index.hpp>
-#include <vast/system/node.hpp>
-#include <vast/system/node_control.hpp>
-#include <vast/system/query_cursor.hpp>
-#include <vast/system/read_query.hpp>
-#include <vast/system/report.hpp>
-#include <vast/system/spawn_or_connect_to_node.hpp>
-#include <vast/system/status.hpp>
+#include <vast/query_cursor.hpp>
+#include <vast/read_query.hpp>
+#include <vast/report.hpp>
+#include <vast/spawn_or_connect_to_node.hpp>
+#include <vast/status.hpp>
 #include <vast/table_slice.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/uuid.hpp>
@@ -156,7 +156,7 @@ struct run {
 };
 
 /// The interface of the REBUILDER actor.
-using rebuilder_actor = system::typed_actor_fwd<
+using rebuilder_actor = typed_actor_fwd<
   // Start a rebuild.
   auto(atom::start, start_options)->caf::result<void>,
   // Stop a rebuild.
@@ -166,7 +166,7 @@ using rebuilder_actor = system::typed_actor_fwd<
   // INTERNAL: Continue working on the currently in-progress rebuild.
   auto(atom::internal, atom::schedule)->caf::result<void>>
   // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<system::component_plugin_actor>::unwrap;
+  ::extend_with<component_plugin_actor>::unwrap;
 
 /// The state of the REBUILDER actor.
 struct rebuilder_state {
@@ -179,9 +179,9 @@ struct rebuilder_state {
 
   /// Actor handles required for the rebuilder.
   rebuilder_actor::pointer self = {};
-  system::catalog_actor catalog = {};
-  system::index_actor index = {};
-  system::accountant_actor accountant = {};
+  catalog_actor catalog = {};
+  index_actor index = {};
+  accountant_actor accountant = {};
 
   /// Constants read once from the system configuration.
   size_t max_partition_size = 0u;
@@ -194,7 +194,7 @@ struct rebuilder_state {
   bool stopping = false;
 
   /// Shows the status of a currently ongoing rebuild.
-  auto status(system::status_verbosity) -> record {
+  auto status(status_verbosity) -> record {
     if (!run)
       return {};
     return {
@@ -290,7 +290,7 @@ struct rebuilder_state {
       ->request(catalog, caf::infinite, atom::candidates_v,
                 std::move(query_context))
       .then(
-        [this, finish](system::catalog_lookup_result& lookup_result) mutable {
+        [this, finish](catalog_lookup_result& lookup_result) mutable {
           VAST_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
             if (not run->options.all) {
@@ -461,8 +461,7 @@ struct rebuilder_state {
     const auto num_partitions = current_run_partitions.size();
     self
       ->request(index, caf::infinite, atom::apply_v, pipeline{std::move(ops)},
-                std::move(current_run_partitions),
-                system::keep_original_partition::no)
+                std::move(current_run_partitions), keep_original_partition::no)
       .then(
         [this, rp, current_run_events, num_partitions,
          is_oversized](std::vector<partition_info>& result) mutable {
@@ -569,7 +568,7 @@ private:
   void emit_telemetry() {
     if (!accountant)
       return;
-    auto report = system::report {
+    auto report = vast::report {
       .data = {
         {"rebuilder.partitions.remaining", run ? run->statistics.num_total - run->statistics.num_completed : 0u},
         {"rebuilder.partitions.rebuilding", run ? run->statistics.num_rebuilding : 0u},
@@ -589,15 +588,15 @@ private:
 /// @param accountant A handle to the ACCOUNTANT actor.
 rebuilder_actor::behavior_type
 rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
-          system::catalog_actor catalog, system::index_actor index,
-          system::accountant_actor accountant) {
+          catalog_actor catalog, index_actor index,
+          accountant_actor accountant) {
   self->state.self = self;
   self->state.catalog = std::move(catalog);
   self->state.index = std::move(index);
   self->state.accountant = std::move(accountant);
   self->state.max_partition_size
     = caf::get_or(self->system().config(), "vast.max-partition-size",
-                  defaults::system::max_partition_size);
+                  defaults::max_partition_size);
   self->state.desired_batch_size
     = caf::get_or(self->system().config(), "vast.import.batch-size",
                   defaults::import::table_slice_size);
@@ -606,7 +605,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   if (self->state.automatic_rebuild > 0) {
     self->state.rebuild_interval
       = caf::get_or(self->system().config(), "vast.active-partition-timeout",
-                    defaults::system::active_partition_timeout);
+                    defaults::active_partition_timeout);
     self->state.schedule();
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {
@@ -622,7 +621,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     self->quit(msg.reason);
   });
   return {
-    [self](atom::status, system::status_verbosity verbosity, duration) {
+    [self](atom::status, status_verbosity verbosity, duration) {
       return self->state.status(verbosity);
     },
     [self](atom::start, start_options& options) {
@@ -651,15 +650,13 @@ get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
                            "the options 'vast.node' and "
                            "'vast.rebuild.detached' "
                            "are incompatible");
-  auto node_opt
-    = system::spawn_or_connect_to_node(self, config, content(sys.config()));
+  auto node_opt = spawn_or_connect_to_node(self, config, content(sys.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt))
     return std::move(*err);
-  const auto& node
-    = std::holds_alternative<system::node_actor>(node_opt)
-        ? std::get<system::node_actor>(node_opt)
-        : std::get<scope_linked<system::node_actor>>(node_opt).get();
-  const auto timeout = system::node_connection_timeout(config);
+  const auto& node = std::holds_alternative<node_actor>(node_opt)
+                       ? std::get<node_actor>(node_opt)
+                       : std::get<scope_linked<node_actor>>(node_opt).get();
+  const auto timeout = node_connection_timeout(config);
   auto result = caf::expected<caf::actor>{caf::error{}};
   self->request(node, timeout, atom::get_v, atom::type_v, "rebuild")
     .receive(
@@ -696,8 +693,7 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
   if (!rebuilder)
     return caf::make_message(std::move(rebuilder.error()));
   // Parse the query expression, iff it exists.
-  auto query = system::read_query(inv, "vast.rebuild.read",
-                                  system::must_provide_query::no);
+  auto query = read_query(inv, "vast.rebuild.read", must_provide_query::no);
   if (!query)
     return caf::make_message(std::move(query.error()));
   auto expr = expression{};
@@ -812,12 +808,11 @@ public:
     return {std::move(rebuild), std::move(factory)};
   }
 
-  system::component_plugin_actor
-  make_component(system::node_actor::stateful_pointer<system::node_state> node)
-    const override {
+  component_plugin_actor
+  make_component(node_actor::stateful_pointer<node_state> node) const override {
     auto [catalog, index, accountant]
-      = node->state.registry.find<system::catalog_actor, system::index_actor,
-                                  system::accountant_actor>();
+      = node->state.registry
+          .find<catalog_actor, index_actor, accountant_actor>();
     return node->spawn(rebuilder, std::move(catalog), std::move(index),
                        std::move(accountant));
   }

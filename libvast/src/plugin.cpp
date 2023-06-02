@@ -11,6 +11,7 @@
 #include "vast/chunk.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/config.hpp"
+#include "vast/configuration.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/env.hpp"
 #include "vast/detail/installdirs.hpp"
@@ -20,12 +21,11 @@
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/node.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query_context.hpp"
 #include "vast/store.hpp"
-#include "vast/system/configuration.hpp"
-#include "vast/system/node.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -281,7 +281,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     }
     // Second, try to read the configuration from the plugin-specific
     // configuration files at <config-dir>/plugin/<plugin-name>.yaml.
-    for (auto&& config_dir : system::config_dirs(cfg)) {
+    for (auto&& config_dir : config_dirs(cfg)) {
       const auto yaml_path
         = config_dir / "plugin" / fmt::format("{}.yaml", plugin->name());
       const auto yml_path
@@ -374,18 +374,18 @@ std::string component_plugin::component_name() const {
 
 // -- analyzer plugin ---------------------------------------------------------
 
-system::analyzer_plugin_actor analyzer_plugin::analyzer(
-  system::node_actor::stateful_pointer<system::node_state> node) const {
+analyzer_plugin_actor
+analyzer_plugin::analyzer(node_actor::stateful_pointer<node_state> node) const {
   if (auto handle = weak_handle_.lock())
     return handle;
   if (spawned_once_ || !node)
     return {};
   auto handle = make_analyzer(node);
-  auto [importer] = node->state.registry.find<system::importer_actor>();
+  auto [importer] = node->state.registry.find<importer_actor>();
   VAST_ASSERT(importer);
   node
     ->request(importer, caf::infinite,
-              static_cast<system::stream_sink_actor<table_slice>>(handle))
+              static_cast<stream_sink_actor<table_slice>>(handle))
     .then([](const caf::outbound_stream_slot<table_slice>&) {},
           [&](const caf::error& error) {
             VAST_ERROR("failed to connect analyzer {} to the importer: {}",
@@ -396,16 +396,16 @@ system::analyzer_plugin_actor analyzer_plugin::analyzer(
   return handle;
 }
 
-system::component_plugin_actor analyzer_plugin::make_component(
-  system::node_actor::stateful_pointer<system::node_state> node) const {
+component_plugin_actor analyzer_plugin::make_component(
+  node_actor::stateful_pointer<node_state> node) const {
   return analyzer(node);
 }
 
 // -- store plugin -------------------------------------------------------------
 
 caf::expected<store_actor_plugin::builder_and_header>
-store_plugin::make_store_builder(system::accountant_actor accountant,
-                                 system::filesystem_actor fs,
+store_plugin::make_store_builder(accountant_actor accountant,
+                                 filesystem_actor fs,
                                  const vast::uuid& id) const {
   auto store = make_active_store();
   if (!store)
@@ -419,9 +419,8 @@ store_plugin::make_store_builder(system::accountant_actor accountant,
   return builder_and_header{store_builder, header};
 }
 
-caf::expected<system::store_actor>
-store_plugin::make_store(system::accountant_actor accountant,
-                         system::filesystem_actor fs,
+caf::expected<store_actor>
+store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
                          std::span<const std::byte> header) const {
   auto store = make_passive_store();
   if (!store)

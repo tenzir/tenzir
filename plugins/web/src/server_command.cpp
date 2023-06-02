@@ -21,12 +21,12 @@
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/format/json.hpp>
 #include <vast/logger.hpp>
+#include <vast/node.hpp>
+#include <vast/node_control.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
-#include <vast/system/node.hpp>
-#include <vast/system/node_control.hpp>
-#include <vast/system/query_cursor.hpp>
-#include <vast/system/spawn_or_connect_to_node.hpp>
+#include <vast/query_cursor.hpp>
+#include <vast/spawn_or_connect_to_node.hpp>
 #include <vast/validate.hpp>
 
 #include <caf/event_based_actor.hpp>
@@ -42,14 +42,13 @@
 
 namespace vast::plugins::web {
 
-using request_dispatcher_actor = system::typed_actor_fwd<
+using request_dispatcher_actor = typed_actor_fwd<
   // Handle a request.
-  auto(atom::request, restinio_response_ptr, rest_endpoint,
-       system::rest_handler_actor)
+  auto(atom::request, restinio_response_ptr, rest_endpoint, rest_handler_actor)
     ->caf::result<void>,
   // INTERNAL: Continue handling a requet.
   auto(atom::internal, atom::request, restinio_response_ptr, rest_endpoint,
-       system::rest_handler_actor)
+       rest_handler_actor)
     ->caf::result<void>>::unwrap;
 
 namespace {
@@ -94,7 +93,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
   self->state.authenticator = authenticator;
   return {
     [self](atom::request, restinio_response_ptr& response,
-           rest_endpoint& endpoint, system::rest_handler_actor handler) {
+           rest_endpoint& endpoint, rest_handler_actor handler) {
       // Skip authentication if its not required.
       if (!self->state.server_config.require_authentication) {
         self->send(self, atom::internal_v, atom::request_v, std::move(response),
@@ -126,7 +125,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           });
     },
     [self](atom::internal, atom::request, restinio_response_ptr& response,
-           const rest_endpoint& endpoint, system::rest_handler_actor handler) {
+           const rest_endpoint& endpoint, rest_handler_actor handler) {
       auto const& header = response->request()->header();
       auto query_params = parse_query_params(header.query());
       if (!query_params)
@@ -221,7 +220,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
 void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                  std::string_view prefix, request_dispatcher_actor dispatcher,
                  const server_config& config, vast::rest_endpoint endpoint,
-                 system::rest_handler_actor handler) {
+                 rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
   auto path = format_api_route(endpoint, prefix);
   VAST_VERBOSE("setting up route {}", path);
@@ -312,16 +311,15 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       fmt::format("invalid server configuration: {}", server_config.error())));
   }
   // Create necessary actors.
-  auto node_opt = vast::system::spawn_or_connect_to_node(
-    self, inv.options, content(system.config()));
+  auto node_opt = vast::spawn_or_connect_to_node(self, inv.options,
+                                                 content(system.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt)) {
     VAST_ERROR("failed to get node: {}", *err);
     return caf::make_message(std::move(*err));
   }
-  const auto& node
-    = std::holds_alternative<system::node_actor>(node_opt)
-        ? std::get<system::node_actor>(node_opt)
-        : std::get<scope_linked<system::node_actor>>(node_opt).get();
+  const auto& node = std::holds_alternative<node_actor>(node_opt)
+                       ? std::get<node_actor>(node_opt)
+                       : std::get<scope_linked<node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
   auto authenticator = get_authenticator(self, node, caf::infinite);
   if (!authenticator) {
@@ -334,7 +332,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   auto router = std::make_unique<router_t>();
   VAST_ASSERT_CHEAP(dispatcher);
   // Set up API routes from plugins.
-  std::vector<system::rest_handler_actor> handlers;
+  std::vector<rest_handler_actor> handlers;
   std::vector<std::string> api_routes;
   for (auto const* rest_plugin : plugins::get<rest_endpoint_plugin>()) {
     auto prefix = rest_plugin->prefix();

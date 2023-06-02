@@ -256,7 +256,7 @@ public:
   }
 
 protected:
-  system::report status() const override {
+  report status() const override {
     using namespace std::string_literals;
     uint64_t invalid_line = num_invalid_lines_;
     if (num_invalid_lines_ > 0)

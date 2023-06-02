@@ -11,9 +11,9 @@
 // The functions in this namespace take PartitionState as template argument
 // because the impelementation is the same for passive and active partitions.
 
-#include "vast/system/active_partition.hpp"
-#include "vast/system/actors.hpp"
-#include "vast/system/passive_partition.hpp"
+#include "vast/active_partition.hpp"
+#include "vast/actors.hpp"
+#include "vast/passive_partition.hpp"
 #include "vast/time_synopsis.hpp"
 #include "vast/type.hpp"
 
@@ -23,7 +23,7 @@ namespace vast::detail {
 /// @relates active_partition_state
 /// @relates passive_partition_state
 template <typename PartitionState>
-system::indexer_actor
+indexer_actor
 fetch_indexer(const PartitionState& state, const data_extractor& dx,
               relational_operator op, const data& x) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
@@ -37,7 +37,7 @@ fetch_indexer(const PartitionState& state, const data_extractor& dx,
 /// @relates active_partition_state
 /// @relates passive_partition_state
 template <typename PartitionState>
-system::indexer_actor
+indexer_actor
 fetch_indexer(const PartitionState& state, const meta_extractor& ex,
               relational_operator op, const data& x) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
@@ -60,8 +60,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
     // For a passive partition, this already went through a time synopsis in
     // the catalog, but for the active partition we create an ad-hoc time
     // synopsis here to do the lookup.
-    if constexpr (std::is_same_v<PartitionState,
-                                 system::active_partition_state>) {
+    if constexpr (std::is_same_v<PartitionState, active_partition_state>) {
       if (const auto* t = caf::get_if<time>(&x)) {
         auto ts = time_synopsis{
           state.data.synopsis->min_import_time,
@@ -82,7 +81,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
   }
   // TODO: Spawning a one-shot actor is quite expensive. Maybe the
   //       partition could instead maintain this actor lazily.
-  return state.self->spawn([row_ids]() -> system::indexer_actor::behavior_type {
+  return state.self->spawn([row_ids]() -> indexer_actor::behavior_type {
     return {
       [=](atom::evaluate, const curried_predicate&) {
         return row_ids;
@@ -98,7 +97,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
 /// @relates active_partition_state
 /// @relates passive_partition_state
 template <typename PartitionState>
-std::vector<system::evaluation_triple>
+std::vector<evaluation_triple>
 evaluate(const PartitionState& state, const expression& expr) {
   auto combined_schema = state.combined_schema();
   if (!combined_schema) {
@@ -112,7 +111,7 @@ evaluate(const PartitionState& state, const expression& expr) {
   // Pretend the partition is a table, and return fitted predicates for the
   // partitions schema.
   // TODO: Should resolve take a record_type directly?
-  std::vector<system::evaluation_triple> result;
+  std::vector<evaluation_triple> result;
   auto resolved = resolve(expr, type{*combined_schema});
   for (auto& [offset, predicate] : resolved) {
     // For each fitted predicate, look up the corresponding INDEXER
@@ -129,7 +128,7 @@ evaluate(const PartitionState& state, const expression& expr) {
         return get_indexer_handle(dx, x);
       },
       [](const auto&, const auto&) {
-        return system::indexer_actor{}; // clang-format fix
+        return indexer_actor{}; // clang-format fix
       },
     };
     // Package the predicate, its position in the query and the required
@@ -149,6 +148,6 @@ evaluate(const PartitionState& state, const expression& expr) {
 /// indexer. Returns default initialized ids{} otherwise.
 ids get_ids_for_evaluation(
   const std::unordered_map<std::string, ids>& type_ids,
-  const std::vector<system::evaluation_triple>& evaluation_triples);
+  const std::vector<evaluation_triple>& evaluation_triples);
 
 } // namespace vast::detail

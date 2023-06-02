@@ -10,8 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/actors.hpp"
 #include "vast/query_context.hpp"
-#include "vast/system/actors.hpp"
 #include "vast/uuid.hpp"
 
 #include <vector>
@@ -27,7 +27,7 @@ struct query_state {
   type_query_context_map query_contexts_per_type;
 
   /// The query client.
-  system::receiver_actor<atom::done> client = {};
+  receiver_actor<atom::done> client = {};
 
   /// The number of partitions that need to be evaluated for this query.
   uint32_t candidate_partitions = 0;
@@ -117,7 +117,7 @@ public:
 
   /// Inserts a new query into the queue.
   [[nodiscard]] caf::error
-  insert(query_state&& query_state, system::catalog_lookup_result&& candidates);
+  insert(query_state&& query_state, catalog_lookup_result&& candidates);
 
   /// Activates an inactive query.
   [[nodiscard]] caf::error activate(const uuid& qid, uint32_t num_partitions);
@@ -133,7 +133,7 @@ public:
   [[nodiscard]] std::optional<entry> next();
 
   /// Returns a client handle in case the requested batch has been completed.
-  [[nodiscard]] std::optional<system::receiver_actor<atom::done>>
+  [[nodiscard]] std::optional<receiver_actor<atom::done>>
   handle_completion(const uuid& qid);
 
   std::size_t memusage() const;

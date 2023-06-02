@@ -12,8 +12,8 @@
 
 #include "web/fbs/server_state.hpp"
 
+#include <vast/actors.hpp>
 #include <vast/flatbuffer.hpp>
-#include <vast/system/actors.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -47,19 +47,18 @@ struct authenticator_state {
   std::filesystem::path path_ = {};
 
   /// Handle of the filesystem actor.
-  system::filesystem_actor filesystem_ = {};
+  filesystem_actor filesystem_ = {};
 
   /// The list of all known authentication tokens.
   std::vector<token_description> tokens_ = {};
 };
 
 caf::expected<authenticator_actor>
-get_authenticator(caf::scoped_actor&, system::node_actor node,
-                  caf::timespan timeout);
+get_authenticator(caf::scoped_actor&, node_actor node, caf::timespan timeout);
 
 /// Spawns the AUTHENTICATOR.
 authenticator_actor::behavior_type
 authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
-              system::filesystem_actor fs);
+              filesystem_actor fs);
 
 } // namespace vast::plugins::web

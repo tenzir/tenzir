@@ -458,7 +458,7 @@ make_csv_parser(const record_type& schema, table_slice_builder_ptr builder,
 
 } // namespace
 
-vast::system::report reader::status() const {
+vast::report reader::status() const {
   using namespace std::string_literals;
   uint64_t num_lines = num_lines_;
   uint64_t invalid_lines = num_invalid_lines_;

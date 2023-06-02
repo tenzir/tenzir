@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/connect_to_node.hpp>
 #include <vast/logger.hpp>
+#include <vast/node_control.hpp>
 #include <vast/plugin.hpp>
-#include <vast/system/connect_to_node.hpp>
-#include <vast/system/node_control.hpp>
 
 namespace vast::plugins::flush {
 
@@ -19,13 +19,12 @@ caf::message flush_command(const invocation&, caf::actor_system& sys) {
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
-  auto node_opt = system::connect_to_node(self, content(sys.config()));
+  auto node_opt = connect_to_node(self, content(sys.config()));
   if (!node_opt)
     return caf::make_message(node_opt.error());
   const auto& node = *node_opt;
   // Get the index actor.
-  auto components
-    = system::get_node_components<system::index_actor>(self, node);
+  auto components = get_node_components<index_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto [index] = std::move(*components);

@@ -10,7 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/system/actors.hpp"
+#include "vast/actors.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
 
@@ -26,11 +26,10 @@ struct operator_control_plane {
   virtual ~operator_control_plane() noexcept = default;
 
   /// Returns the hosting actor.
-  [[nodiscard]] virtual auto self() noexcept
-    -> system::execution_node_actor::base& = 0;
+  [[nodiscard]] virtual auto self() noexcept -> execution_node_actor::base& = 0;
 
   /// Returns the node actor, if the operator location is remote.
-  [[nodiscard]] virtual auto node() noexcept -> system::node_actor = 0;
+  [[nodiscard]] virtual auto node() noexcept -> node_actor = 0;
 
   /// Stop the execution of the operator.
   /// @pre error != caf::none

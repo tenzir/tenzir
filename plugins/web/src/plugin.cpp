@@ -16,10 +16,10 @@
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/data.hpp>
+#include <vast/node.hpp>
+#include <vast/node_control.hpp>
 #include <vast/plugin.hpp>
-#include <vast/system/node.hpp>
-#include <vast/system/node_control.hpp>
-#include <vast/system/spawn_or_connect_to_node.hpp>
+#include <vast/spawn_or_connect_to_node.hpp>
 #include <vast/type.hpp>
 
 #include <caf/scoped_actor.hpp>
@@ -43,10 +43,9 @@ class plugin final : public virtual command_plugin,
     return "web";
   }
 
-  system::component_plugin_actor
-  make_component(system::node_actor::stateful_pointer<system::node_state> node)
-    const override {
-    auto [filesystem] = node->state.registry.find<system::filesystem_actor>();
+  component_plugin_actor
+  make_component(node_actor::stateful_pointer<node_state> node) const override {
+    auto [filesystem] = node->state.registry.find<filesystem_actor>();
     return node->spawn(authenticator, std::move(filesystem));
   }
 

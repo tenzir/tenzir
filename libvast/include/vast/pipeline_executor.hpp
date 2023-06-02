@@ -2,8 +2,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/actors.hpp"
 #include "vast/pipeline.hpp"
-#include "vast/system/actors.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -13,7 +13,7 @@ struct pipeline_executor_state {
   static constexpr auto name = "pipeline-executor";
 
   /// A pointer to the parent actor.
-  system::pipeline_executor_actor::pointer self;
+  pipeline_executor_actor::pointer self;
 
   /// The currently running pipeline.
   std::optional<pipeline> pipe;
@@ -41,8 +41,7 @@ struct pipeline_executor_state {
   /// Spawns a set of execution nodes, creating one execution node actor per
   /// operator. The operators must form a valid pipeline. The *remote* node
   /// actor may be nullptr if all operators' locations are local or anywhere.
-  void spawn_execution_nodes(system::node_actor remote,
-                             std::vector<operator_ptr> ops);
+  void spawn_execution_nodes(node_actor remote, std::vector<operator_ptr> ops);
 
   /// A continuation of *spawn_execution_nodes* that must be called after all
   /// remote execution nodes were spawned.
@@ -54,13 +53,12 @@ struct pipeline_executor_state {
 
   /// Start the pipeline execution. Assumes that all execution nodes were
   /// spawned successfully.
-  auto run(system::node_actor remote_node = {}) -> caf::result<void>;
+  auto run(node_actor remote_node = {}) -> caf::result<void>;
 };
 
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
-  system::pipeline_executor_actor::stateful_pointer<pipeline_executor_state>
-    self,
-  pipeline p) -> system::pipeline_executor_actor::behavior_type;
+  pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
+  pipeline p) -> pipeline_executor_actor::behavior_type;
 
 } // namespace vast

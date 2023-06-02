@@ -114,8 +114,8 @@ out what virtual function need overriding. In the above example, we have a
 following two interfaces:
 
 ```cpp
-system::analyzer_plugin_actor make_analyzer(
-  system::node_actor::stateful_pointer<system::node_state> node) const override;
+analyzer_plugin_actor make_analyzer(
+  node_actor::stateful_pointer<node_state> node) const override;
 
 std::pair<std::unique_ptr<command>, command::factory>
 make_command() const override;

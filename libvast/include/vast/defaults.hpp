@@ -187,9 +187,6 @@ inline constexpr const bool omit_nulls = false;
 
 // -- constants for the entire system ------------------------------------------
 
-/// Contains system-wide constants.
-namespace system {
-
 /// Hostname or IP address and port of a remote node.
 //  (explicitly use IPv4 here to get predictable behavior even on
 //   weird dual-stack setups)
@@ -275,7 +272,5 @@ inline constexpr bool detach_components = true;
 /// Time to wait before trying to make another connection attempt to a remote
 /// VAST node.
 inline constexpr auto node_connection_retry_delay = std::chrono::seconds{3u};
-
-} // namespace system
 
 } // namespace vast::defaults
