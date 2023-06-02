@@ -152,7 +152,7 @@ std::string format_time(caf::timespan timespan) {
 void log_connection_failed(connect_request request,
                            caf::timespan remaining_time,
                            caf::timespan retry_delay) {
-  VAST_INFO("client faild to connect to remote node {}:{}{}; attempting to "
+  VAST_INFO("client failed to connect to remote node {}:{}{}; attempting to "
             "reconnect in {} (remaining time: {})",
             request.host, request.port,
             formatted_resolved_host_suffix(request.host),
