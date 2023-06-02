@@ -672,7 +672,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       VAST_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
-    [self](atom::spawn, pipeline& pipeline)
+    [self](atom::spawn, pipeline& pipeline, receiver_actor<diagnostic> diag)
       -> caf::result<std::vector<std::pair<execution_node_actor, std::string>>> {
       auto optimized = pipeline.optimize();
       if (not optimized) {
@@ -694,11 +694,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         if (op->detached()) {
           result.emplace_back(
             self->spawn<caf::detached>(execution_node, std::move(op),
-                                       caf::actor_cast<node_actor>(self)),
+                                       caf::actor_cast<node_actor>(self), diag),
             std::move(description));
         } else {
           result.emplace_back(self->spawn(execution_node, std::move(op),
-                                          caf::actor_cast<node_actor>(self)),
+                                          caf::actor_cast<node_actor>(self),
+                                          diag),
                               std::move(description));
         }
       }

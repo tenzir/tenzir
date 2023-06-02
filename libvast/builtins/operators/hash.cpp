@@ -55,6 +55,8 @@ class hash_operator final
   : public schematic_operator<hash_operator,
                               std::vector<indexed_transformation>> {
 public:
+  hash_operator() = default;
+
   explicit hash_operator(configuration configuration)
     : config_(std::move(configuration)) {
   }
@@ -110,14 +112,12 @@ public:
     return transform_columns(slice, state);
   };
 
-  auto to_string() const noexcept -> std::string override {
-    VAST_ASSERT(config_.out == fmt::format("{}_hashed", config_.field));
-    auto result = std::string{"hash "};
-    if (config_.salt) {
-      result += fmt::format("--salt=\"{}\" ", *config_.salt);
-    }
-    result += config_.field;
-    return result;
+  auto name() const noexcept -> std::string override {
+    return "hash";
+  }
+
+  friend auto inspect(auto& f, hash_operator& x) -> bool {
+    return f.apply(x.config_);
   }
 
 private:
@@ -125,18 +125,8 @@ private:
   configuration config_ = {};
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<hash_operator> {
 public:
-  // plugin API
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
-    return "hash";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

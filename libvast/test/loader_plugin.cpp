@@ -8,11 +8,14 @@
 
 #include "vast/collect.hpp"
 #include "vast/detail/string_literal.hpp"
+#include "vast/diagnostics.hpp"
 #include "vast/file.hpp"
+#include "vast/parser_interface.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/stdin_file_inut.hpp"
 #include "vast/test/test.hpp"
+#include "vast/tql/parser.hpp"
 
 #include <arrow/record_batch.h>
 #include <caf/error.hpp>
@@ -57,19 +60,33 @@ struct fixture {
       -> const concepts_map& override {
       FAIL("no mock implementation available");
     }
+
+    auto diagnostics() noexcept -> diagnostic_handler& override {
+      static auto diag = null_diagnostic_handler{};
+      return diag;
+    }
   };
+
+  auto make_loader(std::string_view name, std::string args)
+    -> std::unique_ptr<plugin_loader> {
+    loader_plugin = vast::plugins::find<vast::loader_parser_plugin>(name);
+    REQUIRE(loader_plugin);
+    auto diag = null_diagnostic_handler{};
+    auto p = tql::make_parser_interface(std::move(args), diag);
+    return loader_plugin->parse_loader(*p);
+  }
 
   fixture() {
     // TODO: Move this into a separate fixture when we are starting to test more
     // than one loader type.
-    loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
-    REQUIRE(loader_plugin);
     current_loader = [this] {
-      return unbox(loader_plugin->make_loader({}, control_plane));
+      auto result = make_loader("stdin", "")->instantiate(control_plane);
+      REQUIRE(result);
+      return std::move(*result);
     };
   }
 
-  const vast::loader_plugin* loader_plugin;
+  const vast::loader_parser_plugin* loader_plugin;
   std::function<auto()->generator<chunk_ptr>> current_loader;
   mock_control_plane control_plane;
 };
@@ -142,37 +159,18 @@ TEST(stdin loader - one complete chunk) {
 }
 
 TEST(file loader - parser deduction) {
-  loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
-  REQUIRE(loader_plugin);
-  auto [parser, _] = loader_plugin->default_parser(
-    std::vector<std::string>{"--timeout", "1s", "foo.csv"});
-  REQUIRE_EQUAL(parser, std::string{"csv"});
-  parser = loader_plugin
-             ->default_parser(
-               std::vector<std::string>{"--timeout", "1s", "foo.ndjson"})
-             .first;
-  REQUIRE_EQUAL(parser, std::string{"json"});
-  parser = loader_plugin
-             ->default_parser(
-               std::vector<std::string>{"--timeout", "1s", "eve.json"})
-             .first;
-  REQUIRE_EQUAL(parser, std::string{"suricata"});
-  parser = loader_plugin
-             ->default_parser(
-               std::vector<std::string>{"-", "--timeout", "1s", "eve.json"})
-             .first;
-  REQUIRE_EQUAL(parser, std::string{"json"});
-  parser = loader_plugin
-             ->default_parser(std::vector<std::string>{"-", "--timeout", "1s"})
-             .first;
-  REQUIRE_EQUAL(parser, std::string{"json"});
+  CHECK_EQUAL(make_loader("file", "--timeout 1s foo.csv")->default_parser(),
+              "csv");
+  CHECK_EQUAL(make_loader("file", "--timeout 1s foo.ndjson")->default_parser(),
+              "json");
+  CHECK_EQUAL(make_loader("file", "--timeout 1s eve.json")->default_parser(),
+              "suricata");
+  CHECK_EQUAL(make_loader("file", "--timeout 1s -")->default_parser(), "json");
 }
 
 TEST(file loader - nonexistent file) {
-  loader_plugin = vast::plugins::find<vast::loader_plugin>("file");
-  auto args = std::vector<std::string>{"no-file-oops"};
-  REQUIRE(loader_plugin);
-  REQUIRE_ERROR(loader_plugin->make_loader(args, control_plane));
+  CHECK_EQUAL(make_loader("file", "no-file-oops")->instantiate(control_plane),
+              std::nullopt);
 }
 
 // TODO: Does not run unter Ubuntu CI unit test step.

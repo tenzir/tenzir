@@ -102,8 +102,8 @@ auto apply_all(Inspector& f, Args&&... args) {
 }
 
 template <class Inspector, class Enum>
-  requires std::is_enum_v<Enum> bool
-inspect_enum(Inspector& f, Enum& x) {
+  requires std::is_enum_v<Enum>
+bool inspect_enum(Inspector& f, Enum& x) {
   using underlying_type = std::underlying_type_t<Enum>;
   if constexpr (Inspector::is_loading) {
     underlying_type tmp;

@@ -1,0 +1,3 @@
+where :ip == 1.2.3.4
+-----
+located("where", located(expression(predicate(type_extractor(<unprintable>), ==, anonymous([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 1, 2, 3, 4]))), location(6, 20)), location(0, 20))

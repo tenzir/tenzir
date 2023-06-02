@@ -195,6 +195,10 @@ public:
   explicit exporter_source(exporter_ptr exporter) : exporter_{exporter} {
   }
 
+  auto name() const -> std::string override {
+    return "<exporter_source>";
+  }
+
   auto operator()() const -> generator<table_slice> {
     auto& state = exporter_->state;
     while (true) {
@@ -232,10 +236,6 @@ public:
     VAST_DEBUG("{} source is done", *exporter_);
   }
 
-  auto to_string() const -> std::string override {
-    return "<exporter_source>";
-  }
-
 private:
   exporter_ptr exporter_;
 };
@@ -243,6 +243,10 @@ private:
 class exporter_sink final : public crtp_operator<exporter_sink> {
 public:
   explicit exporter_sink(exporter_ptr exporter) : exporter_{exporter} {
+  }
+
+  auto name() const -> std::string override {
+    return "<exporter_sink>";
   }
 
   auto operator()(generator<table_slice> input) const
@@ -255,10 +259,6 @@ public:
       }
       co_yield {};
     }
-  }
-
-  auto to_string() const -> std::string override {
-    return "<exporter_sink>";
   }
 
 private:

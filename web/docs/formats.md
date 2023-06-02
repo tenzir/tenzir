@@ -15,6 +15,16 @@ Parsers and printers interact with their corresponding dual from a
 
 ![Format](formats/format.excalidraw.svg)
 
+Formats appear as an argument to the [`read`](operators/sources/from.md) and
+[`write`](operators/sinks/to.md) operators:
+
+```
+read <format> [from <connector>]
+write <format> [to <connector>]
+```
+
+If the connector is omitted, the default is `stdin` or `stdout`.
+
 Tenzir ships with the following formats:
 
 import DocCardList from '@theme/DocCardList';

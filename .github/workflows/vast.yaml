@@ -816,9 +816,6 @@ jobs:
             target: example-analyzer
             path: examples/plugins/analyzer
             debian-dependencies:
-          - name: Sigma
-            target: sigma
-            path: plugins/sigma
           - name: Parquet
             target: parquet
             path: plugins/parquet

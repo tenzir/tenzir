@@ -11,6 +11,7 @@
 #include "vast/actors.hpp"
 #include "vast/connect_to_node.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/diagnostics.hpp"
 #include "vast/execution_node.hpp"
 #include "vast/pipeline.hpp"
 
@@ -44,7 +45,8 @@ auto flatten(std::vector<std::vector<T>> vecs) -> std::vector<T> {
 } // namespace
 
 void pipeline_executor_state::spawn_execution_nodes(
-  node_actor remote, std::vector<operator_ptr> ops) {
+  node_actor remote, std::vector<operator_ptr> ops,
+  receiver_actor<diagnostic> diag) {
   VAST_DEBUG("spawning execution nodes (remote = {})", remote);
   hosts.reserve(ops.size());
   for (auto it = ops.begin(); it != ops.end(); ++it) {
@@ -58,10 +60,10 @@ void pipeline_executor_state::spawn_execution_nodes(
           if ((*it)->detached()) {
             v.push_back(caf::actor_cast<caf::actor>(
               self->spawn<caf::monitored + caf::detached>(
-                execution_node, std::move(*it), node_actor{})));
+                execution_node, std::move(*it), node_actor{}, diag)));
           } else {
             v.push_back(caf::actor_cast<caf::actor>(self->spawn<caf::monitored>(
-              execution_node, std::move(*it), node_actor{})));
+              execution_node, std::move(*it), node_actor{}, diag)));
           }
           node_descriptions.emplace(v.back().address(), std::move(description));
           nodes_alive += 1;
@@ -93,7 +95,9 @@ void pipeline_executor_state::spawn_execution_nodes(
         // We keep track of the remote spawning calls in order to continue
         // only after remoting spawning is complete.
         remote_spawn_count += 1;
-        self->request(remote, caf::infinite, atom::spawn_v, std::move(subpipe))
+        self
+          ->request(remote, caf::infinite, atom::spawn_v, std::move(subpipe),
+                    diag)
           .then(
             [=, this](std::vector<std::pair<execution_node_actor, std::string>>&
                         execution_nodes) mutable {
@@ -148,22 +152,22 @@ auto pipeline_executor_state::run(node_actor remote_node) -> caf::result<void> {
   }
   rp_complete = self->make_response_promise<void>();
   if (remote_node) {
-    spawn_execution_nodes(remote_node, std::move(ops));
+    spawn_execution_nodes(remote_node, std::move(ops), self);
   } else if (has_remote) {
-    connect_to_node(self, content(self->system().config()),
-                    // We use a shared_ptr because of non-copyable operator_ptr.
-                    [this, shared_ops
-                           = std::make_shared<decltype(ops)>(std::move(ops))](
-                      caf::expected<node_actor> node) mutable {
-                      if (!node) {
-                        rp_complete.deliver(node.error());
-                        self->quit(node.error());
-                        return;
-                      }
-                      spawn_execution_nodes(*node, std::move(*shared_ops));
-                    });
+    connect_to_node(
+      self, content(self->system().config()),
+      // We use a shared_ptr because of non-copyable operator_ptr.
+      [this, shared_ops = std::make_shared<decltype(ops)>(std::move(ops))](
+        caf::expected<node_actor> node) mutable {
+        if (!node) {
+          rp_complete.deliver(node.error());
+          self->quit(node.error());
+          return;
+        }
+        spawn_execution_nodes(*node, std::move(*shared_ops), self);
+      });
   } else {
-    spawn_execution_nodes({}, std::move(ops));
+    spawn_execution_nodes({}, std::move(ops), self);
   }
   return rp_complete;
 }
@@ -203,7 +207,8 @@ void pipeline_executor_state::continue_if_done_spawning() {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline p) -> pipeline_executor_actor::behavior_type {
+  pipeline pipe, std::unique_ptr<diagnostic_handler> diag)
+  -> pipeline_executor_actor::behavior_type {
   self->state.self = self;
   self->set_down_handler([self](caf::down_msg& msg) {
     VAST_DEBUG("pipeline executor node down: {}, reason: {}", msg.source,
@@ -232,12 +237,13 @@ auto pipeline_executor(
       VAST_DEBUG("promise is not pending, discarding down message");
     }
   });
-  auto optimized = p.optimize();
+  auto optimized = pipe.optimize();
   if (not optimized) {
     self->quit(std::move(optimized.error()));
     return pipeline_executor_actor::behavior_type::make_empty_behavior();
   }
   self->state.pipe = std::move(*optimized);
+  self->state.diag = std::move(diag);
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "vast.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
@@ -247,6 +253,11 @@ auto pipeline_executor(
     },
     [self](atom::run, node_actor node) -> caf::result<void> {
       return self->state.run(std::move(node));
+    },
+    [self](diagnostic d) -> caf::result<void> {
+      VAST_DEBUG("{} received diagnostic: {}", *self, d);
+      self->state.diag->emit(std::move(d));
+      return {};
     },
   };
 }

@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/argument_parser.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/numeric.hpp>
 #include <vast/concept/parseable/to.hpp>
@@ -33,6 +34,8 @@
 #include <memory>
 
 namespace vast::plugins::cef {
+
+namespace {
 
 /// Unescapes CEF string data containing \r, \n, \\, and \=.
 std::string unescape(std::string_view value) {
@@ -332,17 +335,67 @@ private:
   mutable size_t num_lines_ = 0;
 };
 
-class plugin final : public virtual reader_plugin,
-                     public virtual parser_plugin {
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return caf::none;
+auto impl(generator<std::optional<std::string_view>> lines,
+          operator_control_plane& ctrl) -> generator<table_slice> {
+  auto builder = std::optional<table_slice_builder>{};
+  for (auto&& line : lines) {
+    if (!line) {
+      co_yield {};
+      continue;
+    }
+    if (line->empty()) {
+      VAST_DEBUG("CEF parser ignored empty line");
+      continue;
+    }
+    auto msg = to<message_view>(*line);
+    if (!msg) {
+      ctrl.warn(caf::make_error(ec::parse_error,
+                                fmt::format("CEF parser failed to parse "
+                                            "message: {} "
+                                            "(line: '{}')",
+                                            msg.error(), *line)));
+      continue;
+    }
+    auto schema = infer(*msg);
+    if (!builder || builder->schema() != schema) {
+      if (builder) {
+        co_yield builder->finish();
+      }
+      builder = table_slice_builder{schema};
+    }
+    if (auto error = add(*msg, *builder)) {
+      ctrl.warn(
+        caf::make_error(ec::parse_error, fmt::format("CEF parser failed "
+                                                     "to add message: {} "
+                                                     "(line: '{}')",
+                                                     error, line)));
+      continue;
+    }
   }
+  if (builder) {
+    co_yield builder->finish();
+  }
+}
 
-  [[nodiscard]] std::string name() const override {
+class cef_parser final : public plugin_parser {
+public:
+  auto name() const -> std::string override {
     return "cef";
   }
 
+  auto
+  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> std::optional<generator<table_slice>> override {
+    return impl(to_lines(std::move(input)), ctrl);
+  }
+
+  friend auto inspect(auto&, cef_parser&) -> bool {
+    return true;
+  }
+};
+
+class plugin final : public virtual reader_plugin,
+                     public virtual parser_plugin<cef_parser> {
   [[nodiscard]] const char* reader_format() const override {
     return "cef";
   }
@@ -362,66 +415,14 @@ class plugin final : public virtual reader_plugin,
     return std::make_unique<reader>(options, in ? std::move(*in) : nullptr);
   }
 
-  auto make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<parser> override {
-    if (!args.empty()) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("CEF parser does not expecte any "
-                                         "arguments but got [{}]",
-                                         fmt::join(args, ", ")));
-    }
-    return std::invoke(
-      [](generator<std::optional<std::string_view>> lines,
-         operator_control_plane& ctrl) -> generator<table_slice> {
-        auto builder = std::optional<table_slice_builder>{};
-        for (auto&& line : lines) {
-          if (!line) {
-            co_yield {};
-            continue;
-          }
-          if (line->empty()) {
-            VAST_DEBUG("CEF parser ignored empty line");
-            continue;
-          }
-          auto msg = to<message_view>(*line);
-          if (!msg) {
-            ctrl.warn(caf::make_error(ec::parse_error,
-                                      fmt::format("CEF parser failed to parse "
-                                                  "message: {} "
-                                                  "(line: '{}')",
-                                                  msg.error(), *line)));
-            continue;
-          }
-          auto schema = infer(*msg);
-          if (!builder || builder->schema() != schema) {
-            if (builder) {
-              co_yield builder->finish();
-            }
-            builder = table_slice_builder{schema};
-          }
-          if (auto error = add(*msg, *builder)) {
-            ctrl.warn(
-              caf::make_error(ec::parse_error, fmt::format("CEF parser failed "
-                                                           "to add message: {} "
-                                                           "(line: '{}')",
-                                                           error, line)));
-            continue;
-          }
-        }
-        if (builder) {
-          co_yield builder->finish();
-        }
-      },
-      to_lines(std::move(loader)), ctrl);
-  }
-
-  auto default_loader(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    (void)args;
-    return {"stdin", {}};
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    argument_parser{"cef", "https://vast.io/docs/next/formats/cef"}.parse(p);
+    return std::make_unique<cef_parser>();
   }
 };
+
+} // namespace
 
 } // namespace vast::plugins::cef
 

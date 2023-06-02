@@ -22,10 +22,6 @@ json [--pretty] [--omit-nulls] [--omit-empty-records] [--omit-empty-lists]
 The `json` format provides a parser and printer for JSON and [line-delimited
 JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects.
 
-The default loader for the `json` parser is [`stdin`](../connectors/stdin.md).
-
-The default saver for the `json` printer is [`stdout`](../connectors/stdout.md).
-
 ### `--selector=field[:prefix]` (Parser)
 
 Designates a field value as schema name, optionally with an added dot-separated

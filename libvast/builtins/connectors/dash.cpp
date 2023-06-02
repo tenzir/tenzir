@@ -10,40 +10,25 @@
 
 namespace vast::plugins::dash {
 
-class plugin final : public virtual loader_plugin, public virtual saver_plugin {
+class plugin final : public virtual loader_parser_plugin,
+                     public virtual saver_parser_plugin {
 public:
-  auto make_loader(std::span<std::string const> args,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<generator<chunk_ptr>> override {
-    return stdin_plugin_->make_loader(args, ctrl);
+  auto parse_loader(parser_interface& p) const
+    -> std::unique_ptr<plugin_loader> override {
+    return stdin_plugin_->parse_loader(p);
   }
 
-  auto default_parser(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return stdin_plugin_->default_parser(args);
-  }
-
-  auto make_saver(std::span<std::string const> args, printer_info info,
-                  operator_control_plane& ctrl) const
-    -> caf::expected<saver> override {
-    return stdout_plugin_->make_saver(args, std::move(info), ctrl);
-  }
-
-  auto default_printer(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return stdout_plugin_->default_printer(args);
-  }
-
-  auto saver_does_joining() const -> bool override {
-    return stdout_plugin_->saver_does_joining();
+  auto parse_saver(parser_interface& p) const
+    -> std::unique_ptr<plugin_saver> override {
+    return stdout_plugin_->parse_saver(p);
   }
 
   auto initialize(const record&, const record&) -> caf::error override {
-    stdin_plugin_ = plugins::find<loader_plugin>("stdin");
+    stdin_plugin_ = plugins::find<loader_parser_plugin>("stdin");
     if (not stdin_plugin_) {
       return caf::make_error(ec::logic_error, "stdin plugin unavailable");
     }
-    stdout_plugin_ = plugins::find<saver_plugin>("stdout");
+    stdout_plugin_ = plugins::find<saver_parser_plugin>("stdout");
     if (not stdout_plugin_) {
       return caf::make_error(ec::logic_error, "stdout plugin unavailable");
     }
@@ -55,8 +40,8 @@ public:
   }
 
 private:
-  const loader_plugin* stdin_plugin_ = nullptr;
-  const saver_plugin* stdout_plugin_ = nullptr;
+  const loader_parser_plugin* stdin_plugin_ = nullptr;
+  const saver_parser_plugin* stdout_plugin_ = nullptr;
 };
 
 } // namespace vast::plugins::dash

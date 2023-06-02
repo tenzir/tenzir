@@ -7,7 +7,7 @@ Reads and writes raw network packets in libpcap format.
 Parser:
 
 ```
-pcap [--disable-community-id] 
+pcap [--disable-community-id]
      [-c|--cutoff=<uint64t>] [-m|--max-flows=<uint64t>]
      [-a|--max-flow-age=<duration>] [-e|--flow-expiry=<uint64t>]
 ```
@@ -53,10 +53,6 @@ pcap.packet:
           format: pcap
           skip: ~
 ```
-
-The default loader for the `pcap` parser is [`stdin`](../connectors/stdin.md).
-
-The default saver for the `pcap` printer is [`stdout`](../connectors/stdout.md).
 
 ### VLAN Tags
 
@@ -171,7 +167,7 @@ read pcap | where vlan.outer > 0 || vlan.inner in [1, 2, 3]
 Filter packets by Community ID:
 
 ```
-read pcap 
-| where community_id == "1:wCb3OG7yAFWelaUydu0D+125CLM=" 
+read pcap
+| where community_id == "1:wCb3OG7yAFWelaUydu0D+125CLM="
 | write pcap
 ```

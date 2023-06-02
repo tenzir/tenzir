@@ -22,6 +22,8 @@ namespace {
 
 class measure_operator final : public crtp_operator<measure_operator> {
 public:
+  measure_operator() = default;
+
   measure_operator(uint64_t batch_size, bool real_time, bool cumulative)
     : batch_size_{batch_size}, real_time_{real_time}, cumulative_{cumulative} {
   }
@@ -103,26 +105,22 @@ public:
                        cumulative_ ? " --cumulative" : "");
   }
 
+  auto name() const -> std::string override {
+    return "measure";
+  }
+
+  friend auto inspect(auto& f, measure_operator& x) -> bool {
+    return detail::apply_all(f, x.batch_size_, x.real_time_, x.cumulative_);
+  }
+
 private:
   uint64_t batch_size_ = {};
   bool real_time_ = {};
   bool cumulative_ = {};
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<measure_operator> {
 public:
-  // plugin API
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  const record& global_config) -> caf::error override {
-    batch_size_ = get_or(global_config, "vast.import.batch-size",
-                         defaults::import::table_slice_size);
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "measure";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,

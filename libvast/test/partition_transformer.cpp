@@ -154,7 +154,7 @@ TEST(delete pipeline / persist before done) {
   auto transformer
     = self->spawn(vast::partition_transformer, store_id, synopsis_opts,
                   index_opts, accountant, catalog, filesystem,
-                  unbox(vast::pipeline::parse("drop uid")),
+                  unbox(vast::pipeline::internal_parse("drop uid")),
                   PARTITION_PATH_TEMPLATE, SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
   // Stream data
@@ -460,10 +460,10 @@ TEST(query after transform) {
   auto& partition_info = partition_infos.emplace_back();
   partition_info.uuid = partition_uuid;
   partition_info.schema = partition_type;
-  auto rp3 = self->request(
-    index, caf::infinite, vast::atom::apply_v,
-    unbox(vast::pipeline::parse("rename zeek.totally_not_conn=:zeek.conn")),
-    partition_infos, vast::keep_original_partition::no);
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v,
+                           unbox(vast::pipeline::internal_parse(
+                             "rename zeek.totally_not_conn=:zeek.conn")),
+                           partition_infos, vast::keep_original_partition::no);
   run();
   rp3.receive(
     [=](const std::vector<vast::partition_info>& infos) {
@@ -556,10 +556,11 @@ TEST(select pipeline with an empty result set) {
   std::vector<vast::partition_info> partition_infos;
   auto& partition_info = partition_infos.emplace_back();
   partition_info.uuid = partition_uuid;
-  auto rp2 = self->request(index, caf::infinite, vast::atom::apply_v,
-                           unbox(vast::pipeline::parse("where #schema == "
-                                                       "\"does_not_exist\"")),
-                           partition_infos, vast::keep_original_partition::no);
+  auto rp2
+    = self->request(index, caf::infinite, vast::atom::apply_v,
+                    unbox(vast::pipeline::internal_parse("where #schema == "
+                                                         "\"does_not_exist\"")),
+                    partition_infos, vast::keep_original_partition::no);
   run();
   rp2.receive(
     [=](const std::vector<vast::partition_info>& infos) {

@@ -28,8 +28,9 @@ inline auto to_parser(std::string str) {
 }
 
 template <class T>
-constexpr auto
-to_parser(T x) requires(std::is_arithmetic_v<T> and !std::is_same_v<T, bool>) {
+constexpr auto to_parser(T x)
+  requires(std::is_arithmetic_v<T> and !std::is_same_v<T, bool>)
+{
   return ignore(parsers::str{std::to_string(x)});
 }
 
@@ -42,8 +43,8 @@ constexpr auto to_parser(T x) -> T {
 
 template <class T>
 constexpr bool is_convertible_to_unary_parser_v
-  = std::is_convertible_v<
-      T, std::string> || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
+  = std::is_convertible_v<T, std::string>
+    || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
 
 template <class T, class U>
 constexpr bool is_convertible_to_binary_parser_v
@@ -77,7 +78,8 @@ template <template <class, class> class BinaryParser, class T, class U>
 constexpr auto to_parser(T&& x, U&& y)
   -> make_binary_parser<BinaryParser, decltype(to_parser(std::forward<T>(x))),
                         decltype(to_parser(std::forward<U>(y)))>
-requires(is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>) {
+  requires(is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>)
+{
   return {to_parser(std::forward<T>(x)), to_parser(std::forward<U>(y))};
 }
 

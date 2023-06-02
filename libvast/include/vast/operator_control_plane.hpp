@@ -11,6 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/actors.hpp"
+#include "vast/diagnostics.hpp"
+#include "vast/die.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
 
@@ -50,6 +52,8 @@ struct operator_control_plane {
   /// Access available concepts.
   [[nodiscard]] virtual auto concepts() const noexcept
     -> const concepts_map& = 0;
+
+  virtual auto diagnostics() noexcept -> diagnostic_handler& = 0;
 };
 
 } // namespace vast

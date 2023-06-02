@@ -1,0 +1,3 @@
+<local_remote> "pass", 0, false
+-----
+located("<local_remote>", "pass", 0, false, location(0, 23))

@@ -59,7 +59,6 @@
         "plugins/cef"
         "plugins/parquet"
         "plugins/pcap"
-        "plugins/sigma"
         "plugins/web"
       ]
       ++ extraPlugins';

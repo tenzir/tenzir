@@ -25,10 +25,6 @@ versions of its major dependencies that it currently uses:
       "version": "bundled"
     },
     {
-      "name": "sigma",
-      "version": "bundled"
-    },
-    {
       "name": "web",
       "version": "bundled"
     }

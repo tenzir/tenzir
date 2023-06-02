@@ -6,10 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/diagnostics.hpp"
 #include "vast/operator_control_plane.hpp"
+#include "vast/parser_interface.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/test.hpp"
+#include "vast/tql/parser.hpp"
 
 using namespace vast;
 
@@ -55,6 +58,11 @@ public:
     FAIL("Unexpected call to operator_control_plane::concepts");
   }
 
+  auto diagnostics() noexcept -> diagnostic_handler& override {
+    static auto diag = null_diagnostic_handler{};
+    return diag;
+  }
+
 private:
   OnWarnCallable on_warn_;
   std::vector<type> schemas_;
@@ -64,11 +72,13 @@ private:
 };
 
 auto create_sut(generator<chunk_ptr> json_chunk_gen,
-                operator_control_plane& control_plane,
-                std::vector<std::string> args = {}) -> generator<table_slice> {
-  auto const* plugin = vast::plugins::find<vast::parser_plugin>("json");
-  auto sut
-    = plugin->make_parser(args, std::move(json_chunk_gen), control_plane);
+                operator_control_plane& control_plane, std::string args = "")
+  -> generator<table_slice> {
+  auto const* plugin = vast::plugins::find<vast::parser_parser_plugin>("json");
+  auto diag = null_diagnostic_handler{};
+  auto p = tql::make_parser_interface(std::move(args), diag);
+  auto sut = plugin->parse_parser(*p)->instantiate(std::move(json_chunk_gen),
+                                                   control_plane);
   REQUIRE(sut);
   return std::move(*sut);
 }
@@ -388,8 +398,7 @@ TEST(0 slices and abort from event that is properly formatted JSON among
 FIXTURE_SCOPE_END()
 
 struct known_schema_no_infer_fixture : public unknown_schema_fixture {
-  std::vector<std::string> args{"--selector=field_to_chose:modulee",
-                                "--no-infer"};
+  std::string args{"--selector=field_to_chose:modulee --no-infer"};
 };
 
 FIXTURE_SCOPE(no_infer_known_schema_json_parser_tests,
@@ -575,7 +584,7 @@ TEST(issue a warning and dont output a slice when no schema can be found) {
 FIXTURE_SCOPE_END()
 
 struct known_schema_fixture : public unknown_schema_fixture {
-  std::vector<std::string> args{"--selector=field_to_chose:modulee"};
+  std::string args{"--selector=field_to_chose:modulee"};
 };
 
 FIXTURE_SCOPE(known_schema_json_parser_tests, known_schema_fixture)
