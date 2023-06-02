@@ -6,15 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/catalog.hpp>
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/json.hpp>
 #include <vast/data.hpp>
 #include <vast/logger.hpp>
+#include <vast/node_control.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
-#include <vast/system/catalog.hpp>
-#include <vast/system/node_control.hpp>
-#include <vast/system/spawn_or_connect_to_node.hpp>
+#include <vast/spawn_or_connect_to_node.hpp>
 #include <vast/taxonomies.hpp>
 
 #include <caf/blocking_actor.hpp>
@@ -134,17 +134,15 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
-  auto node_opt = system::spawn_or_connect_to_node(self, inv.options,
-                                                   content(sys.config()));
+  auto node_opt
+    = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  const auto& node
-    = std::holds_alternative<system::node_actor>(node_opt)
-        ? std::get<system::node_actor>(node_opt)
-        : std::get<scope_linked<system::node_actor>>(node_opt).get();
+  const auto& node = std::holds_alternative<node_actor>(node_opt)
+                       ? std::get<node_actor>(node_opt)
+                       : std::get<scope_linked<node_actor>>(node_opt).get();
   // Get the catalog actor.
-  auto components
-    = system::get_node_components<system::catalog_actor>(self, node);
+  auto components = get_node_components<catalog_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto [catalog] = std::move(*components);
@@ -187,7 +185,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
     query_context.id = uuid::random();
     self->send(catalog, atom::candidates_v, std::move(query_context));
     self->receive(
-      [&](const system::catalog_lookup_result& catalog_result) {
+      [&](const catalog_lookup_result& catalog_result) {
         auto types = type_set{};
         for (const auto& [type, partitions] : catalog_result.candidate_infos) {
           for (const auto& partition_info : partitions.partition_infos) {

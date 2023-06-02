@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "vast/actors.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
-#include "vast/system/actors.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
@@ -18,7 +18,7 @@
 // An in-memory implementation of the filesystem actor, to rule out
 // test flakiness due to a slow disk and to be able to write to any
 // path without permission issues.
-inline vast::system::filesystem_actor::behavior_type memory_filesystem() {
+inline vast::filesystem_actor::behavior_type memory_filesystem() {
   auto chunks
     = std::make_shared<std::map<std::filesystem::path, vast::chunk_ptr>>();
   return {
@@ -74,7 +74,7 @@ inline vast::system::filesystem_actor::behavior_type memory_filesystem() {
       chunks->erase(path);
       return vast::atom::done_v;
     },
-    [](vast::atom::status, vast::system::status_verbosity,
+    [](vast::atom::status, vast::status_verbosity,
        vast::duration) -> vast::record {
       return {};
     },

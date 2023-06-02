@@ -13,7 +13,7 @@
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_context.hpp"
-#include "vast/system/report.hpp"
+#include "vast/report.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/attach_stream_sink.hpp>
@@ -49,7 +49,7 @@ handle_query(const auto& self, const query_context& query_context) {
     // taxonomy resolution is not guaranteed to have worked (whenever the
     // type in this store did not exist in the catalog when the partition
     // was created). In that case we simply discard the query.
-    if constexpr (std::is_same_v<system::default_active_store_actor, Actor>)
+    if constexpr (std::is_same_v<default_active_store_actor, Actor>)
       return 0ull;
     return caf::make_error(ec::invalid_query,
                            fmt::format("{} failed to tailor '{}' to '{}'",
@@ -58,7 +58,7 @@ handle_query(const auto& self, const query_context& query_context) {
   auto rp = self->template make_response_promise<uint64_t>();
   auto f = detail::overload{
     [&](const count_query_context& count) -> void {
-      if constexpr (std::is_same_v<Actor, system::default_passive_store_actor>) {
+      if constexpr (std::is_same_v<Actor, default_passive_store_actor>) {
         if (count.mode == count_query_context::estimate) {
           rp.deliver(caf::make_error(ec::logic_error, "estimate counts must "
                                                       "not evaluate "
@@ -104,7 +104,7 @@ handle_query(const auto& self, const query_context& query_context) {
             const auto id_str = fmt::to_string(query_id);
             self->send(self->state.accountant, atom::metrics_v,
                        fmt::format("{}.lookup.runtime", self->name()), runtime,
-                       system::metrics_metadata{
+                       metrics_metadata{
                          {"query", id_str},
                          {"issuer", issuer},
                          {"store-type", self->state.store_type},
@@ -112,7 +112,7 @@ handle_query(const auto& self, const query_context& query_context) {
             self->send(self->state.accountant, atom::metrics_v,
                        fmt::format("{}.lookup.hits", self->name()),
                        it->second.num_hits,
-                       system::metrics_metadata{
+                       metrics_metadata{
                          {"query", id_str},
                          {"issuer", issuer},
                          {"store-type", self->state.store_type},
@@ -164,7 +164,7 @@ handle_query(const auto& self, const query_context& query_context) {
             const auto id_str = fmt::to_string(query_id);
             self->send(self->state.accountant, atom::metrics_v,
                        fmt::format("{}.lookup.runtime", self->name()), runtime,
-                       system::metrics_metadata{
+                       metrics_metadata{
                          {"query", id_str},
                          {"issuer", issuer},
                          {"store-type", self->state.store_type},
@@ -172,7 +172,7 @@ handle_query(const auto& self, const query_context& query_context) {
             self->send(self->state.accountant, atom::metrics_v,
                        fmt::format("{}.lookup.hits", self->name()),
                        it->second.num_hits,
-                       system::metrics_metadata{
+                       metrics_metadata{
                          {"query", id_str},
                          {"issuer", issuer},
                          {"store-type", self->state.store_type},
@@ -236,14 +236,12 @@ base_store::extract(expression expr, ids selection) const {
   }
 }
 
-system::default_passive_store_actor::behavior_type
-default_passive_store(system::default_passive_store_actor::stateful_pointer<
-                        default_passive_store_state>
-                        self,
-                      std::unique_ptr<passive_store> store,
-                      system::filesystem_actor filesystem,
-                      system::accountant_actor accountant,
-                      std::filesystem::path path, std::string store_type) {
+default_passive_store_actor::behavior_type default_passive_store(
+  default_passive_store_actor::stateful_pointer<default_passive_store_state>
+    self,
+  std::unique_ptr<passive_store> store, filesystem_actor filesystem,
+  accountant_actor accountant, std::filesystem::path path,
+  std::string store_type) {
   const auto start = std::chrono::steady_clock::now();
   // Configure our actor state.
   self->state.self = self;
@@ -262,7 +260,7 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
         auto startup_duration = std::chrono::steady_clock::now() - start;
         self->send(self->state.accountant, atom::metrics_v,
                    "passive-store.init.runtime", startup_duration,
-                   system::metrics_metadata{
+                   metrics_metadata{
                      {"store-type", self->state.store_type},
                    });
         if (load_error)
@@ -279,8 +277,7 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
       VAST_DEBUG("{} starts working on query {}", *self, query_context.id);
-      return handle_query<system::default_passive_store_actor>(self,
-                                                               query_context);
+      return handle_query<default_passive_store_actor>(self, query_context);
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
       // For new, partition-local stores we know that we always erase
@@ -321,9 +318,8 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
-      return self->delegate(
-        static_cast<system::default_passive_store_actor>(self),
-        atom::internal_v, atom::extract_v, query_id);
+      return self->delegate(static_cast<default_passive_store_actor>(self),
+                            atom::internal_v, atom::extract_v, query_id);
     },
     [self](atom::internal, atom::count,
            const uuid& query_id) -> caf::result<void> {
@@ -342,18 +338,16 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
-      return self->delegate(
-        static_cast<system::default_passive_store_actor>(self),
-        atom::internal_v, atom::count_v, query_id);
+      return self->delegate(static_cast<default_passive_store_actor>(self),
+                            atom::internal_v, atom::count_v, query_id);
     },
   };
 }
 
-system::default_active_store_actor::behavior_type default_active_store(
-  system::default_active_store_actor::stateful_pointer<default_active_store_state>
-    self,
-  std::unique_ptr<active_store> store, system::filesystem_actor filesystem,
-  system::accountant_actor accountant, std::filesystem::path path,
+default_active_store_actor::behavior_type default_active_store(
+  default_active_store_actor::stateful_pointer<default_active_store_state> self,
+  std::unique_ptr<active_store> store, filesystem_actor filesystem,
+  accountant_actor accountant, std::filesystem::path path,
   std::string store_type) {
   // Configure our actor state.
   self->state.self = self;
@@ -371,8 +365,7 @@ system::default_active_store_actor::behavior_type default_active_store(
       VAST_DEBUG("{} starts working on query {}", *self, query_context.id);
       if (self->state.store->num_events() == 0)
         return 0ull;
-      return handle_query<system::default_active_store_actor>(self,
-                                                              query_context);
+      return handle_query<default_active_store_actor>(self, query_context);
     },
     [self](atom::erase, const ids& selection) {
       // For new, partition-local stores we know that we always erase
@@ -394,7 +387,7 @@ system::default_active_store_actor::behavior_type default_active_store(
         // cache, and it received all data from the incoming stream. This
         // pointer serves to keep the ref-count alive for the last part, and
         // is reset after the data has been written to disk.
-        system::default_active_store_actor strong_self;
+        default_active_store_actor strong_self;
       };
       auto attach_sink_result = caf::attach_stream_sink(
         self, stream,
@@ -443,7 +436,7 @@ system::default_active_store_actor::behavior_type default_active_store(
         });
       return attach_sink_result.inbound_slot();
     },
-    [self](atom::status, system::status_verbosity, duration) {
+    [self](atom::status, status_verbosity, duration) {
       return record{
         {"events", self->state.store->num_events()},
         {"path", self->state.path.string()},
@@ -469,9 +462,8 @@ system::default_active_store_actor::behavior_type default_active_store(
       if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
-      return self->delegate(
-        static_cast<system::default_active_store_actor>(self), atom::internal_v,
-        atom::extract_v, query_id);
+      return self->delegate(static_cast<default_active_store_actor>(self),
+                            atom::internal_v, atom::extract_v, query_id);
     },
     [self](atom::internal, atom::count,
            const uuid& query_id) -> caf::result<void> {
@@ -490,9 +482,8 @@ system::default_active_store_actor::behavior_type default_active_store(
       if (++state.result_iterator == state.result_generator.end()) {
         return {};
       }
-      return self->delegate(
-        static_cast<system::default_active_store_actor>(self), atom::internal_v,
-        atom::count_v, query_id);
+      return self->delegate(static_cast<default_active_store_actor>(self),
+                            atom::internal_v, atom::count_v, query_id);
     },
   };
 }

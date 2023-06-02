@@ -25,8 +25,8 @@ struct index_config {
 
   struct rule {
     std::vector<std::string> targets = {};
-    double fp_rate = defaults::system::fp_rate;
-    bool create_partition_index = defaults::system::create_partition_index;
+    double fp_rate = defaults::fp_rate;
+    bool create_partition_index = defaults::create_partition_index;
 
     template <class Inspector>
     friend auto inspect(Inspector& f, rule& x) {
@@ -45,7 +45,7 @@ struct index_config {
   };
 
   std::vector<rule> rules = {};
-  double default_fp_rate = defaults::system::fp_rate;
+  double default_fp_rate = defaults::fp_rate;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, index_config& x) {

@@ -9,8 +9,8 @@
 #pragma once
 
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/node.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/node.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/data.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
@@ -51,7 +51,7 @@ struct node : deterministic_actor_system_and_events {
   // Performs a historical query and returns the resulting events.
   std::vector<table_slice> query(std::string expr);
 
-  system::node_actor test_node;
+  node_actor test_node;
 };
 
 } // namespace fixtures

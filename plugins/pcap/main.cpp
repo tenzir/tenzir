@@ -342,7 +342,7 @@ public:
     return "pcap-reader";
   }
 
-  vast::system::report status() const override {
+  vast::report status() const override {
     using namespace std::string_literals;
     if (!pcap_)
       return {};

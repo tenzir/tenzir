@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/application.hpp"
+#include "vast/default_configuration.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/detail/signal_handlers.hpp"
 #include "vast/factory.hpp"
@@ -16,9 +18,7 @@
 #include "vast/modules.hpp"
 #include "vast/plugin.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/application.hpp"
-#include "vast/system/default_configuration.hpp"
-#include "vast/system/signal_reflector.hpp"
+#include "vast/signal_reflector.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>
@@ -36,10 +36,10 @@ int main(int argc, char** argv) {
   std::signal(SIGSEGV, fatal_handler);
   std::signal(SIGABRT, fatal_handler);
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
-  auto sigset = system::termsigset();
+  auto sigset = termsigset();
   pthread_sigmask(SIG_BLOCK, &sigset, nullptr);
   // Set up our configuration, e.g., load of YAML config file(s).
-  system::default_configuration cfg;
+  default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
     std::cerr << "failed to parse configuration: " << to_string(err)
               << std::endl;
@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
   factory<format::reader>::initialize();
   factory<format::writer>::initialize();
   // Application setup.
-  auto [root, root_factory] = system::make_application(argv[0]);
+  auto [root, root_factory] = make_application(argv[0]);
   if (!root)
     return EXIT_FAILURE;
   // Parse the CLI.
@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
   if (!invocation) {
     if (invocation.error()) {
-      system::render_error(*root, invocation.error(), std::cerr);
+      render_error(*root, invocation.error(), std::cerr);
       return EXIT_FAILURE;
     }
     // Printing help/documentation texts returns caf::no_error, and we want to
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
-  for (const auto& file : system::loaded_config_files())
+  for (const auto& file : loaded_config_files())
     VAST_INFO("loaded configuration file: {}", file);
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : *loaded_plugin_paths)
@@ -163,8 +163,8 @@ int main(int argc, char** argv) {
   // thread-safe.
   auto sys = caf::actor_system{cfg};
   // The reflector scope variable cleans up the reflector on destruction.
-  scope_linked<system::signal_reflector_actor> reflector{
-    sys.spawn<caf::detached>(system::signal_reflector)};
+  scope_linked<signal_reflector_actor> reflector{
+    sys.spawn<caf::detached>(signal_reflector)};
   std::atomic<bool> stop = false;
   // clang-format off
   auto signal_monitoring_thread = std::thread([&]()
@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
   signal_monitoring_thread.join();
   pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {
-    system::render_error(*root, run_error, std::cerr);
+    render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

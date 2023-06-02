@@ -116,14 +116,14 @@ index 8a0ef87e8..d93ff7912 100644
 --- a/libvast/native-plugins/segment_store.cpp
 +++ b/libvast/native-plugins/segment_store.cpp
 @@ -22,6 +22,7 @@
- #include <vast/system/status.hpp>
+ #include <vast/status.hpp>
  #include <vast/table_slice.hpp>
  
 +#include <arrow/record_batch.h>
  #include <caf/attach_stream_sink.hpp>
  #include <caf/settings.hpp>
  #include <caf/typed_event_based_actor.hpp>
-@@ -335,6 +336,17 @@ system::store_actor::behavior_type passive_local_store(
+@@ -335,6 +336,17 @@ store_actor::behavior_type passive_local_store(
    };
  }
  
@@ -140,7 +140,7 @@ index 8a0ef87e8..d93ff7912 100644
 +
  local_store_actor::behavior_type
  active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
-                    system::accountant_actor accountant,
+                    accountant_actor accountant,
 @@ -434,13 +446,28 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
      },
      // internal handlers
@@ -176,14 +176,14 @@ index 9ec239056..0b3df399c 100644
 --- a/libvast/src/store.cpp
 +++ b/libvast/src/store.cpp
 @@ -16,6 +16,7 @@
- #include "vast/system/report.hpp"
+ #include "vast/report.hpp"
  #include "vast/table_slice.hpp"
  
 +#include <arrow/record_batch.h>
  #include <caf/attach_stream_sink.hpp>
  #include <caf/typed_event_based_actor.hpp>
  
-@@ -340,6 +341,17 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
+@@ -340,6 +341,17 @@ default_passive_store(default_passive_store_actor::stateful_pointer<
    };
  }
  
@@ -198,10 +198,10 @@ index 9ec239056..0b3df399c 100644
 +  return size;
 +}
 +
- system::default_active_store_actor::behavior_type default_active_store(
-   system::default_active_store_actor::stateful_pointer<default_active_store_state>
+ default_active_store_actor::behavior_type default_active_store(
+   default_active_store_actor::stateful_pointer<default_active_store_state>
      self,
-@@ -408,6 +420,29 @@ system::default_active_store_actor::behavior_type default_active_store(
+@@ -408,6 +420,29 @@ default_active_store_actor::behavior_type default_active_store(
            // persist anything.
            if (self->state.erased)
              return;

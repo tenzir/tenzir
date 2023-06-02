@@ -14,8 +14,8 @@
 #include <vast/fbs/utils.hpp>
 #include <vast/index/hash_index.hpp>
 #include <vast/legacy_type.hpp>
+#include <vast/passive_partition.hpp>
 #include <vast/qualified_record_field.hpp>
-#include <vast/system/passive_partition.hpp>
 #include <vast/type.hpp>
 #include <vast/value_index_factory.hpp>
 
@@ -284,7 +284,7 @@ void print_partition(const std::filesystem::path& path, indentation& indent,
     auto const* header = vast::fbs::GetSegmentedFileHeader((*chunk)->data());
     print_segmented_file_header(header, indent, formatting);
   }
-  auto maybe_partition = vast::system::partition_chunk::get_flatbuffer(*chunk);
+  auto maybe_partition = vast::partition_chunk::get_flatbuffer(*chunk);
   if (!maybe_partition) {
     fmt::print("(failed to read partition: {}\n", maybe_partition.error());
     return;

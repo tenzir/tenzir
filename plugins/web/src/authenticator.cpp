@@ -112,7 +112,7 @@ bool authenticator_state::authenticate(token_t x) const {
 }
 
 caf::expected<authenticator_actor>
-get_authenticator(caf::scoped_actor& self, system::node_actor node,
+get_authenticator(caf::scoped_actor& self, node_actor node,
                   caf::timespan timeout) {
   auto maybe_authenticator = caf::expected<caf::actor>{caf::error{}};
   self->request(node, timeout, atom::get_v, atom::type_v, "web")
@@ -142,7 +142,7 @@ get_authenticator(caf::scoped_actor& self, system::node_actor node,
 
 authenticator_actor::behavior_type
 authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
-              system::filesystem_actor fs) {
+              filesystem_actor fs) {
   self->state.path_ = std::filesystem::path{"plugins/web/authenticator.svs"};
   self->state.filesystem_ = fs;
   self->request(fs, caf::infinite, atom::read_v, self->state.path_)
@@ -195,7 +195,7 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
     [self](atom::validate, const token_t& token) -> bool {
       return self->state.authenticate(token);
     },
-    [](atom::status, system::status_verbosity, duration) -> vast::record {
+    [](atom::status, status_verbosity, duration) -> vast::record {
       return record{};
     },
   };

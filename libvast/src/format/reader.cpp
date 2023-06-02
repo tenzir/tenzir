@@ -11,9 +11,9 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/table_slice_encoding.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/configuration.hpp"
 #include "vast/format/reader_factory.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/configuration.hpp"
 
 #include <caf/settings.hpp>
 
@@ -30,7 +30,7 @@ reader::consumer::~consumer() {
 
 reader::reader(const caf::settings& options) {
   auto parse_timeout = [&](std::string_view key, duration fallback) {
-    auto timeout_value = system::get_or_duration(options, key, fallback);
+    auto timeout_value = get_or_duration(options, key, fallback);
     if (!timeout_value) {
       VAST_WARN("client failed to read '{}': {}", key, timeout_value.error());
       return fallback;
@@ -48,7 +48,7 @@ reader::~reader() {
   // nop
 }
 
-vast::system::report reader::status() const {
+vast::report reader::status() const {
   return {};
 }
 

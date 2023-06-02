@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/actors.hpp>
 #include <vast/atoms.hpp>
 #include <vast/detail/overload.hpp>
 #include <vast/detail/zip_iterator.hpp>
@@ -13,13 +14,12 @@
 #include <vast/fbs/utils.hpp>
 #include <vast/ids.hpp>
 #include <vast/logger.hpp>
+#include <vast/node_control.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
+#include <vast/report.hpp>
 #include <vast/segment.hpp>
-#include <vast/system/actors.hpp>
-#include <vast/system/node_control.hpp>
-#include <vast/system/report.hpp>
-#include <vast/system/status.hpp>
+#include <vast/status.hpp>
 #include <vast/table_slice.hpp>
 
 #include <caf/attach_stream_sink.hpp>
@@ -37,11 +37,11 @@ namespace vast::plugins::segment_store {
 namespace {
 
 /// The STORE BUILDER actor interface.
-using local_store_actor = system::typed_actor_fwd<
+using local_store_actor = typed_actor_fwd<
   // INTERNAL: Persist the actor.
   auto(atom::internal, atom::persist)->caf::result<void>>
   // Conform to the protocol of a STORE BUILDER actor.
-  ::extend_with<system::store_builder_actor>::unwrap;
+  ::extend_with<store_builder_actor>::unwrap;
 
 struct passive_store_state {
   /// Defaulted constructor to make this a non-aggregate.
@@ -59,10 +59,10 @@ struct passive_store_state {
   std::vector<erasure> deferred_erasures = {};
 
   /// Actor handle of the accountant.
-  system::accountant_actor accountant = {};
+  accountant_actor accountant = {};
 
   /// The actor handle of the filesystem actor.
-  system::filesystem_actor fs = {};
+  filesystem_actor fs = {};
 
   /// The path where the segment is stored.
   std::filesystem::path path = {};
@@ -132,10 +132,10 @@ store_path_from_header(std::span<const std::byte> header) {
   return std::filesystem::path{sv};
 }
 
-system::store_actor::behavior_type passive_local_store(
-  system::store_actor::stateful_pointer<passive_store_state> self,
-  system::accountant_actor accountant, system::filesystem_actor fs,
-  const std::filesystem::path& path) {
+store_actor::behavior_type
+passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
+                    accountant_actor accountant, filesystem_actor fs,
+                    const std::filesystem::path& path) {
   const auto start = std::chrono::steady_clock::now();
   self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
@@ -174,19 +174,19 @@ system::store_actor::behavior_type passive_local_store(
              std::exchange(self->state.deferred_requests, {})) {
           VAST_TRACE("{} delegates {} (pending: {})", *self, query,
                      rp.pending());
-          rp.delegate(static_cast<system::store_actor>(self), atom::query_v,
+          rp.delegate(static_cast<store_actor>(self), atom::query_v,
                       std::move(query));
         }
         for (auto&& [ids, rp] :
              std::exchange(self->state.deferred_erasures, {})) {
           VAST_TRACE("{} delegates erase (pending: {})", *self, rp.pending());
-          rp.delegate(static_cast<system::store_actor>(self), atom::erase_v,
+          rp.delegate(static_cast<store_actor>(self), atom::erase_v,
                       std::move(ids));
         }
         auto startup_duration = std::chrono::steady_clock::now() - start;
         self->send(self->state.accountant, atom::metrics_v,
                    "passive-store.init.runtime", startup_duration,
-                   system::metrics_metadata{
+                   metrics_metadata{
                      {"store-type", "segment-store"},
                    });
       },
@@ -218,14 +218,14 @@ system::store_actor::behavior_type passive_local_store(
       auto id_str = fmt::to_string(query_context.id);
       self->send(self->state.accountant, atom::metrics_v,
                  "passive-store.lookup.runtime", runtime,
-                 system::metrics_metadata{
+                 metrics_metadata{
                    {"query", id_str},
                    {"issuer", query_context.issuer},
                    {"store-type", "segment-store"},
                  });
       self->send(self->state.accountant, atom::metrics_v,
                  "passive-store.lookup.hits", *num_hits,
-                 system::metrics_metadata{
+                 metrics_metadata{
                    {"query", id_str},
                    {"issuer", query_context.issuer},
                    {"store-type", "segment-store"},
@@ -288,15 +288,15 @@ public:
 
   // store plugin API
   [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder([[maybe_unused]] system::accountant_actor accountant,
-                     [[maybe_unused]] system::filesystem_actor fs,
+  make_store_builder([[maybe_unused]] accountant_actor accountant,
+                     [[maybe_unused]] filesystem_actor fs,
                      [[maybe_unused]] const vast::uuid& id) const override {
     return caf::make_error(ec::logic_error, "segment-store plugin is read-only "
                                             "since VAST v2.4");
   }
 
-  [[nodiscard]] caf::expected<system::store_actor>
-  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
+  [[nodiscard]] caf::expected<store_actor>
+  make_store(accountant_actor accountant, filesystem_actor fs,
              std::span<const std::byte> header) const override {
     auto path = store_path_from_header(header);
     return fs->home_system().spawn<caf::lazy_init>(passive_local_store,

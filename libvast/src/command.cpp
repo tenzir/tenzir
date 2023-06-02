@@ -8,6 +8,7 @@
 
 #include "vast/command.hpp"
 
+#include "vast/application.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/settings.hpp"
@@ -15,8 +16,7 @@
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/application.hpp"
-#include "vast/system/start_command.hpp"
+#include "vast/start_command.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
@@ -193,7 +193,7 @@ void render_parse_error(const command& cmd, const invocation& inv,
     os << "error: unrecognized subcommand" << '\n' << make_line_pair() << '\n';
     helptext(cmd, os);
   } else {
-    system::render_error(cmd, err, os);
+    render_error(cmd, err, os);
     os << std::endl;
   }
 }

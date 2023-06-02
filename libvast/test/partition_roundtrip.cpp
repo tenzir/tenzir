@@ -8,6 +8,9 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/active_partition.hpp"
+#include "vast/actors.hpp"
+#include "vast/catalog.hpp"
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
@@ -15,13 +18,10 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/index.hpp"
+#include "vast/passive_partition.hpp"
+#include "vast/posix_filesystem.hpp"
 #include "vast/query_context.hpp"
-#include "vast/system/active_partition.hpp"
-#include "vast/system/actors.hpp"
-#include "vast/system/catalog.hpp"
-#include "vast/system/index.hpp"
-#include "vast/system/passive_partition.hpp"
-#include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
@@ -36,7 +36,7 @@
 #include <filesystem>
 #include <span>
 
-vast::system::store_actor::behavior_type dummy_store() {
+vast::store_actor::behavior_type dummy_store() {
   return {
     [](vast::atom::query, const vast::query_context&) {
       return uint64_t{0};
@@ -64,7 +64,7 @@ TEST(uuid roundtrip) {
 }
 
 TEST(index roundtrip) {
-  vast::system::index_state state(/*self = */ nullptr);
+  vast::index_state state(/*self = */ nullptr);
   // Both unpersisted and persisted partitions should show up in the created
   // flatbuffer.
   state.unpersisted[vast::uuid::random()] = {};
@@ -116,9 +116,9 @@ FIXTURE_SCOPE(partition_roundtrips, fixture)
 
 TEST(empty partition roundtrip) {
   // Create partition state.
-  vast::system::active_partition_state state;
+  vast::active_partition_state state;
   state.data.id = vast::uuid::random();
-  state.data.store_id = vast::defaults::system::store_backend;
+  state.data.store_id = vast::defaults::store_backend;
   state.data.store_header = vast::chunk::make_empty();
   state.data.events = 23;
   state.data.synopsis = caf::make_copy_on_write<vast::partition_synopsis>();
@@ -142,8 +142,8 @@ TEST(empty partition roundtrip) {
   auto slice = slice_builder->finish();
   slice.offset(0);
   REQUIRE_NOT_EQUAL(slice.encoding(), vast::table_slice_encoding::none);
-  state.data.synopsis.unshared().add(
-    slice, vast::defaults::system::max_partition_size, vast::index_config{});
+  state.data.synopsis.unshared().add(slice, vast::defaults::max_partition_size,
+                                     vast::index_config{});
   // Serialize partition.
   vast::chunk_ptr partition_chunk = {};
   {
@@ -154,7 +154,7 @@ TEST(empty partition roundtrip) {
     partition_chunk = *partition;
   }
   // Deserialize partition.
-  vast::system::passive_partition_state recovered_state = {};
+  vast::passive_partition_state recovered_state = {};
   auto container = vast::fbs::flatbuffer_container{partition_chunk};
   auto partition = container.as_flatbuffer<vast::fbs::Partition>(0);
   REQUIRE(partition);
@@ -165,7 +165,7 @@ TEST(empty partition roundtrip) {
   REQUIRE(partition_legacy->store());
   REQUIRE(partition_legacy->store()->id());
   CHECK_EQUAL(partition_legacy->store()->id()->str(),
-              vast::defaults::system::store_backend);
+              vast::defaults::store_backend);
   CHECK_EQUAL(partition_legacy->events(), state.data.events);
   auto error = unpack(*partition_legacy, recovered_state);
   CHECK(!error);
@@ -177,13 +177,12 @@ TEST(empty partition roundtrip) {
   CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
   // Deserialize catalog state from this partition.
   auto ps = caf::make_copy_on_write<vast::partition_synopsis>();
-  auto error2 = vast::system::unpack(*partition_legacy, ps.unshared());
+  auto error2 = vast::unpack(*partition_legacy, ps.unshared());
   CHECK(!error2);
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
   CHECK_EQUAL(ps->events, state.data.events);
   auto catalog
-    = self->spawn(vast::system::catalog, vast::system::accountant_actor{},
-                  directory / "types");
+    = self->spawn(vast::catalog, vast::accountant_actor{}, directory / "types");
   auto rp = self->request(catalog, caf::infinite, vast::atom::merge_v,
                           recovered_state.id, ps);
   run();
@@ -200,7 +199,7 @@ TEST(empty partition roundtrip) {
                            std::move(query_context));
   run();
   rp2.receive(
-    [&](const vast::system::catalog_lookup_result& candidates) {
+    [&](const vast::catalog_lookup_result& candidates) {
       REQUIRE_EQUAL(candidates.candidate_infos.size(), 1ull);
       auto candidate_partition
         = candidates.candidate_infos.begin()->second.partition_infos.front();
@@ -223,17 +222,16 @@ TEST(full partition roundtrip) {
     },
   };
   // Spawn a partition.
-  auto fs = self->spawn(vast::system::posix_filesystem, directory,
-                        vast::system::accountant_actor{});
+  auto fs
+    = self->spawn(vast::posix_filesystem, directory, vast::accountant_actor{});
   auto partition_uuid = vast::uuid::random();
   const auto* store_plugin = vast::plugins::find<vast::store_actor_plugin>(
-    vast::defaults::system::store_backend);
+    vast::defaults::store_backend);
   REQUIRE(store_plugin);
-  auto partition
-    = sys.spawn(vast::system::active_partition, schema, partition_uuid,
-                vast::system::accountant_actor{}, fs, caf::settings{},
-                vast::index_config{}, store_plugin,
-                std::make_shared<vast::taxonomies>());
+  auto partition = sys.spawn(vast::active_partition, schema, partition_uuid,
+                             vast::accountant_actor{}, fs, caf::settings{},
+                             vast::index_config{}, store_plugin,
+                             std::make_shared<vast::taxonomies>());
   run();
   REQUIRE(partition);
   // Add data to the partition.
@@ -263,14 +261,14 @@ TEST(full partition roundtrip) {
     });
   self->send_exit(partition, caf::exit_reason::user_shutdown);
   auto readonly_partition
-    = sys.spawn(vast::system::passive_partition, partition_uuid,
-                vast::system::accountant_actor{}, fs, persist_path);
+    = sys.spawn(vast::passive_partition, partition_uuid,
+                vast::accountant_actor{}, fs, persist_path);
   REQUIRE(readonly_partition);
   run();
   // A minimal `partition_client_actor`that stores the results in a local
   // variable.
   auto dummy_client = [](std::shared_ptr<uint64_t> count)
-    -> vast::system::receiver_actor<uint64_t>::behavior_type {
+    -> vast::receiver_actor<uint64_t>::behavior_type {
     return {
       [count](uint64_t hits) {
         *count += hits;

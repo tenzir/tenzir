@@ -12,7 +12,7 @@
 
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/system/report.hpp"
+#include "vast/report.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/error.hpp>
@@ -110,7 +110,7 @@ public:
   [[nodiscard]] virtual const char* name() const = 0;
 
   /// @returns A report for the accountant.
-  [[nodiscard]] virtual vast::system::report status() const;
+  [[nodiscard]] virtual vast::report status() const;
 
 protected:
   virtual caf::error

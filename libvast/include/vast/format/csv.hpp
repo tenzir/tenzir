@@ -69,7 +69,7 @@ public:
 
   vast::module module() const override;
 
-  vast::system::report status() const override;
+  vast::report status() const override;
 
   const char* name() const override;
 

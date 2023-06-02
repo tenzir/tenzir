@@ -3,76 +3,141 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/test/fixtures/filesystem.hpp"
-
-#include "vast/detail/system.hpp"
-#include "vast/file.hpp"
-#include "vast/si_literals.hpp"
+#include "vast/chunk.hpp"
+#include "vast/io/read.hpp"
+#include "vast/io/write.hpp"
+#include "vast/posix_filesystem.hpp"
+#include "vast/status.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
 #include <cstddef>
 #include <filesystem>
-
-#if VAST_POSIX
-#  include <unistd.h>
-#endif
+#include <fstream>
+#include <span>
 
 using namespace vast;
+using namespace vast;
+using namespace std::string_literals;
 
 namespace {
 
-struct fixture : public fixtures::filesystem {
-  fixture() : fixtures::filesystem(VAST_PP_STRINGIFY(SUITE)) {
+struct fixture : fixtures::deterministic_actor_system {
+  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+    filesystem = self->spawn<caf::detached>(posix_filesystem, directory,
+                                            accountant_actor{});
   }
+
+  filesystem_actor filesystem;
 };
 
 } // namespace
 
-FIXTURE_SCOPE(chunk_tests, fixture)
+FIXTURE_SCOPE(filesystem_tests, fixture)
 
-#if VAST_POSIX
-
-// The following write test adds several seconds (or minutes in case of
-// macOS) to the execution time. Running it every time would hurt development
-// speed, so it must be enabled manually.
-TEST_DISABLED(large_file_io) {
-  using namespace vast::binary_byte_literals;
-  auto filename = directory / "very-large.file";
-  auto size = 3_GiB;
-  {
-    MESSAGE("Generate a sparse file");
-    file f{filename};
-    REQUIRE(f.open(file::write_only));
-    auto fd = f.handle();
-    REQUIRE(fd > 0);
-    REQUIRE_EQUAL(ftruncate(fd, size), 0);
-    REQUIRE(f.close());
-  }
-  {
-    MESSAGE("load into memory");
-    file f{filename};
-    REQUIRE(f.open(file::read_only));
-    std::vector<std::byte> buffer(size);
-    auto ptr = reinterpret_cast<char*>(buffer.data());
-    if (auto err = f.read(ptr, size))
-      FAIL(err);
-    REQUIRE(f.close());
-    CHECK(std::filesystem::remove_all(filename));
-    MESSAGE("write back to disk");
-    auto filename_copy = filename;
-    filename_copy += ".copy";
-    auto f2 = file{filename_copy};
-    REQUIRE(f2.open(file::write_only));
-    if (auto err = f2.write(ptr, size))
-      FAIL(err);
-    REQUIRE(f2.close());
-    CHECK(std::filesystem::remove_all(filename_copy));
-  }
+TEST(read) {
+  MESSAGE("create file");
+  auto foo = "foo"s;
+  auto filename = directory / foo;
+  auto bytes = std::span<const char>{foo.data(), foo.size()};
+  auto err = io::write(filename, as_bytes(bytes));
+  REQUIRE(err == caf::none);
+  MESSAGE("read file via actor");
+  self
+    ->request(filesystem, caf::infinite, atom::read_v,
+              std::filesystem::path{foo})
+    .receive(
+      [&](const chunk_ptr& chk) {
+        CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
+      },
+      [&](const caf::error& err) {
+        FAIL(err);
+      });
+  MESSAGE("attempt reading non-existent file");
+  self
+    ->request(filesystem, caf::infinite, atom::read_v,
+              std::filesystem::path{"bar"})
+    .receive(
+      [&](const chunk_ptr&) {
+        FAIL("fail should not exist");
+      },
+      [&](const caf::error& err) {
+        CHECK_EQUAL(err, ec::no_such_file);
+      });
 }
 
-#endif
+TEST(write) {
+  auto foo = "foo"s;
+  auto copy = foo;
+  auto chk = chunk::make(std::move(copy));
+  REQUIRE(chk);
+  auto filename = directory / foo;
+  MESSAGE("write file via actor");
+  self
+    ->request(filesystem, caf::infinite, atom::write_v,
+              std::filesystem::path{foo}, chk)
+    .receive(
+      [&](atom::ok) {
+        // all good
+      },
+      [&](const caf::error& err) {
+        FAIL(err);
+      });
+  MESSAGE("verify file contents");
+  auto bytes = unbox(io::read(filename));
+  CHECK_EQUAL(as_bytes(bytes), as_bytes(chk));
+}
+
+TEST(mmap) {
+  MESSAGE("create file");
+  auto foo = "foo"s;
+  auto filename = directory / foo;
+  auto bytes = std::span<const char>{foo.data(), foo.size()};
+  auto err = io::write(filename, as_bytes(bytes));
+  MESSAGE("mmap file via actor");
+  self
+    ->request(filesystem, caf::infinite, atom::mmap_v,
+              std::filesystem::path{foo})
+    .receive(
+      [&](const chunk_ptr& chk) {
+        CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
+      },
+      [&](const caf::error& err) {
+        FAIL(err);
+      });
+}
+
+TEST(status) {
+  MESSAGE("create file");
+  self
+    ->request(filesystem, caf::infinite, atom::read_v,
+              std::filesystem::path{"not-there"})
+    .receive(
+      [&](const chunk_ptr&) {
+        FAIL("should not receive chunk on failure");
+      },
+      [&](const caf::error& err) {
+        CHECK_EQUAL(err, ec::no_such_file);
+      });
+  self
+    ->request(filesystem, caf::infinite, atom::status_v,
+              status_verbosity::debug, duration{})
+    .receive(
+      [&](record& status) {
+        auto ops = caf::get<record>(status["operations"]);
+        auto checks = caf::get<record>(ops["checks"]);
+        auto failed_checks = caf::get<uint64_t>(checks["failed"]);
+        CHECK_EQUAL(failed_checks, 1u);
+        auto reads = caf::get<record>(ops["reads"]);
+        auto failed_reads = caf::get<uint64_t>(reads["failed"]);
+        CHECK_EQUAL(failed_reads, 0u);
+      },
+      [&](const caf::error& err) {
+        FAIL(err);
+      });
+}
 
 FIXTURE_SCOPE_END()

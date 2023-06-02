@@ -10,7 +10,7 @@
 
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/status.hpp"
+#include "vast/status.hpp"
 
 #include <caf/expected.hpp>
 

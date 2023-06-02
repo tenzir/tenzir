@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include <vast/actors.hpp>
 #include <vast/fwd.hpp>
 #include <vast/plugin.hpp>
-#include <vast/system/actors.hpp>
 
 #include <memory>
 
@@ -34,13 +34,13 @@ CAF_END_TYPE_ID_BLOCK(vast_web_plugin_types)
 namespace vast::plugins::web {
 
 /// Server-side AUTHENTICATOR actor.
-using authenticator_actor = system::typed_actor_fwd<
+using authenticator_actor = typed_actor_fwd<
   // Generate a token.
   auto(atom::generate)->caf::result<token_t>,
   // Validate a token.
   auto(atom::validate, token_t)->caf::result<bool>>
   // Conform to the protocol of a STATUS CLIENT actor.
-  ::extend_with<system::status_client_actor>::unwrap;
+  ::extend_with<status_client_actor>::unwrap;
 
 } // namespace vast::plugins::web
 

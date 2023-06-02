@@ -140,8 +140,7 @@ synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
   }
   bloom_filter_parameters params;
   params.n = *max_part_size;
-  params.p
-    = caf::get_or(opts, "string-synopsis-fp-rate", defaults::system::fp_rate);
+  params.p = caf::get_or(opts, "string-synopsis-fp-rate", defaults::fp_rate);
   auto annotated_type = annotate_parameters(type, params);
   // Create either a a buffered_string_synopsis or a plain string synopsis
   // depending on the callers preference.

@@ -1150,7 +1150,7 @@ const char* reader::name() const {
   return reader_name_.c_str();
 }
 
-vast::system::report reader::status() const {
+vast::report reader::status() const {
   using namespace std::string_literals;
   uint64_t invalid_line = num_invalid_lines_;
   uint64_t unknown_layout = num_unknown_layouts_;

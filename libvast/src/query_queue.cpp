@@ -8,8 +8,8 @@
 
 #include "vast/query_queue.hpp"
 
+#include "vast/catalog.hpp"
 #include "vast/detail/algorithms.hpp"
-#include "vast/system/catalog.hpp"
 
 namespace vast {
 
@@ -74,7 +74,7 @@ query_queue::queries() const {
 /// Inserts a new query into the queue.
 [[nodiscard]] caf::error
 query_queue::insert(query_state&& query_state,
-                    system::catalog_lookup_result&& candidates) {
+                    catalog_lookup_result&& candidates) {
   if (candidates.empty())
     return caf::make_error(ec::unspecified, "can't add a query with 0 "
                                             "candidates");
@@ -239,7 +239,7 @@ std::optional<query_queue::entry> query_queue::next() {
   return std::nullopt;
 }
 
-[[nodiscard]] std::optional<system::receiver_actor<atom::done>>
+[[nodiscard]] std::optional<receiver_actor<atom::done>>
 query_queue::handle_completion(const uuid& qid) {
   auto it = queries_.find(qid);
   if (it == queries_.end()) {
@@ -248,7 +248,7 @@ query_queue::handle_completion(const uuid& qid) {
     VAST_DEBUG("index tried to access non-existent query {}", qid);
     return std::nullopt;
   }
-  auto result = std::optional<system::receiver_actor<atom::done>>{};
+  auto result = std::optional<receiver_actor<atom::done>>{};
   auto& query_state = it->second;
   query_state.completed_partitions++;
   if (query_state.completed_partitions == query_state.requested_partitions)
