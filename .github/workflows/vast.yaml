@@ -76,6 +76,7 @@ jobs:
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
+      nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-vast: ${{ steps.configure.outputs.run-vast }}
       run-vast-plugins: ${{ steps.configure.outputs.run-vast-plugins }}
       run-python: ${{ steps.configure.outputs.run-python }}
@@ -268,6 +269,52 @@ jobs:
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"
+      - name: Configure Nix
+        id: nix
+        if: steps.configure.outputs.run-vast-nix == 'true'
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tags=("${{ steps.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            tags=('latest' "${{ github.sha }}")
+            aliases=('latest')
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            aliases=('stable')
+          else
+            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            exit 1
+          fi
+          nix_config="$(jq -c \
+            '."tags" = $ARGS.positional' \
+            .github/workflows/nix-config-base.json \
+            --args -- "${tags[@]}")"
+          nix_config="$(jq -c \
+            '."aliases" = $ARGS.positional' \
+            --args -- "${aliases[@]}" \
+            <<< "${nix_config}")"
+          # Clear push repos in case we're in a PR, but push the developer
+          # edition to ghcr.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            nix_config="$(jq -c '(.editions[] | ."package-stores") |= [] |
+              (.editions[] | ."image-registries") |= [] |
+              (.editions[] | select(.name == "vast-static") | ."image-registries") |= ["ghcr.io"]' \
+              <<< "${nix_config}")"
+          fi
+          # Reshape the config so that each edition is in a dedicated config.
+          # This will be supplied as a matrix to the nix job.
+          # We do this because the static editions that we build here are
+          # independent derivations, meaning there is no sharing of build
+          # products.
+          nix_matrix="$(jq -c '.aliases as $aliases | .tags as $tags |
+            .targets = (.editions | map(. as $e |{}|
+              .editions = [$e] |
+              .aliases = $aliases |
+              .tags = $tags)
+            ) | .targets | map({"name": .editions[0].name, "config": .})' \
+            <<< "${nix_config}")"
+          echo "nix-matrix=${nix_matrix}" >> "$GITHUB_OUTPUT"
+          echo "::notice nix-matrix = ${nix_matrix}"
 
   policy-enforcement:
     name: Policy Enforcement
@@ -514,203 +561,17 @@ jobs:
           make docker TARGET=clean
 
   vast-nix:
+    name: Nix (${{ matrix.config.name }})
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-vast-nix == 'true' }}
-    name: ${{ matrix.vast-nix.job-name }} (Nix)
-    runs-on: ubuntu-20.04
+    uses: ./.github/workflows/nix.yaml
     strategy:
       matrix:
-        # The values for `package` and `image-basename` should correspond to
-        # so that `-static` in the former is `-slim` in the latter. This way
-        # the binary artifacts built in one job are resused by the other.
-        # Both names are defined in `flake.nix`.
-        vast-nix:
-          - job-name: VAST
-            name: vast
-            package: vast-static
-            release-asset-name: vast-linux-static
-            image-basename: vast-slim
-          - job-name: VAST CE
-            name: vast-ce
-            package: vast-ce-static
-            release-asset-name: vast-ce-linux-static
-            image-basename: vast-ce-slim
-    env:
-      BUILD_DIR: build
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Install Nix
-        uses: cachix/install-nix-action@v21
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
-      - name: Setup Cachix
-        uses: cachix/cachix-action@v12
-        with:
-          name: vast
-          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
-      - name: Build Static Packages
-        id: build_static_packages
-        run: |
-          STORE_PATH=$(nix --print-build-logs build .#${{ matrix.vast-nix.package }}.package --print-out-paths)
-          TAR_GZ=$(find "$STORE_PATH" -type f -name '*.tar.gz')
-          echo "TARBALL is at: $TAR_GZ"
-          echo "tar_gz=${TAR_GZ}" >> $GITHUB_OUTPUT
-          DEB="$(find "$STORE_PATH" -type f -name '*.deb')"
-          echo "DEB is at: $DEB"
-          echo "deb=${DEB}" >> $GITHUB_OUTPUT
-          # The debian package filename contains a colon (:), but GitHub does
-          # not allow this character in attached assets, so we create an extra
-          # copy.
-          DEB_GITHUB="$PWD/$(basename "$DEB" | tr ':' '_')"
-          echo "DEB_GITHUB is at: $DEB_GITHUB"
-          cp "$DEB" "$DEB_GITHUB"
-          echo "deb_github=${DEB_GITHUB}" >> $GITHUB_OUTPUT
-      - name: Run Integration Tests
-        run: |
-          mkdir -p vast-integration-test
-          tar xf ${{ steps.build_static_packages.outputs.tar_gz }} --directory vast-integration-test
-          nix develop .#vast-integration-test-shell --command python vast/integration/integration.py --app \
-            vast-integration-test/opt/vast/bin/vast
-      - name: Upload Integration Test Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: "vast-integration-test-nix-static-vast"
-          path: "vast-integration-test"
-          if-no-files-found: error
-      - name: Upload Tarball to Github
-        uses: actions/upload-artifact@v3
-        with:
-          name: "${{ matrix.vast-nix.name }}.tar.gz"
-          path: "${{ steps.build_static_packages.outputs.tar_gz }}"
-          if-no-files-found: error
-      - name: Upload Debian Package to Github
-        uses: actions/upload-artifact@v3
-        with:
-          name: "${{ matrix.vast-nix.name }}.deb"
-          path: "${{ steps.build_static_packages.outputs.deb_github }}"
-          if-no-files-found: error
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
-      - name: Authenticate to Google Cloud
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/auth@v1
-        with:
-          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
-          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - name: Configure GCloud Credentials
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v1
-      - name: Upload Artifact to GCS (push)
-        if: github.event_name == 'push'
-        env:
-          PUBLIC_GCS_BUCKET: tenzir-public-data
-          STATIC_BINARY_FOLDER: vast-static-builds
-        run: |
-          TAR_GZ_BASENAME="$(basename "${{ steps.build_static_packages.outputs.tar_gz }}")"
-          gsutil cp "${{ steps.build_static_packages.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${TAR_GZ_BASENAME}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${TAR_GZ_BASENAME}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.vast-nix.package }}-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.vast-nix.package }}-latest.deb"
-      - name: Upload Artifact to GCS (release)
-        if: github.event_name == 'release'
-        env:
-          PUBLIC_GCS_BUCKET: tenzir-public-data
-          STATIC_BINARY_FOLDER: vast-static-builds
-        run: |
-          TAR_GZ_BASENAME="$(basename "${{ steps.build_static_packages.outputs.tar_gz }}" .tar.gz)"
-          DEB_BASENAME="$(basename "${{ steps.build_static_packages.outputs.deb }}" .deb)"
-          gsutil cp "${{ steps.build_static_packages.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${TAR_GZ_BASENAME}-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}${DEB_BASENAME}-latest.deb"
-      # This step ensures that assets from previous runs are cleaned up to avoid
-      # failure of the next step (asset upload)
-      - name: Delete Release Assets
-        if: github.event_name == 'release'
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          # don't fail if no previous assets exist
-          fail-if-no-assets: false
-          # only delete assets when `tag` refers to a release
-          fail-if-no-release: true
-          assets: |
-            "${{ matrix.vast-nix.release-asset-name }}.tar.gz"
-            "${{ matrix.vast-nix.release-asset-name }}.deb"
-      - name: Upload Release Tarball
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ steps.build_static_packages.outputs.tar_gz }}"
-          # The asset name is constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
-          # for a build of the latest release.
-          asset_name: "${{ matrix.vast-nix.release-asset-name }}.tar.gz"
-          asset_content_type: application/gzip
-      - name: Upload Debian Release Package
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ steps.build_static_packages.outputs.deb_github }}"
-          # The asset name is constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb
-          # for a build of the latest release.
-          asset_name: "${{ matrix.vast-nix.release-asset-name }}.deb"
-          asset_content_type: application/vnd.debian.binary-package
-      - name: Login to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: tenzir-bot
-          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-      - name: Build Docker Image
-        if: github.event_name != 'workflow_dispatch'
-        run: |
-          nix run .#stream-${{ matrix.vast-nix.image-basename }}-image | docker load
-      - name: Upload Docker Image
-        if: github.event_name != 'workflow_dispatch'
-        run: |
-          image="tenzir/${{ matrix.vast-nix.image-basename }}"
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            registries=('ghcr.io/')
-            tags=("${{ needs.configure.outputs.head-ref-slug }}")
-          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            registries=('' 'ghcr.io/')
-            tags=('latest' "${{ github.sha }}")
-          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            registries=('' 'ghcr.io/')
-            tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
-          else
-            2>& echo "unexpected github.event_name '${GITHUB_EVENT_NAME}'"
-            exit 1
-          fi
-          for registry in "${registries[@]}"; do
-            for tag in "${tags[@]}"; do
-              docker tag "${image}:latest-nix" "${registry}${image}:${tag}"
-              docker push "${registry}${image}:${tag}"
-            done
-          done
+        config: ${{ fromJSON(needs.configure.outputs.nix-matrix) }}
+    with:
+      config: ${{ toJSON(matrix.config.config) }}
+    secrets: inherit
 
   vast:
     needs:

@@ -1,4 +1,5 @@
 {
+  "name": "vast-plugins",
   "url": "git@github.com:tenzir/vast-plugins",
   "ref": "main",
   "rev": "98d32a0f9588ef00e2f2c9dd178b9f0784542d1e",
