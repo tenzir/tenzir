@@ -13,6 +13,9 @@
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
+#include <vast/tql/argument_parser.hpp>
+#include <vast/tql/diagnostics.hpp>
+#include <vast/tql/parser_interface.hpp>
 
 #include <arrow/util/config.h>
 #include <boost/version.hpp>
@@ -39,6 +42,8 @@ auto add_value(auto& field, auto value) {
 
 class version_operator final : public crtp_operator<version_operator> {
 public:
+  version_operator() = default;
+
   explicit version_operator(bool dev_mode) : dev_mode_{dev_mode} {
   }
 
@@ -171,14 +176,19 @@ public:
             VAST_ADD_PLUGIN_TYPE(command);
             VAST_ADD_PLUGIN_TYPE(reader);
             VAST_ADD_PLUGIN_TYPE(writer);
-            VAST_ADD_PLUGIN_TYPE(operator);
+            VAST_ADD_PLUGIN_TYPE(operator_parser);
+            VAST_ADD_PLUGIN_TYPE(operator_serialization);
             VAST_ADD_PLUGIN_TYPE(aggregation_function);
             VAST_ADD_PLUGIN_TYPE(language);
             VAST_ADD_PLUGIN_TYPE(rest_endpoint);
-            VAST_ADD_PLUGIN_TYPE(loader);
-            VAST_ADD_PLUGIN_TYPE(parser);
-            VAST_ADD_PLUGIN_TYPE(printer);
-            VAST_ADD_PLUGIN_TYPE(saver);
+            VAST_ADD_PLUGIN_TYPE(loader_parser);
+            VAST_ADD_PLUGIN_TYPE(loader_serialization);
+            VAST_ADD_PLUGIN_TYPE(parser_parser);
+            VAST_ADD_PLUGIN_TYPE(parser_serialization);
+            VAST_ADD_PLUGIN_TYPE(printer_parser);
+            VAST_ADD_PLUGIN_TYPE(printer_serialization);
+            VAST_ADD_PLUGIN_TYPE(saver_parser);
+            VAST_ADD_PLUGIN_TYPE(saver_serialization);
             VAST_ADD_PLUGIN_TYPE(store);
 #undef VAST_ADD_PLUGIN_TYPE
           }
@@ -206,43 +216,27 @@ public:
     return dev_mode_ ? "version --dev" : "version";
   }
 
+  auto name() const -> std::string override {
+    return "version";
+  }
+
+  friend auto inspect(auto& f, version_operator& x) -> bool {
+    return f.apply(x.dev_mode_);
+  }
+
 private:
   bool dev_mode_;
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<version_operator> {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "version";
-  };
-
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::str;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    auto dev_mode = std::string{};
-    const auto p = -(required_ws_or_comment >> str{"--dev"})
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    if (!p(f, l, dev_mode)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "version operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<version_operator>(not dev_mode.empty()),
-    };
+  auto parse_operator(tql::parser_interface& p) const -> operator_ptr override {
+    auto parser = tql::argument_parser{
+      "version", "https://vast.io/docs/understand/operators/sources/version"};
+    auto dev = false;
+    parser.add("--dev", dev);
+    parser.parse(p);
+    return std::make_unique<version_operator>(dev);
   }
 };
 

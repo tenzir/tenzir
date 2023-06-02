@@ -8,9 +8,11 @@
 
 #include "vast/execution_node.hpp"
 
+#include "vast/actors.hpp"
 #include "vast/framed.hpp"
 #include "vast/modules.hpp"
 #include "vast/operator_control_plane.hpp"
+#include "vast/tql/diagnostics.hpp"
 
 #include <caf/attach_stream_sink.hpp>
 #include <caf/attach_stream_source.hpp>
@@ -27,11 +29,41 @@ namespace vast {
 
 namespace {
 
-class actor_control_plane : public operator_control_plane {
+class actor_diagnostic_handler final : public diagnostic_handler {
+public:
+  actor_diagnostic_handler(
+    execution_node_actor::stateful_pointer<execution_node_state> exec_node)
+    : exec_node_{exec_node} {
+  }
+
+  void emit(diagnostic d) override {
+    VAST_DEBUG("sending diagnostic: {}", d);
+    // TODO: Is this what we want?
+    VAST_ASSERT(exec_node_->state.diag);
+    exec_node_->request(exec_node_->state.diag, caf::infinite, std::move(d))
+      .then(
+        []() {
+          VAST_DEBUG("sending successful");
+        },
+        [](caf::error& e) {
+          VAST_WARN("sending failed: {}", e);
+        });
+  }
+
+  auto has_seen_error() const -> bool override {
+    // TODO
+    return false;
+  }
+
+private:
+  execution_node_actor::stateful_pointer<execution_node_state> exec_node_;
+};
+
+class actor_control_plane final : public operator_control_plane {
 public:
   explicit actor_control_plane(
     execution_node_actor::stateful_impl<execution_node_state>& self)
-    : self_{self} {
+    : self_{self}, diag_{&self} {
   }
 
   auto self() noexcept -> execution_node_actor::base& override {
@@ -49,7 +81,9 @@ public:
   }
 
   auto warn(caf::error err) noexcept -> void override {
-    VAST_WARN("[WARN] {}: {}", self_.state.op->to_string(), err);
+    diagnostic::warning("{}", err)
+      .note("from `{}`", self_.state.op->to_string())
+      .emit(diagnostics());
   }
 
   auto emit(table_slice) noexcept -> void override {
@@ -64,8 +98,13 @@ public:
     return vast::modules::concepts();
   }
 
+  auto diagnostics() noexcept -> diagnostic_handler& override {
+    return diag_;
+  }
+
 private:
   execution_node_actor::stateful_impl<execution_node_state>& self_;
+  actor_diagnostic_handler diag_;
 };
 
 auto empty(const table_slice& slice) -> bool {
@@ -278,6 +317,7 @@ auto execution_node_state::start(std::vector<caf::actor> next)
   }
   auto result = op->instantiate(std::monostate{}, *ctrl);
   if (!result) {
+    // TODO: Can `instantiate` emit diagnostics if we quit here?
     self->quit(std::move(result.error()));
     return {};
   }
@@ -363,11 +403,13 @@ auto execution_node_state::start(caf::stream<framed<Input>> in,
 
 auto execution_node(
   execution_node_actor::stateful_pointer<execution_node_state> self,
-  operator_ptr op, node_actor node) -> execution_node_actor::behavior_type {
+  operator_ptr op, node_actor node, receiver_actor<diagnostic> diag)
+  -> execution_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.ctrl = std::make_unique<actor_control_plane>(*self);
   self->state.node = std::move(node);
+  self->state.diag = std::move(diag);
   return {
     [self](atom::run, std::vector<caf::actor> next) -> caf::result<void> {
       VAST_DEBUG("source execution node received atom::run");

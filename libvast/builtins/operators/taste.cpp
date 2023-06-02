@@ -23,6 +23,8 @@ namespace {
 class taste_operator final
   : public schematic_operator<taste_operator, uint64_t> {
 public:
+  taste_operator() = default;
+
   explicit taste_operator(uint64_t limit) : limit_{limit} {
   }
 
@@ -42,22 +44,20 @@ public:
     return fmt::format("taste {}", limit_);
   }
 
+  auto name() const -> std::string override {
+    return "taste";
+  }
+
+  friend auto inspect(auto& f, taste_operator& x) -> bool {
+    return f.apply(x.limit_);
+  }
+
 private:
   uint64_t limit_;
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<taste_operator> {
 public:
-  // plugin API
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
-    return "taste";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,

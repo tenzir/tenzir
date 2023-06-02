@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/config.hpp" // IWYU pragma: export
+#include "vast/tql/fwd.hpp"
 
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>
@@ -132,16 +133,17 @@ class chunk;
 class command;
 class configuration;
 class data;
+class diagnostic_builder;
 class double_type;
 class duration_type;
 class enumeration_type;
 class ewah_bitmap;
 class expression;
-class http_request;
 class http_request_description;
+class http_request;
 class int64_type;
-class ip;
 class ip_type;
+class ip;
 class legacy_abstract_type;
 class legacy_type;
 class list_type;
@@ -153,18 +155,18 @@ class passive_store;
 class pattern;
 class pipeline;
 class pipeline;
-class plugin;
 class plugin_ptr;
+class plugin;
 class port;
 class record_type;
 class segment;
 class string_type;
-class subnet;
 class subnet_type;
+class subnet;
 class synopsis;
-class table_slice;
 class table_slice_builder;
 class table_slice_column;
+class table_slice;
 class time_type;
 class type;
 class uint64_type;
@@ -176,10 +178,10 @@ struct accountant_config;
 struct active_partition_state;
 struct attribute;
 struct catalog_lookup_result;
-struct component_map;
 struct component_map_entry;
-struct component_state;
+struct component_map;
 struct component_state_map;
+struct component_state;
 struct concept_;
 struct conjunction;
 struct connect_request;
@@ -187,10 +189,12 @@ struct count_query_context;
 struct curried_predicate;
 struct data_extractor;
 struct data_point;
+struct diagnostic;
 struct disjunction;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
+struct identifier;
 struct index_state;
 struct invocation;
 struct legacy_address_type;
@@ -209,6 +213,7 @@ struct legacy_record_type;
 struct legacy_string_type;
 struct legacy_subnet_type;
 struct legacy_time_type;
+struct location;
 struct measurement;
 struct meta_extractor;
 struct metrics_metadata;
@@ -217,8 +222,8 @@ struct negation;
 struct node_state;
 struct offset;
 struct partition_info;
-struct partition_synopsis;
 struct partition_synopsis_pair;
+struct partition_synopsis;
 struct passive_partition_state;
 struct performance_report;
 struct performance_sample;
@@ -265,6 +270,9 @@ class projection;
 template <class>
 class scope_linked;
 
+template <class... Ts>
+class variant;
+
 namespace detail {
 
 class legacy_deserializer;
@@ -273,6 +281,7 @@ class legacy_deserializer;
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
+using operator_ptr = std::unique_ptr<operator_base>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
@@ -381,6 +390,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::curried_predicate))
   VAST_ADD_TYPE_ID((vast::data_extractor))
   VAST_ADD_TYPE_ID((vast::data))
+  VAST_ADD_TYPE_ID((vast::diagnostic))
   VAST_ADD_TYPE_ID((vast::disjunction))
   VAST_ADD_TYPE_ID((vast::ec))
   VAST_ADD_TYPE_ID((vast::ewah_bitmap))

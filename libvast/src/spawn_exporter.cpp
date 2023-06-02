@@ -45,15 +45,7 @@ auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
                              args.inv.arguments.size());
     }
     auto& query = args.inv.arguments[0];
-    auto result = pipeline::parse(query);
-    if (!result) {
-      if (auto as_expr = pipeline::parse(fmt::format("where {}", query))) {
-        VAST_WARN("`vast export <expr>` is deprecated, please use `vast export "
-                  "'where <expr>'` instead");
-        result = std::move(as_expr);
-      }
-    }
-    return result;
+    return pipeline::internal_parse(query);
   });
   if (!parse_result) {
     return std::move(parse_result.error());

@@ -13,6 +13,10 @@
 #include "vast/table_slice.hpp"
 #include "vast/tag.hpp"
 
+#include <caf/binary_serializer.hpp>
+#include <caf/detail/stringification_inspector.hpp>
+#include <caf/fwd.hpp>
+#include <caf/save_inspector.hpp>
 #include <fmt/core.h>
 
 #include <memory>
@@ -114,9 +118,6 @@ inline auto trivially_true_expression() -> const expression& {
   return expr;
 }
 
-/// Uniquely owned pipeline operator.
-using operator_ptr = std::unique_ptr<operator_base>;
-
 /// The operator location.
 enum class operator_location {
   local,    ///< Run this operator in a local process, e.g., `vast exec`.
@@ -124,10 +125,44 @@ enum class operator_location {
   anywhere, ///< Run this operator where the previous operator ran.
 };
 
+auto inspect(auto& f, operator_location& x) {
+  return detail::inspect_enum(f, x);
+}
+
+// TODO: Consider making this `virtual`.
+// TODO: Consider splitting this up.
+struct inspector
+  : std::variant<std::reference_wrapper<caf::serializer>,
+                 std::reference_wrapper<caf::deserializer>,
+                 std::reference_wrapper<caf::binary_serializer>,
+                 std::reference_wrapper<caf::binary_deserializer>,
+                 std::reference_wrapper<caf::detail::stringification_inspector>> {
+  using variant::variant;
+
+  auto is_loading() -> bool;
+
+  void set_error(caf::error e);
+
+  auto get_error() const -> const caf::error&;
+
+  template <class T>
+  [[nodiscard]] auto apply(T& x) -> bool {
+    return std::visit(
+      [&](auto& f) -> bool {
+        return f.get().apply(x);
+      },
+      *this);
+  }
+};
+
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
 public:
   virtual ~operator_base() = default;
+
+  /// The name must match the name of the plugin that will construct an instance
+  /// of this operator. TODO
+  virtual auto name() const -> std::string = 0;
 
   /// Instantiates the pipeline operator for a given input.
   ///
@@ -144,16 +179,14 @@ public:
     -> caf::expected<operator_output>
     = 0;
 
-  /// Copies the underlying pipeline operator.
-  virtual auto copy() const -> operator_ptr = 0;
+  /// Copies the underlying pipeline operator. The default implementation is
+  /// derived from `inspect()` and requires that it does not fail.
+  virtual auto copy() const -> operator_ptr;
 
   /// Returns a textual representation of this operator for display, debugging
   /// purposes, and roundtripping if the operator is not executed locally.
-  ///
-  /// NOTE: If `location() != operator_location::local`, then
-  /// `pipeline::parse(to_string(), {})` must succeed and be semantically
-  /// equivalent to `*this`.
-  virtual auto to_string() const -> std::string = 0;
+  // TODO
+  virtual auto to_string() const -> std::string;
 
   /// Tries to perform predicate pushdown with the given expression.
   ///
@@ -233,12 +266,17 @@ public:
   /// Parses a pipeline from its definition.
   ///
   /// NOTE: If `location() != operator_location::local`, then
-  /// `pipeline::parse(to_string(), {})` must succeed and be semantically
+  /// `pipeline::legacy_parse(to_string(), {})` must succeed and be semantically
   /// equivalent to `*this`.
-  static auto parse(std::string_view repr) -> caf::expected<pipeline>;
+  static auto legacy_parse(std::string_view repr) -> caf::expected<pipeline>;
+
+  /// Replacement API for `legacy_parse`. TODO
+  static auto internal_parse(std::string_view repr) -> caf::expected<pipeline>;
+  static auto internal_parse_as_operator(std::string_view repr)
+    -> caf::expected<operator_ptr>;
 
   /// @copydoc parse
-  static auto parse_as_operator(std::string_view repr)
+  static auto legacy_parse_as_operator(std::string_view repr)
     -> caf::expected<operator_ptr>;
 
   /// Adds an operator at the end of this pipeline.
@@ -284,30 +322,67 @@ public:
   /// Support the CAF type inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, pipeline& x) -> bool {
+    // TODO: Replace asserts with checks once CAF reports inspection errors.
     if constexpr (Inspector::is_loading) {
-      auto repr = std::string{};
-      if (not f.object(x)
-                .pretty_name("vast.pipeline")
-                .fields(f.field("repr", repr)))
-        return false;
-      auto result = pipeline::parse(repr);
-      if (not result) {
-        VAST_WARN("failed to parse pipeline '{}': {}", repr, result.error());
+      x.operators_.clear();
+      auto ops = size_t{};
+      VAST_ASSERT(f.begin_sequence(ops));
+      x.operators_.reserve(ops);
+      for (auto i = size_t{0}; i < ops; ++i) {
+        auto array_size = size_t{};
+        VAST_ASSERT(f.begin_associative_array(array_size));
+        VAST_ASSERT(array_size == 1);
+        // if (array_size != 1) {
+        //   f.set_error(caf::make_error(ec::serialization_error,
+        //                               fmt::format("invalid array size of {}",
+        //                                           array_size)));
+        //   return false;
+        // }
+        auto plugin_name = std::string{};
+        VAST_ASSERT(f.begin_key_value_pair());
+        auto g = inspector{f};
+        auto op = deserialize_op(g);
+        VAST_ASSERT(op);
+        x.operators_.push_back(std::move(op));
+        VAST_ASSERT(f.end_key_value_pair());
+        VAST_ASSERT(f.end_associative_array());
+      }
+      return f.end_sequence();
+    } else {
+      if (!f.begin_sequence(x.operators_.size())) {
         return false;
       }
-      x = std::move(*result);
-      return true;
-    } else {
-      auto repr = x.to_string();
-      return f.object(x)
-        .pretty_name("vast.pipeline")
-        .fields(f.field("repr", repr));
+      for (const auto& op : x.operators_) {
+        auto g = inspector{f};
+        if (!(f.begin_associative_array(1) && f.begin_key_value_pair()
+              && serialize_op(*op, g) && f.end_key_value_pair()
+              && f.end_associative_array())) {
+          return false;
+        }
+      }
+      return f.end_sequence();
     }
   }
 
+  auto name() const -> std::string override {
+    return "<pipeline>";
+  }
+
 private:
+  static auto deserialize_op(inspector& f) -> operator_ptr;
+
+  static auto serialize_op(const operator_base& op, inspector& f) -> bool;
+
   std::vector<operator_ptr> operators_;
 };
+
+inline auto inspect(auto& f, operator_ptr& x) -> bool {
+  VAST_ASSERT(x);
+  if (auto* pipe = dynamic_cast<pipeline*>(x.get())) {
+    return f.apply(*pipe);
+  }
+  return plugin_inspect(f, x);
+}
 
 /// Base class for defining operators using CRTP.
 ///
@@ -392,7 +467,11 @@ public:
   }
 
   auto copy() const -> operator_ptr final {
-    return std::make_unique<Self>(self());
+    if constexpr (std::is_copy_constructible_v<Self>) {
+      return std::make_unique<Self>(self());
+    } else {
+      return operator_base::copy();
+    }
   }
 
 private:

@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/tql/diagnostics.hpp"
+#include "vast/tql/parser.hpp"
+#include "vast/tql/parser_interface.hpp"
+
 #include <vast/collect.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice.hpp>
@@ -51,14 +55,24 @@ struct fixture {
       -> const concepts_map& override {
       FAIL("no mock implementation available");
     }
+
+    auto diagnostics() noexcept -> diagnostic_handler& override {
+      static auto diag = null_diagnostic_handler{};
+      return diag;
+    }
   };
 
   fixture() {
     // TODO: Move this into a separate fixture when we are starting to test more
     // than one saver type.
-    saver_plugin = vast::plugins::find<vast::saver_plugin>("stdout");
+    saver_plugin = vast::plugins::find<vast::saver_parser_plugin>("stdout");
     REQUIRE(saver_plugin);
-    current_saver = unbox(saver_plugin->make_saver({}, {}, control_plane));
+    auto diag = null_diagnostic_handler{};
+    auto p = tql::make_parser_interface("", diag);
+    auto saver
+      = saver_plugin->parse_saver(*p)->instantiate(control_plane, std::nullopt);
+    REQUIRE(saver);
+    current_saver = std::move(*saver);
   }
 
   // Helper struct that, as long as it is alive, captures stdout.
@@ -103,8 +117,8 @@ struct fixture {
     return states;
   }
 
-  const vast::saver_plugin* saver_plugin;
-  vast::saver_plugin::saver current_saver;
+  const vast::saver_parser_plugin* saver_plugin;
+  std::function<void(chunk_ptr)> current_saver;
   mock_control_plane control_plane;
 };
 

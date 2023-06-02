@@ -26,6 +26,7 @@
 #include "vast/plugin.hpp"
 #include "vast/query_context.hpp"
 #include "vast/store.hpp"
+#include "vast/tql/argument_parser.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -437,134 +438,149 @@ store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
                                                  std::move(path), name());
 }
 
-auto store_plugin::make_parser(std::vector<std::string> args,
-                               generator<chunk_ptr> loader,
-                               operator_control_plane& ctrl) const
-  -> caf::expected<parser> {
-  if (not args.empty()) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt ::format("{} parser expected no arguments, but "
-                                        "got [{}]",
-                                        name(), fmt::join(args, ", ")));
-  }
-  auto store = make_passive_store();
-  if (not store) {
-    return caf::make_error(ec::logic_error,
-                           fmt ::format("{} parser failed to create store: {}",
-                                        name(), store.error()));
-  }
-  return [](generator<chunk_ptr> loader, operator_control_plane& ctrl,
-            std::unique_ptr<passive_store> store,
-            std::string name) -> generator<table_slice> {
-    // TODO: Loading everything into memory here is far from ideal. We should
-    // instead load passive stores incrementally. For now we at least warn the
-    // user that this is experimental.
-    auto chunks = std::vector<chunk_ptr>{};
-    for (auto&& chunk : loader) {
-      if (not chunk || chunk->size() == 0) {
-        co_yield {};
-        continue;
-      }
-      chunks.push_back(std::move(chunk));
+static auto
+store_parser_impl(generator<chunk_ptr> loader, operator_control_plane& ctrl,
+                  std::unique_ptr<passive_store> store, std::string name)
+  -> generator<table_slice> {
+  // TODO: Loading everything into memory here is far from ideal. We should
+  // instead load passive stores incrementally. For now we at least warn the
+  // user that this is experimental.
+  auto chunks = std::vector<chunk_ptr>{};
+  for (auto&& chunk : loader) {
+    if (not chunk || chunk->size() == 0) {
       co_yield {};
+      continue;
     }
-    if (chunks.size() == 1) {
-      if (auto err = store->load(std::move(chunks.front()))) {
-        ctrl.abort(caf::make_error(ec::format_error,
-                                   "{} parser failed to load: {}", name,
-                                   std::move(err)));
-        co_return;
-      }
-    } else {
-      ctrl.warn(caf::make_error(
-        ec::unspecified, fmt::format("the experimental {} parser does "
-                                     "not currently load files "
-                                     "incrementally and may use an "
-                                     "excessive amount of memory; consider "
-                                     "using 'from file --mmap'",
-                                     name)));
-      auto buffer = std::vector<std::byte>{};
-      for (auto&& chunk : chunks) {
-        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
-      }
-      if (auto err = store->load(chunk::make(std::move(buffer)))) {
-        ctrl.abort(caf::make_error(ec::format_error,
-                                   "{} parser failed to load: {}", name,
-                                   std::move(err)));
-        co_return;
-      }
+    chunks.push_back(std::move(chunk));
+    co_yield {};
+  }
+  if (chunks.size() == 1) {
+    if (auto err = store->load(std::move(chunks.front()))) {
+      ctrl.abort(caf::make_error(ec::format_error,
+                                 "{} parser failed to load: {}", name,
+                                 std::move(err)));
+      co_return;
     }
-    for (auto&& slice : store->slices()) {
-      co_yield std::move(slice);
+  } else {
+    ctrl.warn(caf::make_error(
+      ec::unspecified, fmt::format("the experimental {} parser does "
+                                   "not currently load files "
+                                   "incrementally and may use an "
+                                   "excessive amount of memory; consider "
+                                   "using 'from file --mmap'",
+                                   name)));
+    auto buffer = std::vector<std::byte>{};
+    for (auto&& chunk : chunks) {
+      buffer.insert(buffer.end(), chunk->begin(), chunk->end());
     }
-  }(std::move(loader), ctrl, std::move(*store), name());
+    if (auto err = store->load(chunk::make(std::move(buffer)))) {
+      ctrl.abort(caf::make_error(ec::format_error,
+                                 "{} parser failed to load: {}", name,
+                                 std::move(err)));
+      co_return;
+    }
+  }
+  for (auto&& slice : store->slices()) {
+    co_yield std::move(slice);
+  }
 }
 
-auto store_plugin::default_loader(std::span<std::string const>) const
-  -> std::pair<std::string, std::vector<std::string>> {
-  return {"stdin", {}};
-}
-
-auto store_plugin::make_printer(std::span<std::string const> args,
-                                type input_schema,
-                                operator_control_plane& ctrl) const
-  -> caf::expected<printer> {
-  VAST_ASSERT(input_schema != type{});
-  if (not args.empty()) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt ::format("{} printer expected no arguments, but "
-                                        "got [{}]",
-                                        name(), fmt::join(args, ", ")));
-  }
-  auto store = make_active_store();
-  if (not store) {
-    return caf::make_error(ec::logic_error,
-                           fmt ::format("{} parser failed to create store: {}",
-                                        name(), store.error()));
+class store_parser final : public plugin_parser {
+public:
+  store_parser(const store_plugin* plugin) : plugin_{plugin} {
   }
 
-  class store_printer : public printer_base {
-  public:
-    explicit store_printer(std::unique_ptr<active_store> store,
-                           operator_control_plane& ctrl)
-      : store_{std::move(store)}, ctrl_{ctrl} {
-    }
+  auto name() const -> std::string override {
+    return plugin_->name();
+  }
 
-    auto process(table_slice slice) -> generator<chunk_ptr> override {
-      auto vec = std::vector<table_slice>{};
-      vec.push_back(std::move(slice));
-      if (auto error = store_->add(std::move(vec))) {
-        ctrl_.abort(std::move(error));
-        co_return;
-      }
-      // TODO
-      auto chunk = store_->finish();
-      if (!chunk) {
-        ctrl_.abort(std::move(chunk.error()));
-        co_return;
-      }
-      co_yield std::move(*chunk);
-    }
-
-    auto finish() -> generator<chunk_ptr> override {
+  auto
+  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> std::optional<generator<table_slice>> override {
+    auto store = plugin_->make_passive_store();
+    if (!store) {
+      diagnostic::error("{}", store.error()).emit(ctrl.diagnostics());
       return {};
     }
+    return store_parser_impl(std::move(input), ctrl, std::move(*store),
+                             plugin_->name());
+  }
 
-  private:
-    std::unique_ptr<active_store> store_;
-    operator_control_plane& ctrl_;
-  };
+private:
+  const store_plugin* plugin_;
+};
 
-  return std::make_unique<store_printer>(std::move(*store), ctrl);
+auto store_plugin::parse_parser(tql::parser_interface& p) const
+  -> std::unique_ptr<plugin_parser> {
+  tql::argument_parser{name()}.parse(p);
+  return std::make_unique<store_parser>(this);
 }
 
-auto store_plugin::default_saver(std::span<std::string const>) const
-  -> std::pair<std::string, std::vector<std::string>> {
-  return {"directory", {"."}};
-}
+class store_printer_impl : public printer_instance {
+public:
+  explicit store_printer_impl(std::unique_ptr<active_store> store,
+                              operator_control_plane& ctrl)
+    : store_{std::move(store)}, ctrl_{ctrl} {
+  }
 
-auto store_plugin::printer_allows_joining() const -> bool {
-  return false;
+  auto process(table_slice slice) -> generator<chunk_ptr> override {
+    auto vec = std::vector<table_slice>{};
+    vec.push_back(std::move(slice));
+    if (auto error = store_->add(std::move(vec))) {
+      ctrl_.abort(std::move(error));
+      co_return;
+    }
+    // TODO
+    auto chunk = store_->finish();
+    if (!chunk) {
+      ctrl_.abort(std::move(chunk.error()));
+      co_return;
+    }
+    co_yield std::move(*chunk);
+  }
+
+  auto finish() -> generator<chunk_ptr> override {
+    return {};
+  }
+
+private:
+  std::unique_ptr<active_store> store_;
+  operator_control_plane& ctrl_;
+};
+
+class store_printer final : public plugin_printer {
+public:
+  store_printer(const store_plugin* plugin) : plugin_{plugin} {
+  }
+
+  auto instantiate(type input_schema, operator_control_plane& ctrl) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    VAST_ASSERT(input_schema != type{});
+    auto store = plugin_->make_active_store();
+    if (not store) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("{} parser failed to create store: {}",
+                                         name(), store.error()));
+    }
+    return std::make_unique<store_printer_impl>(std::move(*store), ctrl);
+  }
+
+  auto allows_joining() const -> bool override {
+    return false;
+  }
+
+  auto name() const -> std::string override {
+    return plugin_->name();
+  }
+
+private:
+  const store_plugin* plugin_;
+};
+
+auto store_plugin::parse_printer(tql::parser_interface& p) const
+  -> std::unique_ptr<plugin_printer> {
+  tql::argument_parser{name()}.parse(p);
+  return std::make_unique<store_printer>(this);
 }
 
 // -- plugin_ptr ---------------------------------------------------------------

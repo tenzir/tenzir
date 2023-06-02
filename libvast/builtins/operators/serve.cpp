@@ -103,7 +103,7 @@ constexpr auto SPEC_V0 = R"_(
               timeout:
                 type: string
                 example: "100ms"
-                default: "100ms" 
+                default: "100ms"
                 description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
     responses:
       200:
@@ -758,6 +758,8 @@ auto serve_handler(
 
 class serve_operator final : public crtp_operator<serve_operator> {
 public:
+  serve_operator() = default;
+
   serve_operator(std::string serve_id, uint64_t buffer_size)
     : serve_id_{std::move(serve_id)}, buffer_size_{buffer_size} {
   }
@@ -847,6 +849,14 @@ public:
     return operator_location::remote;
   }
 
+  auto name() const -> std::string override {
+    return "serve";
+  }
+
+  friend auto inspect(auto& f, serve_operator& x) -> bool {
+    return f.apply(x.serve_id_) && f.apply(x.buffer_size_);
+  }
+
 private:
   std::string serve_id_ = {};
   uint64_t buffer_size_ = {};
@@ -856,15 +866,8 @@ private:
 
 class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
-                     public virtual operator_plugin {
-  auto initialize(const record&, const record&) -> caf::error override {
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "serve";
-  };
-
+                     public virtual operator_plugin<serve_operator> {
+public:
   auto component_name() const -> std::string override {
     return "serve-manager";
   }

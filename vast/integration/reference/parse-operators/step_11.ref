@@ -1,0 +1,3 @@
+print("json", false) | save("file", saver_args(located("xyz.json", [8, 16]), null, null, null))
+-----
+located([[["print", "json", false]], [["save", "file", saver_args(located("xyz.json", [8, 16]), null, null, null)]]], [0, 16])

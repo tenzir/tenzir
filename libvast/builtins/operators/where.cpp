@@ -18,6 +18,9 @@
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
+#include <vast/tql/argument_parser.hpp>
+#include <vast/tql/basic.hpp>
+#include <vast/tql/diagnostics.hpp>
 
 #include <arrow/type.h>
 #include <caf/expected.hpp>
@@ -50,23 +53,29 @@ struct configuration {
 class where_operator final
   : public schematic_operator<where_operator, std::optional<expression>> {
 public:
+  where_operator() = default;
+
   /// Constructs a *where* pipeline operator.
   /// @pre *expr* must be normalized and validated
-  explicit where_operator(expression expr) : expr_{std::move(expr)} {
+  explicit where_operator(located<expression> expr) : expr_{std::move(expr)} {
 #if VAST_ENABLE_ASSERTIONS
-    auto result = normalize_and_validate(expr_);
+    auto result = normalize_and_validate(expr_.inner);
     VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
-    VAST_ASSERT(*result == expr_);
+    VAST_ASSERT(*result == expr_.inner, fmt::to_string(result).c_str());
 #endif // VAST_ENABLE_ASSERTIONS
   }
 
-  auto initialize(const type& schema, operator_control_plane&) const
+  auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    auto tailored_expr = tailor(expr_, schema);
+    auto tailored_expr = tailor(expr_.inner, schema);
     // Failing to tailor in this context is not an error, it just means that we
     // cannot do anything with the result.
-    if (not tailored_expr)
+    if (not tailored_expr) {
+      diagnostic::warning("{}", tailored_expr.error())
+        .primary(expr_.source)
+        .emit(ctrl.diagnostics());
       return std::nullopt;
+    }
     return std::move(*tailored_expr);
   }
 
@@ -83,71 +92,52 @@ public:
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override {
     if (expr == trivially_true_expression()) {
-      return std::pair{expr_, nullptr};
+      return std::pair{expr_.inner, nullptr};
     }
-    auto expr_conjunction = conjunction{expr_, expr};
+    auto expr_conjunction = conjunction{expr_.inner, expr};
     auto result = normalize_and_validate(expr_conjunction);
     VAST_ASSERT(result);
     return std::pair{std::move(*result), nullptr};
   }
 
   auto to_string() const -> std::string override {
-    return fmt::format("where {}", expr_);
+    return fmt::format("where {}", expr_.inner);
   };
 
-private:
-  expression expr_;
-};
-
-class plugin final : public virtual operator_plugin {
-public:
-  [[nodiscard]] caf::error
-  initialize([[maybe_unused]] const record& plugin_config,
-             [[maybe_unused]] const record& global_config) override {
-    return {};
+  auto name() const -> std::string override {
+    return "where";
   }
 
-  [[nodiscard]] std::string name() const override {
-    return "where";
-  };
+  friend auto inspect(auto& f, where_operator& x) -> bool {
+    return f.apply(x.expr_);
+  }
 
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::expr;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> expr >> optional_ws_or_comment
-                   >> end_of_pipeline_operator;
-    auto parse_result = expression{};
-    if (!p(f, l, parse_result)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse where "
-                                                      "operator: '{}'",
-                                                      pipeline)),
-      };
+private:
+  located<expression> expr_;
+};
+
+class plugin final : public virtual operator_plugin<where_operator> {
+public:
+  auto parse_operator(tql::parser_interface& p) const -> operator_ptr override {
+    auto parser
+      = tql::argument_parser{"where", "https://vast.io/docs/understand/"
+                                      "operators/transformations/where"};
+    auto expr = located<vast::expression>{};
+    parser.add(expr, "<expr>");
+    parser.parse(p);
+    auto normalized_and_validated = normalize_and_validate(expr.inner);
+    if (!normalized_and_validated) {
+      diagnostic::error("invalid expression")
+        .primary(expr.source)
+        .docs("https://tenzir.com/docs/expressions")
+        .throw_();
     }
-    auto normalized_and_validated_expr = normalize_and_validate(parse_result);
-    if (!normalized_and_validated_expr) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(
-          ec::invalid_configuration,
-          fmt::format("failed to normalized and validate expression '{}': {}",
-                      parse_result, normalized_and_validated_expr.error())),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<where_operator>(
-        std::move(*normalized_and_validated_expr)),
-    };
+    expr.inner = std::move(*normalized_and_validated);
+    return std::make_unique<where_operator>(std::move(expr));
   }
 };
 
 } // namespace
-
 } // namespace vast::plugins::where
 
 VAST_REGISTER_PLUGIN(vast::plugins::where::plugin)

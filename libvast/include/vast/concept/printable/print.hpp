@@ -21,8 +21,8 @@ auto print(Iterator&& out, const T& x, Args&&... args) {
 }
 
 template <class Iterator, access_printer T, class... Args>
-requires(!registered_printer<T>) auto print(Iterator&& out, const T& x,
-                                            Args&&... args) {
+  requires(!registered_printer<T>)
+auto print(Iterator&& out, const T& x, Args&&... args) {
   return access::printer<T>{std::forward<Args>(args)...}.print(out, x);
 }
 
@@ -51,9 +51,7 @@ requires(!registered_printer<T>) auto print(Iterator&& out, const T& x,
 //}
 
 template <class Iterator, class T>
-concept printable = requires(Iterator out, T x) {
-  print(out, x);
-};
+concept printable = requires(Iterator out, T x) { print(out, x); };
 
 template <class Iterator, class T>
 using is_printable = std::bool_constant<printable<Iterator, T>>;

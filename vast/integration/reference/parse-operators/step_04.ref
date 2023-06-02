@@ -1,0 +1,17 @@
+error: loader `a/b/c.json` could not be found
+ --> <input>:1:6
+  |
+1 | from a/b/c.json read json
+  |      ^^^^^^^^^^ 
+  |
+  = note: must be one of -, file, stdin
+  = docs: https://vast.io/docs/understand/connectors
+-----
+[1m[31merror[39m: loader `a/b/c.json` could not be found[0m
+ [1m[34m-->[0m <input>:1:6
+  [1m[34m|[0m
+[1m[34m1 |[0m from a/b/c.json read json
+  [1m[34m| [31m     ^^^^^^^^^^ [0m
+  [1m[34m|[0m
+  [1m[34m=[39m note:[0m must be one of -, file, stdin
+  [1m[34m=[39m docs:[0m https://vast.io/docs/understand/connectors

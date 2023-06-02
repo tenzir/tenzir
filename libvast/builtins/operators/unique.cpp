@@ -16,6 +16,8 @@ namespace {
 
 class unique_operator final : public crtp_operator<unique_operator> {
 public:
+  unique_operator() = default;
+
   // Note: The following implementation does a point-wise comparison of
   // consecutive rows. To this end, we use `table_slice::at`. This could be
   // optimized in the future.
@@ -55,6 +57,14 @@ public:
     return "unique";
   }
 
+  auto name() const -> std::string override {
+    return "unique";
+  }
+
+  friend auto inspect(auto&, unique_operator&) -> bool {
+    return true;
+  }
+
 private:
   /// @pre `a.schema() == b.schema()`
   static auto is_duplicate(const table_slice& a, size_t a_row,
@@ -69,16 +79,8 @@ private:
   }
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<unique_operator> {
 public:
-  auto initialize(const record&, const record&) -> caf::error override {
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "unique";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;

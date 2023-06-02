@@ -12,6 +12,9 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
+#include "vast/tql/diagnostics.hpp"
+#include "vast/tql/parser.hpp"
+#include "vast/tql/parser_interface.hpp"
 
 #include <caf/test/dsl.hpp>
 using namespace vast;
@@ -72,12 +75,17 @@ struct fixture : fixtures::events {
       -> const concepts_map& override {
       FAIL("no mock implementation available");
     }
+
+    auto diagnostics() noexcept -> diagnostic_handler& override {
+      static auto diag = null_diagnostic_handler{};
+      return diag;
+    }
   };
 
   fixture() {
     // TODO: Move this into a separate fixture when we are starting to test more
     // than one printer type.
-    printer_plugin = vast::plugins::find<vast::printer_plugin>("json");
+    printer_plugin = vast::plugins::find<vast::printer_parser_plugin>("json");
     REQUIRE(printer_plugin);
   }
 
@@ -91,7 +99,7 @@ struct fixture : fixtures::events {
   }
 
   auto collect_chunks(std::function<generator<table_slice>()> slice_generator,
-                      printer_plugin::printer current_printer)
+                      std::unique_ptr<printer_instance> current_printer)
     -> std::vector<chunk_ptr> {
     auto chunks = std::vector<chunk_ptr>{};
     for (auto&& x : slice_generator()) {
@@ -104,7 +112,17 @@ struct fixture : fixtures::events {
     return chunks;
   }
 
-  const vast::printer_plugin* printer_plugin;
+  auto make_printer(std::string args, type schema)
+    -> std::unique_ptr<printer_instance> {
+    auto diag = null_diagnostic_handler{};
+    auto p = tql::make_parser_interface(std::move(args), diag);
+    auto result = printer_plugin->parse_printer(*p)->instantiate(
+      std::move(schema), control_plane);
+    REQUIRE(result);
+    return std::move(*result);
+  }
+
+  const vast::printer_parser_plugin* printer_plugin;
   mock_control_plane control_plane;
 };
 
@@ -120,8 +138,7 @@ TEST(json printer - singular slice - singular column) {
     },
   };
   basic_table_slice_generator g(std::move(schema));
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, g.schema, control_plane));
+  auto current_printer = make_printer("", g.schema);
   auto str = std::string{R"({"content": "foo"}
 )"};
   auto slice_generator = [this, &g]() -> generator<table_slice> {
@@ -143,8 +160,7 @@ TEST(json printer - multiple slices - singular column) {
     },
   };
   basic_table_slice_generator g(std::move(schema));
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, g.schema, control_plane));
+  auto current_printer = make_printer("", g.schema);
   auto strs = std::vector<std::string>{
     R"({"content": "foo"}
 )",
@@ -174,8 +190,7 @@ TEST(json printer - singular slice - multiple columns) {
                 {"content3", string_type{}}},
   };
   basic_table_slice_generator g(std::move(schema));
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, g.schema, control_plane));
+  auto current_printer = make_printer("", g.schema);
   auto str = std::string{
     R"({"content": "foo", "content2": "foo", "content3": "foo"}
 )"};
@@ -198,8 +213,7 @@ TEST(json printer - multiple slices - multiple columns) {
                 {"content3", string_type{}}},
   };
   basic_table_slice_generator g(std::move(schema));
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, g.schema, control_plane));
+  auto current_printer = make_printer("", g.schema);
   auto strs = std::vector<std::string>{
     R"({"content": "foo", "content2": "foo", "content3": "foo"}
 )",
@@ -243,8 +257,7 @@ TEST(json printer - nested columns) {
     co_yield second_slice;
     co_return;
   };
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
+  auto current_printer = make_printer("", slice_type);
   auto strs = std::vector<std::string>{
     R"({"f1": "n1", "f2": 2, "f3_rec": {"f3.1": "p1", "f3.2": 7}}
 )",
@@ -271,8 +284,7 @@ TEST(json printer - list type) {
     co_yield slice;
     co_return;
   };
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
+  auto current_printer = make_printer("", slice_type);
   auto str = std::string{R"({"list": [0, 1, 2]}
 )"};
   auto chunks
@@ -292,8 +304,7 @@ TEST(json printer - uint64 type) {
     co_yield slice;
     co_return;
   };
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
+  auto current_printer = make_printer("", slice_type);
   auto strs = std::vector<std::string>{
     R"({"foo": 0}
 {"foo": 1}
@@ -348,8 +359,7 @@ TEST(json printer - list of structs) {
     co_yield second_slice;
     co_return;
   };
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
+  auto current_printer = make_printer("", slice_type);
   auto strs = std::vector<std::string>{
     R"({"foo": [{"bar": 1, "baz": 2}, {"bar": 3, "baz": null}]}
 )",
@@ -374,8 +384,7 @@ TEST(json printer - suricata netflow) {
     co_yield suricata_netflow_log.front();
     co_return;
   };
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
+  auto current_printer = make_printer("", slice_type);
   auto str = std::string{
     R"({"timestamp": "2011-08-14T05:38:55.549713", "flow_id": 929669869939483, "pcap_cnt": null, "vlan": null, "in_iface": null, "src_ip": "147.32.84.165", "src_port": 138, "dest_ip": "147.32.84.255", "dest_port": 138, "proto": "UDP", "event_type": "netflow", "community_id": null, "netflow": {"pkts": 2, "bytes": 486, "start": "2011-08-12T12:53:47.928539", "end": "2011-08-12T12:53:47.928552", "age": 0}, "app_proto": "failed"}
 )"};
@@ -396,8 +405,7 @@ TEST(json printer - zeek conn log) {
     }
     co_return;
   };
-  auto current_printer
-    = unbox(printer_plugin->make_printer({}, slice_type, control_plane));
+  auto current_printer = make_printer("", slice_type);
   auto strs = std::vector<std::string>{
     R"({"ts": "2009-11-18T08:00:21.486539", "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": "163.82ms", "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []}
 {"ts": "2009-11-18T08:08:00.237253", "uid": "nkCxlvNN8pi", "id.orig_h": "192.168.1.103", "id.orig_p": 137, "id.resp_h": "192.168.1.255", "id.resp_p": 137, "proto": "udp", "service": "dns", "duration": "3.78s", "orig_bytes": 350, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 7, "orig_ip_bytes": 546, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}

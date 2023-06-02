@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/detail/string_literal.hpp"
-
 #include <vast/adaptive_table_slice_builder.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
@@ -16,9 +14,13 @@
 #include <vast/defaults.hpp>
 #include <vast/detail/assert.hpp>
 #include <vast/detail/padded_buffer.hpp>
+#include <vast/detail/string_literal.hpp>
 #include <vast/generator.hpp>
 #include <vast/operator_control_plane.hpp>
 #include <vast/plugin.hpp>
+#include <vast/tql/argument_parser.hpp>
+#include <vast/tql/diagnostics.hpp>
+#include <vast/tql/parser.hpp>
 
 #include <arrow/record_batch.h>
 #include <fmt/format.h>
@@ -41,6 +43,14 @@ enum class parser_action {
 struct selector {
   std::string prefix;
   std::string selector_field;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, selector& x) -> bool {
+    return f.object(x)
+      .pretty_name("selector")
+      .fields(f.field("prefix", x.prefix),
+              f.field("selector_field", x.selector_field));
+  }
 };
 
 struct parser_state {
@@ -96,6 +106,7 @@ public:
       parse_impl(val.value_unsafe(), field, depth + 1);
     }
   }
+
 private:
   auto report_parse_err(auto& v, std::string description) -> void {
     ctrl_.warn(caf::make_error(
@@ -476,150 +487,172 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
     co_yield unflatten_if_needed(separator, std::move(*slice));
 }
 
-auto get_selector(const caf::settings& settings, operator_control_plane& ctrl)
-  -> std::optional<selector> {
-  if (not settings.contains("selector"))
-    return {};
-  auto selector_opt = caf::get<std::string>(settings, "selector");
-  auto split = detail::split(selector_opt, ":");
-  VAST_ASSERT(!split.empty());
+auto parse_selector(std::string_view x, location source) -> selector {
+  auto split = detail::split(x, ":");
+  VAST_ASSERT(!x.empty());
   if (split.size() > 2 or split[0].empty()) {
-    ctrl.warn(caf::make_error(
-      ec::parse_error,
-      fmt::format("failed to parse selector '{}': must contain at most one "
-                  "':' and field name must not be empty; ignoring option",
-                  selector_opt)));
-    return {};
+    diagnostic::error("invalid selector `{}`: must contain at most "
+                      "one `:` and field name must "
+                      "not be empty",
+                      x)
+      .primary(source)
+      .throw_();
   }
   auto prefix = split.size() == 2 ? std::string{split[1]} : "";
   return selector{std::move(prefix), std::string{split[0]}};
 }
 
-} // namespace
+struct config {
+  std::optional<selector> selector;
+  std::string unnest_separator;
+  bool no_infer = false;
 
-class plugin final : public virtual parser_plugin,
-                     public virtual printer_plugin {
-  auto make_parser(std::vector<std::string> args,
-                   generator<chunk_ptr> json_chunk_generator,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<parser> override {
-    caf::settings settings;
-    config_options options;
-    options.add<std::string>("selector", "");
-    options.add<std::string>("unnest-separator", "");
-    options.add<bool>("no-infer", "");
-    if (auto [ec, it] = options.parse(settings, args);
-        ec != caf::pec::success) {
-      return caf::make_error(ec,
-                             fmt::format("failed to parse option '{}'", *it));
-    }
-    return make_parser_impl(
-      std::move(json_chunk_generator), ctrl, get_selector(settings, ctrl),
-      not settings.contains("no-infer"),
-      caf::get_or<std::string>(settings, "unnest-separator", ""));
+  template <class Inspector>
+  friend auto inspect(Inspector& f, config& x) -> bool {
+    return f.object(x).pretty_name("config").fields(
+      f.field("selector", x.selector),
+      f.field("unnest_separator", x.unnest_separator),
+      f.field("no_infer", x.no_infer));
   }
+};
 
-  auto default_loader(std::span<std::string const>) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"stdin", {}};
-  }
+class json_parser final : public plugin_parser {
+public:
+  json_parser() = default;
 
-  auto make_printer(std::span<std::string const> args, type input_schema,
-                    operator_control_plane&) const
-    -> caf::expected<printer> override {
-    (void)input_schema;
-    bool pretty = false;
-    if (args.size() == 1 && args.front() == "--pretty") {
-      pretty = true;
-    } else if (!args.empty()) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("json printer received unexpected "
-                                         "arguments: {}",
-                                         fmt::join(args, ", ")));
-    };
-    return to_printer([pretty](table_slice slice) -> generator<chunk_ptr> {
-      if (slice.rows() == 0) {
-        co_yield {};
-        co_return;
-      }
-      // JSON printer should output NDJSON, see:
-      // https://github.com/ndjson/ndjson-spec
-      auto printer = vast::json_printer{{.oneline = not pretty}};
-      // TODO: Since this printer is per-schema we can write an optimized
-      // version of it that gets the schema ahead of time and only expects
-      // data corresponding to exactly that schema.
-      auto buffer = std::vector<char>{};
-      auto resolved_slice = resolve_enumerations(slice);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto out_iter = std::back_inserter(buffer);
-      for (const auto& row :
-           values(caf::get<record_type>(resolved_slice.schema()), *array)) {
-        VAST_ASSERT_CHEAP(row);
-        const auto ok = printer.print(out_iter, *row);
-        VAST_ASSERT_CHEAP(ok);
-        out_iter = fmt::format_to(out_iter, "\n");
-      }
-      auto chunk = chunk::make(std::move(buffer));
-      co_yield std::move(chunk);
-    });
-  }
-
-  auto default_saver(std::span<std::string const>) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"stdout", {}};
-  }
-
-  auto printer_allows_joining() const -> bool override {
-    return true;
-  };
-
-  auto initialize(const record&, const record&) -> caf::error override {
-    return {};
+  explicit json_parser(config cfg) : cfg_{std::move(cfg)} {
   }
 
   auto name() const -> std::string override {
     return "json";
   }
+
+  auto
+  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> std::optional<generator<table_slice>> override {
+    return make_parser_impl(std::move(input), ctrl, cfg_.selector,
+                            !cfg_.no_infer, cfg_.unnest_separator);
+  }
+
+  friend auto inspect(auto& f, json_parser& x) -> bool {
+    return f.apply(x.cfg_);
+  }
+
+private:
+  config cfg_;
+};
+
+class json_printer final : public plugin_printer {
+public:
+  json_printer() = default;
+
+  explicit json_printer(bool pretty) : pretty_{pretty} {
+  }
+
+  auto name() const -> std::string override {
+    return "json";
+  }
+
+  auto instantiate(type, operator_control_plane&) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    return printer_instance::make(
+      [pretty = pretty_](table_slice slice) -> generator<chunk_ptr> {
+        if (slice.rows() == 0) {
+          co_yield {};
+          co_return;
+        }
+        // JSON printer should output NDJSON, see:
+        // https://github.com/ndjson/ndjson-spec
+        auto printer = vast::json_printer{{.oneline = not pretty}};
+        // TODO: Since this printer is per-schema we can write an optimized
+        // version of it that gets the schema ahead of time and only expects
+        // data corresponding to exactly that schema.
+        auto buffer = std::vector<char>{};
+        auto resolved_slice = resolve_enumerations(slice);
+        auto array
+          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto out_iter = std::back_inserter(buffer);
+        for (const auto& row :
+             values(caf::get<record_type>(resolved_slice.schema()), *array)) {
+          VAST_ASSERT_CHEAP(row);
+          const auto ok = printer.print(out_iter, *row);
+          VAST_ASSERT_CHEAP(ok);
+          out_iter = fmt::format_to(out_iter, "\n");
+        }
+        auto chunk = chunk::make(std::move(buffer));
+        co_yield std::move(chunk);
+      });
+  }
+
+  auto allows_joining() const -> bool override {
+    return true;
+  };
+
+  friend auto inspect(auto& f, json_printer& x) -> bool {
+    return f.apply(x.pretty_);
+  }
+
+private:
+  bool pretty_;
+};
+
+class plugin final : public virtual parser_plugin<json_parser>,
+                     public virtual printer_plugin<json_printer> {
+public:
+  auto name() const -> std::string override {
+    // TODO: Resolve this.
+    return parser_plugin::name();
+  }
+
+  auto parse_parser(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    auto cfg = config{};
+    auto selector = std::optional<located<std::string>>{};
+    auto parser = tql::argument_parser{"json", "https://vast.io/docs/"
+                                               "understand/formats/json"};
+    parser.add("--selector", selector, "<selector>");
+    parser.add("--unnest-separator", cfg.unnest_separator, "<separator>");
+    parser.add("--no-infer", cfg.no_infer);
+    parser.parse(p);
+    if (selector) {
+      cfg.selector = parse_selector(selector->inner, selector->source);
+    }
+    return std::make_unique<json_parser>(std::move(cfg));
+  }
+
+  auto parse_printer(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_printer> override {
+    auto pretty = false;
+    auto parser = tql::argument_parser{"json", "https://vast.io/docs/"
+                                               "understand/formats/json"};
+    parser.add("--pretty", pretty);
+    parser.parse(p);
+    return std::make_unique<json_printer>(pretty);
+  }
 };
 
 template <detail::string_literal Name, detail::string_literal Selector,
           detail::string_literal Separator = "">
-class selector_parser final : public virtual parser_plugin {
-  auto make_parser(std::vector<std::string> args,
-                   generator<chunk_ptr> json_chunk_generator,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<parser> override {
-    args.push_back(fmt::format("--selector={}", Selector.str()));
-    if constexpr (not Separator.str().empty())
-      args.push_back(fmt::format("--unnest-separator={}", Separator.str()));
-    return json_parser_->make_parser(std::move(args),
-                                     std::move(json_chunk_generator), ctrl);
-  }
-
-  auto default_loader(std::span<std::string const>) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"stdin", {}};
-  }
-
-  auto initialize(const record&, const record&) -> caf::error override {
-    json_parser_ = plugins::find<parser_plugin>("json");
-    if (not json_parser_) {
-      return caf::make_error(ec::logic_error, "json plugin unavailable");
-    }
-    return {};
-  }
-
+class selector_parser final : public virtual parser_parser_plugin {
+public:
   auto name() const -> std::string override {
     return std::string{Name.str()};
   }
 
-private:
-  const parser_plugin* json_parser_ = nullptr;
+  auto parse_parser(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    tql::argument_parser{name()}.parse(p);
+    auto cfg = config{};
+    cfg.selector = parse_selector(Selector.str(), location::unknown);
+    cfg.unnest_separator = Separator.str();
+    return std::make_unique<json_parser>(std::move(cfg));
+  }
 };
 
 using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
 using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
+
+} // namespace
 
 } // namespace vast::plugins::json
 

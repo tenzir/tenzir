@@ -1,0 +1,3 @@
+load("file", loader_args(located("a/b/c.json", [10, 20]), 20ms, null, null)) | parse("json", config(null, "", false))
+-----
+located([[["load", "file", loader_args(located("a/b/c.json", [10, 20]), 20ms, null, null)]], [["parse", "json", config(null, "", false)]]], [0, 20])

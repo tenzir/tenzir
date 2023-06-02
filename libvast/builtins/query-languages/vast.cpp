@@ -37,7 +37,7 @@ auto parse(std::string_view repr, const record& config,
                                          repr));
     }
     // 2a. find plugin using operator name
-    const auto* plugin = plugins::find<operator_plugin>(operator_name);
+    const auto* plugin = plugins::find<operator_parser_plugin>(operator_name);
     // 2b. find alias definition in `vast.operators` (and `vast.operators`)
     auto new_config_prefix = "vast.operators";
     auto old_config_prefix = "vast.pipelines";

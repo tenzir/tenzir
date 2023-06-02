@@ -13,6 +13,7 @@
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice.hpp>
+#include <vast/tql/argument_parser.hpp>
 
 #include <arrow/type.h>
 
@@ -22,7 +23,13 @@ namespace {
 
 class head_operator final : public crtp_operator<head_operator> {
 public:
+  head_operator() = default;
+
   explicit head_operator(uint64_t limit) : limit_{limit} {
+  }
+
+  auto name() const -> std::string override {
+    return "head";
   }
 
   auto operator()(generator<table_slice> input) const
@@ -47,42 +54,22 @@ public:
   }
 
 private:
+  friend auto inspect(auto& f, head_operator& x) -> bool {
+    return f.apply(x.limit_);
+  }
+
   uint64_t limit_;
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<head_operator> {
 public:
-  // plugin API
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
-    return "head";
-  };
-
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::u64;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = -(required_ws_or_comment >> u64) >> optional_ws_or_comment
-                   >> end_of_pipeline_operator;
-    auto limit = std::optional<uint64_t>{};
-    if (!p(f, l, limit)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "head operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<head_operator>(limit.value_or(10)),
-    };
+  auto parse_operator(tql::parser_interface& p) const -> operator_ptr override {
+    auto parser = tql::argument_parser{
+      "head", "https://vast.io/docs/understand/operators/transformations/head"};
+    auto count = std::optional<size_t>{};
+    parser.add(count, "<limit>");
+    parser.parse(p);
+    return std::make_unique<head_operator>(count.value_or(10));
   }
 };
 

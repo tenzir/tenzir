@@ -8,14 +8,19 @@
 
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/defaults.hpp>
 #include <vast/detail/env.hpp>
 #include <vast/detail/fdinbuf.hpp>
 #include <vast/detail/fdoutbuf.hpp>
 #include <vast/detail/file_path_to_parser.hpp>
 #include <vast/detail/posix.hpp>
 #include <vast/detail/string.hpp>
+#include <vast/fwd.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
+#include <vast/tql/argument_parser.hpp>
+#include <vast/tql/diagnostics.hpp>
+#include <vast/tql/parser_interface.hpp>
 
 #include <caf/detail/scope_guard.hpp>
 #include <caf/error.hpp>
@@ -159,237 +164,234 @@ private:
   std::FILE* file_;
 };
 
-class plugin : public virtual loader_plugin, public virtual saver_plugin {
+struct loader_args {
+  located<std::string> path;
+  std::chrono::milliseconds timeout
+    = vast::defaults::import::read_timeout; // TODO
+  std::optional<location> follow = std::nullopt;
+  std::optional<location> mmap = std::nullopt;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, loader_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("loader_args")
+      .fields(f.field("path", x.path), f.field("timeout", x.timeout),
+              f.field("follow", x.follow), f.field("mmap", x.mmap));
+  }
+};
+
+struct saver_args {
+  located<std::string> path;
+  std::optional<location> appending;
+  std::optional<location> real_time;
+  std::optional<location> uds;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, saver_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("saver_args")
+      .fields(f.field("path", x.path), f.field("appending", x.appending),
+              f.field("real_time", x.real_time), f.field("uds", x.uds));
+  }
+};
+
+class fd_wrapper {
+public:
+  fd_wrapper() : fd_{-1}, close_{false} {
+  }
+  fd_wrapper(int fd, bool close) : fd_{fd}, close_{close} {
+  }
+  fd_wrapper(const fd_wrapper&) = delete;
+  auto operator=(const fd_wrapper&) -> fd_wrapper& = delete;
+  fd_wrapper(fd_wrapper&& other) noexcept
+    : fd_{other.fd_}, close_{other.close_} {
+    other.close_ = false;
+  }
+  auto operator=(fd_wrapper&& other) noexcept -> fd_wrapper& {
+    fd_ = other.fd_;
+    close_ = other.close_;
+    other.close_ = false;
+    return *this;
+  }
+
+  ~fd_wrapper() {
+    if (close_) {
+      if (::close(fd_) != 0) {
+        VAST_WARN("failed to close file in destructor: {}",
+                  detail::describe_errno());
+      }
+    }
+  }
+
+  operator int() const {
+    return fd_;
+  }
+
+private:
+  int fd_;
+  bool close_;
+};
+
+class file_loader final : public plugin_loader {
 public:
   static constexpr auto max_chunk_size = size_t{16384};
 
-  auto
-  make_loader(std::span<std::string const> args, operator_control_plane&) const
-    -> caf::expected<generator<chunk_ptr>> override {
-    auto read_timeout = read_timeout_;
-    auto path = std::string{};
-    auto following = false;
-    auto mmap = false;
-    auto is_socket = false;
-    for (auto i = size_t{0}; i < args.size(); ++i) {
-      const auto& arg = args[i];
-      if (arg == "--timeout") {
-        if (i + 1 == args.size()) {
-          return caf::make_error(ec::syntax_error,
-                                 fmt::format("missing duration value"));
+  file_loader() = default;
+
+  explicit file_loader(loader_args args) : args_{std::move(args)} {
+  }
+
+  auto instantiate(operator_control_plane& ctrl) const
+    -> std::optional<generator<chunk_ptr>> override {
+    auto make = [](std::chrono::milliseconds timeout, fd_wrapper fd,
+                   bool following) -> generator<chunk_ptr> {
+      auto in_buf = detail::fdinbuf(fd, max_chunk_size);
+      in_buf.read_timeout() = timeout;
+      auto current_data = std::vector<std::byte>{};
+      current_data.reserve(max_chunk_size);
+      auto eof_reached = false;
+      while (following or not eof_reached) {
+        auto current_char = in_buf.sbumpc();
+        if (current_char != detail::fdinbuf::traits_type::eof()) {
+          current_data.emplace_back(static_cast<std::byte>(current_char));
         }
-        if (auto parsed_duration = to<vast::duration>(args[i + 1])) {
-          read_timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
-            *parsed_duration);
-          ++i;
-        } else {
-          return caf::make_error(ec::syntax_error,
-                                 fmt::format("could not parse duration: {}",
-                                             args[i + 1]));
+        if (current_char == detail::fdinbuf::traits_type::eof()
+            or current_data.size() == max_chunk_size) {
+          eof_reached = (current_char == detail::fdinbuf::traits_type::eof()
+                         and not in_buf.timed_out());
+          if (eof_reached and current_data.empty() and not following) {
+            break;
+          }
+          auto chunk = chunk::make(std::exchange(current_data, {}));
+          co_yield std::move(chunk);
+          if (eof_reached and not following) {
+            break;
+          }
+          current_data.reserve(max_chunk_size);
         }
-      } else if (arg == "-") {
-        path = std_io_path;
-      } else if (arg == "--mmap") {
-        mmap = true;
-      } else if (arg == "-f" || arg == "--follow") {
-        following = true;
-      } else if (not arg.starts_with("-")) {
-        std::error_code err{};
-        auto expanded = expand_path(arg);
-        auto status = std::filesystem::status(expanded, err);
-        if (err) {
-          return caf::make_error(ec::parse_error,
-                                 fmt::format("could not access file {}: {}",
-                                             expanded, err));
-        }
-        is_socket = (status.type() == std::filesystem::file_type::socket);
-        if (path == std_io_path) {
-          return caf::make_error(ec::parse_error,
-                                 fmt::format("file argument {} can not be "
-                                             "combined with "
-                                             "stdin file argument",
-                                             expanded));
-        }
-        path = std::move(expanded);
-      } else {
-        return caf::make_error(
-          ec::invalid_argument,
-          fmt::format("unexpected argument for 'file' connector: {}", arg));
       }
-    }
-    if (path.empty()) {
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("no file specified"));
-    }
-    if (mmap) {
-      if (path == std_io_path) {
-        return caf::make_error(ec::filesystem_error, "cannot mmap STDIN");
+      co_return;
+    };
+    if (args_.mmap) {
+      auto chunk = chunk::mmap(args_.path.inner);
+      if (not chunk) {
+        ctrl.diagnostics().emit(
+          diagnostic::error("could not mmap file: {}", chunk.error())
+            .primary(args_.path.source)
+            .done());
+        return {};
       }
-      if (following) {
-        return caf::make_error(ec::filesystem_error,
-                               "cannot use `--follow` with `--mmap`");
-      }
-      auto chunk = chunk::mmap(path);
-      if (not chunk)
-        return std::move(chunk.error());
       return std::invoke(
         [](chunk_ptr chunk) mutable -> generator<chunk_ptr> {
           co_yield std::move(chunk);
         },
         std::move(*chunk));
     }
-    auto fd = file_description_wrapper(new int(STDIN_FILENO), [](auto* fd) {
-      std::default_delete<int>()(fd);
-    });
-    if (is_socket) {
-      if (path == std_io_path) {
-        return caf::make_error(ec::filesystem_error, "cannot use STDIN as UNIX "
-                                                     "domain socket");
-      }
-      auto uds = detail::unix_domain_socket::connect(path);
+    if (args_.path.inner == "-") {
+      return make(args_.timeout, fd_wrapper{STDIN_FILENO, false}, false);
+    }
+    auto err = std::error_code{};
+    auto status = std::filesystem::status(args_.path.inner, err);
+    if (err == std::make_error_code(std::errc::no_such_file_or_directory)) {
+      // TODO: Unify and improve error descriptions.
+      diagnostic::error("the file `{}` does not exist", args_.path.inner, err)
+        .primary(args_.path.source)
+        .emit(ctrl.diagnostics());
+      return {};
+    }
+    if (err) {
+      diagnostic::error("could not access file `{}`", args_.path.inner, err)
+        .primary(args_.path.source)
+        .note("{}", err)
+        .emit(ctrl.diagnostics());
+      return {};
+    }
+    if (status.type() == std::filesystem::file_type::socket) {
+      auto uds = detail::unix_domain_socket::connect(args_.path.inner);
       if (!uds) {
-        return caf::make_error(ec::filesystem_error,
-                               fmt::format("unable to connect to UNIX domain "
-                                           "socket at {}",
-                                           path));
+        diagnostic::error("could not connect to UNIX domain socket at {}",
+                          args_.path.inner)
+          .primary(args_.path.source)
+          .emit(ctrl.diagnostics());
+        return {};
       }
-      fd = file_description_wrapper(new int(uds.fd), [](auto fd) {
-        if (*fd != -1) {
-          ::close(*fd);
-        }
-        std::default_delete<int>()(fd);
-      });
-    } else {
-      if (path != std_io_path) {
-        fd = file_description_wrapper(new int(::open(path.c_str(), O_RDONLY)),
-                                      [](auto fd) {
-                                        if (*fd != -1) {
-                                          ::close(*fd);
-                                        }
-                                        std::default_delete<int>()(fd);
-                                      });
-        if (*fd == -1) {
-          return caf::make_error(ec::filesystem_error,
-                                 fmt::format("open(2) for file {} failed {}:",
-                                             path, detail::describe_errno()));
-        }
-      }
+      return make(args_.timeout, fd_wrapper{uds.fd, true},
+                  args_.follow.has_value());
     }
-    return std::invoke(
-      [](auto timeout, auto fd, auto following) -> generator<chunk_ptr> {
-        auto in_buf = detail::fdinbuf(*fd, max_chunk_size);
-        in_buf.read_timeout() = timeout;
-        auto current_data = std::vector<std::byte>{};
-        current_data.reserve(max_chunk_size);
-        auto eof_reached = false;
-        while (following or not eof_reached) {
-          auto current_char = in_buf.sbumpc();
-          if (current_char != detail::fdinbuf::traits_type::eof()) {
-            current_data.emplace_back(static_cast<std::byte>(current_char));
-          }
-          if (current_char == detail::fdinbuf::traits_type::eof()
-              or current_data.size() == max_chunk_size) {
-            eof_reached = (current_char == detail::fdinbuf::traits_type::eof()
-                           and not in_buf.timed_out());
-            if (eof_reached and current_data.empty() and not following) {
-              break;
-            }
-            auto chunk = chunk::make(std::exchange(current_data, {}));
-            co_yield std::move(chunk);
-            if (eof_reached and not following) {
-              break;
-            }
-            current_data.reserve(max_chunk_size);
-          }
-        }
-        co_return;
-      },
-      read_timeout, std::move(fd), following);
+    // TODO: Switch to something else or make this more robust.
+    // TODO: Check that `fd` is not a directory.
+    auto fd = ::open(args_.path.inner.c_str(), O_RDONLY);
+    if (fd == -1) {
+      diagnostic::error("could not open `{}`: {}", args_.path.inner,
+                        detail::describe_errno())
+        .primary(args_.path.source)
+        .throw_();
+    }
+    return make(args_.timeout, fd_wrapper{fd, true}, args_.follow.has_value());
   }
 
-  auto default_parser(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    for (auto i = size_t{0}; i < args.size(); ++i) {
-      const auto& arg = args[i];
-      if (arg == "-") {
-        break;
-      }
-      if (arg == "--timeout") {
-        ++i;
-      } else if (!arg.starts_with("-")) {
-        return {detail::file_path_to_parser(arg), {}};
-      }
+  auto to_string() const -> std::string override {
+    auto result = std::string{"file"};
+    // TODO: Escaping.
+    result += args_.path.inner;
+    if (args_.follow) {
+      result += " --follow";
     }
-    return {"json", {}};
+    if (args_.mmap) {
+      result += " --mmap";
+    }
+    // TODO
+    if (args_.timeout != vast::defaults::import::read_timeout) {
+      result += fmt::format(" --timeout {}", args_.timeout);
+    }
+    return result;
   }
 
-  auto initialize(const record&, const record& global_config)
-    -> caf::error override {
-    auto timeout
-      = try_get<vast::duration>(global_config, "vast.import.read-timeout");
-    if (!timeout.engaged()) {
-      return std::move(timeout.error());
-    }
-    if (timeout->has_value()) {
-      read_timeout_
-        = std::chrono::duration_cast<std::chrono::milliseconds>(**timeout);
-    }
-    return caf::none;
+  auto name() const -> std::string override {
+    return "file";
   }
 
-  auto make_saver(std::span<std::string const> args,
-                  [[maybe_unused]] printer_info info,
-                  operator_control_plane& ctrl) const
-    -> caf::expected<saver> override {
-    auto appending = false;
-    auto real_time = false;
-    auto is_socket = false;
-    auto path = std::string{};
-    for (auto i = size_t{0}; i < args.size(); ++i) {
-      const auto& arg = args[i];
-      if (arg == "-") {
-        path = std_io_path;
-      } else if (arg == "-a" || arg == "--append") {
-        appending = true;
-      } else if (arg == "--real-time") {
-        real_time = true;
-      } else if (arg == "--uds") {
-        is_socket = true;
-      } else if (not arg.starts_with("-")) {
-        if (path == std_io_path) {
-          return caf::make_error(ec::parse_error,
-                                 fmt::format("file argument {} can not be "
-                                             "combined with "
-                                             "stdout file argument",
-                                             arg));
-        }
-        path = expand_path(arg);
-      } else {
-        return caf::make_error(
-          ec::invalid_argument,
-          fmt::format("unexpected argument for 'file' sink: {}", arg));
-      }
-    }
+  auto default_parser() const -> std::string override {
+    return detail::file_path_to_parser(args_.path.inner);
+  }
+
+  friend auto inspect(auto& f, file_loader& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  loader_args args_;
+};
+
+class file_saver final : public plugin_saver {
+public:
+  file_saver() = default;
+
+  explicit file_saver(saver_args args) : args_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "file";
+  }
+
+  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+    -> caf::expected<std::function<void(chunk_ptr)>> override {
     // This should not be a `shared_ptr`, but we have to capture `stream` in
     // the returned `std::function`. Also, we capture it in a guard that calls
     // `.close()` to not silently discard errors that occur during destruction.
     auto stream = std::shared_ptr<writer>{};
-    if (is_socket) {
-      if (path == std_io_path) {
-        return caf::make_error(ec::filesystem_error,
-                               "cannot use STDOUT as UNIX domain socket");
-      }
+    auto path = args_.path.inner;
+    if (args_.uds) {
       auto uds = detail::unix_domain_socket::connect(path);
       if (!uds) {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("unable to connect to UNIX "
-                                           "domain "
-                                           "socket at {}",
+                                           "domain socket at {}",
                                            path));
       }
       // TODO: This won't do any additional buffering. Is this what we want?
       stream = std::make_shared<fd_writer>(uds.fd, true);
-    } else if (path == std_io_path) {
+    } else if (path == "-") {
       stream = std::make_shared<fd_writer>(STDOUT_FILENO, false);
     } else {
       auto directory = std::filesystem::path{path}.parent_path();
@@ -404,7 +406,7 @@ public:
         }
       }
       // We use `fopen` because we want buffered writes.
-      auto handle = std::fopen(path.c_str(), appending ? "ab" : "wb");
+      auto handle = std::fopen(path.c_str(), args_.appending ? "ab" : "wb");
       if (handle == nullptr) {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("failed to open {}: {}", path,
@@ -418,7 +420,7 @@ public:
         ctrl.abort(std::move(error));
       }
     });
-    return [&ctrl, real_time, stream = std::move(stream),
+    return [&ctrl, real_time = args_.real_time, stream = std::move(stream),
             guard = std::make_shared<decltype(guard)>(std::move(guard))](
              chunk_ptr chunk) {
       if (!chunk || chunk->size() == 0) {
@@ -437,17 +439,108 @@ public:
     };
   }
 
-  auto default_printer([[maybe_unused]] std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"json", {}};
-  }
-
-  auto saver_does_joining() const -> bool override {
+  auto is_joining() const -> bool override {
     return true;
   }
 
+  friend auto inspect(auto& f, file_saver& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  saver_args args_;
+};
+
+class plugin : public virtual loader_plugin<file_loader>,
+               public virtual saver_plugin<file_saver> {
+public:
   auto name() const -> std::string override {
-    return "file";
+    // TODO: Resolve this.
+    return loader_plugin::name();
+  }
+
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
+    auto timeout
+      = try_get<vast::duration>(global_config, "vast.import.read-timeout");
+    if (!timeout.engaged()) {
+      return std::move(timeout.error());
+    }
+    if (timeout->has_value()) {
+      read_timeout_
+        = std::chrono::duration_cast<std::chrono::milliseconds>(**timeout);
+    }
+    return caf::none;
+  }
+
+  auto parse_loader(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_loader> override {
+    auto args = loader_args{};
+    auto timeout = std::optional<located<std::string>>{};
+    auto parser = tql::argument_parser{"file", "https://vast.io/docs/"
+                                               "understand/connectors/file"};
+    parser.add(args.path, "<path>");
+    parser.add("-f,--follow", args.follow);
+    parser.add("--mmap", args.mmap);
+    parser.add("--timeout", timeout, "<duration>");
+    parser.parse(p);
+    if (args.mmap) {
+      if (args.follow) {
+        diagnostic::error("cannot have both `--follow` and `--mmap`")
+          .primary(*args.follow)
+          .primary(*args.mmap)
+          .throw_();
+      }
+      if (args.path.inner == "-") {
+        diagnostic::error("cannot have `--mmap` with stdin")
+          .primary(*args.mmap)
+          .primary(args.path.source)
+          .throw_();
+      }
+      if (timeout) {
+        // TODO: Ideally, this diagnostic should point to `--timeout` instead of
+        // the timeout value.
+        diagnostic::error("cannot have both `--timeout` and `--mmap`")
+          .primary(timeout->source)
+          .primary(*args.mmap)
+          .throw_();
+      }
+    }
+    if (timeout) {
+      if (auto parsed = to<vast::duration>(timeout->inner)) {
+        args.timeout
+          = std::chrono::duration_cast<std::chrono::milliseconds>(*parsed);
+      } else {
+        diagnostic::error("invalid duration").primary(timeout->source).throw_();
+      }
+    }
+    args.path.inner = expand_path(args.path.inner);
+    return std::make_unique<file_loader>(std::move(args));
+  }
+
+  auto parse_saver(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_saver> override {
+    auto args = saver_args{};
+    auto parser = tql::argument_parser{"file", "https://vast.io/docs/"
+                                               "understand/connectors/file"};
+    parser.add(args.path, "<path>");
+    parser.add("--appending", args.appending);
+    parser.add("--real-time", args.real_time);
+    parser.add("--uds", args.uds);
+    parser.parse(p);
+    // TODO: Better argument validation
+    if (args.path.inner == "-") {
+      for (auto& other : {args.appending, args.real_time, args.uds}) {
+        if (other) {
+          diagnostic::error("these flags are mutually exclusive")
+            .primary(*other)
+            .primary(args.path.source)
+            .throw_();
+        }
+      }
+    }
+    args.path.inner = expand_path(args.path.inner);
+    return std::make_unique<file_saver>(std::move(args));
   }
 
 private:
@@ -460,23 +553,32 @@ private:
 namespace vast::plugins::stdin_ {
 namespace {
 
-class plugin : public virtual file::plugin {
+class plugin : public virtual loader_parser_plugin {
 public:
-  auto make_loader(std::span<std::string const> args,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<generator<chunk_ptr>> override {
-    std::vector<std::string> new_args = {"-"};
-    new_args.insert(new_args.end(), args.begin(), args.end());
-    return file::plugin::make_loader(new_args, ctrl);
-  }
-
-  auto default_parser([[maybe_unused]] std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"json", {}};
-  }
-
   auto name() const -> std::string override {
     return "stdin";
+  }
+
+  auto parse_loader(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_loader> override {
+    // TODO: Is there a better way to do aliases?
+    auto timeout = std::optional<located<std::string>>{};
+    auto parser = tql::argument_parser{"stdin", "https://vast.io/docs/"
+                                                "understand/connectors/stdin"};
+    parser.add("--timeout", timeout, "<duration>");
+    parser.parse(p);
+    auto args = file::loader_args{};
+    args.path = located<std::string>{"-", location::unknown};
+    // TODO: Find a way to un-copy-paste this (from `file`).
+    if (timeout) {
+      if (auto parsed = to<vast::duration>(timeout->inner)) {
+        args.timeout
+          = std::chrono::duration_cast<std::chrono::milliseconds>(*parsed);
+      } else {
+        diagnostic::error("invalid duration").primary(timeout->source).throw_();
+      }
+    }
+    return std::make_unique<vast::plugins::file::file_loader>(std::move(args));
   }
 };
 
@@ -486,19 +588,16 @@ public:
 namespace vast::plugins::stdout_ {
 namespace {
 
-class plugin : public virtual file::plugin {
+class plugin : public virtual saver_parser_plugin {
 public:
-  auto make_saver(std::span<std::string const> args, printer_info info,
-                  operator_control_plane& ctrl) const
-    -> caf::expected<saver> override {
-    std::vector<std::string> new_args = {"-"};
-    new_args.insert(new_args.end(), args.begin(), args.end());
-    return file::plugin::make_saver(new_args, std::move(info), ctrl);
-  }
-
-  auto default_printer([[maybe_unused]] std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"json", {}};
+  virtual auto parse_saver(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_saver> override {
+    auto parser = tql::argument_parser{name(), "https://vast.io/docs/"
+                                               "understand/connectors/stdout"};
+    parser.parse(p);
+    auto args = file::saver_args{};
+    args.path.inner = "-";
+    return std::make_unique<file::file_saver>(std::move(args));
   }
 
   auto name() const -> std::string override {

@@ -69,7 +69,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
         return caf::make_error(
           ec::invalid_query,
           fmt::format("{} failed to normalize and validate {}", *self, query));
-      auto transform = pipeline::parse(
+      auto transform = pipeline::internal_parse(
         fmt::format("where {}", fmt::to_string(expression{negation{*expr}})));
       if (!transform)
         return transform.error();

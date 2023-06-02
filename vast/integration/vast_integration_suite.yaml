@@ -53,6 +53,29 @@ fixtures:
       node.stop()
 
 tests:
+  Parse basic:
+    tags: [parser]
+    steps:
+      - command: exec --dump-ast " "
+      - command: exec --dump-ast "// comment"
+      - command: exec --dump-ast "#!/usr/bin/env tenzir"
+
+  Parse operators:
+    tags: [parser]
+    steps:
+      - command: exec --dump-ast "version"
+      - command: exec --dump-ast "version --dev"
+      - command: exec --dump-error "version --tev"
+      - command: exec --dump-error "version 42"
+      - command: exec --dump-error "from a/b/c.json read json"
+      - command: exec --dump-ast "from file a/b/c.json"
+      - command: exec --dump-ast "from file a/b/c.json read cef"
+      - command: exec --dump-ast "parse zeek-tsv"
+      - command: exec --dump-ast "head 42"
+      - command: exec --dump-ast "local remote local pass"
+      - command: exec --dump-ast "where :ip == 1.2.3.4"
+      - command: exec --dump-ast "to file xyz.json"
+
   Conn log counting:
     tags: [node, counting, zeek]
     steps:
@@ -758,7 +781,7 @@ tests:
         input: data/json/empty-record.json
       - command: exec 'from - read json | write csv to stdout'
         input: data/json/empty-record.json
-      - command: exec 'from - read json | write xsv to stdout'
+      - command: exec 'from - read json | write xsv " " ; NULL to stdout'
         input: data/json/empty-record.json
 
   Repeat:
@@ -788,7 +811,7 @@ tests:
         input: data/zeek/dns.log.gz
       - command: exec 'from stdin read zeek-tsv | head 300 | write csv to stdout'
         input: data/zeek/dns.log.gz
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --set-separator=";" --empty-field="empty" --unset-field="NULLVAL" to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --set-separator ";" --empty-field "empty" --unset-field "NULLVAL" to stdout'
         input: data/zeek/whitespace_start.log
       - command: exec 'from stdin read json | write zeek-tsv to stdout'
         input: data/json/snmp.log.json.gz

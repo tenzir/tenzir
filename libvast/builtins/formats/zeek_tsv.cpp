@@ -22,6 +22,7 @@
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/to_lines.hpp"
+#include "vast/tql/argument_parser.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
@@ -44,13 +45,6 @@ namespace {
 // The type name prefix to prepend to Zeek log names when translating them
 // into VAST types.
 constexpr std::string_view type_name_prefix = "zeek.";
-constexpr auto default_sep = '\x09';
-constexpr auto default_set_sep = ',';
-constexpr std::string_view default_empty_val = "(empty)";
-constexpr std::string_view default_unset_val = "-";
-constexpr auto set_separator_option = "set-separator";
-constexpr auto empty_field_option = "empty-field";
-constexpr auto unset_field_option = "unset-field";
 
 /// Constructs a polymorphic Zeek data parser.
 template <class Iterator, class Attribute>
@@ -526,218 +520,173 @@ struct zeek_printer {
 };
 } // namespace
 
-class plugin : public virtual parser_plugin, public virtual printer_plugin {
+auto parser_impl(generator<std::optional<std::string_view>> lines,
+                 operator_control_plane& ctrl) -> generator<table_slice> {
+  // Parse header.
+  auto it = lines.begin();
+  while (it != lines.end()) {
+    auto header_line = *it;
+    if (header_line and not header_line->empty())
+      // Encountered the first non-empty header line.
+      break;
+    co_yield {};
+    if (header_line and header_line->empty())
+      ++it;
+  }
+  if (it == lines.end()) {
+    // Empty input.
+    co_return;
+  }
+  auto metadata = zeek_metadata{};
+  auto parsed = metadata.parse_header(it, lines, ctrl);
+  if (not parsed) {
+    ctrl.abort(parsed.error());
+    VAST_ERROR("aborting Zeek metadata parsing");
+    co_return;
+  }
+  ++it;
+  auto closed = false;
+  auto b = table_slice_builder{metadata.temp_slice_schema};
+  std::vector<data> xs(metadata.fields.size());
+  for (; it != lines.end(); ++it) {
+    auto line = *it;
+    if (not line) {
+      co_yield {};
+      continue;
+    }
+    if (line->empty()) {
+      VAST_DEBUG("zeek-tsv parser ignored empty line");
+      continue;
+    }
+    if (line->starts_with("#close")) {
+      if (closed) {
+        ctrl.abort(caf::make_error(ec::syntax_error,
+                                   fmt::format("zeek-tsv parser failed: "
+                                               "#close without previous "
+                                               "#open header found")));
+        co_return;
+      }
+      closed = true;
+      co_yield {};
+      continue;
+    }
+    if (line->starts_with("#separator")) {
+      if (not closed) {
+        ctrl.abort(caf::make_error(
+          ec::syntax_error, fmt::format("zeek-tsv parser failed: "
+                                        "previous logs are still open")));
+        co_return;
+      }
+      closed = false;
+      auto finished = b.finish();
+      if (metadata.output_slice_schema)
+        finished = cast(std::move(finished), metadata.output_slice_schema);
+      co_yield std::move(finished);
+      auto parsed = metadata.parse_header(it, lines, ctrl);
+      if (not parsed) {
+        ctrl.abort(parsed.error());
+        co_return;
+      }
+      xs.resize(metadata.fields.size());
+      b = table_slice_builder{metadata.temp_slice_schema};
+      ++it;
+    }
+    if (closed) {
+      ctrl.abort(caf::make_error(ec::syntax_error,
+                                 fmt::format("zeek-tsv parser failed: "
+                                             "additional data after "
+                                             "#close should be "
+                                             "preceded by Zeek header")));
+      co_return;
+    }
+    auto values = detail::split((*it).value(), metadata.sep);
+    if (values.size() != metadata.fields.size()) {
+      ctrl.warn(caf::make_error(
+        ec::parse_error, fmt::format("zeek-tsv parser skipped line: "
+                                     "expected {} fields but got "
+                                     "{}",
+                                     metadata.fields.size(), values.size())));
+      continue;
+    }
+    for (auto i = size_t{0}; i < values.size(); ++i) {
+      auto value = values[i];
+      if (metadata.is_unset(value)) {
+        xs[i] = caf::none;
+      } else if (metadata.is_empty(value)) {
+        xs[i] = caf::get<record_type>(metadata.temp_slice_schema)
+                  .field(i)
+                  .type.construct();
+      } else if (!metadata.parsers[i](values[i], xs[i])) {
+        ctrl.warn(caf::make_error(ec::parse_error,
+                                  fmt::format("zeek-tsv parser skipped "
+                                              "line: failed"
+                                              "to parse value '{}'",
+                                              value)));
+        continue;
+      }
+    }
+    for (auto i = size_t{0}; i < xs.size(); ++i) {
+      auto&& x = xs[i];
+      if (not b.add(make_data_view(x))) {
+        ctrl.abort(
+          caf::make_error(ec::parse_error, fmt::format("zeek-tsv parser failed "
+                                                       "to finalize value '{}'",
+                                                       x)));
+        co_return;
+      }
+    }
+  }
+  auto finished = b.finish();
+  if (metadata.output_slice_schema)
+    finished = cast(std::move(finished), metadata.output_slice_schema);
+  co_yield std::move(finished);
+}
+
+class zeek_tsv_parser final : public plugin_parser {
 public:
+  auto name() const -> std::string override {
+    return "zeek-tsv";
+  }
+
   auto
-  make_parser([[maybe_unused]] std::vector<std::string> args,
-              generator<chunk_ptr> loader, operator_control_plane& ctrl) const
-    -> caf::expected<parser> override {
-    return std::invoke(
-      [](generator<std::optional<std::string_view>> lines,
-         operator_control_plane& ctrl) -> generator<table_slice> {
-        // Parse header.
-        auto it = lines.begin();
-        while (it != lines.end()) {
-          auto header_line = *it;
-          if (header_line and not header_line->empty())
-            // Encountered the first non-empty header line.
-            break;
-          co_yield {};
-          if (header_line and header_line->empty())
-            ++it;
-        }
-        if (it == lines.end()) {
-          // Empty input.
-          co_return;
-        }
-        auto metadata = zeek_metadata{};
-        auto parsed = metadata.parse_header(it, lines, ctrl);
-        if (not parsed) {
-          ctrl.abort(parsed.error());
-          VAST_ERROR("aborting Zeek metadata parsing");
-          co_return;
-        }
-        ++it;
-        auto closed = false;
-        auto b = table_slice_builder{metadata.temp_slice_schema};
-        std::vector<data> xs(metadata.fields.size());
-        for (; it != lines.end(); ++it) {
-          auto line = *it;
-          if (not line) {
-            co_yield {};
-            continue;
-          }
-          if (line->empty()) {
-            VAST_DEBUG("zeek-tsv parser ignored empty line");
-            continue;
-          }
-          if (line->starts_with("#close")) {
-            if (closed) {
-              ctrl.abort(caf::make_error(ec::syntax_error,
-                                         fmt::format("zeek-tsv parser failed: "
-                                                     "#close without previous "
-                                                     "#open header found")));
-              co_return;
-            }
-            closed = true;
-            co_yield {};
-            continue;
-          }
-          if (line->starts_with("#separator")) {
-            if (not closed) {
-              ctrl.abort(caf::make_error(
-                ec::syntax_error, fmt::format("zeek-tsv parser failed: "
-                                              "previous logs are still open")));
-              co_return;
-            }
-            closed = false;
-            auto finished = b.finish();
-            if (metadata.output_slice_schema)
-              finished
-                = cast(std::move(finished), metadata.output_slice_schema);
-            co_yield std::move(finished);
-            auto parsed = metadata.parse_header(it, lines, ctrl);
-            if (not parsed) {
-              ctrl.abort(parsed.error());
-              co_return;
-            }
-            xs.resize(metadata.fields.size());
-            b = table_slice_builder{metadata.temp_slice_schema};
-            ++it;
-          }
-          if (closed) {
-            ctrl.abort(caf::make_error(ec::syntax_error,
-                                       fmt::format("zeek-tsv parser failed: "
-                                                   "additional data after "
-                                                   "#close should be "
-                                                   "preceded by Zeek header")));
-            co_return;
-          }
-          auto values = detail::split((*it).value(), metadata.sep);
-          if (values.size() != metadata.fields.size()) {
-            ctrl.warn(caf::make_error(
-              ec::parse_error,
-              fmt::format("zeek-tsv parser skipped line: "
-                          "expected {} fields but got "
-                          "{}",
-                          metadata.fields.size(), values.size())));
-            continue;
-          }
-          for (auto i = size_t{0}; i < values.size(); ++i) {
-            auto value = values[i];
-            if (metadata.is_unset(value)) {
-              xs[i] = caf::none;
-            } else if (metadata.is_empty(value)) {
-              xs[i] = caf::get<record_type>(metadata.temp_slice_schema)
-                        .field(i)
-                        .type.construct();
-            } else if (!metadata.parsers[i](values[i], xs[i])) {
-              ctrl.warn(caf::make_error(ec::parse_error,
-                                        fmt::format("zeek-tsv parser skipped "
-                                                    "line: failed"
-                                                    "to parse value '{}'",
-                                                    value)));
-              continue;
-            }
-          }
-          for (auto i = size_t{0}; i < xs.size(); ++i) {
-            auto&& x = xs[i];
-            if (not b.add(make_data_view(x))) {
-              ctrl.abort(caf::make_error(ec::parse_error,
-                                         fmt::format("zeek-tsv parser failed "
-                                                     "to finalize value '{}'",
-                                                     x)));
-              co_return;
-            }
-          }
-        }
-        auto finished = b.finish();
-        if (metadata.output_slice_schema)
-          finished = cast(std::move(finished), metadata.output_slice_schema);
-        co_yield std::move(finished);
-      },
-      to_lines(std::move(loader)), ctrl);
+  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> std::optional<generator<table_slice>> override {
+    return parser_impl(to_lines(std::move(input)), ctrl);
   }
 
-  auto default_loader([[maybe_unused]] std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"stdin", {}};
+  friend auto inspect(auto&, zeek_tsv_parser&) -> bool {
+    return true;
+  }
+};
+
+class zeek_tsv_printer final : public plugin_printer {
+public:
+  struct args {
+    std::optional<char> set_sep;
+    std::optional<std::string> empty_field;
+    std::optional<std::string> unset_field;
+    bool disable_timestamp_tags;
+
+    friend auto inspect(auto& f, args& x) -> bool {
+      return f.object(x).fields(
+        f.field("set_sep", x.set_sep), f.field("empty_field", x.empty_field),
+        f.field("unset_field", x.unset_field),
+        f.field("disable_timestamp_tags", x.disable_timestamp_tags));
+    }
+  };
+
+  zeek_tsv_printer() = default;
+
+  explicit zeek_tsv_printer(args a) : args_{std::move(a)} {
   }
 
-  auto make_printer(std::span<std::string const> args, type input_schema,
-                    operator_control_plane&) const
-    -> caf::expected<printer> override {
-    auto set_sep = default_set_sep;
-    auto empty_field = default_empty_val;
-    auto unset_field = default_unset_val;
-    auto options = option_set_parser{{{set_separator_option, 's'},
-                                      {empty_field_option, 'e'},
-                                      {unset_field_option, 'u'}}};
-    auto parsed_options = std::unordered_map<std::string, data>{};
-    for (std::string_view arg : args) {
-      const auto* f = arg.begin();
-      const auto* const l = arg.end();
-      options(f, l, parsed_options);
-    }
-    if (parsed_options.contains(set_separator_option)) {
-      auto* set_sep_option_val
-        = caf::get_if<std::string>(&parsed_options[set_separator_option]);
-      if (not set_sep_option_val)
-        return caf::make_error(ec::invalid_argument,
-                               "invalid set separator argument");
-      auto parsed_set_sep = to_xsv_sep(*set_sep_option_val);
-      if (not parsed_set_sep) {
-        return std::move(parsed_set_sep.error());
-      }
-      if (*parsed_set_sep == '\t') {
-        return caf::make_error(ec::invalid_argument,
-                               "separator and set separator must be "
-                               "different");
-      }
-      set_sep = *parsed_set_sep;
-    }
-    if (parsed_options.contains(empty_field_option)) {
-      auto* empty_field_option_val
-        = caf::get_if<std::string>(&parsed_options[empty_field_option]);
-      if (not empty_field_option_val)
-        return caf::make_error(ec::invalid_argument,
-                               "invalid set separator argument");
-      empty_field = *empty_field_option_val;
-      auto conflict
-        = std::any_of(empty_field.begin(), empty_field.end(), [&](auto ch) {
-            return ch == default_sep or ch == set_sep;
-          });
-      if (conflict) {
-        return caf::make_error(ec::invalid_argument, "empty field must not "
-                                                     "contain separator or set "
-                                                     "separator");
-      }
-    }
-    if (parsed_options.contains(unset_field_option)) {
-      auto* unset_field_option_val
-        = caf::get_if<std::string>(&parsed_options[unset_field_option]);
-      if (not unset_field_option_val)
-        return caf::make_error(ec::invalid_argument,
-                               "invalid set separator argument");
-      unset_field = *unset_field_option_val;
-      auto conflict
-        = std::any_of(unset_field.begin(), unset_field.end(), [&](auto ch) {
-            return ch == default_sep or ch == set_sep;
-          });
-      if (conflict) {
-        return caf::make_error(ec::invalid_argument, "unset field must not "
-                                                     "contain separator or set "
-                                                     "separator");
-      }
-      if (empty_field == unset_field) {
-        return caf::make_error(ec::invalid_argument,
-                               "unset field must not be equal to empty "
-                               "field");
-      }
-    }
-    auto printer = zeek_printer{set_sep, empty_field, unset_field,
-                                disable_timestamp_tags_};
-    return to_printer(
+  auto instantiate(type input_schema, operator_control_plane&) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    auto printer = zeek_printer{args_.set_sep.value_or(','),
+                                args_.empty_field.value_or("(empty)"),
+                                args_.unset_field.value_or("-"),
+                                args_.disable_timestamp_tags};
+    return printer_instance::make(
       [printer = std::move(printer), input_schema = std::move(input_schema)](
         table_slice slice) -> generator<chunk_ptr> {
         auto input_type = caf::get<record_type>(input_schema);
@@ -764,26 +713,74 @@ public:
       });
   }
 
-  auto default_saver(std::span<std::string const>) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"directory", {"."}};
+  auto allows_joining() const -> bool override {
+    return false;
   }
 
-  auto printer_allows_joining() const -> bool override {
-    return false;
-  };
+  auto name() const -> std::string override {
+    return "zeek-tsv";
+  }
+
+  friend auto inspect(auto& f, zeek_tsv_printer& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  args args_;
+};
+
+class plugin final : public virtual parser_plugin<zeek_tsv_parser>,
+                     public virtual printer_plugin<zeek_tsv_printer> {
+public:
+  auto name() const -> std::string override {
+    // TODO
+    return parser_plugin::name();
+  }
+
+  auto parse_parser(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    tql::argument_parser{"zeek-tsv",
+                         "https://vast.io/docs/understand/formats/zeek-tsv"}
+      .parse(p);
+    return std::make_unique<zeek_tsv_parser>();
+  }
+
+  auto parse_printer(tql::parser_interface& p) const
+    -> std::unique_ptr<plugin_printer> override {
+    auto args = zeek_tsv_printer::args{};
+    auto set_separator = std::optional<located<std::string>>{};
+    auto parser = tql::argument_parser{
+      "zeek-tsv", "https://vast.io/docs/understand/formats/zeek-tsv"};
+    parser.add("--set-separator", set_separator, "<sep>");
+    parser.add("--empty-field", args.empty_field, "<str>");
+    parser.add("--unset-field", args.unset_field, "<str>");
+    parser.parse(p);
+    if (set_separator) {
+      auto converted = to_xsv_sep(set_separator->inner);
+      if (!converted) {
+        diagnostic::error("`{}` is not a valid separator", set_separator->inner)
+          .primary(set_separator->source)
+          .note(fmt::to_string(converted.error()))
+          .throw_();
+      }
+      if (*converted == '\t') {
+        diagnostic::error("the `\\t` separator is not allowed here",
+                          set_separator->inner)
+          .primary(set_separator->source)
+          .throw_();
+      }
+      args.set_sep = *converted;
+    }
+    args.disable_timestamp_tags = disable_timestamp_tags_;
+    return std::make_unique<zeek_tsv_printer>(std::move(args));
+  }
 
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
     disable_timestamp_tags_
       = get_or(global_config, "vast.export.zeek.disable-timestamp-tags",
                disable_timestamp_tags_);
-
     return caf::none;
-  }
-
-  auto name() const -> std::string override {
-    return "zeek-tsv";
   }
 
 private:

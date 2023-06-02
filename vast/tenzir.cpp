@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/application.hpp"
+#include "vast/concept/convertible/to.hpp"
+#include "vast/data.hpp"
 #include "vast/default_configuration.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/detail/signal_handlers.hpp"
@@ -19,15 +21,18 @@
 #include "vast/plugin.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/signal_reflector.hpp"
+#include "vast/tql/parser.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>
+#include <caf/fwd.hpp>
 
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 
 int main(int argc, char** argv) {
   using namespace vast;
@@ -166,6 +171,26 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   modules::init(*module, std::move(taxonomies->concepts));
+  // Set up pipeline aliases.
+  if (auto aliases = caf::get_if<caf::settings>(&cfg, "vast.operators")) {
+    auto r = to<record>(*aliases);
+    if (!r) {
+      VAST_ERROR("could not load `vast.operators`: invalid record");
+      return EXIT_FAILURE;
+    }
+    auto map = std::unordered_map<std::string, std::string>{};
+    for (auto&& [name, value] : *r) {
+      auto* definition = caf::get_if<std::string>(&value);
+      if (!definition) {
+        VAST_ERROR("could not load `vast.operators`: alias `{}` does not "
+                   "resolve to a string",
+                   name);
+        return EXIT_FAILURE;
+      }
+      map.emplace(std::move(name), *definition);
+    }
+    tql::set_operator_aliases(std::move(map));
+  }
   // Lastly, initialize the actor system context, and execute the given
   // command. From this point onwards, do not execute code that is not
   // thread-safe.

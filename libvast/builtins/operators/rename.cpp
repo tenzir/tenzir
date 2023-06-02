@@ -75,6 +75,8 @@ struct state_t {
 class rename_operator final
   : public schematic_operator<rename_operator, state_t> {
 public:
+  rename_operator() = default;
+
   rename_operator(configuration config) : config_{std::move(config)} {
     // nop
   }
@@ -152,6 +154,14 @@ public:
     return result;
   }
 
+  auto name() const -> std::string override {
+    return "rename";
+  }
+
+  friend auto inspect(auto& f, rename_operator& x) -> bool {
+    return f.apply(x.config_);
+  }
+
 private:
   /// Step-specific configuration, including the schema name mapping.
   configuration config_ = {};
@@ -159,10 +169,11 @@ private:
 
 // -- plugin ------------------------------------------------------------------
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<rename_operator> {
 public:
-  caf::error initialize(const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize(const record& plugin_config,
+                  [[maybe_unused]] const record& global_config)
+    -> caf::error override {
     // We don't use any plugin-specific configuration under
     // vast.plugins.rename, so nothing is needed here.
     if (plugin_config.empty()) {
@@ -172,12 +183,6 @@ public:
                                                       "configuration under "
                                                       "vast.plugins.rename");
   }
-
-  /// The name is how the pipeline operator is addressed in a transform
-  /// definition.
-  [[nodiscard]] std::string name() const override {
-    return "rename";
-  };
 
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {

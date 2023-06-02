@@ -47,6 +47,10 @@ constexpr auto operator_name(enum mode mode) -> std::string_view {
 struct configuration {
   std::vector<std::tuple<std::string, caf::optional<operand>>>
     extractor_to_operand = {};
+
+  friend auto inspect(auto& f, configuration& x) -> bool {
+    return f.apply(x.extractor_to_operand);
+  }
 };
 
 auto make_drop() {
@@ -116,9 +120,15 @@ template <mode Mode>
 class put_extend_operator final
   : public crtp_operator<put_extend_operator<Mode>> {
 public:
+  put_extend_operator() = default;
+
   explicit put_extend_operator(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
+  }
+
+  auto name() const -> std::string override {
+    return std::string{operator_name(Mode)};
   }
 
   auto operator()(const table_slice& slice, operator_control_plane& ctrl) const
@@ -219,24 +229,18 @@ public:
     return result;
   }
 
+  friend auto inspect(auto& f, put_extend_operator& x) -> bool {
+    return f.apply(x.config_);
+  }
+
 private:
   /// The underlying configuration of the transformation.
   configuration config_ = {};
 };
 
 template <mode Mode>
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<put_extend_operator<Mode>> {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  [[nodiscard]] auto name() const -> std::string override {
-    return std::string{operator_name(Mode)};
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

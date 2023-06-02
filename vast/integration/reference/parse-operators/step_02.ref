@@ -1,0 +1,17 @@
+error: unknown option `--tev`
+ --> <input>:1:9
+  |
+1 | version --tev
+  |         ^^^^^ 
+  |
+  = usage: version [--dev]
+  = docs: https://vast.io/docs/understand/operators/sources/version
+-----
+[1m[31merror[39m: unknown option `--tev`[0m
+ [1m[34m-->[0m <input>:1:9
+  [1m[34m|[0m
+[1m[34m1 |[0m version --tev
+  [1m[34m| [31m        ^^^^^ [0m
+  [1m[34m|[0m
+  [1m[34m=[39m usage:[0m version [--dev]
+  [1m[34m=[39m docs:[0m https://vast.io/docs/understand/operators/sources/version

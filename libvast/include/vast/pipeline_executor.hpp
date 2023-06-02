@@ -4,6 +4,7 @@
 
 #include "vast/actors.hpp"
 #include "vast/pipeline.hpp"
+#include "vast/tql/diagnostics.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -18,17 +19,20 @@ struct pipeline_executor_state {
   /// The currently running pipeline.
   std::optional<pipeline> pipe;
 
-  /// Number of execution nodes still alive. If this count goes to zero, we can
-  /// finish the *rp_complete* promise that tracks whether the request is
+  // TODO
+  std::unique_ptr<diagnostic_handler> diag;
+
+  /// Number of execution nodes still alive. If this count goes to zero, we
+  /// can finish the *rp_complete* promise that tracks whether the request is
   /// completed.
   size_t nodes_alive{0};
 
   /// A response promise responsible for delivering the result of *run*,
   caf::typed_response_promise<void> rp_complete;
 
-  /// Temporary storage for the execution nodes, grouped by their host (local or
-  /// remote). Used to transfer information between *spawn_execution_nodes* and
-  /// *continue_if_done_spawning*.
+  /// Temporary storage for the execution nodes, grouped by their host (local
+  /// or remote). Used to transfer information between *spawn_execution_nodes*
+  /// and *continue_if_done_spawning*.
   std::vector<std::vector<caf::actor>> hosts;
 
   // A mapping of execution node address to a string describing the execution
@@ -41,7 +45,8 @@ struct pipeline_executor_state {
   /// Spawns a set of execution nodes, creating one execution node actor per
   /// operator. The operators must form a valid pipeline. The *remote* node
   /// actor may be nullptr if all operators' locations are local or anywhere.
-  void spawn_execution_nodes(node_actor remote, std::vector<operator_ptr> ops);
+  void spawn_execution_nodes(node_actor remote, std::vector<operator_ptr> ops,
+                             receiver_actor<diagnostic> diag);
 
   /// A continuation of *spawn_execution_nodes* that must be called after all
   /// remote execution nodes were spawned.
@@ -59,6 +64,7 @@ struct pipeline_executor_state {
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline p) -> pipeline_executor_actor::behavior_type;
+  pipeline p, std::unique_ptr<diagnostic_handler> diag)
+  -> pipeline_executor_actor::behavior_type;
 
 } // namespace vast

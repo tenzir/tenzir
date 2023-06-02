@@ -165,14 +165,22 @@ private:
 
 class sort_operator final : public crtp_operator<sort_operator> {
 public:
-  sort_operator(std::string key, arrow::compute::ArraySortOptions sort_options)
-    : key_{std::move(key)}, sort_options_{std::move(sort_options)} {
+  sort_operator() = default;
+
+  sort_operator(std::string key, bool descending, bool nulls_first)
+    : key_{std::move(key)}, descending_{descending}, nulls_first_{nulls_first} {
   }
 
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto state = sort_state{key_, sort_options_};
+    auto options = arrow::compute::ArraySortOptions::Defaults();
+    options.order = descending_ ? arrow::compute::SortOrder::Descending
+                                : arrow::compute::SortOrder::Ascending;
+    options.null_placement = nulls_first_
+                               ? arrow::compute::NullPlacement::AtStart
+                               : arrow::compute::NullPlacement::AtEnd;
+    auto state = sort_state{key_, options};
     for (auto&& slice : input) {
       co_yield state.try_add(std::move(slice), ctrl);
     }
@@ -181,33 +189,23 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format(
-      "sort {}{}{}", key_,
-      sort_options_.order == arrow::compute::SortOrder::Ascending ? ""
-                                                                  : " desc",
-      sort_options_.null_placement == arrow::compute::NullPlacement::AtEnd
-        ? ""
-        : " nulls-first",
-      key_);
+  auto name() const -> std::string override {
+    return "sort";
+  }
+
+  friend auto inspect(auto& f, sort_operator& x) -> bool {
+    return f.object(x).fields(f.field("descending", x.descending_),
+                              f.field("nulls_first", x.nulls_first_));
   }
 
 private:
   std::string key_ = {};
-  arrow::compute::ArraySortOptions sort_options_
-    = arrow::compute::ArraySortOptions::Defaults();
+  bool descending_{};
+  bool nulls_first_{};
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<sort_operator> {
 public:
-  auto initialize(const record&, const record&) -> caf::error override {
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "sort";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
@@ -215,23 +213,21 @@ public:
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     auto key = std::string{};
-    auto sort_options = arrow::compute::ArraySortOptions::Defaults();
     const auto p
       = required_ws_or_comment >> extractor
         >> -(required_ws_or_comment >> (str{"asc"} | str{"desc"}))
               .then([&](std::string sort_order) {
-                return sort_order.empty() || sort_order == "asc"
-                         ? arrow::compute::SortOrder::Ascending
-                         : arrow::compute::SortOrder::Descending;
+                return !(sort_order.empty() || sort_order == "asc");
               })
         >> -(required_ws_or_comment >> (str{"nulls-first"} | str{"nulls-last"}))
               .then([&](std::string null_placement) {
-                return null_placement.empty() || null_placement == "nulls-last"
-                         ? arrow::compute::NullPlacement::AtEnd
-                         : arrow::compute::NullPlacement::AtStart;
+                return !(null_placement.empty()
+                         || null_placement == "nulls-last");
               })
         >> optional_ws_or_comment >> end_of_pipeline_operator;
-    if (!p(f, l, key, sort_options.order, sort_options.null_placement)) {
+    bool descending = false;
+    bool nulls_first = false;
+    if (!p(f, l, key, descending, nulls_first)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -241,7 +237,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<sort_operator>(std::move(key), std::move(sort_options)),
+      std::make_unique<sort_operator>(std::move(key), descending, nulls_first),
     };
   }
 };

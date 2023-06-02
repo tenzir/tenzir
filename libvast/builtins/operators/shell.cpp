@@ -106,6 +106,8 @@ private:
 
 class shell_operator final : public crtp_operator<shell_operator> {
 public:
+  shell_operator() = default;
+
   explicit shell_operator(std::string command) : command_{std::move(command)} {
   }
 
@@ -218,23 +220,20 @@ public:
     return true;
   }
 
+  auto name() const -> std::string override {
+    return "shell";
+  }
+
+  friend auto inspect(auto& f, shell_operator& x) -> bool {
+    return f.apply(x.command_);
+  }
+
 private:
   std::string command_;
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<shell_operator> {
 public:
-  // plugin API
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  [[nodiscard]] auto name() const -> std::string override {
-    return "shell";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,

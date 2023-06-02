@@ -32,7 +32,7 @@ class plugin final : public virtual language_plugin {
     if (auto yaml = from_yaml(query)) {
       auto parsed = parse_rule(*yaml);
       if (parsed) {
-        return pipeline::parse(fmt::format("where {}", *parsed));
+        return pipeline::internal_parse(fmt::format("where {}", *parsed));
       }
       return std::move(parsed.error());
     } else {
