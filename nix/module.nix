@@ -105,8 +105,7 @@ in {
       wantedBy = ["multi-user.target"];
       serviceConfig = {
         Type = "notify";
-        ExecStart = "${cfg.package}/bin/vast --config=${configFile} start";
-        ExecStop = "${cfg.package}/bin/vast --config=${configFile} stop";
+        ExecStart = "${cfg.package}/bin/tenzird --config=${configFile}";
         DynamicUser = true;
         NoNewPrivileges = true;
         PIDFile = "${cfg.settings.vast.db-directory}/pid.lock";

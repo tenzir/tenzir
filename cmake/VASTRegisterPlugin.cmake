@@ -556,7 +556,7 @@ function (VASTRegisterPlugin)
 
   if (VAST_ENABLE_STATIC_PLUGINS)
     # Link our static library against the vast binary directly.
-    VASTTargetLinkWholeArchive(vast PRIVATE ${PLUGIN_TARGET}-static)
+    VASTTargetLinkWholeArchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
   else ()
     # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
     # depending on the plugin type. This must not be user-configurable for
@@ -589,8 +589,8 @@ function (VASTRegisterPlugin)
       COMPONENT Runtime)
 
     # Ensure that VAST only runs after all dynamic plugin libraries are built.
-    if (TARGET vast)
-      add_dependencies(vast ${PLUGIN_TARGET}-shared)
+    if (TARGET tenzir)
+      add_dependencies(tenzir ${PLUGIN_TARGET}-shared)
     endif ()
   endif ()
 
@@ -696,7 +696,7 @@ function (VASTRegisterPlugin)
   endif ()
 
   # Setup integration tests.
-  if (TARGET vast::vast
+  if (TARGET vast::tenzir
       AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
     if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
       set(integration_test_path "${CMAKE_SOURCE_DIR}/vast/integration")
@@ -704,7 +704,7 @@ function (VASTRegisterPlugin)
       if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
         set(integration_test_path "${CMAKE_INSTALL_DATADIR}/vast/integration")
       else ()
-        get_target_property(integration_test_path vast::vast LOCATION)
+        get_target_property(integration_test_path vast::tenzir LOCATION)
         get_filename_component(integration_test_path "${integration_test_path}"
                                DIRECTORY)
         get_filename_component(integration_test_path "${integration_test_path}"
@@ -726,7 +726,7 @@ function (VASTRegisterPlugin)
         fi
         base_dir=\"${integration_test_path}\"
         env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-        export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::vast>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::vast>>\"
+        export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>ctl\"
         update=\"$<IF:$<BOOL:${VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
         set -e
         if [ ! -f \"$env_dir/bin/activate\" ]; then

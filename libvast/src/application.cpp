@@ -21,23 +21,96 @@
 #include "vast/start_command.hpp"
 #include "vast/writer_command.hpp"
 
+#include <fmt/color.h>
+
 namespace vast {
 
 namespace {
 
-command::opts_builder add_index_opts(command::opts_builder ob) {
-  return std::move(ob)
-    .add<int64_t>("max-partition-size", "maximum number of events in a "
-                                        "partition")
-    .add<duration>("active-partition-timeout",
-                   "timespan after which an active partition is "
-                   "forcibly flushed")
-    .add<int64_t>("max-resident-partitions", "maximum number of in-memory "
-                                             "partitions")
-    .add<int64_t>("max-taste-partitions", "maximum number of immediately "
-                                          "scheduled partitions")
-    .add<int64_t>("max-queries,q", "maximum number of "
-                                   "concurrent queries");
+void add_root_opts(command& cmd) {
+  const auto binary = detail::objectpath();
+  auto schema_paths = std::vector<std::filesystem::path>{"/etc/vast/schema"};
+  if (binary) {
+    schema_paths.push_back(binary->parent_path().parent_path() / "share"
+                           / "vast" / "schema");
+  }
+  const auto module_desc
+    = fmt::format("list of directories to look for schema files ([{}])",
+                  fmt::join(schema_paths, ", "));
+  cmd.options.add<std::string>("?vast", "config",
+                               "path to a configuration file");
+  cmd.options.add<bool>(
+    "?vast", "bare-mode",
+    "disable user and system configuration, schema and plugin "
+    "directories lookup and static and dynamic plugin "
+    "autoloading (this may only be used on the command line)");
+  cmd.options.add<bool>("?vast", "detach-components",
+                        "create dedicated threads for some "
+                        "components");
+  cmd.options.add<bool>(
+    "?vast", "allow-unsafe-pipelines",
+    "allow unsafe location overrides for pipelines with the "
+    "'local' and 'remote' keywords, e.g., remotely reading from "
+    "a file");
+  cmd.options.add<std::string>("?vast", "console-verbosity",
+                               "output verbosity level on the "
+                               "console");
+  cmd.options.add<std::string>("?vast", "console-format",
+                               "format string for logging to the "
+                               "console");
+  cmd.options.add<caf::config_value::list>("?vast", "schema-dirs", module_desc);
+  cmd.options.add<std::string>("?vast", "db-directory,d",
+                               "directory for persistent state");
+  cmd.options.add<std::string>("?vast", "log-file", "log filename");
+  cmd.options.add<std::string>("?vast", "client-log-file",
+                               "client log file (default: "
+                               "disabled)");
+  cmd.options.add<int64_t>("?vast", "log-queue-size",
+                           "the queue size for the logger");
+  cmd.options.add<std::string>("?vast", "endpoint,e", "node endpoint");
+  cmd.options.add<std::string>("?vast", "node-id,i",
+                               "the unique ID of this node");
+  cmd.options.add<bool>("?vast", "node,N",
+                        "spawn a node instead of connecting to one");
+  cmd.options.add<bool>("?vast", "enable-metrics",
+                        "keep track of performance metrics");
+  cmd.options.add<caf::config_value::list>("?vast", "plugin-dirs",
+                                           "additional directories "
+                                           "to load plugins from");
+  cmd.options.add<caf::config_value::list>(
+    "?vast", "plugins",
+    "plugins to load at startup; the special values 'bundled' "
+    "and 'all' enable autoloading of bundled and all plugins "
+    "respectively.");
+  cmd.options.add<std::string>("?vast", "aging-frequency",
+                               "interval between two aging "
+                               "cycles");
+  cmd.options.add<std::string>("?vast", "aging-query",
+                               "query for aging out obsolete data");
+  cmd.options.add<std::string>("?vast", "store-backend",
+                               "store plugin to use for imported "
+                               "data");
+  cmd.options.add<std::string>("?vast", "connection-timeout",
+                               "the timeout for connecting to "
+                               "a VAST server (default: 5m)");
+  cmd.options.add<std::string>("?vast", "connection-retry-delay",
+                               "the delay between vast node connection attempts"
+                               "a VAST server (default: 3s)");
+  cmd.options.add<int64_t>("?vast", "max-partition-size",
+                           "maximum number of events in a "
+                           "partition");
+  cmd.options.add<duration>("?vast", "active-partition-timeout",
+                            "timespan after which an active partition is "
+                            "forcibly flushed");
+  cmd.options.add<int64_t>("?vast", "max-resident-partitions",
+                           "maximum number of in-memory "
+                           "partitions");
+  cmd.options.add<int64_t>("?vast", "max-taste-partitions",
+                           "maximum number of immediately "
+                           "scheduled partitions");
+  cmd.options.add<int64_t>("?vast", "max-queries,q",
+                           "maximum number of "
+                           "concurrent queries");
 }
 
 auto make_count_command() {
@@ -176,66 +249,11 @@ auto make_command_factory() {
   return result;
 } // namespace
 
-auto make_root_command(std::string_view path) {
+auto make_root_command(std::string_view name) {
   using namespace std::string_literals;
-  // We're only interested in the application name, not in its path. For
-  // example, argv[0] might contain "./build/release/bin/vast" and we are only
-  // interested in "vast".
-  path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
-  const auto binary = detail::objectpath();
-  auto module_desc
-    = "list of directories to look for schema files ([/etc/vast/schema"s;
-  if (binary) {
-    const auto relative_module_dir
-      = binary->parent_path().parent_path() / "share" / "vast" / "schema";
-    module_desc += ", " + relative_module_dir.string();
-  }
-  module_desc += "])";
-  auto ob
-    = opts("?vast")
-        .add<std::string>("config", "path to a configuration file")
-        .add<bool>("bare-mode",
-                   "disable user and system configuration, schema and plugin "
-                   "directories lookup and static and dynamic plugin "
-                   "autoloading (this may only be used on the command line)")
-        .add<bool>("detach-components", "create dedicated threads for some "
-                                        "components")
-        .add<bool>("allow-unsafe-pipelines",
-                   "allow unsafe location overrides for pipelines with the "
-                   "'local' and 'remote' keywords, e.g., remotely reading from "
-                   "a file")
-        .add<std::string>("console-verbosity", "output verbosity level on the "
-                                               "console")
-        .add<std::string>("console-format", "format string for logging to the "
-                                            "console")
-        .add<caf::config_value::list>("schema-dirs", module_desc.c_str())
-        .add<std::string>("db-directory,d", "directory for persistent state")
-        .add<std::string>("log-file", "log filename")
-        .add<std::string>("client-log-file", "client log file (default: "
-                                             "disabled)")
-        .add<int64_t>("log-queue-size", "the queue size for the logger")
-        .add<std::string>("endpoint,e", "node endpoint")
-        .add<std::string>("node-id,i", "the unique ID of this node")
-        .add<bool>("node,N", "spawn a node instead of connecting to one")
-        .add<bool>("enable-metrics", "keep track of performance metrics")
-        .add<caf::config_value::list>("plugin-dirs", "additional directories "
-                                                     "to load plugins from")
-        .add<caf::config_value::list>(
-          "plugins", "plugins to load at startup; the special values 'bundled' "
-                     "and 'all' enable autoloading of bundled and all plugins "
-                     "respectively.")
-        .add<std::string>("aging-frequency", "interval between two aging "
-                                             "cycles")
-        .add<std::string>("aging-query", "query for aging out obsolete data")
-        .add<std::string>("store-backend", "store plugin to use for imported "
-                                           "data")
-        .add<std::string>("connection-timeout", "the timeout for connecting to "
-                                                "a VAST server (default: 5m)")
-        .add<std::string>("connection-retry-delay",
-                          "the delay between vast node connection attempts"
-                          "a VAST server (default: 3s)");
-  ob = add_index_opts(std::move(ob));
-  auto root = std::make_unique<command>(path, "", std::move(ob));
+  auto ob = opts("?vast");
+  auto root = std::make_unique<command>(name, "", std::move(ob));
+  add_root_opts(*root);
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
@@ -301,20 +319,89 @@ std::unique_ptr<command> make_import_command() {
 
 std::pair<std::unique_ptr<command>, command::factory>
 make_application(std::string_view path) {
-  auto root = make_root_command(path);
+  // We're only interested in the application name, not in its path. For
+  // example, argv[0] might contain "./build/release/bin/vast" and we are only
+  // interested in "vast".
+  const auto last_slash = path.find_last_of('/');
+  const auto name
+    = last_slash == std::string_view::npos ? path : path.substr(last_slash + 1);
+  if (name == "tenzird") {
+    auto cmd = make_start_command();
+    cmd->name = "";
+    add_root_opts(*cmd);
+    return {
+      std::move(cmd),
+      command::factory{
+        {"", start_command},
+      },
+    };
+  }
+  if (name == "tenzir") {
+    const auto* exec = plugins::find<command_plugin>("exec");
+    VAST_ASSERT(exec);
+    auto [cmd, cmd_factory] = exec->make_command();
+    VAST_ASSERT(cmd);
+    add_root_opts(*cmd);
+    VAST_ASSERT(cmd_factory.contains("exec"));
+    cmd->name = "";
+    return {
+      std::move(cmd),
+      command::factory{
+        {"", cmd_factory["exec"]},
+        {"exec", cmd_factory["exec"]},
+      },
+    };
+  }
+  if (name == "vast") {
+    fmt::print(stderr, fmt::emphasis::bold, "\nVAST is now called Tenzir.\n\n");
+    fmt::print(stderr, "For more information, see the announcement at ");
+    fmt::print(stderr, fmt::emphasis::underline,
+               "https://docs.tenzir.com/blog/vast-to-tenzir");
+    fmt::print(stderr, ".\n\ntl;dr:\n- Use ");
+    fmt::print(stderr, fmt::emphasis::bold, "tenzird");
+    fmt::print(stderr, " instead of ");
+    fmt::print(stderr, fmt::emphasis::bold, "vast start");
+    fmt::print(stderr, "\n- Use ");
+    fmt::print(stderr, fmt::emphasis::bold, "tenzir");
+    fmt::print(stderr, " instead of ");
+    fmt::print(stderr, fmt::emphasis::bold, "vast exec");
+    fmt::print(stderr, "\n- Use ");
+    fmt::print(stderr, fmt::emphasis::bold, "tenzirctl");
+    fmt::print(stderr,
+               " for all other commands\n- Move your configuration from ");
+    fmt::print(stderr, fmt::emphasis::bold, "<prefix>/etc/vast/vast.yaml");
+    fmt::print(stderr, " to ");
+    fmt::print(stderr, fmt::emphasis::bold, "<prefix>/etc/tenzir/tenzir.yaml");
+    fmt::print(stderr, "\n- Move your configuration from ");
+    fmt::print(stderr, fmt::emphasis::bold, "$XDG_CONFIG_HOME/vast/vast.yaml");
+    fmt::print(stderr, " to ");
+    fmt::print(stderr, fmt::emphasis::bold,
+               "$XDG_CONFIG_HOME/tenzir/tenzir.yaml");
+    fmt::print(stderr, "\n- In your configuration, replace ");
+    fmt::print(stderr, fmt::emphasis::bold, "vast:");
+    fmt::print(stderr, " with ");
+    fmt::print(stderr, fmt::emphasis::bold, "tenzir:");
+    fmt::print(stderr, "\n- Prefix environment variables with ");
+    fmt::print(stderr, fmt::emphasis::bold, "TENZIR_");
+    fmt::print(stderr, " instead of ");
+    fmt::print(stderr, fmt::emphasis::bold, "VAST_");
+    fmt::print(stderr, "\n\n");
+  }
+  auto root = make_root_command(name);
   auto root_factory = make_command_factory();
   // Add additional commands from plugins.
-  for (auto& plugin : plugins::get()) {
-    if (auto* cp = plugin.as<command_plugin>()) {
-      auto&& [cmd, cmd_factory] = cp->make_command();
-      if (!cmd || cmd_factory.empty())
-        continue;
-      root->add_subcommand(std::move(cmd));
-      root_factory.insert(std::make_move_iterator(cmd_factory.begin()),
-                          std::make_move_iterator(cmd_factory.end()));
-    }
+  for (const auto* plugin : plugins::get<command_plugin>()) {
+    auto [cmd, cmd_factory] = plugin->make_command();
+    if (!cmd || cmd_factory.empty())
+      continue;
+    root->add_subcommand(std::move(cmd));
+    root_factory.insert(std::make_move_iterator(cmd_factory.begin()),
+                        std::make_move_iterator(cmd_factory.end()));
   }
-  return {std::move(root), std::move(root_factory)};
+  return {
+    std::move(root),
+    std::move(root_factory),
+  };
 }
 
 void render_error(const command& root, const caf::error& err,

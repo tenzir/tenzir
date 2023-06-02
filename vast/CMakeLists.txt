@@ -1,25 +1,37 @@
-option(VAST_ENABLE_VAST "Build the standalone vast binary"
-       "${VAST_IS_NOT_SUBPROJECT}")
-add_feature_info("VAST_ENABLE_VAST" VAST_ENABLE_VAST
-                 "build the standalone vast binary.")
-
-if (NOT VAST_ENABLE_VAST)
-  return()
-endif ()
-
-add_executable(vast vast.cpp)
-VASTTargetEnableTooling(vast)
-target_link_libraries(vast PRIVATE vast::internal vast::libvast)
-VASTTargetLinkWholeArchive(vast PRIVATE vast::libvast_builtins)
+add_executable(tenzir tenzir.cpp)
+VASTTargetEnableTooling(tenzir)
+target_link_libraries(tenzir PRIVATE vast::internal vast::libvast)
+VASTTargetLinkWholeArchive(tenzir PRIVATE vast::libvast_builtins)
 install(
-  TARGETS vast
+  TARGETS tenzir
   DESTINATION "${CMAKE_INSTALL_BINDIR}"
   COMPONENT Runtime)
-add_executable(vast::vast ALIAS vast)
+add_executable(vast::tenzir ALIAS tenzir)
+
+macro (create_tenzir_symlink name)
+  add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/${name}"
+    COMMAND ${CMAKE_COMMAND} -E create_symlink "./tenzir"
+            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/${name}"
+    DEPENDS tenzir
+    COMMENT "Creating ${name} symlink")
+  add_custom_target(
+    "${name}" ALL DEPENDS "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/${name}")
+  install(
+    CODE "
+    execute_process(COMMAND
+      \"${CMAKE_COMMAND}\" -E create_symlink \"./tenzir\"
+      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${name}\")"
+    COMPONENT Runtime)
+endmacro ()
+
+create_tenzir_symlink(tenzird)
+create_tenzir_symlink(tenzirctl)
+create_tenzir_symlink(vast)
 
 # Install vast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
-  TARGETS vast
+  TARGETS tenzir
   EXPORT VASTTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
@@ -54,7 +66,7 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
     if (NOT IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
       string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
     endif ()
-    set(VAST_BINARY \"\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:vast>\")
+    set(VAST_BINARY \"\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
     set(VAST_WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/vast\")
     message(STATUS
       \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
@@ -90,7 +102,7 @@ file(
      fi
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::vast>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::vast>>\"
+     export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>ctl\"
      update=\"$<IF:$<BOOL:${VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
      set -e
      if [ ! -f \"$env_dir/bin/activate\" ]; then
@@ -189,7 +201,7 @@ list(TRANSFORM VAST_BUNDLED_PLUGINS PREPEND "\"")
 list(TRANSFORM VAST_BUNDLED_PLUGINS APPEND "\"")
 list(JOIN VAST_BUNDLED_PLUGINS "," joined_bundled_plugins)
 target_compile_definitions(
-  vast PRIVATE "VAST_BUNDLED_PLUGINS=${joined_bundled_plugins}")
+  tenzir PRIVATE "VAST_BUNDLED_PLUGINS=${joined_bundled_plugins}")
 
 # -- man page ------------------------------------------------------------------
 
