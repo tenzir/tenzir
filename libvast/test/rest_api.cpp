@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/node.hpp>
 #include <vast/plugin.hpp>
-#include <vast/system/node.hpp>
 #include <vast/test/fixtures/node.hpp>
 #include <vast/test/test.hpp>
 

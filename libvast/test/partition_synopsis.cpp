@@ -26,7 +26,7 @@ TEST(custom index_config) {
   // Setup.
   using namespace std::string_literals;
   auto ps = vast::partition_synopsis{};
-  auto capacity = vast::defaults::system::max_partition_size;
+  auto capacity = vast::defaults::max_partition_size;
   auto synopsis_opts = vast::index_config{
     .rules = {
       {
@@ -68,7 +68,7 @@ TEST(custom index_config) {
   auto address_parameters = vast::parse_parameters(ip_synopsis->type());
   REQUIRE(string_parameters);
   REQUIRE(url_parameters);
-  CHECK_EQUAL(string_parameters->p, vast::defaults::system::fp_rate);
+  CHECK_EQUAL(string_parameters->p, vast::defaults::fp_rate);
   CHECK_EQUAL(address_parameters->p, 0.05);
 }
 

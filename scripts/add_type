@@ -6,8 +6,8 @@
 # -o   Header-only (do not add .cpp file)
 
 # Usage example:
-# - Header, class, and test: add_type libvast vast::system::foo
-# - Header and test: add_type -o libvast vast::system::foo
+# - Header, class, and test: add_type libvast vast::foo
+# - Header and test: add_type -o libvast vast::foo
 
 import argparse
 

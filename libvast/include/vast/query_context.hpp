@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "vast/actors.hpp"
 #include "vast/bitmap.hpp"
 #include "vast/detail/inspection_common.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/expression.hpp"
-#include "vast/system/actors.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/typed_actor_view.hpp>
@@ -40,13 +40,13 @@ struct count_query_context {
       .fields(f.field("sink", x.sink), f.field("mode", x.mode));
   }
 
-  system::receiver_actor<uint64_t> sink;
+  receiver_actor<uint64_t> sink;
   enum mode mode = {};
 };
 
 /// An extract query to retrieve the events that match the expression.
 struct extract_query_context {
-  system::receiver_actor<table_slice> sink;
+  receiver_actor<table_slice> sink;
 
   friend bool operator==(const extract_query_context& lhs,
                          const extract_query_context& rhs) {
@@ -89,8 +89,7 @@ struct query_context {
              enum count_query_context::mode m, expression expr) {
     return {
       std::move(issuer),
-      count_query_context{
-        caf::actor_cast<system::receiver_actor<uint64_t>>(sink), m},
+      count_query_context{caf::actor_cast<receiver_actor<uint64_t>>(sink), m},
       std::move(expr),
     };
   }
@@ -100,8 +99,7 @@ struct query_context {
   make_extract(std::string issuer, const Actor& sink, expression expr) {
     return {
       std::move(issuer),
-      extract_query_context{
-        caf::actor_cast<system::receiver_actor<table_slice>>(sink)},
+      extract_query_context{caf::actor_cast<receiver_actor<table_slice>>(sink)},
       std::move(expr),
     };
   }

@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/actors.hpp"
 #include "vast/command.hpp"
 #include "vast/config_options.hpp"
 #include "vast/data.hpp"
@@ -18,7 +19,6 @@
 #include "vast/http_api.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/pipeline.hpp"
-#include "vast/system/actors.hpp"
 #include "vast/type.hpp"
 
 #include <caf/error.hpp>
@@ -146,8 +146,8 @@ public:
   /// @returns The actor handle to the NODE component.
   /// @note This function runs in the actor context of the NODE actor and can
   /// safely access the NODE's state.
-  virtual system::component_plugin_actor make_component(
-    system::node_actor::stateful_pointer<system::node_state> node) const
+  virtual component_plugin_actor
+  make_component(node_actor::stateful_pointer<node_state> node) const
     = 0;
 };
 
@@ -162,14 +162,13 @@ public:
   /// for retrieving an already spawned ANALYZER.
   /// @returns The actor handle to the analyzer, or `nullptr` if the actor was
   /// spawned but shut down already.
-  system::analyzer_plugin_actor
-  analyzer(system::node_actor::stateful_pointer<system::node_state> node
-           = nullptr) const;
+  analyzer_plugin_actor
+  analyzer(node_actor::stateful_pointer<node_state> node = nullptr) const;
 
   /// Implicitly fulfill the requirements of a COMPONENT PLUGIN actor via the
   /// ANALYZER PLUGIN actor.
-  system::component_plugin_actor make_component(
-    system::node_actor::stateful_pointer<system::node_state> node) const final;
+  component_plugin_actor
+  make_component(node_actor::stateful_pointer<node_state> node) const final;
 
 protected:
   /// Creates an actor that hooks into the input table slice stream.
@@ -179,13 +178,13 @@ protected:
   /// is still running.
   /// @note This function runs in the actor context of the NODE actor and can
   /// safely access the NODE's state.
-  virtual system::analyzer_plugin_actor make_analyzer(
-    system::node_actor::stateful_pointer<system::node_state> node) const
+  virtual analyzer_plugin_actor
+  make_analyzer(node_actor::stateful_pointer<node_state> node) const
     = 0;
 
 private:
   /// A weak handle to the spawned actor handle.
-  mutable detail::weak_handle<system::analyzer_plugin_actor> weak_handle_ = {};
+  mutable detail::weak_handle<analyzer_plugin_actor> weak_handle_ = {};
 
   /// Indicates that the ANALYZER was spawned at least once. This flag is used
   /// to ensure that `make_analyzer` is called at most once per plugin.
@@ -320,8 +319,8 @@ public:
   /// Actor that will handle this endpoint.
   //  TODO: This should get some integration with component_plugin so that
   //  the component can be used to answer requests directly.
-  [[nodiscard]] virtual system::rest_handler_actor
-  handler(caf::actor_system& system, system::node_actor node) const
+  [[nodiscard]] virtual rest_handler_actor
+  handler(caf::actor_system& system, node_actor node) const
     = 0;
 };
 
@@ -457,7 +456,7 @@ public:
   /// header will be persisted on disk, and should allow the plugin to retrieve
   /// the correct store actor when `make_store()` below is called.
   struct builder_and_header {
-    system::store_builder_actor store_builder;
+    store_builder_actor store_builder;
     chunk_ptr header;
   };
 
@@ -472,8 +471,8 @@ public:
   /// @returns A handle to the store builder actor to add events to, and a
   /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual caf::expected<builder_and_header>
-  make_store_builder(system::accountant_actor accountant,
-                     system::filesystem_actor fs, const vast::uuid& id) const
+  make_store_builder(accountant_actor accountant, filesystem_actor fs,
+                     const vast::uuid& id) const
     = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
@@ -482,8 +481,8 @@ public:
   /// @param fs The actor handle of a filesystem.
   /// @param header The store header as found in the partition flatbuffer.
   /// @returns A new store actor.
-  [[nodiscard]] virtual caf::expected<system::store_actor>
-  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
+  [[nodiscard]] virtual caf::expected<store_actor>
+  make_store(accountant_actor accountant, filesystem_actor fs,
              std::span<const std::byte> header) const
     = 0;
 };
@@ -504,12 +503,11 @@ public:
 
 private:
   [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(system::accountant_actor accountant,
-                     system::filesystem_actor fs,
+  make_store_builder(accountant_actor accountant, filesystem_actor fs,
                      const vast::uuid& id) const final;
 
-  [[nodiscard]] caf::expected<system::store_actor>
-  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
+  [[nodiscard]] caf::expected<store_actor>
+  make_store(accountant_actor accountant, filesystem_actor fs,
              std::span<const std::byte> header) const final;
 
   auto make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,

@@ -8,9 +8,9 @@
 
 #include "vast/query_queue.hpp"
 
+#include "vast/catalog.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
-#include "vast/system/catalog.hpp"
 #include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
 
@@ -40,12 +40,12 @@ std::vector<uuid> xs
      unbox(to<uuid>("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")),
      unbox(to<uuid>("ffffffff-ffff-ffff-ffff-ffffffffffff"))};
 
-system::receiver_actor<atom::done> dummy_client = {};
+receiver_actor<atom::done> dummy_client = {};
 
-system::catalog_lookup_result cands(uint32_t start, uint32_t end) {
+catalog_lookup_result cands(uint32_t start, uint32_t end) {
   if (end > xs.size() || start > end)
     FAIL("can't generate more than 16 candidates");
-  system::catalog_lookup_result result{};
+  catalog_lookup_result result{};
   for (auto i = start; i < end; ++i) {
     auto id = xs[i];
     result.candidate_infos[vast::type{}].partition_infos.emplace_back(
@@ -54,7 +54,7 @@ system::catalog_lookup_result cands(uint32_t start, uint32_t end) {
   return result;
 }
 
-system::catalog_lookup_result cands(uint32_t num) {
+catalog_lookup_result cands(uint32_t num) {
   return cands(0, num);
 }
 
@@ -66,7 +66,7 @@ query_context make_random_query_context() {
   return result;
 }
 
-uuid make_insert(query_queue& q, system::catalog_lookup_result&& candidates) {
+uuid make_insert(query_queue& q, catalog_lookup_result&& candidates) {
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
   REQUIRE_SUCCESS(q.insert(query_state{.query_contexts_per_type
@@ -78,7 +78,7 @@ uuid make_insert(query_queue& q, system::catalog_lookup_result&& candidates) {
   return query_context.id;
 }
 
-uuid make_insert(query_queue& q, system::catalog_lookup_result&& candidates,
+uuid make_insert(query_queue& q, catalog_lookup_result&& candidates,
                  uint32_t taste_size,
                  uint64_t priority = query_context::priority::normal) {
   uint32_t cands_size = candidates.size();

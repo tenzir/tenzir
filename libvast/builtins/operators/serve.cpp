@@ -45,6 +45,7 @@
 // implicitly a component actor, and as such may run outside of the node or even
 // multiple times. We should revisit this in the future.
 
+#include <vast/actors.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/numeric.hpp>
@@ -54,14 +55,13 @@
 #include <vast/concept/printable/vast/json.hpp>
 #include <vast/detail/weak_run_delayed.hpp>
 #include <vast/format/json.hpp>
+#include <vast/node.hpp>
+#include <vast/node_control.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
-#include <vast/system/actors.hpp>
-#include <vast/system/node.hpp>
-#include <vast/system/node_control.hpp>
-#include <vast/system/query_cursor.hpp>
-#include <vast/system/status.hpp>
+#include <vast/query_cursor.hpp>
+#include <vast/status.hpp>
 #include <vast/table_slice.hpp>
 
 #include <arrow/record_batch.h>
@@ -178,7 +178,7 @@ constexpr auto SPEC_V0 = R"_(
 
 // -- serve manager -----------------------------------------------------------
 
-using serve_manager_actor = system::typed_actor_fwd<
+using serve_manager_actor = typed_actor_fwd<
   // Register a new serve operator.
   auto(atom::start, std::string serve_id, uint64_t buffer_size)
     ->caf::result<void>,
@@ -192,7 +192,7 @@ using serve_manager_actor = system::typed_actor_fwd<
        uint64_t limit, duration timeout)
     ->caf::result<std::tuple<std::string, std::vector<table_slice>>>>
   // Conform to the protocol of the COMPONENT PLUGIN actor interface.
-  ::extend_with<system::component_plugin_actor>::unwrap;
+  ::extend_with<component_plugin_actor>::unwrap;
 
 struct serve_request {
   std::string serve_id = {};
@@ -487,7 +487,7 @@ struct serve_manager_state {
     return found->get_rp;
   }
 
-  auto status(system::status_verbosity verbosity) const -> caf::result<record> {
+  auto status(status_verbosity verbosity) const -> caf::result<record> {
     auto requests = list{};
     requests.reserve(ops.size());
     for (const auto& op : ops) {
@@ -501,12 +501,12 @@ struct serve_manager_state {
       entry.emplace("num_requested", op.requested);
       entry.emplace("num_delivered", op.delivered);
       entry.emplace("done", op.done);
-      if (verbosity >= system::status_verbosity::detailed) {
+      if (verbosity >= status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
         entry.emplace("get_pending", op.get_rp.pending());
         entry.emplace("stop_pending", op.stop_rp.pending());
       }
-      if (verbosity >= system::status_verbosity::debug) {
+      if (verbosity >= status_verbosity::debug) {
         entry.emplace("source", fmt::to_string(op.source));
         entry.emplace("last_continuation_token",
                       op.last_continuation_token.empty()
@@ -550,7 +550,7 @@ auto serve_manager(
         .timeout = timeout,
       });
     },
-    [self](atom::status, system::status_verbosity verbosity,
+    [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
       return self->state.status(verbosity);
     },
@@ -560,7 +560,7 @@ auto serve_manager(
 // -- serve handler -----------------------------------------------------------
 
 using serve_handler_actor
-  = system::typed_actor_fwd<>::extend_with<system::rest_handler_actor>::unwrap;
+  = typed_actor_fwd<>::extend_with<rest_handler_actor>::unwrap;
 
 struct serve_handler_state {
   static constexpr auto name = "serve-handler";
@@ -727,7 +727,7 @@ struct serve_handler_state {
 
 auto serve_handler(
   serve_handler_actor::stateful_pointer<serve_handler_state> self,
-  const system::node_actor& node) -> serve_handler_actor::behavior_type {
+  const node_actor& node) -> serve_handler_actor::behavior_type {
   self->state.self = self;
   self->request(node, caf::infinite, atom::get_v, atom::type_v, "serve-manager")
     .await(
@@ -864,9 +864,8 @@ class plugin final : public virtual component_plugin,
     return "serve-manager";
   }
 
-  auto make_component(
-    system::node_actor::stateful_pointer<system::node_state> node) const
-    -> system::component_plugin_actor override {
+  auto make_component(node_actor::stateful_pointer<node_state> node) const
+    -> component_plugin_actor override {
     return node->spawn(serve_manager);
   }
 
@@ -901,8 +900,8 @@ class plugin final : public virtual component_plugin,
     return endpoints;
   }
 
-  auto handler(caf::actor_system& system, system::node_actor node) const
-    -> system::rest_handler_actor override {
+  auto handler(caf::actor_system& system, node_actor node) const
+    -> rest_handler_actor override {
     return system.spawn(serve_handler, node);
   }
 

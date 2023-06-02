@@ -9,9 +9,9 @@
 #include "fixtures/node.hpp"
 
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/node.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/node.hpp"
-#include "vast/system/query_status.hpp"
+#include "vast/query_status.hpp"
 #include "vast/uuid.hpp"
 
 using namespace vast;
@@ -21,8 +21,8 @@ namespace fixtures {
 node::node(std::string_view suite)
   : fixtures::deterministic_actor_system_and_events(suite) {
   MESSAGE("spawning node");
-  test_node = self->spawn(system::node, "test", directory / "node",
-                          system::detach_components::no);
+  test_node = self->spawn(vast::node, "test", directory / "node",
+                          detach_components::no);
   run();
   auto settings = caf::settings{};
   auto vast_settings = caf::settings{};
@@ -88,7 +88,7 @@ std::vector<table_slice> node::query(std::string expr) {
       MESSAGE("... got " << slice.rows() << " events");
       result.push_back(std::move(slice));
     },
-    [&](const uuid&, const system::query_status&) {
+    [&](const uuid&, const query_status&) {
       // ignore
     },
     [&](const caf::down_msg& msg) {

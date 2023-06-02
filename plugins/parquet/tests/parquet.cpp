@@ -17,9 +17,9 @@
 #include <vast/ids.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
+#include <vast/posix_filesystem.hpp>
 #include <vast/query_context.hpp>
-#include <vast/system/posix_filesystem.hpp>
-#include <vast/system/status.hpp>
+#include <vast/status.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/test/fixtures/actor_system_and_events.hpp>
 #include <vast/test/memory_filesystem.hpp>
@@ -75,7 +75,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   std::vector<table_slice>
-  query(const system::store_actor& actor, const ids& ids,
+  query(const store_actor& actor, const ids& ids,
         const expression& expr = expression{
           predicate{meta_extractor{meta_extractor::schema},
                     relational_operator::not_equal, data{std::string{}}}}) {
@@ -105,7 +105,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   // received_messages must match the number of table slices in the store
-  uint64_t count(const system::store_actor& actor, const ids& ids,
+  uint64_t count(const store_actor& actor, const ids& ids,
                  const expression& expr = expression{predicate{
                    meta_extractor{meta_extractor::schema},
                    relational_operator::not_equal, data{std::string{}}}}) {
@@ -135,8 +135,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     REQUIRE_EQUAL(rows, tally);
     return tally;
   }
-  vast::system::accountant_actor accountant = {};
-  vast::system::filesystem_actor filesystem;
+  vast::accountant_actor accountant = {};
+  vast::filesystem_actor filesystem;
 };
 
 } // namespace
@@ -456,7 +456,7 @@ TEST(active parquet store status) {
   run();
   auto timeout = std::chrono::milliseconds(100);
   auto r = self->request(builder, timeout, atom::status_v,
-                         vast::system::status_verbosity::info,
+                         vast::status_verbosity::info,
                          std::chrono::duration_cast<vast::duration>(timeout));
   run();
   r.receive(

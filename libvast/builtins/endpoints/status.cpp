@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/builtin_rest_endpoints.hpp>
+#include <vast/node.hpp>
 #include <vast/plugin.hpp>
-#include <vast/system/builtin_rest_endpoints.hpp>
-#include <vast/system/node.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -54,17 +54,17 @@ static auto const* SPEC_V0 = R"_(
     )_";
 
 using status_handler_actor
-  = system::typed_actor_fwd<>::extend_with<system::rest_handler_actor>::unwrap;
+  = typed_actor_fwd<>::extend_with<rest_handler_actor>::unwrap;
 
 struct status_handler_state {
   static constexpr auto name = "status-handler";
   status_handler_state() = default;
-  system::node_actor node_;
+  node_actor node_;
 };
 
 status_handler_actor::behavior_type
 status_handler(status_handler_actor::stateful_pointer<status_handler_state> self,
-               system::node_actor node) {
+               node_actor node) {
   self->state.node_ = std::move(node);
   return {
     [self](atom::http_request, uint64_t, http_request rq) {
@@ -148,7 +148,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   rest_endpoints() const override {
     static const auto endpoints = std::vector<rest_endpoint>{
       {
-        .endpoint_id = static_cast<uint64_t>(system::status_endpoints::status),
+        .endpoint_id = static_cast<uint64_t>(status_endpoints::status),
         .method = http_method::get,
         .path = "/status",
         .params = record_type{
@@ -163,8 +163,8 @@ class plugin final : public virtual rest_endpoint_plugin {
     return endpoints;
   }
 
-  system::rest_handler_actor
-  handler(caf::actor_system& system, system::node_actor node) const override {
+  rest_handler_actor
+  handler(caf::actor_system& system, node_actor node) const override {
     return system.spawn(status_handler, node);
   }
 };

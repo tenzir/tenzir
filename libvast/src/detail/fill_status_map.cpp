@@ -11,7 +11,7 @@
 #include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/algorithms.hpp"
-#include "vast/system/status.hpp"
+#include "vast/status.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/downstream_manager.hpp>

@@ -130,6 +130,7 @@ class bitmap;
 class bool_type;
 class chunk;
 class command;
+class configuration;
 class data;
 class double_type;
 class duration_type;
@@ -139,8 +140,8 @@ class expression;
 class http_request;
 class http_request_description;
 class int64_type;
-class ip_type;
 class ip;
+class ip_type;
 class legacy_abstract_type;
 class legacy_type;
 class list_type;
@@ -151,36 +152,46 @@ class operator_base;
 class passive_store;
 class pattern;
 class pipeline;
-class plugin_ptr;
+class pipeline;
 class plugin;
+class plugin_ptr;
 class port;
 class record_type;
 class segment;
 class string_type;
-class subnet_type;
 class subnet;
+class subnet_type;
 class synopsis;
+class table_slice;
 class table_slice_builder;
 class table_slice_column;
-class table_slice;
 class time_type;
 class type;
 class uint64_type;
 class uuid;
 class value_index;
 class wah_bitmap;
-class pipeline;
 
+struct accountant_config;
+struct active_partition_state;
 struct attribute;
+struct catalog_lookup_result;
+struct component_map;
+struct component_map_entry;
+struct component_state;
+struct component_state_map;
 struct concept_;
 struct conjunction;
+struct connect_request;
 struct count_query_context;
 struct curried_predicate;
 struct data_extractor;
+struct data_point;
 struct disjunction;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
+struct index_state;
 struct invocation;
 struct legacy_address_type;
 struct legacy_alias_type;
@@ -198,18 +209,28 @@ struct legacy_record_type;
 struct legacy_string_type;
 struct legacy_subnet_type;
 struct legacy_time_type;
+struct measurement;
 struct meta_extractor;
+struct metrics_metadata;
 struct model;
 struct negation;
+struct node_state;
 struct offset;
 struct partition_info;
-struct partition_synopsis_pair;
 struct partition_synopsis;
+struct partition_synopsis_pair;
+struct passive_partition_state;
+struct performance_report;
+struct performance_sample;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
+struct query_cursor;
+struct query_status;
+struct report;
 struct rest_endpoint;
 struct schema_statistics;
+struct spawn_arguments;
 struct status;
 struct taxonomies;
 struct type_extractor;
@@ -222,9 +243,12 @@ enum class ec : uint8_t;
 enum class http_content_type : uint16_t;
 enum class http_method : uint8_t;
 enum class http_status_code : uint16_t;
+enum class keep_original_partition : bool;
 enum class port_type : uint8_t;
 enum class query_options : uint32_t;
 enum class relational_operator : uint8_t;
+enum class send_initial_dbstate : bool;
+enum class status_verbosity;
 enum class table_slice_encoding : uint8_t;
 
 template <class>
@@ -342,37 +366,6 @@ using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format
 
-namespace system {
-
-class configuration;
-
-struct accountant_config;
-struct active_partition_state;
-struct component_map;
-struct component_map_entry;
-struct component_state;
-struct component_state_map;
-struct connect_request;
-struct data_point;
-struct index_state;
-struct measurement;
-struct catalog_lookup_result;
-struct metrics_metadata;
-struct node_state;
-struct passive_partition_state;
-struct performance_report;
-struct performance_sample;
-struct query_cursor;
-struct query_status;
-struct report;
-struct spawn_arguments;
-
-enum class keep_original_partition : bool;
-enum class send_initial_dbstate : bool;
-enum class status_verbosity;
-
-} // namespace system
-
 } // namespace vast
 
 // -- type announcements -------------------------------------------------------
@@ -431,17 +424,17 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::detail::stable_map<std::string, vast::data>))
   VAST_ADD_TYPE_ID((vast::detail::stable_map<vast::data, vast::data>))
 
-  VAST_ADD_TYPE_ID((vast::system::connect_request))
-  VAST_ADD_TYPE_ID((vast::system::metrics_metadata))
-  VAST_ADD_TYPE_ID((vast::system::performance_report))
-  VAST_ADD_TYPE_ID((vast::system::query_cursor))
-  VAST_ADD_TYPE_ID((vast::system::query_status))
-  VAST_ADD_TYPE_ID((vast::system::report))
-  VAST_ADD_TYPE_ID((vast::system::keep_original_partition))
-  VAST_ADD_TYPE_ID((vast::system::status_verbosity))
-  VAST_ADD_TYPE_ID((vast::system::catalog_lookup_result))
-  VAST_ADD_TYPE_ID((vast::system::accountant_config))
-  VAST_ADD_TYPE_ID((vast::system::send_initial_dbstate))
+  VAST_ADD_TYPE_ID((vast::connect_request))
+  VAST_ADD_TYPE_ID((vast::metrics_metadata))
+  VAST_ADD_TYPE_ID((vast::performance_report))
+  VAST_ADD_TYPE_ID((vast::query_cursor))
+  VAST_ADD_TYPE_ID((vast::query_status))
+  VAST_ADD_TYPE_ID((vast::report))
+  VAST_ADD_TYPE_ID((vast::keep_original_partition))
+  VAST_ADD_TYPE_ID((vast::status_verbosity))
+  VAST_ADD_TYPE_ID((vast::catalog_lookup_result))
+  VAST_ADD_TYPE_ID((vast::accountant_config))
+  VAST_ADD_TYPE_ID((vast::send_initial_dbstate))
 
   VAST_ADD_TYPE_ID((vast::framed<vast::chunk_ptr>))
   VAST_ADD_TYPE_ID((vast::framed<vast::table_slice>))
@@ -460,7 +453,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID(
     (std::unordered_map<vast::uuid, vast::partition_synopsis_ptr>))
   VAST_ADD_TYPE_ID((std::unordered_map<vast::type, //
-                                       vast::system::catalog_lookup_result>))
+                                       vast::catalog_lookup_result>))
   VAST_ADD_TYPE_ID((std::map<vast::uuid, vast::partition_synopsis_ptr>))
   VAST_ADD_TYPE_ID(
     (std::shared_ptr<

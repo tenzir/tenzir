@@ -10,8 +10,8 @@
 #include <vast/detail/inspection_common.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
+#include <vast/node.hpp>
 #include <vast/plugin.hpp>
-#include <vast/system/node.hpp>
 #include <vast/table_slice.hpp>
 
 #include <caf/actor_cast.hpp>
@@ -30,7 +30,7 @@ using example_actor = caf::typed_actor<
   // Update the configuration of the EXAMPLE actor.
   auto(atom::config, record)->caf::result<void>>
   // Conform to the protocol of the PLUGIN ANALYZER actor.
-  ::extend_with<system::analyzer_plugin_actor>;
+  ::extend_with<analyzer_plugin_actor>;
 
 /// The state of the EXAMPLE actor.
 struct example_actor_state;
@@ -116,7 +116,7 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
                })
         .inbound_slot();
     },
-    [](atom::status, system::status_verbosity, duration) -> record {
+    [](atom::status, status_verbosity, duration) -> record {
       // Return an arbitrary record here for use in the status command.
       auto result = record{};
       result["answer"] = uint64_t{42};
@@ -157,9 +157,8 @@ public:
 
   /// Creates an actor that hooks into the input table slice stream.
   /// @param node A pointer to the NODE actor handle.
-  system::analyzer_plugin_actor
-  make_analyzer(system::node_actor::stateful_pointer<system::node_state> node)
-    const override {
+  analyzer_plugin_actor
+  make_analyzer(node_actor::stateful_pointer<node_state> node) const override {
     // Create a scoped actor for interaction with actors from non-actor
     // contexts.
     auto self = caf::scoped_actor{node->system()};

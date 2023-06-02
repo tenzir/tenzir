@@ -10,9 +10,9 @@
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
+#include <vast/node_control.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
-#include <vast/system/node_control.hpp>
 
 #include <arrow/type.h>
 #include <caf/attach_stream_source.hpp>
@@ -76,8 +76,8 @@ public:
     // have to create a scoped actor here; once the operator API uses async we
     // can offer a better mechanism here.
     auto blocking_self = caf::scoped_actor{ctrl.self().system()};
-    auto components = system::get_node_components<system::index_actor>(
-      blocking_self, ctrl.node());
+    auto components
+      = get_node_components<index_actor>(blocking_self, ctrl.node());
     if (!components) {
       ctrl.abort(std::move(components.error()));
       co_return;

@@ -8,25 +8,24 @@
 
 #include "vast/detail/partition_common.hpp"
 
+#include "vast/evaluation_triple.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/evaluation_triple.hpp"
 
 #include <unordered_map>
 
 namespace vast::detail {
 
 namespace {
-bool needs_evaluation_without_indexer(
-  const std::vector<system::evaluation_triple>& t) {
+bool needs_evaluation_without_indexer(const std::vector<evaluation_triple>& t) {
   return std::any_of(cbegin(t), cend(t), [](const auto& triple) {
-    return !std::get<system::indexer_actor>(triple);
+    return !std::get<indexer_actor>(triple);
   });
 }
 } // namespace
 
 ids get_ids_for_evaluation(
   const std::unordered_map<std::string, ids>& type_ids,
-  const std::vector<system::evaluation_triple>& evaluation_triples) {
+  const std::vector<evaluation_triple>& evaluation_triples) {
   if (needs_evaluation_without_indexer(evaluation_triples)) {
     auto all_ids = vast::ids{};
     for (const auto& [_, ids] : type_ids)

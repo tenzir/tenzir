@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "vast/configuration.hpp"
 #include "vast/detail/inspection_common.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
-#include "vast/system/configuration.hpp"
 #include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
 
@@ -29,8 +29,8 @@ namespace fixtures {
 
 /// Configures the actor system of a fixture with default settings for unit
 /// testing.
-struct test_configuration : vast::system::configuration {
-  using super = vast::system::configuration;
+struct test_configuration : vast::configuration {
+  using super = vast::configuration;
 
   test_configuration();
   caf::error parse(int argc, char** argv);

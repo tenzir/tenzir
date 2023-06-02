@@ -9,6 +9,7 @@
 #include "lsvast.hpp"
 
 #include <vast/command.hpp>
+#include <vast/configuration.hpp>
 #include <vast/error.hpp>
 #include <vast/fbs/index.hpp>
 #include <vast/fbs/partition.hpp>
@@ -16,7 +17,6 @@
 #include <vast/fbs/segmented_file.hpp>
 #include <vast/io/read.hpp>
 #include <vast/logger.hpp>
-#include <vast/system/configuration.hpp>
 
 #include <caf/expected.hpp>
 
@@ -138,7 +138,7 @@ using namespace lsvast;
 
 int main(int argc, char** argv) {
   // Initialize factories.
-  [[maybe_unused]] auto config = vast::system::configuration{};
+  [[maybe_unused]] auto config = vast::configuration{};
   std::string raw_path;
   struct options options;
   auto& format = options.format;

@@ -10,8 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/actors.hpp"
 #include "vast/generator.hpp"
-#include "vast/system/actors.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
@@ -84,7 +84,7 @@ struct base_query_state {
   /// Aggregator for number of matching events.
   uint64_t num_hits = {};
   /// Actor to send the final / intermediate results to.
-  system::receiver_actor<ResultType> sink = {};
+  receiver_actor<ResultType> sink = {};
   /// Start time for metrics tracking.
   std::chrono::steady_clock::time_point start
     = std::chrono::steady_clock::now();
@@ -100,9 +100,9 @@ struct extract_query_state : public base_query_state<table_slice> {};
 struct default_passive_store_state {
   static constexpr auto name = "passive-store";
 
-  system::default_passive_store_actor::pointer self = {};
-  system::filesystem_actor filesystem = {};
-  system::accountant_actor accountant = {};
+  default_passive_store_actor::pointer self = {};
+  filesystem_actor filesystem = {};
+  accountant_actor accountant = {};
   std::unique_ptr<passive_store> store = {};
   std::filesystem::path path = {};
   std::string store_type = {};
@@ -118,22 +118,20 @@ struct default_passive_store_state {
 /// @param accountant A handle to the accountant actor.
 /// @param path The path to load the store from.
 /// @param store_type The unique store identifier of the used store plugin.
-system::default_passive_store_actor::behavior_type
-default_passive_store(system::default_passive_store_actor::stateful_pointer<
-                        default_passive_store_state>
-                        self,
-                      std::unique_ptr<passive_store> store,
-                      system::filesystem_actor filesystem,
-                      system::accountant_actor accountant,
-                      std::filesystem::path path, std::string store_type);
+default_passive_store_actor::behavior_type default_passive_store(
+  default_passive_store_actor::stateful_pointer<default_passive_store_state>
+    self,
+  std::unique_ptr<passive_store> store, filesystem_actor filesystem,
+  accountant_actor accountant, std::filesystem::path path,
+  std::string store_type);
 
 /// The state of the default active store actor implementation.
 struct default_active_store_state {
   static constexpr auto name = "active-store";
 
-  system::default_active_store_actor::pointer self = {};
-  system::filesystem_actor filesystem = {};
-  system::accountant_actor accountant = {};
+  default_active_store_actor::pointer self = {};
+  filesystem_actor filesystem = {};
+  accountant_actor accountant = {};
   std::unique_ptr<active_store> store = {};
   std::filesystem::path path = {};
   std::string store_type = {};
@@ -149,11 +147,10 @@ struct default_active_store_state {
 /// @param accountant A handle to the accountant actor.
 /// @param path The path to persist the store at.
 /// @param store_type The unique store identifier of the used store plugin.
-system::default_active_store_actor::behavior_type default_active_store(
-  system::default_active_store_actor::stateful_pointer<default_active_store_state>
-    self,
-  std::unique_ptr<active_store> store, system::filesystem_actor filesystem,
-  system::accountant_actor accountant, std::filesystem::path path,
+default_active_store_actor::behavior_type default_active_store(
+  default_active_store_actor::stateful_pointer<default_active_store_state> self,
+  std::unique_ptr<active_store> store, filesystem_actor filesystem,
+  accountant_actor accountant, std::filesystem::path path,
   std::string store_type);
 
 } // namespace vast

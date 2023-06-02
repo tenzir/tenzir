@@ -2,9 +2,9 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/actors.hpp"
 #include "vast/operator_control_plane.hpp"
 #include "vast/pipeline.hpp"
-#include "vast/system/actors.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -14,7 +14,7 @@ struct execution_node_state {
   static constexpr auto name = "execution-node";
 
   /// A pointer to the parent actor.
-  system::execution_node_actor::pointer self;
+  execution_node_actor::pointer self;
 
   /// The operator owned by this execution node.
   operator_ptr op;
@@ -24,7 +24,7 @@ struct execution_node_state {
   std::unique_ptr<operator_control_plane> ctrl;
 
   /// The node actor (iff available).
-  system::node_actor node;
+  node_actor node;
 
   /// Entry point for the source.
   auto start(std::vector<caf::actor> next) -> caf::result<void>;
@@ -41,8 +41,7 @@ struct execution_node_state {
 /// Before spawning this actor, check whether `op->detached()` returns true, and
 /// spawn the actor as a detached actor if desired.
 auto execution_node(
-  system::execution_node_actor::stateful_pointer<execution_node_state> self,
-  operator_ptr op, system::node_actor node)
-  -> system::execution_node_actor::behavior_type;
+  execution_node_actor::stateful_pointer<execution_node_state> self,
+  operator_ptr op, node_actor node) -> execution_node_actor::behavior_type;
 
 } // namespace vast
