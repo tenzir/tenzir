@@ -428,9 +428,9 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
 }
 
 node_actor::behavior_type
-node(node_actor::stateful_pointer<node_state> self, std::string name,
+node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
      std::filesystem::path dir, detach_components detach_filesystem) {
-  self->state.name = std::move(name);
+  self->state.self = self;
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
   node_state::component_factory = make_component_factory();
