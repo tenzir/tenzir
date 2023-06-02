@@ -207,7 +207,7 @@
           description = "Visibility Across Space and Time";
           homepage = "https://vast.io/";
           # Set mainProgram so that all editions work with `nix run`.
-          mainProgram = "vast";
+          mainProgram = "tenzirctl";
           license = licenses.bsd3;
           platforms = platforms.unix;
           maintainers = with maintainers; [tobim];
