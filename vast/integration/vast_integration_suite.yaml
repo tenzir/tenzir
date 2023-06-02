@@ -674,11 +674,15 @@ tests:
     steps:
       - command: exec 'from file @./data/json/record-in-list.json read json | write json to stdout'
 
-  # TODO: uncomment once casting is implemented (uint64_t <-> int64_t is needed)
-  # Read from suricata file:
-  #   tags: [pipelines]
-  #   steps:
-  #     - command: exec 'from file @./data/suricata/eve.json read suricata | write json to stdout'
+  Read from suricata file:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from file @./data/suricata/eve.json read suricata | write json to stdout'
+
+  Read from zeek json file:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from file @./data/zeek/zeek.json read zeek | write json to stdout'
 
   Schema ID Extractor:
     tags: [pipelines, cef]
