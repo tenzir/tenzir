@@ -32,6 +32,11 @@ namespace vast::plugins::version {
 
 namespace {
 
+auto add_value(auto& field, auto value) {
+  [[maybe_unused]] auto err = field.add(value);
+  VAST_ASSERT(not err);
+}
+
 class version_operator final : public crtp_operator<version_operator> {
 public:
   explicit version_operator(bool dev_mode) : dev_mode_{dev_mode} {
@@ -43,35 +48,36 @@ public:
       auto row = builder.push_row();
       {
         auto version_field = row.push_field("version");
-        version_field.add(vast::version::version);
+        add_value(version_field, vast::version::version);
       }
       if (dev_mode_) {
         auto build_field = row.push_field("build");
         auto build = build_field.push_record();
         {
           auto type_field = build.push_field("type");
-          type_field.add(vast::version::build::type);
+          add_value(type_field, vast::version::build::type);
         }
         {
           auto tree_hash_field = build.push_field("tree_hash");
-          tree_hash_field.add(vast::version::build::tree_hash);
+          add_value(tree_hash_field, vast::version::build::tree_hash);
         }
         {
           auto assertions_field = build.push_field("assertions");
-          assertions_field.add(vast::version::build::has_assertions);
+          add_value(assertions_field, vast::version::build::has_assertions);
         }
         {
           auto sanitizers_field = build.push_field("sanitizers");
           auto sanitizers = sanitizers_field.push_record();
           {
             auto address_field = sanitizers.push_field("address");
-            address_field.add(vast::version::build::has_address_sanitizer);
+            add_value(address_field,
+                      vast::version::build::has_address_sanitizer);
           }
           {
             auto undefined_behavior_field
               = sanitizers.push_field("undefined_behavior");
-            undefined_behavior_field.add(
-              vast::version::build::has_undefined_behavior_sanitizer);
+            add_value(undefined_behavior_field,
+                      vast::version::build::has_undefined_behavior_sanitizer);
           }
         }
       }
@@ -83,13 +89,13 @@ public:
     auto name##_record = dependencies.push_record();                           \
     {                                                                          \
       auto name_field = name##_record.push_field("name");                      \
-      name_field.add(#name);                                                   \
+      add_value(name_field, #name);                                            \
     }                                                                          \
     {                                                                          \
       const auto version_string = std::string{(version)}; /*NOLINT*/           \
       if (version_string.empty()) {                                            \
         auto version_field = name##_record.push_field("version");              \
-        version_field.add(std::string_view{version_string});                   \
+        add_value(version_field, std::string_view{version_string});            \
       }                                                                        \
     }                                                                          \
   } while (false)
@@ -141,14 +147,14 @@ public:
           auto plugin_record = plugins.push_record();
           {
             auto name_field = plugin_record.push_field("name");
-            name_field.add(plugin->name());
+            add_value(name_field, plugin->name());
           }
           {
             auto version_field = plugin_record.push_field("version");
             if (const auto* version = plugin.version()) {
-              version_field.add(version);
+              add_value(version_field, version);
             } else {
-              version_field.add("bundled");
+              add_value(version_field, "bundled");
             }
           }
           if (dev_mode_) {
@@ -157,7 +163,7 @@ public:
 #define VAST_ADD_PLUGIN_TYPE(category)                                         \
   do {                                                                         \
     if (plugin.as<category##_plugin>()) {                                      \
-      types.add(#category);                                                    \
+      add_value(types, #category);                                             \
     }                                                                          \
   } while (false)
             VAST_ADD_PLUGIN_TYPE(component);
@@ -180,13 +186,13 @@ public:
             auto kind_field = plugin_record.push_field("kind");
             switch (plugin.type()) {
               case plugin_ptr::type::builtin:
-                kind_field.add("builtin");
+                add_value(kind_field, "builtin");
                 break;
               case plugin_ptr::type::static_:
-                kind_field.add("static");
+                add_value(kind_field, "static");
                 break;
               case plugin_ptr::type::dynamic:
-                kind_field.add("dynamic");
+                add_value(kind_field, "dynamic");
                 break;
             }
           }
