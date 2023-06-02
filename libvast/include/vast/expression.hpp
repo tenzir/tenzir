@@ -35,7 +35,7 @@ class expression;
 
 /// Extracts meta data from an event.
 struct meta_extractor : detail::totally_ordered<meta_extractor> {
-  enum kind { type, import_time };
+  enum kind { schema, schema_id, import_time };
 
   explicit meta_extractor() = default;
 
@@ -516,8 +516,10 @@ struct formatter<enum vast::meta_extractor::kind> {
   template <typename FormatContext>
   auto format(enum vast::meta_extractor::kind value, FormatContext& ctx) const {
     switch (value) {
-      case vast::meta_extractor::kind::type:
-        return format_to(ctx.out(), "#type");
+      case vast::meta_extractor::kind::schema:
+        return format_to(ctx.out(), "#schema");
+      case vast::meta_extractor::kind::schema_id:
+        return format_to(ctx.out(), "#schema_id");
       case vast::meta_extractor::kind::import_time:
         return format_to(ctx.out(), "#import_time");
     }

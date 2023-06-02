@@ -312,10 +312,10 @@ TEST(full partition roundtrip) {
     vast::predicate{vast::field_extractor{"foo"},
                     vast::relational_operator::equal, vast::data{1u}}};
   auto type_equals_y = vast::expression{
-    vast::predicate{vast::meta_extractor{vast::meta_extractor::type},
+    vast::predicate{vast::meta_extractor{vast::meta_extractor::schema},
                     vast::relational_operator::equal, vast::data{"y"}}};
   auto type_equals_foo = vast::expression{
-    vast::predicate{vast::meta_extractor{vast::meta_extractor::type},
+    vast::predicate{vast::meta_extractor{vast::meta_extractor::schema},
                     vast::relational_operator::equal, vast::data{"foo"}}};
   // For the query `x == 0`, we expect one result.
   test_expression(x_equals_zero, 1);
@@ -323,9 +323,9 @@ TEST(full partition roundtrip) {
   test_expression(x_equals_one, 0);
   // For the query `foo == 1`, we expect zero results.
   test_expression(foo_equals_one, 0);
-  // For the query `#type == "x"`, we expect one result.
+  // For the query `#schema == "x"`, we expect one result.
   test_expression(type_equals_y, 1);
-  // For the query `#type == "foo"`, we expect no results.
+  // For the query `#schema == "foo"`, we expect no results.
   test_expression(type_equals_foo, 0);
   // Shut down test actors.
   self->send_exit(readonly_partition, caf::exit_reason::user_shutdown);

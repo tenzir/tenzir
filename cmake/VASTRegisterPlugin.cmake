@@ -726,7 +726,7 @@ function (VASTRegisterPlugin)
         fi
         base_dir=\"${integration_test_path}\"
         env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-        app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::vast>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::vast>>\"
+        export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::vast>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::vast>>\"
         update=\"$<IF:$<BOOL:${VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
         set -e
         if [ ! -f \"$env_dir/bin/activate\" ]; then

@@ -52,7 +52,7 @@ docker compose run --no-TTY vast import suricata < path/to/eve.json
 # Run a query against VAST.
 # NOTE: For commands that check whether input exists on stdin, passing
 # --interactive=false is required. This is a bug in Docker Compose.
-docker compose run --interactive=false vast export json '#type == "suricata.alert"'
+docker compose run --interactive=false vast export json '#schema == "suricata.alert"'
 ```
 
 The Docker Compose network by default exposes VAST on port 5158, allowing for

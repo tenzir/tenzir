@@ -4,14 +4,14 @@
 # for selectively synchronizing based on specific properties or types
 #
 # Usage examples:
-#   sync-vast-nodes.sh "#type == \"suricata.alert\""  10 :5158 :42001 vast
-#   sync-vast-nodes.sh "" 10 :5158 :42001 vast
+#   sync-vast-nodes.sh "#schema == \"suricata.alert\""  10 :5158 :5160 vast
+#   sync-vast-nodes.sh "" 10 :5158 :5160 vast
 #
 # Arguments
-#   query: e.g. "#type == \"suricata.alert\"" - mind the quotes; can be empty ""
+#   query: e.g. "#schema == \"suricata.alert\"" - mind the quotes; can be empty ""
 #   seconds - sync interval in seconds - default 5
 #   VAST endpoint of source - default :5158
-#   VAST endpoint of sink   - default :42001
+#   VAST endpoint of sink   - default :5160
 #   path to VAST binary     - default `vast` (must be in path)
 
 TS_FILE="last_queried.ts"
@@ -19,7 +19,7 @@ TS_FILE="last_queried.ts"
 Q=${1:-""}
 S=${2:-5}
 SOURCE_VAST_ENDPOINT=${3:-:5158}
-DESTINATION_VAST_ENDPOINT=${4:-:42001}
+DESTINATION_VAST_ENDPOINT=${4:-:5160}
 VAST_BINARY="${5:-vast}"
 
 >&2 echo "syncing $SOURCE_VAST_ENDPOINT to $DESTINATION_VAST_ENDPOINT every $S seconds"
@@ -31,7 +31,7 @@ then
 else
   PREVIOUS_TIMESTAMP="1970-01-01T00:00:00+00:00"
   >&2 echo "no previous sync time stamp starting from $PREVIOUS_TIMESTAMP"
-fi 
+fi
 
 while true; do
   TIMESTAMP=`date -Iseconds`

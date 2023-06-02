@@ -11,4 +11,4 @@ VAST_PORT=5158
 
 # The port at which the VAST web interface can be accessed outside of Docker
 # Compose.
-VAST_WEB_PORT=42001
+VAST_WEB_PORT=5160

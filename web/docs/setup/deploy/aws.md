@@ -207,7 +207,7 @@ Then run:
 You should see new events flowing into VAST within a few minutes:
 
 ```bash
-./vast-cloud vast.lambda-client -c "vast count '#type==\"aws.cloudtrail\"'"
+./vast-cloud vast.lambda-client -c "vast count '#schema==\"aws.cloudtrail\"'"
 ```
 
 Running the global `./vast-cloud destroy` command will also destroy optional

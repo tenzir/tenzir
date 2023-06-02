@@ -784,12 +784,15 @@ table_slice resolve_enumerations(table_slice slice) {
 }
 
 auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
-  -> view<data> {
+  -> data {
   if (slice.encoding() == table_slice_encoding::none)
     return {};
   switch (ex.kind) {
-    case meta_extractor::type: {
-      return slice.schema().name();
+    case meta_extractor::schema: {
+      return std::string{slice.schema().name()};
+    }
+    case meta_extractor::schema_id: {
+      return slice.schema().make_fingerprint();
     }
     case meta_extractor::import_time: {
       const auto import_time = slice.import_time();
@@ -875,7 +878,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
       bind_value({});
     },
     [&](const meta_extractor& ex) {
-      bind_value(materialize(resolve_meta_extractor(slice, ex)));
+      bind_value(resolve_meta_extractor(slice, ex));
     },
     [&](const data_extractor& ex) {
       bind_array(layout.resolve_flat_index(ex.column));
