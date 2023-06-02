@@ -366,8 +366,14 @@ private:
               not maybe_err) {
             return maybe_err.error();
           }
-          // macOS compilation errors here that this is not used.
-          return this->cast_impl<BuilderValueType, Type>(builder, view);
+          auto err = cast_impl<BuilderValueType, Type>(builder, view);
+          if (not err)
+            return caf::error{};
+          if (err and not can_change_builder_type_)
+            return err;
+          // TODO: implement casting whole array instead of returning error here
+          // in upcomming PR.
+          return err;
         },
         [view](concrete_series_builder<record_type>&) {
           return caf::make_error(ec::convert_error,
@@ -396,6 +402,8 @@ private:
       },
       *this);
   }
+
+  bool can_change_builder_type_ = true;
 };
 
 } // namespace vast::detail

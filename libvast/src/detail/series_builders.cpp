@@ -255,7 +255,8 @@ auto fixed_fields_record_builder::get_arrow_builder()
   return record_series_builder_base::get_arrow_builder(type_);
 }
 
-series_builder::series_builder(const vast::type& type, bool are_fields_fixed) {
+series_builder::series_builder(const vast::type& type, bool are_fields_fixed)
+  : can_change_builder_type_{not are_fields_fixed} {
   caf::visit(
     detail::overload{
       [this, &type]<class Type>(const Type&) {
