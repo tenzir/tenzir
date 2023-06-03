@@ -123,3 +123,83 @@ RUN vast exec version
 
 ENTRYPOINT ["vast"]
 CMD ["--help"]
+
+# -- plugins -------------------------------------------------------------------
+
+FROM development AS plugins
+
+WORKDIR /tmp/vast
+
+COPY contrib/vast-plugins ./contrib/vast-plugins
+
+RUN cmake -S contrib/vast-plugins/compaction -B build-compaction -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-compaction --parallel && \
+      DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
+      rm -rf build-compaction
+
+RUN cmake -S contrib/vast-plugins/inventory -B build-inventory -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-inventory --parallel && \
+      DESTDIR=/plugin/inventory cmake --install build-inventory --strip --component Runtime && \
+      rm -rf build-inventory
+
+RUN cmake -S contrib/vast-plugins/matcher -B build-matcher -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-matcher --parallel && \
+      DESTDIR=/plugin/matcher cmake --install build-matcher --strip --component Runtime && \
+      rm -rf build-matcher
+
+RUN cmake -S contrib/vast-plugins/netflow -B build-netflow -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-netflow --parallel && \
+      DESTDIR=/plugin/netflow cmake --install build-netflow --strip --component Runtime && \
+      rm -rf build-netflow
+
+RUN cmake -S contrib/vast-plugins/pipeline_manager -B build-pipeline_manager -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-pipeline_manager --parallel && \
+      DESTDIR=/plugin/pipeline_manager cmake --install build-pipeline_manager --strip --component Runtime && \
+      rm -rf build-pipeline_manager
+
+RUN cmake -S contrib/vast-plugins/platform -B build-platform -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-platform --parallel && \
+      DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \
+      rm -rf build-platform
+
+# -- vast-ce -------------------------------------------------------------------
+
+FROM production AS vast-ce
+
+COPY --from=plugins --chown=vast:vast /plugin/matcher /
+COPY --from=plugins --chown=vast:vast /plugin/netflow /
+COPY --from=plugins --chown=vast:vast /plugin/pipeline_manager /
+COPY --from=plugins --chown=vast:vast /plugin/platform /
+
+# -- vast-demo --------------------------------------------------------------
+
+FROM vast-ce AS vast-demo
+
+USER root:root
+COPY demo-node /demo-node
+RUN apt-get update && \
+    apt install -y \
+        curl \
+        bc \
+        zstd && \
+        rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT ["/demo-node/entrypoint.bash"]
+
+# -- vast-ee -------------------------------------------------------------------
+
+FROM vast-ce AS vast-ee
+
+COPY --from=plugins --chown=vast:vast /plugin/compaction /
+
+# -- vast ----------------------------------------------------------------------
+
+# As a last stage we re-introduce VAST without proprietary plugins so that it's
+# the default when not specifying a build target.
+FROM production AS vast
