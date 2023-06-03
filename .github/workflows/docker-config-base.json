@@ -2,7 +2,7 @@
   "editions": [
     {
       "name": "vast",
-      "target": "production",
+      "target": "vast",
       "registries": [
         "ghcr.io",
         "docker.io"
