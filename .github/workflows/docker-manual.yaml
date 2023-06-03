@@ -61,7 +61,7 @@ jobs:
             '."editions" = [
               if ${{ inputs.push-de-to-ghcr }} then
                 {
-                  "name": "vast-de", "target": "production", "registries": [
+                  "name": "vast-de", "target": "vast", "registries": [
                    "ghcr.io"
                   ]
                 }

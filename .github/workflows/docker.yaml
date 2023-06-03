@@ -88,9 +88,8 @@ jobs:
         run: |
           cmake_version_args="-DVAST_VERSION_TAG:STRING=${{ fromJSON(inputs.config).version }}"
           echo "::info Building the Developer Edition Image"
-          cat Dockerfile.extra >> Dockerfile
           docker buildx build . \
-            -t "tenzir/vast:latest" --target "production" \
+            -t "tenzir/vast:latest" --target "vast" \
             --load --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}" \
             --cache-from "type=registry,ref=${CACHE_TAG}" \
