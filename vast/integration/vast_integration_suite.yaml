@@ -631,6 +631,26 @@ tests:
       - command: export json 'where act == /Accept|Bypass/'
       - command: export json 'where dvc == 10.1.1.8'
 
+  Export in Pipeline:
+    fixture: ServerTester
+    tags: [import, export, pipelines]
+    steps:
+      - command: exec 'export | to stdout'
+      - command: exec 'read cef | import'
+        input: data/cef/cynet.log
+      - command: exec 'export | to stdout'
+      - command: flush
+      - command: exec 'export | to stdout'
+      - command: exec 'read cef | import'
+        input: data/cef/checkpoint.log
+      - command: exec 'export | to stdout'
+      - command: flush
+      - command: exec 'export | to stdout'
+        transformation: jq length
+      - command: exec 'export | where device_product == "VPN-1 & FireWall-1" | to stdout'
+        transformation: jq length
+      - command: exec 'export | where device_product == "VPN-1 & FireWall-1" | where 192.168.101.100 | to stdout'
+
   Patterns:
     fixture: ServerTester
     tags: [import, export]
