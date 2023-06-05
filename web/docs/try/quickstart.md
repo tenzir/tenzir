@@ -162,7 +162,7 @@ is an [expression](../understand/expressions.md) followed by zero or
 more operators. The full pipeline would be:
 
 ```
-from vast
+export
 | where EXPR
 | OP
 | OP
