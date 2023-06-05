@@ -42,6 +42,10 @@ public:
     return self_.state.node;
   }
 
+  auto dir() noexcept -> std::filesystem::path override {
+    return self_.state.dir;
+  }
+
   auto abort(caf::error error) noexcept -> void override {
     VAST_DEBUG("{} called actor_control_plane::abort({})", self_, error);
     VAST_ASSERT(error != caf::none);
@@ -363,10 +367,12 @@ auto execution_node_state::start(caf::stream<framed<Input>> in,
 
 auto execution_node(
   execution_node_actor::stateful_pointer<execution_node_state> self,
-  operator_ptr op, node_actor node) -> execution_node_actor::behavior_type {
+  operator_ptr op, node_actor node, std::filesystem::path dir)
+  -> execution_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.ctrl = std::make_unique<actor_control_plane>(*self);
+  self->state.dir = std::move(dir);
   self->state.node = std::move(node);
   return {
     [self](atom::run, std::vector<caf::actor> next) -> caf::result<void> {

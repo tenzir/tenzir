@@ -58,10 +58,12 @@ void pipeline_executor_state::spawn_execution_nodes(
           if ((*it)->detached()) {
             v.push_back(caf::actor_cast<caf::actor>(
               self->spawn<caf::monitored + caf::detached>(
-                execution_node, std::move(*it), node_actor{})));
+                execution_node, std::move(*it), node_actor{},
+                std::filesystem::path{})));
           } else {
             v.push_back(caf::actor_cast<caf::actor>(self->spawn<caf::monitored>(
-              execution_node, std::move(*it), node_actor{})));
+              execution_node, std::move(*it), node_actor{},
+              std::filesystem::path{})));
           }
           node_descriptions.emplace(v.back().address(), std::move(description));
           nodes_alive += 1;

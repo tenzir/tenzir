@@ -31,6 +31,9 @@ struct operator_control_plane {
   /// Returns the node actor, if the operator location is remote.
   [[nodiscard]] virtual auto node() noexcept -> node_actor = 0;
 
+  /// The root directory of the node actor.
+  virtual auto dir() noexcept -> std::filesystem::path = 0;
+
   /// Stop the execution of the operator.
   /// @pre error != caf::none
   virtual auto abort(caf::error error) noexcept -> void = 0;

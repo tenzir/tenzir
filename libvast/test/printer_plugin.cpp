@@ -51,6 +51,10 @@ struct fixture : fixtures::events {
       FAIL("no mock implementation available");
     }
 
+    auto dir() noexcept -> std::filesystem::path override {
+      FAIL("no mock implementation available");
+    }
+
     auto abort(caf::error) noexcept -> void override {
       FAIL("no mock implementation available");
     }

@@ -56,28 +56,30 @@ public:
         [&current_result](catalog_lookup_result result) {
           current_result = std::move(result);
         },
-        [&ctrl](const caf::error& e) {
-          ctrl.abort(e);
+        [&ctrl](caf::error e) {
+          ctrl.abort(std::move(e));
         });
     for (const auto& [type, info] : current_result.candidate_infos) {
-      auto uuid = info.partition_infos.front().uuid;
-      auto partition
-        = blocking_self->spawn(passive_partition, uuid, accountant, fs,
-                               fmt::format("index/{:l}", uuid));
-      blocking_self->send(partition, atom::query_v, query_context);
-      blocking_self->receive(
-        [&current_slice](table_slice slice) {
-          current_slice = std::move(slice);
-        },
-        [](atom::done) {
-          // no-op
-        },
-        [&ctrl](caf::error& e) {
-          ctrl.abort(e);
-        });
-      if (current_slice) {
-        co_yield *current_slice;
-        current_slice.reset();
+      for (const auto& partition_info : info.partition_infos) {
+        const auto& uuid = partition_info.uuid;
+        auto partition = blocking_self->spawn(
+          passive_partition, uuid, accountant, fs,
+          ctrl.dir() / "index" / fmt::format("{:l}", uuid));
+        blocking_self->send(partition, atom::query_v, query_context);
+        blocking_self->receive(
+          [&current_slice](table_slice slice) {
+            current_slice = std::move(slice);
+          },
+          [](atom::done) {
+            // no-op
+          },
+          [&ctrl](caf::error e) {
+            ctrl.abort(std::move(e));
+          });
+        if (current_slice) {
+          co_yield *current_slice;
+          current_slice.reset();
+        }
       }
     }
   }
