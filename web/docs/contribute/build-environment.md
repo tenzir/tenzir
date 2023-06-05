@@ -11,14 +11,17 @@ from the topmost directory in the source tree.
 
 The [direnv][direnv] tool is able to automate this process, create an `.envrc`
 with the content:
+
 ```
 use flake
 ```
+
 and it will automatically add the dependencies to your shell environment when
 you move into the source directory.
 
 If you want to silence the messages about binary caches you can use a variation
 of `.envrc` that invokes `nix` with a lower verbosity setting:
+
 ```
 use_flake2() {
   watch_file flake.nix
@@ -30,14 +33,15 @@ use_flake2() {
 use_flake2
 ```
 
-The VAST repository comes with a set of CMake configure and build presets that
+The Tenzir repository comes with a set of CMake configure and build presets that
 can be used in this environment:
-* `nix-clang-debug`
-* `nix-clang-redeb`
-* `nix-clang-release`
-* `nix-gcc-debug`
-* `nix-gcc-redeb`
-* `nix-gcc-release`
+
+- `nix-clang-debug`
+- `nix-clang-redeb`
+- `nix-clang-release`
+- `nix-gcc-debug`
+- `nix-gcc-redeb`
+- `nix-gcc-release`
 
 :::note
 This build environment is currently only tested on Linux.
@@ -52,9 +56,10 @@ well. That means we need to use a different environment, you can enter it with
 nix develop .#vast-static
 ```
 
-The CMake presets for that mode are
-* `nix-gcc-static-debug`
-* `nix-gcc-static-redeb`
-* `nix-gcc-static-release`
+The CMake presets for that mode are:
+
+- `nix-gcc-static-debug`
+- `nix-gcc-static-redeb`
+- `nix-gcc-static-release`
 
 [direnv]: https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz

@@ -4,7 +4,7 @@ sidebar_position: 5
 
 # Documentation
 
-The VAST documentation resides inside [our main GitHub
+The Tenzir documentation resides inside [our main GitHub
 repository](https://github.com/tenzir/vast) in
 [`/web/docs`](https://github.com/tenzir/vast/tree/main/web/docs).
 We use [Docusaurus](https://docusaurus.io/) as website framework.

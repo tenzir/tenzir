@@ -1,6 +1,6 @@
 # Export
 
-Querying data from VAST (aka *exporting*) involves spinning up a VAST client
+Querying data from Tenzir (aka *exporting*) involves spinning up a Tenzir client
 that executes a query expression. In the following, we assume that you [set up a
 server](../run/README.md) listening at `localhost:5158`.
 
@@ -14,13 +14,13 @@ Let's go through each of these steps.
 
 ## Decide what to query
 
-To figure out what you can query, VAST offers
+To figure out what you can query, Tenzir offers
 [introspection](../introspect/README.md) via the `show` command.
 
 Use `show schemas` to display the schema of all types:
 
 ```bash
-vast show schemas --yaml
+tenzirctl show schemas --yaml
 ```
 
 In case you ingested [Suricata](../../understand/formats/suricata.md) data, this
@@ -114,9 +114,9 @@ schema.
 
 ## Begin with an expression
 
-We designed the [VAST language](../../understand/README.md) to make it
+We designed the [Tenzir language](../../understand/README.md) to make it
 easy to reference the data schema and put constraints on it. Specifically,
-VAST's [expression language](../../understand/expressions.md) has the
+Tenzir's [expression language](../../understand/expressions.md) has the
 concept of [extractors](../../understand/expressions.md#extractors)
 that refer to various parts of the event structure. For example, you can query
 the above schemas with a *meta extractor* to select a specific set of event
@@ -138,7 +138,7 @@ This expression has two predicates with field extractors. The first field
 extractor `hostname` is in fact a suffix of the fully-qualified field
 `suricata.http.hostname`. Because it's often inconvenient to write down the
 complete field name, you can write just `hostname` instead. Of there exist
-multiple fields that qualify, VAST builds the logical OR (a *disjunction*) of
+multiple fields that qualify, Tenzir builds the logical OR (a *disjunction*) of
 all fields. This may unfold as follows:
 
 ```c
@@ -169,7 +169,7 @@ it possible to shorten this expression to:
 
 Using type extractors (and thereby value predicates) hinges on having
 a powerful type system. If you only have strings and numbers, this is not
-helping much. VAST's [type system](../../understand/data-model/type-system.md)
+helping much. Tenzir's [type system](../../understand/data-model/type-system.md)
 supports *aliases*, e.g., you can define an alias called `port` that points to a
 `uint64`. Then you'd write a query only over ports:
 
@@ -183,7 +183,7 @@ their name.
 To summarize, we have now seen three ways to query data, all based on
 information that is intrinsic to the data. There's another way to write queries
 using extrinsic information: [event taxonomies][taxonomies], which define
-*concepts* and *models*. Concepts are basically field mappings that VAST
+*concepts* and *models*. Concepts are basically field mappings that Tenzir
 resolves prior to query execution, whereas models define a tuple over concepts,
 e.g., to represent common structures like a network connection 4-tuple. A
 concept query looks syntactically identical to field extractor query. For
@@ -193,7 +193,7 @@ example:
 net.src.ip !in 192.168.0.0/16
 ```
 
-VAST resolves the concept `net.src.ip` to all fieldnames that this concept has
+Tenzir resolves the concept `net.src.ip` to all fieldnames that this concept has
 been defined with. We defer to the [taxonomy documentation][taxonomies] for a
 more detailed discussion.
 
@@ -213,15 +213,15 @@ src_ip == 192.168.1.104
 ## Choose an export format
 
 After your have written your query expression, the final step is selecting how
-you'd like the result to be served. The `export` command spins up a VAST client
-that connects to a server where the query runs, and receives the results back to
-then render them on standard output:
+you'd like the result to be served. The `export` command spins up a Tenzir
+client that connects to a server where the query runs, and receives the results
+back to then render them on standard output:
 
 ```bash
-vast export [options] <format> [options] [expr]
+tenzirctl export [options] <format> [options] [expr]
 ```
 
-The [format](../../understand/formats/README.md) defines how VAST renders the
+The [format](../../understand/formats/README.md) defines how Tenzir renders the
 query results. Text formats include [JSON](../../understand/formats/json.md),
 [CSV](../../understand/formats/csv.md), or tool-specific data encodings like
 [Zeek](../../understand/formats/zeek-tsv.md).
@@ -230,5 +230,5 @@ query results. Text formats include [JSON](../../understand/formats/json.md),
 For example, to run query that exports the results as JSON, run:
 
 ```bash
-vast export json net.src.ip in 10.0.0.0/8
+tenzirctl export json net.src.ip in 10.0.0.0/8
 ```

@@ -1,6 +1,6 @@
 # Contribute
 
-This section explains how to contribute to the VAST project. As an open-source
+This section explains how to contribute to the Tenzir project. As an open-source
 project with the aim to build a community, we encourage contributions of any
 kind: new code, documentation enhancements, feature requests, suggestions for
 improvements, or simply just feedback. We strive to make our development

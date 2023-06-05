@@ -39,8 +39,8 @@ schema][ocsf-schema].
 We could add [yet another data model](https://xkcd.com/927/), but our goal is
 that you pick one that you know already or like best. We envision a thriving
 community around taxonomization, as exemplified with the [OCSF][ocsf]. With
-VAST, we aim for leveraging the taxonomy of your choice. There are currently two
-mechanisms for this purpose:
+Tenzir, we aim for leveraging the taxonomy of your choice. There are currently
+two mechanisms for this purpose:
 
 - [Concept](#concepts): a field mapping/alias that lazily resolves at query time
 - [Model](#models): a set of concepts that in sum describe a specific entity
@@ -88,7 +88,7 @@ imperfect approximation in practice, for the following reasons:
 ## Concepts
 
 A *concept* is a set of [extractors][extractors] to enable more semantic
-querying. VAST translates a query expression containing a concept to a
+querying. Tenzir translates a query expression containing a concept to a
 disjunction of all extractors.
 
 [extractors]: ../expressions.md#extractors
@@ -188,7 +188,7 @@ connection = <_, _, 10.0.0.1, 80>
 The query expression resolution begins with models, continues with concepts, and
 terminates when the query consists of extractors only. For example, consider the
 model query `destination_endpoint = <10.0.0.1, 80>` where the left-hand side
-being the name of a model and the right-hand side a record value. VAST resolves
+being the name of a model and the right-hand side a record value. Tenzir resolves
 this query into a conjunction first:
 
 ```

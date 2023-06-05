@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Quickstart
 
-This notebook showcases the key use cases of VAST in an interactive manner.
+This notebook showcases the key use cases of Tenzir in an interactive manner.
 
 :::caution Work in Progress
 This page is work in progress. It is the first example of a [notebook-based
@@ -13,29 +13,29 @@ guides](/docs/contribute/notebooks), but the content and
 CI-workflow is not fully fleshed out. Stay tuned.
 :::
 
-## Install VAST
+## Install Tenzir
 
-First, let's get a VAST binary to play with. The easiest way to [setup
-VAST](/docs/setup) is downloading a static binary on Linux.
+First, let's get a Tenzir binary to play with. The easiest way to [setup
+Tenzir](/docs/setup) is downloading a static binary on Linux.
 
-Following the instructions to add `/opt/vast/bin` to your `PATH`, test
-whether you are ready to use VAST:
-
-```{bash}
-#| eval: false
-vast version
-```
-
-## Start a VAST node
-
-Begin with starting a VAST node:
+Following the instructions to add `/opt/tenzir/bin` to your `PATH`, test
+whether you are ready to use Tenzir:
 
 ```{bash}
 #| eval: false
-vast start
+tenzir version
+```
+
+## Start a Tenzir node
+
+Begin with starting a Tenzir node:
+
+```{bash}
+#| eval: false
+tenzir start
 ```
 ```
-[14:12:09.207] VAST v2.1.0 is listening on localhost:5158
+[14:12:09.207] Tenzir v2.1.0 is listening on localhost:5158
 ```
 
 This command creates a listening socket at `localhost:5158` that you can now
@@ -49,7 +49,7 @@ Test the connection with a new command:
 ```
 {
   "current-memory-usage": 10322685460480,
-  "database-path": "/tmp/vast",
+  "database-path": "/tmp/tenzir",
   "in-memory-table-slices": 0,
   "peak-memory-usage": 645167841280
 }
@@ -57,7 +57,7 @@ Test the connection with a new command:
 
 ## Ingest data
 
-After we have a VAST node to interact with, let's ingest some data.
+After we have a Tenzir node to interact with, let's ingest some data.
 
 We [prepared a dataset][m57-with-malware] derived from one day of the M57
 recording and injected with malicious traffic from malware-trafic-analysis.net,
@@ -70,11 +70,11 @@ the background noise.
 #| eval: false
 cd /tmp
 curl -OL TODO
-vast import pcap < dataset/PCAP/*.pcap
-vast import zeek < dataset/Zeek/*.log
-vast import suricata < dataset/Suricata/eve.json
+tenzir import pcap < dataset/PCAP/*.pcap
+tenzir import zeek < dataset/Zeek/*.log
+tenzir import suricata < dataset/Suricata/eve.json
 ```
 
 ## Run queries
 
-With a loaded VAST node, we can now answer some questions.
+With a loaded Tenzir node, we can now answer some questions.

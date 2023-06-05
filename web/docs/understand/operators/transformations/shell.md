@@ -33,7 +33,7 @@ line as you would on the shell, use single or double quotes for escaping, e.g.,
 Consider the use case of converting CSV to JSON:
 
 ```bash
-vast exec 'read csv | write json' | jq -C
+tenzir 'read csv | write json' | jq -C
 ```
 
 The `write json` operator produces NDJSON. Piping this output to `jq` generates a
@@ -57,8 +57,8 @@ print json | shell "jq -C" | save stdout
 Using [user-defined operators](../user-defined.md), we can expose this
 (potentially verbose) post-processing more succinctly in the pipeline language:
 
-```yaml {0} title="vast.yaml"
-vast:
+```yaml {0} title="tenzir.yaml"
+tenzir:
   operators:
     jsonize: >
       print json | shell "jq -C" | save stdout
@@ -67,12 +67,12 @@ vast:
 Now you can use `jsonize` as a custom operator in a pipeline:
 
 ```bash
-vast exec 'read csv | where field > 42 | jsonize' < file.csv
+tenzir 'read csv | where field > 42 | jsonize' < file.csv
 ```
 
 This mechanism allows for wrapping also more complex invocation of tools.
 [Zeek](https://zeek.org), for example, converts packets into structured network
-logs. VAST already has support for consuming Zeek output with the formats
+logs. Tenzir already has support for consuming Zeek output with the formats
 [`zeek-json`](../../formats/zeek-json.md) and
 [`zeek-tsv`](../../formats/zeek-tsv.md). But that requires attaching yourself
 downstream of a Zeek instance. Sometimes you want instant Zeek analytics given a
@@ -83,8 +83,8 @@ post-process the output with a rich set of operators, to filter, reshape,
 enrich, or route the logs as structured data. Let's define a `zeek` operator for
 that:
 
-```yaml {0} title="vast.yaml"
-vast:
+```yaml {0} title="tenzir.yaml"
+tenzir:
   operators:
     zeek: >
       shell "zeek -r - LogAscii::output_to_stdout=T
@@ -98,7 +98,7 @@ Processing a PCAP trace now is a matter of calling the `zeek` operator:
 
 ```bash
 gunzip -c example.pcap.gz |
-  vast exec 'zeek | select id.orig_h, id.orig_p, id.resp_h | head 3'
+  tenzir 'zeek | select id.orig_h, id.orig_p, id.resp_h | head 3'
 ```
 
 ```json

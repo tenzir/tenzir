@@ -4,7 +4,7 @@ sidebar_position: 0
 
 # Type System
 
-One [design goal](../../develop/architecture/design-goals.md) of VAST is being
+One [design goal](../../develop/architecture/design-goals.md) of Tenzir is being
 expressive enough to capture the semantics of the domain. This led us to develop
 a rich type system for structured security data, inspired by the
 [Zeek](https://zeek.org) network security monitor.
@@ -13,7 +13,7 @@ a rich type system for structured security data, inspired by the
 
 The diagram below illustrates the type system at a glance:
 
-![Type System - VAST](type-system-vast.excalidraw.svg)
+![Type System - Tenzir](type-system-tenzir.excalidraw.svg)
 
 ### Basic Types
 
@@ -45,7 +45,7 @@ Complex types are stateful types that carry additional runtime information.
 The `enum` type is a list of predefined string values. It comes in handy for
 low-cardinality values from a fixed set of options.
 
-VAST implements an `enum` as an Arrow Dictionary.
+Tenzir implements an `enum` as an Arrow Dictionary.
 
 #### List
 
@@ -60,13 +60,13 @@ name and type. Records must have at least one field.
 
 The field name is an arbitrary UTF-8 string.
 
-The field type is any VAST type.
+The field type is any Tenzir type.
 
 ### Optionality
 
 All types are optional in that there exists an additional `null` data point in
-every value domain. Consequently, VAST does not have a special type to indicate
-optionality.
+every value domain. Consequently, Tenzir does not have a special type to
+indicate optionality.
 
 ### Attributes
 
@@ -91,10 +91,10 @@ types `U` and `T`.
 
 ## Type Construction
 
-VAST comes with a lean type definition language. Think [JSON
+Tenzir comes with a lean type definition language. Think [JSON
 schema](https://json-schema.org/) fused with [Kaitai](https://kaitai.io/), with
 the goal that humans can jot it down quickly. We use YAML as vehicle to express
-the structure because that's already VAST's language for configuration.
+the structure because that's already Tenzir's language for configuration.
 
 How do you create a type? Let `T` be an existing type, then you can construct a
 new type like this:
@@ -276,12 +276,12 @@ field name clashes occur between the two records:
 
 ## Comparison to Arrow
 
-All VAST types have a lossless mapping to Arrow types, however, not all Arrow
-types have a VAST equivalent. As a result, it is currently not yet possible to
+All Tenzir types have a lossless mapping to Arrow types, however, not all Arrow
+types have a Tenzir equivalent. As a result, it is currently not yet possible to
 import arbitrary Arrow data. In the future, we plan to extend our support for
 Arrow-native types and also offer conversion options for seamless data handover.
 
-VAST has a few domain-specific types that map to Arrow [extension
+Tenzir has a few domain-specific types that map to Arrow [extension
 types][extension-types]. These are currently:
 
 - `enum`
@@ -290,15 +290,15 @@ types][extension-types]. These are currently:
 
 [extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
 
-Note that VAST attaches attributes to a top-level type instance, where Arrow
+Note that Tenzir attaches attributes to a top-level type instance, where Arrow
 only allows type meta data for record fields.
 
-VAST treats type meta data differently from Arrow. In VAST, the type is the
+Tenzir treats type meta data differently from Arrow. In Tenzir, the type is the
 component that contains metadata. In Arrow, it's the record field or the schema.
 As a result, we can simply define a [schema](schemas) as named record type.
 
-:::tip More on Arrow & VAST
-If you want to learn more about why VAST uses Apache Arrow, please read our
+:::tip More on Arrow & Tenzir
+If you want to learn more about why Tenzir uses Apache Arrow, please read our
 [two](/blog/apache-arrow-as-platform-for-security-data-engineering) [blog
 posts](/blog/parquet-and-feather-enabling-open-investigations) that explain why
 we build on top of Arrow.

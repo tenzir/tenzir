@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Actor Model
 
-VAST uses the [actor model][dist-prog-actor-model] to structure control flow
+Tenzir uses the [actor model][dist-prog-actor-model] to structure control flow
 into individual components. The actor runtime maps the application logic onto
 OS processes or remote actors in the network. The actor model simplifies the
 design a distributed system because it allows for easier reasoning about
@@ -28,7 +28,7 @@ execution.
 
 ## C++ Actor Framework (CAF)
 
-VAST is written in C++. We [evaluated multiple actor model library
+Tenzir is written in C++. We [evaluated multiple actor model library
 implementations](http://matthias.vallentin.net/papers/thesis-phd.pdf) and
 found that the [C++ Actor Framework (CAF)][caf] best suits our needs because of
 the following unique features:

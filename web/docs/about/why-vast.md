@@ -2,9 +2,9 @@
 sidebar_position: 0
 ---
 
-# Why VAST
+# Why Tenzir
 
-VAST fills a gap in the market—powerful enough for data-intensive security use
+Tenzir fills a gap in the market—powerful enough for data-intensive security use
 cases, but easy enough for security users that are not data engineers.
 
 ![Spectra #width500](spectra.excalidraw.svg)
@@ -32,16 +32,16 @@ and manage *without* the need for dedicated data engineering resources. It
 should also be built around security standards and integrate easily with
 security tools in a plug-and-play fashion.
 
-VAST aims to fill this gap as an open pipelines and storage engine for building
-scalable security architectures. Pipelines make it easy to transport, filter,
-reshape, and aggregate security events, whereas the embedded storage and query
-engine enables numerous detection and response workloads to move upstream of
-SIEM for a more cost-effective and scalable implementation. VAST is built using
-open standards, such as Apache Arrow for data in motion and Apache Parquet for
-data at rest, preventing vendor lock-in and promote full control of your event
-data and security content.
+Tenzir aims to fill this gap as an open pipelines and storage engine for
+building scalable security architectures. Pipelines make it easy to transport,
+filter, reshape, and aggregate security events, whereas the embedded storage and
+query engine enables numerous detection and response workloads to move upstream
+of SIEM for a more cost-effective and scalable implementation. Tenzir is built
+using open standards, such as Apache Arrow for data in motion and Apache Parquet
+for data at rest, preventing vendor lock-in and promote full control of your
+event data and security content.
 
-## VAST vs. SIEMs
+## Tenzir vs. SIEMs
 
 Traditional SIEMs support basic search and a fixed set of analytical operations.
 For moderate data volumes, the established SIEM use cases perform well. But when
@@ -51,24 +51,24 @@ threat hunting and raw exploratory data analysis. That's why more advanced use
 cases, such as feature extraction, model training, and detection engineering,
 require additional data-centric workbenches.
 
-VAST *complements* a [SIEM][siem] nicely with the following use cases:
+Tenzir *complements* a [SIEM][siem] nicely with the following use cases:
 
-- **Offloading**: route the high-volume telemetry to VAST that would otherwise
+- **Offloading**: route the high-volume telemetry to Tenzir that would otherwise
   overload your SIEM or be cost-prohibitive to ingest. By keeping the bulk of
-  the data in VAST, you remove bottlenecks and can selectively forward the
+  the data in Tenzir, you remove bottlenecks and can selectively forward the
   activity that matters to your SIEM.
 
-- **Compliance**: VAST supports fine-grained retention configuration to meet
+- **Compliance**: Tenzir supports fine-grained retention configuration to meet
   [GDPR](https://en.wikipedia.org/wiki/General_Data_Protection_Regulation) and
   other regulatory requirements. When storage capacity needs careful management,
-  VAST's *compaction* feature allows for weighted ageing of your data, so that
+  Tenzir's *compaction* feature allows for weighted ageing of your data, so that
   you can specify relative importance of event types. Powerful *transforms*
   allow you to anonymize, pseudonymize, or encrypt specific fields—either to
   sanitize [PII data](https://en.wikipedia.org/wiki/Personal_data) on import, or
-  ad-hoc on export when data leaves VAST.
+  ad-hoc on export when data leaves Tenzir.
 
 - **Data Science**: The majority of SIEMs provide an API-only, low-bandwidth
-  access path to your security data. VAST is an [Arrow][arrow]-native engine
+  access path to your security data. Tenzir is an [Arrow][arrow]-native engine
   that offers unfettered high-bandwidth access so that you can bring your own
   workloads, with your own tools, e.g., to run iterative clustering algorithms
   or complex feature extraction in conjunction with machine learning.
@@ -77,12 +77,12 @@ VAST *complements* a [SIEM][siem] nicely with the following use cases:
 [arrow]: https://arrow.apache.org
 
 :::note Recommendation
-Unlike a heavy-weight legacy SIEM, VAST is highly embeddable so that you can
+Unlike a heavy-weight legacy SIEM, Tenzir is highly embeddable so that you can
 run it everywhere: containerized in the public cloud, in the data center in the
 private cloud, on bare-metal appliances deep in the network, or at the edge.
 :::
 
-## VAST vs. Data Warehouses
+## Tenzir vs. Data Warehouses
 
 Data warehouses and
 [OLAP](https://en.wikipedia.org/wiki/Online_analytical_processing) engines
@@ -91,17 +91,17 @@ sufficient ingest bandwidth, perform well on group-by and aggregation queries,
 come frequently with advanced operations like joins, and often scale out well.
 
 However, as a cornerstone for security operations, they fall short in supporting
-the following relevant use cases where VAST has the edge:
+the following relevant use cases where Tenzir has the edge:
 
 - **Data Onboarding**: it takes considerable effort to write and maintain
-  schemas for the tables of the respective data sources. Since VAST is
+  schemas for the tables of the respective data sources. Since Tenzir is
   purpose-built for security data, integrations for key data sources and data
   connectors exist out of the box.
 
 - **Rich Typing**: modeling security event data with a generic database often
   reduces the values to strings or integers, as opposed to retaining
-  domain-specific semantics, such as IP addresses or port numbers. VAST offers a
-  rich type system that can retain such semantics at ingest time, while also
+  domain-specific semantics, such as IP addresses or port numbers. Tenzir offers
+  a rich type system that can retain such semantics at ingest time, while also
   giving you the ability to query the data with your own taxonomy at query time.
 
 - **Fast Search**: typical query patterns are (1) automatically triggered point
@@ -116,10 +116,10 @@ the following relevant use cases where VAST has the edge:
 Data warehouses may be well-suited for raw data processing, but a data backbone
 for security operations has a lot more domain-specific demands. The required
 heavy lifting to bridge this gap is cost and time prohibitive for any security
-operations center. This is why we built VAST.
+operations center. This is why we built Tenzir.
 :::
 
-## VAST vs. Relational DBs
+## Tenzir vs. Relational DBs
 
 Unlike [OLAP](#vast-vs-data-warehouses) workloads,
 [OLTP](https://en.wikipedia.org/wiki/Online_transaction_processing) workloads
@@ -127,18 +127,18 @@ have strong transactional and consistency guarantees, e.g., when performing
 inserts, updates, and deletes. These extra guarantees come at a cost of
 throughput and latency when working with large datasets, but are rarely needed
 in security analytics (e.g., ingestion is an append-only operation). In a domain
-of incomplete data, VAST trades correctness for performance and availability,
+of incomplete data, Tenzir trades correctness for performance and availability,
 i.e., throttles a data source with backpressure instead of falling behind and
 risking out-of-memory scenarios.
 
 :::note Recommendation
 If you aim to perform numerous modifications on a small subset of event data,
 with medium ingest rates, relational databases, like PostgreSQL or MySQL, might
-be a better fit. VAST's columnar data representation is ill-suited for row-level
-modifications.
+be a better fit. Tenzir's columnar data representation is ill-suited for
+row-level modifications.
 :::
 
-## VAST vs. Document DBs
+## Tenzir vs. Document DBs
 
 Document DBs, such as MongoDB, offer worry-free ingestion of unstructured
 data. They scale well horizontally and flexible querying.
@@ -154,7 +154,7 @@ operations, for the following reasons:
 - **Analytical Workloads**: the document-oriented storage does not perform well
   for analytical workloads, such as group-by and aggregation queries. But such
   analytics are very common in interactive threat hunting scenarios and in
-  various threshold-based detections. VAST leverages Arrow for columnar data
+  various threshold-based detections. Tenzir leverages Arrow for columnar data
   representation and partially for query execution.
 
 - **Economy of Representation**: security telemetry data exhibits a lot of
@@ -170,12 +170,12 @@ relevant results for a given combination of search terms.
 :::note Recommendation
 Most of the security telemetry arrives as structured log/event data, as opposed
 to unstructured textual data. If your primary use case involves working with
-text, VAST might not be a good fit. That said, needle-in-haystack search
+text, Tenzir might not be a good fit. That said, needle-in-haystack search
 and other information retrieval techniques are still relevant for security
-analytics, for which VAST has basic support.
+analytics, for which Tenzir has basic support.
 :::
 
-## VAST vs. Timeseries DBs
+## Tenzir vs. Timeseries DBs
 
 Timeseries databases share a lot in common with [OLAP
 engines](#vast-vs-data-warehouses), but put center data organization around
@@ -187,10 +187,10 @@ majority of data as series, a timeseries DBs may suit the bill. If you access
 data through other (spatial) attributes, like IP addresses or domains, a
 traditional timeseries DB might not be good fit—especially for high-cardinality
 attributes. If your analysis involve running more complex detections, or
-include needle-in-haystack searches, VAST might be a better fit.
+include needle-in-haystack searches, Tenzir might be a better fit.
 :::
 
-## VAST vs. Key-Value DBs
+## Tenzir vs. Key-Value DBs
 
 A key-value store performs a key-based point or range lookup to retrieve one or
 more values. Security telemetry is high-dimensional data and there are many more
@@ -200,11 +200,11 @@ application protocol, domain name, or hash value.
 :::note Recommendation
 Key-value stores alone are not suitable as foundation for running security
 analytics workloads. There are narrow use cases where key-value stores can
-facilitate certain capabilities, e.g., when processing watch lists. (VAST offers
-a *matcher* plugin for this purpose.)
+facilitate certain capabilities, e.g., when processing watch lists. (Tenzir
+offers a *matcher* plugin for this purpose.)
 :::
 
-## VAST vs. Graph DBs
+## Tenzir vs. Graph DBs
 
 Graph databases are purpose-built for answering complex queries over networks of
 nodes and their relationships, such as finding shortest paths, measuring node
@@ -213,8 +213,8 @@ communication patterns can naturally be represented as graphs, traditional
 security analytics query patterns may not benefit from a graph representation.
 
 :::note Recommendation
-If graph-centric queries dominate your use case, VAST is not the right execution
-engine. VAST can still prove valuable as foundation for graph analytics by
-storing the raw telemetry and feeding it (via Arrow) into graph engines that
-support ad-hoc data frame analysis.
+If graph-centric queries dominate your use case, Tenzir is not the right
+execution engine. Tenzir can still prove valuable as foundation for graph
+analytics by storing the raw telemetry and feeding it (via Arrow) into graph
+engines that support ad-hoc data frame analysis.
 :::

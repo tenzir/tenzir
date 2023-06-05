@@ -4,7 +4,7 @@ sidebar_position: 0
 
 # Pipelines
 
-The VAST language centers around one principle: **dataflow pipelines**.
+The Tenzir language centers around one principle: **dataflow pipelines**.
 
 A pipeline is chain of [operators](operators) that represents a flow of data.
 Operators can produce, transform, or consume data. Think of it as UNIX pipes or
@@ -12,7 +12,7 @@ Powershell commands where output from one command is input to the next:
 
 ![Pipeline Chaining](pipeline-chaining.excalidraw.svg)
 
-VAST distinguishes three types of operators:
+Tenzir distinguishes three types of operators:
 
 1. **Source**: generates new data
 2. **Transformation**: modifies data
@@ -24,8 +24,8 @@ The diagram below illustrates the operator chaining:
 ![Pipeline Structure](pipeline-structure.excalidraw.svg)
 
 If a pipeline would not have a source and sink, it would "leak" data. We call
-pipelines that have both a source and sink a **closed pipeline**. VAST can only
-execute closed pipelines. A pipeline that solely consists of a chain
+pipelines that have both a source and sink a **closed pipeline**. Tenzir can
+only execute closed pipelines. A pipeline that solely consists of a chain
 transformations is an **open pipeline**.
 
 ## Operator Overview
@@ -45,13 +45,13 @@ get data in and out of the system.[^1]
 ![Operator Overview](operator-overview.excalidraw.svg)
 
 :::caution Work in Progress
-The above diagram shows the scope that we are targeting for VAST v4.0. Some of
+The above diagram shows the scope that we are targeting for Tenzir v4.0. Some of
 the pictured operators, formats, and connectors are not yet implemented.
 :::
 
 ## Syntax
 
-VAST comes with its own language to define pipelines, geared towards working
+Tenzir comes with its own language to define pipelines, geared towards working
 with richly typed, structured event data across multiple schemas. There exist
 numerous dataflow languages out there, and we drew inspiration from others to
 achieve:
@@ -98,15 +98,15 @@ designing the language:
 4. Exploit symmetries for an intuitive learning experience, e.g., `from` and
    `to` have their duals `read` and `write`.
 
-How does the syntax of a concrete VAST pipeline look? Let's take the following
+How does the syntax of a concrete Tenzir pipeline look? Let's take the following
 example:
 
 ![Pipeline Example](pipeline-example.excalidraw.svg)
 
-Here is how you write this pipeline in the VAST language:
+Here is how you write this pipeline in the Tenzir language:
 
 ```cpp
-/* 1. Get data from a VAST node */
+/* 1. Get data from a Tenzir node */
 export
 /* 2. Filter out a subset of events */
 | where #schema == "zeek.weird" && note == "SSL::Invalid_Server_Cert"
@@ -126,18 +126,18 @@ soon. The corresponding [roadmap
 item](https://github.com/tenzir/public-roadmap/issues/18) tracks the progress
 publicly.
 
-Until then, it is only possible to run an open pipelines. When using the `vast`
-binary, source and sink operators are implicit. You can [run an open
+Until then, it is only possible to run an open pipelines. When using the
+`tenzir` binary, source and sink operators are implicit. You can [run an open
 pipeline](../use/export/README.md) with the `export` command as follows:
 
 ```bash
-vast export json 'where ... | ... | head 20'
+tenzir export json 'where ... | ... | head 20'
 ```
 :::
 
 ## Expressions
 
-VAST [expressions](expressions) are search expressions to describe the desired
+Tenzir [expressions](expressions) are search expressions to describe the desired
 working set, usually at the beginning of an interactive data exploration. An
 expression consists of predicates chained together by *connectives*, such as a
 conjunction (logical AND), a disjunction (logical OR), and a negation (logical
@@ -149,13 +149,13 @@ Expression occur predominantly as argument to the
 Other expression elements, such as [extractors](expressions#extractors), also
 occur in other operators.
 
-Historically, the VAST language only supported providing expressions. But the
+Historically, the Tenzir language only supported providing expressions. But the
 strong demand for reshaping and analytic workloads made the language evolve to
 include dataflow semantics.
 
 ## Connectors and Formats
 
-VAST has two low-level abstractions to integrate with the rest of the world:
+Tenzir has two low-level abstractions to integrate with the rest of the world:
 
 - [Connector](connectors/README.md): performs low-level I/O to exchange data
   with a resource. A connector provides a *loader* to acquire raw bytes, and/or
@@ -173,7 +173,7 @@ A connector is typically I/O-bound whereas a format is CPU-bound.
 
 ## Logical and Phyiscal Operators
 
-VAST has two types of operators:
+Tenzir has two types of operators:
 
 1. **Logical Operators**: user-facing operators that express the intent in the
    domain.
@@ -197,23 +197,23 @@ through a third-party library that exposes the structured data directly. We'd
 still like to write `from X` at the logical level in this case, but the physical
 then won't go through `load` and `parse`.
 
-This decoupling is what makes the VAST language declarative: the user only needs
-to specify the intent of how the data flows, but it's up to the implementation
-to select the optimal building blocks for the most efficient realization. For
-example, filter predicates may be "pushed down" to reduce the amount of data
-that flows through a pipeline. Such optimizations are common practice in
-declarative query languages.
+This decoupling is what makes the Tenzir language declarative: the user only
+needs to specify the intent of how the data flows, but it's up to the
+implementation to select the optimal building blocks for the most efficient
+realization. For example, filter predicates may be "pushed down" to reduce the
+amount of data that flows through a pipeline. Such optimizations are common
+practice in declarative query languages.
 
 ## Language Frontends
 
-If you do not like the syntax of the VAST language and prefer to bring your own
-language to the data, then you can write a [frontend](frontends) that transpiles
-user input into the VAST language.
+If you do not like the syntax of the Tenzir language and prefer to bring your
+own language to the data, then you can write a [frontend](frontends) that
+transpiles user input into the Tenzir language.
 
 For example, we provide a [Sigma](frontends/sigma) frontend that transpiles a
-YAML detection rule into VAST [expression](expressions). In fact, the VAST
+YAML detection rule into Tenzir [expression](expressions). In fact, the Tenzir
 language itself is a language frontend.
 
 In future, we aim for providing frontends for SQL and other detection languages.
-Please [chat with us](/discord) if you have ideas about concrete languages VAST
-should support.
+Please [chat with us](/discord) if you have ideas about concrete languages
+Tenzir should support.

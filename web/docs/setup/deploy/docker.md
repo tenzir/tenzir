@@ -4,9 +4,9 @@ sidebar_position: 0
 
 # Docker
 
-Our Docker image contains a dynamic of VAST build with plugins as shared
-libraries. The system user `vast` runs the VAST executable with limited
-privileges. Database contents go into the volume exposed at `/var/lib/vast`.
+Our Docker image contains a dynamic of Tenzir build with plugins as shared
+libraries. The system user `tenzir` runs the Tenzir executable with limited
+privileges. Database contents go into the volume exposed at `/var/lib/tenzir`.
 
 Make sure you have the appropriate Docker runtime setup, e.g., [Docker
 Desktop](https://www.docker.com/products/docker-desktop/) or [Docker
@@ -17,31 +17,31 @@ Make sure Docker has enough multiple CPU cores and several GBs of RAM.
 :::
 ## Pull the image
 
-Retrieving a dockerized version of VAST only requires pulling a pre-built image
-from our [container registry at DockerHub][dockerhub]:
+Retrieving a dockerized version of Tenzir only requires pulling a pre-built
+image from our [container registry at DockerHub][dockerhub]:
 
 ```bash
-docker pull tenzir/vast
+docker pull tenzir/tenzir
 ```
 
-Thereafter, you're ready to start a VAST node in a container.
+Thereafter, you're ready to start a Tenzir node in a container.
 
-[dockerhub]: https://hub.docker.com/repository/docker/tenzir/vast
+[dockerhub]: https://hub.docker.com/repository/docker/tenzir/tenzir
 
 ## Start the container
 
-When running VAST in a container, you need to wire two resources for a practical
-deployment:
+When running Tenzir in a container, you need to wire two resources for a
+practical deployment:
 
-1. **Network**: VAST exposes a listening socket to accept client commands.
-2. **Disk**: VAST stores its database content on mounted volume.
+1. **Network**: Tenzir exposes a listening socket to accept client commands.
+2. **Disk**: Tenzir stores its database content on mounted volume.
 
-We recommend starting the VAST server detached in the background:
+We recommend starting the Tenzir server detached in the background:
 
 ```bash
 mkdir -p /path/to/db
-docker run -dt --name=vast --rm -p 5158:5158 -v /path/to/db:/var/lib/vast \
-  tenzir/vast start
+docker run -dt --name=tenzir --rm -p 5158:5158 -v /path/to/db:/var/lib/tenzir \
+  tenzir/tenzir start
 ```
 
 The `docker` arguments have the following meaning:
@@ -53,12 +53,12 @@ The `docker` arguments have the following meaning:
 - `-p` to expose the port to the outer world
 - `-v from:to` to mount the local path `from` into the container at `to`
 
-Now you are ready to interact with a running VAST node.
+Now you are ready to interact with a running Tenzir node.
 
-## Configure a VAST container
+## Configure a Tenzir container
 
 Configuration in the Docker ecosystem typically entails setting environment
-variables. VAST supports this paradigm with a one-to-one [mapping from
+variables. Tenzir supports this paradigm with a one-to-one [mapping from
 configuration file entries to environment
 variables](../configure.md#environment-variables).
 
@@ -68,43 +68,43 @@ environment variable by specifying just `-e KEY` without an assignment. Here is
 an example:
 
 ```bash
-docker run -e VAST_ENDPOINT -e VAST_IMPORT__BATCH_SIZE=42 --env-file .env \
-  tenzir/vast start
+docker run -e TENZIR_ENDPOINT -e TENZIR_IMPORT__BATCH_SIZE=42 --env-file .env \
+  tenzir/tenzir start
 ```
 
-## Build your own VAST image
+## Build your own Tenzir image
 
 You can always build your own Docker image in case our prebuilt images don't fit
 your use case.
 
-Our official [Dockerfile](https://github.com/tenzir/vast/blob/main/Dockerfile)
+Our official [Dockerfile](https://github.com/tenzir/tenzir/blob/main/Dockerfile)
 offers two starting points: a *development* and *production* layer.
 
 Before building the image, make sure to fetch all submodules:
 
 ```bash
-git clone --recursive https://github.com/tenzir/vast
-cd vast
+git clone --recursive https://github.com/tenzir/tenzir
+cd tenzir
 ```
 
 ### Build the production image
 
 The production image is optimized for size and security. This is the official
-`tenzir/vast` image. From the repository root, build it as follows:
+`tenzir/tenzir` image. From the repository root, build it as follows:
 
 ```bash
-docker build -t tenzir/vast .
+docker build -t tenzir/tenzir .
 ```
 
 ### Build the development image
 
-The development image `tenzir/vast-dev` contains all build-time dependencies of
-VAST. It runs with a `root` user to allow for building custom images that build
-additional VAST plugins. By default, VAST loads all installed plugins in our
-images.
+The development image `tenzir/tenzir-dev` contains all build-time dependencies
+of Tenzir. It runs with a `root` user to allow for building custom images that
+build additional Tenzir plugins. By default, Tenzir loads all installed plugins
+in our images.
 
 Build the development image by specifying it as `--target`:
 
 ```bash
-docker build -t tenzir/vast-dev --target development .
+docker build -t tenzir/tenzir-dev --target development .
 ```

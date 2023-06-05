@@ -20,8 +20,8 @@ the event type.
 [suricata]: https://suricata.io
 [eve-json]: https://suricata.readthedocs.io/en/latest/output/eve/eve-json-output.html
 
-VAST's [`json`](json.md) can handle EVE JSON correctly, but for the schema names
-to match the value from the `event_type` field, we need to pass the option
+Tenzir's [`json`](json.md) can handle EVE JSON correctly, but for the schema
+names to match the value from the `event_type` field, we need to pass the option
 `--selector=event_type:suricata`. The `suricata` parser does this by default.
 
 The default loader for the `suricata` parser is
@@ -43,13 +43,13 @@ Here's an `eve.log` sample:
 Import the log as follows:
 
 ```bash
-vast import suricata < eve.log
+tenzir 'read suricata | import' < eve.log
 ```
 
 ### Read from a UNIX domain socket
 
 Instead of writing to a file, Suricata can also log to a UNIX domain socket that
-VAST can then read from. This saves a filesystem round-trip. This requires the
+Tenzir can then read from. This saves a filesystem round-trip. This requires the
 following settings in your `suricata.yaml`:
 
 ```yaml
@@ -64,10 +64,10 @@ Suricata creates `eve.sock` upon startup. Thereafter, you can read from the
 socket via netcat:
 
 ```bash
-nc -vlkU eve.sock | vast exec 'read suricata | ...'
+nc -vlkU eve.sock | tenzir 'read suricata | ...'
 ```
 
-Or natively via this VAST pipeline:
+Or natively via this Tenzir pipeline:
 
 ```
 from file --uds eve.sock read suricata

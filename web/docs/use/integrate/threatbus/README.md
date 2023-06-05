@@ -2,8 +2,7 @@
 
 :::caution
 Threat Bus is in maintenance mode. We are no longer adding features, as we are
-about to integrate the core concepts into a new version of VAST's Python
-bindings.
+about to integrate the core concepts into a new version of Tenzir.
 
 We're happy to answer any question about the upcoming relaunch in our [community
 chat](/discord).
@@ -13,8 +12,8 @@ Threat Bus is a
 [STIX](https://docs.oasis-open.org/cti/stix/v2.1/stix-v2.1.html)-based security
 content fabric to connect security tools, such as network monitors like
 [Zeek](https://zeek.org/), telemetry engines like
-[VAST](https://github.com/tenzir/vast), or threat intelligence platforms (TIP)
-like [OpenCTI](https://www.opencti.io) and
+[Tenzir](https://github.com/tenzir/tenzir), or threat intelligence platforms
+(TIP) like [OpenCTI](https://www.opencti.io) and
 [MISP](https://www.misp-project.org/). Threat Bus wraps a tool's functions in a
 publish-subscrbe fashion and connects it to a messaging backbone.
 

@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Build
 
-VAST uses [CMake](https://cmake.org) as build system. Aside from a modern C++20
+Tenzir uses [CMake](https://cmake.org) as build system. Aside from a modern C++20
 compiler, you need to ensure availability of the dependencies in the table
 below.
 
@@ -18,17 +18,17 @@ builds.
 
 ## Dependencies
 
-Every [release](https://github.com/tenzir/vast/releases) of VAST includes an
+Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 [SBOM](https://en.wikipedia.org/wiki/Software_bill_of_materials) in
 [SPDX](https://spdx.dev) format that lists all dependencies and their versions.
 
 <div align="center" class="padding-bottom--md">
-  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/vast/releases/latest/download/VAST.spdx">Latest SBOM</a>
+  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/tenzir/releases/latest/download/Tenzir.spdx">Latest SBOM</a>
 </div>
 
 |Required|Dependency|Version|Description|
 |:-:|:-:|:-:|-|
-|✓|C++ Compiler|C++20 required|VAST is tested to compile with GCC >= 12.0 and Clang >= 15.0.|
+|✓|C++ Compiler|C++20 required|Tenzir is tested to compile with GCC >= 12.0 and Clang >= 15.0.|
 |✓|[CMake](https://cmake.org)|>= 3.19|Cross-platform tool for building, testing and packaging software.|
 |✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 0.18.7|Implementation of the actor model in C++. (Bundled as submodule.)|
 |✓|[OpenSSL](https://www.openssl.org)||Utilities for secure networking and cryptography.|
@@ -46,22 +46,22 @@ Every [release](https://github.com/tenzir/vast/releases) of VAST includes an
 ||[libpcap](https://www.tcpdump.org)||Required for building the `pcap` plugin.|
 ||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
 ||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
-||[Doxygen](http://www.doxygen.org)||Required to build documentation for libvast.|
-||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for VAST.|
+||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|
+||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for Tenzir.|
 
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
 
 ## Compile
 
-Building VAST involves the following steps:
+Building Tenzir involves the following steps:
 
 1. [Download the latest release](download.md) or clone the repository
    recursively:
   ```bash
-  git clone https://github.com/tenzir/vast
-  cd vast
-  git submodule update --init --recursive -- libvast plugins
+  git clone https://github.com/tenzir/tenzir
+  cd tenzir
+  git submodule update --init --recursive -- libtenzir plugins
   ```
 
 2. Configure the build with CMake. For faster builds, we recommend passing
@@ -104,7 +104,7 @@ verify that your build works as expected:
   ```
 ## Install
 
-6. Install VAST system-wide.
+6. Install Tenzir system-wide.
   ```bash
   cmake --install build
   ```
@@ -115,7 +115,7 @@ If you prefer to install into a custom install prefix, install with `--prefix
 To remove debug symbols from the installed binaries and libraries, pass
 `--strip`.
 
-To install only files relevant for running VAST and not for plugin development
+To install only files relevant for running Tenzir and not for plugin development
 pass `--component Runtime`.
 
 ## Clean

@@ -14,7 +14,7 @@ The `measure` operator yields metrics for each received batch of events or bytes
 using the following schema, respectively:
 
 ```title="Events Metrics"
-type vast.metrics.events = record  {
+type tenzir.metrics.events = record  {
   timestamp: time,
   schema: string,
   schema_id: string,
@@ -23,7 +23,7 @@ type vast.metrics.events = record  {
 ```
 
 ```title="Bytes Metrics"
-type vast.metrics.bytes = record  {
+type tenzir.metrics.bytes = record  {
   timestamp: time,
   bytes: uint64,
 }
@@ -34,7 +34,8 @@ type vast.metrics.bytes = record  {
 Emit metrics immediately with every batch, rather than buffering until the
 upstream operator stalls, i.e., is idle or waiting for further input.
 
-The --real-time option is useful when inspect should emit data without latency.
+The `--real-time` option is useful when inspect should emit data without
+latency.
 
 ### `--cumulative`
 

@@ -1,39 +1,40 @@
 # Python
 
-VAST ships with Python bindings to enable interaction with VAST with primitives
-that integrate well with the Python ecosystem. We distribute the bindings as
-PyPI package called [pyvast][pypi-page].
+Tenzir ships with a Python library to enable interaction with Tenzir with
+primitives that integrate well with the Python ecosystem. We distribute the
+library as PyPI package called [tenzir][pypi-page].
 
-[pypi-page]: https://pypi.org/project/pyvast/
+[pypi-page]: https://pypi.org/project/tenzir/
 
 :::warning Experimental
-PyVAST is considered experimental and subject to change without notice.
+The Python library is considered experimental and subject to change without
+notice.
 :::
 
 ## Install the PyPI package
 
-Use `pip` to install PyVAST:
+Use `pip` to install Tenzir:
 
 ```bash
-pip install pyvast
+pip install tenzir
 ```
 
-## Use PyVAST
+## Use the Tenzir Python library
 
 ### Quickstart
 
-The following snippet illustrates a small script to query VAST.
+The following snippet illustrates a small script to query Tenzir.
 
 ```py
 #!/usr/bin/env python3
 
 import asyncio
-from pyvast import VAST, to_json_rows
+from tenzir import Tenzir, to_json_rows
 
 async def example():
-    vast = VAST()
+    tenzir = Tenzir()
 
-    generator = vast.export("192.168.1.103", limit=10)
+    generator = tenzir.export("192.168.1.103", limit=10)
     async for row in to_json_rows(generator):
         print(row)
 
@@ -42,30 +43,31 @@ asyncio.run(example())
 
 ### Overview
 
-PyVAST is meant to expose all the VAST features that are relevant in a Python
-environment. For now though, it is still in active development and only the
-following interfaces are exposed:
+The Python library is meant to expose all the Tenzir features that are relevant
+in a Python environment. For now though, it is still in active development and
+only the following interfaces are exposed:
+
 - `export`
 - `count`
 - `status`
 
-Many options that exist on the CLI are not mapped to PyVAST. The idea here is to
-avoid overwhelming the API with options that are actually not needed when
-interacting with VAST from Python.
+Many options that exist on the CLI are not mapped to the library. The idea here
+is to avoid overwhelming the API with options that are actually not needed when
+interacting with Tenzir from Python.
 
-### class VAST
+### class Tenzir
 
 ```py
-    class VAST(
+    class Tenzir(
         endpoint: Optional[str]
     )
 ```
 
-Create a connection to a VAST node that is listening at the specified endpoint.
-If no enpdoint is given the `VAST_ENDPOINT` environment variable is used, if
-that is also not present the `vast.endpoint` value from a local `vast.yaml`
-configuration file is used. In case that value is also not present the default
-connection endpoint of `127.0.0.1:5158` is used.
+Create a connection to a Tenzir node that is listening at the specified
+endpoint. If no enpdoint is given the `TENZIR_ENDPOINT` environment variable is
+used, if that is also not present the `tenzir.endpoint` value from a local
+`tenzir.yaml` configuration file is used. In case that value is also not present
+the default connection endpoint of `127.0.0.1:5158` is used.
 
 #### export
 
@@ -77,12 +79,12 @@ connection endpoint of `127.0.0.1:5158` is used.
     ) -> AsyncIterable[TableSlice]
 ```
 
-Evaluate an expression in a VAST node and receive the resulting events in an
+Evaluate an expression in a Tenzir node and receive the resulting events in an
 asynchronous stream of `TableSlices`.
 
 The `mode` argument can be set to one of `HISTORICAL`, `CONTINUOUS`, or
 `UNIFIED`. A historical export evaluates the expression against data
-that is stored in the VAST database, the resulting output stream ends
+that is stored in the Tenzir database, the resulting output stream ends
 when all eligible data has been evaluated. A `CONTINUOUS` one looks at data
 as it flows into the node, it will continue to run until the event limit is
 reached, it gets discarded, or the node terminates.
@@ -107,13 +109,13 @@ Evaluate the sum of all events in the database that match the given expression.
     coroutine status() -> dict
 ```
 
-Retrieve the current status from VAST.
+Retrieve the current status from Tenzir.
 
 ```py
->>> st = await vast.status()
+>>> st = await tenzir.status()
 >>> pprint.pprint(st["system"])
 {'current-memory-usage': 729628672,
- 'database-path': '/var/lib/vast',
+ 'database-path': '/var/lib/tenzir',
  'in-memory-table-slices': 0,
  'peak-memory-usage': 729628672,
  'swap-space-usage': 0}
@@ -131,15 +133,15 @@ Collect a stream of `TableSlice` and return a dictionary of [Arrow
 tables][pyarrow] indexed by schema name.
 [pyarrow]: https://arrow.apache.org/docs/python/index.html
 
-### class VastRow
+### class TenzirRow
 
-A `VastRow` is a Python native representation of an "event" from VAST. It
+A `TenzirRow` is a Python native representation of an "event" from Tenzir. It
 consists of a `name` and a `data` dictionary.
 
 ```py
     coroutine to_json_rows(
         stream: AsyncIterable[TableSlice],
-    ) -> AsyncIterable[VastRow]
+    ) -> AsyncIterable[TenzirRow]
 ```
 
-Convert a stream of `TableSlice`s to a stream of `VastRow`s.
+Convert a stream of `TableSlice`s to a stream of `TenzirRow`s.

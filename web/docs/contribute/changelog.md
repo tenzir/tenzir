@@ -21,8 +21,9 @@ The procedure for adding a changelog entry looks as follows.
 4. Add a file with the following filename structure: `X1[-X2-...-Xn][--Y].md`.
    where `X` is either a PR number in the tenzir/vast repository or a GitHub
    account name. We only include account names for external contributions
-   outside from the VAST core team. Everything after the two dashes `--` is an
+   outside from the Tenzir core team. Everything after the two dashes `--` is an
    optional description to clarify what the change was about.
 
-Every installation and build of VAST contains the amalgamated CHANGELOG.md file.
-To view that directly, open `path/to/build/CHANGELOG.md` for your VAST build.
+Every installation and build of Tenzir contains the amalgamated CHANGELOG.md
+file. To view that directly, open `path/to/build/CHANGELOG.md` for your Tenzir
+build.

@@ -9,8 +9,9 @@ Operator modifiers are keywords that may occur before an operator.
 ## Location Overrides
 
 Pipelines run across multiple processes:
-- The local `vast exec` process, and
-- the remote `vast start` processes (commonly referred to as _nodes_).
+
+- The local `tenzir` process, and
+- the remote `tenzird` processes (commonly referred to as *nodes*).
 
 Some pipeline operators prefer running either local or remote. For example, the
 `from` and `to` operators run locally, and the `serve` operator runs remotely by
@@ -37,7 +38,7 @@ overrides:
    potentially unwanted operators, you must set the following configuration
    option to enable running local operators remotely (and vice versa):
 
-   ```yaml {0} title="vast.yaml"
-   vast:
+   ```yaml {0} title="tenzir.yaml"
+   tenzir:
      allow-unsafe-pipelines: true
    ```

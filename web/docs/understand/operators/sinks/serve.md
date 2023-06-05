@@ -32,10 +32,10 @@ operator errors when receiving a duplicate serve id.
 
 ## Examples
 
-Read a Zeek conn log, 100 events at a time:
+Read a Zeek conn.log, 100 events at a time:
 
 ```bash
-vast exec 'from file path/to/conn.log read zeek-tsv | serve zeek-conn-logs'
+tenzir 'from file path/to/conn.log read zeek-tsv | serve zeek-conn-logs'
 ```
 
 ```bash
