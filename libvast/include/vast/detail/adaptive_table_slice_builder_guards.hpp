@@ -169,7 +169,10 @@ public:
 
   /// @brief Adds a value to a field.
   /// @param view View of a value to be added.
-  /// @return Error describing why the addition wasn't successful.
+  /// @return Error describing why the addition wasn't successful. TODO:
+  /// Returning a caf::error after each addition may significantly slow down the
+  /// parsing. It might be worthwhile to check if we need to optimize this in
+  /// the future.
   template <class ViewType>
     requires requires(ViewType x) { materialize(x); }
   auto add(ViewType view) -> caf::error {
