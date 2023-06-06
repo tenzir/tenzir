@@ -677,7 +677,13 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     },
     [self](atom::spawn, pipeline& pipeline)
       -> caf::result<std::vector<std::pair<execution_node_actor, std::string>>> {
-      auto ops = std::move(pipeline).unwrap();
+      auto optimized = pipeline.optimize();
+      if (not optimized) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("failed to optimize pipeline: '{}'",
+                                           optimized.error()));
+      }
+      auto ops = std::move(*optimized).unwrap();
       auto result = std::vector<std::pair<execution_node_actor, std::string>>{};
       result.reserve(ops.size());
       for (auto&& op : ops) {

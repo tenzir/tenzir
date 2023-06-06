@@ -129,12 +129,21 @@ auto pipeline::optimize() const -> caf::expected<pipeline> {
     return caf::make_error(ec::logic_error, "failed to optimize pipeline '{}'",
                            *this);
   }
+
   if (optimized->first != trivially_true_expression()) {
-    return caf::make_error(ec::logic_error,
-                           "failed to optimize pipeline '{}': source "
-                           "operator pushed expression {}",
-                           *this, optimized->first);
+    if (this->infer_type<void>()) {
+      return caf::make_error(ec::logic_error,
+                             "failed to optimizie pipeline '{}': source pushed "
+                             "expression {}",
+                             *this, optimized->first);
+    }
+    // Prepend where operator as a hacky way to handle pipelines without source.
+    auto where
+      = pipeline::parse_as_operator(fmt::format("where {}", optimized->first));
+    VAST_ASSERT(where);
+    optimized->second.prepend(std::move(*where));
   }
+
   return std::move(optimized->second);
 }
 
@@ -275,9 +284,9 @@ auto pipeline::infer_type_impl(operator_type input) const
   for (const auto& op : operators_) {
     auto first = &op == &operators_.front();
     if (!first && current.is<void>()) {
-      return caf::make_error(
-        ec::type_clash,
-        fmt::format("pipeline continues with {} after sink", op->to_string()));
+      return caf::make_error(ec::type_clash, fmt::format("pipeline continues "
+                                                         "with {} after sink",
+                                                         op->to_string()));
     }
     auto next = op->infer_type(current);
     if (!next) {
