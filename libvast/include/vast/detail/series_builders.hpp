@@ -265,15 +265,15 @@ struct series_builder : series_builder_base {
   vast::type type() const;
 
   template <concrete_type Type>
-  auto add(auto view) -> void {
+  auto add(auto view) -> caf::error {
     if constexpr (std::is_same_v<Type, string_type>) {
       if (auto enum_builder
           = std::get_if<concrete_series_builder<enumeration_type>>(this)) {
         enum_builder->add(view);
-        return;
+        return {};
       }
     }
-    add_impl<Type>(std::move(view));
+    return add_impl<Type>(std::move(view));
   }
 
   std::shared_ptr<arrow::Array> finish();
@@ -345,8 +345,8 @@ private:
   }
 
   template <concrete_type Type>
-  auto add_impl(auto view) -> void {
-    auto err = std::visit(
+  auto add_impl(auto view) -> caf::error {
+    return std::visit(
       detail::overload{
         [view](concrete_series_builder<Type>& same_type_builder) {
           same_type_builder.add(view);
@@ -366,8 +366,14 @@ private:
               not maybe_err) {
             return maybe_err.error();
           }
-          // macOS compilation errors here that this is not used.
-          return this->cast_impl<BuilderValueType, Type>(builder, view);
+          auto err = cast_impl<BuilderValueType, Type>(builder, view);
+          if (not err)
+            return caf::error{};
+          if (err and not can_change_builder_type_)
+            return err;
+          // TODO: implement casting whole array instead of returning error here
+          // in upcomming PR.
+          return err;
         },
         [view](concrete_series_builder<record_type>&) {
           return caf::make_error(ec::convert_error,
@@ -395,10 +401,9 @@ private:
         },
       },
       *this);
-    // TODO: propagate outside of this function in next PR
-    if (err)
-      VAST_WARN("{}", err);
   }
+
+  bool can_change_builder_type_ = true;
 };
 
 } // namespace vast::detail

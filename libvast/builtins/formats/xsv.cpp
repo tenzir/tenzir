@@ -256,7 +256,8 @@ public:
           }
           for (const auto& [field, value] : detail::zip(fields, values)) {
             auto field_guard = row.push_field(field);
-            field_guard.add(value);
+            if (auto err = field_guard.add(value))
+              ctrl.warn(std::move(err));
             // TODO: Check what add() does with strings.
           }
         }
