@@ -1,6 +1,6 @@
 # import
 
-Imports events into a VAST node.
+Imports events into a VAST node. The dual to [`export`](../sources/export.md).
 
 ## Synopsis
 
