@@ -32,6 +32,9 @@ namespace vast::plugins::export_ {
 
 class export_operator final : public crtp_operator<export_operator> {
 public:
+  explicit export_operator(expression expr) : expr_{std::move(expr)} {
+  }
+
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
     // TODO: Some of the the requests this operator makes are blocking, so we
@@ -42,16 +45,9 @@ public:
       = get_node_components<catalog_actor, accountant_actor, filesystem_actor>(
         blocking_self, ctrl.node());
     auto [catalog, accountant, fs] = std::move(*components);
-    auto expr = trivially_true_expression();
-    if (auto pushdown = predicate_pushdown(expr)) {
-      expr = std::move(*pushdown).first;
-    } else {
-      VAST_VERBOSE("no expression found: launching 'export' to retrieve all "
-                   "persisted events");
-    }
     auto current_slice = std::optional<table_slice>{};
-    auto query_context = vast::query_context::make_extract(
-      "export", blocking_self, std::move(expr));
+    auto query_context
+      = vast::query_context::make_extract("export", blocking_self, expr_);
     auto current_result = catalog_lookup_result{};
     auto current_error = caf::error{};
     blocking_self
@@ -73,31 +69,45 @@ public:
         auto partition = blocking_self->spawn(
           passive_partition, uuid, accountant, fs,
           ctrl.dir() / "index" / fmt::format("{:l}", uuid));
+        auto recieving_slices = true;
         blocking_self->send(partition, atom::query_v, query_context);
-        blocking_self->receive(
-          [&current_slice](table_slice slice) {
-            current_slice = std::move(slice);
-          },
-          [](atom::done) {
-            // no-op
-          },
-          [&current_error](caf::error e) {
-            current_error = std::move(e);
-          });
-        if (current_error) {
-          ctrl.abort(std::move(current_error));
-          co_return;
-        }
-        if (current_slice) {
-          co_yield *current_slice;
-          current_slice.reset();
+        while (recieving_slices) {
+          blocking_self->receive(
+            [&current_slice](table_slice slice) {
+              current_slice = std::move(slice);
+            },
+            [&recieving_slices](uint64_t) {
+              recieving_slices = false;
+            },
+            [&recieving_slices, &current_error](caf::error e) {
+              recieving_slices = false;
+              current_error = std::move(e);
+            });
+          if (current_error) {
+            ctrl.warn(std::move(current_error));
+            continue;
+          }
+          if (current_slice) {
+            co_yield *current_slice;
+            current_slice.reset();
+          } else {
+            co_yield {};
+          }
         }
       }
     }
   }
 
   auto to_string() const -> std::string override {
-    return "export";
+    auto string = std::string{"export"};
+    if (expr_ != trivially_true_expression()) {
+      string.append(fmt::format(" | where {}", expr_));
+    }
+    return string;
+  }
+
+  auto detached() const -> bool override {
+    return true;
   }
 
   auto location() const -> operator_location override {
@@ -106,8 +116,13 @@ public:
 
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override {
-    return std::pair{expr, std::make_unique<export_operator>(*this)};
+    return std::pair{
+      trivially_true_expression(),
+      std::make_unique<export_operator>(conjunction{expr_, expr})};
   }
+
+private:
+  expression expr_;
 };
 
 class plugin final : public virtual operator_plugin {
@@ -138,7 +153,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<export_operator>(),
+      std::make_unique<export_operator>(trivially_true_expression()),
     };
   }
 };
