@@ -250,6 +250,9 @@ public:
   /// Returns the sequence of operators that this pipeline was built from.
   auto unwrap() && -> std::vector<operator_ptr>;
 
+  /// Returns an optimized pipeline with pushed-down expressions.
+  auto optimize() const -> caf::expected<pipeline>;
+
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;
 

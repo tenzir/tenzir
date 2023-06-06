@@ -127,6 +127,21 @@ auto pipeline::unwrap() && -> std::vector<operator_ptr> {
   return std::move(operators_);
 }
 
+auto pipeline::optimize() const -> caf::expected<pipeline> {
+  auto optimized = predicate_pushdown_pipeline(trivially_true_expression());
+  if (not optimized) {
+    return caf::make_error(ec::logic_error, "failed to optimize pipeline '{}'",
+                           *this);
+  }
+  if (optimized->first != trivially_true_expression()) {
+    return caf::make_error(ec::logic_error,
+                           "failed to optimize pipeline '{}': source "
+                           "operator pushed expression {}",
+                           *this, optimized->first);
+  }
+  return std::move(optimized->second);
+}
+
 auto pipeline::copy() const -> operator_ptr {
   auto copied = std::make_unique<pipeline>();
   copied->operators_.reserve(operators_.size());
