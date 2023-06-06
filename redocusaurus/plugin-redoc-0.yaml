@@ -45,8 +45,10 @@ paths:
                 managed:
                   type: boolean
                   description: >-
-                    A flag specifying whether this pipeline is managed
-                    (persistable).
+                    A flag specifying whether this pipeline is
+                    managed.\nNon-managed (ephemeral) pipelines are not
+                    persisted, will not show up in the /pipeline/list endpoint,
+                    and are implicitly removed once they are terminated.
                   default: false
                 name:
                   type: string
