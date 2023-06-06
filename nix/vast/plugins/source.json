@@ -2,7 +2,7 @@
   "name": "vast-plugins",
   "url": "git@github.com:tenzir/vast-plugins",
   "ref": "main",
-  "rev": "65318c14317ba8d26c269520f97d3e6afe35e284",
+  "rev": "7f72f7a5866b25172f9d29c805de7e0b1200cefe",
   "submodules": true,
   "shallow": true
 }
