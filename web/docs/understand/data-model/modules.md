@@ -22,8 +22,8 @@ All defined type names and aliases share one *global* identifier namespace.
 Introducing a new type definition or alias adds a symbol to this namespace. The
 following rules exist to make manipulation of the namespace manageable:
 
-- VAST processes all directories of the `vast.module-dirs` option *in order*,
-  creating a union of all type definitions.
+- Tenzir processes all directories of the `tenzir.module-dirs` option *in
+  order*, creating a union of all type definitions.
 
 - *Within* a specified module directory, all type definitions must be unique,
   i.e., no types can have the same name.
@@ -37,38 +37,38 @@ following rules exist to make manipulation of the namespace manageable:
   The 2-phase lookup only works within a module directory.
 
 :::note
-VAST processes all directories *recursively*. This means you are free to split
+Tenzir processes all directories *recursively*. This means you are free to split
 the content over a directory structure of your choice.
 :::
 
 ## Module Directory Lookup
 
-VAST ships with modules containing type definitions and aliases for common
+Tenzir ships with modules containing type definitions and aliases for common
 formats, such as Zeek or Suricata logs. Pre-installed modules reside in
-`<datadir>/vast/modules`, and additional search paths for user-provided modules
-can be set in the configuration file `vast.yaml` by adjusting the
-`vast.module-dirs` option.
+`<datadir>/tenzir/modules`, and additional search paths for user-provided
+modules can be set in the configuration file `tenzir.yaml` by adjusting the
+`tenzir.module-dirs` option.
 
-VAST looks at module directories in the following order:
+Tenzir looks at module directories in the following order:
 
-1. `<datadir>/vast/module` for system-wide module files bundled with VAST,
+1. `<datadir>/tenzir/module` for system-wide module files bundled with Tenzir,
    where `<datadir>` is the platform-specific directory for data files, e.g.,
    `<install-prefix>/share`.
 
-2. `<sysconfdir>/vast/modules` for system-wide configuration, where
+2. `<sysconfdir>/tenzir/modules` for system-wide configuration, where
    `<sysconfdir>` is the platform-specific directory for configuration files,
    e.g., `<install-prefix>/etc`.
 
-3. `~/.config/vast/modules` for user-specific configuration. VAST respects the
-   XDG base directory specification and its environment variables.
+3. `~/.config/tenzir/modules` for user-specific configuration. Tenzir respects
+   the XDG base directory specification and its environment variables.
 
 4. An ordered, comma-separated list of directories passed using
    `--module-dirs=path/to/modules` on the command line. This corresponds to the
-   option `vast.module-dirs`.
+   option `tenzir.module-dirs`.
 
-:::caution Changing VAST modules
+:::caution Changing Tenzir modules
 We recommend to avoid making changes to module files in
-`<datadir>/vast/modules`, as this can break updates to VAST. If you need to make
-adaptations of builtin types, you can modify them in your own module directory
-with the help of record type operations.
+`<datadir>/tenzir/modules`, as this can break updates to Tenzir. If you need to
+make adaptations of builtin types, you can modify them in your own module
+directory with the help of record type operations.
 :::

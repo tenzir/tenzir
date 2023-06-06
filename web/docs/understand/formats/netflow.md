@@ -18,7 +18,7 @@ import CommunityEdition from '@site/presets/CommunityEdition.md';
 computing and relaying flow-level statistics. An *exporter*, such as a router or
 switch, aggregates packets into flow records and sends them to a *collector*.
 
-VAST supports NetFlow v5, v9, and IPFIX via *Flexible NetFlow*. For IPFIX we
+Tenzir supports NetFlow v5, v9, and IPFIX via *Flexible NetFlow*. For IPFIX we
 support Private Enterprise Numbers 3054 (IXIA IxFlow) and 29305 (Bidirectional
 Flow Export). Please contact us if you require support for additional Private
 Enterprise Numbers.

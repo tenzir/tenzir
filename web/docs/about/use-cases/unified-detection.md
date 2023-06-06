@@ -23,14 +23,14 @@ also immediately trigger a retro scan:
 ![Live & Retro Detection](live-retro-detection.excalidraw.svg)
 
 This architecture decouples the arrival of new security content from the
-execution of the detection. VAST runs in production with this use case for
+execution of the detection. Tenzir runs in production with this use case for
 detections in the form of tactical indicators. We are in the process of
 extending this mechanism to more advanced stateful detections, e.g., Sigma
 correlations or machine-learning models.
 
 :::note Suricon 2021
 Check out [our talk][suricon21-slides] with [DCSO](https://dcso.de) at [Suricon
-2021](https://suricon.net/suricon-2021-boston/) on how VAST supports this
+2021](https://suricon.net/suricon-2021-boston/) on how Tenzir supports this
 architecture with Suricata telemetry and security content in the form of STIX
 indicators.
 :::

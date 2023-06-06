@@ -4,11 +4,11 @@ sidebar_position: 5
 
 # Expressions
 
-VAST's expression language makes it easy to describe a relevant subset of
-interest over structured data. The "easy" part is that VAST expressions operate
-on multiple different schemas at once, as opposed to traditional expressions
-that apply to a single, fixed schema. The language captures this heterogeneity
-with [extractors](#extractors).
+Tenzir's expression language makes it easy to describe a relevant subset of
+interest over structured data. The "easy" part is that Tenzir expressions
+operate on multiple different schemas at once, as opposed to traditional
+expressions that apply to a single, fixed schema. The language captures this
+heterogeneity with [extractors](#extractors).
 
 :::tip Where?
 Expressions occur in pipeline operators. The
@@ -95,13 +95,13 @@ available types. Each letter in a cell denotes a set of operators:
 ### Extractors
 
 An *extractor* retrieves a certain aspect of an event. When looking up an
-expression, VAST *binds* the extractor to a specific record field, i.e., maps it
-to the corresponding numeric column offset in the schema. **Binding an expression
-implicitly creates a disjunction of all matching fields.** We find that this
-existential qualification is the natural user experience when "extracting" data
-declaratively.
+expression, Tenzir *binds* the extractor to a specific record field, i.e., maps
+it to the corresponding numeric column offset in the schema. **Binding an
+expression implicitly creates a disjunction of all matching fields.** We find
+that this existential qualification is the natural user experience when
+"extracting" data declaratively.
 
-VAST has the following extractor types:
+Tenzir has the following extractor types:
 
 1. [Field](#field-extractor): extracts all fields whose name match a given
    record field name.

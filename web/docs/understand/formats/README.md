@@ -15,7 +15,7 @@ Parsers and printers interact with their corresponding dual from a
 
 ![Format](format.excalidraw.svg)
 
-VAST ships with the following formats:
+Tenzir ships with the following formats:
 
 import DocCardList from '@theme/DocCardList';
 

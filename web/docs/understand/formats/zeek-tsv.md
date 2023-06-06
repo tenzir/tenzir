@@ -26,9 +26,9 @@ metadata.
 
 The `zeek-tsv` parser processes this metadata to extract a schema for the
 subsequent log entries. Similarly, the `zeek-tsv` printer (re)generates the TSV
-metadata based on VAST's internal schema. VAST's data model is a superset of
+metadata based on Tenzir's internal schema. Tenzir's data model is a superset of
 Zeek's, so the conversion into Zeek TSV may be lossy. The Zeek types `count`,
-`real`, and `addr` map to the respective VAST types `uint64`, `double`, and
+`real`, and `addr` map to the respective Tenzir types `uint64`, `double`, and
 `ip`.
 
 Here's an example of a typical Zeek `conn.log` in TSV form:
@@ -86,7 +86,7 @@ from file /tmp/conn.log read zeek-tsv
 Read compressed Zeek TSV logs in one shot:
 
 ```bash
-gunzip -c *.gz | vast exec 'read zeek-tsv | ...'
+gunzip -c *.gz | tenzir 'read zeek-tsv | ...'
 ```
 
 Write Zeek TSV into a directory, one file per schema:

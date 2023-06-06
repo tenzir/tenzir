@@ -9,8 +9,8 @@ sidebar_position: 4
 User-defined operator aliases make pipelines easier to use by enabling users to
 encapsulate pipelines into a new operator.
 
-```yaml {0} title="vast.yaml"
-vast:
+```yaml {0} title="tenzir.yaml"
+tenzir:
   operators:
     # Aggregate suricata.flow events with matching source and destination IP
     # addresses.
@@ -46,13 +46,13 @@ pipeline will fail with an error.
 
 ## Operator Plugins
 
-In addition to aliases, developers can add additional operators to VAST by using
-the [operator plugin API](../../develop/architecture/plugins.md#operator). This
-allows for writing arbitrarily complex operators in C++ by developing against
-`libvast`.
+In addition to aliases, developers can add additional operators to Tenzir by
+using the [operator plugin API](../../develop/architecture/plugins.md#operator).
+This allows for writing arbitrarily complex operators in C++ by developing
+against `libtenzir`.
 
 If you want to learn more about building your own operators, we recommend
-studying [VAST's built-in operators][builtins-operators], which are developed
+studying [Tenzir's built-in operators][builtins-operators], which are developed
 against the same API.
 
-[builtins-operators]: https://github.com/tenzir/vast/tree/main/libvast/builtins/operators
+[builtins-operators]: https://github.com/tenzir/tenzir/tree/main/libtenzir/builtins/operators

@@ -1,7 +1,7 @@
 # Setup
 
-This section describes VAST from an **operator perspective**. We cover the
-different stages of the setup process that ultimately yield a running VAST
+This section describes Tenzir from an **operator perspective**. We cover the
+different stages of the setup process that ultimately yield a running Tenzir
 instance. You have several options to enter the setup pipeline, based on what
 intermediate artifact you would like to begin with.
 
@@ -36,20 +36,20 @@ flowchart LR
   instance <--> tune
   instance <--> monitor
   %% Links
-  click download "setup/download" "Download VAST"
-  click build "setup/build" "Build VAST"
-  click install "setup/install" "Install VAST"
-  click deploy "setup/deploy" "Deploy VAST"
-  click configure "setup/configure" "Configure VAST"
-  click tune "setup/tune" "Tune VAST"
-  click monitor "setup/monitor" "Monitor VAST"
+  click download "setup/download" "Download Tenzir"
+  click build "setup/build" "Build Tenzir"
+  click install "setup/install" "Install Tenzir"
+  click deploy "setup/deploy" "Deploy Tenzir"
+  click configure "setup/configure" "Configure Tenzir"
+  click tune "setup/tune" "Tune Tenzir"
+  click monitor "setup/monitor" "Monitor Tenzir"
 ```
 
 :::tip Quick Start
-Want hands-on experience with VAST? Then continue with a quick tour below. 👇
+Want hands-on experience with Tenzir? Then continue with a quick tour below. 👇
 :::
 
-## Run VAST
+## Run Tenzir
 
 To get up and running quickly, we recommend using the static binary or Docker
 image:
@@ -63,25 +63,25 @@ If you have a Linux at your fingertips, just download and extract our package
 with a static binary:
 
 ```bash
-mkdir /opt/vast
-cd /opt/vast
-wget https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
-mkdir -p /opt/vast
-tar xzf vast-linux-static.tar.gz -C /opt/vast
-export PATH="/opt/vast/bin:$PATH" # based on your shell, e.g., fish_add_path /opt/vast/bin
-vast start
+mkdir /opt/tenzir
+cd /opt/tenzir
+wget https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.tar.gz
+mkdir -p /opt/tenzir
+tar xzf tenzir-linux-static.tar.gz -C /opt/tenzir
+export PATH="/opt/tenzir/bin:$PATH" # based on your shell, e.g., fish_add_path /opt/tenzir/bin
+tenzir start
 ```
 </TabItem>
 <TabItem value="docker" label="Docker">
 For a container deployment, use our official Docker image:
 
 ```bash
-docker pull tenzir/vast
+docker pull tenzir/tenzir
 mkdir -p /tmp/db # persistent state
-docker run -dt --name=vast --rm -p 5158:5158 -v /tmp/db:/var/lib/vast \
-  tenzir/vast start
+docker run -dt --name=tenzir --rm -p 5158:5158 -v /tmp/db:/var/lib/tenzir \
+  tenzir/tenzir start
 ```
 </TabItem>
 </Tabs>
 
-Now that you have running VAST node, you can start ingesting data.
+Now that you have running Tenzir node, you can start ingesting data.

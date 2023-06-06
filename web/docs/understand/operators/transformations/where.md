@@ -13,7 +13,7 @@ where <expression>
 The `where` operator only keeps events that match the provided
 [expression](../../expressions.md) and discards all other events.
 
-Use `where` to extract the subset of interest of the data. VAST's expression
+Use `where` to extract the subset of interest of the data. Tenzir's expression
 language offers various ways to describe the desired data. In particular,
 expressions work *across schemas* and thus make it easy to concisely articulate
 constraints.

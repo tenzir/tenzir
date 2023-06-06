@@ -4,22 +4,22 @@ sidebar_position: 1
 
 # Quickstart
 
-This guide illustrates how you can use VAST from the command line interface.
-We're assuming that you have [installed VAST](../setup/install/README.md) and
-that you have a `vast` binary in your path.
+This guide illustrates how you can use Tenzir from the command line interface.
+We're assuming that you have [installed Tenzir](../setup/install/README.md) and
+that you have a `tenzir` binary in your path.
 
-## Start a VAST node
+## Start a Tenzir node
 
-Let's spin up a VAST node:
+Let's spin up a Tenzir node:
 
 ```bash
-vast start
+tenzird
 ```
 
-Let's connect to the node and check its version via the `status` command:
+Let's connect to the node and check its version:
 
 ```bash
-vast status version
+tenzir 'remote version'
 ```
 
 ```json
@@ -34,7 +34,7 @@ vast status version
       "Undefined Behavior Sanitizer": false
     },
     "CAF": "0.18.7",
-    "VAST": "v3.0.0-rc1-2-gcc393580f1",
+    "Tenzir": "v3.0.0-rc1-2-gcc393580f1",
     "plugins": []
   }
 }
@@ -42,42 +42,42 @@ vast status version
 
 ## Download example dataset
 
-Now that we have a VAST node running, let’s ingest some data. We [prepared a
+Now that we have a Tenzir node running, let’s ingest some data. We [prepared a
 dataset][m57] derived from one day of the M57 recording and injected malicious
 traffic from malware-traffic-analysis.net, adjusting timestamps such that the
 malware activity occurs in the same day as the background noise. Then we ran
 [Zeek](https://zeek.org) and [Suricata](https://suricata.io) over the PCAP to
 get structured log data.
 
-[m57]: https://storage.googleapis.com/vast-datasets/M57/README.md
+[m57]: https://storage.googleapis.com/tenzir-datasets/M57/README.md
 
 First download the logs:
 
 ``` bash
 cd /tmp
-curl -L -O https://storage.googleapis.com/vast-datasets/M57/suricata.tar.gz
-curl -L -O https://storage.googleapis.com/vast-datasets/M57/zeek.tar.gz
+curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
+curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
 ```
 
-Then ingest them via `vast import`, which spawns a dedicated process that
-handles the parsing, followed by sending batches of data to our VAST node:
+Then ingest them via `tenzirctl import`, which spawns a dedicated process that
+handles the parsing, followed by sending batches of data to our Tenzir node:
 
 ```bash
 # The 'O' flag in tar dumps the archive contents to stdout.
-tar xOzf zeek.tar.gz | vast import zeek
+tar xOzf zeek.tar.gz | tenzirctl import zeek
 ```
 
 ```
-[20:35:58.434] client connected to VAST node at 127.0.0.1:5158
+[20:35:58.434] client connected to Tenzir node at 127.0.0.1:5158
 [20:36:00.923] zeek-reader source produced 954189 events at a rate of 383606 events/sec in 2.49s
 ```
 
 ```bash
-tar xOzf suricata.tar.gz | vast import suricata '#schema == "suricata.alert"'
+tar xOzf suricata.tar.gz | tenzirctl import suricata '#schema == "suricata.alert"'
 ```
 
 ```
-[20:36:42.380] client connected to VAST node at 127.0.0.1:5158
+[20:36:42.380] client connected to Tenzir node at 127.0.0.1:5158
 [20:36:52.420] suricata-reader source produced 1398847 events at a rate of 139397 events/sec in 10.03s
 [20:36:58.075] suricata-reader source produced 750510 events at a rate of 132718 events/sec in 5.65s
 ```
@@ -135,26 +135,26 @@ Zeek/dce_rpc.log
 
 </details>
 
-VAST's Zeek TSV parser auto-detects schema changes in the same stream of input
+Tenzir's Zeek TSV parser auto-detects schema changes in the same stream of input
 and resets itself whenever it encounters a new log header. This is why piping a
-bunch of logs to `vast import zeek` Just Works.
+bunch of logs to `tenzirctl import zeek` Just Works.
 :::
 
 ## Export data
 
-With Zeek and Suricata data in the VAST node, let's run some query pipelines.
+With Zeek and Suricata data in the Tenzir node, let's run some query pipelines.
 We're going to show the data in [JSON format](../understand/formats/json.md),
 but you could display it in [other formats](../understand/formats/README.md) as
 well.
 
 :::info Pipelines
-As of VAST v3.0, the VAST language supports ad-hoc
+As of Tenzir v3.0, the Tenzir language supports ad-hoc
 [pipelines](../understand/pipelines.md) for flexible transformation in addition
 to plain search. A pipeline consists of a chain of
 [operators](../understand/operators/README.md) and must begin with *source*
 operator, the producer emitting data, and end with a *sink* operator, the
 consumer receiving data. If a pipeline has source and sink, we call it *closed*.
-The `export` command implicitly closes a pipeline by adding the VAST node as
+The `export` command implicitly closes a pipeline by adding the Tenzir node as
 source and standard output as sink.
 
 Concretely, `export` takes a pipeline of the form `EXPR | OP | OP` where `EXPR`
@@ -162,14 +162,14 @@ is an [expression](../understand/expressions.md) followed by zero or
 more operators. The full pipeline would be:
 
 ```
-from vast
+export
 | where EXPR
 | OP
 | OP
 | to stdout
 ```
 
-In future versions of VAST, you will gain full control over sources and sinks.
+In future versions of Tenzir, you will gain full control over sources and sinks.
 Stay tuned.
 :::
 
@@ -177,10 +177,10 @@ Stay tuned.
 
 If you know what you want, you can dive right into querying data with
 expressions. But you can also take a step back and inspect the schema metadata
-VAST keeps using the `show` command.
+Tenzir keeps using the `show` command.
 
 ```bash
-vast show schemas --yaml
+tenzirctl show schemas --yaml
 ```
 
 ```yaml
@@ -216,20 +216,21 @@ various fields as list of key-value pairs under the `record` key. Note the
 nested record `id` that has type alias called `zeek.conn_id`.
 
 :::info Schemas
-In VAST, a [schema](../understand/data-model/schemas.md) is just a record [type
-definition](../understand/data-model/type-system.md). You would touch schemas
-when the defaults are not enough. In future versions of VAST, you will interact
-less and less with schemas because VAST can actually infer them reasonably well.
+In Tenzir, a [schema](../understand/data-model/schemas.md) is just a record
+[type definition](../understand/data-model/type-system.md). You would touch
+schemas when the defaults are not enough. In future versions of Tenzir, you will
+interact less and less with schemas because Tenzir can actually infer them
+reasonably well.
 :::
 
 Now that you know a little bit about available schemas of the data, you could
-start referencing record fields in expressions. But VAST can also give you a
+start referencing record fields in expressions. But Tenzir can also give you a
 taste of actual events. The
 [`taste`](../understand/operators/transformations/taste.md) operator limits the
 number of events per unique schema:
 
 ```bash
-vast export json '#schema == /(zeek|suricata).*/ | taste 1'
+tenzirctl export json '#schema == /(zeek|suricata).*/ | taste 1'
 ```
 
 ```json
@@ -277,7 +278,7 @@ There are many other ways to slice and dice the data. For example, we could pick
 a single schema:
 
 ```bash
-vast export json '#schema == "suricata.alert" | head 3'
+tenzirctl export json '#schema == "suricata.alert" | head 3'
 ```
 
 ```json
@@ -290,7 +291,7 @@ There are a lot of `null` values in there. We can filter them out by passing
 `--omit-nulls` to the `json` printer:
 
 ```bash
-vast export json --omit-nulls '#schema == "suricata.alert" | head 3'
+tenzirctl export json --omit-nulls '#schema == "suricata.alert" | head 3'
 ```
 
 ```json
@@ -304,7 +305,7 @@ Certainly less noisy. The
 selecting fields of interest:
 
 ```bash
-vast export json '#schema == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
+tenzirctl export json '#schema == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
 ```
 
 ```json
@@ -319,7 +320,7 @@ Looking at the output, we see multiple alert severities. Let's understand their
 distribution:
 
 ```bash
-vast export json '#schema == "suricata.alert" | summarize count=count(src_ip) by severity'
+tenzirctl export json '#schema == "suricata.alert" | summarize count=count(src_ip) by severity'
 ```
 
 ```json
@@ -333,9 +334,9 @@ This is the point where you'd typically do ad-hoc rollups (aka. "stack
 counting") to extract the top-most values in your distribution. Unix folks know
 this `... | sort | uniq -c | sort -n` pattern.
 
-As of v3.0, VAST doesn't ship with the `sort` operator yet. Please bear with us,
-[we scheduled it](https://github.com/tenzir/public-roadmap/issues/18) along with
-various other pipeline operators.
+As of v3.0, Tenzir doesn't ship with the `sort` operator yet. Please bear with
+us, [we scheduled it](https://github.com/tenzir/public-roadmap/issues/18) along
+with various other pipeline operators.
 :::
 
 Suricata alerts with lower severity are more critical, with severity 1 being the
@@ -343,7 +344,7 @@ highest. We could further slice by signature type and check for some that
 contain the string `SHELLCODE`:
 
 ```bash
-vast export json 'severity == 1 | summarize count=count(src_ip) by signature | where /.*SHELLCODE.*/'
+tenzirctl export json 'severity == 1 | summarize count=count(src_ip) by signature | where /.*SHELLCODE.*/'
 ```
 
 ```json
@@ -352,12 +353,12 @@ vast export json 'severity == 1 | summarize count=count(src_ip) by signature | w
 ```
 
 Observe that we started the query with `severity == 1` and didn't include a type
-filter. This is because VAST performs *suffix matching* on fields to make it
+filter. This is because Tenzir performs *suffix matching* on fields to make it
 easy to specify fields in nested records. The fully qualified field name is
 `suricata.alert.severity`, which is a bit unwieldy to type.
 
 :::info Extractors
-Aside from using field names, VAST offers powerful
+Aside from using field names, Tenzir offers powerful
 [extractors](../understand/expressions.md#extractors) locating data.
 If you don't know a field name, you can go through the type system, e.g., to
 apply a query over all fields of the `ip` type by writing `:ip == 172.17.2.163`.
@@ -365,7 +366,7 @@ apply a query over all fields of the `ip` type by writing `:ip == 172.17.2.163`.
 The left-hand side of this predicate is a *type extractor*, denoted by `:T` for
 a builtin or user-defined type `T`. The right-hand side is an IP address literal
 `172.17.2.163`. You can go one step further and just write `172.17.2.163` as
-query. VAST infers the literal type and make a predicate out of it, i.e.,. `x`,
+query. Tenzir infers the literal type and make a predicate out of it, i.e.,. `x`,
 expands to `:T == x` where `T` is the type of `x`. Under the hood, the predicate
 all possible fields with type address and yields a giant logical OR.
 
@@ -379,7 +380,7 @@ different from JSON output, to showcase that it's not hard to change the last
 step of rendering data:
 
 ```bash
-vast export ascii '172.17.2.163 | head 10'
+tenzirctl export ascii '172.17.2.163 | head 10'
 ```
 
 ```
@@ -401,12 +402,12 @@ maximum data density.
 ### Extract data with rich expressions
 
 Finally, let's get a feel for the [expression
-language](../understand/expressions.md). VAST comes with native types for IP
+language](../understand/expressions.md). Tenzir comes with native types for IP
 addresses, subnets, timestamps, and durations. These come in handy to succinctly
 describe what you want:
 
 ```bash
-vast export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | select orig_h, resp_h, orig_bytes'
+tenzirctl export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | select orig_h, resp_h, orig_bytes'
 ```
 
 ```json
@@ -418,12 +419,12 @@ vast export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | sel
 The above example extracts connections that either have sent more than 1 MiB or
 lasted longer than 30 minutes. The value `10.10.5.0/25` actually expands to the
 expression `:ip in 10.10.5.0/25 || :subnet == 10.10.5.0/25` under the hood,
-meaning, VAST looks for any IP address field and performs a top-k prefix search
-(by masking the top 25 bits IP address bits), or any subnet field where the value
-matches exactly.
+meaning, Tenzir looks for any IP address field and performs a top-k prefix
+search (by masking the top 25 bits IP address bits), or any subnet field where
+the value matches exactly.
 
 ## Going deeper
 
 This was just a brief summary of how you could sift through the data. Take a
-look at various [operators](../understand/operators/README.md) VAST has to
+look at various [operators](../understand/operators/README.md) Tenzir has to
 offer and start writing pipelines!

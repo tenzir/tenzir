@@ -4,8 +4,8 @@ sidebar_position: 1
 
 # Target Audience
 
-This section characterizes the primary audience of VAST in the security
-operations center (SOC). From our perspective, VAST users fall into three user
+This section characterizes the primary audience of Tenzir in the security
+operations center (SOC). From our perspective, Tenzir users fall into three user
 categories that ideally collaborate to achieve the SOC's mission of defending
 its constituency: the **SOC Analyst**, the **Detection Engineer**, and the
 **Data Scientist**.
@@ -30,10 +30,10 @@ from domain knowledge, experience, and understanding of the behavior of the
 local environment.
 
 :::tip Threat Hunting Engine
-With VAST, we want to enable threat hunters with an interactive data exploration
-workbench so that they can *think and execute in the security domain*, without
-having to context-switch and adapt to the lower-level analytics primitives
-exposed by a generic database.
+With Tenzir, we want to enable threat hunters with an interactive data
+exploration workbench so that they can *think and execute in the security
+domain*, without having to context-switch and adapt to the lower-level analytics
+primitives exposed by a generic database.
 :::
 
 ## Detection Engineer
@@ -58,11 +58,11 @@ but it's the Detection Engineer's responsibility to ensure that low-fidelity
 alerts are properly contextualized and triaged before hitting the SOC Analyst.
 
 :::tip Security Content Execution Engine
-With VAST, we aim to build a universal security content execution engine that is
-capable of processing detections in an open, standardized format, such as STIX
-bundles or MISP events. VAST will operationalize security content by deploying
-it live in-stream to catch future events, as well as retro-actively to surface
-past occurrences of previously unknown attacks.
+With Tenzir, we aim to build a universal security content execution engine that
+is capable of processing detections in an open, standardized format, such as
+STIX bundles or MISP events. Tenzir will operationalize security content by
+deploying it live in-stream to catch future events, as well as retro-actively to
+surface past occurrences of previously unknown attacks.
 :::
 
 ## Data Scientist
@@ -84,9 +84,9 @@ often organic process at arriving at a working solution—both analytically and
 visually.
 
 :::tip Data Science Workbench
-With VAST, we enable Data Scientists to access the raw underlying security data
-at high bandwidth while bringing their own tools to run custom, advanced
-analytics. VAST makes this possible by standardizing all internal data
+With Tenzir, we enable Data Scientists to access the raw underlying security
+data at high bandwidth while bringing their own tools to run custom, advanced
+analytics. Tenzir makes this possible by standardizing all internal data
 representation and processing on [Apache Arrow](https://arrow.apache.org), which
 offers high interoperability and native access from R, Python, Spark, and other
 data science tools.

@@ -12,15 +12,15 @@ Loaders and savers interact with their corresponding dual from a
 
 ![Connector](connector.excalidraw.svg)
 
-Connectors appear as an argument to the [`from`](../operators/sources/from.md) and
-[`to`](../operators/sinks/to.md) operators:
+Connectors appear as an argument to the [`from`](../operators/sources/from.md)
+and [`to`](../operators/sinks/to.md) operators:
 
 ```
 from <connector> [read <format>]
 to <connector> [write <format>]
 ```
 
-VAST ships with the following connectors:
+Tenzir ships with the following connectors:
 
 import DocCardList from '@theme/DocCardList';
 

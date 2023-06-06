@@ -1,6 +1,6 @@
 # version
 
-Returns a single event displaying version information of VAST.
+Returns a single event displaying version information of Tenzir.
 
 ## Synopsis
 
@@ -10,12 +10,12 @@ version [--dev]
 
 ## Description
 
-The version operator returns detailed information about VAST. The output of the
-operator has the following schema:
+The version operator returns detailed information about Tenzir. The output of
+the operator has the following schema:
 
 ```
 record {
-  // The version number of VAST.
+  // The version number of Tenzir.
   version: string,
   // A list of plugins. Excludes builtins.
   plugins: list<record {
@@ -34,13 +34,13 @@ Add additional, developer-facing information to the output of the operator. With
 
 ```
 record {
-  // The version number of VAST.
+  // The version number of Tenzir.
   version: string,
-  // Build information for VAST.
+  // Build information for Tenzir.
   build: record {
     // The configured build type; one of Debug, RelWithDebInfo or Release.
     type: string,
-    // A hash that uniquely describes the VAST build tree.
+    // A hash that uniquely describes the Tenzir build tree.
     tree_hash: string,
     // Whether assertions are enabled.
     assertions: bool,
@@ -69,13 +69,13 @@ record {
 
 ## Examples
 
-Get the version of your VAST process.
+Get the version of your Tenzir process.
 
 ```
 version
 ```
 
-Get extended version information of the remote VAST node.
+Get extended version information of the remote Tenzir node.
 
 ```
 remote version --dev
