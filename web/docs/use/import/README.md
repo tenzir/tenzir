@@ -9,7 +9,7 @@ that you [set up a server](../run/README.md) listening at `localhost:5158`.
 Use the `import` command to ingest data from standard input or file:
 
 ```bash
-tenzirctl import [options] <format> [options] [expr]
+tenzir-ctl import [options] <format> [options] [expr]
 ```
 
 The [format](../../understand/formats/README.md) defines the encoding of data.
@@ -22,7 +22,7 @@ Text formats include [JSON](../../understand/formats/json.md),
 For example, to import a file in JSON, use the `json` format:
 
 ```bash
-tenzirctl import json < data.json
+tenzir-ctl import json < data.json
 ```
 
 ## Write a schema manually
@@ -99,7 +99,7 @@ At the server, restart Tenzir and you're ready to go. Or just spin up a new
 client and ingest the CSV with richer typing:
 
 ```bash
-tenzirctl import csv < foo.csv
+tenzir-ctl import csv < foo.csv
 ```
 
 ## Map events to schemas
@@ -134,7 +134,7 @@ There exist two ways to tell Tenzir how to map events to schemas:
 
    To designate a selector field, use the `--selector=FIELD:PREFIX` option to
    specify a colon-separated field-name-to-schema-prefix mapping, e.g.,
-   `tenzirctl import json --selector=event_type:suricata` reads the value from
+   `tenzir-ctl import json --selector=event_type:suricata` reads the value from
    the field `event_type` and prefixes it with `suricata.` to look for a
    corresponding schema.
 

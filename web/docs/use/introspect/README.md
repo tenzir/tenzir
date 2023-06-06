@@ -11,7 +11,7 @@ The `status` command displays a variety of system information. Without any
 arguments, it provides a high-level overview in JSON output:
 
 ```bash
-tenzirctl status
+tenzir-ctl status
 ```
 
 ```json
@@ -88,8 +88,8 @@ The returned top-level JSON object has one key per component, plus the two
 
 There exist two variations that add more detailed output:
 
-1. `tenzirctl status --detailed`
-2. `tenzirctl status --debug`
+1. `tenzir-ctl status --detailed`
+2. `tenzir-ctl status --debug`
 
 Both variations fill in more output in the respective component sections.
 
@@ -102,9 +102,9 @@ would be `SHOW TABLES` or `DESCRIBE`.
 
 You can invoke the `show` command with three positional arguments:
 
-1. `tenzirctl show concepts`
-2. `tenzirctl show models`
-3. `tenzirctl show schemas`
+1. `tenzir-ctl show concepts`
+2. `tenzir-ctl show models`
+3. `tenzir-ctl show schemas`
 
 Options (1) and (2) show taxonomy details about concepts and models, and (3)
 displays all known types, both from statically specified schemas in
@@ -117,7 +117,7 @@ for a more human-readable structure after any of the positional arguments. For
 example:
 
 ```bash
-tenzirctl show schemas --yaml
+tenzir-ctl show schemas --yaml
 ```
 
 ```yaml
@@ -272,7 +272,7 @@ tenzirctl show schemas --yaml
 
 </details>
 
-Semantically, `tenzirctl show schemas` is to Tenzir data what [JSON
+Semantically, `tenzir-ctl show schemas` is to Tenzir data what [JSON
 Schema](https://json-schema.org/) is to JSON. In Tenzir's [type
 system](../../understand/data-model/type-system.md) value constraints (e.g.,
 minimum value, maximum string length) correspond to type attributes, which are
@@ -288,7 +288,7 @@ The other two arguments to `show` commands display data-independent
 For example, you can display all concepts as follows:
 
 ```bash
-tenzirctl show concepts --yaml
+tenzir-ctl show concepts --yaml
 ```
 
 ```yaml
@@ -329,7 +329,7 @@ tenzirctl show concepts --yaml
 Similarly, you can display all models with:
 
 ```bash
-tenzirctl show models --yaml
+tenzir-ctl show models --yaml
 ```
 
 ```yaml

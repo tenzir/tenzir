@@ -157,10 +157,10 @@ you can shut down the server:
 
 After your Tenzir node is up and running, you can start spawning clients.
 The `tenzir.server-execute` target lifts Tenzir command into an ECS Exec
-operation. For example, to execute `tenzirctl status`, run:
+operation. For example, to execute `tenzir-ctl status`, run:
 
 ```bash
-./tenzir-cloud tenzir.server-execute --cmd "tenzirctl status"
+./tenzir-cloud tenzir.server-execute --cmd "tenzir-ctl status"
 ```
 
 If you do not specify the `cmd` option, it will start an interactive bash shell.
@@ -177,7 +177,7 @@ seconds for the ECS Exec agent to start.
 To run a Tenzir client from Lambda, use the `tenzir.lambda-client` target:
 
 ```bash
-./tenzir-cloud tenzir.lambda-client --cmd "tenzirctl status"
+./tenzir-cloud tenzir.lambda-client --cmd "tenzir-ctl status"
 ```
 
 The Lambda image also contains extra tooling, such as the AWS CLI, which is
@@ -212,7 +212,7 @@ Then run:
 You should see new events flowing into Tenzir within a few minutes:
 
 ```bash
-./tenzir-cloud tenzir.lambda-client -c "tenzirctl count '#schema==\"aws.cloudtrail\"'"
+./tenzir-cloud tenzir.lambda-client -c "tenzir-ctl count '#schema==\"aws.cloudtrail\"'"
 ```
 
 Running the global `./tenzir-cloud destroy` command will also destroy optional

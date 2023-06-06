@@ -33,13 +33,13 @@ components.
 To run the REST API as dedicated process, use the `web server` command:
 
 ```bash
-tenzirctl web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
+tenzir-ctl web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
 ```
 
-To run the server within the main Tenzir process, use the `tenzird` binary:
+To run the server within the main Tenzir process, use the `tenzir-node` binary:
 
 ```bash
-tenzird --commands="web server [...]"
+tenzir-node --commands="web server [...]"
 ```
 
 The server will only accept TLS requests by default. To allow clients to connect
@@ -53,7 +53,7 @@ string that clients put in the `X-Tenzir-Token` request header. You can generate
 a valid token on the command line:
 
 ```bash
-tenzirctl web generate-token
+tenzir-ctl web generate-token
 ```
 
 For local testing and development, generating suitable certificates and tokens
@@ -75,7 +75,7 @@ The developer mode bypasses encryption and authentication token verification.
 Pass `--mode=dev` to start the REST API in developer mode:
 
 ```bash
-tenzirctl web server --mode=dev
+tenzir-ctl web server --mode=dev
 ```
 
 ### Server Mode
@@ -90,7 +90,7 @@ operation.
 Pass `--mode=server` to start the REST API in server mode:
 
 ```bash
-tenzirctl web server --mode=server
+tenzir-ctl web server --mode=server
 ```
 
 ### Upstream TLS Mode
@@ -107,7 +107,7 @@ checks authentication tokens.
 Pass `--mode=upstream` to start the REST API in server mode:
 
 ```bash
-tenzirctl web server --mode=upstream
+tenzir-ctl web server --mode=upstream
 ```
 
 ### Mutual TLS Mode
@@ -126,7 +126,7 @@ endpoints.
 Pass `--mode=mtls` to start the REST API in server mode:
 
 ```bash
-tenzirctl web server --mode=mtls
+tenzir-ctl web server --mode=mtls
 ```
 
 ## Scaling

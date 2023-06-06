@@ -46,7 +46,7 @@ command_runner_actor::behavior_type
 command_runner(command_runner_actor::pointer self) {
   return {
     [self](atom::run, vast::invocation& invocation) -> caf::result<void> {
-      auto [root, root_factory] = make_application("tenzirctl");
+      auto [root, root_factory] = make_application("tenzir-ctl");
       auto result = run(invocation, self->home_system(), root_factory);
       if (!result)
         VAST_ERROR("failed to run start command {}: {}", invocation,
@@ -123,7 +123,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   }
   std::vector<command_runner_actor> command_runners;
   if (!commands.empty()) {
-    auto [root, root_factory] = make_application("tenzirctl");
+    auto [root, root_factory] = make_application("tenzir-ctl");
     // We're already in the start command, so we can safely assert that
     // make_application works as expected.
     VAST_ASSERT(root);

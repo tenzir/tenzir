@@ -105,7 +105,7 @@ in {
       wantedBy = ["multi-user.target"];
       serviceConfig = {
         Type = "notify";
-        ExecStart = "${cfg.package}/bin/tenzird --config=${configFile}";
+        ExecStart = "${cfg.package}/bin/tenzir-node --config=${configFile}";
         DynamicUser = true;
         NoNewPrivileges = true;
         PIDFile = "${cfg.settings.vast.db-directory}/pid.lock";

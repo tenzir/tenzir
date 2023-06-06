@@ -25,8 +25,8 @@ macro (create_tenzir_symlink name)
     COMPONENT Runtime)
 endmacro ()
 
-create_tenzir_symlink(tenzird)
-create_tenzir_symlink(tenzirctl)
+create_tenzir_symlink(tenzir-node)
+create_tenzir_symlink(tenzir-ctl)
 create_tenzir_symlink(vast)
 
 # Install vast in PREFIX/lib and headers in PREFIX/include/vast.

@@ -45,7 +45,7 @@ SystemCallErrorNumber=EPERM
 # service specifics
 TimeoutStopSec=600
 WorkingDirectory=/var/lib/vast
-ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/tenzird
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/tenzir-node
 
 [Install]
 WantedBy=multi-user.target

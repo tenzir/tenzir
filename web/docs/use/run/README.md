@@ -5,7 +5,7 @@ We are in the middle of renaming VAST to Tenzir in multiple steps. The
 documentation here might not reflect the current project state at the moment.
 :::
 
-Running Tenzir means spawning a process of the `tenzirctl` executable. A Tenzir
+Running Tenzir means spawning a process of the `tenzir-ctl` executable. A Tenzir
 process can operate in two modes:
 
 1. **Server**: runs continuously and listens on a network socket accepting
@@ -31,12 +31,12 @@ The `start` command spins up a Tenzir server that blocks until told to
 [stop](#stop-a-server):
 
 ```bash
-tenzirctl start
+tenzir-ctl start
 ```
 
 By default, a Tenzir server listens on localhost and TCP port 5158.
 
-Usually you would invoke `tenzirctl start` only for testing purposes in a
+Usually you would invoke `tenzir-ctl start` only for testing purposes in a
 terminal. In production you would typically use a service manager, e.g.,
 [systemd on Linux](../../setup/install/linux.md#systemd).
 
@@ -53,7 +53,7 @@ Option (3) comes in handy when you are working with a remote Tenzir server.
 ## Spawn a client
 
 Every command except for `start` is a client command that interacts with a
-server. Run `tenzirctl help` for a list of available commands.
+server. Run `tenzir-ctl help` for a list of available commands.
 
 To select a specific Tenzir server to connect to,
 [configure](../../setup/configure.md) the endpoint, e.g., by providing

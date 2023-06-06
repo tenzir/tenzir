@@ -50,7 +50,7 @@ matchers](../../use/detect/match-threat-intel.md#start-matchers) through the
 Lambda client:
 
 ```bash
-./tenzir-cloud tenzir.lambda-client -c "tenzirctl matcher start --mode=exact --match-types=ip feodo"
+./tenzir-cloud tenzir.lambda-client -c "tenzir-ctl matcher start --mode=exact --match-types=ip feodo"
 ```
 
 Similarly, you can load indicators into the created matchers.

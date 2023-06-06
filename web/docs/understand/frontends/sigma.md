@@ -8,7 +8,7 @@ data.
 For example:
 
 ```bash
-tenzirctl export json < sigma-rule.yaml
+tenzir-ctl export json < sigma-rule.yaml
 ```
 
 Sigma defines a [YAML-based rule language][sigma-spec] along with a compiler
@@ -24,10 +24,10 @@ system of Tenzir. The translation process looks as follows:
 
 ## Usage
 
-Use the `tenzirctl export` command to provide a Sigma rule on standard input:
+Use the `tenzir-ctl export` command to provide a Sigma rule on standard input:
 
 ```bash
-tenzirctl export <format> < sigma-rule.yaml
+tenzir-ctl export <format> < sigma-rule.yaml
 ```
 
 The `<format>` placeholder represents an output format, such as `json` or `csv`,

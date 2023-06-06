@@ -11,7 +11,7 @@ Operator modifiers are keywords that may occur before an operator.
 Pipelines run across multiple processes:
 
 - The local `tenzir` process, and
-- the remote `tenzird` processes (commonly referred to as *nodes*).
+- the remote `tenzir-node` processes (commonly referred to as *nodes*).
 
 Some pipeline operators prefer running either local or remote. For example, the
 `from` and `to` operators run locally, and the `serve` operator runs remotely by

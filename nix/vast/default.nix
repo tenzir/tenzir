@@ -174,7 +174,7 @@
         # TODO: Investigate why the disk monitor test fails in the build sandbox.
         installCheckPhase = ''
           python ../vast/integration/integration.py \
-            --app ${placeholder "out"}/bin/tenzirctl \
+            --app ${placeholder "out"}/bin/tenzir-ctl \
             --disable "Disk Monitor"
         '';
 
@@ -198,7 +198,7 @@
               {
                 nativeBuildInputs = [makeWrapper];
               } ''
-                makeWrapper ${self}/bin/tenzirctl $out/bin/tenzirctl \
+                makeWrapper ${self}/bin/tenzir-ctl $out/bin/tenzir-ctl \
                   --set VAST_PLUGIN_DIRS "${pluginDir}/lib/vast/plugins"
               '';
         };
@@ -207,7 +207,7 @@
           description = "Visibility Across Space and Time";
           homepage = "https://vast.io/";
           # Set mainProgram so that all editions work with `nix run`.
-          mainProgram = "tenzirctl";
+          mainProgram = "tenzir-ctl";
           license = licenses.bsd3;
           platforms = platforms.unix;
           maintainers = with maintainers; [tobim];
