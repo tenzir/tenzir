@@ -68,7 +68,7 @@ public:
         const auto& uuid = partition_info.uuid;
         auto partition = blocking_self->spawn(
           passive_partition, uuid, accountant, fs,
-          ctrl.dir() / "index" / fmt::format("{:l}", uuid));
+          std::filesystem::path{"index"} / fmt::format("{:l}", uuid));
         auto recieving_slices = true;
         blocking_self->send(partition, atom::query_v, query_context);
         while (recieving_slices) {

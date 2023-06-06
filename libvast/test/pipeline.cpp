@@ -41,10 +41,6 @@ public:
     FAIL("no mock implementation available");
   }
 
-  auto dir() noexcept -> std::filesystem::path override {
-    FAIL("no mock implementation available");
-  }
-
   auto abort(caf::error error) noexcept -> void override {
     VAST_ASSERT(error != caf::none);
     error_ = error;
