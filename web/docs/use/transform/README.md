@@ -221,8 +221,9 @@ The `compaction` plugin needs to be loaded both by the client and the server
 process to use the `tenzirctl compaction` subcommand.
 :::
 
-For an overview of the current status of the compaction plugin, you can use the `tenzirctl status` subcommand:
+For an overview of the current status of the compaction plugin, you can use the
+`tenzirctl status` subcommand:
 
 ```bash
-tenzirctl status | jq .compaction
+tenzirctl status compaction
 ```

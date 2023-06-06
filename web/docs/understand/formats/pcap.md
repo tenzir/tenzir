@@ -29,7 +29,7 @@ representation is an attribute to the `payload` field in the packet schema
 outlined below:
 
 ```yaml
-tenzir.packet:
+pcap.packet:
   record:
     - time:
         timestamp: time

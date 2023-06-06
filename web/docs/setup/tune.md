@@ -287,7 +287,7 @@ partitions.
 This is how you run it manually:
 
 ```bash
-tenzir rebuild start [--all] [--undersized] [--parallel=<number>] [--max-partitions=<number>] [--detached] [<expression>]
+tenzirctl rebuild start [--all] [--undersized] [--parallel=<number>] [--max-partitions=<number>] [--detached] [<expression>]
 ```
 
 A rebuild is not only useful when upgrading outdated partitions, but also when
@@ -316,10 +316,10 @@ example, to rebuild outdated partitions containing `suricata.flow` events
 older than 2 weeks, run the following command:
 
 ```bash
-tenzir rebuild start '#schema == "suricata.flow" && #import_time < 2 weeks ago'
+tenzirctl rebuild start '#schema == "suricata.flow" && #import_time < 2 weeks ago'
 ```
 
-To stop an ongoing rebuild, use the `tenzir rebuild stop` command.
+To stop an ongoing rebuild, use `tenzirctl rebuild stop`.
 
 ## Logging
 

@@ -13,13 +13,13 @@ that you have a `tenzir` binary in your path.
 Let's spin up a Tenzir node:
 
 ```bash
-tenzir start
+tenzird
 ```
 
 Let's connect to the node and check its version via the `status` command:
 
 ```bash
-tenzir status version
+tenzirctl status version
 ```
 
 ```json
@@ -137,7 +137,7 @@ Zeek/dce_rpc.log
 
 Tenzir's Zeek TSV parser auto-detects schema changes in the same stream of input
 and resets itself whenever it encounters a new log header. This is why piping a
-bunch of logs to `tenzir importctl zeek` Just Works.
+bunch of logs to `tenzirctl import zeek` Just Works.
 :::
 
 ## Export data
@@ -162,7 +162,7 @@ is an [expression](../understand/expressions.md) followed by zero or
 more operators. The full pipeline would be:
 
 ```
-from tenzir
+export
 | where EXPR
 | OP
 | OP
@@ -180,7 +180,7 @@ expressions. But you can also take a step back and inspect the schema metadata
 Tenzir keeps using the `show` command.
 
 ```bash
-tenzir show schemas --yaml
+tenzirctl show schemas --yaml
 ```
 
 ```yaml

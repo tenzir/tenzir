@@ -99,7 +99,7 @@ At the server, restart Tenzir and you're ready to go. Or just spin up a new
 client and ingest the CSV with richer typing:
 
 ```bash
-Tenzir import csv < foo.csv
+tenzirctl import csv < foo.csv
 ```
 
 ## Map events to schemas

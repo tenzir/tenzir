@@ -120,21 +120,6 @@ export
 | write json to stdout
 ```
 
-:::caution Running closed pipelines
-We do not support running closed pipelines yet, but aim to ship this ability
-soon. The corresponding [roadmap
-item](https://github.com/tenzir/public-roadmap/issues/18) tracks the progress
-publicly.
-
-Until then, it is only possible to run an open pipelines. When using the
-`tenzir` binary, source and sink operators are implicit. You can [run an open
-pipeline](../use/export/README.md) with the `export` command as follows:
-
-```bash
-tenzir export json 'where ... | ... | head 20'
-```
-:::
-
 ## Expressions
 
 Tenzir [expressions](expressions) are search expressions to describe the desired
