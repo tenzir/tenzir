@@ -16,10 +16,10 @@ Let's spin up a Tenzir node:
 tenzird
 ```
 
-Let's connect to the node and check its version via the `status` command:
+Let's connect to the node and check its version:
 
 ```bash
-tenzirctl status version
+tenzir 'remote version'
 ```
 
 ```json
