@@ -24,7 +24,7 @@ recommend passing the `--mmap` option to `file` to give the parser full control
 over the reads, which leads to better performance and memory usage.
 :::
 
-VAST writes Feather files with Zstd compression enables. Our blog has a [post
+Tenzir writes Feather files with Zstd compression enables. Our blog has a [post
 with an in-depth analysis][parquet-and-feather-blog] about the effect of Zstd
 compression.
 

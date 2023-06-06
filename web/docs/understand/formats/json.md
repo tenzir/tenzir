@@ -38,7 +38,8 @@ with the name `suricata.flow`.
 
 ### `--unnest-separator=<string>` (Parser)
 
-A delimiter that, if present in keys, causes values to be treated as values of nested records.
+A delimiter that, if present in keys, causes values to be treated as values of
+nested records.
 
 A popular example of this is the [Zeek JSON](zeek-json.md) format. It includes
 the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
@@ -56,7 +57,7 @@ Without an unnest separator, the data looks like this:
 }
 ```
 
-With the unnest separator set to `.`, VAST reads the events like this:
+With the unnest separator set to `.`, Tenzir reads the events like this:
 
 ```json
 {
@@ -71,7 +72,7 @@ With the unnest separator set to `.`, VAST reads the events like this:
 
 ### `--pretty` (Printer)
 
-VAST defaults to line-delimited JSON output (JSONL or NDJSON). The `--pretty`
+Tenzir defaults to line-delimited JSON output (JSONL or NDJSON). The `--pretty`
 flag switches to a tree-structured representation.
 
 ### `--omit-nulls` (Printer)

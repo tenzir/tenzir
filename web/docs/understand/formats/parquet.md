@@ -23,7 +23,7 @@ recommend passing the `--mmap` option to `file` to give the parser full control
 over the reads, which leads to better performance and memory usage.
 :::
 
-VAST writes Parquet files with Zstd compression enables. Our blog has a [post
+Tenzir writes Parquet files with Zstd compression enables. Our blog has a [post
 with an in-depth analysis][parquet-and-feather-blog] about the effect of Zstd
 compression.
 
@@ -37,6 +37,6 @@ Read a Parquet file via the [`from`](../operators/sources/from.md) operator:
 from file --mmap /tmp/data.prq read parquet
 ```
 :::caution Limitation
-The `parquet` parser currently supports only Parquet files written with VAST. We
-will remove this limitation in the future.
+The `parquet` parser currently supports only Parquet files written with Tenzir.
+We will remove this limitation in the future.
 :::

@@ -7,16 +7,16 @@ sidebar_position: 6
 :::note Minimal overhead
 Collecting metrics is optional and incurs minimal overhead. We recommend
 enabling the accountant unless disk space is scarce or every last bit of
-performance needs to be made available to other components of VAST.
+performance needs to be made available to other components of Tenzir.
 :::
 
-VAST keeps detailed track of system metrics that reflect runtime state, such
+Tenzir keeps detailed track of system metrics that reflect runtime state, such
 as ingestion performance, query latencies, and resource usage.
 
 Components send their metrics to a central *accountant* that relays the
 telemetry to a configured sink. The accountant is disabled by default and waits
 for metrics reports from other components. It represents telemetry as regular
-`vast.metrics` events with the following schema:
+`tenzir.metrics` events with the following schema:
 
 ```yaml
 metrics:
@@ -33,61 +33,65 @@ metrics:
 ```
 
 The `ts` field is always displayed in Coordinated Universal Time (UTC) without a
-timezone offset. In case you want to correlate metrics data with a VAST log
+timezone offset. In case you want to correlate metrics data with a Tenzir log
 messages you need to add the local timezone offset to arrive at the correct time
 window for the matching logs.
 
-The `version` field is the version of VAST.
+The `version` field is the version of Tenzir.
 
 ## Enable metrics collection
 
 Enable the accountant to collect metrics collection in your configuration:
 
 ```yaml
-vast:
+tenzir:
   enable-metrics: true
 ```
 
-Alternatively, pass the corresponding command-line option when starting VAST:
-`vast --enable-metrics start`.
+Alternatively, pass the corresponding command-line option when starting a Tenzir
+node:
+
+```bash
+tenzird --enable-metrics
+```
 
 ## Write metrics to a file or UNIX domain socket
 
-VAST also supports writing metrics to a file or UNIX domain socket (UDS). You
+Tenzir also supports writing metrics to a file or UNIX domain socket (UDS). You
 can enable them individually or at the same time:
 
 ```yaml
-vast:
+tenzir:
   metrics:
     # Configures if and where metrics should be written to a file.
     file-sink:
       enable: false
       real-time: false
-      path: /tmp/vast-metrics.log
+      path: /tmp/tenzir-metrics.log
     # Configures if and where metrics should be written to a socket.
     uds-sink:
       enable: false
       real-time: false
-      path: /tmp/vast-metrics.sock
+      path: /tmp/tenzir-metrics.sock
       type: datagram # possible values are "stream" or "datagram"
-    # Configures if and where metrics should be written to VAST itself.
+    # Configures if and where metrics should be written to Tenzir itself.
     self-sink:
       enable: false
 ```
 
 Both the file and UDS sinks write metrics as NDJSON and inline the `metadata`
-key-value pairs into the top-level object. VAST buffers metrics for these sinks
-to batch I/O operations. To enable real-time metrics reporting, set the options
-`vast.metrics.file-sink.real-time` or `vast.metrics.uds-sink.real-time`
-respectively in your configuration file.
+key-value pairs into the top-level object. Tenzir buffers metrics for these
+sinks to batch I/O operations. To enable real-time metrics reporting, set the
+options `tenzir.metrics.file-sink.real-time` or
+`tenzir.metrics.uds-sink.real-time` respectively in your configuration file.
 
 :::tip Self Sink ❤️ Pipelines
-The self-sink routes metrics as events into VAST's internal storage engine,
-allowing you to work with metrics using VAST's pipelines. The schema for the
+The self-sink routes metrics as events into Tenzir's internal storage engine,
+allowing you to work with metrics using Tenzir's pipelines. The schema for the
 self-sink is slightly different, with the key being embedded in the schema name:
 
 ```yaml
-vast.metrics.<key>:
+tenzir.metrics.<key>:
   record:
     - ts: timestamp
     - version: string
@@ -97,12 +101,12 @@ vast.metrics.<key>:
     - <metadata...>
 ```
 
-Here's an example that shows the start up latency of VAST's stores,
+Here's an example that shows the start up latency of Tenzir's stores,
 grouped into 10 second buckets and looking at the minimum and the maximum
 latency, respectively, for all buckets.
 
 ```bash
-vast export json '#schema == "vast.metrics.passive-store.init.runtime"
+tenzirctl export json '#schema == "tenzir.metrics.passive-store.init.runtime"
   | select ts, value
   | summarize min(value), max(value) by ts resolution 10s'
 ```
@@ -120,8 +124,8 @@ The following list describes all available metrics keys:
 
 |Key|Description|Unit|Metadata|
 |-:|-|-|-|
-|`accountant.startup`|The first event in the lifetime of VAST.|constant `0`||
-|`accountant.shutdown`|The last event in the lifetime of VAST.|constant `0`||
+|`accountant.startup`|The first event in the lifetime of Tenzir.|constant `0`||
+|`accountant.shutdown`|The last event in the lifetime of Tenzir.|constant `0`||
 |`archive.rate`|The rate of events processed by the archive component.|#events/second||
 |`arrow-writer.rate`|The rate of events processed by the Arrow sink.|#events/second||
 |`ascii-writer.rate`|The rate of events processed by the ascii sink.|#events/second||

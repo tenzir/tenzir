@@ -10,13 +10,13 @@ that computes a variety of connection statistics.
 The UNIX tool `argus` processes either [PCAP](../understand/formats/pcap.md) or
 [NetFlow](../understand/formats/netflow.md) data and generates binary output.
 The companion utility `ra` transforms this binary output into a textual form
-that VAST can parse.
+that Tenzir can parse.
 
 Ingesting Argus data involves the following steps:
 
 1. Read PCAP or NetFlow data with `argus`
 2. Convert the binary Argus data into CSV with `ra`
-3. Pipe the `ra` output to `vast`
+3. Pipe the `ra` output to `tenzir`
 
 ## Read network data
 
@@ -74,21 +74,22 @@ StartTime,Flgs,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,TotPkts,TotBytes,State,SrcP
 
 ## Ingest Argus CSV output
 
-Since VAST has [CSV support](../understand/formats/csv.md), ingesting Argus CSV
-output only requires an adequate schema. VAST already ships with an argus schema
-containing a type `argus.record` that covers all fields from the `ra` man page.
+Since Tenzir has [CSV support](../understand/formats/csv.md), ingesting Argus
+CSV output only requires an adequate schema. Tenzir already ships with an argus
+schema containing a type `argus.record` that covers all fields from the `ra` man
+page.
 
 The following command imports a file `argus.csv`:
 
 ```bash
-vast import -t argus.record csv < argus.csv
+tenzirctl import -t argus.record csv < argus.csv
 ```
 
 Alternatively, this UNIX pipe processes a PCAP trace without intermediate file
-and ships the data directly to VAST:
+and ships the data directly to Tenzir:
 
 ```bash
 argus -r trace.pcap -w - |
   ra -F ra.conf -L0 -c , -n -s +spkts,dpkts,load,pcr |
-  vast import -t argus.record csv
+  tenzirctl import -t argus.record csv
 ```

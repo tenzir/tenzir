@@ -14,28 +14,28 @@ namespace vast::detail {
 
 namespace {
 
-auto add_data_view(auto& guard, const data_view& view) {
-  caf::visit(detail::overload{
-               [&guard](const auto& v) {
-                 guard.add(make_view(v));
-               },
-               [](const caf::none_t&) {
-                 // nop
-               },
-               [](const map_view_handle&) {
-                 die("adding view<map> is not supported");
-               },
-               [](const list_view_handle&) {
-                 die("adding view<list> is not supported");
-               },
-               [](const record_view_handle&) {
-                 die("adding view<record> is not supported");
-               },
-               [](const pattern_view&) {
-                 die("adding patterns is not supported");
-               },
-             },
-             view);
+auto add_data_view(auto& guard, const data_view& view) -> caf::error {
+  return caf::visit(detail::overload{
+                      [&guard](const auto& v) -> caf::error {
+                        return guard.add(make_view(v));
+                      },
+                      [](const caf::none_t&) -> caf::error {
+                        return caf::error{};
+                      },
+                      [](const map_view_handle&) -> caf::error {
+                        die("adding view<map> is not supported");
+                      },
+                      [](const list_view_handle&) -> caf::error {
+                        die("adding view<list> is not supported");
+                      },
+                      [](const record_view_handle&) -> caf::error {
+                        die("adding view<record> is not supported");
+                      },
+                      [](const pattern_view&) -> caf::error {
+                        die("adding patterns is not supported");
+                      },
+                    },
+                    view);
 }
 
 auto try_create_field_builder_for_fixed_builder(
@@ -111,8 +111,8 @@ list_guard::list_record_guard::~list_record_guard() noexcept {
   }
 }
 
-auto list_guard::add(const data_view& view) -> void {
-  add_data_view(*this, view);
+auto list_guard::add(const data_view& view) -> caf::error {
+  return add_data_view(*this, view);
 }
 
 auto list_guard::push_record() -> list_guard::list_record_guard {
@@ -171,8 +171,8 @@ auto list_guard::push_list() -> list_guard {
   return list_guard{builder_provider_, this, child_value_type};
 }
 
-auto field_guard::add(const data_view& view) -> void {
-  add_data_view(*this, view);
+auto field_guard::add(const data_view& view) -> caf::error {
+  return add_data_view(*this, view);
 }
 
 auto field_guard::push_record() -> record_guard {

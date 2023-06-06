@@ -20,19 +20,19 @@ TEST(add two rows of nested records) {
   adaptive_table_slice_builder sut;
   {
     auto row = sut.push_row();
-    row.push_field("int1").add(int64_t{5});
-    row.push_field("str1").add("some_str");
+    REQUIRE(not row.push_field("int1").add(int64_t{5}));
+    REQUIRE(not row.push_field("str1").add("some_str"));
     auto nested = row.push_field("nested").push_record();
-    nested.push_field("rec1").add(int64_t{10});
-    nested.push_field("rec2").add("rec_str");
+    REQUIRE(not nested.push_field("rec1").add(int64_t{10}));
+    REQUIRE(not nested.push_field("rec2").add("rec_str"));
   }
   {
     auto row = sut.push_row();
-    row.push_field("int1").add(int64_t{5});
-    row.push_field("str1").add("some_str");
+    REQUIRE(not row.push_field("int1").add(int64_t{5}));
+    REQUIRE(not row.push_field("str1").add("some_str"));
     auto nested = row.push_field("nested").push_record();
-    nested.push_field("rec1").add(int64_t{10});
-    nested.push_field("rec2").add("rec_str");
+    REQUIRE(not nested.push_field("rec1").add(int64_t{10}));
+    REQUIRE(not nested.push_field("rec2").add("rec_str"));
   }
   auto out = sut.finish();
   REQUIRE_EQUAL(out.rows(), 2u);
@@ -58,33 +58,33 @@ TEST(single row with nested lists) {
   adaptive_table_slice_builder sut;
   {
     auto row = sut.push_row();
-    row.push_field("int").add(int64_t{5});
+    REQUIRE(not row.push_field("int").add(int64_t{5}));
     auto arr_field = row.push_field("arr");
     auto outer_list = arr_field.push_list();
     {
       auto level_1_list = outer_list.push_list();
       {
         auto level_2_list = level_1_list.push_list();
-        level_2_list.add(int64_t{1});
-        level_2_list.add(int64_t{2});
+        REQUIRE(not level_2_list.add(int64_t{1}));
+        REQUIRE(not level_2_list.add(int64_t{2}));
       }
       {
         auto level_2_list = level_1_list.push_list();
-        level_2_list.add(int64_t{3});
-        level_2_list.add(int64_t{4});
+        REQUIRE(not level_2_list.add(int64_t{3}));
+        REQUIRE(not level_2_list.add(int64_t{4}));
       }
     }
     {
       auto level_1_list = outer_list.push_list();
       {
         auto level_2_list = level_1_list.push_list();
-        level_2_list.add(int64_t{5});
-        level_2_list.add(int64_t{6});
+        REQUIRE(not level_2_list.add(int64_t{5}));
+        REQUIRE(not level_2_list.add(int64_t{6}));
       }
       {
         auto level_2_list = level_1_list.push_list();
-        level_2_list.add(int64_t{7});
-        level_2_list.add(int64_t{8});
+        REQUIRE(not level_2_list.add(int64_t{7}));
+        REQUIRE(not level_2_list.add(int64_t{8}));
       }
     }
   }
@@ -108,14 +108,14 @@ TEST(single record with array inside nested record) {
   adaptive_table_slice_builder sut;
   {
     auto row = sut.push_row();
-    row.push_field("bool").add(true);
+    REQUIRE(not row.push_field("bool").add(true));
     auto nested_rec_field = row.push_field("nested");
     auto nested = nested_rec_field.push_record();
     auto nested_arr_field = nested.push_field("arr");
     auto nested_arr = nested_arr_field.push_list();
-    nested_arr.add(uint64_t{10});
-    nested_arr.add(uint64_t{100});
-    nested_arr.add(uint64_t{1000});
+    REQUIRE(not nested_arr.add(uint64_t{10}));
+    REQUIRE(not nested_arr.add(uint64_t{100}));
+    REQUIRE(not nested_arr.add(uint64_t{1000}));
   }
   auto out = sut.finish();
   REQUIRE_EQUAL(out.rows(), 1u);
@@ -140,22 +140,22 @@ TEST(record nested in array of records in two rows) {
     auto arr_field = row.push_field("arr");
     auto arr = arr_field.push_list();
     auto rec = arr.push_record();
-    rec.push_field("rec double").add(2.0);
-    rec.push_field("rec time").add(vast::time{row_1_time_point});
+    REQUIRE(not rec.push_field("rec double").add(2.0));
+    REQUIRE(not rec.push_field("rec time").add(vast::time{row_1_time_point}));
     auto nested_rec_fied = rec.push_field("nested rec");
     auto nested_rec = nested_rec_fied.push_record();
-    nested_rec.push_field("nested duration").add(duration{20us});
+    REQUIRE(not nested_rec.push_field("nested duration").add(duration{20us}));
   }
   {
     auto row = sut.push_row();
     auto arr_field = row.push_field("arr");
     auto arr = arr_field.push_list();
     auto rec = arr.push_record();
-    rec.push_field("rec double").add(4.0);
-    rec.push_field("rec time").add(vast::time{row_2_time_point});
+    REQUIRE(not rec.push_field("rec double").add(4.0));
+    REQUIRE(not rec.push_field("rec time").add(vast::time{row_2_time_point}));
     auto nested_rec_fied = rec.push_field("nested rec");
     auto nested_rec = nested_rec_fied.push_record();
-    nested_rec.push_field("nested duration").add(duration{6ms});
+    REQUIRE(not nested_rec.push_field("nested duration").add(duration{6ms}));
   }
   auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 2u);
@@ -192,18 +192,19 @@ TEST(two rows of array of complex records) {
     auto arr = arr_field.push_list();
     {
       auto rec = arr.push_record();
-      rec.push_field("subnet").add(row_1_1_subnet);
+      REQUIRE(not rec.push_field("subnet").add(row_1_1_subnet));
       auto ip_arr_arr_field = rec.push_field("ip arr");
       auto ip_arr_arr = ip_arr_arr_field.push_list();
       auto ip_arr_1 = ip_arr_arr.push_list();
-      ip_arr_1.add(ip::v4(2u));
-      ip_arr_1.add(ip::v4(3u));
-      ip_arr_arr.push_list().add(ip::v4(4u));
+      REQUIRE(not ip_arr_1.add(ip::v4(2u)));
+      REQUIRE(not ip_arr_1.add(ip::v4(3u)));
+      REQUIRE(not ip_arr_arr.push_list().add(ip::v4(4u)));
     }
     {
       auto rec = arr.push_record();
-      rec.push_field("subnet").add(row_1_2_subnet);
-      rec.push_field("ip arr").push_list().push_list().add(ip::v4(6u));
+      REQUIRE(not rec.push_field("subnet").add(row_1_2_subnet));
+      REQUIRE(
+        not rec.push_field("ip arr").push_list().push_list().add(ip::v4(6u)));
     }
   }
   {
@@ -212,20 +213,21 @@ TEST(two rows of array of complex records) {
     auto arr = arr_field.push_list();
     {
       auto rec = arr.push_record();
-      rec.push_field("subnet").add(row_2_1_subnet);
+      REQUIRE(not rec.push_field("subnet").add(row_2_1_subnet));
       auto ip_arr_arr_field = rec.push_field("ip arr");
       auto ip_arr_arr = ip_arr_arr_field.push_list();
       auto ip_arr_1 = ip_arr_arr.push_list();
-      ip_arr_1.add(ip::v4(0xFF << 1));
-      ip_arr_1.add(ip::v4(0xFF << 2));
+      REQUIRE(not ip_arr_1.add(ip::v4(0xFF << 1)));
+      REQUIRE(not ip_arr_1.add(ip::v4(0xFF << 2)));
       auto ip_arr_2 = ip_arr_arr.push_list();
-      ip_arr_2.add(ip::v4(0xFF << 3));
-      ip_arr_2.add(ip::v4(0xFF << 4));
+      REQUIRE(not ip_arr_2.add(ip::v4(0xFF << 3)));
+      REQUIRE(not ip_arr_2.add(ip::v4(0xFF << 4)));
     }
     {
       auto rec = arr.push_record();
-      rec.push_field("subnet").add(row_2_2_subnet);
-      rec.push_field("ip arr").push_list().push_list().add(ip::v4(0xFF << 5));
+      REQUIRE(not rec.push_field("subnet").add(row_2_2_subnet));
+      REQUIRE(not rec.push_field("ip arr").push_list().push_list().add(
+        ip::v4(0xFF << 5)));
     }
   }
   auto out = sut.finish();
@@ -262,16 +264,16 @@ TEST(two rows with array) {
   adaptive_table_slice_builder sut;
   {
     auto row = sut.push_row();
-    row.push_field("int").add(int64_t{5});
+    REQUIRE(not row.push_field("int").add(int64_t{5}));
     auto arrow_field = row.push_field("arr");
     auto arr = arrow_field.push_list();
-    arr.add(int64_t{1});
-    arr.add(int64_t{2});
+    REQUIRE(not arr.add(int64_t{1}));
+    REQUIRE(not arr.add(int64_t{2}));
   }
   {
     auto row = sut.push_row();
-    row.push_field("int").add(int64_t{10});
-    row.push_field("arr").push_list().add(int64_t{3});
+    REQUIRE(not row.push_field("int").add(int64_t{10}));
+    REQUIRE(not row.push_field("arr").push_list().add(int64_t{3}));
   }
   auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 2u);
@@ -290,18 +292,18 @@ TEST(two rows with array) {
 
 TEST(new fields added in new rows) {
   adaptive_table_slice_builder sut;
-  sut.push_row().push_field("int").add(int64_t{5});
+  REQUIRE(not sut.push_row().push_field("int").add(int64_t{5}));
   {
     auto row = sut.push_row();
     auto arr_field = row.push_field("arr");
     auto arr = arr_field.push_list();
-    arr.push_list().add(int64_t{3});
-    arr.push_list().add(int64_t{4});
+    REQUIRE(not arr.push_list().add(int64_t{3}));
+    REQUIRE(not arr.push_list().add(int64_t{4}));
   }
   {
     auto row = sut.push_row();
-    row.push_field("int").add(int64_t{1});
-    row.push_field("str").add("strr");
+    REQUIRE(not row.push_field("int").add(int64_t{1}));
+    REQUIRE(not row.push_field("str").add("strr"));
   }
   auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 3u);
@@ -341,7 +343,7 @@ TEST(empty struct is not added to the output table slice) {
   {
     auto row = sut.push_row();
     row.push_field("struct").push_record();
-    row.push_field("int").add(int64_t{2312});
+    REQUIRE(not row.push_field("int").add(int64_t{2312}));
   }
   auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 1u);
@@ -367,7 +369,7 @@ TEST(empty array is not added to the output table slice) {
   {
     auto row = sut.push_row();
     row.push_field("arr").push_list();
-    row.push_field("int").add(int64_t{2312});
+    REQUIRE(not row.push_field("int").add(int64_t{2312}));
   }
   auto out = sut.finish();
   CHECK_EQUAL(out.rows(), 1u);
@@ -383,39 +385,39 @@ TEST(empty array is not added to the output table slice) {
 TEST(
   empty structs and arrays fields change into non empty ones in the next rows) {
   adaptive_table_slice_builder sut;
-  sut.push_row().push_field("int").add(int64_t{5});
+  REQUIRE(not sut.push_row().push_field("int").add(int64_t{5}));
   {
     auto row = sut.push_row();
-    row.push_field("int").add(int64_t{10});
+    REQUIRE(not row.push_field("int").add(int64_t{10}));
     row.push_field("arr").push_list();
   }
   {
     auto row = sut.push_row();
-    row.push_field("int").add(int64_t{15});
+    REQUIRE(not row.push_field("int").add(int64_t{15}));
     row.push_field("struct").push_record();
   }
   {
     auto row = sut.push_row();
-    row.push_field("int").add(int64_t{20});
-    row.push_field("arr").push_list().add("arr1");
+    REQUIRE(not row.push_field("int").add(int64_t{20}));
+    REQUIRE(not row.push_field("arr").push_list().add("arr1"));
   }
-  sut.push_row().push_field("int").add(int64_t{25});
-  sut.push_row()
-    .push_field("struct")
-    .push_record()
-    .push_field("struct.str")
-    .add("str");
+  REQUIRE(not sut.push_row().push_field("int").add(int64_t{25}));
+  REQUIRE(not sut.push_row()
+                .push_field("struct")
+                .push_record()
+                .push_field("struct.str")
+                .add("str"));
   {
     auto row = sut.push_row();
     auto root_struct = row.push_field("struct").push_record();
-    root_struct.push_field("struct.str").add("str2");
+    REQUIRE(not root_struct.push_field("struct.str").add("str2"));
     auto inner_struct_field = root_struct.push_field("struct.struct");
     auto inner_struct = inner_struct_field.push_record();
-    inner_struct.push_field("struct.struct.int").add(int64_t{90});
+    REQUIRE(not inner_struct.push_field("struct.struct.int").add(int64_t{90}));
     auto arr_field = inner_struct.push_field("struct.struct.array");
     auto arr = arr_field.push_list();
-    arr.add(int64_t{10});
-    arr.add(int64_t{20});
+    REQUIRE(not arr.add(int64_t{10}));
+    REQUIRE(not arr.add(int64_t{20}));
   }
 
   auto out = sut.finish();
@@ -485,12 +487,14 @@ TEST(append nulls to the first field of a record field when a different field
   {
     auto row = sut.push_row();
     auto record_field = row.push_field("record");
-    record_field.push_record().push_field("field1").add(int64_t{1});
+    REQUIRE(
+      not record_field.push_record().push_field("field1").add(int64_t{1}));
   }
   {
     auto row = sut.push_row();
     auto record_field = row.push_field("record");
-    record_field.push_record().push_field("field2").add("field2 val");
+    REQUIRE(
+      not record_field.push_record().push_field("field2").add("field2 val"));
   }
 
   auto out = sut.finish();
@@ -504,10 +508,10 @@ TEST(append nulls to the first field of a record field when a different field
 
 TEST(field not present after removing the row which introduced the field) {
   adaptive_table_slice_builder sut;
-  sut.push_row().push_field("int").add(int64_t{5});
+  REQUIRE(not sut.push_row().push_field("int").add(int64_t{5}));
   auto row = sut.push_row();
-  row.push_field("int").add(int64_t{10});
-  row.push_field("str").add("str");
+  REQUIRE(not row.push_field("int").add(int64_t{10}));
+  REQUIRE(not row.push_field("str").add("str"));
   row.cancel();
   auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 1u);
@@ -520,14 +524,14 @@ TEST(remove basic row) {
   {
     auto row = sut.push_row();
     auto rec = row.push_field("record").push_record();
-    rec.push_field("rec int").add(int64_t{1});
-    rec.push_field("rec str").add("str");
+    REQUIRE(not rec.push_field("rec int").add(int64_t{1}));
+    REQUIRE(not rec.push_field("rec str").add("str"));
   }
   auto row = sut.push_row();
   {
     auto rec = row.push_field("record").push_record();
-    rec.push_field("rec int").add(int64_t{2});
-    rec.push_field("rec str").add("str2");
+    REQUIRE(not rec.push_field("rec int").add(int64_t{2}));
+    REQUIRE(not rec.push_field("rec str").add("str2"));
   }
   row.cancel();
   auto output = sut.finish();
@@ -543,16 +547,16 @@ TEST(remove row list) {
     auto row = sut.push_row();
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
-    list.add(int64_t{1});
-    list.add(int64_t{2});
+    REQUIRE(not list.add(int64_t{1}));
+    REQUIRE(not list.add(int64_t{2}));
   }
 
   auto row = sut.push_row();
   {
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
-    list.add(int64_t{3});
-    list.add(int64_t{4});
+    REQUIRE(not list.add(int64_t{3}));
+    REQUIRE(not list.add(int64_t{4}));
   }
   row.cancel();
   auto output = sut.finish();
@@ -568,7 +572,7 @@ TEST(remove row list of records) {
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
     auto record = list.push_record();
-    record.push_field("list_rec_int").add(int64_t{1});
+    REQUIRE(not record.push_field("list_rec_int").add(int64_t{1}));
   }
 
   auto row = sut.push_row();
@@ -576,7 +580,7 @@ TEST(remove row list of records) {
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
     auto record = list.push_record();
-    record.push_field("list_rec_int").add(int64_t{2});
+    REQUIRE(not record.push_field("list_rec_int").add(int64_t{2}));
   }
   row.cancel();
 
@@ -585,7 +589,7 @@ TEST(remove row list of records) {
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
     auto record = list.push_record();
-    record.push_field("list_rec_int").add(int64_t{3});
+    REQUIRE(not record.push_field("list_rec_int").add(int64_t{3}));
   }
   auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 2u);
@@ -605,15 +609,15 @@ TEST(remove row list of lists) {
     auto outer_list_field = row.push_field("list");
     auto outer_list = outer_list_field.push_list();
     auto inner_list = outer_list.push_list();
-    inner_list.add(int64_t{1u});
+    REQUIRE(not inner_list.add(int64_t{1u}));
   }
 
   auto row = sut.push_row();
   auto outer_list_field = row.push_field("list");
   auto outer_list = outer_list_field.push_list();
   auto inner_list = outer_list.push_list();
-  inner_list.add(int64_t{2u});
-  inner_list.add(int64_t{3u});
+  REQUIRE(not inner_list.add(int64_t{2u}));
+  REQUIRE(not inner_list.add(int64_t{3u}));
   row.cancel();
 
   {
@@ -621,8 +625,8 @@ TEST(remove row list of lists) {
     auto outer_list_field = row.push_field("list");
     auto outer_list = outer_list_field.push_list();
     auto inner_list = outer_list.push_list();
-    inner_list.add(int64_t{4u});
-    inner_list.add(int64_t{5u});
+    REQUIRE(not inner_list.add(int64_t{4u}));
+    REQUIRE(not inner_list.add(int64_t{5u}));
   }
 
   auto output = sut.finish();
@@ -640,11 +644,11 @@ TEST(remove row list of records with list fields) {
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
     auto rec = list.push_record();
-    rec.push_field("int").add(int64_t{1});
+    REQUIRE(not rec.push_field("int").add(int64_t{1}));
     auto inner_list_field = rec.push_field("inner list");
     auto inner_list = inner_list_field.push_list();
     auto inner_record = inner_list.push_record();
-    inner_record.push_field("str").add("str1");
+    REQUIRE(not inner_record.push_field("str").add("str1"));
   }
 
   auto row = sut.push_row();
@@ -652,11 +656,11 @@ TEST(remove row list of records with list fields) {
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
     auto rec = list.push_record();
-    rec.push_field("int").add(int64_t{2});
+    REQUIRE(not rec.push_field("int").add(int64_t{2}));
     auto inner_list_field = rec.push_field("inner list");
     auto inner_list = inner_list_field.push_list();
     auto inner_record = inner_list.push_record();
-    inner_record.push_field("str").add("str2");
+    REQUIRE(not inner_record.push_field("str").add("str2"));
   }
 
   row.cancel();
@@ -665,11 +669,11 @@ TEST(remove row list of records with list fields) {
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
     auto rec = list.push_record();
-    rec.push_field("int").add(int64_t{3});
+    REQUIRE(not rec.push_field("int").add(int64_t{3}));
     auto inner_list_field = rec.push_field("inner list");
     auto inner_list = inner_list_field.push_list();
     auto inner_record = inner_list.push_record();
-    inner_record.push_field("str").add("str3");
+    REQUIRE(not inner_record.push_field("str").add("str3"));
   }
   auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 2u);
@@ -695,21 +699,21 @@ TEST(remove row with non empty list after pushing empty lists to previous rows) 
   {
     auto row = sut.push_row();
     row.push_field("list").push_list();
-    row.push_field("int").add(int64_t{10});
+    REQUIRE(not row.push_field("int").add(int64_t{10}));
   }
   {
     auto row = sut.push_row();
-    row.push_field("int").add(int64_t{20});
+    REQUIRE(not row.push_field("int").add(int64_t{20}));
   }
 
   auto row = sut.push_row();
   {
-    row.push_field("list").push_list().add(int64_t{1});
-    row.push_field("int").add(int64_t{30});
+    REQUIRE(not row.push_field("list").push_list().add(int64_t{1}));
+    REQUIRE(not row.push_field("int").add(int64_t{30}));
   }
 
   row.cancel();
-  sut.push_row().push_field("str").add("str0");
+  REQUIRE(not sut.push_row().push_field("str").add("str0"));
   auto output = sut.finish();
   REQUIRE_EQUAL(output.rows(), 3u);
   REQUIRE_EQUAL(output.columns(), 2u);
@@ -726,11 +730,11 @@ TEST(remove row empty list) {
   {
     auto row = sut.push_row();
     row.push_field("list").push_list();
-    row.push_field("int").add(int64_t{10});
+    REQUIRE(not row.push_field("int").add(int64_t{10}));
   }
 
   auto row = sut.push_row();
-  row.push_field("int").add(int64_t{20});
+  REQUIRE(not row.push_field("int").add(int64_t{20}));
 
   row.cancel();
   auto output = sut.finish();
@@ -749,7 +753,7 @@ TEST(Add nulls to fields that didnt have values added when adaptive builder is
                                             {"rec2", string_type{}},
                                           }}}};
   auto sut = adaptive_table_slice_builder{schema};
-  sut.push_row().push_field("int1").add(int64_t{5238592});
+  REQUIRE(not sut.push_row().push_field("int1").add(int64_t{5238592}));
   auto out = sut.finish(schema.name());
   REQUIRE_EQUAL(schema, out.schema());
 
@@ -767,8 +771,8 @@ TEST(Allow new fields to be added when adaptive builder is constructed with a
     = vast::type{"a nice name", record_type{{"int1", int64_type{}}}};
 
   auto sut = adaptive_table_slice_builder{starting_schema, true};
-  sut.push_row().push_field("int1").add(int64_t{5238592});
-  sut.push_row().push_field("int2").add(int64_t{1});
+  REQUIRE(not sut.push_row().push_field("int1").add(int64_t{5238592}));
+  REQUIRE(not sut.push_row().push_field("int2").add(int64_t{1}));
   auto out = sut.finish();
 
   const auto schema = vast::type{record_type{
@@ -792,7 +796,7 @@ TEST(Add enumeration type from a string representation to a basic field) {
     = vast::type{"a nice name", record_type{{"enum", enum_type}}};
 
   auto sut = adaptive_table_slice_builder{starting_schema};
-  sut.push_row().push_field("enum").add("enum2");
+  REQUIRE(not sut.push_row().push_field("enum").add("enum2"));
   auto out = sut.finish(starting_schema.name());
   CHECK_EQUAL(starting_schema, out.schema());
 
@@ -812,8 +816,8 @@ TEST(Add enumeration type from a string representation to a list of enums) {
     auto row = sut.push_row();
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
-    list.add("enum7");
-    list.add("enum5");
+    REQUIRE(not list.add("enum7"));
+    REQUIRE(not list.add("enum5"));
   }
   auto out = sut.finish(starting_schema.name());
   CHECK_EQUAL(starting_schema, out.schema());
@@ -834,7 +838,7 @@ TEST(Add enumeration type from an enum representation to a basic field) {
   auto sut = adaptive_table_slice_builder{starting_schema};
   const auto input
     = detail::narrow_cast<enumeration>(*enum_type.resolve("enum2"));
-  sut.push_row().push_field("enum").add(input);
+  REQUIRE(not sut.push_row().push_field("enum").add(input));
   auto out = sut.finish(starting_schema.name());
   CHECK_EQUAL(starting_schema, out.schema());
 
@@ -857,8 +861,8 @@ TEST(Add enumeration type from an enum representation to a list of enums) {
     auto row = sut.push_row();
     auto list_field = row.push_field("list");
     auto list = list_field.push_list();
-    list.add(input_1);
-    list.add(input_2);
+    REQUIRE(not list.add(input_1));
+    REQUIRE(not list.add(input_2));
   }
   auto out = sut.finish();
   CHECK_EQUAL((type{starting_schema.make_fingerprint(), starting_schema}),
@@ -876,7 +880,7 @@ TEST(Add none for enumerations that dont exist)
     = vast::type{"a nice name", record_type{{"enum", enum_type}}};
 
   auto sut = adaptive_table_slice_builder{starting_schema};
-  sut.push_row().push_field("enum").add("enum4");
+  REQUIRE(not sut.push_row().push_field("enum").add("enum4"));
   auto out = sut.finish(starting_schema.name());
   CHECK_EQUAL(starting_schema, out.schema());
 
@@ -893,8 +897,8 @@ TEST(Fixed fields builder can be reused after finish call) {
 
   {
     auto row = sut.push_row();
-    row.push_field("int1").add(int64_t{1});
-    row.push_field("str1").add("str");
+    REQUIRE(not row.push_field("int1").add(int64_t{1}));
+    REQUIRE(not row.push_field("str1").add("str"));
   }
   auto out = sut.finish(schema.name());
   REQUIRE_EQUAL(schema, out.schema());
@@ -906,8 +910,8 @@ TEST(Fixed fields builder can be reused after finish call) {
 
   {
     auto row = sut.push_row();
-    row.push_field("int1").add(int64_t{2});
-    row.push_field("str1").add("str2");
+    REQUIRE(not row.push_field("int1").add(int64_t{2}));
+    REQUIRE(not row.push_field("str1").add("str2"));
   }
   out = sut.finish(schema.name());
   REQUIRE_EQUAL(schema, out.schema());
@@ -934,37 +938,37 @@ TEST(Fixed fields builder add record type) {
     auto row = sut.push_row();
     auto record_field = row.push_field("record");
     auto record = record_field.push_record();
-    record.push_field("int").add(int64_t{1});
+    REQUIRE(not record.push_field("int").add(int64_t{1}));
     auto list_field = record.push_field("list");
     auto list = list_field.push_list();
     auto list_record = list.push_record();
-    list_record.push_field("str").add("str1");
+    REQUIRE(not list_record.push_field("str").add("str1"));
     auto nested_list_field = list_record.push_field("nested list");
     auto nested_list = nested_list_field.push_list();
-    nested_list.add(int64_t{1});
-    nested_list.add(int64_t{2});
+    REQUIRE(not nested_list.add(int64_t{1}));
+    REQUIRE(not nested_list.add(int64_t{2}));
   }
   {
     auto row = sut.push_row();
     auto record_field = row.push_field("record");
     auto record = record_field.push_record();
-    record.push_field("int").add(int64_t{2});
+    REQUIRE(not record.push_field("int").add(int64_t{2}));
     auto list_field = record.push_field("list");
     auto list = list_field.push_list();
     {
       auto list_record = list.push_record();
-      list_record.push_field("str").add("str2");
+      REQUIRE(not list_record.push_field("str").add("str2"));
       auto nested_list_field = list_record.push_field("nested list");
       auto nested_list = nested_list_field.push_list();
-      nested_list.add(int64_t{3});
-      nested_list.add(int64_t{4});
+      REQUIRE(not nested_list.add(int64_t{3}));
+      REQUIRE(not nested_list.add(int64_t{4}));
     }
     {
       auto list_record = list.push_record();
-      list_record.push_field("str").add("str3");
+      REQUIRE(not list_record.push_field("str").add("str3"));
       auto nested_list_field = list_record.push_field("nested list");
       auto nested_list = nested_list_field.push_list();
-      nested_list.add(int64_t{100});
+      REQUIRE(not nested_list.add(int64_t{100}));
     }
   }
   auto out = sut.finish(schema.name());
@@ -1009,38 +1013,38 @@ TEST(Fixed fields builder remove record type row) {
   {
     auto record_field = row_1.push_field("record");
     auto record = record_field.push_record();
-    record.push_field("int").add(int64_t{1});
+    REQUIRE(not record.push_field("int").add(int64_t{1}));
     auto list_field = record.push_field("list");
     auto list = list_field.push_list();
     auto list_record = list.push_record();
-    list_record.push_field("str").add("str1");
+    REQUIRE(not list_record.push_field("str").add("str1"));
     auto nested_list_field = list_record.push_field("nested list");
     auto nested_list = nested_list_field.push_list();
-    nested_list.add(int64_t{1});
-    nested_list.add(int64_t{2});
+    REQUIRE(not nested_list.add(int64_t{1}));
+    REQUIRE(not nested_list.add(int64_t{2}));
   }
   row_1.cancel();
   {
     auto row = sut.push_row();
     auto record_field = row.push_field("record");
     auto record = record_field.push_record();
-    record.push_field("int").add(int64_t{2});
+    REQUIRE(not record.push_field("int").add(int64_t{2}));
     auto list_field = record.push_field("list");
     auto list = list_field.push_list();
     {
       auto list_record = list.push_record();
-      list_record.push_field("str").add("str2");
+      REQUIRE(not list_record.push_field("str").add("str2"));
       auto nested_list_field = list_record.push_field("nested list");
       auto nested_list = nested_list_field.push_list();
-      nested_list.add(int64_t{3});
-      nested_list.add(int64_t{4});
+      REQUIRE(not nested_list.add(int64_t{3}));
+      REQUIRE(not nested_list.add(int64_t{4}));
     }
     {
       auto list_record = list.push_record();
-      list_record.push_field("str").add("str3");
+      REQUIRE(not list_record.push_field("str").add("str3"));
       auto nested_list_field = list_record.push_field("nested list");
       auto nested_list = nested_list_field.push_list();
-      nested_list.add(int64_t{100});
+      REQUIRE(not nested_list.add(int64_t{100}));
     }
   }
   auto out = sut.finish(schema.name());

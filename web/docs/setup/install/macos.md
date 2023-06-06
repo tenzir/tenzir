@@ -1,6 +1,6 @@
 # macOS
 
-On macOS, you must [build VAST from source](../build.md). Note that building
+On macOS, you must [build Tenzir from source](../build.md). Note that building
 requires C++20 support from the compiler, so the native AppleClang compiler can
 not be used.
 
@@ -15,14 +15,14 @@ export CPPFLAGS="-isystem $(brew --prefix llvm)/include ${CPPFLAGS}"
 export CXXFLAGS="-isystem $(brew --prefix llvm)/include/c++/v1 ${CXXFLAGS}"
 ```
 
- ## launchd
+## launchd
 
- Installing VAST via CMake on macOS configures a [launchd
- agent](https://www.launchd.info) to
- `~/Library/LaunchAgents/com.tenzir.vast.plist`. To run VAST automatically at
- login, run this command:
+Installing Tenzir via CMake on macOS configures a [launchd
+agent](https://www.launchd.info) to
+`~/Library/LaunchAgents/com.tenzir.tenzir.plist`. To run Tenzir automatically
+at login, run this command:
 
- ```bash
- # NOTE: Use 'unload' rather than 'load' to unload the agent
- launchctl load -w ~/Library/LaunchAgents/com.tenzir.vast.plist
- ```
+```bash
+# NOTE: Use 'unload' rather than 'load' to unload the agent
+launchctl load -w ~/Library/LaunchAgents/com.tenzir.tenzir.plist
+```

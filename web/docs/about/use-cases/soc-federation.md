@@ -4,7 +4,7 @@ sidebar_position: 0
 
 # SOC Federation
 
-VAST is an engine for telemetry storage and security content execution,
+Tenzir is an engine for telemetry storage and security content execution,
 embeddable at the edge and specifically catering to use cases of larger SOCs at
 service providers, network operators, and managed detection and response (MDR)
 vendors. Ultimately, [we strive for a federated
@@ -19,7 +19,7 @@ architecture more generally. The diagram below shows an example environment:
 
 The core idea is to keep the bulk of the data decentralized at their respective
 origin, and disseminate security content via a [security data
-fabric](../vision.md#security-data-fabric) to the VAST
+fabric](../vision.md#security-data-fabric) to the Tenzir
 nodes—effectively shipping compute to the data. The SOC will always need central
 management and collaboration, and selective backhauling of data. The
 architecture does not exclude this, but the focus is on offloading as much
@@ -51,28 +51,28 @@ address the scaling issues, but also raise new concerns:
 3. **On-premise**: private cloud and on-premise deployments will remain next to
    public-cloud workloads. Even though Anthos, Outpost, and Stack bring the
    cloud control plane closer back to the enterprise, certain environments will
-   always remain autarkic. To be clear, our goal is to deploy VAST in exactly
+   always remain autarkic. To be clear, our goal is to deploy Tenzir in exactly
    these cloud-on-prem environments, but we strongly believe that no one should
    be *coerced* to run on top of a third-party platform they do not control.
 
 :::tip Key Benefits
-A federated edge security architecture with a fleet of VAST nodes as foundation
-for detection and response has the following benefits:
+A federated edge security architecture with a fleet of Tenzir nodes as
+foundation for detection and response has the following benefits:
 
 1. **Better detection**: as compute ramps up at the edge, so does detection
-   capability. Pushing resource-intense workloads (e.g., pre-trained attack models,
-   kill-chain state machines, multi-stage analytics) to the edge opens new
-   avenues for scaling efficiently.
+   capability. Pushing resource-intense workloads (e.g., pre-trained attack
+   models, kill-chain state machines, multi-stage analytics) to the edge opens
+   new avenues for scaling efficiently.
 2. **Faster response**: detections can trigger responses faster due to closer
    proximity to the affected entity. Responding can become smarter and more
    independent when data-driven decision making can rely on low-latency and
    high-bandwidth access to context.
 3. **Easier compliance**: when keeping data at the source, adhering to data
-   residency requirements becomes simpler. In addition, VAST offers flexible
+   residency requirements becomes simpler. In addition, Tenzir offers flexible
    transformation and compaction feature to keep data compliant with respect to
    the local policy.
-4. **Strong multi tenancy**: A multi-node VAST deployment makes it easy to cater
-   to strict data separation while enabling cross-tenant analytics in a
+4. **Strong multi tenancy**: A multi-node Tenzir deployment makes it easy to
+   cater to strict data separation while enabling cross-tenant analytics in a
    transparent way. We are working on a clearing house architecture and unified
    fleet management solution to offer a turn-key solution for service providers,
    stay tuned.

@@ -1,17 +1,17 @@
 # Introspect
 
 With *introspection* we mean the ability of to inspect the current system state.
-This concerns both health and status metrics of VAST, as well as higher-level
+This concerns both health and status metrics of Tenzir, as well as higher-level
 metadata, such as event schemas and [taxonomies][taxonomies] (concepts and
 models).
 
-## Inspect the status of a VAST node
+## Inspect the status of a Tenzir node
 
 The `status` command displays a variety of system information. Without any
 arguments, it provides a high-level overview in JSON output:
 
 ```bash
-vast status
+tenzirctl status
 ```
 
 ```json
@@ -57,7 +57,7 @@ vast status
   },
   "system": {
     "current-memory-usage": 499281920,
-    "database-path": "/var/lib/vast",
+    "database-path": "/var/lib/tenzir",
     "in-memory-table-slices": 2,
     "peak-memory-usage": 499281920
   },
@@ -71,7 +71,7 @@ vast status
       "Undefined Behavior Sanitizer": false
     },
     "CAF": "0.18.6",
-    "VAST": "v2.4.0-583-gade8a85ac4-dirty",
+    "Tenzir": "v2.4.0-583-gade8a85ac4-dirty",
     "plugins": {
       "cef": "v0.1.0-g314fcdd30c",
       "parquet": "v1.0.0-g314fcdd30c",
@@ -88,23 +88,23 @@ The returned top-level JSON object has one key per component, plus the two
 
 There exist two variations that add more detailed output:
 
-1. `vast status --detailed`
-2. `vast status --debug`
+1. `tenzirctl status --detailed`
+2. `tenzirctl status --debug`
 
 Both variations fill in more output in the respective component sections.
 
 ## Describe event schemas and taxonomies
 
-When you want to know "what's in my VAST node?" so that you can write queries,
+When you want to know "what's in my Tenzir node?" so that you can write queries,
 use the `show` command. If you're familiar with SQL databases, such as
 [DuckDB](https://duckdb.org/docs/guides/meta/list_tables), the `show` equivalent
 would be `SHOW TABLES` or `DESCRIBE`.
 
 You can invoke the `show` command with three positional arguments:
 
-1. `vast show concepts`
-2. `vast show models`
-3. `vast show schemas`
+1. `tenzirctl show concepts`
+2. `tenzirctl show models`
+3. `tenzirctl show schemas`
 
 Options (1) and (2) show taxonomy details about concepts and models, and (3)
 displays all known types, both from statically specified schemas in
@@ -117,7 +117,7 @@ for a more human-readable structure after any of the positional arguments. For
 example:
 
 ```bash
-vast show schemas --yaml
+tenzirctl show schemas --yaml
 ```
 
 ```yaml
@@ -272,11 +272,11 @@ vast show schemas --yaml
 
 </details>
 
-Semantically, `vast show schemas` is to VAST data what [JSON
-Schema](https://json-schema.org/) is to JSON. In VAST's [type
+Semantically, `tenzirctl show schemas` is to Tenzir data what [JSON
+Schema](https://json-schema.org/) is to JSON. In Tenzir's [type
 system](../../understand/data-model/type-system.md) value constraints (e.g.,
 minimum value, maximum string length) correspond to type attributes, which are
-free-form key-value pairs. To date, VAST does not actively support enforcing
+free-form key-value pairs. To date, Tenzir does not actively support enforcing
 type constraints via attributes, but will rely on this mechanism for this
 purpose in the future.
 
@@ -288,7 +288,7 @@ The other two arguments to `show` commands display data-independent
 For example, you can display all concepts as follows:
 
 ```bash
-vast show concepts --yaml
+tenzirctl show concepts --yaml
 ```
 
 ```yaml
@@ -329,7 +329,7 @@ vast show concepts --yaml
 Similarly, you can display all models with:
 
 ```bash
-vast show models --yaml
+tenzirctl show models --yaml
 ```
 
 ```yaml

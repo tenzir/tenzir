@@ -16,12 +16,12 @@ tactical threat intelligence. We focus on the tactical data that decomposes into
 compromise (IoCs)* that reflect malicious activity.
 :::
 
-VAST can live-match threat intelligence against the incoming stream of events,
+Tenzir can live-match threat intelligence against the incoming stream of events,
 producing an alert feed of sightings. This feature fits into the bigger theme
 of a [unified detection](../../about/use-cases/unified-detection.md) strategy
 with a security-content-driven workflow.
 
-VAST features *matchers* that check whether specific field values exist in
+Tenzir features *matchers* that check whether specific field values exist in
 dynamic set of indicators. A successful match emits a *sighting* as output.
 This functionality resembles [Suricata's datasets][datasets] or [Zeek's intel
 framework][intel-framework], but generalized to all security telemetry. Key
@@ -34,7 +34,7 @@ matcher features include:
   backends, such as hash tables, Bloom filters, and Cuckoo filters.
 
 - **Surgical Target Locking**: fine-grained configuration options to dispatch
-  matchers to fields in the data, fully leveraging VAST's type system.
+  matchers to fields in the data, fully leveraging Tenzir's type system.
 
 - **Composable Sighting Streams**: mix-and-match sighting streams to combine
   the results of matchers, e.g., fuse TLP:RED and inhouse indicators in one
@@ -49,26 +49,26 @@ Working with matchers involves three separate steps:
 2. [Add](#add-indicators)/[remove](#remove-indicators) indicators
 3. [Attach to the matcher](#attach-to-matchers) to consume sightings
 
-VAST uniquely identifies matchers by their name, either as specified in the YAML
-configuration or on the command line. Whenever interacting with a matcher, you
-need to pass the name as argument to all operations. The general pattern looks
-as follows:
+Tenzir uniquely identifies matchers by their name, either as specified in the
+YAML configuration or on the command line. Whenever interacting with a matcher,
+you need to pass the name as argument to all operations. The general pattern
+looks as follows:
 
 ```bash
-vast matcher <command> [options] <name>
+tenzirctl matcher <command> [options] <name>
 ```
 
-VAST also supports executing operations on multiple matchers at once, e.g., to
+Tenzir also supports executing operations on multiple matchers at once, e.g., to
 a add an indicator to a many matchers. To this end, simply use a comma-separated
-list for the positional `name` argument, e.g., `vast matcher add a,b,c ...` to
-act on matchers `a`, `b`, and `c`.
+list for the positional `name` argument, e.g., `tenzirctl matcher add a,b,c ...`
+to act on matchers `a`, `b`, and `c`.
 
 :::note Requirements
-To use matchers, make sure that your VAST distribution has the `matcher` plugin
-available, e.g., by checking the output of `vast version`:
+To use matchers, make sure that your Tenzir distribution has the `matcher`
+plugin available, e.g., by checking the output of `tenzir version`:
 
 ```bash
-vast -q --plugins=all version | jq .plugins.matcher
+tenzir -q --plugins=all version | jq .plugins.matcher
 ```
 :::
 
@@ -76,8 +76,8 @@ vast -q --plugins=all version | jq .plugins.matcher
 
 There exist two methods to start matchers:
 
-1. Server-side: configure them in the `vast.yaml` configuration
-2. Client-side: invoke `vast matcher start` on the command line
+1. Server-side: configure them in the `tenzir.yaml` configuration
+2. Client-side: invoke `tenzirctl matcher start` on the command line
 
 Method (1) produces *persistent* matchers that survive restarts and flush their
 state periodically; (2) produces *ephemeral* matchers, which are functionally
@@ -101,7 +101,7 @@ plugins:
     # "dirty" matchers, i.e., those that have been modified since the last
     # write.
     persistence-interval: 30 mins
-    # VAST automatically starts all matchers configured in this section.
+    # Tenzir automatically starts all matchers configured in this section.
     matchers:
       # An exact matcher that operates on fields.
       hostnames:
@@ -127,24 +127,25 @@ Adding a matcher means adding a new entry under the key `matchers`.
 
 The matcher-global option `persistence-interval` controls how fast a persist
 operation takes place after a state mutation. Regardless of the configured
-value, VAST persists all matchers with pending modifications on shutdown.
+value, Tenzir persists all matchers with pending modifications on shutdown.
 
 ### Client-side
 
 When deploying matchers, editing the server-side configuration can be unwieldy
 and result int undesired blind spots, because they require a restart of the
-server for the configuration changes to take effect. This is why VAST also
+server for the configuration changes to take effect. This is why Tenzir also
 supports spawning *ephemeral* matchers via the CLI. Ephemeral matchers behave
-exactly like persistent matchers, with the only difference that the VAST server
-doesn't manage their state. However, it is still possible to [manually save/load
+exactly like persistent matchers, with the only difference that the Tenzir
+server doesn't manage their state. However, it is still possible to [manually
+save/load
 the matcher state](#manage-matcher-state).
 
-To start an ephemeral matcher, use `vast matcher start`. The command line
+To start an ephemeral matcher, use `tenzirctl matcher start`. The command line
 options are identical to the YAML keys. For example, to spawn the `iocs`
 matcher configured above as ephemeral matcher, use this command:
 
 ```bash
-vast matcher start \
+tenzirctl matcher start \
   --mode=dcso-bloom \
   --capacity=1000000 \
   --false-positive-probability=0.001 \
@@ -154,8 +155,8 @@ vast matcher start \
 
 ## List Matchers
 
-To show the running matchers, use `vast matcher list`. Example output may look
-like this:
+To show the running matchers, use `tenzirctl matcher list`. Example output may
+look like this:
 
 ```
 hostnames (disabled with 0 clients)
@@ -176,7 +177,7 @@ To attach to a matcher, you need to specified output format and the matcher
 name:
 
 ```bash
-vast matcher attach csv hostnames
+tenzirctl matcher attach csv hostnames
 ```
 
 The process will block and print all sightings in CSV format on standard
@@ -188,11 +189,11 @@ to multiple matchers with a single client, provide their names as
 list:
 
 ```bash
-vast matcher attach json hostnames,ips,iocs
+tenzirctl matcher attach json hostnames,ips,iocs
 ```
 
 You will now receive sightings from all matchers in JSON format. There is no
-ordering guarantee on the sighting output, as VAST fuses the sighting stream
+ordering guarantee on the sighting output, as Tenzir fuses the sighting stream
 asynchronously to deliver optimal latency.
 
 ## Add Indicators
@@ -207,14 +208,14 @@ There exist two methods to populate matchers with content:
 Adding a single indicator involves passing it on the command line:
 
 ```bash
-vast matcher add <matcher> <value> [context]
+tenzirctl matcher add <matcher> <value> [context]
 ```
 
 For example, to add and IP address along with an opaque identifier to the
 matcher `ips`, use:
 
 ```bash
-vast matcher add ips 6.6.6.6 opaque-id-42
+tenzirctl matcher add ips 6.6.6.6 opaque-id-42
 ```
 
 The context value `opaque-id-42` will show in in all sightings for this
@@ -228,15 +229,16 @@ matchers cannot store the extra context data. Please consult the section on
 
 ### Bulk Import
 
-Adding large sets of indicators using `vast matcher add` does not scale,
+Adding large sets of indicators using `tenzirctl matcher add` does not scale,
 because the overhead of establishing a connection to the server dwarfs the time
 it takes to implant the indicator into the corresponding data structure. To
-import large sets of indicators in bulk, use the `vast matcher import` command.
+import large sets of indicators in bulk, use the `tenzirctl matcher import`
+command.
 
-The `vast matcher import` command mirrors the interface of the `vast import`
-command. Instead of importing events into the database, it imports events
-containing *indicators* and forwards them to selected matchers. Let's take a
-look at an example incovation using the [Pulsedive threat intelligence
+The `tenzirctl matcher import` command mirrors the interface of the `tenzirctl
+import` command. Instead of importing events into the database, it imports
+events containing *indicators* and forwards them to selected matchers. Let's
+take a look at an example incovation using the [Pulsedive threat intelligence
 feed](https://pulsedive.com/about/feed):
 
 ```bash
@@ -245,14 +247,14 @@ feed_url='https://pulsedive.com/premium/?key=&header=true&fields=id,type,risk,th
 
 # Ingest the feed into the matcher 'ips' we created above.
 curl -sSL "$feed_url" |
-  vast matcher import -t pulsedive csv ips
+  tenzirctl matcher import -t pulsedive csv ips
 ```
 
-The `curl` command downloads a CSV and dumps it to STDOUT. The `vast matcher
-import` command reads CSV content by specifying `csv` as first positional
-argument. We are also telling VAST via `-t pulsedive` that the data matches the
-`pulsedive` type (specified in the bundled `pulsedive.schema`). After parsing,
-VAST forwards the parsed indicators to the matcher `ips`.
+The `curl` command downloads a CSV and dumps it to STDOUT. The `tenzirctl
+matcher import` command reads CSV content by specifying `csv` as first
+positional argument. We are also telling Tenzir via `-t pulsedive` that the data
+matches the `pulsedive` type (specified in the bundled `pulsedive.schema`).
+After parsing, Tenzir forwards the parsed indicators to the matcher `ips`.
 
 An additional [concepts
 definition](../../understand/data-model/taxonomies.md#concepts) for the
@@ -261,7 +263,7 @@ definition](../../understand/data-model/taxonomies.md#concepts) for the
 optional *context*.
 
 The above example used a pre-filtered list from Pulsedive. However, import
-filter expressions allow for doing the filtering on the fly using VAST's
+filter expressions allow for doing the filtering on the fly using Tenzir's
 regular import filter expressions like this:
 
 ```bash
@@ -270,13 +272,13 @@ feed_url='https://pulsedive.com/premium/?key=&header=true&fields=id,type,risk,th
 
 # Ingest the feed into the matcher 'ips', but skip all retired indicators.
 curl -sSL "${feed_url}" |
-  vast matcher import -t pulsedive csv ips \
+  tenzirctl matcher import -t pulsedive csv ips \
     'risk != /:retired/ && type == /ip.*/
 ```
 
 The matcher plugin conveniently ships with a Pulsedive schema and concept
 definitions for use with the matcher plugin in
-`<sysconfdir>/share/vast/plugins/matcher/schema`.
+`<sysconfdir>/share/tenzir/plugins/matcher/schema`.
 
 ## Delete Indicators
 
@@ -284,7 +286,7 @@ The `remove` command is the dual to `add`: it removes a single indicator value.
 For example, to remove `6.6.6.6` from the matcher `ips`, invoke:
 
 ```bash
-vast matcher remove ips 6.6.6.6
+tenzirctl matcher remove ips 6.6.6.6
 ```
 
 :::caution Context Usability
@@ -298,20 +300,20 @@ filters.
 
 ## Manage Matcher State
 
-To simplify managing of large sets of indicators for operators, VAST supports
+To simplify managing of large sets of indicators for operators, Tenzir supports
 client-side modification of the underlying raw matcher state.
 
 For example, this allows you to compile a Bloom filter containing several
 millions of indicators in your threat intelligence platform and synchronize the
-content for matching in VAST. Another use case involves dumping matcher state
-to replicate the matcher at another VAST instance.
+content for matching in Tenzir. Another use case involves dumping matcher state
+to replicate the matcher at another Tenzir instance.
 
 ### Save/load state at the client
 
 To show the state of a specific matcher, use the `matcher save` command:
 
 ```bash
-vast matcher save ips > ips.state
+tenzirctl matcher save ips > ips.state
 ```
 
 The command writes the binary state of the matcher `ips` to standard output,
@@ -321,7 +323,7 @@ and you can copy it over to other machines as well.
 To replace the state of a running matcher, use the `matcher load` command:
 
 ```bash
-vast matcher load ips < ips.state
+tenzirctl matcher load ips < ips.state
 ```
 
 The command reads the binary state from standard input.
@@ -332,7 +334,7 @@ e.g., to perform a modification that you want to reverse later on, or to "fork"
 a matcher. To migrate matcher `foo` to matcher `bar`, use:
 
 ```bash
-vast matcher save foo | vast matcher load bar
+tenzirctl matcher save foo | tenzirctl matcher load bar
 ```
 :::
 
@@ -373,7 +375,7 @@ Compared to Bloom filters, Cuckoo filters have the following advantages:
 The delete operation comes with a caveat: it is only well-defined if the
 to-be-deleted item has been previously added. Otherwise the filter enters an
 undefined state and can produce false negatives in addition to false positives.
-VAST cannot enforce this pre-condition, so you must tread carefully when using
+Tenzir cannot enforce this pre-condition, so you must tread carefully when using
 it.
 :::
 
@@ -392,7 +394,7 @@ Hurst's [Bloom Filter Calculator](https://hur.st/bloomfilter/) for finding the
 optimal configuration for your use case.
 
 The Bloom ftiler is complete C++ rebuild of DCSO's Bloom filter library
-[`bloom`](https://github.com/dcso/bloom). VAST's implementation is
+[`bloom`](https://github.com/dcso/bloom). Tenzir's implementation is
 binary-compatible and uses the exact same method for FNV1 hashing and parameter
 calculation, making it a drop-in replacement for `bloom` users.
 
@@ -403,9 +405,9 @@ parameters `--false-positive-probability` (`-n`) and `--capacity` (`-n`) allow
 for controlling the underlying Bloom filter:
 
 ```bash
-vast matcher start --mode=dcso-bloom -p 0.1 -n 100 --match-fields=net.domain ns
-vast matcher add ns 1.1.1.1
-vast matcher add ns 8.8.8.8
+tenzirctl matcher start --mode=dcso-bloom -p 0.1 -n 100 --match-fields=net.domain ns
+tenzirctl matcher add ns 1.1.1.1
+tenzirctl matcher add ns 8.8.8.8
 ```
 
 #### Importing bloom-generated binary filters
@@ -423,11 +425,11 @@ Use `bloom show ns.bloom` to display a few statistics about the filter, such as
 the number of elements, false-positive probability, number of hash functions,
 and bits used.
 
-Finally, we hand the Bloom filter over to VAST and associate it with the
+Finally, we hand the Bloom filter over to Tenzir and associate it with the
 matcher called `ns`:
 
 ```bash
-vast matcher load dns < ns.bloom
+tenzirctl matcher load dns < ns.bloom
 ```
 
 See the section on [matcher state management](#manage-matcher-state) for
@@ -466,8 +468,9 @@ head -n 15 ipblocklist.csv
 "2021-01-17 07:47:59","46.101.90.205","4643","online","2021-08-18","Dridex"
 ```
 
-Before VAST can read this data, we need to tell VAST what type to use for it. We
-write an `abuse` [module](../../understand/data-model/modules.md) for this:
+Before Tenzir can read this data, we need to tell Tenzir what type to use for
+it. We write an `abuse` [module](../../understand/data-model/modules.md) for
+this:
 
 ```yaml
 module: abuse
@@ -485,7 +488,7 @@ types:
       - malware: string
 ```
 
-In addition, you need to tell VAST what fields have the indicator data,
+In addition, you need to tell Tenzir what fields have the indicator data,
 consisting of value and an optional context. To this end, you need to provide a
 [concept](../../understand/data-model/taxonomies.md#concepts) definition:
 
@@ -499,7 +502,7 @@ concepts:
       - abuse.feodo.blocklist.malware
 ```
 
-Now we can translate the blocklist into a format that VAST can read, e.g., CSV
+Now we can translate the blocklist into a format that Tenzir can read, e.g., CSV
 or JSON. In the example below, we simply add a header to the plain text file to
 create a valid CSV. (Feodo also provides a CSV download, but we want to
 illustrate how you can easily perform a translation.)
@@ -508,7 +511,7 @@ illustrate how you can easily perform a translation.)
 curl -sSL https://feodotracker.abuse.ch/downloads/ipblocklist.csv |
   tr -d '\015' |
   grep -v '^#' |
-  vast matcher import -t feodo.blocklist csv ips
+  tenzirctl matcher import -t feodo.blocklist csv ips
 ```
 
 We throw in a `tr -d '\015'` to convert DOS linebreaks to UNIX and strip `#`

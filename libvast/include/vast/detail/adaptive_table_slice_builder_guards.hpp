@@ -61,16 +61,18 @@ public:
   /// @brief Adds a value to a list. Use push_record and push_list to add record
   /// and list respectively.
   /// @param view View of a value to be added.
+  /// @return Error describing why the addition wasn't successful.
   template <class ViewType>
     requires requires(ViewType x) { materialize(x); }
-  auto add(ViewType view) -> void {
+  auto add(ViewType view) -> caf::error {
     using view_value_type = decltype(materialize(std::declval<ViewType>()));
     using vast_type = type_from_data_t<view_value_type>;
-    add<vast_type>(view);
+    return add<vast_type>(view);
   }
 
   /// @brief Adds the underlying view to the list if it is of a supported type.
-  auto add(const data_view& view) -> void;
+  /// @return Error describing why the addition wasn't successful.
+  auto add(const data_view& view) -> caf::error;
 
   /// @brief Adds a new record as a value of the list. The parent list guard
   /// must outlive the return value of this method.
@@ -89,20 +91,17 @@ private:
   auto get_root_list_builder() -> concrete_series_builder<vast::list_type>&;
 
   template <concrete_type Type>
-  auto add(auto view) -> void {
+  auto add(auto view) -> caf::error {
     if constexpr (std::is_same_v<Type, string_type>) {
-      add_str(view);
-      return;
+      return add_str(view);
     }
-    add_impl<Type>(view);
+    return add_impl<Type>(view);
   }
 
-  auto add_str(std::string_view view) -> void {
+  auto add_str(std::string_view view) -> caf::error {
     auto enum_type = caf::get_if<enumeration_type>(&value_type);
-    if (not enum_type) {
-      add_impl<string_type>(view);
-      return;
-    }
+    if (not enum_type)
+      return add_impl<string_type>(view);
     auto& builder
       = get_root_list_builder()
           .get_child_builder<type_to_arrow_builder_t<enumeration_type>>(
@@ -110,14 +109,15 @@ private:
     if (auto resolved = enum_type->resolve(view)) {
       const auto s = append_builder(*enum_type, builder, *resolved);
       VAST_ASSERT(s.ok());
-      return;
+      return {};
     }
     const auto s = builder.AppendNull();
     VAST_ASSERT(s.ok());
+    return {};
   }
 
   template <concrete_type Type>
-  auto add_impl(auto view) -> void {
+  auto add_impl(auto view) -> caf::error {
     if (not value_type)
       propagate_type(vast::type{Type{}});
     // Casting not supported yet.
@@ -128,6 +128,7 @@ private:
         value_type),
       view);
     VAST_ASSERT(s.ok());
+    return caf::error{};
   }
 
   builder_provider builder_provider_;
@@ -168,16 +169,21 @@ public:
 
   /// @brief Adds a value to a field.
   /// @param view View of a value to be added.
+  /// @return Error describing why the addition wasn't successful. TODO:
+  /// Returning a caf::error after each addition may significantly slow down the
+  /// parsing. It might be worthwhile to check if we need to optimize this in
+  /// the future.
   template <class ViewType>
     requires requires(ViewType x) { materialize(x); }
-  auto add(ViewType view) -> void {
+  auto add(ViewType view) -> caf::error {
     using view_value_type = decltype(materialize(std::declval<ViewType>()));
     using vast_type = type_from_data_t<view_value_type>;
-    builder_provider_.provide().add<vast_type>(view);
+    return builder_provider_.provide().add<vast_type>(view);
   }
 
   /// @brief Adds the underlying view to the field if it is of a supported type.
-  auto add(const data_view& view) -> void;
+  /// @return Error describing why the addition wasn't successful.
+  auto add(const data_view& view) -> caf::error;
 
   /// @brief Turns the field into a record_type if it was of unknown type.
   /// @return Object that enables manipulation of the record. The field_guard

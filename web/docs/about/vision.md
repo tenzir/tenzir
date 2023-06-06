@@ -11,7 +11,7 @@ mindset. We call this "sustainable cybersecurity architecture" because it lays
 the foundation for accommodating future requirements in the ever-changing shape
 of organizations.
 
-To achive this vision, we are building VAST as a modular building block for a
+To achive this vision, we are building Tenzir as a modular building block for a
 data-first security operations architecture. We are fully committed to open,
 standardized interfaces at the core that prevent vendor lock-in, both for
 security content (e.g., the [OASIS][oasis] standards [STIX][stix],
@@ -41,15 +41,15 @@ from point-to-point towards one-to-many integrations:
 
 ![Security Data Fabric](security-data-fabric.excalidraw.svg)
 
-The network of VAST nodes forms the fabric where communication takes place over
-a pluggable messaging *backbone*, such as Kafka, RabbitMQ, or MQTT. In this
-architecture, VAST assumes a mediator function, with a backbone-facing and
-local-facing side. On the backbone, VAST implements the security domain
+The network of Tenzir nodes forms the fabric where communication takes place
+over a pluggable messaging *backbone*, such as Kafka, RabbitMQ, or MQTT. In this
+architecture, Tenzir assumes a mediator function, with a backbone-facing and
+local-facing side. On the backbone, Tenzir implements the security domain
 knowledge and analytical processing power to enable composable use cases, such
 as routing security content to detection engines, or executing security on top
-of the available telemetry. On the local side, VAST bi-directionally integrates
-security tools, infusing them with relevant data from the fabric and exposing
-their data and services to the fabric for other tools.
+of the available telemetry. On the local side, Tenzir bi-directionally
+integrates security tools, infusing them with relevant data from the fabric and
+exposing their data and services to the fabric for other tools.
 
 The primary communication pattern of the fabric is publish-subscribe, wrapping
 request-response-style communication where appropriate. An example scenario
@@ -67,7 +67,7 @@ Kafka][intel-soc] as their high-bandwidth messaging backbone, and every public
 cloud has its own streaming and event hub implementations. In addition, we do
 not want to burden operators with rolling out *another* message bus that
 abstracts the infrastructure complexity. Our position is *bring your own bus*.
-VAST uses what is available.
+Tenzir uses what is available.
 
 We demonstrated the concept of a pluggable backbone in [Threat
 Bus](https://github.com/tenzir/threatbus), which onboards data to the fabric by

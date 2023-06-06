@@ -5,7 +5,7 @@ sidebar_position: 6
 # Notebooks
 
 We use [Quarto notebooks](https://quarto.org/) as vehicle for self-contained
-guides that illustrate how to use VAST.
+guides that illustrate how to use Tenzir.
 
 Quarto notebooks have the file extension `.qmd` and manifest in various places
 across the repository:
@@ -37,13 +37,13 @@ there to run `quarto render` to generate all contained notebooks.
 ## Run within Docker
 
 We also provide a Docker container to enable a reproducible execution of
-notebooks. The container builds on top of the VAST container and adds Quarto,
-including all Python and R dependencies. This makes it easy to demonstrate VAST
-features within a Quarto notebook.
+notebooks. The container builds on top of the Tenzir container and adds Quarto,
+including all Python and R dependencies. This makes it easy to demonstrate
+Tenzir features within a Quarto notebook.
 
 Other services can be added to the context of the Quarto notebook execution by
 extending the Docker Compose setup with [extra
-overlays](https://github.com/tenzir/vast/tree/main/docker/).
+overlays](https://github.com/tenzir/tenzir/tree/main/docker/).
 
 The website build harness uses this Docker Compose environment to run Quarto
 notebooks that represent more elaborate user guides or blog posts that. For
@@ -84,8 +84,8 @@ Adding an example notebook to the repository involves the following steps:
 
 ### Create a documentation page
 
-You can use Quarto to write a VAST tutorial or guide in the form as a notebook.
-Take a look at the directory `/docs/try` for examples.
+You can use Quarto to write a Tenzir tutorial or guide in the form as a
+notebook. Take a look at the directory `/docs/try` for examples.
 
 Adding a new documentation page involves the following steps:
 

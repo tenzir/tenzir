@@ -17,20 +17,21 @@ Next, we'll discuss each step in more detail.
 The scaffolding of a plugin includes the CMake glue that makes it possible to
 use as static or dynamic plugin.
 
-Pass `-DVAST_ENABLE_STATIC_PLUGINS:BOOL=ON` to `cmake` to build plugins
-alongside VAST as static plugins. This option is always on for static binary
+Pass `-DTENZIR_ENABLE_STATIC_PLUGINS:BOOL=ON` to `cmake` to build plugins
+alongside Tenzir as static plugins. This option is always on for static binary
 builds.
 
-VAST ships with an example plugin that showcases how a typical scaffold looks
+Tenzir ships with an example plugin that showcases how a typical scaffold looks
 like. Have a look at the the [example
-plugins](https://github.com/tenzir/vast/tree/main/examples/plugins) directory,
+plugins](https://github.com/tenzir/tenzir/tree/main/examples/plugins) directory,
 and an [example `CMakeLists.txt` file for
-plugins](https://github.com/tenzir/vast/blob/main/examples/plugins/analyzer/CMakeLists.txt).
+plugins](https://github.com/tenzir/tenzir/blob/main/examples/plugins/analyzer/CMakeLists.txt).
 
-We highly urge calling the provided `VASTRegisterPlugin` CMake in your plugin's
+We highly urge calling the provided `TenzirRegisterPlugin` CMake in your plugin's
 `CMakeLists.txt` file instead of handrolling your CMake build scaffolding
 code. This ensures that your plugin always uses the recommended defaults.
-Non-static installations of VAST contain the `VASTRegisterPlugin.cmake` modules.
+Non-static installations of Tenzir contain the `TenzirRegisterPlugin.cmake`
+modules.
 
 The typical structure of a plugin directory includes the following
 files/directories:
@@ -47,21 +48,21 @@ files/directories:
 
 ## Choose a plugin type
 
-VAST offers [a variety of customization
+Tenzir offers [a variety of customization
 points](../architecture/plugins.md#plugin-types), each of which defines its own
-API by inheriting from the plugin base class `vast::plugin`. When writing a new
-plugin, you can choose a subset of available types by inheriting from the
+API by inheriting from the plugin base class `tenzir::plugin`. When writing a
+new plugin, you can choose a subset of available types by inheriting from the
 respective plugin classes.
 
 :::caution Dreaded Diamond
 To avoid common issues with multiple inheritance, all intermediate plugin
-classes that inherit from `vast::plugin` use *virtual inheritance* to avoid
+classes that inherit from `tenzir::plugin` use *virtual inheritance* to avoid
 issues with the [dreaded
 diamond](https://isocpp.org/wiki/faq/multiple-inheritance#mi-diamond).
 :::
 
 Please also consult the [example-analyzer
-plugin](https://github.com/tenzir/vast/tree/main/examples/plugins/analyzer)
+plugin](https://github.com/tenzir/tenzir/tree/main/examples/plugins/analyzer)
 for a complete end-to-end code example.
 
 ## Implement the plugin interface
@@ -86,8 +87,8 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param plugin_config The relevant subsection of the configuration.
-  /// @param global_config The entire VAST configuration for potential access to
-  /// global options.
+  /// @param global_config The entire Tenzir configuration for potential access
+  /// to global options.
   caf::error initialize(const record& plugin_config,
                         const record& global_config) override;
 
@@ -127,7 +128,7 @@ plugin class definition:
 
 ```cpp
 // This line must not be in a namespace.
-VAST_REGISTER_PLUGIN(vast::plugins::example_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::example_plugin)
 ```
 
 :::tip Registering Type IDs
@@ -140,7 +141,7 @@ Types](https://actor-framework.readthedocs.io/en/stable/ConfiguringActorApplicat
 
 ## Process configuration options
 
-To configure a plugin at runtime, VAST first looks whether the YAML
+To configure a plugin at runtime, Tenzir first looks whether the YAML
 configuration contains a key with the plugin name under the top-level key
 `plugins`. Consider our example plugin with the name `example`:
 
@@ -152,81 +153,81 @@ plugins:
 
 Here, the plugin receives the record `{option: 42}` at load time. A plugin can
 process the configuration snippet by overriding the following function of
-`vast::plugin`:
+`tenzir::plugin`:
 
 ```
 caf::error initialize(const record& plugin_config,
                       const record& global_config) override;
 ```
 
-VAST expects the plugin to be fully operational after calling `initialize`.
+Tenzir expects the plugin to be fully operational after calling `initialize`.
 Subsequent calls to the implemented customization points must have a
 well-defined behavior.
 
 ## Compile the source code
 
-### Building alongside VAST
+### Building alongside Tenzir
 
-When configuring the VAST build, you need to tell CMake the path to the plugin
-source directory. The CMake variable `VAST_PLUGINS` holds a comma-separated
+When configuring the Tenzir build, you need to tell CMake the path to the plugin
+source directory. The CMake variable `TENZIR_PLUGINS` holds a comma-separated
 list of paths to plugin directories.
 
-To test that VAST loads the plugin properly, you can use `vast
+To test that Tenzir loads the plugin properly, you can use `tenzir
 --plugins=example version` and look into the `plugins`. A key-value pair with
 your plugin name and version should exist in the output.
 
 Refer to the [plugin loading](../../setup/configure.md#load-plugins) section of
 the documentation to find out how to explicitly de-/activate plugins.
 
-### Building against an installed VAST
+### Building against an installed Tenzir
 
-It is also possible to build plugins against an installed VAST. The
-`VASTRegisterPlugin` CMake function contains the required scaffolding to set up
-`test` and `integration` targets that mimic VAST's targets. Here's how you can
-use it:
+It is also possible to build plugins against an installed Tenzir. The
+`TenzirRegisterPlugin` CMake function contains the required scaffolding to set
+up `test` and `integration` targets that mimic Tenzir's targets. Here's how you
+can use it:
 
 ```bash
-# Configure the build. Requires VAST to be installed in the CMake Module Path.
+# Configure the build. Requires Tenzir to be installed in the CMake Module Path.
 cmake -S path/to/plugin -B build
-# Optionally you can manually specify a non-standard VAST install root:
-#   VAST_DIR=/opt/vast cmake -S path/to/plugin -B build
+# Optionally you can manually specify a non-standard Tenzir install root:
+#   TENZIR_DIR=/opt/tenzir cmake -S path/to/plugin -B build
 cmake --build build
 # Run plugin-specific unit tests.
 ctest --test-dir build
-# Install to where VAST is also installed.
+# Install to where Tenzir is also installed.
 cmake --install build
-# Optionally you can manually specify a non-standard VAST install root:
-#   cmake --install build --prefix /opt/vast
-# Run plugin-specific integration tests against the installed VAST.
+# Optionally you can manually specify a non-standard Tenzir install root:
+#   cmake --install build --prefix /opt/tenzir
+# Run plugin-specific integration tests against the installed Tenzir.
 cmake --build build --target integration
 ```
 
 ## Add unit and integration tests
 
-VAST comes with unit and integration tests. So does a robust plugin
+Tenzir comes with unit and integration tests. So does a robust plugin
 implementation. We now look at how you can hook into the testing frameworks.
 
 ### Unit tests
 
-Every plugin ideally comes with unit tests. The `VASTRegisterPlugin` CMake
+Every plugin ideally comes with unit tests. The `TenzirRegisterPlugin` CMake
 function takes an optional `TEST_SOURCES` argument that creates a test binary
 `<plugin>-test` with `<plugin>` being the plugin name. The test binary links
-against the `vast::test` target. ou can find the test binary in `bin` within
+against the `tenzir::test` target. ou can find the test binary in `bin` within
 your build directory.
 
 To execute registered unit tests, you can also simply run the test binary
 `<plugin>-test`, where `<plugin>` is the name of your plugin. The build target
-`test` sequentially runs tests for all plugins and VAST itself.
+`test` sequentially runs tests for all plugins and Tenzir itself.
 
 ### Integration tests
 
 Every plugin ideally comes with integration tests as well. Our convention is
 that integration tests reside in an `integration` subdirectory. If you add a
-file called `integration/tests.yaml`, VAST runs them alongside the regular
+file called `integration/tests.yaml`, Tenzir runs them alongside the regular
 integration tests. Please refer to the example plugin directory for more
 details.
 
-Note that plugins may affect the overall behavior of VAST. Therefore we
+Note that plugins may affect the overall behavior of Tenzir. Therefore we
 recommend to to run all integrations regularly by running the build target
 `integration`.
 
@@ -240,10 +241,10 @@ Please let us know if you do so, we can then link to community plugins from the
 documentation.
 
 :::tip Contribute Upstream
-If you think your plugin provides key functionality beneficial to all VAST
+If you think your plugin provides key functionality beneficial to all Tenzir
 users, feel free to [submit a pull
-request](https://github.com/tenzir/vast/pulls) to the main repository. But
+request](https://github.com/tenzir/tenzir/pulls) to the main repository. But
 please consider swinging by our [community chat](/discord) or
-starting a [GitHub Discussion](https://github.com/tenzir/vast/discussions) to
+starting a [GitHub Discussion](https://github.com/tenzir/tenzir/discussions) to
 ensure that your contribution becomes a fruitful addition. 🙏
 :::

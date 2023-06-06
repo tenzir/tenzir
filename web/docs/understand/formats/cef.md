@@ -28,10 +28,10 @@ CEF:0|Cynet|Cynet 360|4.5.4.22139|0|Memory Pattern - Cobalt Strike Beacon Reflec
 ```
 
 The [CEF specification][cef] pre-defines several extension field key names and
-data types for the corresponding values. VAST's parser does not enforce the
+data types for the corresponding values. Tenzir's parser does not enforce the
 strict definitions and instead tries to infer the type from the provided values.
 
-VAST translates the `extension` field to a nested record, where the key-value
+Tenzir translates the `extension` field to a nested record, where the key-value
 pairs of the extensions map to record fields. Here is an example of the above
 event:
 

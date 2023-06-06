@@ -1,6 +1,6 @@
 # Develop
 
-This section describes VAST from a **developer perspective**. We cover the
+This section describes Tenzir from a **developer perspective**. We cover the
 following topics:
 
 import DocCardList from '@theme/DocCardList';

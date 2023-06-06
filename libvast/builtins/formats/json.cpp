@@ -113,7 +113,7 @@ private:
           report_parse_err(val, "a number");
           return;
         }
-        pusher.add(result.value_unsafe());
+        add_value(pusher, result.value_unsafe());
         return;
       }
       case simdjson::ondemand::number_type::signed_integer: {
@@ -122,7 +122,7 @@ private:
           report_parse_err(val, "a number");
           return;
         }
-        pusher.add(result.value_unsafe());
+        add_value(pusher, result.value_unsafe());
         return;
       }
       case simdjson::ondemand::number_type::unsigned_integer: {
@@ -131,7 +131,7 @@ private:
           report_parse_err(val, "a number");
           return;
         }
-        pusher.add(result.value_unsafe());
+        add_value(pusher, result.value_unsafe());
         return;
       }
     }
@@ -149,11 +149,11 @@ private:
       = parsers::time | parsers::duration | parsers::net | parsers::ip;
     data result;
     if (parser(str, result)) {
-      pusher.add(make_view(result));
+      add_value(pusher, make_view(result));
       return;
     }
     // Take the input as-is if nothing worked.
-    pusher.add(str);
+    add_value(pusher, str);
   }
 
   auto parse_array(simdjson::ondemand::array arr, auto& pusher, size_t depth)
@@ -187,7 +187,7 @@ private:
           report_parse_err(val, "a boolean value");
           return;
         }
-        pusher.add(result.value_unsafe());
+        add_value(pusher, result.value_unsafe());
         return;
       }
       case simdjson::ondemand::json_type::string:
@@ -200,6 +200,11 @@ private:
         parse_object(val, pusher.push_record(), depth + 1);
         return;
     }
+  }
+
+  auto add_value(auto& guard, auto value) -> void {
+    if (auto err = guard.add(value))
+      ctrl_.warn(std::move(err));
   }
 
   const FieldValidator& field_validator_;

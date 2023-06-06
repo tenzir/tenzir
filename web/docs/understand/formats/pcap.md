@@ -29,7 +29,7 @@ representation is an attribute to the `payload` field in the packet schema
 outlined below:
 
 ```yaml
-vast.packet:
+pcap.packet:
   record:
     - time:
         timestamp: time
@@ -60,7 +60,7 @@ The default saver for the `pcap` printer is [`stdout`](../connectors/stdout.md).
 
 ### VLAN Tags
 
-While decapsulating packets, VAST extracts
+While decapsulating packets, Tenzir extracts
 [802.1Q](https://en.wikipedia.org/wiki/IEEE_802.1Q) VLAN tags into the nested
 `vlan` record, consisting of an `outer` and `inner` field for the respective
 tags. The value of the VLAN tag corresponds to the 12-bit VLAN identifier (VID).
@@ -93,8 +93,8 @@ can be controlled via `--flow-expiry`/`-e`.
 Disables computation of the per-packet [Community
 ID](https://github.com/corelight/community-id-spec).
 
-By default, VAST populates the `community_id` field in the packet schema with a
-string representation of the Community ID, e.g.,
+By default, Tenzir populates the `community_id` field in the packet schema with
+a string representation of the Community ID, e.g.,
 `1:wCb3OG7yAFWelaUydu0D+125CLM=`. Use `--disable-community-id` to disable
 computation of the Community ID, e.g., to save resources.
 
@@ -147,11 +147,11 @@ Read packets from a PCAP file:
 from file /tmp/trace.pcap read pcap
 ```
 
-Filter a PCAP trace with VAST:
+Filter a PCAP trace with Tenzir:
 
 ```bash
 tcpdump -r trace.pcap -w - |
-  vast exec 'read pcap | where vast.packet.time > 5 mins ago | write pcap' |
+  tenzir 'read pcap | where tenzir.packet.time > 5 mins ago | write pcap' |
   tcpdump -r - -nl
 ```
 
