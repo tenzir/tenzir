@@ -50,15 +50,20 @@ public:
     auto query_context = vast::query_context::make_extract(
       "export", blocking_self, std::move(expr));
     auto current_result = catalog_lookup_result{};
+    auto current_error = caf::error{};
     blocking_self
       ->request(catalog, caf::infinite, atom::candidates_v, query_context)
       .receive(
         [&current_result](catalog_lookup_result result) {
           current_result = std::move(result);
         },
-        [&ctrl](caf::error e) {
-          ctrl.abort(std::move(e));
+        [&current_error](caf::error e) {
+          current_error = std::move(e);
         });
+    if (current_error) {
+      ctrl.abort(std::move(current_error));
+      co_return;
+    }
     for (const auto& [type, info] : current_result.candidate_infos) {
       for (const auto& partition_info : info.partition_infos) {
         const auto& uuid = partition_info.uuid;
@@ -73,9 +78,13 @@ public:
           [](atom::done) {
             // no-op
           },
-          [&ctrl](caf::error e) {
-            ctrl.abort(std::move(e));
+          [&current_error](caf::error e) {
+            current_error = std::move(e);
           });
+        if (current_error) {
+          ctrl.abort(std::move(current_error));
+          co_return;
+        }
         if (current_slice) {
           co_yield *current_slice;
           current_slice.reset();
