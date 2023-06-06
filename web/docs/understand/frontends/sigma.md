@@ -18,7 +18,7 @@ query expression, without going through the Python tooling provided by the
 SigmaHQ project. This has numerous advantages in exploiting the richer type
 system of Tenzir. The translation process looks as follows:
 
-![Sigma Query Frontend](sigma-query-frontend.excalidraw.svg)
+![Sigma Execution](sigma-execution.excalidraw.svg)
 
 [sigma-spec]: https://sigmahq.github.io/sigma-specification/
 
