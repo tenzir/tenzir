@@ -34,7 +34,7 @@ Cloud Map as a service discovery provider.
 ## Images and Registries
 
 Both Lambda and Fargate deploy Tenzir as a Docker image. They use the official
-[tenzir/vast](https://hub.docker.com/r/tenzir/vast) image with extra layers
+[tenzir/tenzir](https://hub.docker.com/r/tenzir/tenzir) image with extra layers
 containing tooling such as:
 
 | Image            | Tooling                             |

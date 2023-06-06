@@ -2,11 +2,11 @@
 
 Welcome to Tenzir! If you have any questions, do not hesitate to join our
 [community chat](/discord) or open a [GitHub
-discussion](https://github.com/tenzir/vast/discussions).
+discussion](https://github.com/tenzir/tenzir/discussions).
 
 ## What is Tenzir?
 
-<!-- Keep in sync with project README at https://github.com/tenzir/vast -->
+<!-- Keep in sync with project README at https://github.com/tenzir/tenzir -->
 
 Tenzir is the open-source pipeline and storage engine for security event data.
 

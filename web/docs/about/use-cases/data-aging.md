@@ -23,7 +23,7 @@ detection.
 
 How can we implement a successful detection and response strategy in
 this spectrum? By making the spectrum transparent and fully controllable. In
-VAST, we developed a declarative compaction approach to perform [fine-grained
+Tenzir, we developed a declarative compaction approach to perform [fine-grained
 transformation](../../use/transform/README.md) of historical data to control
 retention span and manage finite storage. Compaction operates in two dimensions:
 
@@ -31,7 +31,7 @@ retention span and manage finite storage. Compaction operates in two dimensions:
    of age. For example, a policy may dictate a maximum retention of 1 week for
    events containing URIs and 3 months for events containing IP addresses
    related to network connections. However, these retention windows could be
-   broadened when pseudonomyzing or anonymizing the relevant fields. VAST not
+   broadened when pseudonomyzing or anonymizing the relevant fields. Tenzir not
    only supports deletion of data after exceeding a configured age, but also
    transforming the data with a set of transformations (such as hashing,
    encrypting, permuting). The intuitive declarative definition makes it easy to
@@ -53,22 +53,22 @@ retention span and manage finite storage. Compaction operates in two dimensions:
    retention periods while working with high-volume telemetry.
 
 :::tip Key Benefits
-In summary, VAST's data aging capabilities have the following benefits:
+In summary, Tenzir's data aging capabilities have the following benefits:
 
-- **Easy Compliance**: VAST makes it easy to implement and share compliance
+- **Easy Compliance**: Tenzir makes it easy to implement and share compliance
   policies. The configuration of temporal compaction is a human-readable file
   that clearly states what happens with the data at what age.
 
-- **Gradual Event Decay**: instead of deleting old data as a whole, VAST offers
-  an incremental approach to reduce size and information content of events. For
-  example, first filter out unneeded fields, then aggregate the smaller events
-  into an event summary, and delete the summary at last. Being able to express
-  event decay in this gradual way is the Goldilocks approach of managing utility
-  of security telemetry.
+- **Gradual Event Decay**: instead of deleting old data as a whole, Tenzir
+  offers an incremental approach to reduce size and information content of
+  events. For example, first filter out unneeded fields, then aggregate the
+  smaller events into an event summary, and delete the summary at last. Being
+  able to express event decay in this gradual way is the Goldilocks approach of
+  managing utility of security telemetry.
 
 - **Dynamic Aging**: When only considering age as input for deleting old data,
   high-volume data source also dictate the retention span for low-volume event
-  streams, because they can consume orders of magnitude more space. VAST's
+  streams, because they can consume orders of magnitude more space. Tenzir's
   weighted aging makes it possible to define a *relative* importance of events
   to each other. By assigning higher age weights to low-volume-but-important
   data sources (e.g., alerts), we can selectively increase their retention span.

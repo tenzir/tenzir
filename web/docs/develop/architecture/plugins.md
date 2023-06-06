@@ -11,7 +11,7 @@ functionality that adds CLI commands, receives a copy of the input stream,
 spawns queries, or implements integrations with third-party libraries.
 
 There exist **dynamic plugins** that come in the form shared libraries, and
-**static plugins** that are compiled into libvast or Tenzir itself:
+**static plugins** that are compiled into libtenzir or Tenzir itself:
 
 ![Plugins](plugins.excalidraw.svg)
 

@@ -121,7 +121,7 @@ operations center. This is why we built Tenzir.
 
 ## Tenzir vs. Relational DBs
 
-Unlike [OLAP](#vast-vs-data-warehouses) workloads,
+Unlike [OLAP](#tenzir-vs-data-warehouses) workloads,
 [OLTP](https://en.wikipedia.org/wiki/Online_transaction_processing) workloads
 have strong transactional and consistency guarantees, e.g., when performing
 inserts, updates, and deletes. These extra guarantees come at a cost of
@@ -178,7 +178,7 @@ analytics, for which Tenzir has basic support.
 ## Tenzir vs. Timeseries DBs
 
 Timeseries databases share a lot in common with [OLAP
-engines](#vast-vs-data-warehouses), but put center data organization around
+engines](#tenzir-vs-data-warehouses), but put center data organization around
 time.
 
 :::note Recommendation

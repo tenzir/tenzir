@@ -53,7 +53,7 @@ Static binaries require a that the dependencies were built in static mode as
 well. That means we need to use a different environment, you can enter it with
 
 ```sh
-nix develop .#vast-static
+nix develop .#tenzir-static
 ```
 
 The CMake presets for that mode are:
@@ -62,4 +62,4 @@ The CMake presets for that mode are:
 - `nix-gcc-static-redeb`
 - `nix-gcc-static-release`
 
-[direnv]: https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
+[direnv]: https://storage.googleapis.com/tenzir-public-data/tenzir-static-builds/tenzir-static-latest.tar.gz
