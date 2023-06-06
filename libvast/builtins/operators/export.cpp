@@ -45,6 +45,9 @@ public:
     auto expr = trivially_true_expression();
     if (auto pushdown = predicate_pushdown(expr)) {
       expr = std::move(*pushdown).first;
+    } else {
+      VAST_VERBOSE("no expression found: launching 'export' to retrieve all "
+                   "persisted events");
     }
     auto current_slice = std::optional<table_slice>{};
     auto query_context = vast::query_context::make_extract(
