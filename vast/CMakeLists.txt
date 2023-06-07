@@ -20,6 +20,7 @@ macro (create_tenzir_symlink name)
   install(
     CODE "
     execute_process(COMMAND
+      \"${CMAKE_COMMAND}\" -E make_directory \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\"
       \"${CMAKE_COMMAND}\" -E create_symlink \"./tenzir\"
       \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${name}\")"
     COMPONENT Runtime)
