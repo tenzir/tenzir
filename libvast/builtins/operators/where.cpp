@@ -82,7 +82,13 @@ public:
 
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override {
-    return std::pair{conjunction{expr_, expr}, nullptr};
+    if (expr == trivially_true_expression()) {
+      return std::pair{expr_, nullptr};
+    }
+    auto expr_conjunction = conjunction{expr_, expr};
+    auto result = normalize_and_validate(expr_conjunction);
+    VAST_ASSERT(result);
+    return std::pair{std::move(*result), nullptr};
   }
 
   auto to_string() const -> std::string override {

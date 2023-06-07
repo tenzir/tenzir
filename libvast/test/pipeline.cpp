@@ -404,8 +404,7 @@ TEST(predicate pushdown select conflict) {
   auto [expr, op] = std::move(*result);
   CHECK_EQUAL(op->to_string(),
               "select x, z | where (y > 0 && y < 5 && z == 3)");
-  auto expected_expr
-    = conjunction{unbox(to<expression>("x == 0")), trivially_true_expression()};
+  auto expected_expr = unbox(to<expression>("x == 0"));
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
 }
 

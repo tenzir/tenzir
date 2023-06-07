@@ -232,7 +232,12 @@ auto pipeline_executor(
       VAST_DEBUG("promise is not pending, discarding down message");
     }
   });
-  self->state.pipe = std::move(p);
+  auto optimized = p.optimize();
+  if (not optimized) {
+    self->quit(std::move(optimized.error()));
+    return pipeline_executor_actor::behavior_type::make_empty_behavior();
+  }
+  self->state.pipe = std::move(*optimized);
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "vast.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
