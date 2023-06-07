@@ -650,6 +650,7 @@ tests:
       - command: exec 'export | where device_product == "VPN-1 & FireWall-1" | to stdout'
         transformation: jq length
       - command: exec 'export | where device_product == "VPN-1 & FireWall-1" | where 192.168.101.100 | to stdout'
+      - command: exec 'export | where device_product == "VPN-1 & FireWall-1" && 192.168.101.100 | to stdout'
 
   Patterns:
     fixture: ServerTester
