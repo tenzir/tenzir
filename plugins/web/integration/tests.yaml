@@ -81,7 +81,7 @@ tests:
         transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
         prepend_vast: false
   Serve Endpoint:
-    tags: [rest, status]
+    tags: [rest, serve]
     fixture: ServerTester
     steps:
       - command: "@./scripts/serve.sh"
