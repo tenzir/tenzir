@@ -69,6 +69,7 @@ set(CPACK_INSTALLED_DIRECTORIES "/var/lib/tenzir" "/var/log/tenzir")
 
 set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
 
+set(CPACK_DEBIAN_PACKAGE_PROVIDES "vast")
 set(CPACK_DEBIAN_PACKAGE_CONFLICTS "vast")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "vast")
 
@@ -113,7 +114,7 @@ include(CPack)
 cpack_add_component(
   Runtime
   DISPLAY_NAME "Runtime"
-  DESCRIPTION "Runtime files for VAST"
+  DESCRIPTION "Runtime files for Tenzir"
   REQUIRED)
 # TODO: Remove all Unspecified install components. The vendored fast_float
 # library always installs itself; once fastfloat/fast_float#142 is merged we can
@@ -125,5 +126,5 @@ cpack_add_component(
 cpack_add_component(
   Development
   DISPLAY_NAME "Development"
-  DESCRIPTION "Development files for VAST"
+  DESCRIPTION "Development files for Tenzir"
   DEPENDS Unspecified Runtime)

@@ -3,22 +3,25 @@
 set -e
 
 if [ "$1" = "configure" ]; then
-	mkdir -p /var/lib/vast
-    if ! getent passwd vast >/dev/null; then
+  if [ -d /var/lib/vast ] && ! [ -d /var/lib/tenzir ]; then
+    mv /var/lib/vast /var/lib/tenzir
+  fi
+	mkdir -p /var/lib/tenzir
+    if ! getent passwd tenzir >/dev/null; then
         adduser \
-            --system --group --no-create-home --home /var/lib/vast \
-            vast
+            --system --group --no-create-home --home /var/lib/tenzir \
+            tenzir
     fi
-    if ! dpkg-statoverride --list /var/lib/vast >/dev/null 2>&1; then
+    if ! dpkg-statoverride --list /var/lib/tenzir >/dev/null 2>&1; then
         dpkg-statoverride \
             --quiet --update \
-            --add vast vast 0750 /var/lib/vast
+            --add tenzir tenzir 0750 /var/lib/tenzir
     fi
-    mkdir -p /var/log/vast
-    if ! dpkg-statoverride --list /var/log/vast >/dev/null 2>&1; then
+    mkdir -p /var/log/tenzir
+    if ! dpkg-statoverride --list /var/log/tenzir >/dev/null 2>&1; then
         dpkg-statoverride \
             --quiet --update \
-            --add vast vast 0750 /var/log/vast
+            --add tenzir tenzir 0750 /var/log/tenzir
     fi
 fi
 
@@ -26,23 +29,23 @@ if [ "$1" = "configure" ] ; then
 	# Link the service into systemd's default service directory to make
 	# it known. This is normally done with `systemctl link`, but that
 	# command is not available in the dpkg context.
-	ln -sf /opt/vast/lib/systemd/system/vast.service /lib/systemd/system/
+	ln -sf /opt/tenzir/lib/systemd/system/tenzir.service /lib/systemd/system/
 fi
 
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask 'vast.service' >/dev/null || true
+	deb-systemd-helper unmask 'tenzir.service' >/dev/null || true
 
 	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled 'vast.service'; then
+	if deb-systemd-helper --quiet was-enabled 'tenzir.service'; then
 		# Enables the unit on first installation, creates new
 		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable 'vast.service' >/dev/null || true
+		deb-systemd-helper enable 'tenzir.service' >/dev/null || true
 	else
 		# Update the statefile to add new symlinks (if any), which need to be
 		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state 'vast.service' >/dev/null || true
+		deb-systemd-helper update-state 'tenzir.service' >/dev/null || true
 	fi
 fi
 # End automatically added section
@@ -55,7 +58,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			_dh_action=start
 		fi
-		deb-systemd-invoke $_dh_action 'vast.service' >/dev/null || true
+		deb-systemd-invoke $_dh_action 'tenzir.service' >/dev/null || true
 	fi
 fi
 # End automatically added section

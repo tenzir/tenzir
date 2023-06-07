@@ -1,5 +1,5 @@
 [Unit]
-Description=VAST - Visibility Across Space and Time
+Description=Tenzir Node
 StartLimitIntervalSec=120
 StartLimitBurst=1
 Wants=network-online.target
@@ -12,8 +12,8 @@ Restart=always
 # user + privileges
 # We explicitly don't use DynamicUser because that can lead to recursive `chown`s.
 # Doing that is pretty slow on some file systems (e.g., xfs).
-User=vast
-Group=vast
+User=tenzir
+Group=tenzir
 NoNewPrivileges=yes
 
 # capabilities

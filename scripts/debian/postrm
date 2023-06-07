@@ -3,19 +3,19 @@
 set -e
 
 if [ "$1" = "purge" ] ; then
-    if dpkg-statoverride --list /var/lib/vast >/dev/null 2>&1 ; then
-        dpkg-statoverride --remove /var/lib/vast
+    if dpkg-statoverride --list /var/lib/tenzir >/dev/null 2>&1 ; then
+        dpkg-statoverride --remove /var/lib/tenzir
     fi
-    echo "Removing VAST db directory (/var/lib/vast)"
-    rm -rf /var/lib/vast
+    echo "Removing tenzir db directory (/var/lib/tenzir)"
+    rm -rf /var/lib/tenzir
 
-     if dpkg-statoverride --list /var/log/vast >/dev/null 2>&1 ; then
-        dpkg-statoverride --remove /var/log/vast
+     if dpkg-statoverride --list /var/log/tenzir >/dev/null 2>&1 ; then
+        dpkg-statoverride --remove /var/log/tenzir
     fi
-    echo "Removing VAST log directory (/var/log/vast)"
-    rm -rf /var/log/vast
+    echo "Removing tenzir log directory (/var/log/tenzir)"
+    rm -rf /var/log/tenzir
 
-    deluser  --system vast || echo "Could not remove VAST user."
+    deluser  --system tenzir || echo "Could not remove tenzir user."
 fi
 
 # Automatically added by dh_installsystemd/13.3.4
@@ -26,15 +26,15 @@ fi
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "remove" ]; then
 	if [ -x "/usr/bin/deb-systemd-helper" ]; then
-		deb-systemd-helper mask 'vast.service' >/dev/null || true
+		deb-systemd-helper mask 'tenzir.service' >/dev/null || true
 	fi
 fi
 
 if [ "$1" = "purge" ]; then
 	if [ -x "/usr/bin/deb-systemd-helper" ]; then
-		deb-systemd-helper purge 'vast.service' >/dev/null || true
-		deb-systemd-helper unmask 'vast.service' >/dev/null || true
+		deb-systemd-helper purge 'tenzir.service' >/dev/null || true
+		deb-systemd-helper unmask 'tenzir.service' >/dev/null || true
 	fi
-	rm -f /lib/systemd/system/vast.service
+	rm -f /lib/systemd/system/tenzir.service
 fi
 # End automatically added section
