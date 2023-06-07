@@ -46,7 +46,9 @@ auto adaptive_table_slice_builder::finish(std::string_view slice_schema_name)
     = arrow::RecordBatch::Make(slice_schema.to_arrow_schema(),
                                struct_array.length(), struct_array.fields());
   VAST_ASSERT(batch);
-  return table_slice{batch, std::move(slice_schema)};
+  auto ret = table_slice{batch, std::move(slice_schema)};
+  ret.offset(0u);
+  return ret;
 }
 
 auto adaptive_table_slice_builder::rows() const -> detail::arrow_length_type {
