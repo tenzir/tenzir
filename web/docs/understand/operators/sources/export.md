@@ -1,6 +1,6 @@
 # export
 
-Retrieves events from a VAST node. The dual to [`import`](../sinks/import.md).
+Retrieves events from a Tenzir node. The dual to [`import`](../sinks/import.md).
 
 ## Synopsis
 
@@ -10,15 +10,14 @@ export
 
 ## Description
 
-The `export` operator retrieves events from a VAST node.
+The `export` operator retrieves events from a Tenzir node.
 
 :::note Flush to disk
 Pipelines starting with the `export` operator do not access events that are not
 written to disk.
 
-We plan to change this behavior in the near future. Until then, we recommend
-running `vast flush` before exporting events to make sure they're available for
-downstream consumption.
+We recommend running `tenzir-ctl flush` before exporting events to make sure
+they're available for downstream consumption.
 :::
 
 ## Examples
