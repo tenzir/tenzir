@@ -19,44 +19,13 @@ Plugins do not only exist for extensions by third parties, but Tenzir also
 implements core functionality through the plugin API. Such plugins compile as
 static plugins. Because they are always built, we call them *builtins*.
 
-## Plugin types
-
 Tenzir offers several customization points to exchange or enhance functionality
-selectively. Here is a list of available plugin categories and plugin types:
+selectively. Here is a list of available plugin categories and plugin types.
 
-```mermaid
-flowchart TB
-subgraph System
-  Command
-  click Command "#command"
-  Component
-  click Component "#component"
-end
-subgraph Storage
-  StoreActor
-  click StoreActor "#store"
-  Store
-  click Store "#store"
-end
-subgraph Format
-  Parser
-  click Parser "#parser"
-  Printer
-  click Printer "#printer"
-end
-subgraph Connector
-  Loader
-  click Loader "#loader"
-  Saver
-  click Saver "#saver"
-end
-subgraph Pipeline
-  Operator
-  click Operator "#operator"
-  AggregationFunction
-  click AggregationFunction "#aggregation-function"
-end
-```
+## Pipeline
+
+The following plugin types allow for adding
+[pipeline](../../understand/pipelines.md) logic.
 
 ### Operator
 
@@ -71,23 +40,30 @@ function](../../understand/operators/transformations/summarize.md#aggregate-func
 for the `summarize` pipeline operator that performs an incremental aggregation
 over a set of grouped input values of a single type.
 
+## Connector
+
+The following plugin types allow for adding
+[connectors](../../understand/connectors/).
+
 ### Loader
 
-The loader plugin defines the input side of a
-[connector](../../understand/connectors/) for use in the `from
+The loader plugin defines the input side of a connector for use in the `from
 CONNECTOR read FORMAT` and `load CONNECTOR` operators.
 
 ### Saver
 
-The saver plugin defines the output side of a
-[connector](../../understand/connectors/) for use in the `write FORMAT to
-CONNECTOR` and `save CONNECTOR` operators.
+The saver plugin defines the output side of a connector for use in the `write
+FORMAT to CONNECTOR` and `save CONNECTOR` operators.
+
+## Format
+
+The following plugin types allow for adding
+[formats](../../understand/formats/).
 
 ### Parser
 
-The parser plugin defines the input side of a
-[format](../../understand/formats/) for use in the `from CONNECTOR read FORMAT`
-and `parse FORMAT` operators.
+The parser plugin defines the input side of a format for use in the `from
+CONNECTOR read FORMAT` and `parse FORMAT` operators.
 
 ### Printer
 
@@ -95,24 +71,26 @@ The parser plugin defines the output side of a
 [format](../../understand/formats/) for use in the `write FORMAT to CONNECTOR`
 and `print FORMAT` operators.
 
+## System
+
+The following plugin types allow for adding system-wide functionality.
+
+### Command
+
+The command plugin adds a new command to the `tenzir-ctl` executable, at a
+configurable location in the command hierarchy. New commands can have
+sub-commands as well and allow for flexible structuring of the provided
+functionality.
+
 ### Store
 
 Inside a partition, the store plugin implements the conversion from in-memory
 Arrow record batches to the persistent format, and vice versa.
 
-:::note Store Actor
-There exists a variant of the store plugin called the store actor plugin, which
-is more powerful and allows for customizing the control flow on top of providing
-a custom store backend. Unlike the store plugin, the store actor plugin is
-responsible for doing I/O itself.
+:::tip Store = Format
+Every store plugin is also a [format](#format) and acts as both
+[parser](#parser) and [printer](#printer).
 :::
-
-### Command
-
-The command plugin adds a new command to the `tenzir` executable, at a
-configurable location in the command hierarchy. New commands can have
-sub-commands as well and allow for flexible structuring of the provided
-functionality.
 
 ### Component
 
