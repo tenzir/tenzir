@@ -9,7 +9,7 @@ alternative to a [Tenzir query](../../understand/README.md). Simply
 provide it on standard input to the `export` command:
 
 ```bash
-tenzirctl export json < sigma-rule.yaml
+tenzir-ctl export json < sigma-rule.yaml
 ```
 
 This requires that you built Tenzir with the [Sigma

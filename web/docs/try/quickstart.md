@@ -13,7 +13,7 @@ that you have a `tenzir` binary in your path.
 Let's spin up a Tenzir node:
 
 ```bash
-tenzird
+tenzir-node
 ```
 
 Let's connect to the node and check its version:
@@ -59,12 +59,12 @@ curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
 curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
 ```
 
-Then ingest them via `tenzirctl import`, which spawns a dedicated process that
+Then ingest them via `tenzir-ctl import`, which spawns a dedicated process that
 handles the parsing, followed by sending batches of data to our Tenzir node:
 
 ```bash
 # The 'O' flag in tar dumps the archive contents to stdout.
-tar xOzf zeek.tar.gz | tenzirctl import zeek
+tar xOzf zeek.tar.gz | tenzir-ctl import zeek
 ```
 
 ```
@@ -73,7 +73,7 @@ tar xOzf zeek.tar.gz | tenzirctl import zeek
 ```
 
 ```bash
-tar xOzf suricata.tar.gz | tenzirctl import suricata '#schema == "suricata.alert"'
+tar xOzf suricata.tar.gz | tenzir-ctl import suricata '#schema == "suricata.alert"'
 ```
 
 ```
@@ -137,7 +137,7 @@ Zeek/dce_rpc.log
 
 Tenzir's Zeek TSV parser auto-detects schema changes in the same stream of input
 and resets itself whenever it encounters a new log header. This is why piping a
-bunch of logs to `tenzirctl import zeek` Just Works.
+bunch of logs to `tenzir-ctl import zeek` Just Works.
 :::
 
 ## Export data
@@ -180,7 +180,7 @@ expressions. But you can also take a step back and inspect the schema metadata
 Tenzir keeps using the `show` command.
 
 ```bash
-tenzirctl show schemas --yaml
+tenzir-ctl show schemas --yaml
 ```
 
 ```yaml
@@ -230,7 +230,7 @@ taste of actual events. The
 number of events per unique schema:
 
 ```bash
-tenzirctl export json '#schema == /(zeek|suricata).*/ | taste 1'
+tenzir-ctl export json '#schema == /(zeek|suricata).*/ | taste 1'
 ```
 
 ```json
@@ -278,7 +278,7 @@ There are many other ways to slice and dice the data. For example, we could pick
 a single schema:
 
 ```bash
-tenzirctl export json '#schema == "suricata.alert" | head 3'
+tenzir-ctl export json '#schema == "suricata.alert" | head 3'
 ```
 
 ```json
@@ -291,7 +291,7 @@ There are a lot of `null` values in there. We can filter them out by passing
 `--omit-nulls` to the `json` printer:
 
 ```bash
-tenzirctl export json --omit-nulls '#schema == "suricata.alert" | head 3'
+tenzir-ctl export json --omit-nulls '#schema == "suricata.alert" | head 3'
 ```
 
 ```json
@@ -305,7 +305,7 @@ Certainly less noisy. The
 selecting fields of interest:
 
 ```bash
-tenzirctl export json '#schema == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
+tenzir-ctl export json '#schema == "suricata.alert" | select src_ip, dest_ip, severity, signature | head 3'
 ```
 
 ```json
@@ -320,7 +320,7 @@ Looking at the output, we see multiple alert severities. Let's understand their
 distribution:
 
 ```bash
-tenzirctl export json '#schema == "suricata.alert" | summarize count=count(src_ip) by severity'
+tenzir-ctl export json '#schema == "suricata.alert" | summarize count=count(src_ip) by severity'
 ```
 
 ```json
@@ -344,7 +344,7 @@ highest. We could further slice by signature type and check for some that
 contain the string `SHELLCODE`:
 
 ```bash
-tenzirctl export json 'severity == 1 | summarize count=count(src_ip) by signature | where /.*SHELLCODE.*/'
+tenzir-ctl export json 'severity == 1 | summarize count=count(src_ip) by signature | where /.*SHELLCODE.*/'
 ```
 
 ```json
@@ -380,7 +380,7 @@ different from JSON output, to showcase that it's not hard to change the last
 step of rendering data:
 
 ```bash
-tenzirctl export ascii '172.17.2.163 | head 10'
+tenzir-ctl export ascii '172.17.2.163 | head 10'
 ```
 
 ```
@@ -407,7 +407,7 @@ addresses, subnets, timestamps, and durations. These come in handy to succinctly
 describe what you want:
 
 ```bash
-tenzirctl export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | select orig_h, resp_h, orig_bytes'
+tenzir-ctl export json '10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min) | select orig_h, resp_h, orig_bytes'
 ```
 
 ```json

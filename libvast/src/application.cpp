@@ -325,7 +325,7 @@ make_application(std::string_view path) {
   const auto last_slash = path.find_last_of('/');
   const auto name
     = last_slash == std::string_view::npos ? path : path.substr(last_slash + 1);
-  if (name == "tenzird") {
+  if (name == "tenzir-node") {
     auto cmd = make_start_command();
     cmd->name = "";
     add_root_opts(*cmd);
@@ -358,7 +358,7 @@ make_application(std::string_view path) {
     fmt::print(stderr, fmt::emphasis::underline,
                "https://docs.tenzir.com/blog/vast-to-tenzir");
     fmt::print(stderr, ".\n\ntl;dr:\n- Use ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzird");
+    fmt::print(stderr, fmt::emphasis::bold, "tenzir-node");
     fmt::print(stderr, " instead of ");
     fmt::print(stderr, fmt::emphasis::bold, "vast start");
     fmt::print(stderr, "\n- Use ");
@@ -366,7 +366,7 @@ make_application(std::string_view path) {
     fmt::print(stderr, " instead of ");
     fmt::print(stderr, fmt::emphasis::bold, "vast exec");
     fmt::print(stderr, "\n- Use ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzirctl");
+    fmt::print(stderr, fmt::emphasis::bold, "tenzir-ctl");
     fmt::print(stderr,
                " for all other commands\n- Move your configuration from ");
     fmt::print(stderr, fmt::emphasis::bold, "<prefix>/etc/vast/vast.yaml");

@@ -43,7 +43,7 @@ utilized disk storage. To limit the disk space used by the Tenzir database,
 configure a disk quota:
 
 ```bash
-tenzirctl start --disk-quota-high=1TiB
+tenzir-ctl start --disk-quota-high=1TiB
 ```
 
 Whenever Tenzir detects that its database directory has grown to exceed the
@@ -207,23 +207,23 @@ the `compaction` subcommand. Use the `list` subcommand to show all configured
 compaction rules:
 
 ```bash
-tenzirctl compaction list
+tenzir-ctl compaction list
 ```
 
 You can then trigger a compaction manually with the `run` sub-command:
 
 ```bash
-tenzirctl compaction run <rule>
+tenzir-ctl compaction run <rule>
 ```
 
 :::note
 The `compaction` plugin needs to be loaded both by the client and the server
-process to use the `tenzirctl compaction` subcommand.
+process to use the `tenzir-ctl compaction` subcommand.
 :::
 
 For an overview of the current status of the compaction plugin, you can use the
-`tenzirctl status` subcommand:
+`tenzir-ctl status` subcommand:
 
 ```bash
-tenzirctl status compaction
+tenzir-ctl status compaction
 ```

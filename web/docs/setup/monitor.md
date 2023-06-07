@@ -52,7 +52,7 @@ Alternatively, pass the corresponding command-line option when starting a Tenzir
 node:
 
 ```bash
-tenzird --enable-metrics
+tenzir-node --enable-metrics
 ```
 
 ## Write metrics to a file or UNIX domain socket
@@ -106,7 +106,7 @@ grouped into 10 second buckets and looking at the minimum and the maximum
 latency, respectively, for all buckets.
 
 ```bash
-tenzirctl export json '#schema == "tenzir.metrics.passive-store.init.runtime"
+tenzir-ctl export json '#schema == "tenzir.metrics.passive-store.init.runtime"
   | select ts, value
   | summarize min(value), max(value) by ts resolution 10s'
 ```

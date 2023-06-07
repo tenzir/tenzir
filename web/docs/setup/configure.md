@@ -23,8 +23,8 @@ Tenzir has a hierarchical command structure of this form:
 
 ```
 tenzir [opts] <pipeline>
-tenzird [opts]
-tenzirctl [opts] cmd1 [opts1] cmd2 [opts2] ...
+tenzir-node [opts]
+tenzir-ctl [opts] cmd1 [opts1] cmd2 [opts2] ...
 ```
 
 Both long `--long=X` and short `-s X` exist. Boolean options do not require
@@ -36,8 +36,8 @@ Each command has its own dedicated set of options. Options are not global and
 only valid for their respective command. Consider this example:
 
 ```bash
-tenzirctl --option foo # option applies to command 'tenzir'
-tenzirctl foo --option # option applies to command 'foo'
+tenzir-ctl --option foo # option applies to command 'tenzir'
+tenzir-ctl foo --option # option applies to command 'foo'
 ```
 :::
 
@@ -47,17 +47,17 @@ You get short usage instructions for every command by adding the `help`
 sub-command or providing the option `--help` (which has the shorthand `-h`):
 
 ```bash
-tenzirctl help
-tenzirctl --help
-tenzirctl -h
+tenzir-ctl help
+tenzir-ctl --help
+tenzir-ctl -h
 ```
 
 The same help pattern applies to (sub-)commands:
 
 ```bash
-tenzirctl export help
-tenzirctl export --help
-tenzirctl export -h
+tenzir-ctl export help
+tenzir-ctl export --help
+tenzir-ctl export -h
 ```
 
 ## Environment Variables

@@ -20,7 +20,7 @@ To figure out what you can query, Tenzir offers
 Use `show schemas` to display the schema of all types:
 
 ```bash
-tenzirctl show schemas --yaml
+tenzir-ctl show schemas --yaml
 ```
 
 In case you ingested [Suricata](../../understand/formats/suricata.md) data, this
@@ -218,7 +218,7 @@ client that connects to a server where the query runs, and receives the results
 back to then render them on standard output:
 
 ```bash
-tenzirctl export [options] <format> [options] [expr]
+tenzir-ctl export [options] <format> [options] [expr]
 ```
 
 The [format](../../understand/formats/README.md) defines how Tenzir renders the
@@ -230,5 +230,5 @@ query results. Text formats include [JSON](../../understand/formats/json.md),
 For example, to run query that exports the results as JSON, run:
 
 ```bash
-tenzirctl export json net.src.ip in 10.0.0.0/8
+tenzir-ctl export json net.src.ip in 10.0.0.0/8
 ```

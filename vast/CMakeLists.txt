@@ -25,8 +25,8 @@ macro (create_tenzir_symlink name)
     COMPONENT Runtime)
 endmacro ()
 
-create_tenzir_symlink(tenzird)
-create_tenzir_symlink(tenzirctl)
+create_tenzir_symlink(tenzir-node)
+create_tenzir_symlink(tenzir-ctl)
 create_tenzir_symlink(vast)
 
 # Install vast in PREFIX/lib and headers in PREFIX/include/vast.
@@ -102,7 +102,7 @@ file(
      fi
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>ctl\"
+     export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>-ctl\"
      update=\"$<IF:$<BOOL:${VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
      set -e
      if [ ! -f \"$env_dir/bin/activate\" ]; then

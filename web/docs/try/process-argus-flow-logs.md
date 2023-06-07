@@ -82,7 +82,7 @@ page.
 The following command imports a file `argus.csv`:
 
 ```bash
-tenzirctl import -t argus.record csv < argus.csv
+tenzir-ctl import -t argus.record csv < argus.csv
 ```
 
 Alternatively, this UNIX pipe processes a PCAP trace without intermediate file
@@ -91,5 +91,5 @@ and ships the data directly to Tenzir:
 ```bash
 argus -r trace.pcap -w - |
   ra -F ra.conf -L0 -c , -n -s +spkts,dpkts,load,pcr |
-  tenzirctl import -t argus.record csv
+  tenzir-ctl import -t argus.record csv
 ```
