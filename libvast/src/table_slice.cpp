@@ -986,7 +986,10 @@ auto unflatten(const table_slice& slice,
     = vast::type{slice.schema().name(), type::from_arrow(*new_arr->type())};
   const auto new_batch = arrow::RecordBatch::Make(
     schema.to_arrow_schema(), new_arr->length(), new_arr->fields());
-  return table_slice{new_batch, std::move(schema)};
+  auto ret = table_slice{new_batch, std::move(schema)};
+  ret.import_time(slice.import_time());
+  ret.offset(slice.offset());
+  return ret;
 }
 
 } // namespace vast
