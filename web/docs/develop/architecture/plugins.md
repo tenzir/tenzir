@@ -24,31 +24,39 @@ static plugins. Because they are always built, we call them *builtins*.
 Tenzir offers several customization points to exchange or enhance functionality
 selectively. Here is a list of available plugin categories and plugin types:
 
-![Plugin Types](plugin-types.excalidraw.svg)
-
-### Command
-
-The command plugin adds a new command to the `tenzir` executable, at a
-configurable location in the command hierarchy. New commands can have
-sub-commands as well and allow for flexible structuring of the provided
-functionality.
-
-### Component
-
-The component plugin spawns a component inside the Tenzir node. A component is
-an [actor](actor-model) and runs in parallel with all other components.
-
-This plugin is the most generic mechanism to introduce new functionality.
-
-### Language Frontend
-
-A language frontend plugin adds an alternative parser for a query expression.
-This plugin allows for replacing the query *frontend* while using Tenzir as
-*backend* execution engine.
-
-For example, you could write a SQL plugin that takes an expression like
-`SELECT * FROM zeek.conn WHERE id.orig_h = "1.2.3.4"` and executes it on
-historical data or runs it as live query.
+```mermaid
+flowchart TB
+subgraph System
+  Command
+  click Command "#command"
+  Component
+  click Component "#component"
+end
+subgraph Storage
+  StoreActor
+  click StoreActor "#store"
+  Store
+  click Store "#store"
+end
+subgraph Format
+  Parser
+  click Parser "#parser"
+  Printer
+  click Printer "#printer"
+end
+subgraph Connector
+  Loader
+  click Loader "#loader"
+  Saver
+  click Saver "#saver"
+end
+subgraph Pipeline
+  Operator
+  click Operator "#operator"
+  AggregationFunction
+  click AggregationFunction "#aggregation-function"
+end
+```
 
 ### Operator
 
@@ -56,32 +64,36 @@ The pipeline plugin adds a new [pipeline
 operator](../../understand/operators/README.md) that users can reference in a
 [pipeline definition](../../understand/pipelines.md).
 
-### Loader
-
-The loader plugin defines the input side of a connector for use in the `from
-CONNECTOR read FORMAT` and `load CONNECTOR` operators.
-
-### Saver
-
-The saver plugin defines the output side of a connector for use in the `write
-FORMAT to CONNECTOR` and `save CONNECTOR` operators.
-
-### Parser
-
-The parser plugin defines the input side of a format for use in the `from
-CONNECTOR read FORMAT` and `parse FORMAT` operators.
-
-### Printer
-
-The parser plugin defines the output side of a format for use in the `write
-FORMAT to CONNECTOR` and `print FORMAT` operators.
-
 ### Aggregation Function
 
 The aggregation function plugin adds a new [aggregation
 function](../../understand/operators/transformations/summarize.md#aggregate-functions)
 for the `summarize` pipeline operator that performs an incremental aggregation
-over ajj set of grouped input values of a single type.
+over a set of grouped input values of a single type.
+
+### Loader
+
+The loader plugin defines the input side of a
+[connector](../../understand/connectors/) for use in the `from
+CONNECTOR read FORMAT` and `load CONNECTOR` operators.
+
+### Saver
+
+The saver plugin defines the output side of a
+[connector](../../understand/connectors/) for use in the `write FORMAT to
+CONNECTOR` and `save CONNECTOR` operators.
+
+### Parser
+
+The parser plugin defines the input side of a
+[format](../../understand/formats/) for use in the `from CONNECTOR read FORMAT`
+and `parse FORMAT` operators.
+
+### Printer
+
+The parser plugin defines the output side of a
+[format](../../understand/formats/) for use in the `write FORMAT to CONNECTOR`
+and `print FORMAT` operators.
 
 ### Store
 
@@ -95,36 +107,16 @@ a custom store backend. Unlike the store plugin, the store actor plugin is
 responsible for doing I/O itself.
 :::
 
-### Analyzer
+### Command
 
-:::warning Deprecated
-The analyzer plugin type is deprecated and will be removed in a future release.
-:::
+The command plugin adds a new command to the `tenzir` executable, at a
+configurable location in the command hierarchy. New commands can have
+sub-commands as well and allow for flexible structuring of the provided
+functionality.
 
-The analyzer plugin hooks into the processing path of data by spawning a new
-actor inside the server that receives the full stream of table slices. The
-analyzer plugin is a refinement of the [component plugin](#component).
+### Component
 
-### Reader
+The component plugin spawns a component inside a node. A component is an
+[actor](actor-model) and runs in parallel with all other components.
 
-:::warning Deprecated
-The reader plugin type is deprecated and will be removed in a future release;
-use the [parser](#parser) plugin instead.
-:::
-
-The reader plugin adds a new format to parse input data, such as JSON (ASCII) or
-PCAP (binary).
-
-Reader plugins automatically add the subcommand `tenzir import <plugin name>`.
-
-### Writer
-
-:::warning Deprecated
-The writer plugin type is deprecated and will be removed in a future release;
-use the [printer](#printer) plugin instead.
-:::
-
-The writer plugin adds a new format to print data, such as JSON (ASCII) or PCAP
-(binary).
-
-Writer plugins automatically add the subcommand `tenzir export <plugin name>`.
+This plugin is the most generic mechanism to introduce new functionality.
