@@ -26,7 +26,9 @@ RestrictSUIDSGID=yes
 # system access
 ExecPaths=@CMAKE_INSTALL_FULL_LIBEXECDIR@/vast-df-percent.sh
 ProtectSystem=strict
+ReadWritePaths=/var/lib/tenzir
 ReadWritePaths=/var/lib/vast
+ReadWritePaths=/var/log/tenzir
 ReadWritePaths=/var/log/vast
 PrivateTmp=no
 # Allow read access to the home directory of the user so config files can be
@@ -44,7 +46,7 @@ SystemCallErrorNumber=EPERM
 
 # service specifics
 TimeoutStopSec=600
-WorkingDirectory=/var/lib/vast
+WorkingDirectory=/var/lib/tenzir
 ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/tenzir-node
 
 [Install]
