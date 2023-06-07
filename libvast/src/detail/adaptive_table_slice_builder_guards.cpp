@@ -57,6 +57,13 @@ auto record_guard::push_field(std::string_view name) -> field_guard {
   if (auto guard = try_create_field_builder_for_fixed_builder(
         builder_provider_, name, starting_fields_length_))
     return std::move(*guard);
+  if (builder_provider_.is_builder_constructed()) {
+    auto& b = builder_provider_.provide();
+    auto& record_builder = std::get<concrete_series_builder<record_type>>(b);
+    return {record_builder.get_field_builder_provider(name,
+                                                      starting_fields_length_),
+            starting_fields_length_};
+  }
   auto provider = [name, this]() -> series_builder& {
     auto& b = builder_provider_.provide();
     if (std::holds_alternative<unknown_type_builder>(b)) {
