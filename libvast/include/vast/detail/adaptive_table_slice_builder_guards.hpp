@@ -117,18 +117,51 @@ private:
   }
 
   template <concrete_type Type>
+  auto append_value_to_builder(const Type& type, auto val) -> void {
+    const auto s = append_builder(
+      type,
+      get_root_list_builder().get_child_builder<type_to_arrow_builder_t<Type>>(
+        value_type),
+      val);
+    VAST_ASSERT(s.ok());
+  }
+
+  template <concrete_type Type>
   auto add_impl(auto view) -> caf::error {
     if (not value_type)
       propagate_type(vast::type{Type{}});
-    // Casting not supported yet.
-    VAST_ASSERT(caf::holds_alternative<Type>(value_type));
-    const auto s = append_builder(
-      caf::get<Type>(value_type),
-      get_root_list_builder().get_child_builder<type_to_arrow_builder_t<Type>>(
-        value_type),
-      view);
-    VAST_ASSERT(s.ok());
-    return caf::error{};
+    return caf::visit(
+      detail::overload{
+        [this, view](const Type& t) {
+          append_value_to_builder(t, view);
+          return caf::error{};
+        },
+        [view, this](const auto& t) {
+          if (auto castable = can_cast(Type{}, t); not castable)
+            return std::move(castable.error());
+          auto cast_val = cast_value(Type{}, view, t);
+          if (not cast_val)
+            return std::move(cast_val.error());
+          // this is sometimes not used due to the if constexpr below.
+          // This is done to prevent compilation warning treated as an error.
+          (void)this;
+          if constexpr (not std::is_same_v<caf::expected<void>,
+                                           decltype(cast_val)>) {
+            append_value_to_builder(t, *cast_val);
+          }
+          return caf::error{};
+        },
+        [](const list_type&) -> caf::error {
+          die("can't add values to the list_guard with list value_type");
+        },
+        [](const map_type&) -> caf::error {
+          die("can't add values to the list_guard with map value_type");
+        },
+        [](const record_type&) -> caf::error {
+          die("can't add values to the list_guard with record value_type");
+        },
+      },
+      value_type);
   }
 
   builder_provider builder_provider_;
