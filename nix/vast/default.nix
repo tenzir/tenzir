@@ -4,7 +4,7 @@
     lib,
     stdenv,
     callPackage,
-    pname ? "vast",
+    pname ? "tenzir",
     vast-source,
     cmake,
     cmake-format,

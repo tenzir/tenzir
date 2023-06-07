@@ -172,7 +172,7 @@ in {
   };
   vast-ce = let
     pkg = final.vast.override {
-      pname = "vast-ce";
+      pname = "tenzir-ce";
     };
   in
     pkg.withPlugins (ps: [
@@ -183,7 +183,7 @@ in {
     ]);
   vast-cm = let
     pkg = final.vast.override {
-      pname = "vast-cm";
+      pname = "tenzir-cm";
     };
   in
     pkg.withPlugins (ps: [
@@ -192,7 +192,7 @@ in {
     ]);
   vast-ee = let
     pkg = final.vast.override {
-      pname = "vast-ee";
+      pname = "tenzir-ee";
     };
   in
     pkg.withPlugins (ps: [
