@@ -8,6 +8,14 @@ install(
   COMPONENT Runtime)
 add_executable(vast::tenzir ALIAS tenzir)
 
+# Install vast in PREFIX/lib and headers in PREFIX/include/vast.
+install(
+  TARGETS tenzir
+  EXPORT VASTTargets
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
+
 macro (create_tenzir_symlink name)
   add_custom_command(
     OUTPUT "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/${name}"
@@ -20,23 +28,14 @@ macro (create_tenzir_symlink name)
   install(
     CODE "
     execute_process(COMMAND
-      \"${CMAKE_COMMAND}\" -E make_directory \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\"
       \"${CMAKE_COMMAND}\" -E create_symlink \"./tenzir\"
-      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${name}\")"
+      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${name}\")"
     COMPONENT Runtime)
 endmacro ()
 
 create_tenzir_symlink(tenzir-node)
 create_tenzir_symlink(tenzir-ctl)
 create_tenzir_symlink(vast)
-
-# Install vast in PREFIX/lib and headers in PREFIX/include/vast.
-install(
-  TARGETS tenzir
-  EXPORT VASTTargets
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
-  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
-  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
 # -- example configuration file -----------------------------------------------
 
