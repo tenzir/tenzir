@@ -228,7 +228,7 @@
             "-UCMAKE_INSTALL_LIBDIR"
             "-UCMAKE_INSTALL_LIBEXECDIR"
             "-UCMAKE_INSTALL_LOCALEDIR"
-            "-DCMAKE_INSTALL_PREFIX=/opt/vast"
+            "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
           )
           echo "cmake flags: $cmakeFlags ''${cmakeFlagsArray[@]}"
           cmake "$cmakeDir" $cmakeFlags "''${cmakeFlagsArray[@]}"
