@@ -228,8 +228,8 @@ jobs:
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
             deb_package="$(echo "vast-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
             mac_package="$(echo "vast-${before_version}-darwin-Release-Clang" | awk '{ print tolower($0) }')"
-            if ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${deb_package}.tar.gz || \
-               ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${mac_package}.tar.gz; then
+            if ! gsutil -q stat gs://${{ env.GCS_BUCKET }}/${deb_package}.tar.gz || \
+               ! gsutil -q stat gs://${{ env.GCS_BUCKET }}/${mac_package}.tar.gz; then
               echo "run-vast=true" >> $GITHUB_OUTPUT
               run_vast=true
             fi
@@ -740,7 +740,7 @@ jobs:
       - name: Upload Artifact to GCS
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
-          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
+          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ env.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete existing Release Assets
@@ -940,7 +940,7 @@ jobs:
       - name: Download VAST
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
         run: |
-          gsutil cp "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz" .
+          gsutil cp "gs://${{ env.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz" .
       - name: Install VAST
         run: |
           mkdir "${INSTALL_DIR}"
