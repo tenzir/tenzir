@@ -290,9 +290,7 @@ struct managed_serve_operator {
     }
     // Cut the results buffer.
     auto results = std::vector<table_slice>{};
-    VAST_WARN("getting {}/{} events", requested, rows(buffer));
     std::tie(results, buffer) = split(buffer, requested);
-    VAST_WARN("got {} events", rows(results));
     delivered += rows(results);
     // Clear the delayed attempt and the continuation token.
     delayed_attempt.dispose();
