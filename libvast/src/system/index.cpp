@@ -1271,6 +1271,33 @@ index(index_actor::stateful_pointer<index_state> self,
         // importer.
         self->send_exit(self, err);
       }
+      // We gather the schemas first before we call decomission active partition
+      // on every active partition to avoid iterator invalidation.
+      auto schemas = std::vector<type>{};
+      schemas.reserve(self->state.active_partitions.size());
+      for (const auto& [schema, _] : self->state.active_partitions)
+        schemas.push_back(schema);
+      for (const auto& schema : schemas)
+        self->state.decommission_active_partition(schema, {});
+      // Collect partitions for termination.
+      // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
+      // on 'std::vector<caf::actor>' only. That should probably be generalized
+      // in the future.
+      std::vector<caf::actor> partitions;
+      partitions.reserve(self->state.inmem_partitions.size() + 1);
+      for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
+        partitions.push_back(caf::actor_cast<caf::actor>(part.second));
+      for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
+        partitions.push_back(caf::actor_cast<caf::actor>(part));
+      self->state.flush_to_disk();
+      // Receiving an EXIT message does not need to coincide with the state
+      // being destructed, so we explicitly clear the tables to release the
+      // references.
+      self->state.unpersisted.clear();
+      self->state.inmem_partitions.clear();
+      // Terminate partition actors.
+      VAST_DEBUG("{} brings down {} partitions", *self, partitions.size());
+      shutdown<policy::parallel>(self, std::move(partitions));
     },
     caf::policy::arg<caf::broadcast_downstream_manager<
       table_slice, vast::type, i_partition_selector>>{});
@@ -1287,34 +1314,7 @@ index(index_actor::stateful_pointer<index_state> self,
     for (auto&& [rp, _] : std::exchange(self->state.delayed_queries, {}))
       rp.deliver(msg.reason);
     // Flush buffered batches and end stream.
-    detail::shutdown_stream_stage(self->state.stage);
-    // We gather the schemas first before we call decomission active partition
-    // on every active partition to avoid iterator invalidation.
-    auto schemas = std::vector<type>{};
-    schemas.reserve(self->state.active_partitions.size());
-    for (const auto& [schema, _] : self->state.active_partitions)
-      schemas.push_back(schema);
-    for (const auto& schema : schemas)
-      self->state.decommission_active_partition(schema, {});
-    // Collect partitions for termination.
-    // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
-    // on 'std::vector<caf::actor>' only. That should probably be generalized
-    // in the future.
-    std::vector<caf::actor> partitions;
-    partitions.reserve(self->state.inmem_partitions.size() + 1);
-    for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
-      partitions.push_back(caf::actor_cast<caf::actor>(part.second));
-    for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
-      partitions.push_back(caf::actor_cast<caf::actor>(part));
-    self->state.flush_to_disk();
-    // Receiving an EXIT message does not need to coincide with the state
-    // being destructed, so we explicitly clear the tables to release the
-    // references.
-    self->state.unpersisted.clear();
-    self->state.inmem_partitions.clear();
-    // Terminate partition actors.
-    VAST_DEBUG("{} brings down {} partitions", *self, partitions.size());
-    shutdown<policy::parallel>(self, std::move(partitions));
+    self->state.stage->stop();
   });
   // Set up a down handler for monitored exporter actors.
   self->set_down_handler([=](const caf::down_msg& msg) {

@@ -46,6 +46,8 @@ void shutdown_stream_stage(caf::stream_stage_ptr<In, DownstreamManager>& stage) 
   // effect since the buffered downstream manager always forces batches
   // if all paths are closing.
   stage->out().force_emit_batches();
+  // Ensure that this function cannot be called twice.
+  stage = nullptr;
 }
 
 } // namespace vast::detail
