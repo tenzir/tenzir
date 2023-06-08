@@ -831,10 +831,10 @@ jobs:
           - name: Netflow
             target: netflow
             path: contrib/vast-plugins/netflow
-          - # The pipeline manager integration tests require that the web
-            # plugin exists, which is why we're building the web plugin
-            # already in the main VAST job.
-            name: Pipeline Manager
+          # The pipeline manager integration tests require that the web
+          # plugin exists, which is why we're building the web plugin
+          # already in the main VAST job.
+          - name: Pipeline Manager
             target: pipeline-manager
             path: contrib/vast-plugins/pipeline_manager
           - name: Platform
