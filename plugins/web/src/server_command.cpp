@@ -139,15 +139,19 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       // https://stackoverflow.com/a/26717908/92560
       if (header.method() == restinio::http_method_post()) {
         auto const& body = response->request()->body();
-        auto maybe_content_type
-          = header.opt_value_of(restinio::http_field_t::content_type);
-        if (maybe_content_type == "application/x-www-form-urlencoded") {
+        // Default to application/json
+        auto content_type
+          = header.opt_value_of(restinio::http_field_t::content_type)
+              .value_or("application/json");
+        if (content_type == "application/x-www-form-urlencoded") {
           query_params = parse_query_params(body);
           if (!query_params)
-            return response->abort(400, "failed to parse query\n",
-                                   query_params.error());
-        } else if (maybe_content_type == "application/json") {
-          auto json_params = parser.parse(body);
+            return response->abort(
+              400, "failed to parse query parameters from request body\n",
+              query_params.error());
+        } else if (content_type == "application/json") {
+          auto const& json_body = !body.empty() ? body : "{}";
+          auto json_params = parser.parse(json_body);
           if (!json_params.is_object()) {
             if (json_params.error() != simdjson::SUCCESS) {
               return response->abort(
@@ -165,7 +169,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           return response->abort(
             400, "unsupported content type\n",
             caf::make_error(ec::invalid_argument,
-                            fmt::format("{}\n", maybe_content_type)));
+                            fmt::format("{}\n", content_type)));
         }
       }
       auto const& route_params = response->route_params();

@@ -16,26 +16,26 @@ namespace vast::plugins::rest_api::status {
 
 static auto const* SPEC_V0 = R"_(
 /status:
-  get:
+  post:
     summary: Return current status
     description: Returns the current status of the whole node.
-    parameters:
-      - in: query
-        name: component
-        schema:
-          type: string
-        required: false
-        description: If specified, return the status for that component only.
-        example: "index"
-      - in: query
-        name: verbosity
-        schema:
-          type: string
-          enum: [info, detailed, debug]
-          default: info
-        required: false
-        description: The verbosity level of the status response.
-        example: detailed
+    requestBody:
+      description: Body for the status endpoint
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            required: []
+            properties:
+              component:
+                type: string
+                description: If specified, return the status for that component only.
+                example: "index"
+              verbosity:
+                type: string
+                enum: [info, detailed, debug]
+                default: info
     responses:
       200:
         description: OK.
@@ -149,7 +149,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     static const auto endpoints = std::vector<rest_endpoint>{
       {
         .endpoint_id = static_cast<uint64_t>(status_endpoints::status),
-        .method = http_method::get,
+        .method = http_method::post,
         .path = "/status",
         .params = record_type{
           {"component", string_type{}},
