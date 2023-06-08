@@ -670,9 +670,9 @@ public:
 };
 
 /// An extension type for Arrow representing corresponding to the address type.
-struct ip_type::arrow_type final : arrow::ExtensionType {
+struct ip_type::arrow_type : arrow::ExtensionType {
   /// A unique identifier for this extension type.
-  static constexpr auto name = "vast.address";
+  static constexpr auto name = "tenzir.ip";
 
   /// Register this extension type.
   static void register_extension() noexcept;
@@ -762,9 +762,9 @@ public:
 };
 
 /// An extension type for Arrow representing corresponding to the subnet type.
-struct subnet_type::arrow_type final : arrow::ExtensionType {
+struct subnet_type::arrow_type : arrow::ExtensionType {
   /// A unique identifier for this extension type.
-  static constexpr auto name = "vast.subnet";
+  static constexpr auto name = "tenzir.subnet";
 
   /// Register this extension type.
   static void register_extension() noexcept;
@@ -925,13 +925,13 @@ public:
 
 /// An extension type for Arrow representing corresponding to the enumeration
 /// type.
-struct enumeration_type::arrow_type final : arrow::ExtensionType {
+struct enumeration_type::arrow_type : arrow::ExtensionType {
   friend class type;
   friend struct enumeration_type::builder_type;
   friend struct enumeration_type::array_type;
 
   /// A unique identifier for this extension type.
-  static constexpr auto name = "vast.enumeration";
+  static constexpr auto name = "tenzir.enumeration";
 
   /// Register this extension type.
   static void register_extension() noexcept;

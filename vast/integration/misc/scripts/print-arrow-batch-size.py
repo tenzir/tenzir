@@ -20,7 +20,7 @@ try:
             while True:
                 batch = reader.read_next_batch()
                 print(
-                    f"{batch.schema.metadata[b'VAST:name:0'].decode('utf-8')}: {batch.num_rows}"
+                    f"{batch.schema.metadata[b'Tenzir:name:0'].decode('utf-8')}: {batch.num_rows}"
                 )
         except StopIteration:
             pass

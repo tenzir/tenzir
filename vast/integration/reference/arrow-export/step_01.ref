@@ -2,25 +2,25 @@
     -- field metadata --
     -- field metadata --
     -- field metadata --
-    ARROW:extension:metadata: 'vast.address'
-    ARROW:extension:metadata: 'vast.address'
-    ARROW:extension:name: 'vast.address'
-    ARROW:extension:name: 'vast.address'
-    VAST:name:0: 'port'
-    VAST:name:0: 'port'
+    ARROW:extension:metadata: 'tenzir.ip'
+    ARROW:extension:metadata: 'tenzir.ip'
+    ARROW:extension:name: 'tenzir.ip'
+    ARROW:extension:name: 'tenzir.ip'
+    Tenzir:name:0: 'port'
+    Tenzir:name:0: 'port'
   -- field metadata --
   -- field metadata --
   -- field metadata --
-  VAST:attributes:0: '{ "index": "hash" }'
-  VAST:name:0: 'timestamp'
-  VAST:name:0: 'zeek.conn_id'
+  Tenzir:attributes:0: '{ "index": "hash" }'
+  Tenzir:name:0: 'timestamp'
+  Tenzir:name:0: 'zeek.conn_id'
   child 0, item: string
   child 0, orig_h: fixed_size_binary[16]
   child 1, orig_p: uint64
   child 2, resp_h: fixed_size_binary[16]
   child 3, resp_p: uint64
 -- schema metadata --
-VAST:name:0: 'zeek.conn'
+Tenzir:name:0: 'zeek.conn'
 _write_ts: timestamp[ns]
 community_id: string
 conn_state: string

@@ -104,7 +104,7 @@ async def test_arrow_dict_to_json_dict_extension_types():
     extension_dict = extension_types_batch().to_pylist()[0]
 
     assert pyvast.arrow_dict_to_json_dict(extension_dict) == {
-        "vast.address": "10.1.21.165",
-        "vast.subnet": "10.1.20.0/25",
-        "vast.enumeration": "foo",
+        "tenzir.ip": "10.1.21.165",
+        "tenzir.subnet": "10.1.20.0/25",
+        "tenzir.enumeration": "foo",
     }

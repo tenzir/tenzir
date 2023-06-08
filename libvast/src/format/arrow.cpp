@@ -163,8 +163,9 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     // batch, but it's a good enough heuristic to prevent users from running
     // into crashes. A proper fix for this requires casting to VAST-compatible
     // record batch.
-    if (read_result->batch->schema()->metadata()->FindKey("VAST:name:0")
-        == -1) {
+    const auto& metadata = *read_result->batch->schema()->metadata();
+    if (metadata.FindKey("Tenzir:name:0") == -1
+        && metadata.FindKey("VAST:name:0") == -1) {
       VAST_WARN("{} skips record batch with {} rows: metadata is "
                 "incomaptible with VAST",
                 detail::pretty_type_name(*this),

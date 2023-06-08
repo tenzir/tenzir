@@ -11,12 +11,7 @@ class IPScalar(pa.ExtensionScalar):
 
 
 class IPType(pa.ExtensionType):
-    # NOTE: The identifier for the extension type of VAST's ip type has not
-    # changed when the type was renamed from address to ip because that would be
-    # a breaking change. This is fixable by registering two separate extension
-    # types with the same functionality but different ids, but that's a lot of
-    # effort for something users don't usually see.
-    ext_name = "vast.address"
+    ext_name = "tenzir.ip"
     ext_type = pa.binary(16)
 
     def __init__(self):
@@ -50,7 +45,7 @@ class SubnetScalar(pa.ExtensionScalar):
 
 
 class SubnetType(pa.ExtensionType):
-    ext_name = "vast.subnet"
+    ext_name = "tenzir.subnet"
     ext_type = pa.struct([("address", IPType()), ("length", pa.uint8())])
 
     def __init__(self):
@@ -90,7 +85,7 @@ class EnumType(pa.ExtensionType):
     # type. Eventually this will be a 32-bit type as well.
     DICTIONARY_INDEX_TYPE = pa.uint8()
 
-    ext_name = "vast.enumeration"
+    ext_name = "tenzir.enumeration"
     ext_type = pa.dictionary(DICTIONARY_INDEX_TYPE, pa.string())
 
     def __init__(self, fields: dict[str, int]):
@@ -120,7 +115,7 @@ class EnumType(pa.ExtensionType):
 
 def names(schema: pa.Schema):
     meta = schema.metadata
-    return [meta[key].decode() for key in meta if key.startswith(b"VAST:name:")]
+    return [meta[key].decode() for key in meta if key.startswith(b"Tenzir:name:")]
 
 
 def name(schema: pa.Schema):

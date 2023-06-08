@@ -4,10 +4,10 @@
   -- field metadata --
   -- field metadata --
   -- field metadata --
-  ARROW:extension:metadata: 'vast.address'
-  ARROW:extension:metadata: 'vast.address'
-  ARROW:extension:name: 'vast.address'
-  ARROW:extension:name: 'vast.address'
+  ARROW:extension:metadata: 'tenzir.ip'
+  ARROW:extension:metadata: 'tenzir.ip'
+  ARROW:extension:name: 'tenzir.ip'
+  ARROW:extension:name: 'tenzir.ip'
   VAST:attributes:0: '{ "index": "hash" }'
   VAST:name:0: 'port'
   VAST:name:0: 'port'

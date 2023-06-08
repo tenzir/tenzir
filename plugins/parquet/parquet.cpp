@@ -317,7 +317,7 @@ read_parquet_buffer(const chunk_ptr& chunk) {
 std::shared_ptr<::parquet::WriterProperties>
 writer_properties(const configuration& config) {
   auto builder = ::parquet::WriterProperties::Builder{};
-  builder.created_by("VAST")
+  builder.created_by("Tenzir")
     ->enable_dictionary()
     ->compression(::parquet::Compression::ZSTD)
     ->compression_level(detail::narrow_cast<int>(config.zstd_compression_level))
