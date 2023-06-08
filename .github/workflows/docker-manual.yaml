@@ -47,6 +47,7 @@ jobs:
       - name: Configure Docker
         id: docker
         run: |
+          echo '::notice inputs = ${{ toJSON(inputs) }}'
           tags=()
           if [[ '${{ inputs.tag }}' != "" ]]; then
             tags+=('${{ inputs.tag }}')
