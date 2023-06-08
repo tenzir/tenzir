@@ -74,8 +74,12 @@ int main(int argc, char** argv) {
   detail::merge_settings(invocation->options, cfg.content,
                          policy::merge_lists::yes);
   // Tweak CAF parameters in case we're running a client command.
-  if (auto app = std::string_view{argv[0]};
-      app == "vast" || app == "tenzir-ctl") {
+  const auto app_path = std::string_view{argv[0]};
+  const auto last_slash = app_path.find_last_of('/');
+  const auto app_name = last_slash == std::string_view::npos
+                          ? app_path
+                          : app_path.substr(last_slash + 1);
+  if (app_name == "vast" || app_name == "tenzir-ctl") {
     bool is_server = invocation->full_name == "start"
                      || invocation->full_name == "exec"
                      || caf::get_or(cfg.content, "vast.node", false);
