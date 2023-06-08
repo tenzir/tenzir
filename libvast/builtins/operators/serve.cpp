@@ -205,31 +205,36 @@ struct serve_request {
 /// copying data.
 auto split(std::vector<table_slice> events, uint64_t partition_point)
   -> std::pair<std::vector<table_slice>, std::vector<table_slice>> {
-  auto split_it = events.begin();
-  auto offset = uint64_t{0};
-  while (split_it != events.end()) {
-    const auto num_rows = split_it->rows();
-    ++split_it;
-    if (num_rows >= partition_point) {
-      offset = partition_point - num_rows;
-      break;
+  auto it = events.begin();
+  for (; it != events.end(); ++it) {
+    if (partition_point == it->rows()) {
+      return {
+        {events.begin(), it + 1},
+        {it + 1, events.end()},
+      };
     }
-    partition_point -= num_rows;
-  }
-  auto lhs = std::vector<table_slice>{};
-  lhs.insert(lhs.begin(), events.begin(), split_it);
-  if (offset > 0 and split_it != events.end()) {
-    auto [head, tail] = split(lhs.back(), offset);
-    lhs.back() = std::move(head);
-    *split_it = std::move(tail);
-    VAST_ASSERT(split_it != events.begin());
-    events.erase(events.begin(), split_it - 1);
-  } else {
-    events.erase(events.begin(), split_it);
+    if (partition_point < it->rows()) {
+      auto lhs = std::vector<table_slice>{};
+      auto rhs = std::vector<table_slice>{};
+      lhs.reserve(std::distance(events.begin(), it + 1));
+      rhs.reserve(std::distance(it, events.end()));
+      lhs.insert(lhs.end(), std::make_move_iterator(events.begin()),
+                 std::make_move_iterator(it));
+      auto [split_lhs, split_rhs] = split(*it, partition_point);
+      lhs.push_back(std::move(split_lhs));
+      rhs.push_back(std::move(split_rhs));
+      rhs.insert(rhs.end(), std::make_move_iterator(it + 1),
+                 std::make_move_iterator(events.end()));
+      return {
+        std::move(lhs),
+        std::move(rhs),
+      };
+    }
+    partition_point -= it->rows();
   }
   return {
-    std::move(lhs),
     std::move(events),
+    {},
   };
 }
 

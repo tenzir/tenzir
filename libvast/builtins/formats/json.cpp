@@ -633,7 +633,7 @@ private:
 };
 
 using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
-using zeek_parser = selector_parser<"zeek", "_path:zeek", ".">;
+using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 
 } // namespace vast::plugins::json
 

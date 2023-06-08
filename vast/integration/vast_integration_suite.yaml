@@ -703,7 +703,7 @@ tests:
   Read from zeek json file:
     tags: [pipelines]
     steps:
-      - command: exec 'from file @./data/zeek/zeek.json read zeek | write json to stdout'
+      - command: exec 'from file @./data/zeek/zeek.json read zeek-json | write json to stdout'
 
   Schema ID Extractor:
     tags: [pipelines, cef]

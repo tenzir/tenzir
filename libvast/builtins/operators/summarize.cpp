@@ -66,42 +66,6 @@ make_round_temporal_options(duration time_resolution) noexcept {
 ///         max: :timestamp
 ///
 struct configuration {
-  /// Create a configuration from the operator configuration.
-  /// @param config The configuration of the summarize pipeline operator.
-  static caf::expected<configuration> make(const record& config) {
-    auto result = configuration{};
-    for (const auto& [key, value] : config) {
-      if (key == "group-by") {
-        auto group_by_extractors = parse_group_by_extractors(value);
-        if (!group_by_extractors)
-          return group_by_extractors.error();
-        result.group_by_extractors = std::move(*group_by_extractors);
-        continue;
-      }
-      if (key == "time-resolution") {
-        if (const auto* time_resolution = caf::get_if<duration>(&value)) {
-          result.time_resolution = *time_resolution;
-          continue;
-        }
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("unexpected config key: "
-                                           "time-resolution {} is not a "
-                                           "duration",
-                                           value));
-      }
-      if (key == "aggregate") {
-        auto aggregations = parse_aggregations(value);
-        if (!aggregations)
-          return aggregations.error();
-        result.aggregations = std::move(*aggregations);
-        continue;
-      }
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("unexpected config key: {}", key));
-    }
-    return result;
-  }
-
   /// The configuration of a single aggregation.
   struct aggregation {
     std::string function_name; ///< The aggregation function name.
@@ -117,96 +81,6 @@ struct configuration {
 
   /// Configuration for aggregation columns.
   std::vector<aggregation> aggregations = {};
-
-private:
-  /// Parse the unresolved group-by-extractors from their configuration.
-  /// @param config The relevant configuration subsection.
-  static caf::expected<std::vector<std::string>>
-  parse_group_by_extractors(const data& config) {
-    if (const auto* extractor = caf::get_if<std::string>(&config))
-      return std::vector<std::string>{*extractor};
-    if (const auto* extractors = caf::get_if<list>(&config)) {
-      auto result = std::vector<std::string>{};
-      result.reserve(extractors->size());
-      for (const auto& extractor_data : *extractors) {
-        if (const auto* extractor = caf::get_if<std::string>(&extractor_data)) {
-          result.push_back(*extractor);
-          continue;
-        }
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("unexpected config key: "
-                                           "group-by extractor {} is not a "
-                                           "string",
-                                           extractor_data));
-      }
-      return result;
-    }
-    return caf::make_error(ec::invalid_configuration,
-                           fmt::format("unexpected config key: group-by "
-                                       "extractors {} are not string or a "
-                                       "list of strings",
-                                       config));
-  }
-
-  /// Parse the aggregation columns from their configuration.
-  /// @param config The relevant configuration subsection.
-  static caf::expected<std::vector<aggregation>>
-  parse_aggregations(const data& config) {
-    auto result = std::vector<aggregation>{};
-    if (const auto* aggregations = caf::get_if<record>(&config)) {
-      for (const auto& [key, value] : *aggregations) {
-        auto& aggregation = result.emplace_back();
-        aggregation.output = key;
-        if (const auto* aggregation_config = caf::get_if<std::string>(&value)) {
-          aggregation.function_name = *aggregation_config;
-          aggregation.input_extractors = {key};
-          continue;
-        }
-        if (const auto* aggregation_config = caf::get_if<record>(&value)) {
-          if (aggregation_config->size() != 1)
-            return caf::make_error(ec::invalid_configuration,
-                                   fmt::format("unexpected config key: "
-                                               "more than one aggregation "
-                                               "function specified for {}",
-                                               aggregation.output));
-          const auto& [key, value] = *aggregation_config->begin();
-          aggregation.function_name = key;
-          if (const auto* extractor = caf::get_if<std::string>(&value)) {
-            aggregation.input_extractors = {*extractor};
-            continue;
-          }
-          if (const auto* extractors = caf::get_if<list>(&value)) {
-            aggregation.input_extractors.reserve(extractors->size());
-            for (const auto& extractor_data : *extractors) {
-              if (const auto* extractor
-                  = caf::get_if<std::string>(&extractor_data)) {
-                aggregation.input_extractors.push_back(*extractor);
-                continue;
-              }
-              return caf::make_error(ec::invalid_configuration,
-                                     fmt::format("unexpected config key: "
-                                                 "extractor {} for {} is "
-                                                 "not a string",
-                                                 extractor_data,
-                                                 aggregation.output));
-            }
-            continue;
-          }
-          continue;
-        }
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("unexpected config key: "
-                                           "aggregation configured for {} "
-                                           "is not a string or a record",
-                                           aggregation.output));
-      }
-      return result;
-    }
-    return caf::make_error(ec::invalid_configuration,
-                           fmt::format("unexpected config key: aggregate "
-                                       "{} is not a record",
-                                       config));
-  }
 };
 
 /// A group-by column that was bound to a given schema.

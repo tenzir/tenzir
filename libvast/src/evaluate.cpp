@@ -438,17 +438,17 @@ ids evaluate(const expression& expr, const table_slice& slice,
         return ids{offset + num_rows, false};
       const auto index
         = caf::get<record_type>(slice.schema()).resolve_flat_index(lhs.column);
-      const auto [type, array] = index.get(slice);
-      VAST_ASSERT(array);
+      const auto type_and_array = index.get(slice);
+      VAST_ASSERT(type_and_array.second);
       switch (op) {
 #define VAST_EVAL_DISPATCH(op)                                                 \
   case relational_operator::op: {                                              \
     auto f = [&]<concrete_type Type, class Rhs>(                               \
                Type type, const Rhs& rhs) noexcept -> ids {                    \
       return column_evaluator<relational_operator::op, Type, Rhs>::evaluate(   \
-        type, offset, *array, rhs, selection);                                 \
+        type, offset, *type_and_array.second, rhs, selection);                 \
     };                                                                         \
-    return caf::visit(f, type, rhs);                                           \
+    return caf::visit(f, type_and_array.first, rhs);                           \
   }
         VAST_EVAL_DISPATCH(equal);
         VAST_EVAL_DISPATCH(not_equal);
