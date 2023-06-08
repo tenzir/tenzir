@@ -178,9 +178,9 @@ if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
     CODE "\
     cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
     get_filename_component(build_time_prefix
-      \"${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
+      \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
     get_filename_component(install_time_prefix
-      \"\${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
+      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
     if (NOT \"\${build_time_prefix}\" STREQUAL \"\${install_time_prefix}\")
       message(FATAL_ERROR
         \"For non-relocatable builds the configured build-time install prefix (\${build_time_prefix}) must match the configured install-time install prefix (\${install_time_prefix})\"
@@ -843,7 +843,6 @@ configure_package_config_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
   INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
-
 configure_file("${PROJECT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
                ${CMAKE_BINARY_DIR} COPYONLY)
 configure_file("${PROJECT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
@@ -950,35 +949,35 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
   install(
     CODE "
     cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
-    file(REMOVE_RECURSE \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
-    file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+    file(REMOVE_RECURSE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+    file(MAKE_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
     file(
       COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
-      DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+      DESTINATION \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
     # Poetry evaluates the top-level gitignore, which leads it to ignore
     # everything in case the install prefix is in an ignored path. Setting the
     # git directory explicitly works around the issue.
     set(ENV{GIT_DIR} \"/dev/null\")
     execute_process(
       COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel -vvv
-      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
+      WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
       COMMAND_ERROR_IS_FATAL ANY)
     file(
       GLOB VAST_PYTHON_WHL
-      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python/dist/*.whl\")
+      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python/dist/*.whl\")
     file(
       GLOB VAST_OLD_INSTALLED_BINS
-      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
+      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
     execute_process(
       COMMAND \"${POETRY_PATH}\" run pip install
         ${VAST_POETRY_EXTRA_INSTALL_ARGS}
-        --prefix \"\${CMAKE_INSTALL_PREFIX}\"
+        --prefix \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\"
         \"\${VAST_PYTHON_WHL}\"
-      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
+      WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
       COMMAND_ERROR_IS_FATAL ANY)
     file(
       GLOB VAST_NEW_INSTALLED_BINS
-      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
+      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
     foreach (bin IN LISTS VAST_NEW_INSTALLED_BINS)
       if (NOT \"\${bin}\" IN_LIST VAST_OLD_INSTALLED_BINS)
         file(REMOVE \"\${bin}\")

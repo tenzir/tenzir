@@ -63,11 +63,11 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   # Install launchd script on macOS into ~/Library/LaunchAgents
   install(
     CODE "\
-    if (NOT IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
+    if (NOT IS_ABSOLUTE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
       string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
     endif ()
-    set(VAST_BINARY \"\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
-    set(VAST_WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/vast\")
+    set(VAST_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
+    set(VAST_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/vast\")
     message(STATUS
       \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
     configure_file(
