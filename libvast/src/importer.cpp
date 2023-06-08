@@ -193,8 +193,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   namespace defs = defaults;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
-    if (self->state.stage) {
-      detail::shutdown_stream_stage(self->state.stage);
+    for (auto* inbound : self->state.stage->inbound_paths()) {
+      self->send_exit(inbound->hdl, msg.reason);
     }
     self->quit(msg.reason);
   });

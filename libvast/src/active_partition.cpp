@@ -24,6 +24,7 @@
 #include "vast/detail/settings.hpp"
 #include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/detail/tracepoint.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
@@ -449,8 +450,7 @@ active_partition_actor::behavior_type active_partition(
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
-    if (self->state.streaming_initiated
-        && self->state.stage->inbound_paths().empty()) {
+    if (self->state.streaming_initiated && self->state.stage) {
       detail::shutdown_stream_stage(self->state.stage);
     }
     // Delay shutdown if we're currently in the process of persisting.
@@ -511,22 +511,26 @@ active_partition_actor::behavior_type active_partition(
       self->send(self, atom::internal_v, atom::persist_v, atom::resume_v);
       return self->state.persistence_promise;
     },
-    [self](atom::internal, atom::persist, atom::resume) {
+    [self](atom::internal, atom::persist, atom::resume) -> caf::result<void> {
       VAST_TRACE("{} resumes persist atom {}", *self,
                  self->state.indexers.size());
-      if (self->state.streaming_initiated
-          && self->state.stage->inbound_paths().empty()) {
-        detail::shutdown_stream_stage(self->state.stage);
-      } else {
-        using namespace std::chrono_literals;
-        self->delayed_send(self, 50ms, atom::internal_v, atom::persist_v,
-                           atom::resume_v);
-        return;
+      if (self->state.streaming_initiated && self->state.stage) {
+        if (self->state.stage->inbound_paths().empty()) {
+          detail::shutdown_stream_stage(self->state.stage);
+        } else {
+          using namespace std::chrono_literals;
+          auto rp = self->make_response_promise<void>();
+          detail::weak_run_delayed(self, 50ms, [self, rp]() mutable {
+            rp.delegate(static_cast<active_partition_actor>(self),
+                        atom::internal_v, atom::persist_v, atom::resume_v);
+          });
+          return rp;
+        }
       }
       if (self->state.indexers.empty()) {
         self->state.persistence_promise.deliver(
           caf::make_error(ec::logic_error, "partition has no indexers"));
-        return;
+        return {};
       }
       auto& indexers = self->state.indexers;
       auto valid_count
@@ -534,8 +538,10 @@ active_partition_actor::behavior_type active_partition(
             return idx.second != nullptr;
           });
 
-      if (0u == valid_count)
-        return serialize(self);
+      if (0u == valid_count) {
+        serialize(self);
+        return {};
+      }
       VAST_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);
       for (auto& [field, indexer] : self->state.indexers) {
         if (indexer == nullptr)
@@ -576,6 +582,7 @@ active_partition_actor::behavior_type active_partition(
                 self->state.persistence_promise.deliver(std::move(err));
             });
       }
+      return {};
     },
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
       if (!self->state.data.synopsis->schema)
