@@ -1,8 +1,8 @@
           child 0, x1: int64
           child 1, x2: uint64
       -- field metadata --
-      Tenzir:attributes:0: '{ "key_with_no_value": "" }'
-      Tenzir:name:0: 'named_bool'
+      TENZIR:attributes:0: '{ "key_with_no_value": "" }'
+      TENZIR:name:0: 'named_bool'
       child 0, contagious: bool
       child 0, item: struct<x1: int64, x2: uint64>
     -- field metadata --
@@ -11,10 +11,10 @@
     -- field metadata --
     ARROW:extension:metadata: 'tenzir.ip'
     ARROW:extension:name: 'tenzir.ip'
-    Tenzir:attributes:0: '{ "baz_key": "baz_value" }'
-    Tenzir:attributes:0: '{ "skip": "" }'
-    Tenzir:name:0: 'baz'
-    Tenzir:name:0: 'multi_attr_rec'
+    TENZIR:attributes:0: '{ "baz_key": "baz_value" }'
+    TENZIR:attributes:0: '{ "skip": "" }'
+    TENZIR:name:0: 'baz'
+    TENZIR:name:0: 'multi_attr_rec'
   -- field metadata --
   -- field metadata --
   -- field metadata --
@@ -26,8 +26,8 @@
   ARROW:extension:name: 'tenzir.enumeration'
   ARROW:extension:name: 'tenzir.ip'
   ARROW:extension:name: 'tenzir.subnet'
-  Tenzir:attributes:0: '{ "description": "unnamed_extended_bool" }'
-  Tenzir:attributes:0: '{ "skip": "" }'
+  TENZIR:attributes:0: '{ "description": "unnamed_extended_bool" }'
+  TENZIR:attributes:0: '{ "skip": "" }'
   child 0, address: fixed_size_binary[16]
   child 0, item: struct<contagious: bool>
   child 0, x: bool
@@ -36,9 +36,9 @@
   child 2, z: timestamp[ns]
   child 3, lrc: list<item: struct<x1: int64, x2: uint64>>
 -- schema metadata --
-Tenzir:attributes:1: '{ "some": "attr", "top_level_key": "v" }'
-Tenzir:name:0: 'all_types'
-Tenzir:name:1: 'all_types_i'
+TENZIR:attributes:1: '{ "some": "attr", "top_level_key": "v" }'
+TENZIR:name:0: 'all_types'
+TENZIR:name:1: 'all_types_i'
 a: fixed_size_binary[16]
 b: bool
 bar: struct<x: bool, y: string, z: timestamp[ns], lrc: list<item: struct<x1: int64, x2: uint64>>>

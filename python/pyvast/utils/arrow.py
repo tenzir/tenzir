@@ -115,7 +115,7 @@ class EnumType(pa.ExtensionType):
 
 def names(schema: pa.Schema):
     meta = schema.metadata
-    return [meta[key].decode() for key in meta if key.startswith(b"Tenzir:name:")]
+    return [meta[key].decode() for key in meta if key.startswith(b"TENZIR:name:")]
 
 
 def name(schema: pa.Schema):

@@ -6,21 +6,21 @@
     ARROW:extension:metadata: 'tenzir.ip'
     ARROW:extension:name: 'tenzir.ip'
     ARROW:extension:name: 'tenzir.ip'
-    Tenzir:name:0: 'port'
-    Tenzir:name:0: 'port'
+    TENZIR:name:0: 'port'
+    TENZIR:name:0: 'port'
   -- field metadata --
   -- field metadata --
   -- field metadata --
-  Tenzir:attributes:0: '{ "index": "hash" }'
-  Tenzir:name:0: 'timestamp'
-  Tenzir:name:0: 'zeek.conn_id'
+  TENZIR:attributes:0: '{ "index": "hash" }'
+  TENZIR:name:0: 'timestamp'
+  TENZIR:name:0: 'zeek.conn_id'
   child 0, item: string
   child 0, orig_h: fixed_size_binary[16]
   child 1, orig_p: uint64
   child 2, resp_h: fixed_size_binary[16]
   child 3, resp_p: uint64
 -- schema metadata --
-Tenzir:name:0: 'zeek.conn'
+TENZIR:name:0: 'zeek.conn'
 _write_ts: timestamp[ns]
 community_id: string
 conn_state: string

@@ -236,7 +236,7 @@ type enrich_type_with_arrow_metadata(class type type,
   auto names_and_attributes = std::vector<
     std::pair<std::string, std::vector<std::pair<std::string, std::string>>>>{};
   using namespace parser_literals;
-  auto prefix_parser = "VAST:"_p | "Tenzir:";
+  auto prefix_parser = "VAST:"_p | "TENZIR:";
   auto name_parser = prefix_parser >> "name:" >> parsers::u32 >> parsers::eoi;
   auto attribute_parser
     = prefix_parser >> "attributes:" >> parsers::u32 >> parsers::eoi;
@@ -314,11 +314,11 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
         if (enriched_type->name()) {
-          keys.push_back(fmt::format("Tenzir:name:{}", nesting_depth));
+          keys.push_back(fmt::format("TENZIR:name:{}", nesting_depth));
           values.push_back(enriched_type->name()->str());
         }
         if (enriched_type->attributes()) {
-          keys.push_back(fmt::format("Tenzir:attributes:{}", nesting_depth));
+          keys.push_back(fmt::format("TENZIR:attributes:{}", nesting_depth));
           values.push_back(serialize_attributes(*enriched_type->attributes()));
         }
         root = enriched_type->type_nested_root();

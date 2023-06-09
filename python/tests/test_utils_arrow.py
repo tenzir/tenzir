@@ -140,7 +140,7 @@ def test_ipc():
 def test_schema_name_extraction():
     # Since Arrow cannot attach names to schemas, we do this via metadata.
     schema = pa.schema(
-        [("a", "string"), ("b", "string")], metadata={"Tenzir:name:0": "foo"}
+        [("a", "string"), ("b", "string")], metadata={"TENZIR:name:0": "foo"}
     )
     assert vua.name(schema) == "foo"
 
@@ -149,7 +149,7 @@ def test_schema_alias_extraction():
     # Since Arrow cannot attach names to schemas, we do this via metadata.
     schema = pa.schema(
         [("a", "string"), ("b", "string")],
-        metadata={"Tenzir:name:0": "foo", "Tenzir:name:1": "bar"},
+        metadata={"TENZIR:name:0": "foo", "TENZIR:name:1": "bar"},
     )
     names = vua.names(schema)
     assert len(names) == 2
