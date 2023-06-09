@@ -93,6 +93,8 @@
           vast-static = pkgs.pkgsStatic.vast;
           vast-ce = pkgs.vast-ce;
           vast-ce-static = pkgs.pkgsStatic.vast-ce;
+          vast-cm = pkgs.vast-cm;
+          vast-cm-static = pkgs.pkgsStatic.vast-cm;
           vast-ee = pkgs.vast-ee;
           vast-ee-static = pkgs.pkgsStatic.vast-ee;
           vast-integration-test-shell = pkgs.mkShell {
