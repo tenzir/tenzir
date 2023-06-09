@@ -4,18 +4,18 @@ sidebar_position: 4
 
 # Configure
 
-Tenzir offers several mechanisms to adjust configuration options on startup.
+The following options exist to adjust the configuration on startup:
 
 1. Command-line arguments
 2. Environment variables
 3. Configuration files
 4. Compile-time defaults
 
-These mechanisms are sorted by precedence, i.e., command-line arguments override
-environment variables, which override configuration file settings.
+These options are sorted by precedence, i.e., command-line arguments override
+environment variables, which override configuration file settings. Compile-time
+defaults can only be changed by [rebuilding Tenzir from source](build.md).
 
-Compile-time defaults can only be changed by [rebuilding Tenzir from
-source](build.md).
+Let's discuss the first three options in more detail.
 
 ## Command Line
 
