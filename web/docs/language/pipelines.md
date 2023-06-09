@@ -4,7 +4,10 @@ sidebar_position: 0
 
 # Pipelines
 
-The Tenzir language centers around one principle: **dataflow pipelines**.
+The **Tenzir Query Language (TQL)**[^1] centers around one core principle:
+dataflow pipelines.
+
+[^1]: We pronounce it *teaquel*.
 
 A pipeline is chain of [operators](../operators.md) that represents a flow of
 data. Operators can produce, transform, or consume data. Think of it as UNIX
@@ -28,49 +31,31 @@ pipelines that have both a source and sink a **closed pipeline**. Tenzir can
 only execute closed pipelines. A pipeline that solely consists of a chain
 transformations is an **open pipeline**.
 
-## Operator Overview
-
-Let's take an inside look at the anatomy of a pipeline: the operator building
-blocks. The diagram below shows the three major customization points of the
-pipeline execution engine. The operator SDK enables creating transformations,
-sources, and sinks. The SDK for [connectors and
-formats](#connectors-and-formats) are convience abstractions to make it easy to
-get data in and out of the system.[^1]
-
-[^1]: `from <connector> read <format>` and `to <connector> write <format>` are
-      just operators that any developer could write. They are a bit more complex
-      than operators transforming events, so we provide the connector and format
-      SDKs to make it easier for developers to add sources and sinks.
-
-![Operator Overview](operator-overview.excalidraw.svg)
-
-:::caution Work in Progress
-The above diagram shows the scope that we are targeting for Tenzir v4.0. Some of
-the pictured operators, formats, and connectors are not yet implemented.
-:::
-
 ## Syntax
 
-Tenzir comes with its own language to define pipelines, geared towards working
-with richly typed, structured event data across multiple schemas. There exist
-numerous dataflow languages out there, and we drew inspiration from others to
-achieve:
+Tenzir comes with its own language to define pipelines, dubbed Tenzir Query
+Language (TQL). Even though it is a transformation language, we are calling it
+"query language" to allude to the outcome of getting the data in the desired
+form. The language is geared towards working with richly typed, structured event
+data across multiple schemas.
+
+There exist numerous dataflow languages out there, and we drew inspiration from
+others to achieve:
 
 - the *familiarity* of [splunk](https://splunk.com)
-- the *ease* of [Kusto](https://github.com/microsoft/Kusto-Query-Language)
-- the *power* of [dplyr](https://dplyr.tidyverse.org/)
+- the *power* of [Kusto](https://github.com/microsoft/Kusto-Query-Language)
+- the *expressiveness* of [dplyr](https://dplyr.tidyverse.org/)
 - the *flexibility* of [jq](https://stedolan.github.io/jq/)
 - the *ambition* of [Zed](https://zed.brimdata.io/)
 
 :::tip Why yet another language?
 You may sigh and ask "why are you creating yet another language?" We hear you.
 Please allow us to elaborate. First, our long-term strategy is to support as
-many [language frontends](#language-frontends) as possible. Databricks already
-built a [SIEM-to-Spark
-transpiler](https://github.com/databrickslabs/transpiler). Our committment to
-Apache Arrow and efforts like [substrait](https://substrait.io/) and
-[ibis](https://ibis-project.org/) further show that there is a viable path to
-convergence. Unfortunately we cannot wait until these technologies are
+many language *frontends* as possible, similar to Databricks building a
+[SIEM-to-Spark transpiler](https://github.com/databrickslabs/transpiler). Our
+committment to Apache Arrow and efforts like [substrait](https://substrait.io/)
+and [ibis](https://ibis-project.org/) further show that there is a desire for
+convergence. Unfortunately we cannot wait until these fledling projects are
 production-grade; the needed [data engineering has a long
 tail](/blog/parquet-and-feather-data-engineering-woes).
 
@@ -85,13 +70,14 @@ streaming and batch workloads in a unified language.
 In summary, speed of iteration, the current data ecosystem state, the
 commitment to an open data plane, the focus on types as opposed tables, and the
 unified execution of streaming and batch workloads drove us to devising a new
-language.
+language. We hope that you can appreciate and follow this reasoning as you
+unpack the language.
 :::
 
 More generally, we put a lot of emphasis on the following guidelines when
 designing the language:
 
-1. Use natural language keywords where possible
+1. Use natural language keywords where possible, e.g., verbs to convey actions.
 2. Lean on operator names that are familiar to Unix and Powershell users
 3. Avoid gratuitous syntax elements like brackets, braces, quotes, or
    punctuations.
@@ -106,9 +92,9 @@ example:
 Here is how you write this pipeline in the Tenzir language:
 
 ```cpp
-/* 1. Get data from a Tenzir node */
+/* 1. Start pipeline to data at a Tenzir node */
 export
-/* 2. Filter out a subset of events */
+/* 2. Filter out a subset of events (predicate gets pushed down) */
 | where #schema == "zeek.weird" && note == "SSL::Invalid_Server_Cert"
 /* 3. Aggregate them by destination IP */
 | summarize count(num) by id.resp_h
@@ -188,17 +174,3 @@ implementation to select the optimal building blocks for the most efficient
 realization. For example, filter predicates may be "pushed down" to reduce the
 amount of data that flows through a pipeline. Such optimizations are common
 practice in declarative query languages.
-
-## Language Frontends
-
-If you do not like the syntax of the Tenzir language and prefer to bring your
-own language to the data, then you can write a [frontend](frontends) that
-transpiles user input into the Tenzir language.
-
-For example, we provide a [Sigma](frontends/sigma) frontend that transpiles a
-YAML detection rule into Tenzir [expression](expressions). In fact, the Tenzir
-language itself is a language frontend.
-
-In future, we aim for providing frontends for SQL and other detection languages.
-Please [chat with us](/discord) if you have ideas about concrete languages
-Tenzir should support.
