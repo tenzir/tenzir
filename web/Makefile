@@ -23,19 +23,19 @@ dot-github: \
   $(CONTRIBUTING_DIR)/workflow.md
 
 $(CONTRIBUTING_DIR)/code-of-conduct.md:
-	@printf -- "---\nsidebar_position: 0\n---\n" > $@
+	@printf -- "---\nsidebar_position: 0\n---\n\n" > $@
 	@cat .github/CODE-OF-CONDUCT.md >> $@
 
 $(CONTRIBUTING_DIR)/coding-style.md:
-	@printf -- "---\nsidebar_position: 2\n---\n" > $@
+	@printf -- "---\nsidebar_position: 2\n---\n\n" > $@
 	@cat .github/$(@F) >> $@
 
 $(CONTRIBUTING_DIR)/security.md:
-	@printf -- "---\nsidebar_position: 10\n---\n" > $@
+	@printf -- "---\nsidebar_position: 10\n---\n\n" > $@
 	@cat .github/SECURITY.md >> $@
 
 $(CONTRIBUTING_DIR)/workflow.md:
-	@printf -- "---\nsidebar_position: 1\n---\n" > $@
+	@printf -- "---\nsidebar_position: 1\n---\n\n" > $@
 	@cat .github/$(@F) >> $@
 
 rfc: $(RFC_OUTPUT)
@@ -90,7 +90,7 @@ clean:
 
 
 # A straightforward target to enable `make docker TARGET=bash`
-bash: 
+bash:
 	@bash
 
 # Run this makefile from within the Quarto Docker image.

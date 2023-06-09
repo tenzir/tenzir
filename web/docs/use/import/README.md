@@ -12,12 +12,12 @@ Use the `import` command to ingest data from standard input or file:
 tenzir-ctl import [options] <format> [options] [expr]
 ```
 
-The [format](../../understand/formats/README.md) defines the encoding of data.
-Text formats include [JSON](../../understand/formats/json.md),
-[CSV](../../understand/formats/csv.md), or tool-specific data encodings like
-[Zeek](../../understand/formats/zeek-tsv.md). Examples for binary formats are
-[PCAP](../../understand/formats/pcap.md) and
-[NetFlow](../../understand/formats/netflow.md).
+The [format](../../formats.md) defines the encoding of data.
+Text formats include [JSON](../../formats/json.md),
+[CSV](../../formats/csv.md), or tool-specific data encodings like
+[Zeek](../../formats/zeek-tsv.md). Examples for binary formats are
+[PCAP](../../formats/pcap.md) and
+[NetFlow](../../formats/netflow.md).
 
 For example, to import a file in JSON, use the `json` format:
 
@@ -138,6 +138,6 @@ There exist two ways to tell Tenzir how to map events to schemas:
    the field `event_type` and prefixes it with `suricata.` to look for a
    corresponding schema.
 
-[types]: ../../understand/data-model/type-system.md
-[concepts]: ../../understand/data-model/taxonomies.md#concepts
-[modules]: ../../understand/data-model/modules.md
+[types]: ../../data-model/type-system.md
+[concepts]: ../../data-model/taxonomies.md#concepts
+[modules]: ../../data-model/modules.md

@@ -2,8 +2,7 @@
 
 Tenzir has powerful features for transforming [data in
 motion](#modify-data-in-motion) and [data at rest](#modify-data-at-rest). Both
-aspects rely on [pipelines](../../understand/pipelines.md) as building
-block.
+aspects rely on [pipelines](../../language/pipelines.md) as building block.
 
 ## Define a pipeline
 
@@ -30,8 +29,7 @@ tenzir:
 This `example` pipeline consists of two operators, `hash` and `summarize` that
 execute in sequential order.
 
-Have a look at [all available
-operators](../../understand/operators/README.md) to understand what
+Have a look at [all available operators](../../operators.md) to understand what
 other transformations you can apply.
 
 ## Modify data at rest
