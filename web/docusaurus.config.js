@@ -196,11 +196,20 @@ async function createConfig() {
             src: 'img/vast-logo.svg',
           },
           items: [
+            // TODO: after we've rotated out old versions that do not contain
+            // the 'get-started' docId, we can make this again the entry point,
+            // as opposed to using a link to /docs/next/get-started that doesn't
+            // preserve the version selection.
+            //{
+            //  type: 'doc',
+            //  docId: 'get-started',
+            //  position: 'left',
+            //  label: 'Docs',
+            //},
             {
-              type: 'doc',
-              docId: 'about/README',
-              position: 'left',
+              to: '/docs/next/get-started',
               label: 'Docs',
+              position: 'left',
             },
             {
               to: 'blog',
@@ -249,31 +258,27 @@ async function createConfig() {
         footer: {
           links: [
             {
-              title: 'Docs',
+              title: 'Resources',
               items: [
                 {
-                  label: 'About',
-                  to: '/docs/about',
+                  label: 'Docs',
+                  to: '/docs',
                 },
                 {
-                  label: 'Setup',
-                  to: '/docs/setup',
+                  label: 'API',
+                  to: '/api',
                 },
                 {
-                  label: 'Use',
-                  to: '/docs/use',
+                  label: 'Blog',
+                  to: '/blog',
                 },
                 {
-                  label: 'Understand',
-                  to: '/docs/understand',
+                  label: 'Changelog',
+                  to: '/changelog',
                 },
                 {
-                  label: 'Contribute',
-                  to: '/docs/contribute',
-                },
-                {
-                  label: 'Develop',
-                  to: '/docs/develop',
+                  label: 'Roadmap',
+                  to: '/roadmap',
                 },
               ],
             },
@@ -303,52 +308,19 @@ async function createConfig() {
               ],
             },
             {
-              title: 'VAST',
-              items: [
-                {
-                  label: 'Blog',
-                  to: '/blog',
-                },
-                {
-                  label: 'Changelog',
-                  to: '/changelog',
-                },
-                {
-                  label: 'Roadmap',
-                  to: '/roadmap',
-                },
-                {
-                  label: 'API',
-                  to: '/api',
-                },
-                {
-                  label: 'Privacy Statement',
-                  to: '/privacy-statement',
-                },
-              ],
-            },
-            {
               title: 'Tenzir',
               items: [
+                {
+                  label: 'Website',
+                  href: 'https://tenzir.com',
+                },
                 {
                   label: 'VAST and Tenzir',
                   to: '/vast-and-tenzir',
                 },
                 {
-                  label: 'Blog',
-                  href: 'https://tenzir.com/blog',
-                },
-                {
-                  label: 'Request Demo',
-                  href: 'https://tenzir.com/request-demo',
-                },
-                {
-                  label: 'Contact Us',
-                  href: 'https://tenzir.com/contact-us',
-                },
-                {
-                  label: 'Website',
-                  href: 'https://tenzir.com',
+                  label: 'Privacy Statement',
+                  to: '/privacy-statement',
                 },
               ],
             },

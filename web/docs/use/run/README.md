@@ -16,7 +16,7 @@ process can operate in two modes:
 :::info Tenzir Node
 A server contains a special component called the *node* that acts as container
 for pluggable components implemented as
-[actors](../../develop/architecture/actor-model.md). In the future, Tenzir will
+[actors](../../architecture/actor-model.md). In the future, Tenzir will
 be able to connect multiple nodes together to create a distributed system.
 :::
 

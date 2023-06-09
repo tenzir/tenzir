@@ -18,7 +18,7 @@ compromise (IoCs)* that reflect malicious activity.
 
 Tenzir can live-match threat intelligence against the incoming stream of events,
 producing an alert feed of sightings. This feature fits into the bigger theme
-of a [unified detection](../../about/use-cases/unified-detection.md) strategy
+of a [unified detection](../../use-cases/unified-detection.md) strategy
 with a security-content-driven workflow.
 
 Tenzir features *matchers* that check whether specific field values exist in
@@ -257,7 +257,7 @@ matches the `pulsedive` type (specified in the bundled `pulsedive.schema`).
 After parsing, Tenzir forwards the parsed indicators to the matcher `ips`.
 
 An additional [concepts
-definition](../../understand/data-model/taxonomies.md#concepts) for the
+definition](../../data-model/taxonomies.md#concepts) for the
 `matcher.indicator.value` and `matcher.indicator.context` fields for the
 `pulsedive` type lets the command know which fields to treat as *value* and
 optional *context*.
@@ -469,7 +469,7 @@ head -n 15 ipblocklist.csv
 ```
 
 Before Tenzir can read this data, we need to tell Tenzir what type to use for
-it. We write an `abuse` [module](../../understand/data-model/modules.md) for
+it. We write an `abuse` [module](../../data-model/modules.md) for
 this:
 
 ```yaml
@@ -490,7 +490,7 @@ types:
 
 In addition, you need to tell Tenzir what fields have the indicator data,
 consisting of value and an optional context. To this end, you need to provide a
-[concept](../../understand/data-model/taxonomies.md#concepts) definition:
+[concept](../../data-model/taxonomies.md#concepts) definition:
 
 ```yaml
 concepts:

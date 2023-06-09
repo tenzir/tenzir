@@ -274,7 +274,7 @@ tenzir-ctl show schemas --yaml
 
 Semantically, `tenzir-ctl show schemas` is to Tenzir data what [JSON
 Schema](https://json-schema.org/) is to JSON. In Tenzir's [type
-system](../../understand/data-model/type-system.md) value constraints (e.g.,
+system](../../data-model/type-system.md) value constraints (e.g.,
 minimum value, maximum string length) correspond to type attributes, which are
 free-form key-value pairs. To date, Tenzir does not actively support enforcing
 type constraints via attributes, but will rely on this mechanism for this
@@ -344,4 +344,4 @@ tenzir-ctl show models --yaml
       - net.proto
 ```
 
-[taxonomies]: ../../understand/data-model/taxonomies.md
+[taxonomies]: ../../data-model/taxonomies.md

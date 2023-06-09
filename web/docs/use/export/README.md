@@ -23,7 +23,7 @@ Use `show schemas` to display the schema of all types:
 tenzir-ctl show schemas --yaml
 ```
 
-In case you ingested [Suricata](../../understand/formats/suricata.md) data, this
+In case you ingested [Suricata](../../formats/suricata.md) data, this
 may print:
 
 ```yaml
@@ -114,10 +114,10 @@ schema.
 
 ## Begin with an expression
 
-We designed the [Tenzir language](../../understand/README.md) to make it
+We designed the [Tenzir language](../../language.md) to make it
 easy to reference the data schema and put constraints on it. Specifically,
-Tenzir's [expression language](../../understand/expressions.md) has the
-concept of [extractors](../../understand/expressions.md#extractors)
+Tenzir's [expression language](../../language/expressions.md) has the
+concept of [extractors](../../language/expressions.md#extractors)
 that refer to various parts of the event structure. For example, you can query
 the above schemas with a *meta extractor* to select a specific set of event
 types:
@@ -160,7 +160,7 @@ above query as an example, you can also write:
 ```
 
 In fact, both predicates in this expression are what we call [value
-predicates](../../understand/expressions.md#value-predicates), making
+predicates](../../language/expressions.md#value-predicates), making
 it possible to shorten this expression to:
 
 ```c
@@ -169,7 +169,7 @@ it possible to shorten this expression to:
 
 Using type extractors (and thereby value predicates) hinges on having
 a powerful type system. If you only have strings and numbers, this is not
-helping much. Tenzir's [type system](../../understand/data-model/type-system.md)
+helping much. Tenzir's [type system](../../data-model/type-system.md)
 supports *aliases*, e.g., you can define an alias called `port` that points to a
 `uint64`. Then you'd write a query only over ports:
 
@@ -197,12 +197,12 @@ Tenzir resolves the concept `net.src.ip` to all fieldnames that this concept has
 been defined with. We defer to the [taxonomy documentation][taxonomies] for a
 more detailed discussion.
 
-[taxonomies]: ../../understand/data-model/taxonomies.md
+[taxonomies]: ../../data-model/taxonomies.md
 
 ## Apply a pipeline
 
 After providing a filter expression, you can optionally continue with a
-[pipeline](../../understand/pipelines.md).
+[pipeline](../../language/pipelines.md).
 
 ```cpp
 src_ip == 192.168.1.104
@@ -221,11 +221,11 @@ back to then render them on standard output:
 tenzir-ctl export [options] <format> [options] [expr]
 ```
 
-The [format](../../understand/formats/README.md) defines how Tenzir renders the
-query results. Text formats include [JSON](../../understand/formats/json.md),
-[CSV](../../understand/formats/csv.md), or tool-specific data encodings like
-[Zeek](../../understand/formats/zeek-tsv.md).
-[PCAP](../../understand/formats/pcap.md) is an example for a binary format.
+The [format](../../formats.md) defines how Tenzir renders the
+query results. Text formats include [JSON](../../formats/json.md),
+[CSV](../../formats/csv.md), or tool-specific data encodings like
+[Zeek](../../formats/zeek-tsv.md).
+[PCAP](../../formats/pcap.md) is an example for a binary format.
 
 For example, to run query that exports the results as JSON, run:
 

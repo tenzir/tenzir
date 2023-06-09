@@ -160,7 +160,7 @@ at all system- and user-specified configuration paths.
 
 ## Plugins
 
-Tenzir's [plugin architecture](../develop/architecture/plugins.md) allows for
+Tenzir's [plugin architecture](../architecture/plugins.md) allows for
 flexible replacement and enhancement of functionality at various pre-defined
 customization points. There exist **dynamic plugins** that ship as shared
 libraries and **static plugins** that are compiled into libtenzir.
