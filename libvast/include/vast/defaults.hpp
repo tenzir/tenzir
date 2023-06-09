@@ -202,7 +202,7 @@ inline constexpr uint16_t endpoint_port = 5158;
 inline constexpr std::string_view node_id = "node";
 
 /// Path to persistent state.
-inline constexpr std::string_view db_directory = "vast.db";
+inline constexpr std::string_view db_directory = "tenzir.db";
 
 /// Interval between two aging cycles.
 inline constexpr caf::timespan aging_frequency = std::chrono::hours{24};

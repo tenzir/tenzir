@@ -16,7 +16,7 @@ vast:
   connection-retry-delay: 3s
 
   # The file system path used for persistent state.
-  db-directory: "vast.db"
+  db-directory: "tenzir.db"
 
   # The file system path used for log files.
   log-file: "<db-directory>/server.log"
