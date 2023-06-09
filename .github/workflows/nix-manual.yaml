@@ -43,6 +43,7 @@ jobs:
       - name: Assemble the Job Matrix
         id: nix
         run: |
+          echo '::notice inputs = ${{ toJSON(inputs) }}'
           tags=()
           if [[ '${{ inputs.tag }}' != "" ]]; then
             tags+=('${{ inputs.tag }}')
