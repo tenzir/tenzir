@@ -207,7 +207,7 @@ def run_step(
     basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result
 ):
     try:
-        db_dir = work_dir / "vast.db"
+        db_dir = work_dir / "tenzir.db"
         stdout = work_dir / f"{step_id}.out"
         stderr = work_dir / f"{step_id}.err"
         cmd = basecmd + step.command if step.prepend_vast else step.command
