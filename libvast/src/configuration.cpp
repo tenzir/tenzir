@@ -59,7 +59,7 @@ struct has_extension_type
 /// 2. A "__" translates into the record separator '.'
 /// @pre `!prefix.empty()`
 std::optional<std::string>
-to_config_key(std::string_view key, std::string_view prefix = "VAST") {
+to_config_key(std::string_view key, std::string_view prefix) {
   VAST_ASSERT(!prefix.empty());
   // PREFIX_X is the shortest allowed key.
   if (prefix.size() + 2 > key.size())
@@ -127,9 +127,12 @@ collect_config_files(std::vector<std::filesystem::path> dirs,
   }
   // Second, consider command line and environment overrides. But only check
   // the environment if we don't have a config on the command line.
-  if (cli_configs.empty())
-    if (auto file = detail::getenv("VAST_CONFIG"))
+  if (cli_configs.empty()) {
+    if (auto file = detail::getenv("TENZIR_CONFIG"))
       cli_configs.emplace_back(*file);
+    else if (auto file = detail::getenv("VAST_CONFIG"))
+      cli_configs.emplace_back(*file);
+  }
   for (const auto& file : cli_configs) {
     auto config_file = std::filesystem::path{file};
     std::error_code err{};
@@ -200,9 +203,22 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
 
 /// Merges VAST environment variables into a configuration.
 caf::error merge_environment(record& config) {
-  for (const auto& [key, value] : detail::environment())
-    if (!value.empty())
-      if (auto config_key = to_config_key(key)) {
+  for (const auto& [key, value] : detail::environment()) {
+    if (!value.empty()) {
+      auto compat_to_config_key
+        = [](const auto& key) -> std::optional<std::string> {
+        if (auto result = to_config_key(key, "TENZIR"))
+          return result;
+        auto result = to_config_key(key, "VAST");
+        if (result
+            && detail::getenv(
+              fmt::format("TENZIR{}", std::string_view{key}.substr(4)))) {
+          fmt::print(stderr, "ignoring {}\n", key);
+          return {};
+        }
+        return result;
+      };
+      if (auto config_key = compat_to_config_key(key)) {
         if (!config_key->starts_with("caf.")
             && !config_key->starts_with("plugins."))
           config_key->insert(0, "vast.");
@@ -226,6 +242,8 @@ caf::error merge_environment(record& config) {
           config[*config_key] = std::string{value};
         }
       }
+    }
+  }
   return caf::none;
 }
 
@@ -342,11 +360,17 @@ caf::error configuration::parse(int argc, char** argv) {
   // the function config_dirs() relies on this already being there.
   if (auto it
       = std::find(command_line.begin(), command_line.end(), "--bare-mode");
-      it != command_line.end())
+      it != command_line.end()) {
     caf::put(content, "vast.bare-mode", true);
-  else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE"))
-    if (*vast_bare_mode == "true")
+  } else if (auto vast_bare_mode = detail::getenv("TENZIR_BARE_MODE")) {
+    if (*vast_bare_mode == "true") {
       caf::put(content, "vast.bare-mode", true);
+    }
+  } else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE")) {
+    if (*vast_bare_mode == "true") {
+      caf::put(content, "vast.bare-mode", true);
+    }
+  }
   // Gather and parse all to-be-considered configuration files.
   std::vector<std::string> cli_configs;
   for (auto& arg : command_line)
@@ -390,12 +414,21 @@ caf::error configuration::parse(int argc, char** argv) {
   // environment equivalents early. We do so by going through the
   // caf::config_option_set parser such that they use the same syntax as
   // command-line options. We also get escaping for free this way.
-  if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGINS"))
+  if (auto vast_plugin_dirs = detail::getenv("TENZIR_PLUGINS")) {
     plugin_args.push_back(fmt::format("--plugins={}", *vast_plugin_dirs));
-  if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGIN_DIRS"))
+  } else if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGINS")) {
+    plugin_args.push_back(fmt::format("--plugins={}", *vast_plugin_dirs));
+  }
+  if (auto vast_plugin_dirs = detail::getenv("TENZIR_PLUGIN_DIRS")) {
     plugin_args.push_back(fmt::format("--plugin-dirs={}", *vast_plugin_dirs));
-  if (auto vast_schema_dirs = detail::getenv("VAST_SCHEMA_DIRS"))
+  } else if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGIN_DIRS")) {
+    plugin_args.push_back(fmt::format("--plugin-dirs={}", *vast_plugin_dirs));
+  }
+  if (auto vast_schema_dirs = detail::getenv("TENZIR_SCHEMA_DIRS")) {
     plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
+  } else if (auto vast_schema_dirs = detail::getenv("VAST_SCHEMA_DIRS")) {
+    plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
+  }
   // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());
