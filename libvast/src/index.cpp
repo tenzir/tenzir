@@ -564,8 +564,8 @@ caf::error index_state::load_from_disk() {
     if (!chk) {
       VAST_WARN("{} failed to recover data from {}: {}\n"
                 "You can try to manually recover the data with\n"
-                "$ lsvast {} | vast import json",
-                *self, store_path, store_path, chk.error());
+                "$ tenzir 'from {} | import'",
+                *self, store_path, chk.error(), store_path);
       continue;
     }
     auto seg = segment::make(std::move(*chk));

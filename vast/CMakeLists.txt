@@ -117,17 +117,6 @@ file(
       --set \"$base_dir\"/vast_integration_suite.yaml \
       \${update} \
       \"$@\"
-     $<$<BOOL:${VAST_ENABLE_LSVAST}>:
-     rm -rf \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\"
-     mkdir -p \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\"
-     $app --bare-mode -N -d \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test/vast.db\" \
-       import -r \"$base_dir\"/data/suricata/eve.json suricata
-     python3 \"$base_dir/integration.py\" \
-      --app \"$<TARGET_FILE:lsvast>\" \
-      --directory \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\" \
-      --set \"$base_dir\"/lsvast_integration_suite.yaml \
-      \${update} \
-      \"$@\">
     ")
 
 add_custom_target(
