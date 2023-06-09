@@ -98,7 +98,6 @@ in {
   };
 
   config = mkIf cfg.enable {
-    # This is needed so we will have 'lsvast' in our PATH
     environment.systemPackages = [cfg.package];
 
     systemd.services.vast = {

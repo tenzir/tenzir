@@ -818,7 +818,6 @@ endif ()
 
 add_subdirectory(libvast)
 add_subdirectory(libvast_test)
-add_subdirectory(contrib/tools)
 add_subdirectory(vast)
 
 # -- cmake export/config installations -----------------------------------------
