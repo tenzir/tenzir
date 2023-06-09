@@ -892,26 +892,39 @@ auto index_state::schedule_lookups() -> size_t {
     counters.partition_scheduled++;
     counters.partition_lookups += next->queries.size();
     // 3. request all relevant queries in a loop
-    auto cnt = std::make_shared<size_t>(next->queries.size());
+    auto ts = std::chrono::system_clock::now();
+    auto active_lookup_id = active_lookup_counter++;
+    active_lookups.emplace_back(active_lookup_id, ts, *next);
+    auto active_lookup = active_lookups.end() - 1;
     for (auto qid : next->queries) {
       auto it = pending_queries.queries().find(qid);
       if (it == pending_queries.queries().end()) {
         VAST_WARN("{} tried to access non-existent query {}", *self, qid);
-        *cnt -= 1;
-        if (*cnt == 0)
+        auto& qs = std::get<2>(*active_lookup).queries;
+        qs.erase(std::remove(qs.begin(), qs.end(), qid), qs.end());
+        if (qs.empty()) {
           --running_partition_lookups;
+          active_lookups.erase(active_lookup);
+        }
         continue;
       }
-      auto handle_completion = [cnt, qid, this] {
+      auto handle_completion = [active_lookup_id, qid, this] {
         if (auto client = pending_queries.handle_completion(qid))
           self->send(*client, atom::done_v);
         // 4. recursively call schedule_lookups in the done handler. ...or
         //    when all done? (5)
         // 5. decrement running_partition_lookups when all queries that
         //    were started are done. Keep track in the closure.
-        *cnt -= 1;
-        if (*cnt == 0) {
+        auto active_lookup = std::find_if(
+          active_lookups.begin(), active_lookups.end(), [&](const auto& entry) {
+            return std::get<0>(entry) == active_lookup_id;
+          });
+        VAST_ASSERT(active_lookup != active_lookups.end());
+        auto& qs = std::get<2>(*active_lookup).queries;
+        qs.erase(std::remove(qs.begin(), qs.end(), qid), qs.end());
+        if (qs.empty()) {
           --running_partition_lookups;
+          active_lookups.erase(active_lookup);
           const auto num_scheduled = schedule_lookups();
           VAST_DEBUG("{} scheduled {} partitions after completion of a "
                      "previously scheduled lookup",
@@ -1062,6 +1075,23 @@ index_state::status(status_verbosity v, duration d) const {
       = max_concurrent_partition_lookups - running_partition_lookups;
     worker_status["busy"] = running_partition_lookups;
     rs->content["workers"] = std::move(worker_status);
+    auto active_lookup_status = list{};
+    for (const auto& [id, ts, item] : active_lookups) {
+      auto x = record{};
+      x["id"] = id;
+      x["start-time"] = ts;
+      x["partition-id"] = fmt::to_string(item.partition);
+      x["schema"] = fmt::to_string(item.schema);
+      x["priority"] = fmt::to_string(item.priority);
+      x["erased"] = fmt::to_string(item.erased);
+      auto queries = list{};
+      for (const auto& q : item.queries) {
+        queries.push_back(fmt::to_string(q));
+      }
+      x["queries"] = std::move(queries);
+      active_lookup_status.emplace_back(std::move(x));
+    }
+    rs->content["active-lookups"] = std::move(active_lookup_status);
     auto pending_status = list{};
     for (const auto& [u, qs] : pending_queries.queries()) {
       auto q = record{};

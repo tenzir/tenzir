@@ -304,6 +304,12 @@ struct index_state {
   /// lookups.
   size_t running_partition_lookups = 0;
 
+  size_t active_lookup_counter = 0;
+
+  std::vector<std::tuple<size_t, std::chrono::system_clock::time_point,
+                         query_queue::entry>>
+    active_lookups;
+
   /// Keeps temporary statistics that are flushed with the metrics.
   index_counters counters = {};
 
