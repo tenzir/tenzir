@@ -235,12 +235,13 @@ type enrich_type_with_arrow_metadata(class type type,
   };
   auto names_and_attributes = std::vector<
     std::pair<std::string, std::vector<std::pair<std::string, std::string>>>>{};
-  auto name_parser = "VAST:name:" >> parsers::u32 >> parsers::eoi;
-  auto attribute_parser = "VAST:attributes:" >> parsers::u32 >> parsers::eoi;
+  using namespace parser_literals;
+  auto prefix_parser = "VAST:"_p | "TENZIR:";
+  auto name_parser = prefix_parser >> "name:" >> parsers::u32 >> parsers::eoi;
+  auto attribute_parser
+    = prefix_parser >> "attributes:" >> parsers::u32 >> parsers::eoi;
   for (const auto& [key, value] :
        detail::zip(metadata.keys(), metadata.values())) {
-    if (!key.starts_with("VAST:"))
-      continue;
     if (uint32_t index{}; name_parser(key, index)) {
       if (index >= names_and_attributes.size())
         names_and_attributes.resize(index + 1);
@@ -313,11 +314,11 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
         if (enriched_type->name()) {
-          keys.push_back(fmt::format("VAST:name:{}", nesting_depth));
+          keys.push_back(fmt::format("TENZIR:name:{}", nesting_depth));
           values.push_back(enriched_type->name()->str());
         }
         if (enriched_type->attributes()) {
-          keys.push_back(fmt::format("VAST:attributes:{}", nesting_depth));
+          keys.push_back(fmt::format("TENZIR:attributes:{}", nesting_depth));
           values.push_back(serialize_attributes(*enriched_type->attributes()));
         }
         root = enriched_type->type_nested_root();
@@ -1858,6 +1859,15 @@ void ip_type::arrow_type::register_extension() noexcept {
     return;
   auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
   VAST_ASSERT(status.ok());
+  // We also register the IP type as vast.address for backwards compatibility.
+  struct compat : arrow_type {
+    using arrow_type::arrow_type;
+    auto extension_name() const -> std::string override {
+      return "vast.address";
+    }
+  };
+  auto compat_status = arrow::RegisterExtensionType(std::make_shared<compat>());
+  VAST_ASSERT(compat_status.ok());
 }
 
 ip_type::builder_type::builder_type(arrow::MemoryPool* pool)
@@ -1891,7 +1901,8 @@ std::string ip_type::arrow_type::extension_name() const {
 
 bool ip_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
-  return other.extension_name() == name;
+  return other.extension_name() == name
+         || other.extension_name() == "vast.address";
 }
 
 std::shared_ptr<arrow::Array>
@@ -1902,7 +1913,7 @@ ip_type::arrow_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
 arrow::Result<std::shared_ptr<arrow::DataType>>
 ip_type::arrow_type::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
                                  const std::string& serialized) const {
-  if (serialized != name)
+  if (serialized != name && serialized != "vast.address")
     return arrow::Status::Invalid("type identifier does not match");
   if (!storage_type->Equals(storage_type_))
     return arrow::Status::Invalid("storage type does not match");
@@ -1977,6 +1988,15 @@ void subnet_type::arrow_type::register_extension() noexcept {
     return;
   auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
   VAST_ASSERT(status.ok());
+  // We also register the subnet type as vast.subnet for backwards compatibility.
+  struct compat : arrow_type {
+    using arrow_type::arrow_type;
+    auto extension_name() const -> std::string override {
+      return "vast.subnet";
+    }
+  };
+  auto compat_status = arrow::RegisterExtensionType(std::make_shared<compat>());
+  VAST_ASSERT(compat_status.ok());
 }
 
 subnet_type::arrow_type::arrow_type() noexcept
@@ -1992,7 +2012,8 @@ std::string subnet_type::arrow_type::extension_name() const {
 
 bool subnet_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
-  return other.extension_name() == name;
+  return other.extension_name() == name
+         || other.extension_name() == "vast.subnet";
 }
 
 std::shared_ptr<arrow::Array> subnet_type::arrow_type::MakeArray(
@@ -2004,7 +2025,7 @@ arrow::Result<std::shared_ptr<arrow::DataType>>
 subnet_type::arrow_type::Deserialize(
   std::shared_ptr<arrow::DataType> storage_type,
   const std::string& serialized) const {
-  if (serialized != name)
+  if (serialized != name && serialized != "vast.address")
     return arrow::Status::Invalid("type identifier does not match");
   if (!storage_type->Equals(storage_type_))
     return arrow::Status::Invalid("storage type does not match");
@@ -2129,6 +2150,17 @@ void enumeration_type::arrow_type::register_extension() noexcept {
   auto status = arrow::RegisterExtensionType(
     std::make_shared<arrow_type>(enumeration_type{{"stub"}}));
   VAST_ASSERT(status.ok());
+  // We also register the enumeration type as vast.enumeration for backwards
+  // compatibility.
+  struct compat : arrow_type {
+    using arrow_type::arrow_type;
+    auto extension_name() const -> std::string override {
+      return "vast.enumeration";
+    }
+  };
+  auto compat_status = arrow::RegisterExtensionType(
+    std::make_shared<compat>(enumeration_type{{"stub"}}));
+  VAST_ASSERT(compat_status.ok());
 }
 
 arrow::Result<std::shared_ptr<enumeration_type::array_type>>
@@ -2204,7 +2236,8 @@ std::string enumeration_type::arrow_type::extension_name() const {
 
 bool enumeration_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
-  return other.extension_name() == name
+  return (other.extension_name() == name
+          || other.extension_name() == "vast.enumeration")
          && static_cast<const arrow_type&>(other).vast_type_ == vast_type_;
 }
 

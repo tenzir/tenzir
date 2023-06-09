@@ -1,5 +1,5 @@
     -- field metadata --
-    VAST:name:0: 'port'
+    TENZIR:name:0: 'port'
   -- field metadata --
   -- field metadata --
   -- field metadata --
@@ -8,16 +8,16 @@
   -- field metadata --
   -- field metadata --
   -- field metadata --
-  ARROW:extension:metadata: 'vast.address'
-  ARROW:extension:metadata: 'vast.address'
-  ARROW:extension:name: 'vast.address'
-  ARROW:extension:name: 'vast.address'
-  VAST:attributes:0: '{ "index": "hash" }'
-  VAST:attributes:0: '{ "index": "hash" }'
-  VAST:attributes:0: '{ "index": "hash" }'
-  VAST:name:0: 'port'
-  VAST:name:0: 'port'
-  VAST:name:0: 'timestamp'
+  ARROW:extension:metadata: 'tenzir.ip'
+  ARROW:extension:metadata: 'tenzir.ip'
+  ARROW:extension:name: 'tenzir.ip'
+  ARROW:extension:name: 'tenzir.ip'
+  TENZIR:attributes:0: '{ "index": "hash" }'
+  TENZIR:attributes:0: '{ "index": "hash" }'
+  TENZIR:attributes:0: '{ "index": "hash" }'
+  TENZIR:name:0: 'port'
+  TENZIR:name:0: 'port'
+  TENZIR:name:0: 'timestamp'
   child 0, hostname: string
   child 0, item: uint64
   child 1, url: string
@@ -31,7 +31,7 @@
   child 8, status: uint64
   child 9, redirect: string
 -- schema metadata --
-VAST:name:0: 'suricata.http'
+TENZIR:name:0: 'suricata.http'
 community_id: string
 dest_ip: fixed_size_binary[16]
 dest_port: uint64
