@@ -49,8 +49,12 @@ def upload_packages [
   }
   if $copy {
     mkdir ./packages/debian ./packages/tarball
-    cp $debs ./packages/debian
-    cp $tgzs ./packages/tarball
+    for deb in $debs {
+      cp $deb ./packages/debian
+    }
+    for tgz in $tgzs {
+      cp $tgz ./packages/tarball
+    }
   }
   if $copy {
     mkdir ./release/debian ./release/tarball
