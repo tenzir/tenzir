@@ -142,6 +142,9 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         return caf::make_message(hook_invocation.error());
       detail::merge_settings(inv.options, hook_invocation->options,
                              policy::merge_lists::yes);
+      // In case the listen port option was set to 0 we need to set the
+      // port that was allocated by the operating system here.
+      caf::put(hook_invocation->options, "tenzir.endpoint", listen_addr);
       auto runner = self->spawn<caf::detached>(command_runner);
       command_runners.push_back(runner);
       self->send(runner, atom::run_v, *hook_invocation);

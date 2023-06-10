@@ -28,7 +28,7 @@ spawn_or_connect_to_node(caf::scoped_actor& self, const caf::settings& opts,
   };
   if (caf::get_or<bool>(opts, "tenzir.node", false))
     return convert(spawn_node(self, node_opts));
-  return convert(connect_to_node(self, node_opts));
+  return convert(connect_to_node(self, opts));
 }
 
 } // namespace tenzir
