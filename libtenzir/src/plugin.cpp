@@ -176,10 +176,20 @@ caf::expected<detail::stable_set<std::string>> resolve_plugin_names(
     else
       return std::move(path.error());
   }
-  // Deduplicate plugin paths.
+  // Deduplicate plugins.
+  // We dedup based on the filename instead of the full path, this is useful for
+  // running Tenzir with a modified plugin when the unmodified plugin is also
+  // bundled with the installation. If we were to dedup on the full path this
+  // situation would not be caught and the process would crash because of
+  // duplicate symbols.
+  auto path_map = detail::stable_map<std::string, std::string>{};
+  for (auto& path : paths_or_names) {
+    path_map.insert({std::filesystem::path{path}.filename(), std::move(path)});
+  }
   auto paths = detail::stable_set<std::string>{};
-  paths.insert(std::make_move_iterator(paths_or_names.begin()),
-               std::make_move_iterator(paths_or_names.end()));
+  for (auto& [_, path] : path_map) {
+    paths.insert(std::move(path));
+  }
   return paths;
 }
 
