@@ -471,6 +471,45 @@ function (TenzirRegisterPlugin)
     PUBLIC tenzir::libtenzir
     PRIVATE tenzir::internal)
 
+  set(PLUGIN_OUTPUT_DIRECTORY
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins")
+
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    file(CREATE_LINK "${VAST_DIR}/share" "${CMAKE_BINARY_DIR}/share" SYMBOLIC)
+    string(TOUPPER "${VAST_CMAKE_BUILD_TYPE}" build_type_uppercase_)
+    get_target_property(TENZIR_BINARY vast::tenzir
+                        IMPORTED_LOCATION_${build_type_uppercase_})
+    unset(build_type_uppercase_)
+    message(STATUS "Found tenzir executable: ${TENZIR_BINARY}")
+    get_filename_component(TENZIR_BINARY_DIR "${TENZIR_BINARY}" DIRECTORY)
+    file(
+      WRITE "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      "\
+      file(WRITE \"${CMAKE_CURRENT_BINARY_DIR}/bin/\${EXECUTABLE}\"
+      \"\\
+      #!/bin/sh
+
+      export TENZIR_PLUGIN_DIRS=\\\${TENZIR_PLUGIN_DIRS:+\\\${TENZIR_PLUGIN_DIRS}:}${PLUGIN_OUTPUT_DIRECTORY}
+      exec \\\"${TENZIR_BINARY_DIR}/\${EXECUTABLE}\\\" \\\"\\\$@\\\"\")
+      file(CHMOD \"${CMAKE_CURRENT_BINARY_DIR}/bin/\${EXECUTABLE}\"
+        FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                         GROUP_READ GROUP_WRITE GROUP_EXECUTE)")
+    add_custom_target(
+      ${PLUGIN_TARGET}_wrapper ALL
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir -P
+              "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir-ctl -P
+              "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir-node -P
+              "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=vast -P
+              "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      COMMENT
+        "Creating convenience binary wrappers in ${CMAKE_CURRENT_BINARY_DIR}/bin"
+    )
+  endif ()
+
   # Set up the target's include directories.
   if (PLUGIN_INCLUDE_DIRECTORIES)
     # We intentionally omit the install interface include directories and do not
@@ -587,8 +626,7 @@ function (TenzirRegisterPlugin)
     # the library output directory accordingly.
     set_target_properties(
       ${PLUGIN_TARGET}-shared
-      PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-                 "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/tenzir/plugins"
+      PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PLUGIN_OUTPUT_DIRECTORY}"
                  OUTPUT_NAME "tenzir-plugin-${PLUGIN_TARGET}")
     install(
       TARGETS ${PLUGIN_TARGET}-shared
