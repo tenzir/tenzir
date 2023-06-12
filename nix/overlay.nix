@@ -163,7 +163,7 @@ in {
       ../README.md
       ../VAST.spdx
       ../VERSIONING.md
-      ../vast.yaml.example
+      ../tenzir.yaml.example
       ../version.json
     ];
   };

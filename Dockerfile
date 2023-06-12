@@ -23,7 +23,7 @@ COPY python ./python
 COPY schema ./schema
 COPY vast ./vast
 COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
-     vast.yaml.example version.json ./
+     tenzir.yaml.example version.json ./
 
 # -- development ---------------------------------------------------------------
 

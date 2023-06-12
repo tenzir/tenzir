@@ -91,7 +91,7 @@ in {
       '';
       description = ''
         Configuration for VAST. See
-        https://github.com/tenzir/vast/tree/vast.yaml.example for supported
+        https://github.com/tenzir/vast/tree/tenzir.yaml.example for supported
         options.
       '';
     };

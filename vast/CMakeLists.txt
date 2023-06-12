@@ -39,7 +39,7 @@ create_tenzir_symlink(vast)
 
 # -- example configuration file -----------------------------------------------
 
-VASTInstallExampleConfiguration(vast "${PROJECT_SOURCE_DIR}/vast.yaml.example"
+VASTInstallExampleConfiguration(vast "${PROJECT_SOURCE_DIR}/tenzir.yaml.example"
                                 "" "vast.yaml")
 
 # -- init system integration ---------------------------------------------------
@@ -138,10 +138,10 @@ install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
   COMPONENT Development
   DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
-  PATTERN "integration/vast.yaml.example" EXCLUDE)
+  PATTERN "integration/tenzir.yaml.example" EXCLUDE)
 
 install(
-  FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
+  FILES "${PROJECT_SOURCE_DIR}/tenzir.yaml.example"
   COMPONENT Development
   DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/integration")
 
