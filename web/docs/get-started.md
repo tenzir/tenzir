@@ -296,6 +296,6 @@ Now that you got a first impression of Tenzir pipelines, dive deeper by
   [connectors](connectors.md), [formats](formats.md), and the [data
   model](data-model.md).
 
-We're here to help! If you have any questions, chat with us at our [community
+We're here to help! If you have any questions, swing by our friendly [community
 Discord](/discord) or open a [GitHub
 discussion](https://github.com/tenzir/tenzir/discussions).
