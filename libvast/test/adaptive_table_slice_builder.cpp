@@ -73,7 +73,6 @@ TEST(add two rows of structs with lists) {
     REQUIRE(not list.add(int64_t{2}));
   }
   auto out = sut.finish();
-  MESSAGE(to_record_batch(out)->ToString());
   REQUIRE_EQUAL(out.rows(), 2u);
   REQUIRE_EQUAL(out.columns(), 1u);
   CHECK_EQUAL((materialize(out.at(0u, 0u))), list{{int64_t{1}}});
@@ -1093,4 +1092,25 @@ TEST(Fixed fields builder remove record type row) {
                   {"nested list", list{{int64_t{100}}}},
                 }},
               }));
+}
+
+TEST(successful cast to list value type) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto list_f = row.push_field("list");
+    auto list = list_f.push_list();
+    REQUIRE(not list.add(int64_t{1}));
+    REQUIRE(not list.add("520"));
+    REQUIRE(not list.add(469382.0));
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))),
+              (list{int64_t{1}, int64_t{520}, int64_t{469382}}));
+  const auto schema
+    = vast::type{record_type{{"list", list_type{int64_type{}}}}};
+  const auto expected_schema = vast::type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
 }
