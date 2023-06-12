@@ -151,14 +151,20 @@ private:
           }
           return caf::error{};
         },
-        [](const list_type&) -> caf::error {
-          die("can't add values to the list_guard with list value_type");
+        [view](const list_type& t) -> caf::error {
+          return caf::make_error(ec::convert_error,
+                                 fmt::format("unsupported conversion from: "
+                                             "'{}' to a type: '{}",
+                                             data{materialize(view)}, t));
         },
         [](const map_type&) -> caf::error {
           die("can't add values to the list_guard with map value_type");
         },
-        [](const record_type&) -> caf::error {
-          die("can't add values to the list_guard with record value_type");
+        [view](const record_type& t) -> caf::error {
+          return caf::make_error(ec::convert_error,
+                                 fmt::format("unsupported conversion from: "
+                                             "'{}' to a type: '{}",
+                                             data{materialize(view)}, t));
         },
       },
       value_type);

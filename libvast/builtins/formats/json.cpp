@@ -441,10 +441,9 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
       // No need to check after each operation.
       auto doc = (*doc_it).get_value();
       if (auto err = doc.error()) {
-        ctrl.warn(caf::make_error(
-          ec::parse_error, fmt::format("failed to fully parse '{}' : {}. "
-                                       "Some events can be skipped.",
-                                       view, error_message(err))));
+        ctrl.warn(caf::make_error(ec::parse_error,
+                                  fmt::format("skips invalid JSON '{}' : {}",
+                                              view, error_message(err))));
         continue;
       }
       if (schema_is_known) {
