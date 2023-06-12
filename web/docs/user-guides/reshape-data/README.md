@@ -194,7 +194,7 @@ tenzir 'export | where 10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min)'
 </details>
 
 The above example extracts connections that either have sent more than 1 MiB or
-lasted longer than 30 minutes. 
+lasted longer than 30 minutes.
 
 :::info Extractors
 Tenzir's expression language uses
@@ -222,6 +222,10 @@ field where the value matches exactly.
 Use the [`head`](../../operators/transformations/head.md) and
 [`tail`](../../operators/transformations/tail.md) operators to get the first or
 last N records of the input.
+
+:::caution TODO
+Complete this section.
+:::
 
 :::caution `tail` is blocking
 The `tail` operator must wait for its entire input, whereas `head N` terminates
@@ -280,19 +284,27 @@ Note that `select` does not reorder the input fields. Use
 
 ## Sample schemas with `taste`
 
-TODO
+:::caution TODO
+Complete this section.
+:::
 
 ## Add fields with `put` and `extend`
 
-TODO
+:::caution TODO
+Complete this section.
+:::
 
 ## Exchange fields with `replace`
 
-TODO
+:::caution TODO
+Complete this section.
+:::
 
 ## Give fields new names with `rename`
 
-TODO
+:::caution TODO
+Complete this section.
+:::
 
 ## Aggreate records with `summarize`
 
@@ -311,9 +323,18 @@ tenzir '
 <summary>Output</summary>
 
 ```json
-{"alert.severity": 1, "count": 134644}
-{"alert.severity": 2, "count": 26780}
-{"alert.severity": 3, "count": 179713}
+{
+  "alert.severity": 1,
+  "count": 134644
+}
+{
+  "alert.severity": 2,
+  "count": 26780
+}
+{
+  "alert.severity": 3,
+  "count": 179713
+}
 ```
 
 </details>
@@ -334,8 +355,14 @@ tenzir '
 <summary>Output</summary>
 
 ```json
-{"alert.signature": "ET SHELLCODE Possible Call with No Offset TCP Shellcode", "count": 2}
-{"alert.signature": "ET SHELLCODE Possible %41%41%41%41 Heap Spray Attempt", "count": 32}
+{
+  "alert.signature": "ET SHELLCODE Possible Call with No Offset TCP Shellcode",
+  "count": 2
+}
+{
+  "alert.signature": "ET SHELLCODE Possible %41%41%41%41 Heap Spray Attempt",
+  "count": 32
+}
 ```
 
 </details>
@@ -354,15 +381,31 @@ tenzir '
   '
 ```
 
+<details>
+<summary>Output</summary>
+
 ```json
-{"alert.severity": 3, "count": 179713}
-{"alert.severity": 1, "count": 134644}
-{"alert.severity": 2, "count": 26780}
+{
+  "alert.severity": 3,
+  "count": 179713
+}
+{
+  "alert.severity": 1,
+  "count": 134644
+}
+{
+  "alert.severity": 2,
+  "count": 26780
+}
 ```
+
+</details>
 
 ## Deduplicate with `unique`
 
 Use [`unique`](../../operators/transformations/unique.md) to remove adjacent
 duplicates. Typically, this comes up after a `sort`.
 
-TODO
+:::caution TODO
+Complete this section.
+:::
