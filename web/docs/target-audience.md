@@ -1,7 +1,3 @@
----
-sidebar_position: 1
----
-
 # Target Audience
 
 This section characterizes the primary audience of Tenzir in the security

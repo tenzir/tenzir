@@ -2,43 +2,14 @@
 
 <!-- Keep in sync with project README at https://github.com/tenzir/tenzir -->
 
-:::tip What is Tenzir?
+:::info What is Tenzir?
 Tenzir is a distributed pipeline platform for processing and storing security
 event data in a pipeline dataflow model.
 :::
 
-Use Tenzir if you want to:
-
-- Filter, shape, and enrich events before they hit your SIEM or data lake
-- Normalize, enrich, aggregate, and deduplicate structured event data
-- Store, compact, and search event data in an open storage format
-- Operationalize threat intelligence for live and retrospective detection
-- Build your own security data lake
-- Create a federated detection and response architectures
-
-Tenzir's **pipelines** consist of powerful operators that perform computations
-over [Arrow](https://arrow.apache.org) data frames. The [Tenzir Query Language
-(TQL)](language.md) makes it easy to express pipelines—akin to Splunk and Kusto.
-Tenzir's indexed **storage engine** persists dataflows in an open format
-([Parquet](https://parquet.apache.org/) &
-[Feather](https://arrow.apache.org/docs/python/feather.html)) so that you can
-access them with any query engine, or run pipelines over selective historical
-workloads. Tenzir **nodes** offer a managed runtime for pipelines and storage.
-Interconnected nodes form a **data fabric** and pipelines can span across them
-to implement sophisticated security architectures.
-
-![Tenzir Building Blocks](/img/architecture-nodes.excalidraw.svg)
-
-:::info Product launching soon 🚀
-We're gearing up for the launch of our free Community Edition. Head over to
-<https://tenzir.com> and sign up for the waitlist to be notified at launch day.
-:::
-
-## Quickstart
-
 Dive right in with an interactive tour in the browser by going to
 [tenzir.com](https://tenzir.com) and signing up for a free account, or continue
-below with the open source edition with command line examples.
+below with the open source edition and command line examples.
 
 ### Install Tenzir
 
@@ -294,7 +265,9 @@ Now that you got a first impression of Tenzir pipelines, dive deeper by
   common use cases
 - learning more about the [language](language.md), [operators](operators.md),
   [connectors](connectors.md), [formats](formats.md), and the [data
-  model](data-model.md).
+  model](data-model.md)
+- understanding [why](why-tenzir.md) we built Tenzir and how it compares to
+  other systems
 
 We're here to help! If you have any questions, swing by our friendly [community
 Discord](/discord) or open a [GitHub

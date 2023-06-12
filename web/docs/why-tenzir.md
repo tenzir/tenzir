@@ -1,8 +1,42 @@
----
-sidebar_position: 0
----
-
 # Why Tenzir
+
+:::info Product launching soon 🚀
+We're gearing up for the launch of our free Community Edition. Head over to
+<https://tenzir.com> and sign up for the waitlist to be notified at launch day.
+:::
+
+## What is Tenzir?
+
+Tenzir is a distributed pipeline platform for processing and storing security
+event data in a pipeline dataflow model, providing the following abstractions:
+
+- Tenzir's **pipelines** consist of powerful operators that perform computations
+  over [Arrow](https://arrow.apache.org) data frames. The [Tenzir Query Language
+  (TQL)](language.md) makes it easy to express pipelines—akin to Splunk and
+  Kusto.
+- Tenzir's indexed **storage engine** persists dataflows in an open format
+  ([Parquet](https://parquet.apache.org/) &
+  [Feather](https://arrow.apache.org/docs/python/feather.html)) so that you can
+  access them with any query engine, or run pipelines over selective historical
+  workloads.
+- Tenzir **nodes** offer a managed runtime for pipelines and storage.
+- Interconnected nodes form a **data fabric** and pipelines can span across them
+  to implement sophisticated security architectures.
+
+![Tenzir Building Blocks](/img/architecture-nodes.excalidraw.svg)
+
+## What can I do with Tenzir?
+
+Use Tenzir if you want to:
+
+- Filter, shape, and enrich events before they hit your SIEM or data lake
+- Normalize, enrich, aggregate, and deduplicate structured event data
+- Store, compact, and search event data in an open storage format
+- Operationalize threat intelligence for live and retrospective detection
+- Build your own security data lake
+- Create a federated detection and response architectures
+
+## Tenzir vs. X
 
 Tenzir fills a gap in the market—powerful enough for data-intensive security use
 cases, but easy enough for security users that are not data engineers.
@@ -41,7 +75,7 @@ using open standards, such as Apache Arrow for data in motion and Apache Parquet
 for data at rest, preventing vendor lock-in and promote full control of your
 event data and security content.
 
-## Tenzir vs. SIEMs
+### Tenzir vs. SIEMs
 
 Traditional SIEMs support basic search and a fixed set of analytical operations.
 For moderate data volumes, the established SIEM use cases perform well. But when
@@ -82,7 +116,7 @@ run it everywhere: containerized in the public cloud, in the data center in the
 private cloud, on bare-metal appliances deep in the network, or at the edge.
 :::
 
-## Tenzir vs. Data Warehouses
+### Tenzir vs. Data Warehouses
 
 Data warehouses and
 [OLAP](https://en.wikipedia.org/wiki/Online_analytical_processing) engines
@@ -119,7 +153,7 @@ heavy lifting to bridge this gap is cost and time prohibitive for any security
 operations center. This is why we built Tenzir.
 :::
 
-## Tenzir vs. Relational DBs
+### Tenzir vs. Relational DBs
 
 Unlike [OLAP](#tenzir-vs-data-warehouses) workloads,
 [OLTP](https://en.wikipedia.org/wiki/Online_transaction_processing) workloads
@@ -138,7 +172,7 @@ be a better fit. Tenzir's columnar data representation is ill-suited for
 row-level modifications.
 :::
 
-## Tenzir vs. Document DBs
+### Tenzir vs. Document DBs
 
 Document DBs, such as MongoDB, offer worry-free ingestion of unstructured
 data. They scale well horizontally and flexible querying.
@@ -175,7 +209,7 @@ and other information retrieval techniques are still relevant for security
 analytics, for which Tenzir has basic support.
 :::
 
-## Tenzir vs. Timeseries DBs
+### Tenzir vs. Timeseries DBs
 
 Timeseries databases share a lot in common with [OLAP
 engines](#tenzir-vs-data-warehouses), but put center data organization around
@@ -190,7 +224,7 @@ attributes. If your analysis involve running more complex detections, or
 include needle-in-haystack searches, Tenzir might be a better fit.
 :::
 
-## Tenzir vs. Key-Value DBs
+### Tenzir vs. Key-Value DBs
 
 A key-value store performs a key-based point or range lookup to retrieve one or
 more values. Security telemetry is high-dimensional data and there are many more
@@ -204,7 +238,7 @@ facilitate certain capabilities, e.g., when processing watch lists. (Tenzir
 offers a *matcher* plugin for this purpose.)
 :::
 
-## Tenzir vs. Graph DBs
+### Tenzir vs. Graph DBs
 
 Graph databases are purpose-built for answering complex queries over networks of
 nodes and their relationships, such as finding shortest paths, measuring node
