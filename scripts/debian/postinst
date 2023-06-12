@@ -3,8 +3,40 @@
 set -e
 
 if [ "$1" = "configure" ]; then
-  if [ -d /var/lib/vast ] && ! [ -d /var/lib/tenzir ]; then
-    mv /var/lib/vast /var/lib/tenzir
+  # Provide an opt-out mechanism for the automatic migration.
+  if ! [ -f /var/lib/vast/disable-migration ]; then
+    if getent passwd vast >/dev/null; then
+      echo "Detected previous VAST installation and enabling trace mode for the migration"
+      set -x
+    fi
+    # Migrate user and group.
+    if ! getent passwd tenzir >/dev/null; then
+      if getent passwd vast >/dev/null; then
+        usermod -l tenzir vast
+        usermod -d /var/lib/tenzir tenzir || true
+        groupmod -n tenzir vast
+      fi
+    fi
+    # Copy vast.yaml to tenzir.yaml.
+    if [ -f /opt/vast/etc/vast/vast.yaml ] && ! [ -f /opt/tenzir/etc/tenzir/tenzir.yaml ]; then
+      mkdir -p /opt/tenzir/etc/tenzir
+      cp /opt/vast/etc/vast/vast.yaml /opt/tenzir/etc/tenzir/tenzir.yaml
+    fi
+    explicit_db_dir=0
+    if grep -q '^\s\+db-directory:' /opt/vast/etc/vast/vast.yaml > /dev/null 2>&1; then
+      explicit_db_dir=1
+    fi
+    # Move db-directory if is not set explicitly.
+    if [ "$explicit_db_dir" = 0 ] && [ -d /var/lib/vast ] && ! [ -f /var/lib/vast/MOVED-TO-VAR-LIB-TENZIR ] && ! [ -d /var/lib/tenzir ]; then
+      mv /var/lib/vast /var/lib/tenzir
+      mkdir /var/lib/vast
+      touch /var/lib/vast/MOVED-TO-VAR-LIB-TENZIR
+      # Also adjust the inner /var/lib/tenzir/vast.db directory in case it exists.
+      if [ -d /var/lib/tenzir/vast.db ]; then
+        mv /var/lib/tenzir/vast.db /var/lib/tenzir/tenzir.db
+      fi
+    fi
+    set +x
   fi
 	mkdir -p /var/lib/tenzir
     if ! getent passwd tenzir >/dev/null; then
@@ -27,9 +59,8 @@ fi
 
 if [ "$1" = "configure" ] ; then
 	# Link the service into systemd's default service directory to make
-	# it known. This is normally done with `systemctl link`, but that
-	# command is not available in the dpkg context.
-	ln -sf /opt/tenzir/lib/systemd/system/tenzir.service /lib/systemd/system/
+	# it known.
+	/usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir.service
 fi
 
 # Automatically added by dh_installsystemd/13.3.4
@@ -52,7 +83,7 @@ fi
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	if [ -d /run/systemd/system ]; then
-		systemctl --system daemon-reload >/dev/null || true
+		/usr/bin/systemctl --system daemon-reload >/dev/null || true
 		if [ -n "$2" ]; then
 			_dh_action=restart
 		else
