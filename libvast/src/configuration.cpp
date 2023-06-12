@@ -288,10 +288,13 @@ config_dirs(const caf::actor_system_config& config) {
   if (bare_mode)
     return {};
   auto result = std::vector<std::filesystem::path>{};
-  if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
+  if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME")) {
+    result.push_back(std::filesystem::path{*xdg_config_home} / "tenzir");
     result.push_back(std::filesystem::path{*xdg_config_home} / "vast");
-  else if (auto home = detail::getenv("HOME"))
+  } else if (auto home = detail::getenv("HOME")) {
+    result.push_back(std::filesystem::path{*home} / ".config" / "tenzir");
     result.push_back(std::filesystem::path{*home} / ".config" / "vast");
+  }
   result.push_back(detail::install_configdir());
   return result;
 }
