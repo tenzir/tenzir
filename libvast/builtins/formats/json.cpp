@@ -212,23 +212,6 @@ private:
   operator_control_plane& ctrl_;
 };
 
-template <class FieldValidator>
-auto parse_doc(const FieldValidator& validator,
-               simdjson::ondemand::document_stream::iterator doc_it,
-               adaptive_table_slice_builder& builder,
-               operator_control_plane& ctrl) -> simdjson::error_code {
-  // val.error() will inherit all errors from *doc_it and and get_value so no
-  // need to check after each operation.
-  auto val = (*doc_it).get_value();
-  if (auto err = val.error()) {
-    return err;
-  }
-  auto row = builder.push_row();
-  doc_parser{validator, doc_it.source(), ctrl}.parse_object(val.value_unsafe(),
-                                                            row);
-  return {};
-}
-
 auto create_field_validator(bool has_selector, bool infer_types)
   -> std::function<bool(const detail::field_guard&)> {
   if (has_selector and not infer_types) {
@@ -356,7 +339,7 @@ auto handle_truncated_bytes(size_t truncated_bytes, json_buffer& buffer,
   if (truncated_bytes > buffer.view().size()) {
     ctrl.abort(caf::make_error(ec::parse_error,
                                fmt::format("detected malformed JSON and "
-                                           "aborts partsing: '{}'",
+                                           "aborts parsing: '{}'",
                                            buffer.view())));
     return;
   }
@@ -454,6 +437,16 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
       continue;
     }
     for (auto doc_it = stream.begin(); doc_it != stream.end(); ++doc_it) {
+      // doc.error() will inherit all errors from *doc_it and get_value.
+      // No need to check after each operation.
+      auto doc = (*doc_it).get_value();
+      if (auto err = doc.error()) {
+        ctrl.warn(caf::make_error(
+          ec::parse_error, fmt::format("failed to fully parse '{}' : {}. "
+                                       "Some events can be skipped.",
+                                       view, error_message(err))));
+        continue;
+      }
       if (schema_is_known) {
         switch (handle_known_schema(doc_it, *selector, state, schemas, ctrl)) {
           case parser_action::pass:
@@ -466,15 +459,9 @@ auto make_parser_impl(generator<chunk_ptr> json_chunk_generator,
               separator, *std::exchange(state.slice_to_yield, {}));
         }
       }
-      auto err
-        = parse_doc(field_validator, doc_it, *state.last_used_builder, ctrl);
-      if (err) {
-        ctrl.warn(caf::make_error(
-          ec::parse_error, fmt::format("failed to fully parse '{}' : {}. "
-                                       "Some events can be skipped.",
-                                       view, error_message(err))));
-        continue;
-      }
+      auto row = state.last_used_builder->push_row();
+      doc_parser{field_validator, doc_it.source(), ctrl}.parse_object(
+        doc.value_unsafe(), row);
       if (state.last_used_builder->rows() == max_table_slice_rows) {
         co_yield unflatten_if_needed(separator, state.last_used_builder->finish(
                                                   state.last_used_schema_name));
