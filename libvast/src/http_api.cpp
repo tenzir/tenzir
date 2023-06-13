@@ -11,10 +11,8 @@
 #include <vast/http_api.hpp>
 
 #include <fmt/format.h>
-#include <simdjson/dom/array.h>
-#include <simdjson/dom/element.h>
-#include <simdjson/dom/parser.h>
-#include <simdjson/error.h>
+
+#include <simdjson.h>
 
 namespace vast {
 
