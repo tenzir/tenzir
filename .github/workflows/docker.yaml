@@ -113,7 +113,7 @@ jobs:
         if: steps.cfg.outputs.needs-ecr
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::622024652768:role/ecr-vast-ce-github-access
+          role-to-assume: arn:aws:iam::622024652768:role/ecr-tenzir-ce-github-access
           aws-region: eu-west-1
       - name: Login to AWS ECR
         if: steps.cfg.outputs.needs-ecr

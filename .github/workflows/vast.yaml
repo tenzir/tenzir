@@ -235,12 +235,19 @@ jobs:
             fi
           fi
           run_docker_compose="$(any ${run_vast} ${run_vast_plugins} ${run_python})"
-          run_if_changed_default docker-compose $run_docker_compose "docker/" "Dockerfile" ".dockerignore"
+          run_if_changed_default docker-compose $run_docker_compose \
+            "docker/" "Dockerfile" ".dockerignore" \
+            ".github/workflows/docker.yaml" \
+            ".github/workflows/docker-config-base.json"
           run_if_changed_default vast-thehive-app $run_docker_compose
           run_docker_vast="$(any ${run_docker_compose} ${run_vast_io} ${run_python})"
           run_if_changed_default docker-vast $run_docker_vast
           run_if_changed_default regression-tests $run_docker_vast
-          run_if_changed vast-nix "${VAST_SOURCES[@]}" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/
+          run_if_changed vast-nix \
+            "${VAST_SOURCES[@]}" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/ \
+            ".github/workflows/nix.nu" \
+            ".github/workflows/nix.yaml" \
+            ".github/workflows/nix-config-base.json"
       - name: Configure Docker
         id: docker
         if: steps.configure.outputs.run-docker-vast == 'true'
