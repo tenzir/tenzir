@@ -7,9 +7,9 @@ Tenzir is a distributed pipeline platform for processing and storing security
 event data in a pipeline dataflow model.
 :::
 
-Dive right in with an interactive tour in the browser by going to
-[tenzir.com](https://tenzir.com) and signing up for a free account, or continue
-below with the open source edition and command line examples.
+Dive right in with an interactive tour at [tenzir.com](https://tenzir.com) and
+sign up for a free account, or continue below with the open source edition and
+command line examples.
 
 ### Install Tenzir
 
