@@ -11,6 +11,10 @@
 #include <vast/http_api.hpp>
 
 #include <fmt/format.h>
+#include <simdjson/dom/array.h>
+#include <simdjson/dom/element.h>
+#include <simdjson/dom/parser.h>
+#include <simdjson/error.h>
 
 namespace vast {
 
@@ -42,6 +46,29 @@ auto parse_endpoint_parameters(
           if (!parsers::boolean(string_value, result))
             return caf::make_error(ec::invalid_argument, "not a boolean value");
           return data{result};
+        },
+        [&string_value](const list_type&) -> caf::expected<data> {
+          ::simdjson::dom::parser p;
+          auto el = p.parse(string_value);
+          if (el.error() != ::simdjson::error_code::SUCCESS) {
+            return caf::make_error(ec::invalid_argument,
+                                   "not a valid JSON value");
+          }
+          auto obj = el.value().get_array();
+          if (obj.error() != ::simdjson::error_code::SUCCESS) {
+            return caf::make_error(ec::invalid_argument,
+                                   "not a valid JSON array");
+          }
+          auto l = list{};
+          for (const auto& x : obj.value()) {
+            if (x.type() != ::simdjson::dom::element_type::STRING) {
+              return caf::make_error(ec::invalid_argument,
+                                     "currently only string values in arrays "
+                                     "are accepted");
+            }
+            l.emplace_back(std::string{x.get_string().value()});
+          }
+          return l;
         },
         [&string_value]<basic_type Type>(const Type&) -> caf::expected<data> {
           using data_t = type_to_data_t<Type>;
