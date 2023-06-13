@@ -47,7 +47,12 @@ auto parse_endpoint_parameters(
             return caf::make_error(ec::invalid_argument, "not a boolean value");
           return data{result};
         },
-        [&string_value](const list_type&) -> caf::expected<data> {
+        [&string_value](const list_type& lt) -> caf::expected<data> {
+          if (not caf::holds_alternative<string_type>(lt.value_type())) {
+            return caf::make_error(ec::invalid_argument,
+                                   "currently only strings in lists are "
+                                   "accepted");
+          }
           ::simdjson::dom::parser p;
           auto el = p.parse(string_value);
           if (el.error() != ::simdjson::error_code::SUCCESS) {
@@ -78,7 +83,6 @@ auto parse_endpoint_parameters(
           return *result;
         },
         []<complex_type Type>(const Type&) -> caf::expected<data> {
-          // TODO: Also allow lists.
           return caf::make_error(ec::invalid_argument,
                                  "REST API only accepts basic type "
                                  "parameters");
