@@ -1,3 +1,7 @@
+---
+sidebar_position: 9
+---
+
 # Execute Sigma Rules
 
 Tenzir supports executing [Sigma rules](https://github.com/SigmaHQ/sigma) using

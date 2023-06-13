@@ -1,55 +1,26 @@
-# Transform
+---
+sidebar_position: 5
+---
 
-Tenzir has powerful features for transforming [data in
-motion](#modify-data-in-motion) and [data at rest](#modify-data-at-rest). Both
-aspects rely on [pipelines](../../language/pipelines.md) as building block.
+# Transform data at rest
 
-## Define a pipeline
+Tenzir provdides several features to transform historical data at a node.
 
-To reference and use a pipeline as building block, you must add give it a unique
-name under the key `tenzir.pipelines` in the configuration file:
+## Delete old data when reaching storage quota
 
-```yaml
-tenzir:
-  pipelines:
-     example: |
-       hash --salt="B3IwnumKPEJDAA4u" src_ip
-       | summarize 
-           pkts_toserver=sum(flow.pkts_toserver),
-           pkts_toclient=sum(flow.pkts_toclient),
-           bytes_toserver=sum(flow.bytes_toserver),
-           bytes_toclient=sum(flow.bytes_toclient),
-           start=min(flow.start),
-           end=max(flow.end)
-         by
-           src_ip,
-           dest_ip
-```
-
-This `example` pipeline consists of two operators, `hash` and `summarize` that
-execute in sequential order.
-
-Have a look at [all available operators](../../operators.md) to understand what
-other transformations you can apply.
-
-## Modify data at rest
-
-### Delete old data when reaching storage quota
-
-Tenzir's disk-monitoring feature enables periodic deletion of events based on
-utilized disk storage. To limit the disk space used by the Tenzir database,
-configure a disk quota:
+The disk-monitoring feature enables periodic deletion of events based on
+utilized disk storage. To limit the disk space used by a node, configure a disk
+quota:
 
 ```bash
-tenzir-ctl start --disk-quota-high=1TiB
+tenzir-node --disk-quota-high=1TiB
 ```
 
-Whenever Tenzir detects that its database directory has grown to exceed the
-configured quota, it will erase the oldest data in the database. It is possible
-to specify an additional `--disk-quota-low` option to define a corridor for
-the disk space usage. This can be used to avoid having Tenzir running
-permanently at the upper limit and to instad batch the deletion operations
-together.
+Whenever a node detects that its database has exceeded the configured quota, it
+will erase the oldest data. You can specify a corridor for the disk space usage
+by additionally providing the option `--disk-quota-low`. This can be used to
+avoid running permanently at the upper limit and to instad batch the deletion
+operations together.
 
 The full set of available options looks like this:
 
@@ -71,19 +42,19 @@ database directory. It counts towards the size calculations, but cannot be
 automatically deleted during a deletion cycle.
 :::
 
-### Transform old data when reaching storage quota
+## Transform old data when reaching storage quota
 
-Instead of just deleting data periodically, Tenzir can also trigger **spatial
+Instead of deleting data periodically, a node can also trigger **spatial
 compaction** when exceeding a given disk budget. A spatial compaction cycle
 transforms data until disk usage falls below the budget, e.g., by removing
 columns or rows from certain events, or by deleting them entirely.
 
-When the disk budget exceeds the configured threshold, Tenzir decides what data
-to compact. The compaction *mode* defines how this happens. Currently, there
-exists only one mode: [weighted age](#weighted-age).
+When the disk budget exceeds the configured threshold, the node decides what
+data to compact. The compaction *mode* defines how this happens. Currently,
+there exists only one mode: [weighted age](#weighted-age).
 
 This compaction mode selects all events according to a *weighted age*. To
-compute the weighted age, Tenzir divides the actual age of an event with the
+compute the weighted age, the node divides the actual age of an event with the
 weight assigned to this event type. For example, applying a weight of 100 to an
 event that is 100 days old would yield a weighted age of 1 day. This causes it
 to be transformed after events that are 50 days old. Conversely, a weights less
@@ -113,7 +84,7 @@ plugins:
 ```
 
 The `pipeline` key for each type is optional. If present, the corresponding
-pipeline processes all matching events. If absent, Tenzir deletes matching
+pipeline processes all matching events. If absent, the nodes deletes matching
 events.
 
 Two additional keys are useful to fine-tune the behavior of the compaction
@@ -124,39 +95,39 @@ plugin:
 2. `compaction.space.step-size`: adjust how many compaction candidates should be
    processed before re-checking the size of the database directory
 
-### Transform data after exceeding a retention span
+## Transform data after exceeding a retention span
 
-Tenzir triggers temporal compaction according to a set of rules that define how
-to transform events after they reach a specfic age. This declarative
+A node triggers **temporal compaction** according to a set of rules that define
+how to transform events after they reach a specfic age. This declarative
 specification makes it easy to express fine-grained data retention policies,
 which is often needed for regulatory requirements and compliance.
 
-For each compaction cycle, Tenzir processes all rules and identifies what subset
-of the data has become subject to transformation. To this end, each rule
+For each compaction cycle, the node processes all rules and identifies what
+subset of the data has become subject to transformation. To this end, each rule
 defines a *minimum* age, i.e., a lower bound that must be exceeded before the
 corresponding events undergo their configured pipeline.
 
 To configure temporal compaction, provide a list of compaction rules under the
-key `plugins.compaction.time` in the Tenzir configuration. A compaction rule
-defines the minimum age using key `after`, the pipeline to apply with the
-key `pipeline`, the scope in terms of schema using the key `types`, and a name
-to uniquely refer to the rule. Omitting the `types` key causes temporal
-compaction rules to be applied to all schemas.
+key `plugins.compaction.time` in the configuration. A compaction rule defines
+the minimum age using key `after`, the pipeline to apply with the key
+`pipeline`, the scope in terms of schema using the key `types`, and a name to
+uniquely refer to the rule. Omitting the `types` key causes temporal compaction
+rules to be applied to all schemas.
 
-By default, a compaction rule consumes its input, i.e. it erases the original
+By default, a compaction rule consumes its input, i.e., it erases the original
 events from the database and replaces them with the transformed events. The
-`preserve-input` option can be specified on a temporal compaction rule to override
-this behavior and to keep the input partitions available.
+`preserve-input` option can be specified on a temporal compaction rule to
+override this behavior and to keep the input partitions available.
 
 :::note
-Tenzir applies each rule only once per partition and stores the applied rule
+A node applies each rule only once per partition and stores the applied rule
 name within the partition meta data. If you rename a rule in the configuration
 and reload a new compaction configuration, already compacted partitions will
 undergo another round of compaction.
 :::
 
-The pipelines referenced in the compaction configuration must be defined in the
-Tenzir configuration.
+The pipelines referenced in the compaction configuration must be defined in your
+configuration.
 
 ```yaml
 tenzir:
@@ -198,7 +169,7 @@ plugins:
             - suricata.flow
 ```
 
-### Trigger a compaction manually
+## Trigger a compaction cycle manually
 
 You can also interact with the compaction plugin on the command line, through
 the `compaction` subcommand. Use the `list` subcommand to show all configured
@@ -208,19 +179,14 @@ compaction rules:
 tenzir-ctl compaction list
 ```
 
-You can then trigger a compaction manually with the `run` sub-command:
+You can then trigger a compaction manually via `run`:
 
 ```bash
 tenzir-ctl compaction run <rule>
 ```
 
-:::note
-The `compaction` plugin needs to be loaded both by the client and the server
-process to use the `tenzir-ctl compaction` subcommand.
-:::
-
-For an overview of the current status of the compaction plugin, you can use the
-`tenzir-ctl status` subcommand:
+Use the `status` subcommand for an overview of the current status of the
+compaction plugin:
 
 ```bash
 tenzir-ctl status compaction

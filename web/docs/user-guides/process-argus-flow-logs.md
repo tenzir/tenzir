@@ -1,8 +1,8 @@
 ---
-description: Open Source flow monitor
+sidebar_position: 10
 ---
 
-# Process Argus Flow Logs
+# Process Argus flow logs
 
 [Argus](https://qosient.com/argus/index.shtml) is an open-source flow monitor
 that computes a variety of connection statistics.
