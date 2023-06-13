@@ -6,11 +6,11 @@ sidebar_position: 6
 
 :::note Minimal overhead
 Collecting metrics is optional and incurs minimal overhead. We recommend
-enabling the accountant unless disk space is scarce or every last bit of
-performance needs to be made available to other components of Tenzir.
+enabling metrics unless disk space is scarce or every last bit of performance
+needs to be made available to other parts of the system.
 :::
 
-Tenzir keeps detailed track of system metrics that reflect runtime state, such
+Tenzir keeps detailed track of system metrics that reflect pipeline state, such
 as ingestion performance, query latencies, and resource usage.
 
 Components send their metrics to a central *accountant* that relays the
@@ -41,7 +41,7 @@ The `version` field is the version of Tenzir.
 
 ## Enable metrics collection
 
-Enable the accountant to collect metrics collection in your configuration:
+Set the key `tenzir.enable-metrics` to `true` in order to collect metrics:
 
 ```yaml
 tenzir:
@@ -85,7 +85,8 @@ sinks to batch I/O operations. To enable real-time metrics reporting, set the
 options `tenzir.metrics.file-sink.real-time` or
 `tenzir.metrics.uds-sink.real-time` respectively in your configuration file.
 
-:::tip Self Sink ❤️ Pipelines
+## Query metrics via pipelines
+
 The self-sink routes metrics as events into Tenzir's internal storage engine,
 allowing you to work with metrics using Tenzir's pipelines. The schema for the
 self-sink is slightly different, with the key being embedded in the schema name:
@@ -106,9 +107,12 @@ grouped into 10 second buckets and looking at the minimum and the maximum
 latency, respectively, for all buckets.
 
 ```bash
-tenzir-ctl export json '#schema == "tenzir.metrics.passive-store.init.runtime"
+tenzir '
+  export
+  | where #schema == "tenzir.metrics.passive-store.init.runtime"
   | select ts, value
-  | summarize min(value), max(value) by ts resolution 10s'
+  | summarize min(value), max(value) by ts resolution 10s
+  '
 ```
 
 ```json
@@ -116,4 +120,3 @@ tenzir-ctl export json '#schema == "tenzir.metrics.passive-store.init.runtime"
 {"ts": "2023-02-28T17:20:00.000000", "min(value)": 0.549292, "max(value)": 0.991235}
 // ...
 ```
-:::
