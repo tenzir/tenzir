@@ -113,6 +113,10 @@ const sidebars = {
     },
     {
       type: 'doc',
+      id: 'metrics',
+    },
+    {
+      type: 'doc',
       id: 'rest-api',
     },
     {
