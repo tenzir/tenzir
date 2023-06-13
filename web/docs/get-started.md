@@ -155,7 +155,8 @@ tenzir '
 
 ### Spawn a node
 
-Use the `tenzir-node` executable to a node that manages pipelines and storage.
+Use the `tenzir-node` executable to start a node that manages pipelines and
+storage.
 
 <Tabs>
   <TabItem value="binary" label="Binary" default>
@@ -187,14 +188,21 @@ End a pipeline with the [`import`](operators/sinks/import.md) operator to ingest
 data into a node:
 
 ```bash
-tar xOzf zeek.tar.gz | tenzir 'read zeek | import'
+tar xOzf zeek.tar.gz | tenzir '
+  read zeek
+  | import
+  '
 ```
 
 Filter the input with [`where`](operators/transformations/where.md) to select a
 subset of events:
 
 ```bash
-tar xOzf suricata.tar.gz | tenzir 'read zeek | where #schema == "suricata.alert" | import'
+tar xOzf suricata.tar.gz | tenzir '
+  read suricata
+  | where #schema == "suricata.alert"
+  | import
+  '
 ```
 
 ### Export data from a node
