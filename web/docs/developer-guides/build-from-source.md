@@ -1,8 +1,8 @@
 ---
-sidebar_position: 1
+sidebar_position: 0
 ---
 
-# Build
+# Build from source
 
 Tenzir uses [CMake](https://cmake.org) as build system. Aside from a modern C++20
 compiler, you need to ensure availability of the dependencies in the table
@@ -56,8 +56,7 @@ manual testing. Older versions may still work in select cases.
 
 Building Tenzir involves the following steps:
 
-1. [Download the latest release](download.md) or clone the repository
-   recursively:
+1. Clone the repository recursively:
   ```bash
   git clone https://github.com/tenzir/tenzir
   cd tenzir

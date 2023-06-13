@@ -19,56 +19,75 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs>
-  <TabItem value="universal" label="All Platforms" default>
+<TabItem value="universal" label="All Platforms" default>
 
-  Let our installer take care of getting started:
+Let our installer take care of getting started:
 
-  ```bash
-  curl https://get.tenzir.com/ | sh
-  ```
+```bash
+curl https://get.tenzir.com/ | sh
+```
 
-  </TabItem>
-  <TabItem value="linux" label="Linux">
-  
-  Download our static binary as Debian package or tarball for other Linux
-  distributions:
+</TabItem>
+<TabItem value="debian" label="Debian">
 
-  <div class="padding--sm">
-    <a class="button button--md button--info margin--md" href="https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.deb">deb</a>
-    <a class="button button--md button--primary margin--md" href="https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.tar.gz">tar.gz</a>
-  </div>
+Download the latest [Debian
+package](https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.deb)
+and install it via `dpdk`:
 
-  Install the Debian package via `dpkg`:
+```bash
+dpdk -i tenzir-linux-static.deb
+```
 
-  ```bash
-  dpdk -i tenzir-linux-static.deb
-  ```
+</TabItem>
+<TabItem value="nix" label="Nix">
 
-  Alternatively, unpack the tarball into `/opt/tenzir`:
+We provide a `flake.nix` so that you can use
+`tenzir = "github:tenzir/tenzir/stable"` as an input in your own flake, or just
+try it out with:
 
-  ```bash
-  tar xzf tenzir-linux-static.tar.gz -C /
-  ```
-  </TabItem>
-  <TabItem value="macos" label="macOS">
+```bash
+nix run github:tenzir/tenzir/stable
+```
 
-  Please use Docker [with
-  Rosetta](https://levelup.gitconnected.com/docker-on-apple-silicon-mac-how-to-run-x86-containers-with-rosetta-2-4a679913a0d5)
-  until we offer a native package.
+</TabItem>
+<TabItem value="linux" label="Linux">
 
-  </TabItem>
-  <TabItem value="docker" label="Docker">
+Download a tarball with our [static
+binary](https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.tar.gz)
+for all Linux distributions and unpack it into `/opt/tenzir`:
 
-  Pull the open source image:
+```bash
+tar xzf tenzir-linux-static.tar.gz -C /
+```
 
-  ```bash
-  docker pull tenzir/tenzir
-  ```
+We also offer prebuilt statically linked binaries for every Git commit to the
+`main` branch.
 
-  When using Docker, replace `tenzir` with `docker run -it tenzir/tenzir` in the
-  examples below.
+```bash
+version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
+curl -fsSL "https://storage.googleapis.com/tenzir-public-data/tenzir-static-builds/tenzir-${version}-linux-static.tar.gz"
+```
 
-  </TabItem>
+</TabItem>
+<TabItem value="macos" label="macOS">
+
+Please use Docker [with
+Rosetta](https://levelup.gitconnected.com/docker-on-apple-silicon-mac-how-to-run-x86-containers-with-rosetta-2-4a679913a0d5)
+until we offer a native package.
+
+</TabItem>
+<TabItem value="docker" label="Docker">
+
+Pull the open source image:
+
+```bash
+docker pull tenzir/tenzir
+```
+
+When using Docker, replace `tenzir` with `docker run -it tenzir/tenzir` in the
+examples below.
+
+</TabItem>
 </Tabs>
 
 ### Download sample data
