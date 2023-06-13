@@ -2,9 +2,19 @@
 sidebar_position: 4
 ---
 
-# Configure
+# Command Line
 
-The following options exist to adjust the configuration on startup:
+The command line tools are at the core of a deployment. Every installation ships
+with the following executables:
+
+1. `tenzir`: runs a pipeline
+2. `tenzir-node`: spawns a node
+
+There is also the `tenzir-ctl` "master" executable to invoke various commands.
+This is a temporary solution that we will sunset in the future after having
+migrated its functionality into `tenzir` and `tenzir-node`.
+
+The executables support several configuration options:
 
 1. Command-line arguments
 2. Environment variables
@@ -13,13 +23,13 @@ The following options exist to adjust the configuration on startup:
 
 These options are sorted by precedence, i.e., command-line arguments override
 environment variables, which override configuration file settings. Compile-time
-defaults can only be changed by [rebuilding Tenzir from source](build.md).
+defaults can only be changed by rebuilding Tenzir from source.
 
 Let's discuss the first three options in more detail.
 
-## Command Line
+## Command Line Arguments
 
-Tenzir has a hierarchical command structure of this form:
+The command line arguments of the executables have the following synopis:
 
 ```
 tenzir [opts] <pipeline>
@@ -31,15 +41,13 @@ Both long `--long=X` and short `-s X` exist. Boolean options do not require
 explicit specification of a value, and it suffices to write `--long` and `-s`
 to set an option to true.
 
-:::info Hierarchical Options
-Each command has its own dedicated set of options. Options are not global and
-only valid for their respective command. Consider this example:
+Each `tenzir-ctl` command has its own dedicated set of options. Options are not
+global and only valid for their respective command. Consider this example:
 
 ```bash
 tenzir-ctl --option foo # option applies to command 'tenzir'
 tenzir-ctl foo --option # option applies to command 'foo'
 ```
-:::
 
 ### Get help
 
@@ -160,7 +168,7 @@ at all system- and user-specified configuration paths.
 
 ## Plugins
 
-Tenzir's [plugin architecture](../architecture/plugins.md) allows for
+Tenzir's [plugin architecture](architecture/plugins.md) allows for
 flexible replacement and enhancement of functionality at various pre-defined
 customization points. There exist **dynamic plugins** that ship as shared
 libraries and **static plugins** that are compiled into libtenzir.

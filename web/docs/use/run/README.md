@@ -38,7 +38,7 @@ By default, a Tenzir server listens on localhost and TCP port 5158.
 
 Usually you would invoke `tenzir-ctl start` only for testing purposes in a
 terminal. In production you would typically use a service manager, e.g.,
-[systemd on Linux](../../setup/install/linux.md#systemd).
+[systemd on Linux](../../setup-guides/deploy/systemd.md).
 
 ## Stop a server
 
@@ -56,7 +56,7 @@ Every command except for `start` is a client command that interacts with a
 server. Run `tenzir-ctl help` for a list of available commands.
 
 To select a specific Tenzir server to connect to,
-[configure](../../setup/configure.md) the endpoint, e.g., by providing
+[configure](../../command-line.md) the endpoint, e.g., by providing
 `--endpoint=host:port` on the command line, exporting the environment variable
 `TENZIR_ENDPOINT=host:port`, or setting the configuration option
 `tenzir.endpoint: host:port` in your `tenzir.yaml`.

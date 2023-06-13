@@ -37,8 +37,7 @@ This example playbook shows how to run a Tenzir service on the machine
 
 ### `config_file` (required)
 
-A path to a [`tenzir.yaml`](../configure.md#configuration-files) relative to
-the playbook.
+A path to a [`tenzir.yaml`](../../configuration.md) relative to the playbook.
 
 ### `read_write_paths`
 

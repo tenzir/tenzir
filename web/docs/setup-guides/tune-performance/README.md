@@ -2,7 +2,7 @@
 sidebar_position: 5
 ---
 
-# Tune system settings
+# Tune performance
 
 This section describes tuning knobs that have a notable effect on system
 performance.

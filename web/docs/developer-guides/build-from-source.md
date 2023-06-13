@@ -52,61 +52,93 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
 
+:::tip macOS
+On macOS, we recommend using the latest Clang from the Homebrew `llvm` package
+with the following settings:
+
+```bash
+export PATH="$(brew --prefix llvm)/bin:${PATH}"
+export CC="$(brew --prefix llvm)/bin/clang"
+export CXX="$(brew --prefix llvm)/bin/clang++"
+export LDFLAGS="-Wl,-rpath,$(brew --prefix llvm) ${LDFLAGS}"
+export CPPFLAGS="-isystem $(brew --prefix llvm)/include ${CPPFLAGS}"
+export CXXFLAGS="-isystem $(brew --prefix llvm)/include/c++/v1 ${CXXFLAGS}"
+```
+
+Installing via CMake on macOS configures a [launchd](https://www.launchd.info)
+agent to `~/Library/LaunchAgents/com.tenzir.tenzir.plist`. Use `launchctl` to
+spawn a node at login:
+
+```bash
+# To unload the agent, replace 'load' with 'unload'.
+launchctl load -w ~/Library/LaunchAgents/com.tenzir.tenzir.plist
+```
+:::
+
 ## Compile
 
 Building Tenzir involves the following steps:
 
-1. Clone the repository recursively:
-  ```bash
-  git clone https://github.com/tenzir/tenzir
-  cd tenzir
-  git submodule update --init --recursive -- libtenzir plugins
-  ```
+Clone the repository recursively:
 
-2. Configure the build with CMake. For faster builds, we recommend passing
-  `-G Ninja` to `cmake`.
-  ```bash
-  cmake -B build
-  # CMake defaults to a "Debug" build. When performance matters, use "Release"
-  cmake -B build -DCMAKE_BUILD_TYPE=Release  
-  ```
-  
-  Optionally, you can use the CMake TUI to visually configure the build:
-  ```bash
-  ccmake build
-  ```
+```bash
+git clone https://github.com/tenzir/tenzir
+cd tenzir
+git submodule update --init --recursive -- libtenzir plugins
+```
 
-  The source tree also contains a set of CMake presets that combine various
-  configuration options into curated build flavors. You can list them with:
-  ```bash
-  cmake --list-presets
-  ```
+Configure the build with CMake. For faster builds, we recommend passing
+`-G Ninja` to `cmake`.
 
-3. Build the executable:
-  ```bash
-  cmake --build build --target all
-  ```
+```bash
+cmake -B build
+# CMake defaults to a "Debug" build. When performance matters, use "Release"
+cmake -B build -DCMAKE_BUILD_TYPE=Release  
+```
+
+Optionally, you can use the CMake TUI to visually configure the build:
+
+```bash
+ccmake build
+```
+
+The source tree also contains a set of CMake presets that combine various
+configuration options into curated build flavors. You can list them with:
+
+```bash
+cmake --list-presets
+```
+
+Build the executable:
+
+```bash
+cmake --build build --target all
+```
 
 ## Test
 
 After you have built the executable, run the unit and integration tests to
 verify that your build works as expected:
 
-4. Run component-level unit tests:
-  ```bash
-  ctest --test-dir build
-  ```
+Run component-level unit tests:
 
-5. Run end-to-end integration tests:
-  ```bash
-  cmake --build build --target integration
-  ```
+```bash
+ctest --test-dir build
+```
+
+Run end-to-end integration tests:
+
+```bash
+cmake --build build --target integration
+```
+
 ## Install
 
-6. Install Tenzir system-wide.
-  ```bash
-  cmake --install build
-  ```
+Install Tenzir system-wide:
+
+```bash
+cmake --install build
+```
 
 If you prefer to install into a custom install prefix, install with `--prefix
 /path/to/install/prefix`.
