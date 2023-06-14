@@ -62,8 +62,7 @@ public:
   explicit explore_operator(configuration config) : config_{std::move(config)} {
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input) const
     -> generator<std::monostate> {
     using namespace ftxui;
     auto screen = make_screen(config_);
