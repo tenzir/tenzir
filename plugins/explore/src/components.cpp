@@ -215,41 +215,6 @@ auto RecordColumn(ui_state* state, std::vector<Component> columns)
   return container;
 }
 
-///// @relates traverse
-// enum class traversal {
-//   pre_order,
-//   in_order,
-//   post_order,
-// };
-//
-///// Genereates an offset trail in a specific traversal order.
-// template <traversal Traversal>
-// auto traverse(const class type& type)
-//   -> generator<std::pair<offset, class type>> {
-//   static_assert(Traversal != traversal::in_order,
-//                 "in-order traversal not well-defined on non-binary trees");
-//   // Helper until C++23 std::vector::append_range is here.
-//   auto result = offset{};
-//   if (const auto& rec = caf::get_if<record_type>(&type)) {
-//     result.push_back(0);
-//     if (Traversal == traversal::pre_order)
-//       co_yield {result, type};
-//     for (const auto& field : rec->fields()) {
-//       for (auto [i, nested] : traverse<Traversal>(field.type)) {
-//         if (!i.empty()) {
-//           auto copy = result;
-//           copy.insert(copy.end(), i.begin(), i.end());
-//           co_yield {copy, std::move(nested)};
-//         }
-//       }
-//       ++result.back();
-//     }
-//     if (Traversal == traversal::post_order)
-//       co_yield {result, type};
-//     result.pop_back();
-//   }
-// }
-
 auto make_column(ui_state* state, const type& schema, offset index = {})
   -> Component {
   auto parent = schema;
