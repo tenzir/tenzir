@@ -299,28 +299,23 @@ public:
 // request path.
 class rest_endpoint_plugin : public virtual plugin {
 public:
-  /// A path prefix to prepend to all routes declared by this plugin.
-  /// Defaults to the plugin name.
-  [[nodiscard]] virtual std::string prefix() const {
-    return fmt::format("/{}", name());
-  }
-
   /// OpenAPI spec for the plugin endpoints.
   /// @returns A `vast::data` object that is a record containing entries for
   /// the `paths` element of an OpenAPI spec.
-  [[nodiscard]] virtual data
-  openapi_specification(api_version version = api_version::latest) const
+  [[nodiscard]] virtual auto
+  openapi_specification(api_version version = api_version::latest) const -> data
     = 0;
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] virtual const std::vector<rest_endpoint>& rest_endpoints() const
-    = 0;
+  [[nodiscard]] virtual auto rest_endpoints() const
+    -> const std::vector<rest_endpoint>& = 0;
 
   /// Actor that will handle this endpoint.
   //  TODO: This should get some integration with component_plugin so that
   //  the component can be used to answer requests directly.
-  [[nodiscard]] virtual rest_handler_actor
+  [[nodiscard]] virtual auto
   handler(caf::actor_system& system, node_actor node) const
+    -> rest_handler_actor
     = 0;
 };
 

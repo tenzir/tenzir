@@ -874,10 +874,6 @@ class plugin final : public virtual component_plugin,
     return node->spawn(serve_manager);
   }
 
-  auto prefix() const -> std::string override {
-    return "";
-  }
-
   auto openapi_specification(api_version version) const -> data override {
     if (version != api_version::v0)
       return vast::record{};

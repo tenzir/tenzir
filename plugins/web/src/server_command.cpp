@@ -73,10 +73,10 @@ auto parse_query_params(std::string_view text)
   }
 }
 
-std::string
-format_api_route(const rest_endpoint& endpoint, std::string_view prefix) {
-  return fmt::format("/api/v{}{}{}", static_cast<uint8_t>(endpoint.version),
-                     prefix, endpoint.path);
+auto format_api_route(const rest_endpoint& endpoint) -> std::string {
+  VAST_ASSERT_CHEAP(endpoint.path[0] == '/');
+  return fmt::format("/api/v{}{}", static_cast<uint8_t>(endpoint.version),
+                     endpoint.path);
 }
 
 struct request_dispatcher_state {
@@ -222,11 +222,11 @@ request_dispatcher_actor::behavior_type request_dispatcher(
 }
 
 void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
-                 std::string_view prefix, request_dispatcher_actor dispatcher,
+                 request_dispatcher_actor dispatcher,
                  const server_config& config, vast::rest_endpoint endpoint,
                  rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
-  auto path = format_api_route(endpoint, prefix);
+  auto path = format_api_route(endpoint);
   VAST_VERBOSE("setting up route {}", path);
   // The handler just injects the request into the actor system, the
   // actual processing starts in the request_dispatcher.
@@ -339,11 +339,6 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   std::vector<rest_handler_actor> handlers;
   std::vector<std::string> api_routes;
   for (auto const* rest_plugin : plugins::get<rest_endpoint_plugin>()) {
-    auto prefix = rest_plugin->prefix();
-    if (!prefix.empty() && prefix[0] != '/') {
-      VAST_WARN("ignoring endpoints with invalid prefix {}", prefix);
-      continue;
-    }
     auto handler = rest_plugin->handler(system, node);
     handlers.push_back(handler);
     for (auto const& endpoint : rest_plugin->rest_endpoints()) {
@@ -351,9 +346,9 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         VAST_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;
       }
-      api_routes.push_back(format_api_route(endpoint, rest_plugin->prefix()));
-      setup_route(self, router, rest_plugin->prefix(), dispatcher,
-                  *server_config, std::move(endpoint), handler);
+      api_routes.push_back(format_api_route(endpoint));
+      setup_route(self, router, dispatcher, *server_config, std::move(endpoint),
+                  handler);
     }
     // TODO: Monitor the handlers and re-spawn them if they go down.
   }

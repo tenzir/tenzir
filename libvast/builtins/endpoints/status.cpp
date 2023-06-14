@@ -131,10 +131,6 @@ class plugin final : public virtual rest_endpoint_plugin {
     return "api-status";
   };
 
-  [[nodiscard]] std::string prefix() const override {
-    return "";
-  }
-
   [[nodiscard]] data openapi_specification(api_version version) const override {
     if (version != api_version::v0)
       return vast::record{};
