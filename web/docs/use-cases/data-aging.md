@@ -24,8 +24,9 @@ detection.
 How can we implement a successful detection and response strategy in
 this spectrum? By making the spectrum transparent and fully controllable. In
 Tenzir, we developed a declarative compaction approach to perform [fine-grained
-transformation](use/transform/README.md) of historical data to control retention
-span and manage finite storage. Compaction operates in two dimensions:
+transformation](user-guides/transform-data-at-rest.md) of historical data to
+control retention span and manage finite storage. Compaction operates in two
+dimensions:
 
 1. **Temporal**: temporal compaction defines what to do with data as a function
    of age. For example, a policy may dictate a maximum retention of 1 week for

@@ -43,7 +43,3 @@ common. Factoring this shared record into its own type, and then reusing across
 all other occurrences makes it easy to perform cross-event connection analysis
 later on.
 :::
-
-You can write schemas manually by providing a [module](modules.md). To find out
-existing schemas, consult the documentation on
-[introspection](../use/introspect/README.md).

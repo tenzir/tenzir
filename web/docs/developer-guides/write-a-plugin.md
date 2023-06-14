@@ -176,7 +176,7 @@ To test that Tenzir loads the plugin properly, you can use `tenzir
 --plugins=example version` and look into the `plugins`. A key-value pair with
 your plugin name and version should exist in the output.
 
-Refer to the [plugin loading](../setup/configure.md#load-plugins) section of
+Refer to the [plugin loading](../command-line.md#load-plugins) section of
 the documentation to find out how to explicitly de-/activate plugins.
 
 ### Building against an installed Tenzir

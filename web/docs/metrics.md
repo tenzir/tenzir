@@ -2,7 +2,7 @@
 
 Tenzir collects various metrics during execution. This reference describes what
 metrics are available and what they mean. We describe how to [collect
-metrics](user-guides/collect-metrics.md) in the corresponding user guide.
+metrics](setup-guides/collect-metrics.md) in the corresponding user guide.
 
 For the reference table below, these symbols indicate presense of additional
 metadata:
