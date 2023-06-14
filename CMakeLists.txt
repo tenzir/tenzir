@@ -17,7 +17,7 @@ project(
   LANGUAGES C CXX)
 
 set(TENZIR_EDITION_NAME
-    "tenzir"
+    "Tenzir"
     CACHE STRING "Set the edition name")
 
 # -- sanity checks -------------------------------------------------------------
