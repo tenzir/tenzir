@@ -252,3 +252,17 @@ execution engine. Tenzir can still prove valuable as foundation for graph
 analytics by storing the raw telemetry and feeding it (via Arrow) into graph
 engines that support ad-hoc data frame analysis.
 :::
+
+### Tenzir vs. Vector DBs
+
+Vector databases operate on embeddings, which are high-dimensional floating
+point vectors. For generative AI applications, decision support systems, or
+search on unstructured data, embeddings are the building block, and vector
+databases offer native operations on them, such as approximate nearest neighbor
+search.
+
+:::note Recommendation
+Tenzir can efficiently represent embeddings via Apache Arrow, but lacks specific
+processing capabilities. Use Tenzir to transport your vectors to more
+purpose-built engines, that also build on Arrow data frames, such as Lance.
+:::
