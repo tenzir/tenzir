@@ -1114,3 +1114,49 @@ TEST(successful cast to list value type) {
   const auto expected_schema = vast::type{schema.make_fingerprint(), schema};
   CHECK_EQUAL(expected_schema, out.schema());
 }
+
+TEST(cast the whole column to a common type when input type and already existing
+       field type cannot be cast) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("a");
+    REQUIRE(not f.add(true));
+  }
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("a");
+    REQUIRE(not f.add(std::chrono::nanoseconds{20}));
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))), "true");
+  CHECK_EQUAL((materialize(out.at(1u, 0u))), "20.0ns");
+  const auto schema = vast::type{record_type{{"a", string_type{}}}};
+  const auto expected_schema = vast::type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(cast the whole column to a double type when input double is not 0.0
+     or 1.0) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("a");
+    REQUIRE(not f.add(true));
+  }
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("a");
+    REQUIRE(not f.add(20.0));
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))), 1.0);
+  CHECK_EQUAL((materialize(out.at(1u, 0u))), 20.0);
+  const auto schema = vast::type{record_type{{"a", double_type{}}}};
+  const auto expected_schema = vast::type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+}
