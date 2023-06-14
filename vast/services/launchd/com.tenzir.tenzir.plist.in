@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.tenzir.vast</string>
+  <string>com.tenzir.tenzir</string>
   <key>ProgramArguments</key>
   <array>
     <string>@VAST_BINARY@</string>

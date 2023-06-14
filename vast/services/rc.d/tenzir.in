@@ -1,0 +1,73 @@
+#!/bin/sh
+#
+
+# PROVIDE: tenzir
+# REQUIRE: NETWORKING
+# REQUIRE: LOGIN FILESYSTEMS
+# KEYWORD: shutdown
+
+# Add these lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# tenzir_enable (bool): Set to YES to enable a Tenzir Node
+#                     Default: NO
+# tenzir_config (path): Path to the Tenzir configuration file
+#                     Default: @CMAKE_INSTALL_FULL_SYSCONFDIR@/tenzir/tenzir.yaml
+
+. /etc/rc.subr
+
+name="tenzir"
+desc="Visibility Across Space and Time"
+rcvar="${name}_enable"
+start_precmd="${name}_prestart"
+extra_commands="check"
+check_cmd="${name}_check"
+
+# Note that we cannot use the variables $tenzir_user and $tenzir_group because
+# otherwise the rc script would drop privileges before invoking
+# /usr/sbin/daemon.
+
+# TODO: Tenzir currently does not handle the --config option properly, which is
+# why we have a separate option ${tenzir_dir} to specificy the directory instead.
+
+load_rc_config $name
+: "${tenzir_enable:=NO}"
+: "${tenzir_config:=@CMAKE_INSTALL_FULL_SYSCONFDIR@/${name}/${name}.yaml}"
+: "${tenzir_dir:=/var/db/${name}}"
+: "${tenzir_proc_user:=${name}}"
+: "${tenzir_proc_group:=${tenzir_proc_user}}"
+: "${tenzir_pidfile:=/var/run/${name}.pid}"
+
+pidfile="${tenzir_pidfile}"
+required_files="${tenzir_config}"
+tenzir_program="/usr/sbin/daemon"
+tenzir_flags="-f -P ${pidfile} -r -u ${tenzir_proc_user}"
+command_args="@CMAKE_INSTALL_FULL_BINDIR@/${name} -d ${tenzir_dir} start"
+
+tenzir_check()
+{
+  # Ensure Tenzir group exists.
+  if ! pw groupshow ${tenzir_proc_group} > /dev/null 2>&1; then
+    echo "Adding new group for Tenzir process: ${tenzir_proc_group}"
+    pw groupadd ${tenzir_proc_group}
+  fi
+  # Ensure Tenzir user exists.
+  if ! pw usershow ${tenzir_proc_user} > /dev/null 2>&1; then
+    echo "Adding new user for Tenzir process: ${tenzir_proc_user}"
+    pw useradd -n ${tenzir_proc_user} -g ${tenzir_proc_group} -c "Tenzir process account" \
+      -d /dev/null -s /sbin/nologin -w no
+  fi
+  # Esnure Tenzir state directory has the right permissions.
+  if [ ! -d "${tenzir_dir}" ]; then
+    echo "Creating new Tenzir state dir: ${tenzir_dir}"
+    mkdir -m 700 -p "${tenzir_dir}"
+    chown "${tenzir_proc_user}:${tenzir_proc_group}" "${tenzir_dir}"
+  fi
+}
+
+tenzir_prestart()
+{
+  run_rc_command check
+}
+
+run_rc_command "$1"
