@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tui/components.hpp"
+#include "explore/components.hpp"
 
-#include "tui/elements.hpp"
-#include "tui/ui_state.hpp"
+#include "explore/elements.hpp"
+#include "explore/ui_state.hpp"
 
 #include <vast/collect.hpp>
 #include <vast/concept/printable/to_string.hpp>
@@ -24,7 +24,7 @@
 
 #include <unordered_set>
 
-namespace vast::plugins::tui {
+namespace vast::plugins::explore {
 
 using namespace ftxui;
 
@@ -269,7 +269,8 @@ auto make_column(ui_state* state, const type& schema, offset index = {})
       auto column = Container::Vertical({});
       if (!index.empty()) {
         // Only show a top-level record header for nested records.
-        column->Add(RecordHeader(caf::get<record_type>(schema).field(index).name, state->theme));
+        auto field = caf::get<record_type>(schema).field(index);
+        column->Add(RecordHeader(field.name, state->theme));
         column->Add(component(state->theme.separator()));
       }
       // Build columns.
@@ -438,4 +439,4 @@ auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
   return Make<Impl>(screen, state);
 };
 
-} // namespace vast::plugins::tui
+} // namespace vast::plugins::explore

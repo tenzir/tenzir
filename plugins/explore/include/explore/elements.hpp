@@ -10,9 +10,9 @@
 
 #include <ftxui/dom/elements.hpp>
 
-namespace vast::plugins::tui {
+namespace vast::plugins::explore {
 
 /// Renders the VAST logo.
 ftxui::Element Vee();
 
-} // namespace vast::plugins::tui
+} // namespace vast::plugins::explore

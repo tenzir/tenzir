@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tui/theme.hpp"
+#include "explore/theme.hpp"
 
 #include <vast/detail/overload.hpp>
 
-namespace vast::plugins::tui {
+namespace vast::plugins::explore {
 
 using namespace ftxui;
 using namespace ftxui::literals;
@@ -173,4 +173,4 @@ auto mocha() -> theme {
   return result;
 }
 
-} // namespace vast::plugins::tui
+} // namespace vast::plugins::explore

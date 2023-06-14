@@ -1,17 +1,17 @@
-# tui
+# explore
 
 Renders pipeline data in a terminal user interface (TUI).
 
 ## Synopsis
 
 ```
-tui [-f|--fullscreen=<bool>] [-h|--height=<int>] [-w|--width=<int>]
+explore [-f|--fullscreen=<bool>] [-h|--height=<int>] [-w|--width=<int>]
 ```
 
 ## Description
 
-The `tui` operator renders the data in the pipeline in a terminal user interface
-(TUI).
+The `explore` operator renders the data in the pipeline in a terminal user
+interface (TUI).
 
 Use the arrow keys or `j`/`k`/`h`/`l` to navigate through the cells. You can
 also use the mouse to scroll vertically and horizontally, but moving the pointer
@@ -44,17 +44,17 @@ Defaults to 0, which means automatic detection.
 Show the pipeline results in a TUI:
 
 ```bash
-tui
+explore
 ```
 
 Show the pipeline results in a TUI, in fullscreen mode:
 
 ```bash
-tui -f true
+explore -f true
 ```
 
 Show the pipeline results in a TUI, in a fixed window frame:
 
 ```bash
-tui -w 80 -h 20
+explore -w 80 -h 20
 ```

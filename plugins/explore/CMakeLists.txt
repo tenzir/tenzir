@@ -1,21 +1,21 @@
 cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
 
 project(
-  tui
-  DESCRIPTION "TUI plugin for VAST"
+  explore
+  DESCRIPTION "explore plugin for VAST"
   LANGUAGES CXX)
 
 include(CTest)
 
 find_package(VAST REQUIRED)
 
-file(GLOB_RECURSE tui_sources CONFIGURE_DEPENDS
+file(GLOB_RECURSE explore_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 VASTRegisterPlugin(
-  TARGET tui
+  TARGET explore
   ENTRYPOINT src/plugin.cpp
-  SOURCES ${tui_sources}
+  SOURCES ${explore_sources}
   INCLUDE_DIRECTORIES include)
 
 option(VAST_ENABLE_BUNDLED_FTXUI "Always use the bundled ftxui" OFF)
@@ -41,6 +41,6 @@ if (NOT ftxui_FOUND)
   dependency_summary("ftxui" "${CMAKE_CURRENT_SOURCE_DIR}/aux/ftxui"
                      "Dependencies")
 endif ()
-                   
-target_link_libraries(tui PUBLIC vast::libvast vast::internal)
-target_link_libraries(tui PUBLIC ftxui::screen ftxui::dom ftxui::component)
+
+target_link_libraries(explore PUBLIC vast::libvast vast::internal)
+target_link_libraries(explore PUBLIC ftxui::screen ftxui::dom ftxui::component)

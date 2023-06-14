@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tui/ui_state.hpp"
+#include "explore/ui_state.hpp"
 
 #include <vast/fwd.hpp>
 #include <vast/view.hpp>
@@ -16,7 +16,7 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/dom/elements.hpp>
 
-namespace vast::plugins::tui {
+namespace vast::plugins::explore {
 
 /// Lifts an FTXUI element into a component.
 template <class T>
@@ -81,4 +81,4 @@ auto Catch(std::function<bool(ftxui::Event)> on_event)
 auto MainWindow(ftxui::ScreenInteractive* screen, ui_state* state)
   -> ftxui::Component;
 
-} // namespace vast::plugins::tui
+} // namespace vast::plugins::explore

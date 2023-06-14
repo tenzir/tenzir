@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tui/theme.hpp"
+#include "explore/theme.hpp"
 
 #include <vast/table_slice.hpp>
 #include <vast/type.hpp>
@@ -18,7 +18,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace vast::plugins::tui {
+namespace vast::plugins::explore {
 
 struct table_state;
 using table_state_ptr = std::shared_ptr<table_state>;
@@ -41,4 +41,4 @@ struct ui_state {
   auto add(table_slice slice) -> void;
 };
 
-} // namespace vast::plugins::tui
+} // namespace vast::plugins::explore

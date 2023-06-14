@@ -13,7 +13,7 @@
 #include <ftxui/dom/table.hpp>
 #include <ftxui/screen/color.hpp>
 
-namespace vast::plugins::tui {
+namespace vast::plugins::explore {
 
 /// The theme colors.
 struct palette {
@@ -91,4 +91,4 @@ auto mocha() -> theme;
 /// The default theme if the user doesn't adjust one.
 const theme default_theme = mocha();
 
-} // namespace vast::plugins::tui
+} // namespace vast::plugins::explore

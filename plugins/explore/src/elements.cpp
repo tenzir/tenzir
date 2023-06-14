@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tui/elements.hpp"
+#include "explore/elements.hpp"
 
-namespace vast::plugins::tui {
+namespace vast::plugins::explore {
 
 using namespace ftxui;
 
@@ -41,4 +41,4 @@ auto Vee() -> Element {
   return vbox(elements);
 }
 
-} // namespace vast::plugins::tui
+} // namespace vast::plugins::explore

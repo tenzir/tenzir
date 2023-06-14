@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tui/components.hpp"
-#include "tui/ui_state.hpp"
+#include "explore/components.hpp"
+#include "explore/ui_state.hpp"
 
 #include <vast/concept/parseable/vast/option_set.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
@@ -22,11 +22,11 @@
 
 #include <thread>
 
-namespace vast::plugins::tui {
+namespace vast::plugins::explore {
 
 namespace {
 
-/// The configuration for the `tui` operator.
+/// The configuration for the `explore` operator.
 struct configuration {
   int width = 0;
   int height = 0;
@@ -57,10 +57,9 @@ auto make_screen(const configuration& config) -> ftxui::ScreenInteractive {
   return ScreenInteractive::FitComponent();
 }
 
-/// The *terminal user interface (tui)* operator.
-class tui_operator final : public crtp_operator<tui_operator> {
+class explore_operator final : public crtp_operator<explore_operator> {
 public:
-  explicit tui_operator(configuration config) : config_{std::move(config)} {
+  explicit explore_operator(configuration config) : config_{std::move(config)} {
   }
 
   auto
@@ -96,7 +95,7 @@ public:
 
   auto to_string() const -> std::string override {
     // TODO: print configuration as well.
-    return fmt::format("tui");
+    return fmt::format("explore");
   }
 
 private:
@@ -113,7 +112,7 @@ public:
   }
 
   [[nodiscard]] auto name() const -> std::string override {
-    return "tui";
+    return "explore";
   };
 
   auto make_operator(std::string_view pipeline) const
@@ -160,13 +159,13 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<tui_operator>(std::move(config)),
+      std::make_unique<explore_operator>(std::move(config)),
     };
   }
 };
 
 } // namespace
 
-} // namespace vast::plugins::tui
+} // namespace vast::plugins::explore
 
-VAST_REGISTER_PLUGIN(vast::plugins::tui::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::explore::plugin)
