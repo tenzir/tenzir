@@ -16,8 +16,8 @@ namespace vast::detail {
 
 class internal_http_response : public http_response {
 public:
-  internal_http_response(caf::typed_response_promise<std::string>);
-  ~internal_http_response() override;
+  internal_http_response();
+  ~internal_http_response() override = default;
 
   internal_http_response(const internal_http_response&) = delete;
   internal_http_response(internal_http_response&&) = default;
@@ -35,7 +35,6 @@ public:
 
 private:
   caf::expected<std::string> body_;
-  caf::typed_response_promise<std::string> promise_;
 };
 
 } // namespace vast::detail

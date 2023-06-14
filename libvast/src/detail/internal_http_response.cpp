@@ -11,13 +11,7 @@
 
 namespace vast::detail {
 
-internal_http_response::internal_http_response(
-  caf::typed_response_promise<std::string> promise)
-  : body_(std::string{""}), promise_(std::move(promise)) {
-}
-
-internal_http_response::~internal_http_response() {
-  promise_.deliver(std::move(body_));
+internal_http_response::internal_http_response() : body_(std::string{""}) {
 }
 
 void internal_http_response::append(std::string body) {

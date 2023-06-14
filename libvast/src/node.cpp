@@ -424,9 +424,11 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   for (auto const& endpoint : plugin->rest_endpoints())
     rest_handlers[endpoint.canonical_path()]
       = std::make_pair(handler, endpoint);
+  return rest_handlers.at(desc.canonical_path);
   auto result = rest_handlers.find(desc.canonical_path);
-  if (it == rest_handlers.end())
-    return empty_response;
+  // If no canonical path matches, `find_endpoint_plugin()` would
+  // have already returned `nullptr`.
+  VAST_ASSERT_CHEAP(it != rest_handlers.end());
   return result->second;
 }
 
@@ -554,7 +556,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         return caf::make_error(ec::system_error,
                                "failed to spawn rest handler");
       auto rp = self->make_response_promise<std::string>();
-      auto response = std::make_shared<detail::internal_http_response>(rp);
+      auto response = std::make_shared<detail::internal_http_response>();
       auto params = parse_endpoint_parameters(endpoint, desc.params);
       if (!params)
         return caf::make_error(ec::invalid_argument, "invalid parameters");
@@ -566,15 +568,17 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         ->request(handler, caf::infinite, atom::http_request_v,
                   endpoint.endpoint_id, std::move(request))
         .then(
-          []() mutable {
-            /* nop */
+          [response, rp]() mutable {
+            rp.deliver(std::exchange(*response, {}).release());
           },
-          [response](const caf::error& e) mutable {
+          [rp](const caf::error& e) mutable {
             // TODO: Should we switch to a request/response pattern for the
             // handlers so they can just return strings or errors? The downside
             // will be that it's going to be much harder to implement support
             // for chunked or streaming transfers that way.
-            response->abort(500, "internal server error", e);
+            rp.deliver(caf::make_error(
+              ec::system_error,
+              fmt::format("Error 500: internal system error ({})", e)));
           });
       return rp;
     },
