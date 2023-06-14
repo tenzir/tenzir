@@ -4,13 +4,13 @@
 
 - name: Copy Debian package to target host
   ansible.builtin.copy:
-    src: "{{ vast_debian_package }}"
-    dest: /tmp/vast.deb
+    src: "{{ tenzir_debian_package }}"
+    dest: /tmp/tenzir.deb
     mode: '0640'
     owner: "{{ ansible_user_id }}"
     group: "{{ ansible_user_id }}"
 
-- name: Install VAST Debian package
+- name: Install Tenzir Debian package
   ansible.builtin.apt:
-    deb: /tmp/vast.deb
+    deb: /tmp/tenzir.deb
     allow_downgrade: yes

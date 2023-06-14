@@ -1,12 +1,12 @@
 ---
-- name: Deploy vast
+- name: Deploy tenzir
   become: true
-  hosts: example_vast_server
+  hosts: example_tenzir_server
   remote_user: deployer
   roles:
-    - role: vast
+    - role: tenzir
       vars:
-        config_file: ./vast.yaml
+        config_file: ./tenzir.yaml
         read_write_paths: [/tmp]
-        vast_archive: ./vast.tar.gz
-        vast_debian_package: ./vast.deb
+        tenzir_archive: ./tenzir.tar.gz
+        tenzir_debian_package: ./tenzir.deb

@@ -1,8 +1,7 @@
 [Unit]
-Description=VAST - Visibility Across Space and Time
+Description=Tenzir
 StartLimitIntervalSec=120
 StartLimitBurst=1
-OnFailure=vast-collect.service
 Wants=network-online.target
 After=network-online.target
 
@@ -12,8 +11,8 @@ Type=notify
 # user + privileges
 # We explicitly don't use DynamicUser because that can lead to recursive `chown`s.
 # Doing that is pretty slow on some file systems (e.g., xfs).
-User=vast
-Group=vast
+User=tenzir
+Group=tenzir
 NoNewPrivileges=yes
 
 # capabilities
@@ -24,9 +23,11 @@ AmbientCapabilities=
 RestrictSUIDSGID=yes
 
 # system access
-ExecPaths=/opt/vast/libexec/vast-df-percent.sh
+ExecPaths=/opt/tenzir/libexec/vast-df-percent.sh
 ProtectSystem=strict
-ReadWritePaths=/var/lib/vast
+ReadWritePaths=/var/lib/tenzir
+ReadWritePaths=/var/lib/tenzir
+ReadWritePaths=/var/log/vast
 ReadWritePaths=/var/log/vast
 PrivateTmp=no
 # Allow read access to the home directory of the user so config files can be
@@ -44,8 +45,8 @@ SystemCallErrorNumber=EPERM
 
 # service specifics
 TimeoutStopSec=600
-WorkingDirectory=/var/lib/vast
-ExecStart=/opt/vast/bin/vast start
+WorkingDirectory=/var/lib/tenzir
+ExecStart=/opt/tenzir/bin/tenzir-node
 
 [Install]
 WantedBy=multi-user.target
