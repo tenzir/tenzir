@@ -424,7 +424,10 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   for (auto const& endpoint : plugin->rest_endpoints())
     rest_handlers[endpoint.canonical_path()]
       = std::make_pair(handler, endpoint);
-  return rest_handlers.at(desc.canonical_path);
+  auto result = rest_handlers.find(desc.canonical_path);
+  if (it == rest_handlers.end())
+    return empty_response;
+  return result->second;
 }
 
 node_actor::behavior_type
