@@ -307,14 +307,15 @@ public:
     = 0;
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] virtual auto rest_endpoints() const -> const std::vector<rest_endpoint>&
-    = 0;
+  [[nodiscard]] virtual auto rest_endpoints() const
+    -> const std::vector<rest_endpoint>& = 0;
 
   /// Actor that will handle this endpoint.
   //  TODO: This should get some integration with component_plugin so that
   //  the component can be used to answer requests directly.
   [[nodiscard]] virtual auto
-  handler(caf::actor_system& system, node_actor node) const -> rest_handler_actor
+  handler(caf::actor_system& system, node_actor node) const
+    -> rest_handler_actor
     = 0;
 };
 
