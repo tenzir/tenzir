@@ -525,47 +525,6 @@ struct cast_helper<double_type, uint64_type> {
 };
 
 template <>
-struct cast_helper<duration_type, time_type> {
-  static auto can_cast(const duration_type&, const time_type&) noexcept
-    -> caf::expected<void> {
-    return {};
-  }
-
-  static auto cast_value(const duration_type&, duration value,
-                         const time_type&) noexcept -> caf::expected<time> {
-    return time{value};
-  }
-
-  static auto cast(const duration_type&,
-                   std::shared_ptr<type_to_arrow_array_t<duration_type>>,
-                   const time_type&) noexcept
-    -> std::shared_ptr<type_to_arrow_array_t<time_type>> {
-    die("unimplemented");
-  }
-};
-
-template <>
-struct cast_helper<time_type, duration_type> {
-  static auto can_cast(const time_type&, const duration_type&) noexcept
-    -> caf::expected<void> {
-    return {};
-  }
-
-  static auto
-  cast_value(const time_type&, time value, const duration_type&) noexcept
-    -> caf::expected<duration> {
-    return value.time_since_epoch();
-  }
-
-  static auto
-  cast(const time_type&, std::shared_ptr<type_to_arrow_array_t<time_type>>,
-       const duration_type&) noexcept
-    -> std::shared_ptr<type_to_arrow_array_t<duration_type>> {
-    die("unimplemented");
-  }
-};
-
-template <>
 struct cast_helper<uint64_type, enumeration_type> {
   static auto can_cast(const uint64_type&, const enumeration_type&) noexcept
     -> caf::expected<void> {

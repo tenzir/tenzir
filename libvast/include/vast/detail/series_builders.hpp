@@ -299,17 +299,6 @@ private:
     }
   }
 
-  auto cast_to_duration(const time_type& t,
-                        concrete_series_builder<duration_type>& builder,
-                        vast::time value) {
-    auto res = cast_value(t, value, duration_type{});
-    if (res) {
-      builder.add(*res);
-      return caf::error{};
-    }
-    return std::move(res.error());
-  }
-
   auto
   cast_to_duration(const string_type& t,
                    concrete_series_builder<duration_type>& builder, auto view) {
