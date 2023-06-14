@@ -200,8 +200,8 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       }
       auto params = parse_endpoint_parameters(endpoint, combined_params);
       if (!params)
-        return response->abort(422, "failed to parse endpoint parameters",
-                               params.error());
+        return response->abort(
+          422, "failed to parse endpoint parameters: ", params.error());
       auto vast_request = vast::http_request{
         .params = std::move(*params),
         .response = std::move(response),
