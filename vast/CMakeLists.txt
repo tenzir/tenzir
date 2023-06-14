@@ -69,10 +69,10 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
     set(VAST_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
     set(VAST_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/vast\")
     message(STATUS
-      \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
+      \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\")
     configure_file(
-      \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.vast.plist.in\"
-      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\" @ONLY)"
+      \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.tenzir.plist.in\"
+      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\" @ONLY)"
     COMPONENT Runtime)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   # Not all Linux distros use systemd, but those we care about at the moment do.
