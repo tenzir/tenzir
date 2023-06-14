@@ -1,4 +1,8 @@
-# Execute Sigma Rules
+---
+sidebar_position: 9
+---
+
+# Execute Sigma rules
 
 Tenzir supports executing [Sigma rules](https://github.com/SigmaHQ/sigma) using
 the [`sigma`](../../operators/transformations/sigma.md) operator. This allows

@@ -1,7 +1,3 @@
----
-sidebar_position: 2
----
-
 # Vision
 
 At Tenzir, our vision is an open ecosystem of interoperable security solutions.
