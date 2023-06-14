@@ -189,9 +189,8 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
 }
 
 /// A single-row focusable cell in the table header.
-auto RecordHeader(std::string_view top, const struct theme& theme)
-  -> Component {
-  return Renderer([top_text = std::string{top},
+auto RecordHeader(std::string top, const struct theme& theme) -> Component {
+  return Renderer([top_text = std::move(top),
                    top_color = color(theme.palette.text),
                    focus_color = theme.focus_color()](bool focused) mutable {
     auto header = text(top_text) | bold;
@@ -199,55 +198,107 @@ auto RecordHeader(std::string_view top, const struct theme& theme)
   });
 }
 
-/// A collapsible table column that can be a record or
-auto RecordColumn(ui_state* state, std::vector<Component> columns)
+/// A collapsible column for an entire record.
+auto RecordColumn(ui_state* state, Components columns, std::string name = {})
   -> Component {
-  VAST_ASSERT(!columns.empty());
-  auto container = Container::Horizontal({});
-  auto first = true;
-  for (auto& column : columns) {
-    if (first)
-      first = false;
-    else
-      container->Add(component(state->theme.separator()));
-    container->Add(std::move(column));
-  }
-  return container;
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state, Components columns, std::string name)
+      : state_{state} {
+      VAST_ASSERT(!columns.empty());
+      if (!name.empty()) {
+        header_ = RecordHeader(std::move(name), state_->theme);
+        header_ |= Catch<catch_policy::child>([=](Event event) {
+          if (event == Event::Character('c')
+              || event == Event::Character(' ')) {
+            if (collapsed_)
+              uncollapse();
+            else
+              collapse();
+            collapsed_ = !collapsed_;
+            return true;
+          }
+          return false;
+        });
+      }
+      auto first = true;
+      for (auto& column : columns) {
+        if (first)
+          first = false;
+        else
+          body_->Add(component(state_->theme.separator()));
+        body_->Add(std::move(column));
+      }
+      auto result = Container::Vertical({});
+      if (header_) {
+        result->Add(header_);
+        result->Add(component(state_->theme.separator()));
+      }
+      result->Add(body_);
+      Add(result);
+    }
+
+  private:
+    void uncollapse() {
+      if (!header_)
+        return;
+      auto result = Container::Vertical({
+        header_,
+        component(state_->theme.separator()),
+        body_,
+      });
+      DetachAllChildren();
+      Add(result);
+    }
+
+    void collapse() {
+      if (!header_)
+        return;
+      auto result = Container::Vertical({
+        header_,
+        component(state_->theme.separator()),
+        component(text("...") | center),
+      });
+      DetachAllChildren();
+      Add(result);
+    }
+
+    ui_state* state_;
+    bool collapsed_ = false;
+    Component header_;
+    Component body_ = Container::Horizontal({});
+  };
+  return Make<Impl>(state, std::move(columns), std::move(name));
 }
 
 auto make_column(ui_state* state, const type& schema, offset index = {})
   -> Component {
   auto parent = schema;
-  if (!index.empty())
+  auto top_level = index.empty();
+  if (!top_level)
     parent = caf::get<record_type>(schema).field(index).type;
   auto f = detail::overload{
     [&](const auto&) {
-      VAST_ASSERT(!index.empty());
+      VAST_ASSERT(top_level);
       return LeafColumn(state, schema, index);
     },
     [&](const list_type&) {
       // TODO
-      VAST_ASSERT(!index.empty());
+      VAST_ASSERT(top_level);
       return LeafColumn(state, schema, index);
     },
     [&](const record_type& record) {
-      auto column = Container::Vertical({});
-      if (!index.empty()) {
-        // Only show a top-level record header for nested records.
-        auto field = caf::get<record_type>(schema).field(index);
-        column->Add(RecordHeader(field.name, state->theme));
-        column->Add(component(state->theme.separator()));
-      }
-      // Build columns.
-      std::vector<Component> columns;
+      std::string record_name;
+      if (!top_level)
+        record_name = caf::get<record_type>(schema).field(index).name;
+      Components columns;
       index.push_back(0);
       columns.reserve(record.num_fields());
       for (size_t i = 0; i < record.num_fields(); ++i) {
         columns.push_back(make_column(state, schema, index));
         ++index.back();
       }
-      column->Add(RecordColumn(state, std::move(columns)));
-      return column;
+      return RecordColumn(state, std::move(columns), std::move(record_name));
     },
   };
   return caf::visit(f, parent);
