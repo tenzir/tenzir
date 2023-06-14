@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <caf/detail/is_one_of.hpp>
 #include <caf/detail/type_list.hpp>
 
 #include <tuple>
@@ -130,5 +131,53 @@ struct tl_make<T<Ts...>> {
 
 template <class T>
 using tl_make_t = typename tl_make<T>::type;
+
+template <class...>
+struct common_types_helper;
+
+template <class L1>
+struct common_types_helper<L1, type_list<>> {
+  using type = type_list<>;
+};
+
+template <class L1, class L2>
+struct common_types_helper<L1, L2> {
+  using type = std::conditional_t<
+    caf::detail::tl_contains<L1, caf::detail::tl_head_t<L2>>::value,
+    tl_prepend_t<
+      typename common_types_helper<L1, caf::detail::tl_tail_t<L2>>::type,
+      caf::detail::tl_head_t<L2>>,
+    typename common_types_helper<L1, caf::detail::tl_tail_t<L2>>::type>;
+};
+
+// Creates a new type list that contains all the types that are present in both
+// L1 and L2
+template <class L1, class L2>
+  requires(is_type_list<L1>::value and is_type_list<L2>::value)
+using tl_common_types_t
+  = tl_distinct_t<typename common_types_helper<L1, L2>::type>;
+
+template <class...>
+struct tl_remove_types_helper;
+
+template <class... Types>
+struct tl_remove_types_helper<type_list<>, Types...> {
+  using type = type_list<>;
+};
+
+template <class TypeList, class... Types>
+struct tl_remove_types_helper<TypeList, Types...> {
+  using type = std::conditional_t<
+    caf::detail::is_one_of<tl_head_t<TypeList>, Types...>::value,
+    typename tl_remove_types_helper<tl_tail_t<TypeList>, Types...>::type,
+    tl_push_front_t<
+      typename tl_remove_types_helper<tl_tail_t<TypeList>, Types...>::type,
+      tl_head_t<TypeList>>>;
+};
+
+// Remove all of occurrences of the Types from the TypeList
+template <class TypeList, class... Types>
+  requires(is_type_list<TypeList>::value)
+using tl_remove_types_t = tl_remove_types_helper<TypeList, Types...>::type;
 
 } // namespace vast::detail
