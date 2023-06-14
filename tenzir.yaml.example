@@ -305,7 +305,7 @@ tenzir:
 
     # Upper bound for the size of a table slice. A value of 0 causes the
     # batch-size to be unbounded, leaving control of batching to the
-    # tenzir.import.read-timeout option only. This should be a power of 2.
+    # vast.import.read-timeout option only. This should be a power of 2.
     batch-size: 65536
 
     # Block until the importer forwarded all data.
