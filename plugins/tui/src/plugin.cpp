@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tui/components.hpp"
-#include "tui/elements.hpp"
 #include "tui/ui_state.hpp"
 
 #include <vast/concept/parseable/vast/option_set.hpp>
@@ -83,7 +82,10 @@ public:
       // The task executes inside the UI thread. Therefore state access is
       // thread-safe.
       auto task = [&state, &screen, slice] {
-        state.add(slice);
+        auto& table = state.tables[slice.schema()];
+        if (!table)
+          table = std::make_shared<table_state>();
+        table->slices.push_back(slice);
         screen.PostEvent(Event::Custom); // Redraw screen
       };
       screen.Post(task);

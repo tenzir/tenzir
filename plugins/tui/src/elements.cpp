@@ -12,7 +12,7 @@ namespace vast::plugins::tui {
 
 using namespace ftxui;
 
-Element Vee() {
+auto Vee() -> Element {
   Elements elements;
   auto line = [&](auto... xs) {
     elements.emplace_back(hbox(xs...));

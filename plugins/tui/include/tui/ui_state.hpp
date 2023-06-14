@@ -10,28 +10,29 @@
 
 #include "tui/theme.hpp"
 
-#include <vast/detail/stable_map.hpp>
 #include <vast/table_slice.hpp>
-#include <vast/table_slice_column.hpp>
 #include <vast/type.hpp>
 
+#include <map>
+#include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace vast::plugins::tui {
 
+struct table_state;
+using table_state_ptr = std::shared_ptr<table_state>;
+
+/// The state for a table.
+struct table_state {
+  /// The slices for this table.
+  std::vector<table_slice> slices;
+};
+
 /// The state of the UI.
 struct ui_state {
-  /// The state for a table.
-  struct table_state {
-    /// The leaf columns.
-    std::vector<ftxui::Component> leaves;
-
-    /// The slices for this table.
-    std::shared_ptr<std::vector<table_slice>> slices;
-  };
-
-  /// The data to render.
-  detail::stable_map<type, table_state> tables;
+  /// Table slices by schema.
+  std::unordered_map<type, table_state_ptr> tables;
 
   /// Defines styling and colors.
   struct theme theme = default_theme;
