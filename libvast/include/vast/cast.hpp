@@ -10,9 +10,11 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/arrow_table_slice.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/detail/passthrough.hpp"
 #include "vast/die.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 
 #include <caf/expected.hpp>
@@ -20,6 +22,74 @@
 namespace vast {
 
 namespace detail {
+
+template <class...>
+struct supported_casts;
+
+template <>
+struct supported_casts<bool_type> {
+  using types = caf::detail::type_list<bool_type, uint64_type, int64_type,
+                                       double_type, string_type>;
+};
+
+template <>
+struct supported_casts<int64_type> {
+  using types
+    = caf::detail::type_list<int64_type, double_type, uint64_type, bool_type,
+                             duration_type, enumeration_type, string_type>;
+};
+template <>
+struct supported_casts<uint64_type> {
+  using types
+    = caf::detail::type_list<uint64_type, double_type, int64_type, bool_type,
+                             duration_type, enumeration_type, string_type>;
+};
+template <>
+struct supported_casts<double_type> {
+  using types
+    = caf::detail::type_list<double_type, int64_type, uint64_type, bool_type,
+                             duration_type, enumeration_type, string_type>;
+};
+template <>
+struct supported_casts<duration_type> {
+  using types = caf::detail::type_list<duration_type, double_type, int64_type,
+                                       uint64_type, time_type, string_type>;
+};
+template <>
+struct supported_casts<time_type> {
+  using types = caf::detail::type_list<time_type, duration_type, string_type>;
+};
+template <>
+struct supported_casts<string_type> {
+  using types = concrete_types;
+};
+template <>
+struct supported_casts<ip_type> {
+  using types = caf::detail::type_list<ip_type, string_type>;
+};
+template <>
+struct supported_casts<subnet_type> {
+  using types = caf::detail::type_list<subnet_type, string_type>;
+};
+
+template <>
+struct supported_casts<enumeration_type> {
+  using types = caf::detail::type_list<enumeration_type, double_type,
+                                       int64_type, uint64_type, string_type>;
+};
+template <>
+struct supported_casts<list_type> {
+  using types = caf::detail::type_list<list_type, string_type>;
+};
+template <>
+struct supported_casts<map_type> {
+  using types = caf::detail::type_list<map_type, string_type>;
+};
+
+template <>
+struct supported_casts<record_type> {
+  using types = caf::detail::type_list<record_type, string_type>;
+};
 
 template <type_or_concrete_type FromType, type_or_concrete_type ToType>
 struct cast_helper {
@@ -43,6 +113,17 @@ struct cast_helper {
     -> caf::expected<void> {
     return caf::make_error(ec::convert_error,
                            fmt::format("cannot cast from '{}' to '{}': not "
+                                       "implemented",
+                                       from_type, to_type));
+  }
+
+  static auto
+  cast_to_builder(const FromType& from_type,
+                  const std::shared_ptr<type_to_arrow_array_t<FromType>>&,
+                  const ToType& to_type) noexcept -> caf::expected<void> {
+    return caf::make_error(ec::convert_error,
+                           fmt::format("cannot cast to builder from '{}' to "
+                                       "'{}': not "
                                        "implemented",
                                        from_type, to_type));
   }
@@ -840,5 +921,31 @@ auto cast_value(const FromType& from_type, ValueType&& value,
 /// @returns A slice that exactly matches *to_schema*.
 auto cast(table_slice from_slice, const type& to_schema) noexcept
   -> table_slice;
+
+template <class FromType, class ToType>
+  requires(not std::same_as<FromType, ToType>)
+static auto
+cast_to_builder(const FromType& from_type,
+                const std::shared_ptr<type_to_arrow_array_t<FromType>>& in,
+                const ToType& to_type) noexcept
+  -> caf::expected<std::shared_ptr<type_to_arrow_builder_t<ToType>>> {
+  auto ret = to_type.make_arrow_builder(arrow::default_memory_pool());
+  for (const auto& v : values(from_type, *in)) {
+    if (not v) {
+      auto status = ret->AppendNull();
+      VAST_ASSERT(status.ok());
+      continue;
+    }
+    auto converted = cast_value(from_type, *v, to_type);
+    if (not converted)
+      return converted.error();
+    if constexpr (not std::is_same_v<decltype(converted), caf::expected<void>>) {
+      auto status = append_builder(to_type, *ret, *converted);
+      VAST_ASSERT(status.ok());
+    }
+  }
+
+  return ret;
+}
 
 } // namespace vast
