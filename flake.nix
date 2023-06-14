@@ -1,5 +1,5 @@
 {
-  description = "VAST as a standalone app or NixOS module";
+  description = "Tenzir as a standalone app or NixOS module";
 
   nixConfig = {
     extra-substituters = "https://vast.cachix.org";
@@ -19,12 +19,12 @@
     ...
   } @ inputs:
     {
-      nixosModules.vast = {
+      nixosModules.tenzir = {
         imports = [
           ./nix/module.nix
         ];
         _module.args = {
-          inherit (self.packages."x86_64-linux") vast;
+          inherit (self.packages."x86_64-linux") tenzir;
         };
       };
     }
