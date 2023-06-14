@@ -1,5 +1,5 @@
 [Unit]
-Description=Tenzir
+Description=Tenzir Node
 StartLimitIntervalSec=120
 StartLimitBurst=1
 Wants=network-online.target
@@ -7,6 +7,7 @@ After=network-online.target
 
 [Service]
 Type=notify
+Restart=always
 
 # user + privileges
 # We explicitly don't use DynamicUser because that can lead to recursive `chown`s.
@@ -26,8 +27,8 @@ RestrictSUIDSGID=yes
 ExecPaths=/opt/tenzir/libexec/vast-df-percent.sh
 ProtectSystem=strict
 ReadWritePaths=/var/lib/tenzir
-ReadWritePaths=/var/lib/tenzir
-ReadWritePaths=/var/log/vast
+ReadWritePaths=/var/lib/vast
+ReadWritePaths=/var/log/tenzir
 ReadWritePaths=/var/log/vast
 PrivateTmp=no
 # Allow read access to the home directory of the user so config files can be
