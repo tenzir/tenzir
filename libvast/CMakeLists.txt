@@ -33,6 +33,12 @@ include(VASTRegisterPlugin)
 include(VASTUtilities)
 include(internal)
 
+# -- library flavor ------------------------------------------------------------
+
+option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
+add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
+                 "build shared instead of static libraries.\n")
+
 # -- project configuration -----------------------------------------------------
 
 # Determine whether we're building VAST a subproject. This is used to determine
@@ -145,6 +151,7 @@ endif ()
 # -- boost --------------------------------------------------------------------
 
 find_package(Boost REQUIRED COMPONENTS headers filesystem)
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(Boost REQUIRED)")
 
 # -- re2 ----------------------------------------------------------------------
 
@@ -564,6 +571,7 @@ install(
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
   COMPONENT Development)
 
+add_subdirectory(libvast_test)
 add_subdirectory(test)
 
 function (_get_all_cmake_targets out_var current_dir)

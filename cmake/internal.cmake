@@ -1,3 +1,19 @@
+include_guard(GLOBAL)
+
+# -- testing -------------------------------------------------------------------
+
+cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast" ON
+                       "NOT CMAKE_CROSS_COMPILING" OFF)
+add_feature_info("VAST_ENABLE_UNIT_TESTS" VAST_ENABLE_UNIT_TESTS
+                 "build unit tests for libvast.")
+set(VAST_UNIT_TEST_TIMEOUT
+    "60"
+    CACHE STRING "The per-test timeout in unit tests" FORCE)
+
+if (libVAST_DIR)
+  return()
+endif ()
+
 # -- internal target -----------------------------------------------------------
 
 # Create the internal target that is used for option/property propagation.
@@ -276,4 +292,135 @@ if (VAST_ENABLE_JEMALLOC)
   string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
   target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
   dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
+endif ()
+
+set(_vast_enable_developer_mode_default (NOT (VAST_IS_SUBPROJECT OR libVAST_DIR)))
+option(VAST_ENABLE_DEVELOPER_MODE
+       "Enables build settings for a nicer development environment"
+       "${_vast_enable_developer_mode_default}")
+unset(_vast_enable_developer_mode_default)
+add_feature_info("VAST_ENABLE_DEVELOPER_MODE" VAST_ENABLE_DEVELOPER_MODE
+                 "enables build settings for a nicer development environment.")
+
+if (VAST_ENABLE_DEVELOPER_MODE)
+  # Support tools like clang-tidy by creating a compilation database and
+  # copying it to the project root.
+  VASTExportCompileCommands(libvast_internal)
+
+  # Force colored output for the Ninja generator
+  if ("${CMAKE_GENERATOR}" MATCHES "Ninja")
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+      target_compile_options(libvast_internal
+                             INTERFACE -fdiagnostics-color=always)
+    elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+      target_compile_options(libvast_internal INTERFACE -fcolor-diagnostics)
+    endif ()
+  endif ()
+
+  # Keep make output sane
+  set(CMAKE_VERBOSE_MAKEFILE
+      OFF
+      CACHE STRING "Show all outputs including compiler lines." FORCE)
+
+  # Enable CAF's compile-time type ID checks.
+  target_compile_definitions(libvast_internal
+                             INTERFACE CAF_ENABLE_TYPE_ID_CHECKS)
+endif ()
+
+if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
+  # Relocate debug paths to a common prefix for CCache users that work from
+  # multiple worktrees.
+  # The debug paths affect the build-id, we rewrite them to get a more
+  # reproducible build.
+  target_compile_options(
+    libvast_internal
+    INTERFACE "-fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
+endif ()
+
+# -- additional warnings -------------------------------------------------------
+
+option(VAST_ENABLE_MORE_WARNINGS "Enable addditional warnings" OFF)
+add_feature_info("VAST_ENABLE_MORE_WARNINGS" VAST_ENABLE_MORE_WARNINGS
+                 "enable additional warnings.")
+if (VAST_ENABLE_MORE_WARNINGS)
+  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(
+      libvast_internal
+      INTERFACE -Weverything
+                -Wno-c++98-compat
+                -Wno-padded
+                -Wno-documentation-unknown-command
+                -Wno-exit-time-destructors
+                -Wno-global-constructors
+                -Wno-missing-prototypes
+                -Wno-c++98-compat-pedantic
+                -Wno-unused-member-function
+                -Wno-unused-const-variable
+                -Wno-switch-enum
+                -Wno-abstract-vbase-init
+                -Wno-missing-noreturn
+                -Wno-covered-switch-default)
+  elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(
+      libvast_internal
+      INTERFACE -Waddress
+                -Wall
+                -Warray-bounds
+                -Wattributes
+                -Wbuiltin-macro-redefined
+                -Wcast-align
+                -Wcast-qual
+                -Wchar-subscripts
+                -Wclobbered
+                -Wcomment
+                -Wconversion
+                -Wconversion-null
+                -Wcoverage-mismatch
+                -Wcpp
+                -Wdelete-non-virtual-dtor
+                -Wdeprecated
+                -Wdeprecated-declarations
+                -Wdiv-by-zero
+                -Wdouble-promotion
+                -Wempty-body
+                -Wendif-labels
+                -Wenum-compare
+                -Wextra
+                -Wfloat-equal
+                -Wformat
+                -Wfree-nonheap-object
+                -Wignored-qualifiers
+                -Winit-self
+                -Winline
+                -Wint-to-pointer-cast
+                -Winvalid-memory-model
+                -Winvalid-offsetof
+                -Wlogical-op
+                -Wmain
+                -Wmaybe-uninitialized
+                -Wmissing-braces
+                -Wmultichar
+                -Wnarrowing
+                -Wnoexcept
+                -Wnon-template-friend
+                -Wnon-virtual-dtor
+                -Wnonnull
+                -Woverflow
+                -Woverlength-strings
+                -Wparentheses
+                -Wpmf-conversions
+                -Wpointer-arith
+                -Wreorder
+                -Wreturn-type
+                -Wsequence-point
+                -Wsign-compare
+                -Wswitch
+                -Wtype-limits
+                -Wundef
+                -Wuninitialized
+                -Wunused
+                -Wvla
+                -Wwrite-strings
+                -Wno-redundant-move)
+  endif ()
 endif ()
