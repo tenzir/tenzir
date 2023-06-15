@@ -16,3 +16,6 @@
 [submodule "libvast/aux/caf"]
 	path = libvast/aux/caf
 	url = https://github.com/tenzir/actor-framework
+[submodule "plugins/kafka/aux/librdkafka"]
+	path = plugins/kafka/aux/librdkafka
+	url = https://github.com/confluentinc/librdkafka.git
