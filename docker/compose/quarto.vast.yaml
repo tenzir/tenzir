@@ -2,7 +2,7 @@ version: "3"
 services:
   quarto:
     environment:
-      - VAST_ENDPOINT=vast:5158
+      - TENZIR_ENDPOINT=vast:5158
     networks:
       - vast
     depends_on:

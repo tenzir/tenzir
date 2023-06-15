@@ -8,11 +8,11 @@ services:
     image: ${VAST_CONTAINER_REGISTRY:-docker.io}/tenzir/tenzir:${VAST_CONTAINER_REF:-latest}
     container_name: ${VAST_CONTAINER_NAME:-vast-server}
     environment:
-      - VAST_ENDPOINT=vast:5158
-      - VAST_START__COMMANDS=web server
-      - VAST_PLUGINS__WEB__MODE=dev
-      - VAST_PLUGINS__WEB__BIND=0.0.0.0
-      - VAST_PLUGINS__WEB__PORT=5160
+      - TENZIR_ENDPOINT=vast:5158
+      - TENZIR_START__COMMANDS=web server
+      - TENZIR_PLUGINS__WEB__MODE=dev
+      - TENZIR_PLUGINS__WEB__BIND=0.0.0.0
+      - TENZIR_PLUGINS__WEB__PORT=5160
     ports:
       - ${VAST_WEB_PORT:-5160}:5160
       - ${VAST_PORT:-5158}:5158
