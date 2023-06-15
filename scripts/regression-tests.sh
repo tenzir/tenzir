@@ -35,7 +35,7 @@ docker rm -f vast-regression
 # Pull the new version to verify database compatibility.
 docker run \
   $VAST_RUN_FLAGS \
-  ghcr.io/tenzir/vast:$NEW_VERSION \
+  ghcr.io/tenzir/tenzir:$NEW_VERSION \
   start
 
 sleep 3

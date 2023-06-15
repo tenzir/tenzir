@@ -104,6 +104,7 @@ jobs:
       - name: Build Nix Packages
         env:
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
+          RCLONE_GCS_BUCKET_POLICY_ONLY: True
         run: |
           nix shell \
             nixpkgs#git \

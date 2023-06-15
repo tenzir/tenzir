@@ -5,7 +5,7 @@ services:
     # better user experience. We can only do this after the release of VAST v2.4
     # at the earliest, which will be the first release to offer a stable tag for
     # Docker Hub.
-    image: ${VAST_CONTAINER_REGISTRY:-docker.io}/tenzir/vast:${VAST_CONTAINER_REF:-latest}
+    image: ${VAST_CONTAINER_REGISTRY:-docker.io}/tenzir/tenzir:${VAST_CONTAINER_REF:-latest}
     container_name: ${VAST_CONTAINER_NAME:-vast-server}
     environment:
       - VAST_ENDPOINT=vast:5158

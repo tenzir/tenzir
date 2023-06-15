@@ -41,6 +41,6 @@
             "path": "",
             "caption": ""
         },
-        "dockerImage": "tenzir/vast-neuron"
+        "dockerImage": "tenzir/tenzir-neuron"
     }
 ]

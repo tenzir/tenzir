@@ -45,7 +45,7 @@ services:
       - thehive
 
   neuron:
-    image: tenzir/vast-neuron
+    image: tenzir/tenzir-neuron
     pull_policy: build
     network_mode: host  # used for tests only
     build:
