@@ -121,7 +121,7 @@ public:
         VAST_WARN(err);
       auto num_messages = client.queue_size();
       if (num_messages > 0)
-        VAST_ERROR("{} messages were not delivered" , num_messages);
+        VAST_ERROR("{} messages were not delivered", num_messages);
     });
     return [&ctrl, topics = std::move(topics), client = *client,
             guard = std::make_shared<decltype(guard)>(std::move(guard))](

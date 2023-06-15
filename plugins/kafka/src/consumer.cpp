@@ -24,8 +24,7 @@ auto consumer::make(configuration config) -> caf::expected<consumer> {
     RdKafka::KafkaConsumer::create(config.conf_.get(), error));
   if (!result.consumer_)
     return caf::make_error(ec::unspecified,
-                           fmt::format("failed to create consumer: {}",
-                                       error));
+                           fmt::format("failed to create consumer: {}", error));
   result.config_ = std::move(config);
   return result;
 }
@@ -33,9 +32,9 @@ auto consumer::make(configuration config) -> caf::expected<consumer> {
 auto consumer::subscribe(const std::vector<std::string>& topics) -> caf::error {
   auto result = consumer_->subscribe(topics);
   if (result != RdKafka::ERR_NO_ERROR)
-    return caf::make_error(
-      ec::unspecified, fmt::format("failed to subscribe to topics: {}",
-                                   RdKafka::err2str(result)));
+    return caf::make_error(ec::unspecified,
+                           fmt::format("failed to subscribe to topics: {}",
+                                       RdKafka::err2str(result)));
   return {};
 }
 
