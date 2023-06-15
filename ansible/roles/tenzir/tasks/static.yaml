@@ -2,15 +2,15 @@
   ansible.builtin.debug:
     msg: "Using static binary install"
 
-- name: Create vast group
+- name: Create tenzir group
   ansible.builtin.group:
-    name: vast
+    name: tenzir
     state: present
 
-- name: Create vast user
+- name: Create tenzir user
   ansible.builtin.user:
-    name: vast
-    groups: vast
+    name: tenzir
+    groups: tenzir
     shell: /sbin/nologin
     append: yes
     state: present
@@ -18,7 +18,7 @@
 
 - name: Copy service definition file
   ansible.builtin.copy:
-    src: vast.service
+    src: tenzir.service
     dest: /etc/systemd/system
     mode: preserve
     owner: root
@@ -26,31 +26,31 @@
 
 - name: Copy the tarball to the target host
   ansible.builtin.copy:
-    src: "{{ vast_archive }}"
-    dest: /tmp/vast.tar.gz
+    src: "{{ tenzir_archive }}"
+    dest: /tmp/tenzir.tar.gz
     mode: '0640'
     owner: "{{ ansible_user_id }}"
     group: "{{ ansible_user_id }}"
-  register: vast_download
+  register: tenzir_download
 
-- name: Create /var/lib/vast
+- name: Create /var/lib/tenzir
   ansible.builtin.file:
-    path: "/var/lib/vast"
+    path: "/var/lib/tenzir"
     state: directory
     mode: '0755'
-    owner: vast
-    group: vast
+    owner: tenzir
+    group: tenzir
 
-- name: Create /var/log/vast
+- name: Create /var/log/tenzir
   ansible.builtin.file:
-    path: "/var/log/vast"
+    path: "/var/log/tenzir"
     state: directory
     mode: '0755'
-    owner: vast
-    group: vast
+    owner: tenzir
+    group: tenzir
 
-- name: Unarchive VAST release tarball
+- name: Unarchive Tenzir release tarball
   ansible.builtin.unarchive:
-    src: "/tmp/vast.tar.gz"
+    src: "/tmp/tenzir.tar.gz"
     dest: /
     remote_src: yes

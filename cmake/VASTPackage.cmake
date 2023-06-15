@@ -19,13 +19,13 @@ endif ()
 set(CPACK_DEBIAN_PACKAGE_EPOCH "1")
 
 # Lowercase fits better for file names and such.
-set(CPACK_PACKAGE_NAME "vast")
+set(CPACK_PACKAGE_NAME "tenzir")
 set(CPACK_PACKAGE_VENDOR "Tenzir")
 set(CPACK_PACKAGE_CONTACT "engineering@tenzir.com")
 string(REGEX REPLACE "^v" "" CPACK_PACKAGE_VERSION "${VAST_VERSION_SHORT}")
 if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
   # CPACK_SYSTEM_NAME is empty when this is evaluated.
-  string(TOLOWER "${VAST_EDITION_NAME}" _edition_name_lower)
+  string(TOLOWER "${TENZIR_EDITION_NAME}" _edition_name_lower)
   string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_name_lower)
   set(CPACK_PACKAGE_FILE_NAME
       "${_edition_name_lower}-${VAST_VERSION_SHORT}-${_system_name_lower}")
@@ -65,9 +65,13 @@ set(CPACK_VERBATIM_VARIABLES ON)
 
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
-set(CPACK_INSTALLED_DIRECTORIES "/var/lib/vast" "/var/log/vast")
+set(CPACK_INSTALLED_DIRECTORIES "/var/lib/tenzir" "/var/log/tenzir")
 
 set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
+
+set(CPACK_DEBIAN_PACKAGE_PROVIDES "vast")
+set(CPACK_DEBIAN_PACKAGE_CONFLICTS "vast")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "vast")
 
 set(CPACK_DEBIAN_COMPRESSION_TYPE "gzip")
 set(CPACK_DEBIAN_PACKAGE_SECTION "contrib/database")
@@ -110,7 +114,7 @@ include(CPack)
 cpack_add_component(
   Runtime
   DISPLAY_NAME "Runtime"
-  DESCRIPTION "Runtime files for VAST"
+  DESCRIPTION "Runtime files for Tenzir"
   REQUIRED)
 # TODO: Remove all Unspecified install components. The vendored fast_float
 # library always installs itself; once fastfloat/fast_float#142 is merged we can
@@ -122,5 +126,5 @@ cpack_add_component(
 cpack_add_component(
   Development
   DISPLAY_NAME "Development"
-  DESCRIPTION "Development files for VAST"
+  DESCRIPTION "Development files for Tenzir"
   DEPENDS Unspecified Runtime)

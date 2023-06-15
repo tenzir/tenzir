@@ -2,4 +2,4 @@
 
 set -e
 
-deb-systemd-invoke stop vast.service || true
+deb-systemd-invoke stop tenzir.service || true

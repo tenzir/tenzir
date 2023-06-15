@@ -8,6 +8,14 @@ install(
   COMPONENT Runtime)
 add_executable(vast::tenzir ALIAS tenzir)
 
+# Install vast in PREFIX/lib and headers in PREFIX/include/vast.
+install(
+  TARGETS tenzir
+  EXPORT VASTTargets
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
+
 macro (create_tenzir_symlink name)
   add_custom_command(
     OUTPUT "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/${name}"
@@ -21,7 +29,7 @@ macro (create_tenzir_symlink name)
     CODE "
     execute_process(COMMAND
       \"${CMAKE_COMMAND}\" -E create_symlink \"./tenzir\"
-      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${name}\")"
+      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${name}\")"
     COMPONENT Runtime)
 endmacro ()
 
@@ -29,17 +37,9 @@ create_tenzir_symlink(tenzir-node)
 create_tenzir_symlink(tenzir-ctl)
 create_tenzir_symlink(vast)
 
-# Install vast in PREFIX/lib and headers in PREFIX/include/vast.
-install(
-  TARGETS tenzir
-  EXPORT VASTTargets
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
-  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
-  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
-
 # -- example configuration file -----------------------------------------------
 
-VASTInstallExampleConfiguration(vast "${PROJECT_SOURCE_DIR}/vast.yaml.example"
+VASTInstallExampleConfiguration(vast "${PROJECT_SOURCE_DIR}/tenzir.yaml.example"
                                 "" "vast.yaml")
 
 # -- init system integration ---------------------------------------------------
@@ -63,26 +63,27 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   # Install launchd script on macOS into ~/Library/LaunchAgents
   install(
     CODE "\
-    if (NOT IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
+    if (NOT IS_ABSOLUTE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
       string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
     endif ()
-    set(VAST_BINARY \"\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
-    set(VAST_WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/vast\")
+    set(VAST_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
+    set(VAST_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/vast\")
     message(STATUS
-      \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
+      \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\")
     configure_file(
-      \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.vast.plist.in\"
-      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\" @ONLY)"
+      \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.tenzir.plist.in\"
+      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\" @ONLY)"
     COMPONENT Runtime)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   # Not all Linux distros use systemd, but those we care about at the moment do.
   # TODO: We don't consider CPACK_PACKAGE_INSTALL_PREFIX here, this could
   # potentially be solved with a more involved CPack setup. See also the
   # comment at the beginning of cmake/Package.cmake.
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/vast.service.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/vast.service" @ONLY)
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/tenzir.service.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/tenzir.service" @ONLY)
   install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.service"
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir.service"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system/"
     COMPONENT Runtime)
 endif ()
@@ -137,10 +138,10 @@ install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
   COMPONENT Development
   DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
-  PATTERN "integration/vast.yaml.example" EXCLUDE)
+  PATTERN "integration/tenzir.yaml.example" EXCLUDE)
 
 install(
-  FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
+  FILES "${PROJECT_SOURCE_DIR}/tenzir.yaml.example"
   COMPONENT Development
   DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/integration")
 

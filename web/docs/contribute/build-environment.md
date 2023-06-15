@@ -62,4 +62,4 @@ The CMake presets for that mode are:
 - `nix-gcc-static-redeb`
 - `nix-gcc-static-release`
 
-[direnv]: https://storage.googleapis.com/tenzir-public-data/tenzir-static-builds/tenzir-static-latest.tar.gz
+[direnv]: https://direnv.net/

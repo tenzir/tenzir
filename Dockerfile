@@ -6,13 +6,13 @@ LABEL maintainer="engineering@tenzir.com"
 ENV CC="gcc-12" \
     CXX="g++-12"
 
-WORKDIR /tmp/vast
+WORKDIR /tmp/tenzir
 
 COPY scripts ./scripts
 
 RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 
-# VAST
+# Tenzir
 COPY changelog ./changelog
 COPY cmake ./cmake
 COPY examples ./examples
@@ -23,19 +23,19 @@ COPY python ./python
 COPY schema ./schema
 COPY vast ./vast
 COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
-     vast.yaml.example version.json ./
+     tenzir.yaml.example version.json ./
 
 # -- development ---------------------------------------------------------------
 
 FROM dependencies AS development
 
-ENV PREFIX="/opt/tenzir/vast" \
-    PATH="/opt/tenzir/vast/bin:${PATH}" \
+ENV PREFIX="/opt/tenzir" \
+    PATH="/opt/tenzir/bin:${PATH}" \
     CC="gcc-12" \
     CXX="g++-12" \
-    VAST_DB_DIRECTORY="/var/lib/vast" \
-    VAST_LOG_FILE="/var/log/vast/server.log" \
-    VAST_ENDPOINT="0.0.0.0"
+    TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
+    TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
+    TENZIR_ENDPOINT="0.0.0.0"
 
 # Additional arguments to be passed to CMake.
 ARG VAST_BUILD_OPTIONS
@@ -56,14 +56,14 @@ RUN cmake -B build -G Ninja \
     cmake --install build --strip && \
     rm -rf build
 
-RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
+RUN mkdir -p $PREFIX/etc/tenzir /var/log/tenzir /var/lib/tenzir
 
 EXPOSE 5158/tcp
 
-WORKDIR /var/lib/vast
-VOLUME ["/var/lib/vast"]
+WORKDIR /var/lib/tenzir
+VOLUME ["/var/lib/tenzir"]
 
-ENTRYPOINT ["vast"]
+ENTRYPOINT ["tenzir-ctl"]
 CMD ["--help"]
 
 # -- production ----------------------------------------------------------------
@@ -72,16 +72,16 @@ FROM debian:bookworm-slim AS production
 
 # When changing these, make sure to also update the entries in the flake.nix
 # file.
-ENV PREFIX="/opt/tenzir/vast" \
-    PATH="/opt/tenzir/vast/bin:${PATH}" \
-    VAST_DB_DIRECTORY="/var/lib/vast" \
-    VAST_LOG_FILE="/var/log/vast/server.log" \
-    VAST_ENDPOINT="0.0.0.0"
+ENV PREFIX="/opt/tenzir" \
+    PATH="/opt/tenzir/bin:${PATH}" \
+    TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
+    TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
+    TENZIR_ENDPOINT="0.0.0.0"
 
-RUN useradd --system --user-group vast
-COPY --from=development --chown=vast:vast $PREFIX/ $PREFIX/
-COPY --from=development --chown=vast:vast /var/lib/vast/ /var/lib/vast
-COPY --from=development --chown=vast:vast /var/log/vast/ /var/log/vast
+RUN useradd --system --user-group tenzir
+COPY --from=development --chown=tenzir:tenzir $PREFIX/ $PREFIX/
+COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir
+COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
@@ -111,23 +111,23 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install libarrow1100 libparquet1100 && \
     rm -rf /var/lib/apt/lists/*
 
-USER vast:vast
+USER tenzir:tenzir
 
 EXPOSE 5158/tcp
-WORKDIR /var/lib/vast
-VOLUME ["/var/lib/vast"]
+WORKDIR /var/lib/tenzir
+VOLUME ["/var/lib/tenzir"]
 
-# Verify that VAST starts up correctly.
-RUN vast exec version
+# Verify that Tenzir starts up correctly.
+RUN tenzir version
 
-ENTRYPOINT ["vast"]
+ENTRYPOINT ["tenzir-ctl"]
 CMD ["--help"]
 
 # -- plugins -------------------------------------------------------------------
 
 FROM development AS plugins-source
 
-WORKDIR /tmp/vast
+WORKDIR /tmp/tenzir
 COPY contrib/vast-plugins ./contrib/vast-plugins
 
 FROM plugins-source AS compaction-plugin
@@ -178,18 +178,18 @@ RUN cmake -S contrib/vast-plugins/platform -B build-platform -G Ninja \
       DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \
       rm -rf build-platform
 
-# -- vast-ce -------------------------------------------------------------------
+# -- tenzir-ce -------------------------------------------------------------------
 
-FROM production AS vast-ce
+FROM production AS tenzir-ce
 
-COPY --from=matcher-plugin --chown=vast:vast /plugin/matcher /
-COPY --from=netflow-plugin --chown=vast:vast /plugin/netflow /
-COPY --from=pipeline-manager-plugin --chown=vast:vast /plugin/pipeline_manager /
-COPY --from=platform-plugin --chown=vast:vast /plugin/platform /
+COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
+COPY --from=netflow-plugin --chown=tenzir:tenzir /plugin/netflow /
+COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline_manager /
+COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 
-# -- vast-demo --------------------------------------------------------------
+# -- tenzir-demo --------------------------------------------------------------
 
-FROM vast-ce AS vast-demo
+FROM tenzir-ce AS tenzir-demo
 
 USER root:root
 COPY demo-node /demo-node
@@ -202,14 +202,14 @@ RUN apt-get update && \
 
 ENTRYPOINT ["/demo-node/entrypoint.bash"]
 
-# -- vast-ee -------------------------------------------------------------------
+# -- tenzir-ee -------------------------------------------------------------------
 
-FROM vast-ce AS vast-ee
+FROM tenzir-ce AS tenzir-ee
 
-COPY --from=compaction-plugin --chown=vast:vast /plugin/compaction /
+COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 
-# -- vast ----------------------------------------------------------------------
+# -- tenzir ----------------------------------------------------------------------
 
-# As a last stage we re-introduce VAST without proprietary plugins so that it's
+# As a last stage we re-introduce tenzir without proprietary plugins so that it's
 # the default when not specifying a build target.
-FROM production AS vast
+FROM production AS tenzir

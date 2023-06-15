@@ -65,7 +65,7 @@ We also offer prebuilt statically linked binaries for every Git commit to the
 
 ```bash
 version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-curl -fsSL "https://storage.googleapis.com/tenzir-public-data/tenzir-static-builds/tenzir-${version}-linux-static.tar.gz"
+curl -fsSL "https://storage.googleapis.com/tenzir-dist-public/packages/main/tenzir-${version}-linux-static.tar.gz"
 ```
 
 </TabItem>

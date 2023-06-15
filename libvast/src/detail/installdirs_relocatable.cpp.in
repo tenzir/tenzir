@@ -50,9 +50,19 @@ std::filesystem::path install_datadir() {
 
 std::filesystem::path install_configdir() {
   const auto [prefix, _] = install_prefix_and_suffix();
-  if (prefix == "/usr")
-    return "/etc/vast";
-  return prefix / "@CMAKE_INSTALL_SYSCONFDIR@/vast";
+  std::error_code err{};
+  // We are permissive for the config file paths, in case the prefix does not
+  // contain the package name.
+  if (prefix == "/usr") {
+    if (std::filesystem::exists("/etc/vast", err) &&
+        !std::filesystem::exists("/etc/tenzir", err))
+      return "/etc/vast";
+    return "/etc/tenzir";
+  }
+  if (std::filesystem::exists(prefix / "@CMAKE_INSTALL_SYSCONFDIR@/vast", err) &&
+      !std::filesystem::exists(prefix / "@CMAKE_INSTALL_SYSCONFDIR@/tenzir", err))
+    return prefix / "@CMAKE_INSTALL_SYSCONFDIR@/vast";
+  return prefix / "@CMAKE_INSTALL_SYSCONFDIR@/tenzir";
 }
 
 std::filesystem::path install_plugindir() {

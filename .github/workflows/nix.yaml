@@ -12,8 +12,8 @@ permissions:
   packages: write
 
 jobs:
-  vast:
-    name: VAST
+  tenzir:
+    name: Tenzir
     runs-on: ubuntu-20.04
     steps:
       - name: Prevent pushing protected editions to public repos
@@ -22,7 +22,7 @@ jobs:
           jq -r '.editions[] | select(."image-registries" | length > 0) | .name as $name | ."image-registries"[]? // ."image-registries" | [ $name, . ] | join(" ")' \
             <<< '${{ inputs.config }}' | while read -r name registry; do
             # Explicitly allow open source images.
-            [[ "${name}" =~ ^vast$ ]] && continue
+            [[ "${name}" =~ ^tenzir$ ]] && continue
             # Explicitly allow private registries.
             [[ "${registry}" == "622024652768.dkr.ecr.eu-west-1.amazonaws.com" ]] && continue
             echo "::error Pushing ${name} to ${registry} is forbidden"
@@ -57,7 +57,7 @@ jobs:
           echo "needs-vast-plugins=false" >> "$GITHUB_OUTPUT"
           if [[ $(comm -12 \
                  <(jq -r '[(.editions[] | .name)] | sort | .[]' <<< '${{ inputs.config }}') \
-                 <(echo vast-{ce,ee}| tr ' ' '\n' | sort)) \
+                 <(echo tenzir-{ce,ee}| tr ' ' '\n' | sort)) \
           ]]; then
             echo "needs-vast-plugins=true" >> "$GITHUB_OUTPUT"
           fi
@@ -100,7 +100,7 @@ jobs:
           name: vast
           signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
           # Avoid pushing any editions that are not fully open source.
-          pushFilter: "vast-[[:alnum:]]+-(static|slim|[[:digit:]])"
+          pushFilter: "tenzir-[[:alnum:]]+-(static|slim|[[:digit:]])"
       - name: Build Nix Packages
         env:
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
@@ -136,8 +136,8 @@ jobs:
           # only delete assets when `tag` refers to a release
           fail-if-no-release: true
           assets: |
-            "vast-linux-static.deb"
-            "vast-linux-static.tar.gz"
+            "tenzir-linux-static.deb"
+            "tenzir-linux-static.tar.gz"
       - name: Upload Debian Release Package
         if: github.event_name == 'release' && steps.cfg.outputs.upload-to-github
         uses: actions/upload-release-asset@v1
@@ -145,11 +145,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "release/tarball/vast-linux-static.deb"
+          asset_path: "release/tarball/tenzir-linux-static.deb"
           # The asset name is constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb
+          # https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.deb
           # for a build of the latest release.
-          asset_name: "vast-linux-static.deb"
+          asset_name: "tenzir-linux-static.deb"
           asset_content_type: application/vnd.debian.binary-package
       - name: Upload Release Tarball
         if: github.event_name == 'release' && steps.cfg.outputs.upload-to-github
@@ -158,9 +158,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "release/tarball/vast-linux-static.tar.gz"
+          asset_path: "release/tarball/tenzir-linux-static.tar.gz"
           # The asset name is constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
+          # https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.tar.gz
           # for a build of the latest release.
-          asset_name: "vast-linux-static.tar.gz"
+          asset_name: "tenzir-linux-static.tar.gz"
           asset_content_type: application/gzip

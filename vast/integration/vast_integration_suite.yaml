@@ -6,7 +6,7 @@ fixtures:
       node = Server(self.cmd,
                     ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
                     work_dir, name='node', port=VAST_PORT,
-                    config_file='vast.yaml.example')
+                    config_file='tenzir.yaml.example')
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
@@ -412,7 +412,7 @@ tests:
   Example config file:
     tags: [import-export, zeek]
     fixture: ExampleConfigFileTester
-    config-file: vast.yaml.example
+    config-file: tenzir.yaml.example
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz

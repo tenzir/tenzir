@@ -98,32 +98,53 @@ collect_config_files(std::vector<std::filesystem::path> dirs,
   // `config_file_path` in the base class so that we can support multiple
   // configuration files.
   for (auto&& dir : dirs) {
-    // Support both *.yaml and *.yml extensions.
-    auto conf_yaml = dir / "vast.yaml";
-    auto conf_yml = dir / "vast.yml";
-    std::error_code err{};
-    const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
-    if (err)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("failed to check if vast.yaml file "
-                                         "exists in {}: {}",
-                                         dir, err.message()));
-    const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
-    if (err)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("failed to check if vast.yml file "
-                                         "exists in {}: {}",
-                                         dir, err.message()));
-    // We cannot decide which one to pick if we have two, so bail out.
-    if (exists_conf_yaml && exists_conf_yml)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("detected both 'vast.yaml' and "
-                                         "'vast.yml' files in {}",
-                                         dir));
-    if (exists_conf_yaml)
-      result.emplace_back(std::move(conf_yaml));
-    else if (exists_conf_yml)
-      result.emplace_back(std::move(conf_yml));
+    // Support both tenzir.* and vast.* stems, as well as *.yaml and *.yml
+    // extensions
+    auto select
+      = [&](std::string_view name) -> caf::expected<std::filesystem::path> {
+      auto base_yaml = fmt::format("{}.yaml", name);
+      auto base_yml = fmt::format("{}.yml", name);
+      auto conf_yaml = dir / base_yaml;
+      auto conf_yml = dir / base_yml;
+      std::error_code err{};
+      const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
+      if (err)
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("failed to check if {} file "
+                                           "exists in {}: {}",
+                                           base_yaml, dir, err.message()));
+      const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
+      if (err)
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("failed to check if {} file "
+                                           "exists in {}: {}",
+                                           base_yml, dir, err.message()));
+      // We cannot decide which one to pick if we have two, so bail out.
+      if (exists_conf_yaml && exists_conf_yml)
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("detected both '{}' and "
+                                           "'{}' files in {}",
+                                           base_yaml, base_yml, dir));
+      if (exists_conf_yaml)
+        return conf_yaml;
+      else if (exists_conf_yml)
+        return conf_yml;
+      return ec::no_error;
+    };
+    auto tenzir_config = select("tenzir");
+    if (tenzir_config) {
+      result.emplace_back(std::move(*tenzir_config));
+      continue;
+    }
+    if (tenzir_config.error() != ec::no_error)
+      return tenzir_config.error();
+    auto vast_config = select("vast");
+    if (vast_config) {
+      result.emplace_back(std::move(*vast_config));
+      continue;
+    }
+    if (vast_config.error() != ec::no_error)
+      return vast_config.error();
   }
   // Second, consider command line and environment overrides. But only check
   // the environment if we don't have a config on the command line.
@@ -267,10 +288,13 @@ config_dirs(const caf::actor_system_config& config) {
   if (bare_mode)
     return {};
   auto result = std::vector<std::filesystem::path>{};
-  if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
+  if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME")) {
+    result.push_back(std::filesystem::path{*xdg_config_home} / "tenzir");
     result.push_back(std::filesystem::path{*xdg_config_home} / "vast");
-  else if (auto home = detail::getenv("HOME"))
+  } else if (auto home = detail::getenv("HOME")) {
+    result.push_back(std::filesystem::path{*home} / ".config" / "tenzir");
     result.push_back(std::filesystem::path{*home} / ".config" / "vast");
+  }
   result.push_back(detail::install_configdir());
   return result;
 }

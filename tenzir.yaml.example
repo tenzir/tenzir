@@ -1,13 +1,13 @@
-# This is an example configuration file for VAST that shows all available
+# This is an example configuration file for Tenzir that shows all available
 # options. Options in angle brackets have their default value determined at
 # runtime.
 
-# Options that concern VAST.
+# Options that concern Tenzir.
 vast:
   # The host and port to listen at and connect to.
   endpoint: "localhost:5158"
 
-  # The timeout for connecting to a VAST server. Set to 0 seconds to wait
+  # The timeout for connecting to a Tenzir server. Set to 0 seconds to wait
   # indefinitely.
   connection-timeout: 5m
 
@@ -33,9 +33,9 @@ vast:
 
   # Configures the minimum severity of messages written to the log file.
   # Possible values: quiet, error, warning, info, verbose, debug, trace.
-  # File logging is only available for commands that start a node (e.g., vast
-  # start). The levels above 'verbose' are usually not available in release
-  # builds.
+  # File logging is only available for commands that start a node (e.g.,
+  # tenzir-node). The levels above 'verbose' are usually not available in
+  # release builds.
   file-verbosity: debug
 
   # Whether to enable automatic log rotation. If set to false, a new log file
@@ -50,8 +50,8 @@ vast:
 
   # The sink type to use for console logging. Possible values: stderr,
   # syslog, journald. Note that 'journald' can only be selected on linux
-  # systems, and only if VAST was built with journald support.
-  # The journald sink is used as default if VAST is started as a systemd
+  # systems, and only if Tenzir was built with journald support.
+  # The journald sink is used as default if Tenzir is started as a systemd
   # service and the service is configured to use the journal for stderr,
   # otherwise the default is the unstructured stderr sink.
   #console-sink: stderr/journald
@@ -78,10 +78,10 @@ vast:
   # from.
   plugin-dirs: []
 
-  # The plugins to load at startup. For relative paths, VAST tries to find
+  # The plugins to load at startup. For relative paths, Tenzir tries to find
   # the files in the specified `vast.plugin-dirs`. The special values
   # 'bundled' and 'all' enable autoloading of bundled and all plugins
-  # respectively. Note: Add `example` or `/path/to/libvast-plugin-example.so`
+  # respectively. Note: Add `example` or `/path/to/libtenzir-plugin-example.so`
   # to load the example plugin.
   plugins: []
 
@@ -144,7 +144,7 @@ vast:
 
   # The configuration of the metrics reporting component.
   metrics:
-    # Configures if and how metrics should be ingested back into VAST.
+    # Configures if and how metrics should be ingested back into Tenzir.
     self-sink:
       enable: true
       slice-size: 128
@@ -152,12 +152,12 @@ vast:
     file-sink:
       enable: false
       real-time: false
-      path: /tmp/vast-metrics.log
+      path: /tmp/tenzir-metrics.log
     # Configures if and where metrics should be written to a socket.
     uds-sink:
       enable: false
       real-time: false
-      path: /tmp/vast-metrics.sock
+      path: /tmp/tenzir-metrics.sock
       type: datagram
 
   # The `index` key is used to adjust the false-positive rate of
@@ -169,19 +169,19 @@ vast:
     # The default false-positive rate for type synopses.
     default-fp-rate: 0.01
     # rules:
-    #   Every rule adjusts the behaviour of VAST for a set of targets.
-    #   VAST creates one synopsis per target. Targets can be either types
+    #   Every rule adjusts the behaviour of Tenzir for a set of targets.
+    #   Tenzir creates one synopsis per target. Targets can be either types
     #   or field names.
     #
     #   fp-rate - false positive rate. Has effect on string and address type
     #             targets
     #
-    #   partition-index - VAST will not create dense index when set to false
+    #   partition-index - Tenzir will not create dense index when set to false
     #   - targets: [:string, :ip]
     #     fp-rate: 0.01
     #     partition-index: false
 
-  # The `vast start` command starts a new VAST server process.
+  # The `tenzir-ctl start` command starts a new Tenzir server process.
   start:
 
     # Prints the endpoint for clients when the server is ready to accept
@@ -191,7 +191,7 @@ vast:
 
     # An ordered list of commands to run inside the node after starting.
     # As an example, to configure an auto-starting PCAP source that listens
-    # on the interface 'en0' and lives inside the VAST node, add `spawn
+    # on the interface 'en0' and lives inside the Tenzir node, add `spawn
     # source pcap -i en0`.
     # Note that commands are not executed sequentially but in parallel.
     commands: []
@@ -211,26 +211,27 @@ vast:
     disk-budget-step-size: 1
 
     # Binary to use for checking the size of the database directory. If left
-    # unset, VAST will recursively add up the size of all files in the
+    # unset, Tenzir will recursively add up the size of all files in the
     # database directory to compute the size. Mainly useful for e.g.
     # compressed filesystem where raw file size is not the correct metric.
     # Must be the absolute path to an executable file, which will get passed
     # the database directory as its first and only argument.
-    #disk-budget-check-binary: /opt/vast/libexec/vast-df-percent.sh
+    #disk-budget-check-binary: /opt/tenzir/libexec/tenzir-df-percent.sh
 
 
-  # The `vast count` command counts hits for a query without exporting data.
+  # The `tenzir-ctl count` command counts hits for a query without exporting
+  # data.
   count:
 
     # Estimate an upper bound by skipping candidate checks.
     estimate: false
 
-  # The `vast dump` command prints configuration objects as JSON.
+  # The `tenzir-ctl dump` command prints configuration objects as JSON.
   dump:
     # Format output as YAML.
     yaml: false
 
-  # The `vast export` command exports query results to stdout or a file.
+  # The `tenzir-ctl export` command exports query results to stdout or a file.
   export:
     # Mark a query as continuous.
     continuous: false
@@ -250,10 +251,10 @@ vast:
     # The maximum number of events to export.
     #max-events: <infinity>
 
-    # Path for reading the query or "-" for reading from stdin.
-    # Note: Setting this option in the config file creates a conflict with
-    # `vast export` with a positional query argument. This option is only
-    # listed here for completeness.
+    # Path for reading the query or "-" for reading from stdin. Note: Setting
+    # this option in the config file creates a conflict with `tenzir-ctl export`
+    # with a positional query argument. This option is only listed here for
+    # completeness.
     #read: '-'
 
     # Path to write events to or "-" for writing to stdout.
@@ -262,8 +263,8 @@ vast:
     # Treat the write option as a UNIX domain socket to connect to.
     uds: false
 
-    # The `vast export json` command exports events formatted as JSONL (line-
-    # delimited JSON).
+    # The `tenzir-ctl export json` command exports events formatted as JSONL
+    # (line- delimited JSON).
     json:
 
       # Flatten nested objects into the top-level object.
@@ -287,12 +288,12 @@ vast:
       # Set a default value for the omit-nulls and omit-empty-* options.
       omit-empty: false
 
-    # The `vast export pcap` command exports events in the PCAP format.
+    # The `tenzir-ctl export pcap` command exports events in the PCAP format.
     pcap:
       # Flush to disk after this many packets.
       flush-interval: 10000
 
-  # The `vast import` command imports data from stdin, files or over the
+  # The `tenzir-ctl import` command imports data from stdin, files or over the
   # network.
   import:
 
@@ -328,19 +329,19 @@ vast:
     # An alternate schema as a string.
     #schema: <none>
 
-    # The `vast import csv` command imports comma-separated values.
+    # The `tenzir-ctl import csv` command imports comma-separated values.
     csv:
       # The single-character separator. Set this to ' ' to parse space-separated
       # values, or '\t' to parse tab-separated values.
       separator: ','
 
-    # The `vast import json` command imports JSONL data.
+    # The `tenzir-ctl import json` command imports JSONL data.
     json:
       # Read the event type from the given field (specify as
       # '<field>[:<prefix>]').
       #selector= <none>
 
-    # The `vast import pcap` command imports PCAP logs.
+    # The `tenzir-ctl import pcap` command imports PCAP logs.
     pcap:
       # Network interface to read packets from.
       #interface: <none>
@@ -368,23 +369,23 @@ vast:
       # Disable computation of community id for every packet.
       disable-community-id: false
 
-    # The `vast import test` command imports randomly generated events. Used for
-    # debugging and benchmarking only.
+    # The `tenzir-ctl import test` command imports randomly generated events.
+    # Used for debugging and benchmarking only.
     test:
       # The PRNG seed.
       seed: 0
 
-    # The `vast import zeek` command imports Zeek logs.
+    # The `tenzir-ctl import zeek` command imports Zeek logs.
     zeek:
       # Flag to indicate whether the output should contain #open/#close tags.
       # Zeek writes these tags in its logs such that users can gain insight
-      # when Zeek processed the corresponding data. By default, VAST
+      # when Zeek processed the corresponding data. By default, Tenzir
       # does the same. Settings this flag to true skips printing these tags,
       # which may help when fully deterministic output is desired.
       disable-timestamp-tags: false
 
-  # The `vast status` command prints a JSON-formatted status summary of the
-  # node.
+  # The `tenzir-ctl status` command prints a JSON-formatted status summary of
+  # the node.
   status:
 
     # The timeout for components to report their status.
@@ -396,9 +397,9 @@ vast:
     # Include extra debug information
     debug: false
 
-# The below settings are internal to CAF, and are not checked by VAST directly.
+# The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may
-# be in conflict with VAST options, and are only listed here for completeness.
+# be in conflict with Tenzir options, and are only listed here for completeness.
 caf:
 
   # Options affecting the internal scheduler.
@@ -417,7 +418,7 @@ caf:
     profiling-resolution: 100ms
 
     # Forces a fixed number of threads if set. Defaults to the number of
-    # available CPU cores if starting a VAST node, or *2* for client commands.
+    # available CPU cores if starting a Tenzir node, or *2* for client commands.
     #max-threads: <number of cores>
 
     # Maximum number of messages actors can consume in one run.

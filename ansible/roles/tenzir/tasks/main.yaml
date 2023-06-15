@@ -1,64 +1,64 @@
 # We install the config file first, because the Debian Package
-# will restart the VAST node upon installation, and we want to
+# will restart the Tenzir node upon installation, and we want to
 # avoid another restart because the config file changed.
-- name: Ensure directory /opt/vast/etc/vast exists
+- name: Ensure directory /opt/tenzir/etc/tenzir exists
   ansible.builtin.file:
-    path: "/opt/vast/etc/vast"
+    path: "/opt/tenzir/etc/tenzir"
     state: directory
     mode: '0755'
     owner: root
     group: root
 
-- name: Copy vast.yaml
+- name: Copy tenzir.yaml
   ansible.builtin.copy:
     src: "{{ config_file }}"
-    dest: /opt/vast/etc/vast/vast.yaml
+    dest: /opt/tenzir/etc/tenzir/tenzir.yaml
     mode: '0644'
     owner: root
     group: root
-  register: vast_config
+  register: tenzir_config
 
-- name: Ensure directory /etc/systemd/system/vast.service.d exists
+- name: Ensure directory /etc/systemd/system/tenzir.service.d exists
   ansible.builtin.file:
-    path: /etc/systemd/system/vast.service.d
+    path: /etc/systemd/system/tenzir.service.d
     state: directory
     mode: '0755'
     owner: root
     group: root
 
-- name: Create vast-service-overrides.conf
+- name: Create tenzir-service-overrides.conf
   ansible.builtin.template:
-    src: vast-service-overrides.conf.j2
-    dest: /etc/systemd/system/vast.service.d/vast-service-overrides.conf
+    src: tenzir-service-overrides.conf.j2
+    dest: /etc/systemd/system/tenzir.service.d/tenzir-service-overrides.conf
     mode: '0644'
     owner: root
     group: root
-  register: vast_overrides
+  register: tenzir_overrides
 
 - name: Deploy the Debian Package
   ansible.builtin.include_tasks: debian.yaml
   when: ansible_pkg_mgr == "apt"
-  register: vast_package
+  register: tenzir_package
 
 - name: Deploy the static binary tarball
   ansible.builtin.include_tasks: static.yaml
   when: ansible_pkg_mgr != "apt"
-  register: vast_package
+  register: tenzir_package
 
 - name: Restart if config changed
   # Handler notification can't express conjuncion or negation, so we use a task.
-  when: vast_config.changed or vast_overrides.changed and not vast_package.changed  # noqa no-handler
+  when: tenzir_config.changed or tenzir_overrides.changed and not tenzir_package.changed  # noqa no-handler
   ansible.builtin.systemd:
-    name: vast
+    name: tenzir
     state: restarted
 
 - name: Start if not running
   # In case the service was stopped before it would still be at this point, but
   # we want it to run in any case.
   ansible.builtin.systemd:
-    name: vast
+    name: tenzir
     state: started
 
 - name: Propagate variables to the calling context
   ansible.builtin.set_fact:
-    vast_package_status: "{{ vast_package }}"
+    tenzir_package_status: "{{ tenzir_package }}"
