@@ -42,6 +42,10 @@ public:
   /// @note This function calls poll internally.
   auto flush(std::chrono::milliseconds timeout) -> caf::error;
 
+  /// Returns the length of the outbound queue that contains messages and
+  /// requests waiting to be sent to or acknowledged by the broker.
+  auto queue_size() const -> size_t;
+
 private:
   producer() = default;
 

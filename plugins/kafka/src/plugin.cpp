@@ -116,8 +116,12 @@ public:
       return client.error();
     };
     auto guard = caf::detail::make_scope_guard([client = *client]() mutable {
-      if (auto err = client.flush(1000ms))
+      VAST_VERBOSE("waiting 10 seconds to flush pending messages");
+      if (auto err = client.flush(10s))
         VAST_WARN(err);
+      auto num_messages = client.queue_size();
+      if (num_messages > 0)
+        VAST_ERROR("{} messages were not delivered" , num_messages);
     });
     return [&ctrl, topics = std::move(topics), client = *client,
             guard = std::make_shared<decltype(guard)>(std::move(guard))](

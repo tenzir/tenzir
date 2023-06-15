@@ -92,4 +92,8 @@ auto producer::flush(std::chrono::milliseconds timeout) -> caf::error {
   return {};
 }
 
+auto producer::queue_size() const -> size_t {
+  return static_cast<size_t>(producer_->outq_len());
+}
+
 } // namespace vast::plugins::kafka
