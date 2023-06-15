@@ -202,21 +202,25 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       if (!params)
         return response->abort(
           422, "failed to parse endpoint parameters: ", params.error());
-      auto vast_request = vast::http_request{
-        .params = std::move(*params),
-        .response = std::move(response),
-      };
+      // auto vast_request = vast::http_request{
+      //   .params = std::move(*params),
+      //   .response = std::move(response),
+      // };
       // Note that the handler should abort the response by itself if
       // possible (ie. invalid arguments), the error handler is to catch
       // timeouts and real internal errors.
       self
         ->request(handler, caf::infinite, atom::http_request_v,
-                  endpoint.endpoint_id, std::move(vast_request))
-        .then([]() { /*nop*/ },
-              [](const caf::error& e) {
-                VAST_WARN("internal server error while handling request: {}",
-                          e);
-              });
+                  endpoint.endpoint_id, std::move(*params))
+        .then(
+          [response](rest_response& rsp) {
+            auto&& body = std::move(rsp).release();
+            response->finish(std::move(body));
+          },
+          [response](const caf::error& e) {
+            VAST_WARN("internal server error while handling request: {}", e);
+            response->abort(500, "internal server error", e);
+          });
     },
   };
 }

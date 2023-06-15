@@ -43,8 +43,8 @@ struct cell_evaluator<relational_operator::equal> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-      { lhs == rhs } -> std::same_as<bool>;
-    }
+               { lhs == rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_equal(lhs, rhs);
@@ -72,8 +72,8 @@ struct cell_evaluator<relational_operator::less> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-      { lhs < rhs } -> std::same_as<bool>;
-    }
+               { lhs < rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_less(lhs, rhs);
@@ -90,8 +90,8 @@ struct cell_evaluator<relational_operator::less_equal> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-      { lhs <= rhs } -> std::same_as<bool>;
-    }
+               { lhs <= rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_less_equal(lhs, rhs);
@@ -108,8 +108,8 @@ struct cell_evaluator<relational_operator::greater> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-      { lhs > rhs } -> std::same_as<bool>;
-    }
+               { lhs > rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_greater(lhs, rhs);
@@ -126,8 +126,8 @@ struct cell_evaluator<relational_operator::greater_equal> {
 
   template <class LhsView, class Rhs>
     requires requires(const LhsView& lhs, const Rhs& rhs) {
-      { lhs >= rhs } -> std::same_as<bool>;
-    }
+               { lhs >= rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
     if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_greater_equal(lhs, rhs);

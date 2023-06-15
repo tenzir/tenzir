@@ -26,21 +26,21 @@ using response_t
   = restinio::response_builder_t<restinio::user_controlled_output_t>;
 using route_params_t = restinio::router::route_params_t;
 
-class restinio_response final : public vast::http_response {
+class restinio_response final {
 public:
   restinio_response(request_handle_t&& handle, route_params_t&& route_params,
                     bool enable_detailed_errors, const rest_endpoint&);
-  ~restinio_response() override;
+  ~restinio_response();
 
   restinio_response(restinio_response&&) = default;
   restinio_response(const restinio_response&) = delete;
-  restinio_response& operator=(const restinio_response&) = delete;
-  restinio_response& operator=(restinio_response&&) = delete;
+  auto operator=(const restinio_response&) -> restinio_response& = delete;
+  auto operator=(restinio_response&&) -> restinio_response& = delete;
 
-  void append(std::string body) override;
+  void finish(caf::expected<std::string>);
+  void append(std::string body);
 
-  void
-  abort(uint16_t error_code, std::string message, caf::error detail) override;
+  void abort(uint16_t error_code, std::string message, caf::error detail);
 
   // Add a custom response header.
   void add_header(std::string field, std::string value);

@@ -98,4 +98,19 @@ auto parse_endpoint_parameters(
   return result;
 }
 
+rest_response::rest_response(std::string body) : body_(std::move(body)) {
+}
+
+auto rest_response::make_error(uint16_t error_code, std::string message,
+                               caf::error detail) -> rest_response {
+  auto result = rest_response{fmt::format("{{\"error\": {:?}}}\n", message)};
+  result.code_ = error_code;
+  result.detail_ = std::move(detail);
+  return result;
+}
+
+auto rest_response::release() && -> std::string {
+  return std::move(body_);
+}
+
 } // namespace vast

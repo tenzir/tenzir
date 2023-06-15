@@ -96,6 +96,7 @@ public:
       parse_impl(val.value_unsafe(), field, depth + 1);
     }
   }
+
 private:
   auto report_parse_err(auto& v, std::string description) -> void {
     ctrl_.warn(caf::make_error(

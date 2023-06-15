@@ -62,23 +62,24 @@ struct status_handler_state {
   node_actor node_;
 };
 
-status_handler_actor::behavior_type
-status_handler(status_handler_actor::stateful_pointer<status_handler_state> self,
-               node_actor node) {
+auto status_handler(
+  status_handler_actor::stateful_pointer<status_handler_state> self,
+  node_actor node) -> status_handler_actor::behavior_type {
   self->state.node_ = std::move(node);
   return {
-    [self](atom::http_request, uint64_t, http_request rq) {
+    [self](atom::http_request, uint64_t,
+           const vast::record& params) -> caf::result<rest_response> {
       VAST_VERBOSE("{} handles /status request", *self);
       auto arguments = std::vector<std::string>{};
-      if (rq.params.contains("component")) {
-        auto& component = rq.params.at("component");
+      if (params.contains("component")) {
+        auto const& component = params.at("component");
         // The server should have already type-checked this.
         VAST_ASSERT(caf::holds_alternative<std::string>(component));
         arguments.push_back(caf::get<std::string>(component));
       }
       auto options = caf::settings{};
-      if (rq.params.contains("verbosity")) {
-        auto verbosity = caf::get<std::string>(rq.params.at("verbosity"));
+      if (params.contains("verbosity")) {
+        auto verbosity = caf::get<std::string>(params.at("verbosity"));
         if (verbosity == "info")
           /* nop */;
         else if (verbosity == "detailed")
@@ -86,26 +87,30 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
         else if (verbosity == "debug")
           caf::put(options, "vast.status.debug", true);
         else
-          return rq.response->abort(422, "invalid verbosity\n", caf::error{});
+          return rest_response::make_error(422, "invalid verbosity\n",
+                                           caf::error{});
       }
       auto inv = vast::invocation{
         .options = options,
         .full_name = "status",
         .arguments = arguments,
       };
+      auto rp = self->make_response_promise<rest_response>();
       self
         ->request(self->state.node_, caf::infinite, atom::run_v, std::move(inv))
         .then(
-          [rsp = rq.response](const caf::message&) {
-            rsp->abort(500, "unexpected response\n", caf::error{});
+          [rp](const caf::message&) mutable {
+            rp.deliver(rest_response::make_error(500, "unexpected response\n",
+                                                 caf::error{}));
           },
-          [rsp = rq.response](caf::error& e) {
+          [rp](caf::error& e) mutable {
             // The NODE uses some black magic to respond to the request with
             // a `std::string`, which is not what its type signature says. This
             // will arrive as an "unexpected_response" error here.
             if (caf::sec{e.code()} != caf::sec::unexpected_response) {
               VAST_ERROR("node error {}", e);
-              rsp->abort(500, "internal error\n", caf::error{});
+              rp.deliver(rest_response::make_error(500, "internal error\n",
+                                                   caf::error{}));
               return;
             }
             std::string result;
@@ -115,23 +120,26 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
                 result = std::move(str);
               }}(msg);
             }}(ctx);
-            rsp->append(result);
+            rp.deliver(rest_response{result});
           });
+      return rp;
     },
   };
 }
 
 class plugin final : public virtual rest_endpoint_plugin {
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize([[maybe_unused]] const record& plugin_config,
+                  [[maybe_unused]] const record& global_config)
+    -> caf::error override {
     return {};
   }
 
-  [[nodiscard]] std::string name() const override {
+  [[nodiscard]] auto name() const -> std::string override {
     return "api-status";
   };
 
-  [[nodiscard]] data openapi_specification(api_version version) const override {
+  [[nodiscard]] auto openapi_specification(api_version version) const
+    -> data override {
     if (version != api_version::v0)
       return vast::record{};
     auto result = from_yaml(SPEC_V0);
@@ -140,8 +148,8 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] const std::vector<rest_endpoint>&
-  rest_endpoints() const override {
+  [[nodiscard]] auto rest_endpoints() const
+    -> const std::vector<rest_endpoint>& override {
     static const auto endpoints = std::vector<rest_endpoint>{
       {
         .endpoint_id = static_cast<uint64_t>(status_endpoints::status),
@@ -159,8 +167,8 @@ class plugin final : public virtual rest_endpoint_plugin {
     return endpoints;
   }
 
-  rest_handler_actor
-  handler(caf::actor_system& system, node_actor node) const override {
+  auto handler(caf::actor_system& system, node_actor node) const
+    -> rest_handler_actor override {
     return system.spawn(status_handler, node);
   }
 };
