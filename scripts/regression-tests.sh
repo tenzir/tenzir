@@ -32,10 +32,14 @@ docker exec vast-regression \
 
 docker rm -f vast-regression
 
+# Change the volume mount point since the default database location changed from
+# /var/lib/vast to /var/lib/tenzir.
+VAST_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e VAST_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/tenzir/"
+
 # Pull the new version to verify database compatibility.
 docker run \
   $VAST_RUN_FLAGS \
-  ghcr.io/tenzir/vast:$NEW_VERSION \
+  ghcr.io/tenzir/tenzir:$NEW_VERSION \
   start
 
 sleep 3

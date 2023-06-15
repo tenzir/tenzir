@@ -10,7 +10,7 @@ services:
     command: app-thehive-run
     environment:
       - THEHIVE_URL=http://thehive:9000
-      - VAST_ENDPOINT=vast:5158
+      - TENZIR_ENDPOINT=vast:5158
       - BACKFILL_LIMIT=${BACKFILL_LIMIT:-100}
       - DEFAULT_ORGADMIN_EMAIL=${DEFAULT_ORGADMIN_EMAIL:-orgadmin@thehive.local}
       - DEFAULT_ORGADMIN_PWD=${DEFAULT_ORGADMIN_PWD:-secret}

@@ -2,7 +2,7 @@ ARG VAST_VERSION
 ARG QUARTO_VERSION
 ARG VAST_CONTAINER_REGISTRY
 
-FROM $VAST_CONTAINER_REGISTRY/tenzir/vast:$VAST_VERSION AS quarto-base
+FROM $VAST_CONTAINER_REGISTRY/tenzir/tenzir:$VAST_VERSION AS quarto-base
 ARG QUARTO_VERSION
 
 USER root
@@ -34,11 +34,11 @@ RUN git clone -b v${QUARTO_VERSION} https://github.com/quarto-dev/quarto-cli.git
     cd /opt/quarto && \
     ./configure.sh
 
-RUN mkdir /home/vast && chown vast:vast /home/vast
+RUN mkdir /home/tenzir && chown tenzir:tenzir /home/tenzir
 
-USER vast:vast
+USER tenzir:tenzir
 
-# We install Poetry alongside VAST, they shouldn't disturb each other
+# We install Poetry alongside Tenzir, they shouldn't disturb each other
 ENV POETRY_HOME=$PREFIX
 
 RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
@@ -55,8 +55,8 @@ RUN apt update && \
 COPY docker/quarto/entrypoint.sh /entrypoint.sh
 
 # the user whith which the entrypoint script will run the provided commands
-ENV CONTAINER_USER=vast
-ENV CONTAINER_GROUP=vast
+ENV CONTAINER_USER=tenzir
+ENV CONTAINER_GROUP=tenzir
 
 ENTRYPOINT [ "/entrypoint.sh" ]
 
