@@ -271,7 +271,7 @@ jobs:
           # edition to ghcr.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             docker_config="$(jq -c '(.editions[] | .registries) |= [] |
-              (.editions[] | select(.name == "vast") | .registries) |= ["ghcr.io"]' \
+              (.editions[] | select(.name == "tenzir") | .registries) |= ["ghcr.io"]' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
