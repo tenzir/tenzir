@@ -86,6 +86,10 @@ public:
     return operator_location::local;
   }
 
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto to_string() const noexcept -> std::string override {
     return fmt::format("write {}{}{} to {}{}{}", printer_plugin_.name(),
                        print_args.empty() ? "" : " ",

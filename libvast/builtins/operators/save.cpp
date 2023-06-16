@@ -54,6 +54,10 @@ public:
     return operator_location::local;
   }
 
+  auto detached() const -> bool override {
+    return true;
+  }
+
   auto to_string() const -> std::string override {
     return fmt::format("save {}{}{}", saver_plugin_.name(),
                        args_.empty() ? "" : " ", escape_operator_args(args_));
