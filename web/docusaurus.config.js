@@ -315,10 +315,6 @@ async function createConfig() {
                   href: 'https://tenzir.com',
                 },
                 {
-                  label: 'VAST and Tenzir',
-                  to: '/vast-and-tenzir',
-                },
-                {
                   label: 'Privacy Statement',
                   to: '/privacy-statement',
                 },
