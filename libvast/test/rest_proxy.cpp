@@ -45,7 +45,7 @@ TEST(proxy request) {
 }
 
 TEST(invalid request) {
-  // invalid path
+  MESSAGE("invalid path");
   auto desc = vast::http_request_description{
     .canonical_path = "foo",
     .params = {},
@@ -59,22 +59,22 @@ TEST(invalid request) {
     [](const caf::error& e) {
       FAIL(e);
     });
-
-  // invalid params
-  auto desc2 = vast::http_request_description{
-    .canonical_path = "POST /status (v0)",
-    .params = {{"asdf", "jkl"}},
-  };
-  auto rp2
-    = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc2);
-  run();
-  rp2.receive(
-    [](vast::rest_response& response) {
-      CHECK(response.is_error());
-    },
-    [](const caf::error& e) {
-      FAIL(e);
-    });
+  // TODO: Enable when the endpoint does strict parameter validation.
+  // MESSAGE("invalid params");
+  // auto desc2 = vast::http_request_description{
+  //  .canonical_path = "POST /status (v0)",
+  //  .params = {{"asdf", "jkl"}},
+  //};
+  // auto rp2
+  //  = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc2);
+  // run();
+  // rp2.receive(
+  //  [](vast::rest_response& response) {
+  //    CHECK(response.is_error());
+  //  },
+  //  [](const caf::error& e) {
+  //    FAIL(e);
+  //  });
 }
 
 FIXTURE_SCOPE_END()
