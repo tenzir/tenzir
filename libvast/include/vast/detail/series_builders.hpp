@@ -339,10 +339,26 @@ private:
     }
   }
 
-  template <concrete_type NewType, concrete_type CurrentType, class... Args>
+  /// @brief Changes the type of the builder to one of the CommonTypes if all
+  /// the values in the array and value_to_add can be cast to it. The cast
+  /// values are a part of the new builder.
+  /// @tparam ...CommonTypes Types to which the array and the value_to_add
+  /// should be cast to. The first successful type is the new builder's type.
+  /// @tparam NewType Type of the newly added value.
+  /// @tparam CurrentType Current builder's type.
+  /// @param new_value_type Value_to_add type.
+  /// @param value_to_add A new value that is to be appended to the builder.
+  /// @param array All values of the builder.
+  /// @param curr_type Type of a builder.
+  /// @return An error if no common type can be found to contain all the builder
+  /// values and a value_to_add. In reality all casts should succeed when
+  /// string_type is considered and it is considered as a last resort.
+  template <concrete_type NewType, concrete_type CurrentType,
+            class... CommonTypes>
   auto change_builder(const NewType& new_value_type, auto value_to_add,
-                      auto array, const CurrentType& curr_type,
-                      type_list<Args...>) -> caf::error {
+                      const std::shared_ptr<arrow::Array>& array,
+                      const CurrentType& curr_type, type_list<CommonTypes...>)
+    -> caf::error {
     auto impl = [&]<class Type>(const Type& common_type) {
       constexpr auto failure = true;
       if constexpr (std::is_same_v<Type, NewType>) {
@@ -374,7 +390,7 @@ private:
       }
       return not failure;
     };
-    auto failed = (impl(Args{}) && ...);
+    auto failed = (impl(CommonTypes{}) && ...);
     if (failed)
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to add {}: no conversion "
@@ -388,10 +404,12 @@ private:
                    const CurrentType& current_type, auto array) -> caf::error {
     // Remove current_type from common types and remove enumeration_type as it
     // has no field informations to be cast into.
-    using common_types = detail::tl_remove_types_t<
-      detail::tl_common_types_t<typename supported_casts<CurrentType>::types,
-                                typename supported_casts<NewType>::types>,
-      CurrentType, enumeration_type>;
+    using common_types = caf::detail::tl_filter_not_type_t<
+      caf::detail::tl_filter_not_type_t<
+        detail::tl_common_types_t<typename supported_casts<CurrentType>::types,
+                                  typename supported_casts<NewType>::types>,
+        CurrentType>,
+      enumeration_type>;
     return change_builder(new_type, value_to_add, array, current_type,
                           common_types{});
   }

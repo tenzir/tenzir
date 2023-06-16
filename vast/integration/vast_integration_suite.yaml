@@ -703,7 +703,7 @@ tests:
   Use schema time unit when converting from a double to a duration:
     tags: [pipelines]
     steps:
-      - command: exec 'from file @./data/json/double-to-duration-cast.json read json --selector=schema:argus | write json to stdout'
+      - command: exec 'from file @./data/json/double-to-duration-cast.json read json --selector=schema:argus | select SIntPkt | write json to stdout'
 
   Read from suricata file:
     tags: [pipelines]

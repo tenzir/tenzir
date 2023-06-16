@@ -31,11 +31,4 @@ static_assert(
 static_assert(
   std::is_same_v<tl_common_types_t<type_list<>, type_list<int>>, type_list<>>);
 
-// remove all occurrences of a types in the list
-static_assert(
-  std::is_same_v<
-    tl_remove_types_t<type_list<char, int, bool, std::string, bool, char>, bool,
-                      char>,
-    type_list<int, std::string>>);
-
 } // namespace
