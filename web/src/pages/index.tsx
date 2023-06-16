@@ -72,7 +72,7 @@ function HomepageHeader() {
                   key="latest-release-carousel"
                   title={latestReleaseBlogPost?.metadata?.title}
                   link={latestReleaseBlogPost?.metadata?.permalink}
-                  label="Latest Relaese"
+                  label="Latest Release"
                   buttonLabel="Read Announcement"
                   imageLink={latestReleaseBlogPost?.metadata?.frontMatter?.image}
                   description={
