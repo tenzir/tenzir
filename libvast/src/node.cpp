@@ -426,7 +426,7 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   auto result = rest_handlers.find(desc.canonical_path);
   // If no canonical path matches, `find_endpoint_plugin()` should
   // have already returned `nullptr`.
-  VAST_ASSERT_CHEAP(it != rest_handlers.end());
+  VAST_ASSERT_CHEAP(result != rest_handlers.end());
   return result->second;
 }
 
