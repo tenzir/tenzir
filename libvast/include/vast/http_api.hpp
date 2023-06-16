@@ -103,6 +103,10 @@ struct rest_endpoint {
 
 struct rest_response {
   rest_response() = default;
+
+  // TODO: Have the constructor accept a `vast::record` instead and
+  // provide an explicit `from_json_string()` method, to enforce a
+  // JSON-like structure of the responses.
   explicit rest_response(std::string body);
 
   static auto make_error(uint16_t error_code, std::string message,
@@ -125,9 +129,7 @@ struct rest_response {
 private:
   size_t code_ = 200;
 
-  // TODO: Use a `vast::record` here to enforce JSON-like structure.
-  // This can only be done after we fixed the `status` handling of the
-  // node to use regular response/request messaging.
+  // The response body
   std::string body_ = {};
 
   // Whether this is an error response. We can't just check `code_` because
