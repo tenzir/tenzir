@@ -10,6 +10,7 @@
 
 #include "vast/cast.hpp"
 #include "vast/detail/stable_map.hpp"
+#include "vast/detail/type_list.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 
@@ -88,8 +89,13 @@ class concrete_series_builder_base {
 public:
   explicit concrete_series_builder_base(vast::type type = vast::type{Type{}})
     : type_{std::move(type)},
-      builder_(caf::get<Type>(type_).make_arrow_builder(
-        arrow::default_memory_pool())) {
+      builder_{caf::get<Type>(type_).make_arrow_builder(
+        arrow::default_memory_pool())} {
+  }
+
+  concrete_series_builder_base(
+    vast::type type, std::shared_ptr<type_to_arrow_builder_t<Type>> builder)
+    : type_{std::move(type)}, builder_{std::move(builder)} {
   }
 
   auto add(view<type_to_data_t<Type>> view) {
@@ -299,17 +305,6 @@ private:
     }
   }
 
-  auto cast_to_duration(const time_type& t,
-                        concrete_series_builder<duration_type>& builder,
-                        vast::time value) {
-    auto res = cast_value(t, value, duration_type{});
-    if (res) {
-      builder.add(*res);
-      return caf::error{};
-    }
-    return std::move(res.error());
-  }
-
   auto
   cast_to_duration(const string_type& t,
                    concrete_series_builder<duration_type>& builder, auto view) {
@@ -344,6 +339,81 @@ private:
     }
   }
 
+  /// @brief Changes the type of the builder to one of the CommonTypes if all
+  /// the values in the array and value_to_add can be cast to it. The cast
+  /// values are a part of the new builder.
+  /// @tparam ...CommonTypes Types to which the array and the value_to_add
+  /// should be cast to. The first successful type is the new builder's type.
+  /// @tparam NewType Type of the newly added value.
+  /// @tparam CurrentType Current builder's type.
+  /// @param new_value_type Value_to_add type.
+  /// @param value_to_add A new value that is to be appended to the builder.
+  /// @param array All values of the builder.
+  /// @param curr_type Type of a builder.
+  /// @return An error if no common type can be found to contain all the builder
+  /// values and a value_to_add. In reality all casts should succeed when
+  /// string_type is considered and it is considered as a last resort.
+  template <concrete_type NewType, concrete_type CurrentType,
+            class... CommonTypes>
+  auto change_builder(const NewType& new_value_type, auto value_to_add,
+                      const std::shared_ptr<arrow::Array>& array,
+                      const CurrentType& curr_type, type_list<CommonTypes...>)
+    -> caf::error {
+    auto impl = [&]<class Type>(const Type& common_type) {
+      constexpr auto failure = true;
+      if constexpr (std::is_same_v<Type, NewType>) {
+        auto cast_builder = cast_to_builder(
+          curr_type,
+          std::static_pointer_cast<type_to_arrow_array_t<CurrentType>>(array),
+          new_value_type);
+        if (not cast_builder)
+          return failure;
+        auto new_builder = concrete_series_builder<Type>(
+          vast::type{new_value_type}, std::move(*cast_builder));
+        new_builder.add(value_to_add);
+        *this = std::move(new_builder);
+      } else {
+        auto new_val = cast_value(new_value_type, value_to_add, common_type);
+        if (not new_val)
+          return failure;
+        auto cast_builder = cast_to_builder(
+          curr_type,
+          std::static_pointer_cast<type_to_arrow_array_t<CurrentType>>(array),
+          common_type);
+        if (not cast_builder)
+          return failure;
+        auto new_builder = concrete_series_builder<Type>(
+          vast::type{common_type}, std::move(*cast_builder));
+        if constexpr (not std::is_same_v<caf::expected<void>, decltype(new_val)>)
+          new_builder.add(*new_val);
+        *this = std::move(new_builder);
+      }
+      return not failure;
+    };
+    auto failed = (impl(CommonTypes{}) && ...);
+    if (failed)
+      return caf::make_error(ec::convert_error,
+                             fmt::format("unable to add {}: no conversion "
+                                         "available",
+                                         data{materialize(value_to_add)}));
+    return caf::error{};
+  }
+
+  template <concrete_type NewType, concrete_type CurrentType>
+  auto change_type(const NewType& new_type, auto value_to_add,
+                   const CurrentType& current_type, auto array) -> caf::error {
+    // Remove current_type from common types and remove enumeration_type as it
+    // has no field informations to be cast into.
+    using common_types = caf::detail::tl_filter_not_type_t<
+      caf::detail::tl_filter_not_type_t<
+        detail::tl_common_types_t<typename supported_casts<CurrentType>::types,
+                                  typename supported_casts<NewType>::types>,
+        CurrentType>,
+      enumeration_type>;
+    return change_builder(new_type, value_to_add, array, current_type,
+                          common_types{});
+  }
+
   template <concrete_type Type>
   auto add_impl(auto view) -> caf::error {
     return std::visit(
@@ -364,6 +434,11 @@ private:
           concrete_series_builder<BuilderValueType>& builder) {
           if (auto maybe_err = can_cast(Type{}, BuilderValueType{});
               not maybe_err) {
+            if (can_change_builder_type_) {
+              return change_type(Type{}, view,
+                                 caf::get<BuilderValueType>(builder.type()),
+                                 builder.finish());
+            }
             return maybe_err.error();
           }
           auto err = cast_impl<BuilderValueType, Type>(builder, view);
@@ -371,9 +446,9 @@ private:
             return caf::error{};
           if (err and not can_change_builder_type_)
             return err;
-          // TODO: implement casting whole array instead of returning error here
-          // in upcomming PR.
-          return err;
+          return change_type(Type{}, view,
+                             caf::get<BuilderValueType>(builder.type()),
+                             builder.finish());
         },
         [view](concrete_series_builder<record_type>&) {
           return caf::make_error(ec::convert_error,

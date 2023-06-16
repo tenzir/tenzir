@@ -580,3 +580,76 @@ TEST(positive double to duration) {
 }
 
 FIXTURE_SCOPE_END()
+
+TEST(cast int64_t array to a string builder) {
+  auto int_builder
+    = vast::int64_type::make_arrow_builder(arrow::default_memory_pool());
+  auto status = int_builder->Append(1);
+  status = int_builder->Append(2);
+  status = int_builder->AppendNull();
+  status = int_builder->Append(3);
+  auto array
+    = std::static_pointer_cast<vast::type_to_arrow_array_t<vast::int64_type>>(
+      int_builder->Finish().ValueOrDie());
+  auto out
+    = vast::cast_to_builder(vast::int64_type{}, array, vast::string_type{});
+  REQUIRE(out);
+  auto arr = (*out)->Finish().ValueOrDie();
+  auto vals = vast::values(vast::type{vast::string_type{}}, *arr);
+  std::vector<vast::data_view> views;
+  for (const auto& val : vals)
+    views.push_back(val);
+  REQUIRE_EQUAL(views.size(), 4u);
+  CHECK_EQUAL(materialize(views[0]), "+1");
+  CHECK_EQUAL(materialize(views[1]), "+2");
+  CHECK_EQUAL(materialize(views[2]), caf::none);
+  CHECK_EQUAL(materialize(views[3]), "+3");
+}
+
+TEST(casting builder with no compatible types results in an error) {
+  auto int_builder
+    = vast::int64_type::make_arrow_builder(arrow::default_memory_pool());
+  auto status = int_builder->Append(1);
+  auto array
+    = std::static_pointer_cast<vast::type_to_arrow_array_t<vast::int64_type>>(
+      int_builder->Finish().ValueOrDie());
+  auto out = vast::cast_to_builder(vast::int64_type{}, array,
+                                   vast::list_type{vast::string_type{}});
+  CHECK(not out);
+}
+
+TEST(
+  casting int64_t array to uint64_t builder works when all values can be cast) {
+  auto int_builder
+    = vast::int64_type::make_arrow_builder(arrow::default_memory_pool());
+  auto status = int_builder->Append(1);
+  status = int_builder->Append(2);
+  status = int_builder->Append(3);
+  auto array
+    = std::static_pointer_cast<vast::type_to_arrow_array_t<vast::int64_type>>(
+      int_builder->Finish().ValueOrDie());
+  auto out
+    = vast::cast_to_builder(vast::int64_type{}, array, vast::uint64_type{});
+  REQUIRE(out);
+  auto arr = (*out)->Finish().ValueOrDie();
+  auto vals = vast::values(vast::type{vast::uint64_type{}}, *arr);
+  std::vector<vast::data_view> views;
+  for (const auto& val : vals)
+    views.push_back(val);
+  REQUIRE_EQUAL(views.size(), 3u);
+  CHECK_EQUAL(materialize(views[0]), uint64_t{1});
+  CHECK_EQUAL(materialize(views[1]), uint64_t{2});
+  CHECK_EQUAL(materialize(views[2]), uint64_t{3});
+}
+
+TEST(casting int64_t array to uint64_t builder fails due to negative value) {
+  auto int_builder
+    = vast::int64_type::make_arrow_builder(arrow::default_memory_pool());
+  auto status = int_builder->Append(-1);
+  auto array
+    = std::static_pointer_cast<vast::type_to_arrow_array_t<vast::int64_type>>(
+      int_builder->Finish().ValueOrDie());
+  auto out
+    = vast::cast_to_builder(vast::int64_type{}, array, vast::uint64_type{});
+  CHECK(not out);
+}
