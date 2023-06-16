@@ -75,6 +75,12 @@ Specifies the separator for unset "null" fields.
 
 Defaults to `-`.
 
+### `-d|--disable-timestamp-tags` (Printer)
+
+Disables the `#open` and `#close` timestamp tags.
+
+Defaults to `false`.
+
 ## Examples
 
 Read a Zeek `conn.log` from a file:

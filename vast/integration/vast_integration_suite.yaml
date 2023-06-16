@@ -817,17 +817,17 @@ tests:
         input: data/zeek/merge.log
       - command: exec 'from stdin read zeek-tsv | write json to stdout'
         input: data/zeek/merge_with_whitespace_separation.log
-      - command: exec 'from stdin read zeek-tsv | head 300 | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | head 300 | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/dns.log.gz
       - command: exec 'from stdin read zeek-tsv | head 300 | write csv to stdout'
         input: data/zeek/dns.log.gz
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --set-separator ";" --empty-field "empty" --unset-field "NULLVAL" to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags --set-separator ";" --empty-field "empty" --unset-field "NULLVAL" to stdout'
         input: data/zeek/whitespace_start.log
-      - command: exec 'from stdin read json | write zeek-tsv to stdout'
+      - command: exec 'from stdin read json | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/json/snmp.log.json.gz
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/empty.log
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_no_separator_header.log
         expected_result: error
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
