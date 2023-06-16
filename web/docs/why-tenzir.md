@@ -7,8 +7,8 @@ We're gearing up for the launch of our free Community Edition. Head over to
 
 ## What is Tenzir?
 
-Tenzir is a distributed pipeline platform for processing and storing security
-event data in a pipeline dataflow model, providing the following abstractions:
+Tenzir is a distributed platform for processing and storing security event data
+in a pipeline dataflow model, providing the following abstractions:
 
 - Tenzir's **pipelines** consist of powerful operators that perform computations
   over [Arrow](https://arrow.apache.org) data frames. The [Tenzir Query Language
