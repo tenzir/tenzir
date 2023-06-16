@@ -603,7 +603,7 @@ public:
             }
             xs.resize(metadata.fields.size());
             b = table_slice_builder{metadata.temp_slice_schema};
-            ++it;
+            continue;
           }
           if (closed) {
             ctrl.abort(caf::make_error(ec::syntax_error,
