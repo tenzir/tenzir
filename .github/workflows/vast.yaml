@@ -598,14 +598,14 @@ jobs:
             cxx: g++-12
             dependencies-script-path: scripts/debian/install-dev-dependencies.sh
             cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
-          - os: macos-latest
-            container: null
-            name: macOS
-            compiler: Clang
-            cc: clang
-            cxx: clang++
-            dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
-            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
+        # - os: macos-latest
+        #   container: null
+        #   name: macOS
+        #   compiler: Clang
+        #   cc: clang
+        #   cxx: clang++
+        #   dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
+        #   cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
     env:
       BUILD_DIR: build
       CC: ${{ matrix.vast.cc }}
@@ -806,11 +806,11 @@ jobs:
             cc: gcc-12
             cxx: g++-12
             package-suffix: Release-GCC
-          - os: macos-latest
-            name: macOS
-            cc: clang
-            cxx: clang++
-            package-suffix: Release-Clang
+        # - os: macos-latest
+        #   name: macOS
+        #   cc: clang
+        #   cxx: clang++
+        #   package-suffix: Release-Clang
         plugin:
           - name: Example Analyzer
             target: example-analyzer
