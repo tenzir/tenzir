@@ -202,12 +202,8 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       if (!params)
         return response->abort(
           422, "failed to parse endpoint parameters: ", params.error());
-      // auto vast_request = vast::http_request{
-      //   .params = std::move(*params),
-      //   .response = std::move(response),
-      // };
-      // Note that the handler should abort the response by itself if
-      // possible (ie. invalid arguments), the error handler is to catch
+      // Note that the handler should return a valid "error" response by itself
+      // if possible (ie. invalid arguments), the error handler is to catch
       // timeouts and real internal errors.
       self
         ->request(handler, caf::infinite, atom::http_request_v,

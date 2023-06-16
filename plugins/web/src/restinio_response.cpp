@@ -46,7 +46,7 @@ void restinio_response::append(std::string body) {
 }
 
 void restinio_response::finish(caf::expected<std::string> body) {
-  auto text = body ? fmt::format("{}", body.error()) : *body;
+  auto text = body ? *body : fmt::format("{}", body.error());
   body_size_ += text.size();
   response_.append_body(std::move(text));
 }

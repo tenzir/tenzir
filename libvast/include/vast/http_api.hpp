@@ -108,20 +108,10 @@ struct rest_response {
   static auto make_error(uint16_t error_code, std::string message,
                          caf::error detail) -> rest_response;
 
-  // TODO: move impl into .cpp
-  auto is_error() const -> bool {
-    return detail_ != caf::error{};
-  }
-  auto body() const -> const std::string& {
-    return body_;
-  }
-  auto code() const -> size_t {
-    return code_;
-  }
-  auto error_detail() const -> const caf::error& {
-    return detail_;
-  }
-
+  auto is_error() const -> bool;
+  auto body() const -> const std::string&;
+  auto code() const -> size_t;
+  auto error_detail() const -> const caf::error&;
   auto release() && -> std::string;
 
   template <class Inspector>
@@ -138,8 +128,13 @@ private:
   // TODO: Use a `vast::record` here to enforce JSON-like structure.
   // This can only be done after we fixed the `status` handling of the
   // node to use regular response/request messaging.
-  // caf::expected<std::string> body_ = "";
-  std::string body_ = "{}";
+  std::string body_ = {};
+
+  // Whether this is an error response. We can't just check `code_` because
+  // HTTP defines many different "success" values, and we can't just check
+  // `detail_` because some call sites may not be able to provide a detailed
+  // error.
+  bool is_error_ = false;
 
   // For log messages, debugging, etc. Not returned
   caf::error detail_ = {};
@@ -156,10 +151,12 @@ auto parse_endpoint_parameters(
 /// message.
 class http_request_description {
 public:
-  // /// The name of the plugin to handle the request.
+  /// Unique identification of the request endpoint.
   std::string canonical_path;
 
   /// Request parameters. (unvalidated)
+  /// Query parameters, path parameters, and JSON body parameters
+  /// all get merged into this map.
   detail::stable_map<std::string, std::string> params;
 
   template <class Inspector>

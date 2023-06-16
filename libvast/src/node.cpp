@@ -423,9 +423,8 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   for (auto const& endpoint : plugin->rest_endpoints())
     rest_handlers[endpoint.canonical_path()]
       = std::make_pair(handler, endpoint);
-  return rest_handlers.at(desc.canonical_path);
   auto result = rest_handlers.find(desc.canonical_path);
-  // If no canonical path matches, `find_endpoint_plugin()` would
+  // If no canonical path matches, `find_endpoint_plugin()` should
   // have already returned `nullptr`.
   VAST_ASSERT_CHEAP(it != rest_handlers.end());
   return result->second;
@@ -552,12 +551,15 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       VAST_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler)
-        return caf::make_error(ec::system_error,
-                               "failed to spawn rest handler");
-      auto rp = self->make_response_promise<rest_response>();
+        // TODO: Distinguish between 404 (unknown path) and 500 (failed to
+        // spawn) here.
+        return rest_response::make_error(500, "failed to get rest handler",
+                                         caf::error{});
       auto params = parse_endpoint_parameters(endpoint, desc.params);
       if (!params)
-        return caf::make_error(ec::invalid_argument, "invalid parameters");
+        return rest_response::make_error(400, "invalid parameters",
+                                         params.error());
+      auto rp = self->make_response_promise<rest_response>();
       self
         ->request(handler, caf::infinite, atom::http_request_v,
                   endpoint.endpoint_id, *params)

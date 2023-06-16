@@ -36,6 +36,41 @@ TEST(proxy request) {
       auto body = std::move(response).release();
       auto parsed = vast::from_json(body);
       CHECK(parsed);
+      CHECK(caf::holds_alternative<vast::record>(*parsed));
+      CHECK(caf::get<vast::record>(*parsed).contains("version"));
+    },
+    [](const caf::error& e) {
+      FAIL(e);
+    });
+}
+
+TEST(invalid request) {
+  // invalid path
+  auto desc = vast::http_request_description{
+    .canonical_path = "foo",
+    .params = {},
+  };
+  auto rp = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc);
+  run();
+  rp.receive(
+    [](vast::rest_response& response) {
+      CHECK(response.is_error());
+    },
+    [](const caf::error& e) {
+      FAIL(e);
+    });
+
+  // invalid params
+  auto desc2 = vast::http_request_description{
+    .canonical_path = "POST /status (v0)",
+    .params = {{"asdf", "jkl"}},
+  };
+  auto rp2
+    = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc2);
+  run();
+  rp2.receive(
+    [](vast::rest_response& response) {
+      CHECK(response.is_error());
     },
     [](const caf::error& e) {
       FAIL(e);
