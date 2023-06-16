@@ -45,6 +45,12 @@ void restinio_response::append(std::string body) {
   response_.append_body(std::move(body));
 }
 
+void restinio_response::finish(caf::expected<std::string> body) {
+  auto text = body ? *body : fmt::format("{}", body.error());
+  body_size_ += text.size();
+  response_.append_body(std::move(text));
+}
+
 void restinio_response::abort(uint16_t error_code, std::string message,
                               caf::error detail) {
   response_.header().status_code(restinio::http_status_code_t{error_code});

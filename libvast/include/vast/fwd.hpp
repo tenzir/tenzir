@@ -137,7 +137,7 @@ class duration_type;
 class enumeration_type;
 class ewah_bitmap;
 class expression;
-class http_request;
+// class http_request;
 class http_request_description;
 class int64_type;
 class ip;
@@ -229,6 +229,7 @@ struct query_cursor;
 struct query_status;
 struct report;
 struct rest_endpoint;
+struct rest_response;
 struct schema_statistics;
 struct spawn_arguments;
 struct status;
@@ -387,7 +388,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
-  VAST_ADD_TYPE_ID((vast::http_request))
   VAST_ADD_TYPE_ID((vast::http_request_description))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::ip))
@@ -408,6 +408,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
   VAST_ADD_TYPE_ID((vast::rest_endpoint))
+  VAST_ADD_TYPE_ID((vast::rest_response))
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice_column))
   VAST_ADD_TYPE_ID((vast::table_slice))

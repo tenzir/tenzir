@@ -98,4 +98,36 @@ auto parse_endpoint_parameters(
   return result;
 }
 
+rest_response::rest_response(std::string body) : body_(std::move(body)) {
+}
+
+auto rest_response::is_error() const -> bool {
+  return is_error_;
+}
+
+auto rest_response::body() const -> const std::string& {
+  return body_;
+}
+
+auto rest_response::code() const -> size_t {
+  return code_;
+}
+
+auto rest_response::error_detail() const -> const caf::error& {
+  return detail_;
+}
+
+auto rest_response::release() && -> std::string {
+  return std::move(body_);
+}
+
+auto rest_response::make_error(uint16_t error_code, std::string message,
+                               caf::error detail) -> rest_response {
+  auto result = rest_response{fmt::format("{{\"error\": {:?}}}\n", message)};
+  result.code_ = error_code;
+  result.is_error_ = true;
+  result.detail_ = std::move(detail);
+  return result;
+}
+
 } // namespace vast

@@ -357,7 +357,8 @@ using exporter_actor = typed_actor_fwd<
 /// The interface of a REST HANDLER actor.
 using rest_handler_actor = typed_actor_fwd<
   // Receive an incoming HTTP request.
-  auto(atom::http_request, uint64_t, http_request)->caf::result<void>>::unwrap;
+  auto(atom::http_request, uint64_t, vast::record)
+    ->caf::result<rest_response>>::unwrap;
 
 /// The interface of a COMPONENT PLUGIN actor.
 using component_plugin_actor = typed_actor_fwd<>
@@ -409,7 +410,7 @@ using node_actor = typed_actor_fwd<
   // Note that nodes connected via CAF trust each other completely,
   // so this skips all authorization and access control mechanisms
   // that come with HTTP(s).
-  auto(atom::proxy, http_request_description)->caf::result<std::string>,
+  auto(atom::proxy, http_request_description)->caf::result<rest_response>,
   // INTERNAL: Spawn component plugins.
   auto(atom::internal, atom::spawn, atom::plugin)->caf::result<void>,
   // Run an invocation in the node that spawns an actor.
@@ -495,7 +496,6 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::http_request)
 #undef vast_uuid_synopsis_map
 
 #undef VAST_ADD_TYPE_ID

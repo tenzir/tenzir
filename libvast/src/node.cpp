@@ -25,7 +25,6 @@
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/internal_http_response.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/execution_node.hpp"
@@ -425,8 +424,9 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
     rest_handlers[endpoint.canonical_path()]
       = std::make_pair(handler, endpoint);
   auto result = rest_handlers.find(desc.canonical_path);
-  if (it == rest_handlers.end())
-    return empty_response;
+  // If no canonical path matches, `find_endpoint_plugin()` should
+  // have already returned `nullptr`.
+  VAST_ASSERT_CHEAP(result != rest_handlers.end());
   return result->second;
 }
 
@@ -547,34 +547,28 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       return run(inv, self->system(), node_state::command_factory);
     },
     [self](atom::proxy,
-           http_request_description& desc) -> caf::result<std::string> {
+           http_request_description& desc) -> caf::result<rest_response> {
       VAST_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler)
-        return caf::make_error(ec::system_error,
-                               "failed to spawn rest handler");
-      auto rp = self->make_response_promise<std::string>();
-      auto response = std::make_shared<detail::internal_http_response>(rp);
+        // TODO: Distinguish between 404 (unknown path) and 500 (failed to
+        // spawn) here.
+        return rest_response::make_error(500, "failed to get rest handler",
+                                         caf::error{});
       auto params = parse_endpoint_parameters(endpoint, desc.params);
       if (!params)
-        return caf::make_error(ec::invalid_argument, "invalid parameters");
-      auto request = http_request{
-        .params = *params,
-        .response = response,
-      };
+        return rest_response::make_error(400, "invalid parameters",
+                                         params.error());
+      auto rp = self->make_response_promise<rest_response>();
       self
         ->request(handler, caf::infinite, atom::http_request_v,
-                  endpoint.endpoint_id, std::move(request))
+                  endpoint.endpoint_id, *params)
         .then(
-          []() mutable {
-            /* nop */
+          [rp](rest_response& rsp) mutable {
+            rp.deliver(std::move(rsp));
           },
-          [response](const caf::error& e) mutable {
-            // TODO: Should we switch to a request/response pattern for the
-            // handlers so they can just return strings or errors? The downside
-            // will be that it's going to be much harder to implement support
-            // for chunked or streaming transfers that way.
-            response->abort(500, "internal server error", e);
+          [rp](const caf::error& e) mutable {
+            rp.deliver(rest_response::make_error(500, "internal error", e));
           });
       return rp;
     },

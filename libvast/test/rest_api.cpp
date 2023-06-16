@@ -42,28 +42,6 @@ struct fixture : public fixtures::node {
   ~fixture() override = default;
 };
 
-class test_response final : public vast::http_response {
-public:
-  /// Append data to the response body.
-  void append(std::string body) override {
-    body_ += body;
-  }
-
-  /// Return an error and close the connection.
-  //  TODO: Statically verify that we can only abort
-  //  with the documented error codes.
-  void
-  abort(uint16_t error_code, std::string message, caf::error detail) override {
-    body_ = "";
-    error_ = caf::make_error(vast::ec::unspecified,
-                             fmt::format("http error {}: {}{}", error_code,
-                                         message, detail));
-  }
-
-  std::string body_ = {};
-  caf::error error_ = {};
-};
-
 } // namespace
 
 TEST(OpenAPI specs) {
@@ -107,21 +85,24 @@ TEST(status endpoint) {
   REQUIRE_EQUAL(endpoints.size(), 1ull);
   auto const& status_endpoint = endpoints[0];
   auto handler = plugin->handler(self->system(), test_node);
-  auto response = std::make_shared<test_response>();
-  auto request = vast::http_request{
-    .params = {{"component", "system"}},
-    .response = response,
-  };
-  self->send(handler, vast::atom::http_request_v, status_endpoint.endpoint_id,
-             std::move(request));
+  auto params = vast::record{{"component", "system"}};
+  auto rp = self->request(handler, caf::infinite, vast::atom::http_request_v,
+                          status_endpoint.endpoint_id, std::move(params));
   run();
-  CHECK_EQUAL(response->error_, caf::error{});
-  CHECK(!response->body_.empty());
-  auto padded_string = simdjson::padded_string{response->body_};
-  simdjson::dom::parser parser;
-  simdjson::dom::element doc;
-  auto error = parser.parse(padded_string).get(doc);
-  REQUIRE(!error);
+  rp.receive(
+    [](vast::rest_response& response) {
+      CHECK_EQUAL(response.code(), size_t{200});
+      auto body = std::move(response).release();
+      CHECK(!body.empty());
+      auto padded_string = simdjson::padded_string{body};
+      simdjson::dom::parser parser;
+      simdjson::dom::element doc;
+      auto error = parser.parse(padded_string).get(doc);
+      REQUIRE(!error);
+    },
+    [](caf::error& e) {
+      FAIL(e);
+    });
 }
 
 FIXTURE_SCOPE_END()

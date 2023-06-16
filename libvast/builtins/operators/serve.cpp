@@ -573,58 +573,57 @@ struct serve_handler_state {
   serve_handler_actor::pointer self = {};
   serve_manager_actor serve_manager = {};
 
-  static auto try_parse_request(const http_request& rq)
+  static auto try_parse_request(const vast::record& params)
     -> caf::expected<serve_request> {
     auto result = serve_request{};
-    auto serve_id = try_get<std::string>(rq.params, "serve_id");
+    auto serve_id = try_get<std::string>(params, "serve_id");
     if (not serve_id) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("failed to read serve_id parameter: "
                                          "{}; got parameters {}",
-                                         serve_id.error(), rq.params));
+                                         serve_id.error(), params));
     }
     if (not *serve_id) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("serve_id must be specified; got "
                                          "parameters {}",
-                                         rq.params));
+                                         params));
     }
     result.serve_id = std::move(**serve_id);
     auto continuation_token
-      = try_get<std::string>(rq.params, "continuation_token");
+      = try_get<std::string>(params, "continuation_token");
     if (not continuation_token) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("failed to read continuation_token "
                                          "parameter: {}; got parameters {}",
-                                         continuation_token.error(),
-                                         rq.params));
+                                         continuation_token.error(), params));
     }
     if (*continuation_token) {
       result.continuation_token = std::move(**continuation_token);
     }
-    auto max_events = try_get<uint64_t>(rq.params, "max_events");
+    auto max_events = try_get<uint64_t>(params, "max_events");
     if (not max_events) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("failed to read max_events "
                                          "parameter: {}; got params {}",
-                                         max_events.error(), rq.params));
+                                         max_events.error(), params));
     }
     if (*max_events) {
       result.limit = **max_events;
     }
-    auto timeout = try_get<duration>(rq.params, "timeout");
+    auto timeout = try_get<duration>(params, "timeout");
     if (not timeout) {
       return caf::make_error(ec::invalid_argument,
                              fmt::format("failed to read timeout "
                                          "parameter: {}; got params {}",
-                                         timeout.error(), rq.params));
+                                         timeout.error(), params));
     }
     if (*timeout) {
       if (**timeout > std::chrono::seconds{5}) {
         return caf::make_error(ec::invalid_argument,
                                fmt::format("timeout parameter {} exceeds limit "
                                            "of 5 seconds; got params {}",
-                                           data{**timeout}, rq.params));
+                                           data{**timeout}, params));
       }
       result.timeout = **timeout;
     }
@@ -689,43 +688,41 @@ struct serve_handler_state {
     return result;
   }
 
-  auto http_request(uint64_t endpoint_id, http_request rq) const
-    -> caf::result<void> {
+  auto http_request(uint64_t endpoint_id, vast::record params) const
+    -> caf::result<rest_response> {
     if (endpoint_id != SERVE_ENDPOINT_ID) {
       return caf::make_error(ec::logic_error,
                              fmt::format("unepexted /serve endpoint id {}",
                                          endpoint_id));
     }
     VAST_DEBUG("{} handles /serve request for endpoint id {} with params {}",
-               *self, endpoint_id, rq.params);
-    auto request = try_parse_request(rq);
+               *self, endpoint_id, params);
+    auto request = try_parse_request(params);
     if (not request) {
-      rq.response->abort(400,
-                         fmt::format(R"({{"error":{:?}}}{})",
-                                     fmt::to_string(request.error()), '\n'),
-                         {});
+      rest_response::make_error(400,
+                                fmt::format(R"({{"error":{:?}}}{})",
+                                            fmt::to_string(request.error()),
+                                            '\n'),
+                                {});
       return {};
     }
-    auto rp = self->make_response_promise<void>();
+    auto rp = self->make_response_promise<rest_response>();
     self
       ->request(serve_manager, caf::infinite, atom::get_v, request->serve_id,
                 request->continuation_token, request->limit, request->timeout)
       .then(
-        [resp = rq.response,
-         rp](const std::tuple<std::string, std::vector<table_slice>>&
+        [rp](const std::tuple<std::string, std::vector<table_slice>>&
                result) mutable {
-          resp->append(
-            create_response(std::get<0>(result), std::get<1>(result)));
-          rp.deliver();
+          rp.deliver(rest_response{
+            create_response(std::get<0>(result), std::get<1>(result))});
         },
-        [resp = rq.response, rp](caf::error& err) mutable {
-          resp->abort(400,
-                      fmt::format(R"({{"error":{:?}}}{})", fmt::to_string(err),
-                                  '\n'),
-                      {});
-          rp.deliver();
+        [rp](caf::error& err) mutable {
+          auto rsp = rest_response::make_error(
+            400,
+            fmt::format(R"({{"error":{:?}}}{})", fmt::to_string(err), '\n'),
+            {});
+          rp.deliver(std::move(rsp));
         });
-
     return rp;
   }
 };
@@ -748,8 +745,8 @@ auto serve_handler(
       });
   return {
     [self](atom::http_request, uint64_t endpoint_id,
-           http_request& rq) -> caf::result<void> {
-      return self->state.http_request(endpoint_id, std::move(rq));
+           vast::record& params) -> caf::result<rest_response> {
+      return self->state.http_request(endpoint_id, std::move(params));
     },
   };
 }

@@ -14,6 +14,7 @@
 #include <vast/type.hpp>
 
 #include <caf/actor_addr.hpp>
+#include <caf/expected.hpp>
 #include <caf/optional.hpp>
 
 #include <string>
@@ -100,6 +101,47 @@ struct rest_endpoint {
   }
 };
 
+struct rest_response {
+  rest_response() = default;
+
+  // TODO: Have the constructor accept a `vast::record` instead and
+  // provide an explicit `from_json_string()` method, to enforce a
+  // JSON-like structure of the responses.
+  explicit rest_response(std::string body);
+
+  static auto make_error(uint16_t error_code, std::string message,
+                         caf::error detail) -> rest_response;
+
+  auto is_error() const -> bool;
+  auto body() const -> const std::string&;
+  auto code() const -> size_t;
+  auto error_detail() const -> const caf::error&;
+  auto release() && -> std::string;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, rest_response& r) {
+    return f.object(r)
+      .pretty_name("vast.rest_response")
+      .fields(f.field("code", r.code_), f.field("body", r.body_),
+              f.field("detail", r.detail_));
+  }
+
+private:
+  size_t code_ = 200;
+
+  // The response body
+  std::string body_ = {};
+
+  // Whether this is an error response. We can't just check `code_` because
+  // HTTP defines many different "success" values, and we can't just check
+  // `detail_` because some call sites may not be able to provide a detailed
+  // error.
+  bool is_error_ = false;
+
+  // For log messages, debugging, etc. Not returned
+  caf::error detail_ = {};
+};
+
 /// Go through the provided parameters; discard those that are not understood by
 /// the endpoint and attempt to parse the rest to the expected type.
 auto parse_endpoint_parameters(
@@ -107,41 +149,16 @@ auto parse_endpoint_parameters(
   const detail::stable_map<std::string, std::string>& params)
   -> caf::expected<vast::record>;
 
-// We use the virtual inheritance as a compilation firewall to
-// avoid having the dependency on restinio creep into main VAST
-// until we gained a bit more implementation experience and are
-// confident that it is what we want in the long term.
-class http_response {
-public:
-  virtual ~http_response() = default;
-
-  /// Append data to the response body.
-  virtual void append(std::string body) = 0;
-
-  /// Return an HTTP error code and close the connection.
-  //  TODO: Add a `&&` qualifier to ensure one-time use.
-  virtual void
-  abort(uint16_t error_code, std::string message, caf::error detail)
-    = 0;
-};
-
-class http_request {
-public:
-  /// Data according to the type of the endpoint.
-  vast::record params;
-
-  /// The response corresponding to this request.
-  std::shared_ptr<http_response> response;
-};
-
 /// Used for serializing an incoming request to be able to send it as a caf
 /// message.
 class http_request_description {
 public:
-  // /// The name of the plugin to handle the request.
+  /// Unique identification of the request endpoint.
   std::string canonical_path;
 
   /// Request parameters. (unvalidated)
+  /// Query parameters, path parameters, and JSON body parameters
+  /// all get merged into this map.
   detail::stable_map<std::string, std::string> params;
 
   template <class Inspector>
