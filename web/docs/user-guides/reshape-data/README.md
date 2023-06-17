@@ -223,9 +223,71 @@ Use the [`head`](../../operators/transformations/head.md) and
 [`tail`](../../operators/transformations/tail.md) operators to get the first or
 last N records of the input.
 
-:::caution TODO
-Complete this section.
-:::
+The first 3 Zeek logs with IPs in 10.10.5.0/25:
+
+```bash
+tenzir '
+  export
+  | where #schema == /zeek.*/ && 10.10.5.0/25
+  | head 3
+  '
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "ts": "2021-11-19T04:28:06.186626",
+  "cause": "violation",
+  "analyzer_kind": "protocol",
+  "analyzer_name": "GSSAPI",
+  "uid": "CaHAWI2k6vB6BEOh65",
+  "fuid": null,
+  "id.orig_h": "10.10.5.101",
+  "id.orig_p": 49847,
+  "id.resp_h": "10.10.5.5",
+  "id.resp_p": 49667,
+  "id.vlan": null,
+  "id.vlan_inner": null,
+  "failure_reason": "Binpac exception: binpac exception: out_of_bound: ASN1EncodingMeta:more_len: 129 > 74",
+  "failure_data": null
+}
+{
+  "ts": "2021-11-19T04:28:06.186853",
+  "cause": "violation",
+  "analyzer_kind": "protocol",
+  "analyzer_name": "GSSAPI",
+  "uid": "CaHAWI2k6vB6BEOh65",
+  "fuid": null,
+  "id.orig_h": "10.10.5.101",
+  "id.orig_p": 49847,
+  "id.resp_h": "10.10.5.5",
+  "id.resp_p": 49667,
+  "id.vlan": null,
+  "id.vlan_inner": null,
+  "failure_reason": "Binpac exception: binpac exception: out_of_bound: ASN1EncodingMeta:more_len: 129 > 74",
+  "failure_data": null
+}
+{
+  "ts": "2021-11-19T04:28:06.187119",
+  "cause": "violation",
+  "analyzer_kind": "protocol",
+  "analyzer_name": "GSSAPI",
+  "uid": "CaHAWI2k6vB6BEOh65",
+  "fuid": null,
+  "id.orig_h": "10.10.5.101",
+  "id.orig_p": 49847,
+  "id.resp_h": "10.10.5.5",
+  "id.resp_p": 49667,
+  "id.vlan": null,
+  "id.vlan_inner": null,
+  "failure_reason": "Binpac exception: binpac exception: out_of_bound: ASN1EncodingMeta:more_len: 129 > 74",
+  "failure_data": null
+}
+```
+
+</details>
 
 :::caution `tail` is blocking
 The `tail` operator must wait for its entire input, whereas `head N` terminates
@@ -277,34 +339,220 @@ tenzir '
 }
 ```
 
+</details>
+
 Note that `select` does not reorder the input fields. Use
 [`put`](../../operators/transformations/put.md) for adjusting the field order.
 
-</details>
-
 ## Sample schemas with `taste`
 
-:::caution TODO
-Complete this section.
-:::
+The [`taste`](../../operators/transformations/taste.md) operator provides a
+sample of the first N events of every unique schemas in the dataflow. For
+example, to get 5 unique samples:
+
+```bash
+tenzir '
+  export
+  | taste 1
+  | head 5
+  '
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "ts": "2021-11-17T13:54:01.721755",
+  "cause": "violation",
+  "analyzer_kind": "protocol",
+  "analyzer_name": "HTTP",
+  "uid": "Cqp7rtziLijlnrxYf",
+  "fuid": null,
+  "id.orig_h": "87.251.64.137",
+  "id.orig_p": 64078,
+  "id.resp_h": "198.71.247.91",
+  "id.resp_p": 80,
+  "id.vlan": null,
+  "id.vlan_inner": null,
+  "failure_reason": "not a http request line",
+  "failure_data": null
+}
+{
+  "ts": "2021-11-17T13:33:53.748229",
+  "ts_delta": "1.18m",
+  "peer": "zeek",
+  "gaps": 0,
+  "acks": 2,
+  "percent_lost": 0.0,
+  "_write_ts": null
+}
+{
+  "ts": "2021-11-17T13:32:46.565337",
+  "uid": "C5luJD1ATrGDOcouW2",
+  "id": {
+    "orig_h": "89.248.165.145",
+    "orig_p": 43831,
+    "resp_h": "198.71.247.91",
+    "resp_p": 52806
+  },
+  "proto": "tcp",
+  "service": null,
+  "duration": null,
+  "orig_bytes": null,
+  "resp_bytes": null,
+  "conn_state": "S0",
+  "local_orig": null,
+  "local_resp": null,
+  "missed_bytes": 0,
+  "history": "S",
+  "orig_pkts": 1,
+  "orig_ip_bytes": 40,
+  "resp_pkts": 0,
+  "resp_ip_bytes": 0,
+  "tunnel_parents": null,
+  "community_id": "1:c/CLmyk4xRElyzleEMhJ4Baf4Gk=",
+  "_write_ts": null
+}
+{
+  "ts": "2021-11-18T08:05:09.134638",
+  "uid": "Cwk5in34AvxJ8MurDh",
+  "id": {
+    "orig_h": "10.2.9.133",
+    "orig_p": 49768,
+    "resp_h": "10.2.9.9",
+    "resp_p": 135
+  },
+  "rtt": "254.0us",
+  "named_pipe": "135",
+  "endpoint": "epmapper",
+  "operation": "ept_map",
+  "_write_ts": null
+}
+{
+  "ts": "2021-11-18T08:00:21.486539",
+  "uids": [
+    "C4fKs01p1bdzLWvtQa"
+  ],
+  "client_addr": "192.168.1.102",
+  "server_addr": "192.168.1.1",
+  "mac": "00:0b:db:63:58:a6",
+  "host_name": "m57-jo",
+  "client_fqdn": "m57-jo.",
+  "domain": "m57.biz",
+  "requested_addr": null,
+  "assigned_addr": "192.168.1.102",
+  "lease_time": "59.4m",
+  "client_message": null,
+  "server_message": null,
+  "msg_types": [
+    "REQUEST",
+    "ACK"
+  ],
+  "duration": "163.82ms",
+  "trans_id": null,
+  "_write_ts": null
+}
+```
+
+</details>
 
 ## Add fields with `put` and `extend`
 
-:::caution TODO
-Complete this section.
-:::
+The [`extend`](../../operators/transformations/extend.md) operator appends new
+fields to the input. The [`put`](../../operators/transformations/put.md)
+operator does the same but drops all non-referenced fields.
 
-## Exchange fields with `replace`
+Here is an example that generates host pairs plus service for Zeek connection
+records. Think of the output is a the edges in graph, with the last column being
+the edge type.
 
-:::caution TODO
-Complete this section.
-:::
+```bash
+tenzir '
+  export 
+  | where #schema == "zeek.conn" && 10.10.5.0/25
+  | put id.orig_h, id.resp_h, service
+  | head
+  | write tsv to stdout
+  ' | column -t
+```
 
-## Give fields new names with `rename`
+<details>
+<summary>Output</summary>
 
-:::caution TODO
-Complete this section.
-:::
+```
+id.orig_h    id.resp_h     service
+10.10.5.101  77.75.230.91  http
+10.10.5.101  10.10.5.5     dns
+10.10.5.101  10.10.5.5     dns
+10.10.5.101  20.189.173.1  -
+10.10.5.101  20.189.173.1  ssl
+10.10.5.101  52.109.8.21   ssl
+10.10.5.101  10.10.5.5     dns
+10.10.5.101  10.10.5.5     dns
+10.10.5.101  20.54.88.152  ssl
+10.10.5.101  13.107.42.16  ssl
+```
+
+</details>
+
+## Give schemas and fields new names with `rename`
+
+The [`rename`](../../operators/transformations/rename.md) operator changes field
+or schema names.
+
+For example, rename the schema name and only print that afterwards:
+
+```bash
+tenzir '
+  export
+  | where #schema == "zeek.conn"
+  | rename flow=:zeek.conn
+  | put schema=#schema
+  | head 1
+  '
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "schema": "flow"
+}
+```
+
+</details>
+
+Rename a field:
+
+```bash
+tenzir '
+  export
+  | where #schema == "zeek.conn"
+  | rename src=id.orig_h, dst=id.resp_h
+  | put src, dst
+  | head
+  '
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{"src": "89.248.165.145", "dst": "198.71.247.91"}
+{"src": "128.14.134.170", "dst": "198.71.247.91"}
+{"src": "60.205.181.213", "dst": "198.71.247.91"}
+{"src": "31.44.185.120", "dst": "198.71.247.91"}
+{"src": "91.223.67.180", "dst": "198.71.247.91"}
+{"src": "185.73.126.70", "dst": "198.71.247.91"}
+{"src": "183.136.225.42", "dst": "198.71.247.91"}
+{"src": "71.6.135.131", "dst": "198.71.247.91"}
+{"src": "172.104.138.223", "dst": "198.71.247.91"}
+{"src": "185.94.111.1", "dst": "198.71.247.91"}
+```
+
+</details>
 
 ## Aggreate records with `summarize`
 
@@ -404,8 +652,139 @@ tenzir '
 ## Deduplicate with `unique`
 
 Use [`unique`](../../operators/transformations/unique.md) to remove adjacent
-duplicates. Typically, this comes up after a `sort`.
+duplicates. This operator comes in handy after a
+[`sort`](../../operators/transformations/sort.md) that arranges the input so
+that duplicates lay next to each other:
 
-:::caution TODO
-Complete this section.
-:::
+```bash
+tenzir '
+  export
+  | where #schema == "zeek.kerberos"
+  | put client
+  | sort client
+  | unique
+  | head
+  | write ssv to stdout
+  '
+```
+
+<details>
+<summary>Output</summary>
+
+```
+client
+/NM
+Administrator/EAGLEFREAKS
+DEKSTOP-D9UMVWL$/SIMONSAYSGO.NET
+DEKSTOP-VVCWQF5$/POLICYBARONS.COM
+DESKTOP-1-PC$/MAXSUGER.COM
+DESKTOP-1O7QAEA$/VICTORYPUNK.COM
+DESKTOP-2P2S7WR$/VICTORYPUNK.COM
+DESKTOP-30CQ14B$/FIRGREENTECH.COM
+DESKTOP-3KI6Y6G$/JIGGEDYJACK.COM
+DESKTOP-41SH6EJ$/DUCKKISSMIXER.COM
+```
+
+</details>
+
+To compute a unique list of values per group, use the `distinct` aggregation
+function in [`summarize`](../../operators/transformations/summarize.md):
+
+```bash
+tenzir '
+  export
+  | where #schema == "zeek.conn"
+  | summarize sources=distinct(id.orig_h) by id.resp_h
+  | rename destination=id.resp_h
+  | head 3
+  '
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "destination": "192.168.201.13",
+  "sources": [
+    "10.12.14.101",
+    "10.12.17.101"
+  ]
+}
+{
+  "destination": "192.168.62.104",
+  "sources": [
+    "10.12.14.101",
+    "10.12.17.101"
+  ]
+}
+{
+  "destination": "10.0.177.137",
+  "sources": [
+    "10.7.5.133"
+  ]
+}
+```
+
+</details>
+
+## Profile the pipeline with `measure`
+
+Use [`measure`](../../operators/transformations/measure.md) to profile the input
+and replace it with runtime statistics.
+
+For example, one way to compute a histogram over the entire persisted dataset is
+to perform a full scan, replace the input with statistics, and then aggregate
+them by schema:
+
+```bash
+tenzir '
+  export
+  | measure
+  | summarize events=sum(events) by schema
+  | sort events desc
+  | write tsv to stdout
+  ' | column -t
+```
+
+<details>
+<summary>Output</summary>
+
+```
+schema               events
+zeek.conn            583838
+zeek.dns             90013
+zeek.http            75290
+zeek.telemetry       72853
+zeek.ssl             42389
+zeek.files           21922
+suricata.alert       21749
+zeek.dce_rpc         19585
+zeek.analyzer        14755
+zeek.notice          5871
+zeek.weird           4617
+zeek.reporter        3528
+zeek.ocsp            2874
+zeek.kerberos        2708
+zeek.x509            2379
+zeek.smtp            1967
+zeek.smb_mapping     1584
+zeek.stats           1409
+zeek.ntp             1224
+zeek.smb_files       1140
+zeek.dpd             926
+zeek.tunnel          606
+zeek.sip             565
+zeek.loaded_scripts  512
+zeek.capture_loss    476
+zeek.ntlm            429
+zeek.pe              315
+zeek.dhcp            267
+zeek.snmp            132
+zeek.traceroute      9
+zeek.ftp             4
+zeek.packet_filter   1
+zeek.radius          1
+```
+
+</details>
