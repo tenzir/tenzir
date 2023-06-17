@@ -264,5 +264,5 @@ search.
 :::note Recommendation
 Tenzir can efficiently represent embeddings via Apache Arrow, but lacks specific
 processing capabilities. Use Tenzir to transport your vectors to more
-purpose-built engines, that also build on Arrow data frames, such as Lance.
+purpose-built engines that also build on Arrow data frames.
 :::
