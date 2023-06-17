@@ -130,7 +130,7 @@ public:
         return;
       }
       for (const auto& topic : topics) {
-        VAST_INFO("publishing {} bytes to topic {}", chunk->size(), topic);
+        VAST_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
         if (auto error = client.produce(topic, as_bytes(*chunk))) {
           ctrl.abort(std::move(error));
           return;
