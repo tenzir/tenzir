@@ -188,7 +188,7 @@ async function createConfig() {
         navbar: {
           logo: {
             alt: 'Tenzir',
-            src: 'img/tenzir-logo-black.svg',
+            src: 'img/tenzir-black.svg',
           },
           items: [
             // TODO: after we've rotated out old versions that do not contain
