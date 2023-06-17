@@ -189,6 +189,7 @@ async function createConfig() {
           logo: {
             alt: 'Tenzir',
             src: 'img/tenzir-black.svg',
+            srcDark: 'img/tenzir-white.svg',
           },
           items: [
             // TODO: after we've rotated out old versions that do not contain
