@@ -40,12 +40,9 @@
 
 .carousel {
   margin: 0 auto;
-  max-width: 90%;
   overflow: hidden;
   position: relative;
-  margin-top: -3rem;
-  border-radius: 10px;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
   z-index: 10;
   background-color: var(--ifm-color-carousel-bg);
   padding-top: 30px;

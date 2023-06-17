@@ -3,8 +3,8 @@
 <!-- Keep in sync with project README at https://github.com/tenzir/tenzir -->
 
 :::info What is Tenzir?
-Tenzir is a distributed pipeline platform for processing and storing security
-event data in a pipeline dataflow model.
+Tenzir is a distributed platform for processing and storing security event data
+in a pipeline dataflow model.
 :::
 
 Dive right in with an interactive tour at [tenzir.com](https://tenzir.com) and

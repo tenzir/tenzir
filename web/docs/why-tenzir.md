@@ -7,8 +7,8 @@ We're gearing up for the launch of our free Community Edition. Head over to
 
 ## What is Tenzir?
 
-Tenzir is a distributed pipeline platform for processing and storing security
-event data in a pipeline dataflow model, providing the following abstractions:
+Tenzir is a distributed platform for processing and storing security event data
+in a pipeline dataflow model, providing the following abstractions:
 
 - Tenzir's **pipelines** consist of powerful operators that perform computations
   over [Arrow](https://arrow.apache.org) data frames. The [Tenzir Query Language
@@ -80,10 +80,10 @@ event data and security content.
 Traditional SIEMs support basic search and a fixed set of analytical operations.
 For moderate data volumes, the established SIEM use cases perform well. But when
 scaling up to high-volume telemetry data, traditional SIEMs fall behind and
-costs often run out of control. Traditional SIEMs also lack good support for
+costs often spiral out of control. Traditional SIEMs also lack good support for
 threat hunting and raw exploratory data analysis. That's why more advanced use
 cases, such as feature extraction, model training, and detection engineering,
-require additional data-centric workbenches.
+require additional workbenches built on data lakes.
 
 Tenzir *complements* a [SIEM][siem] nicely with the following use cases:
 
@@ -95,17 +95,19 @@ Tenzir *complements* a [SIEM][siem] nicely with the following use cases:
 - **Compliance**: Tenzir supports fine-grained retention configuration to meet
   [GDPR](https://en.wikipedia.org/wiki/General_Data_Protection_Regulation) and
   other regulatory requirements. When storage capacity needs careful management,
-  Tenzir's *compaction* feature allows for weighted ageing of your data, so that
-  you can specify relative importance of event types. Powerful *transforms*
-  allow you to anonymize, pseudonymize, or encrypt specific fields—either to
-  sanitize [PII data](https://en.wikipedia.org/wiki/Personal_data) on import, or
-  ad-hoc on export when data leaves Tenzir.
+  Tenzir's *compaction* feature allows for [weighted
+  ageing](user-guides/transform-data-at-rest.md) of your data, so that you can
+  specify relative importance of event types. Tenzir's powerful pipelines allow
+  you to anonymize, pseudonymize, or encrypt specific fields—either to sanitize
+  [PII data](https://en.wikipedia.org/wiki/Personal_data) on import, or ad-hoc
+  on export when data leaves a pipeline or node.
 
 - **Data Science**: The majority of SIEMs provide an API-only, low-bandwidth
   access path to your security data. Tenzir is an [Arrow][arrow]-native engine
-  that offers unfettered high-bandwidth access so that you can bring your own
-  workloads, with your own tools, e.g., to run iterative clustering algorithms
-  or complex feature extraction in conjunction with machine learning.
+  with unfettered high-bandwidth access so that you can bring demanding
+  workloads to your. Bring your own tools, e.g., to run iterative clustering
+  algorithms, perform feature extraction, compute embeddings, and perform
+  in-stream model inference.
 
 [siem]: https://en.wikipedia.org/wiki/Security_information_and_event_management
 [arrow]: https://arrow.apache.org
@@ -128,29 +130,23 @@ However, as a cornerstone for security operations, they fall short in supporting
 the following relevant use cases where Tenzir has the edge:
 
 - **Data Onboarding**: it takes considerable effort to write and maintain
-  schemas for the tables of the respective data sources. Since Tenzir is
-  purpose-built for security data, integrations for key data sources and data
-  connectors exist out of the box.
+  schemas for the tables of the respective data sources. As a data pipeline
+  product, Tenzir is well suited for your extract-transform-load (ETL) needs:
+  purpose-built for security data, available integrations for key security
+  tools, and many data connectors out of the box.
 
 - **Rich Typing**: modeling security event data with a generic database often
-  reduces the values to strings or integers, as opposed to retaining
-  domain-specific semantics, such as IP addresses or port numbers. Tenzir offers
-  a rich type system that can retain such semantics at ingest time, while also
-  giving you the ability to query the data with your own taxonomy at query time.
-
-- **Fast Search**: typical query patterns are (1) automatically triggered point
-  queries for tactical threat intelligence, arriving at a high rate and often in
-  bulk, of which the majority are true negatives, (2) regular expression search
-  for finding patterns in command line invocations, URLs, or opaque string
-  messages, and (3) group-by and aggregations when hunting for threats or when
-  performing threshold-based detections. Data warehouses work well for (3) but
-  rarely for (1) and (2) as well.
+  reduces the domain-specific values to strings or integers, as opposed to
+  retaining their original semantics, such as IP addresses or port numbers.
+  Tenzir offers a rich type system that can retain such semantics during data
+  onboarding, giving you the ability to query the data with your own taxonomy at
+  query time.
 
 :::note Recommendation
-Data warehouses may be well-suited for raw data processing, but a data backbone
-for security operations has a lot more domain-specific demands. The required
-heavy lifting to bridge this gap is cost and time prohibitive for any security
-operations center. This is why we built Tenzir.
+Data warehouses may be well-suited once data is fully structured, but you still
+need to cover the ETL and reverse-ETL aspects. Thanks to automatic schema
+inference, Tenzir significantly reduces the cost of data onboarding for data
+warehouses.
 :::
 
 ### Tenzir vs. Relational DBs
@@ -160,16 +156,15 @@ Unlike [OLAP](#tenzir-vs-data-warehouses) workloads,
 have strong transactional and consistency guarantees, e.g., when performing
 inserts, updates, and deletes. These extra guarantees come at a cost of
 throughput and latency when working with large datasets, but are rarely needed
-in security analytics (e.g., ingestion is an append-only operation). In a domain
-of incomplete data, Tenzir trades correctness for performance and availability,
-i.e., throttles a data source with backpressure instead of falling behind and
-risking out-of-memory scenarios.
+for analytical workloads. In a world of incomplete data, high data velocity, and
+immutable representations of activity, relational databases are rarely
+encountered.
 
 :::note Recommendation
 If you aim to perform numerous modifications on a small subset of event data,
-with medium ingest rates, relational databases, like PostgreSQL or MySQL, might
+with medium ingest rates, relational databases (like PostgreSQL or MySQL), might
 be a better fit. Tenzir's columnar data representation is ill-suited for
-row-level modifications.
+row-level modifications, but shines for analytical workloads.
 :::
 
 ### Tenzir vs. Document DBs
@@ -186,10 +181,8 @@ operations, for the following reasons:
   scaling horizontally to build a "cluster in a box."
 
 - **Analytical Workloads**: the document-oriented storage does not perform well
-  for analytical workloads, such as group-by and aggregation queries. But such
-  analytics are very common in interactive threat hunting scenarios and in
-  various threshold-based detections. Tenzir leverages Arrow for columnar data
-  representation and partially for query execution.
+  for analytical workloads, such as aggregations. But such workloads are common
+  when hunting or when deploying detections.
 
 - **Economy of Representation**: security telemetry data exhibits a lot of
   repetitiveness between events, such as similar IP addresses, URL prefixes, or
@@ -197,36 +190,43 @@ operations, for the following reasons:
   columnar format, such as Parquet.
 
 A special case of document DBs are full-text search engines, such as
-ElasticSearch or Solr. The unit of input is typically unstructured text. The
-search engine uses (inverted) indexes and ranking methods to return the most
-relevant results for a given combination of search terms.
+ElasticSearch. The unit of input is typically unstructured text. These engines
+use (inverted) indexes and ranking methods to return the most relevant results
+for a given combination of search terms.
 
 :::note Recommendation
-Most of the security telemetry arrives as structured log/event data, as opposed
-to unstructured textual data. If your primary use case involves working with
-text, Tenzir might not be a good fit. That said, needle-in-haystack search
-and other information retrieval techniques are still relevant for security
-analytics, for which Tenzir has basic support.
+Most of the security tools work with structured data. Operators spend a
+substantial amount of time to convert data from unstructured to structured. But
+if your primary use case involves working with text documents, Tenzir might not
+be a good fit. That said, needle-in-haystack search and other information
+retrieval techniques are still relevant for security analytics, for which
+Tenzir's indexed storage engine also has basic support.
+
+Tenzir combines the flexibility of the document-oriented data model with the
+power of structured OLAP. By relying internally on columnar data representation
+with Apache Arrow and simultaneously performing schema inference, you get the
+best of both worlds.
 :::
 
 ### Tenzir vs. Timeseries DBs
 
 Timeseries databases share a lot in common with [OLAP
-engines](#tenzir-vs-data-warehouses), but put center data organization around
-time.
+engines](#tenzir-vs-data-warehouses), but focus their data organization around
+time as key dimension.
 
 :::note Recommendation
-If you plan to access your event data through time domain and need to model the
-majority of data as series, a timeseries DBs may suit the bill. If you access
-data through other (spatial) attributes, like IP addresses or domains, a
-traditional timeseries DB might not be good fit—especially for high-cardinality
-attributes. If your analysis involve running more complex detections, or
-include needle-in-haystack searches, Tenzir might be a better fit.
+If you plan to access your event data only through the time dimension and need
+to model the majority of data as series, a timeseries DBs may suit the bill. If
+you access data through other (spatial) attributes, like IP addresses or
+domains, a traditional timeseries DB might not be good fit—especially for
+high-cardinality attributes. If your workloads involve running more complex
+detections, or include needle-in-haystack searches, Tenzir might be a better
+fit.
 :::
 
 ### Tenzir vs. Key-Value DBs
 
-A key-value store performs a key-based point or range lookup to retrieve one or
+A key-value store performs a key-based point or range lookups to retrieve one or
 more values. Security telemetry is high-dimensional data and there are many more
 desired entry points than a single key besides time, e.g., IP address,
 application protocol, domain name, or hash value.
@@ -251,4 +251,18 @@ If graph-centric queries dominate your use case, Tenzir is not the right
 execution engine. Tenzir can still prove valuable as foundation for graph
 analytics by storing the raw telemetry and feeding it (via Arrow) into graph
 engines that support ad-hoc data frame analysis.
+:::
+
+### Tenzir vs. Vector DBs
+
+Vector databases operate on embeddings, which are high-dimensional floating
+point vectors. For generative AI applications, decision support systems, or
+search on unstructured data, embeddings are the building block, and vector
+databases offer native operations on them, such as approximate nearest neighbor
+search.
+
+:::note Recommendation
+Tenzir can efficiently represent embeddings via Apache Arrow, but lacks specific
+processing capabilities. Use Tenzir to transport your vectors to more
+purpose-built engines that also build on Arrow data frames.
 :::

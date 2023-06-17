@@ -5,7 +5,6 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import {useColorMode} from '@docusaurus/theme-common';
 import styles from './index.module.css';
-import HomepageFeatures from '@site/src/components/HomepageFeatures';
 
 import VASTLight from '@site/static/img/vast-white.svg';
 import VASTDark from '@site/static/img/vast-black.svg';
@@ -72,7 +71,7 @@ function HomepageHeader() {
                   key="latest-release-carousel"
                   title={latestReleaseBlogPost?.metadata?.title}
                   link={latestReleaseBlogPost?.metadata?.permalink}
-                  label="Latest Relaese"
+                  label="Latest Release"
                   buttonLabel="Read Announcement"
                   imageLink={latestReleaseBlogPost?.metadata?.frontMatter?.image}
                   description={
@@ -188,9 +187,8 @@ export default function Home(): JSX.Element {
       title={`Visibility Across Space and Time`}
       description="The network telemetry engine for data-driven security investigations."
     >
-      <HomepageHeader />
       <main>
-        <HomepageFeatures />
+        <HomepageHeader />
       </main>
     </Layout>
   );

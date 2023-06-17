@@ -70,7 +70,7 @@ async function createConfig() {
 
   /// END CUSTOM CODE ///
   return {
-    title: 'VAST',
+    title: 'Tenzir',
     tagline: 'The open-source pipeline and storage engine for security.',
     url: 'https://vast.io',
     baseUrl: '/',
@@ -93,31 +93,27 @@ async function createConfig() {
         {
           redirects: [
             {
-              to: '/docs/about',
+              to: '/docs/next/why-tenzir',
               from: '/docs/about-vast',
             },
             {
-              to: '/docs/try',
+              to: '/docs/next/get-started',
               from: '/docs/try-vast',
             },
             {
-              to: '/docs/setup',
+              to: '/docs/next/setup-guides',
               from: '/docs/setup-vast',
             },
             {
-              to: '/docs/use',
+              to: '/docs/next/user-guides',
               from: '/docs/use-vast',
             },
             {
-              to: '/docs/understand',
-              from: '/docs/understand-vast',
-            },
-            {
-              to: '/docs/develop',
+              to: '/docs/next/developer-guides',
               from: '/docs/develop-vast',
             },
             {
-              to: '/docs/contribute',
+              to: '/docs/next/contribute',
               from: '/docs/develop-vast/contributing',
             },
           ],
@@ -190,10 +186,11 @@ async function createConfig() {
           respectPrefersColorScheme: true,
         },
         navbar: {
-          title: 'VAST',
           logo: {
-            alt: 'Visibility Across Space and Time',
-            src: 'img/vast-logo.svg',
+            alt: 'Tenzir',
+            src: 'img/tenzir-black.svg',
+            srcDark: 'img/tenzir-white.svg',
+            width: 120,
           },
           items: [
             // TODO: after we've rotated out old versions that do not contain
@@ -313,10 +310,6 @@ async function createConfig() {
                 {
                   label: 'Website',
                   href: 'https://tenzir.com',
-                },
-                {
-                  label: 'VAST and Tenzir',
-                  to: '/vast-and-tenzir',
                 },
                 {
                   label: 'Privacy Statement',
