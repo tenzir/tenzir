@@ -190,6 +190,7 @@ async function createConfig() {
             alt: 'Tenzir',
             src: 'img/tenzir-black.svg',
             srcDark: 'img/tenzir-white.svg',
+            width: 120,
           },
           items: [
             // TODO: after we've rotated out old versions that do not contain
