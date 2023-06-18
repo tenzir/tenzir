@@ -6,8 +6,8 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import {useColorMode} from '@docusaurus/theme-common';
 import styles from './index.module.css';
 
-import VASTLight from '@site/static/img/vast-white.svg';
-import VASTDark from '@site/static/img/vast-black.svg';
+import TenzirLight from '@site/static/img/tenzir-white.svg';
+import TenzirDark from '@site/static/img/tenzir-black.svg';
 import Carousel from '../components/Carousel';
 
 import strip from 'strip-markdown';
@@ -46,9 +46,9 @@ function HomepageHeader() {
         <div className={clsx('hero', styles.heroBanner)}>
           <div className="container">
             {colorMode === 'dark' ? (
-              <VASTLight className={styles.vastLogo} title="VAST Logo" />
+              <TenzirLight className={styles.tenzirLogo} title="Tenzir Logo" />
             ) : (
-              <VASTDark className={styles.vastLogo} title="VAST Logo" />
+              <TenzirDark className={styles.tenzirLogo} title="Tenzir Logo" />
             )}
             <p className="hero__subtitle">{siteConfig.tagline}</p>
 
@@ -105,7 +105,7 @@ function HomepageHeader() {
                   key="newsletter-carousel"
                   title="Sign up for our Newsletter"
                   link={'/newsletter'}
-                  label="Get the latest news and updates from the VAST team"
+                  label="Get the latest news and updates from the Tenzir team"
                   imageLink={"/img/newsletter.excalidraw.svg"}
                   buttonLabel="Subscribe"
                 />
@@ -168,7 +168,7 @@ const CarouselCard = ({
           </div>
         </div>
         {/* HACK: This is to safeguard against one incompatible (wrong?) image url in
-        https://github.com/tenzir/vast/tree/6c17f01e630c71a55df7002d2276697dfcfaa463/web/blog/parquet-and-feather-writing-security-telemetry/index.qmd */}
+        https://github.com/tenzir/tenzir/tree/6c17f01e630c71a55df7002d2276697dfcfaa463/web/blog/parquet-and-feather-writing-security-telemetry/index.qmd */}
         {imageLink && imageLink.startsWith('/') && (
           <ReactSVG
             src={imageLink}
@@ -184,7 +184,7 @@ export default function Home(): JSX.Element {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
-      title={`Visibility Across Space and Time`}
+      title={`Tenzir`}
       description="The network telemetry engine for data-driven security investigations."
     >
       <main>
