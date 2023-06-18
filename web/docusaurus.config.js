@@ -188,6 +188,7 @@ async function createConfig() {
         navbar: {
           logo: {
             alt: 'Tenzir',
+            href: 'https://tenzir.com',
             src: 'img/tenzir-black.svg',
             srcDark: 'img/tenzir-white.svg',
             width: 120,
