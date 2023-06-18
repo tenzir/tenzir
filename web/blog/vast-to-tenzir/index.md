@@ -5,7 +5,6 @@ authors: mavam
 image: /img/blog/vast-to-tenzir.excalidraw.svg
 date: 2023-06-22
 tags: [tenzir, vast, community, project]
-draft: true
 ---
 
 After 5 years of developing two identities, the VAST project and Tenzir
