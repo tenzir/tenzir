@@ -71,7 +71,7 @@ async function createConfig() {
   /// END CUSTOM CODE ///
   return {
     title: 'Tenzir',
-    tagline: 'The open-source pipeline and storage engine for security.',
+    tagline: 'Easy data pipelines for security teams.',
     url: 'https://docs.tenzir.com',
     baseUrl: '/',
     onBrokenLinks: 'throw',
