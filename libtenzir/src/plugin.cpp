@@ -264,7 +264,6 @@ caf::error initialize(caf::actor_system_config& cfg) {
   }
   TENZIR_DEBUG("collected {} global options for plugin initialization",
                global_config.size());
-  std::unordered_set<std::string> disabled_plugins;
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
     // First, try to read the configurations from the merged Tenzir configuration.
