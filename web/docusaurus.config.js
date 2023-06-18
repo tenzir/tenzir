@@ -72,13 +72,13 @@ async function createConfig() {
   return {
     title: 'Tenzir',
     tagline: 'The open-source pipeline and storage engine for security.',
-    url: 'https://vast.io',
+    url: 'https://docs.tenzir.com',
     baseUrl: '/',
     onBrokenLinks: 'throw',
     onBrokenMarkdownLinks: 'throw',
     favicon: 'img/favicon.ico',
     organizationName: 'tenzir', // Usually your GitHub org/user name.
-    projectName: 'vast', // Usually your repo name.
+    projectName: 'tenzir', // Usually your repo name.
     trailingSlash: false, // GitHub Pages already adds a slash
 
     markdown: {
@@ -128,7 +128,7 @@ async function createConfig() {
         ({
           docs: {
             sidebarPath: require.resolve('./sidebars.js'),
-            editUrl: 'https://github.com/tenzir/vast/tree/main/web',
+            editUrl: 'https://github.com/tenzir/tenzir/tree/main/web',
             // TODO: The last update author and time is always the person that
             // triggered the last deployment and the time of that deployment.
             // Ideally we'd show this information, but as-is it's unnecessary.
@@ -138,7 +138,7 @@ async function createConfig() {
           },
           blog: {
             blogTitle: 'Blog',
-            blogDescription: 'News from the VAST community',
+            blogDescription: 'News from the Tenzir community',
             blogSidebarCount: 20,
             blogSidebarTitle: 'Blog Posts',
             postsPerPage: 20,
@@ -224,13 +224,13 @@ async function createConfig() {
               position: 'left',
             },
             {
-              href: 'https://vast.io/discord',
+              to: '/discord',
               'aria-label': 'Discord',
               className: 'header-discord-link',
               position: 'right',
             },
             {
-              href: 'https://github.com/tenzir/vast',
+              href: 'https://github.com/tenzir/tenzir',
               'aria-label': 'GitHub',
               className: 'header-github-link',
               position: 'right',
@@ -248,7 +248,7 @@ async function createConfig() {
         },
         announcementBar: {
           content:
-            'Leave us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">a GitHub star</a> ⭐️',
+            'Leave us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/tenzir/stargazers">a GitHub star</a> ⭐️',
           backgroundColor: '#f1f2f2',
           isCloseable: true,
         },
@@ -288,7 +288,7 @@ async function createConfig() {
                 },
                 {
                   label: 'GitHub',
-                  href: 'https://github.com/tenzir/vast',
+                  href: 'https://github.com/tenzir/tenzir',
                 },
                 {
                   label: 'Twitter',
