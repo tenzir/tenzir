@@ -898,3 +898,25 @@ tests:
       - command: exec 'read zeek-tsv | head 1 | print json | shell rev'
         input: data/zeek/conn.log.gz
       - command: exec 'shell "echo foo"'
+
+  Top and Rare Operators:
+    fixture: ServerTester
+    tags: [pipelines, zeek]
+    steps:
+      - command: exec 'read zeek-tsv | import'
+        input: data/zeek/conn.log.gz
+      - command: flush
+      - command: exec 'export | top id.orig_h | to stdout'
+      - command: exec 'export | rare id.orig_h | to stdout'
+      - command: exec 'export | top id.orig_h --count-field=amount | to stdout'
+      - command: exec 'export | rare id.orig_h -c amount | to stdout'
+      - command: exec 'export | top count | to stdout'
+        expected_result: error
+      - command: exec 'export | top id.orig_h --count-field=id.orig_h | to stdout'
+        expected_result: error
+      - command: exec 'export | rare id.orig_h -c id.orig_h | to stdout'
+        expected_result: error
+      - command: exec 'export | rare | to stdout'
+        expected_result: error
+      - command: exec 'export | top | to stdout'
+        expected_result: error
