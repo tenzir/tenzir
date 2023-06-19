@@ -215,6 +215,32 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
                                fmt::format("failed to read config file {}: not "
                                            "a map of key-value pairs",
                                            config));
+      // Rewrite the top-level key 'tenzir' to 'vast' for compatibility.
+      // TODO: Invert the logic to rewrite 'vast' to 'tenzir'.
+      auto tenzir_section
+        = std::find_if(rec->begin(), rec->end(), [&](const auto& x) {
+            return x.first == "tenzir";
+          });
+      auto vast_section
+        = std::find_if(rec->begin(), rec->end(), [&](const auto& x) {
+            return x.first == "vast";
+          });
+      if (vast_section != rec->end()) {
+        fmt::print(stderr,
+                   "In {}: The 'vast' config section name has been deprecated "
+                   "in favor of 'tenzir'\n",
+                   config);
+      }
+      if (tenzir_section != rec->end()) {
+        if (vast_section != rec->end()) {
+          return caf::make_error(
+            ec::parse_error,
+            fmt::format("failed to read config file {}: using 'tenzir' and "
+                        "'vast' sections in the same file is not allowed.",
+                        config));
+        }
+        tenzir_section->first = "vast";
+      }
       merge(*rec, merged_config, policy::merge_lists::yes);
       loaded_config_files_singleton.push_back(config);
     }
