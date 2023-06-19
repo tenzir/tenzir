@@ -805,6 +805,9 @@ private:
   plugin_ptr(void* library, plugin* instance, void (*deleter)(plugin*),
              const char* version, enum type type) noexcept;
 
+  /// Helper function to release ownership of a plugin.
+  void release() noexcept;
+
   /// Implementation details.
   void* library_ = {};
   plugin* instance_ = {};

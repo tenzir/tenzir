@@ -20,21 +20,20 @@
 #include "vast/detail/stable_set.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
-#include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/node.hpp"
 #include "vast/operator_control_plane.hpp"
-#include "vast/plugin.hpp"
-#include "vast/query_context.hpp"
 #include "vast/store.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
 
+#include <algorithm>
 #include <dlfcn.h>
 #include <memory>
 #include <tuple>
+#include <unordered_set>
 
 namespace vast {
 
@@ -265,12 +264,12 @@ caf::error initialize(caf::actor_system_config& cfg) {
   }
   VAST_DEBUG("collected {} global options for plugin initialization",
              global_config.size());
-  std::vector<std::string> disabled_plugins;
+  std::unordered_set<std::string> disabled_plugins;
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
     // First, try to read the configurations from the merged VAST configuration.
     if (plugins_record.contains(plugin->name())) {
-      if (auto plugins_entry
+      if (auto* plugins_entry
           = caf::get_if<record>(&plugins_record.at(plugin->name()))) {
         merged_config = std::move(*plugins_entry);
       } else {
@@ -305,7 +304,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
         // Skip empty config files.
         if (caf::holds_alternative<caf::none_t>(*opts))
           continue;
-        if (auto opts_data = caf::get_if<record>(&*opts)) {
+        if (const auto& opts_data = caf::get_if<record>(&*opts)) {
           merge(*opts_data, merged_config, policy::merge_lists::yes);
           VAST_INFO("loaded plugin configuration file: {}", path);
           loaded_config_files_singleton.push_back(path);
@@ -324,7 +323,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     // its configuration.
     if (!plugin->enabled(merged_config, global_config)) {
       VAST_VERBOSE("disabling plugin {}", plugin->name());
-      disabled_plugins.push_back(plugin->name());
+      disabled_plugins.insert(plugin->name());
       continue;
     }
     // Third, initialize the plugin with the merged configuration.
@@ -336,15 +335,10 @@ caf::error initialize(caf::actor_system_config& cfg) {
                                          "the {} plugin: {} ",
                                          plugin->name(), err));
   }
-  for (auto const& plugin_name : disabled_plugins) {
-    auto& plugins = get_mutable();
-    auto position
-      = std::find_if(plugins.begin(), plugins.end(), [=](const plugin_ptr& p) {
-          return p->name() == plugin_name;
-        });
-    VAST_ASSERT_CHEAP(position != plugins.end());
-    plugins.erase(position);
-  }
+  if (!disabled_plugins.empty())
+    std::erase_if(get_mutable(), [&](const plugin_ptr& p) {
+      return disabled_plugins.contains(p->name());
+    });
   return caf::none;
 }
 
@@ -682,18 +676,7 @@ plugin_ptr plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
 plugin_ptr::plugin_ptr() noexcept = default;
 
 plugin_ptr::~plugin_ptr() noexcept {
-  if (instance_) {
-    VAST_ASSERT(deleter_);
-    deleter_(instance_);
-    instance_ = {};
-    deleter_ = {};
-  }
-  if (library_) {
-    dlclose(library_);
-    library_ = {};
-  }
-  version_ = {};
-  type_ = {};
+  release();
 }
 
 plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
@@ -706,6 +689,8 @@ plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
 }
 
 plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept {
+  // Clean up *this* to prevent leaking an instance_.
+  release();
   library_ = std::exchange(rhs.library_, {});
   instance_ = std::exchange(rhs.instance_, {});
   deleter_ = std::exchange(rhs.deleter_, {});
@@ -751,6 +736,21 @@ const char* plugin_ptr::version() const noexcept {
 
 enum plugin_ptr::type plugin_ptr::type() const noexcept {
   return type_;
+}
+
+void plugin_ptr::release() noexcept {
+  if (instance_) {
+    VAST_ASSERT(deleter_);
+    deleter_(instance_);
+    instance_ = {};
+    deleter_ = {};
+  }
+  if (library_) {
+    dlclose(library_);
+    library_ = {};
+  }
+  version_ = {};
+  type_ = {};
 }
 
 std::strong_ordering
