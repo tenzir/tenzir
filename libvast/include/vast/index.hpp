@@ -304,6 +304,14 @@ struct index_state {
   /// lookups.
   size_t running_partition_lookups = 0;
 
+  /// A counter generate incemental ids for active lookups.
+  size_t active_lookup_counter = 0;
+
+  /// Stores information about currently running partition lookups.
+  std::vector<std::tuple<size_t, std::chrono::system_clock::time_point,
+                         query_queue::entry>>
+    active_lookups;
+
   /// Keeps temporary statistics that are flushed with the metrics.
   index_counters counters = {};
 
