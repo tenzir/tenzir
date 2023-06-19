@@ -666,18 +666,7 @@ plugin_ptr plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
 plugin_ptr::plugin_ptr() noexcept = default;
 
 plugin_ptr::~plugin_ptr() noexcept {
-  if (instance_) {
-    VAST_ASSERT(deleter_);
-    deleter_(instance_);
-    instance_ = {};
-    deleter_ = {};
-  }
-  if (library_) {
-    dlclose(library_);
-    library_ = {};
-  }
-  version_ = {};
-  type_ = {};
+  release();
 }
 
 plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
@@ -690,6 +679,8 @@ plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
 }
 
 plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept {
+  // Clean up *this* to prevent leaking an instance_.
+  release();
   library_ = std::exchange(rhs.library_, {});
   instance_ = std::exchange(rhs.instance_, {});
   deleter_ = std::exchange(rhs.deleter_, {});
@@ -735,6 +726,21 @@ const char* plugin_ptr::version() const noexcept {
 
 enum plugin_ptr::type plugin_ptr::type() const noexcept {
   return type_;
+}
+
+void plugin_ptr::release() noexcept {
+  if (instance_) {
+    VAST_ASSERT(deleter_);
+    deleter_(instance_);
+    instance_ = {};
+    deleter_ = {};
+  }
+  if (library_) {
+    dlclose(library_);
+    library_ = {};
+  }
+  version_ = {};
+  type_ = {};
 }
 
 std::strong_ordering
