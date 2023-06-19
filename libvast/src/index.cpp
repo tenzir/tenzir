@@ -1078,7 +1078,7 @@ index_state::status(status_verbosity v, duration d) const {
     for (const auto& [id, ts, item] : active_lookups) {
       auto x = record{};
       x["id"] = id;
-      x["start-time"] = ts;
+      x["start-time"] = std::chrono::time_point_cast<duration>(ts);
       x["partition-id"] = fmt::to_string(item.partition);
       x["schema"] = fmt::to_string(item.schema);
       x["priority"] = fmt::to_string(item.priority);
