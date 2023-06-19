@@ -6,50 +6,95 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/argument_parser.hpp>
+#include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/string_literal.hpp>
 #include <vast/error.hpp>
+#include <vast/location.hpp>
+#include <vast/logger.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 
 namespace vast::plugins::top_rare {
 
 namespace {
 
-template <detail::string_literal Name, detail::string_literal SortOrder>
-class top_rare_plugin final : public virtual operator_plugin {
+template <detail::string_literal Name>
+// This operator does nothing but provide the operator name - the actual
+// functionality is currently implemented as a "summarize | sort" subpipeline.
+class top_rare_operator final : public crtp_operator<top_rare_operator<Name>> {
 public:
-  auto initialize(const record&, const record&) -> caf::error override {
-    return {};
+  template <operator_input_batch T>
+  auto operator()(T x) const -> T {
+    return x;
+  }
+
+  auto predicate_pushdown(expression const& expr) const
+    -> std::optional<std::pair<expression, operator_ptr>> override {
+    return std::pair{expr, std::make_unique<top_rare_operator>(*this)};
   }
 
   auto name() const -> std::string override {
     return std::string{Name.str()};
-  };
-
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::operator_arg, parsers::count;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> operator_arg
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto field = std::string{};
-    if (!p(f, l, field)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "{} operator: '{}'",
-                                                      Name.str(), pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      pipeline::parse_as_operator(fmt::format("summarize count=count({0}) by "
-                                              "{0} | sort count {1}",
-                                              field, SortOrder.str())),
-    };
   }
+
+  friend auto
+  inspect([[maybe_unused]] auto&, [[maybe_unused]] top_rare_operator&) -> bool {
+    return true;
+  }
+};
+
+template <detail::string_literal Name, detail::string_literal SortOrder>
+class top_rare_plugin final
+  : public virtual operator_plugin<top_rare_operator<Name>> {
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{std::string{Name.str()},
+                                  fmt::format("https://vast.io/docs/next/"
+                                              "operators/transformations/{}",
+                                              Name.str())};
+    auto field = located<std::string>{};
+    auto count_field = std::optional<located<std::string>>{};
+    parser.add(field, "<str>");
+    parser.add("-c,--count-field", count_field, "<str>");
+    parser.parse(p);
+    if (count_field) {
+      if (count_field->inner.empty()) {
+        diagnostic::error("Need a string value for 'count-field' parameter")
+          .primary(field.source)
+          .throw_();
+      }
+      if (count_field->inner == field.inner) {
+        diagnostic::error("Invalid duplicate field value `{}` for count and "
+                          "value fields",
+                          field.inner)
+          .primary(field.source)
+          .secondary(count_field->source)
+          .throw_();
+      }
+    } else {
+      if (field.inner == default_count_field) {
+        diagnostic::error("Invalid duplicate field value `{}` for count and "
+                          "value fields",
+                          field.inner)
+          .primary(field.source)
+          .throw_();
+      } else {
+        count_field.emplace();
+        count_field->inner = default_count_field;
+      }
+    }
+    // TODO: Replace this textual parsing with a subpipeline to improve
+    // diagnostics for this operator.
+    auto repr = fmt::format("summarize "
+                            "{0}=count({1}) by "
+                            "{1} | sort {0} {2}",
+                            count_field->inner, field.inner, SortOrder.str());
+    return std::move(*pipeline::internal_parse_as_operator(repr));
+  }
+
+private:
+  static constexpr auto default_count_field = "count";
 };
 
 using top_plugin = top_rare_plugin<"top", "desc">;
