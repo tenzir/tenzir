@@ -268,7 +268,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     auto merged_config = record{};
     // First, try to read the configurations from the merged VAST configuration.
     if (plugins_record.contains(plugin->name())) {
-      if (auto plugins_entry
+      if (auto* plugins_entry
           = caf::get_if<record>(&plugins_record.at(plugin->name()))) {
         merged_config = std::move(*plugins_entry);
       } else {
@@ -303,7 +303,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
         // Skip empty config files.
         if (caf::holds_alternative<caf::none_t>(*opts))
           continue;
-        if (auto opts_data = caf::get_if<record>(&*opts)) {
+        if (const auto& opts_data = caf::get_if<record>(&*opts)) {
           merge(*opts_data, merged_config, policy::merge_lists::yes);
           VAST_INFO("loaded plugin configuration file: {}", path);
           loaded_config_files_singleton.push_back(path);
