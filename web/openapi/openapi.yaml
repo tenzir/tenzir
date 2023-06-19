@@ -34,23 +34,35 @@ paths:
                   type: string
                   example: export | where foo | publish /bar
                   description: The pipeline definition.
-                autostart:
+                start_when_created:
                   type: boolean
-                  description: Start this pipeline upon creation.
-                  default: true
-                managed:
-                  type: boolean
-                  description: A flag specifying whether this pipeline is managed.\nNon-managed (ephemeral) pipelines are not persisted, will not show up in the /pipeline/list endpoint, and are implicitly removed once they are terminated.
+                  description: Start this pipeline upon creation.\nThis parameter must be true if the 'hidden' parameter is also true.
                   default: false
                 name:
                   type: string
                   description: The human-readable name of the pipeline.
                   default: "[an auto-generated id]"
                   example: zeek-monitoring-pipeline
+                hidden:
+                  type: boolean
+                  description: A flag specifying whether this pipeline is hidden.\nHidden pipelines are not persisted and will not show up in the /pipeline/list endpoint response.
+                  default: false
+                  example: false
+                delete_when_stopped:
+                  type: boolean
+                  description: A flag specifying whether this pipeline is implicitly removed once it is terminated.\nThis parameter must be true if the 'hidden' parameter is also true.
+                  default: false
+                  example: false
+                ttl:
+                  type: string
+                  description: A duration string specifying the maximum time for this pipeline to exist. No value means the pipeline is allowed to exist forever.\nThis parameter must be defined if the 'hidden' parameter is true.
+                  default: ~
+                  example: 5.0m
                 restart_with_node:
                   type: boolean
                   default: false
-                  description: Check if the pipeline should be restarted when the VAST Node is restarted.
+                  description: Check if the pipeline should be restarted when the VAST Node is restarted.\nThis parameter must be false if the 'hidden' parameter is true.
+                  example: false
       responses:
         200:
           description: Success.
@@ -152,6 +164,9 @@ paths:
                         error:
                           type: string
                           description: The error that the pipeline may have encountered during running.
+                        delete_when_stopped:
+                          type: boolean
+                          description: A flag specifying whether this pipeline is implicitly removed once it is terminated.
                         restart_with_node:
                           type: boolean
                           description: A flag specifying whether this pipeline should start upon launching the parent node.
@@ -177,6 +192,7 @@ paths:
                       definition: export | where foo | publish /bar
                       state: starting
                       error: ~
+                      delete_when_stopped: true
                       restart_with_node: true
                       operators:
                         - id: 0
@@ -193,11 +209,64 @@ paths:
                       definition: export asdf
                       state: stopped
                       error: format 'asdf' not found
+                      delete_when_stopped: false
                       restart_with_node: false
                       operators:
                         - id: 0
                           definition: export asdf
                           instrumented: false
+        400:
+          description: Invalid arguments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    example: Invalid arguments
+                    description: The error message.
+  /pipeline/reset-ttl:
+    post:
+      summary: Reset the TTL of an existing pipeline
+      description: Resets the TTL of an existing pipeline as specified, if one has been specified in the /create endpoint before.\nResetting the TTL means that the TTL-related timeout will start counting from zero seconds again, thus keeping the pipeline alive for longer.
+      requestBody:
+        description: Body for the reset-ttl endpoint
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ids
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                  example:
+                    - 7
+                    - 1
+                    - 3
+                  description: The id of pipelines whose TTL should be updated.
+      responses:
+        200:
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ids:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - 7
+                      - 1
+                    description: The id of pipelines whose TTL has been successfully updated.
         400:
           description: Invalid arguments.
           content:
@@ -242,7 +311,10 @@ paths:
                   example: zeek-monitoring-pipeline
                 restart_with_node:
                   type: boolean
-                  description: Check if the pipeline should be restarted when the VAST Node is restarted.
+                  description: Flag that specifies whether the pipeline should be restarted when the VAST Node is restarted.
+                delete_when_stopped:
+                  type: boolean
+                  description: Flag that specifies whether the pipeline should self-destruct after it stopped.
       responses:
         200:
           description: Success.
@@ -258,12 +330,15 @@ paths:
                       id:
                         type: string
                         description: The pipeline ID.
+                        example: 7
                       name:
                         type: string
                         description: The human-readable name of the pipeline to this value.
+                        example: user-assigned-name
                       definition:
                         type: string
                         description: The pipeline definition.
+                        example: export | where foo | publish /bar
                       state:
                         type: string
                         enum:
@@ -271,13 +346,20 @@ paths:
                           - running
                           - stopping
                           - stopped
+                        example: starting
                       error:
                         type: string
                         description: The error that the pipeline may have encountered during running.
+                        example: ~
+                      delete_when_stopped:
+                        type: boolean
+                        description: A flag specifying whether this pipeline is implicitly removed once it is terminated.
+                        example: false
                       restart_with_node:
                         type: boolean
                         description: A flag specifying whether this pipeline should start upon launching the parent node.
                         default: false
+                        example: true
                       operators:
                         type: array
                         items:
@@ -292,24 +374,16 @@ paths:
                             instrumented:
                               type: boolean
                               description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
-                example:
-                  pipeline:
-                    id: 7
-                    name: user-assigned-name
-                    definition: export | where foo | publish /bar
-                    state: starting
-                    error: ~
-                    restart_with_node: true
-                    operators:
-                      - id: 0
-                        definition: export
-                        instrumented: false
-                      - id: 1
-                        definition: where foo
-                        instrumented: true
-                      - id: 2
-                        definition: publish /bar
-                        instrumented: true
+                        example:
+                          - id: 0
+                            definition: export
+                            instrumented: false
+                          - id: 1
+                            definition: where foo
+                            instrumented: true
+                          - id: 2
+                            definition: publish /bar
+                            instrumented: true
         400:
           description: Invalid arguments.
           content:
@@ -425,29 +499,30 @@ paths:
                     example: Invalid arguments
                     description: The error message.
   /status:
-    get:
+    post:
       summary: Return current status
       description: Returns the current status of the whole node.
-      parameters:
-        - in: query
-          name: component
-          schema:
-            type: string
-          required: false
-          description: If specified, return the status for that component only.
-          example: index
-        - in: query
-          name: verbosity
-          schema:
-            type: string
-            enum:
-              - info
-              - detailed
-              - debug
-            default: info
-          required: false
-          description: The verbosity level of the status response.
-          example: detailed
+      requestBody:
+        description: Body for the status endpoint
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                []
+              properties:
+                component:
+                  type: string
+                  description: If specified, return the status for that component only.
+                  example: index
+                verbosity:
+                  type: string
+                  enum:
+                    - info
+                    - detailed
+                    - debug
+                  default: info
       responses:
         200:
           description: OK.
