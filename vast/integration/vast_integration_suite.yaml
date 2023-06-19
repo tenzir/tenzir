@@ -871,6 +871,16 @@ tests:
       - command: exec 'read zeek-tsv | head | select service | sort service nulls-first | write json'
         input: data/zeek/conn.log.gz
 
+  Sort with Remote Operators:
+    fixture: ServerTester
+    tags: [import, export, pipelines]
+    steps:
+      - command: exec 'read cef | import'
+        input: data/cef/forcepoint.log
+      - command: flush
+      - command: exec 'export | sort signature_id asc | write json'
+      - command: exec 'export | sort uid asc | head 10 | write json'
+
   # This tests for a bug fixed by tenzir/vast#3171 that caused sliced nested
   # arrays to be accessed incorrectly, resulting in a crash. The head 8 and tail
   # 3 operators are intentionally chosen to slice in the middle of a batch.
