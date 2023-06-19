@@ -257,11 +257,13 @@ caf::error merge_environment(record& config) {
         if (auto result = to_config_key(key, "TENZIR"))
           return result;
         auto result = to_config_key(key, "VAST");
-        if (result
-            && detail::getenv(
-              fmt::format("TENZIR{}", std::string_view{key}.substr(4)))) {
-          fmt::print(stderr, "ignoring {}\n", key);
-          return {};
+        if (result) {
+          auto tenzir_key
+            = fmt::format("TENZIR{}", std::string_view{key}.substr(4));
+          if (detail::getenv(tenzir_key)) {
+            fmt::print(stderr, "ignoring {} in favor of {}\n", key, tenzir_key);
+            return {};
+          }
         }
         return result;
       };
