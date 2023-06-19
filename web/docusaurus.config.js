@@ -93,28 +93,32 @@ async function createConfig() {
         {
           redirects: [
             {
-              to: '/docs/next/why-tenzir',
+              to: '/next/why-tenzir',
               from: '/docs/about-vast',
             },
             {
-              to: '/docs/next/get-started',
+              to: '/next/get-started',
               from: '/docs/try-vast',
             },
             {
-              to: '/docs/next/setup-guides',
+              to: '/next/setup-guides',
               from: '/docs/setup-vast',
             },
             {
-              to: '/docs/next/user-guides',
+              to: '/next/user-guides',
               from: '/docs/use-vast',
             },
             {
-              to: '/docs/next/developer-guides',
+              to: '/next/developer-guides',
               from: '/docs/develop-vast',
             },
             {
-              to: '/docs/next/contribute',
+              to: '/next/contribute',
               from: '/docs/develop-vast/contributing',
+            },
+            {
+              to: '/',
+              from: '/docs',
             },
           ],
         },
@@ -127,6 +131,8 @@ async function createConfig() {
         /** @type {import('@docusaurus/preset-classic').Options} */
         ({
           docs: {
+            path: 'docs', // The directory in the filesystem.
+            routeBasePath: '/', // Serve the docs at the site's root.
             sidebarPath: require.resolve('./sidebars.js'),
             editUrl: 'https://github.com/tenzir/tenzir/tree/main/web',
             // TODO: The last update author and time is always the person that
@@ -205,7 +211,7 @@ async function createConfig() {
             //  label: 'Docs',
             //},
             {
-              to: '/docs/next/get-started',
+              to: '/next/get-started',
               label: 'Docs',
               position: 'left',
             },
@@ -260,7 +266,7 @@ async function createConfig() {
               items: [
                 {
                   label: 'Docs',
-                  to: '/docs',
+                  to: '/',
                 },
                 {
                   label: 'API',
