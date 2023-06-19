@@ -21,6 +21,25 @@ struct fixture : public fixtures::node {
 
 } // namespace
 
+TEST(parameter parsing) {
+  auto endpoint = vast::rest_endpoint {
+    .params = vast::record_type{
+      {"id", vast::int64_type{}},
+      {"uid", vast::uint64_type{}},
+      {"timeout", vast::duration_type{}},
+      {"value", vast::string_type{}},
+    },
+  };
+  auto params = vast::detail::stable_map<std::string, std::string>{
+    {"id", "0"},
+    {"uid", "0"},
+    {"timeout", "1m"},
+    {"value", "1"},
+  };
+  auto result = parse_endpoint_parameters(endpoint, params);
+  REQUIRE_NOERROR(result);
+}
+
 FIXTURE_SCOPE(rest_api_tests, fixture)
 
 TEST(proxy request) {
@@ -59,22 +78,22 @@ TEST(invalid request) {
     [](const caf::error& e) {
       FAIL(e);
     });
-  // TODO: Enable when the endpoint does strict parameter validation.
-  // MESSAGE("invalid params");
-  // auto desc2 = vast::http_request_description{
-  //  .canonical_path = "POST /status (v0)",
-  //  .params = {{"asdf", "jkl"}},
-  //};
-  // auto rp2
-  //  = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc2);
-  // run();
-  // rp2.receive(
-  //  [](vast::rest_response& response) {
-  //    CHECK(response.is_error());
-  //  },
-  //  [](const caf::error& e) {
-  //    FAIL(e);
-  //  });
+
+  MESSAGE("invalid params");
+  auto desc2 = vast::http_request_description{
+    .canonical_path = "POST /status (v0)",
+    .params = {{"verbosity", "jklo"}},
+  };
+  auto rp2
+    = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc2);
+  run();
+  rp2.receive(
+    [](vast::rest_response& response) {
+      CHECK(response.is_error());
+    },
+    [](const caf::error& e) {
+      FAIL(e);
+    });
 }
 
 FIXTURE_SCOPE_END()

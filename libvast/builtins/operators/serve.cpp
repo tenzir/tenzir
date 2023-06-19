@@ -99,7 +99,7 @@ constexpr auto SPEC_V0 = R"_(
               max_events:
                 type: integer
                 example: 50
-                description: The maximum number of events returned. If unset, the number is unlimited.
+                description: The maximum number of events returned. Must be positive. If unset, the number is unlimited.
               timeout:
                 type: string
                 example: "100ms"
@@ -602,9 +602,9 @@ struct serve_handler_state {
       result.continuation_token = std::move(**continuation_token);
     }
     auto max_events = try_get<uint64_t>(params, "max_events");
-    if (not max_events) {
+    if (not max_events or *max_events < 0) {
       return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to read max_events "
+                             fmt::format("invalid max_events "
                                          "parameter: {}; got params {}",
                                          max_events.error(), params));
     }
@@ -888,7 +888,7 @@ class plugin final : public virtual component_plugin,
         .params = record_type{
           {"serve_id", string_type{}},
           {"continuation_token", string_type{}},
-          {"max_events", uint64_type{}},
+          {"max_events", int64_type{}},
           {"timeout", duration_type{}},
         },
         .version = api_version::v0,
