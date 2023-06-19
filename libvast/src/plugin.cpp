@@ -19,21 +19,20 @@
 #include "vast/detail/stable_set.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
-#include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/node.hpp"
 #include "vast/operator_control_plane.hpp"
-#include "vast/plugin.hpp"
-#include "vast/query_context.hpp"
 #include "vast/store.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
 
+#include <algorithm>
 #include <dlfcn.h>
 #include <memory>
 #include <tuple>
+#include <unordered_set>
 
 namespace vast {
 
@@ -264,7 +263,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
   }
   VAST_DEBUG("collected {} global options for plugin initialization",
              global_config.size());
-  std::vector<std::string> disabled_plugins;
+  std::unordered_set<std::string> disabled_plugins;
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
     // First, try to read the configurations from the merged VAST configuration.
@@ -323,7 +322,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     // its configuration.
     if (!plugin->enabled(merged_config, global_config)) {
       VAST_VERBOSE("disabling plugin {}", plugin->name());
-      disabled_plugins.push_back(plugin->name());
+      disabled_plugins.insert(plugin->name());
       continue;
     }
     // Third, initialize the plugin with the merged configuration.
@@ -335,15 +334,10 @@ caf::error initialize(caf::actor_system_config& cfg) {
                                          "the {} plugin: {} ",
                                          plugin->name(), err));
   }
-  for (auto const& plugin_name : disabled_plugins) {
-    auto& plugins = get_mutable();
-    auto position
-      = std::find_if(plugins.begin(), plugins.end(), [=](const plugin_ptr& p) {
-          return p->name() == plugin_name;
-        });
-    VAST_ASSERT_CHEAP(position != plugins.end());
-    plugins.erase(position);
-  }
+  if (!disabled_plugins.empty())
+    std::erase_if(get_mutable(), [&](const plugin_ptr& p) {
+      return disabled_plugins.contains(p->name());
+    });
   return caf::none;
 }
 
