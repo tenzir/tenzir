@@ -34,13 +34,15 @@ TEST(parameter parsing) {
     .version = vast::api_version::v0,
     .content_type = vast::http_content_type::json,
   };
-  auto params = vast::detail::stable_map<std::string, std::string>{
-    {"id", "0"},
-    {"uid", "0"},
-    {"timeout", "1m"},
-    {"value", "1"},
+  auto params = vast::detail::stable_map<std::string, vast::data>{
+    {"id", std::string{"+0"}},
+    {"uid", std::string{"0"}},
+    {"timeout", std::string{"1m"}},
+    {"value", std::string{"1"}},
   };
-  auto result = parse_endpoint_parameters(endpoint, params);
+  vast::http_parameter_map pmap;
+  pmap.get_unsafe() = params;
+  auto result = parse_endpoint_parameters(endpoint, pmap);
   REQUIRE_NOERROR(result);
 }
 
@@ -50,8 +52,9 @@ TEST(proxy requests) {
   // /status
   auto desc = vast::http_request_description{
     .canonical_path = "POST /status (v0)",
-    .params
-    = {{"verbosity", "detailed"}, {"components", R"_(["catalog", "index"])_"}},
+    .params = {},
+    .json_body
+    = R"_({"verbosity": "detailed", "components": ["catalog", "index"]})_",
   };
   auto rp = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc);
   run();
@@ -101,6 +104,7 @@ TEST(invalid request) {
   auto desc = vast::http_request_description{
     .canonical_path = "foo",
     .params = {},
+    .json_body = {},
   };
   auto rp = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc);
   run();
@@ -115,7 +119,8 @@ TEST(invalid request) {
   MESSAGE("invalid params");
   auto desc2 = vast::http_request_description{
     .canonical_path = "POST /status (v0)",
-    .params = {{"verbosity", "jklo"}},
+    .params = {},
+    .json_body = R"_({"verbosity": "jklo"})_",
   };
   auto rp2
     = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc2);

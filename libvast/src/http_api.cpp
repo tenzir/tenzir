@@ -21,64 +21,150 @@ auto rest_endpoint::canonical_path() const -> std::string {
   return fmt::format("{} {} ({})", method, path, version);
 }
 
-auto parse_endpoint_parameters(
-  const vast::rest_endpoint& endpoint,
-  const detail::stable_map<std::string, std::string>& params)
+auto parse_skeleton(simdjson::ondemand::value value, size_t depth)
+  -> vast::data {
+  if (depth > vast::defaults::max_recursion)
+    throw std::runtime_error("nesting too deep");
+  switch (value.type()) {
+    case simdjson::ondemand::json_type::null:
+      return vast::data{};
+    case simdjson::ondemand::json_type::number:
+    case simdjson::ondemand::json_type::boolean:
+      return std::string{value.raw_json_token()};
+    case simdjson::ondemand::json_type::string:
+      return std::string{value.get_string().value()};
+    case simdjson::ondemand::json_type::array: {
+      auto lst = value.get_array();
+      list xs;
+      for (auto x : lst)
+        xs.push_back(parse_skeleton(x.value(), depth + 1));
+      return xs;
+    }
+    case simdjson::ondemand::json_type::object: {
+      record xs;
+      auto obj = value.get_object();
+      for (auto pair : obj)
+        xs.emplace(std::string{pair.unescaped_key().value()},
+                   parse_skeleton(pair.value().value(), depth + 1));
+      return xs;
+    }
+  }
+  die("missing return in switch statement");
+}
+
+auto http_parameter_map::from_json(std::string_view json)
+  -> caf::expected<http_parameter_map> {
+  http_parameter_map result;
+  if (json.empty())
+    return result;
+  auto padded_string = simdjson::padded_string{json};
+  auto parser = simdjson::ondemand::parser{};
+  auto doc = simdjson::ondemand::document{};
+  auto body = simdjson::ondemand::object{};
+  if ([[maybe_unused]] auto error = parser.iterate(padded_string).get(doc)) {
+    // std::stringstream ss;
+    // ss << error;
+    // auto detailed_error = ss.str();
+    return caf::make_error(ec::invalid_argument, "failed to parse json");
+  }
+  if ([[maybe_unused]] auto error = doc.get_object().get(body))
+    return caf::make_error(ec::invalid_argument, "expected a top-level object");
+  for (auto obj : body)
+    result.params_.emplace(std::string{obj.unescaped_key().value()},
+                           parse_skeleton(obj.value()));
+  return result;
+}
+
+auto http_parameter_map::params() const
+  -> const detail::stable_map<std::string, vast::data>& {
+  return params_;
+}
+
+auto http_parameter_map::get_unsafe()
+  -> detail::stable_map<std::string, vast::data>& {
+  return params_;
+}
+
+auto http_parameter_map::emplace(std::string&& key, vast::data&& value)
+  -> void {
+  // TODO: Validate that `value` contains only strings, lists and records.
+  params_.emplace(std::move(key), std::move(value));
+}
+
+auto parse_endpoint_parameters(const vast::rest_endpoint& endpoint,
+                               const http_parameter_map& parameter_map)
   -> caf::expected<vast::record> {
   vast::record result;
   if (!endpoint.params)
     return result;
+  auto const& params = parameter_map.params();
   for (auto const& leaf : endpoint.params->leaves()) {
     auto const& name = leaf.field.name;
     auto maybe_param = params.find(name);
     if (maybe_param == params.end())
       continue;
-    auto const& string_value = maybe_param->second;
+    auto const& param_data = maybe_param->second;
+    auto is_string = caf::holds_alternative<std::string>(param_data);
+    auto is_list = caf::holds_alternative<vast::list>(param_data);
     auto typed_value = caf::visit(
       detail::overload{
-        [&string_value](const string_type&) -> caf::expected<data> {
-          return data{string_value};
+        [&](const string_type&) -> caf::expected<data> {
+          if (!is_string)
+            return caf::make_error(ec::invalid_argument, "expected string");
+          return param_data;
         },
-        [&string_value](const bool_type&) -> caf::expected<data> {
+        [&](const bool_type&) -> caf::expected<data> {
+          if (!is_string)
+            return caf::make_error(ec::invalid_argument, "expected bool");
           bool result = false;
+          auto const& string_value = caf::get<std::string>(param_data);
           if (!parsers::boolean(string_value, result))
             return caf::make_error(ec::invalid_argument, "not a boolean value");
           return data{result};
         },
-        [&string_value](const list_type& lt) -> caf::expected<data> {
-          if (not caf::holds_alternative<string_type>(lt.value_type())) {
-            return caf::make_error(ec::invalid_argument,
-                                   "currently only strings in lists are "
-                                   "accepted");
+        [&](const list_type& lt) -> caf::expected<data> {
+          if (!is_list)
+            return caf::make_error(ec::invalid_argument, "expected a list");
+          auto list = caf::get<vast::list>(param_data);
+          auto result = vast::list{};
+          for (auto const& x : list) {
+            if (!caf::holds_alternative<std::string>(x))
+              return caf::make_error(ec::invalid_argument, "expected a string");
+            auto const& x_as_string = caf::get<std::string>(x);
+            auto parsed = caf::visit(
+              detail::overload{
+                [&](const string_type&) -> caf::expected<data> {
+                  return x_as_string;
+                },
+                [&]<basic_type Type>(const Type&) -> caf::expected<data> {
+                  using data_t = type_to_data_t<Type>;
+                  auto result = to<data_t>(x_as_string);
+                  if (!result)
+                    return std::move(result.error());
+                  return std::move(*result);
+                },
+                [](const auto&) -> caf::expected<data> {
+                  return caf::make_error(ec::invalid_argument,
+                                         "only lists of basic types are "
+                                         "supported");
+                },
+              },
+              lt.value_type());
+            if (!parsed)
+              return parsed.error();
+            result.emplace_back(*parsed);
           }
-          ::simdjson::dom::parser p;
-          auto el = p.parse(string_value);
-          if (el.error() != ::simdjson::error_code::SUCCESS) {
-            return caf::make_error(ec::invalid_argument,
-                                   "not a valid JSON value");
-          }
-          auto obj = el.value().get_array();
-          if (obj.error() != ::simdjson::error_code::SUCCESS) {
-            return caf::make_error(ec::invalid_argument,
-                                   "not a valid JSON array");
-          }
-          auto l = list{};
-          for (const auto& x : obj.value()) {
-            if (x.type() != ::simdjson::dom::element_type::STRING) {
-              return caf::make_error(ec::invalid_argument,
-                                     "currently only string values in arrays "
-                                     "are accepted");
-            }
-            l.emplace_back(std::string{x.get_string().value()});
-          }
-          return l;
+          return result;
         },
-        [&string_value]<basic_type Type>(const Type&) -> caf::expected<data> {
+        [&]<basic_type Type>(const Type&) -> caf::expected<data> {
           using data_t = type_to_data_t<Type>;
+          if (!is_string)
+            return caf::make_error(ec::invalid_argument, "expected basic type");
+          auto const& string_value = caf::get<std::string>(param_data);
           auto result = to<data_t>(string_value);
           if (!result)
-            return result.error();
-          return *result;
+            return std::move(result.error());
+          return std::move(*result);
         },
         []<complex_type Type>(const Type&) -> caf::expected<data> {
           return caf::make_error(ec::invalid_argument,
@@ -91,7 +177,7 @@ auto parse_endpoint_parameters(
       return caf::make_error(ec::invalid_argument,
                              fmt::format("failed to parse parameter "
                                          "'{}' with value '{}': {}\n",
-                                         name, string_value,
+                                         name, param_data,
                                          typed_value.error()));
     result[name] = std::move(*typed_value);
   }

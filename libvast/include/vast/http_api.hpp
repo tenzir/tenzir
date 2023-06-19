@@ -17,6 +17,7 @@
 #include <caf/expected.hpp>
 #include <caf/optional.hpp>
 
+#include <simdjson.h>
 #include <string>
 
 namespace vast {
@@ -73,8 +74,9 @@ struct rest_endpoint {
   /// Path can use the express.js conventions
   std::string path;
 
-  /// Expected parameters.
-  //  (A record_type cannot be empty, so we need an optional)
+  /// Expected parameters, if any.
+  // Note that the node will currently only forward basic types and
+  // lists of basic types as parameters.
   std::optional<vast::record_type> params;
 
   /// Version for that endpoint.
@@ -142,13 +144,6 @@ private:
   caf::error detail_ = {};
 };
 
-/// Go through the provided parameters; discard those that are not understood by
-/// the endpoint and attempt to parse the rest to the expected type.
-auto parse_endpoint_parameters(
-  const vast::rest_endpoint& endpoint,
-  const detail::stable_map<std::string, std::string>& params)
-  -> caf::expected<vast::record>;
-
 /// Used for serializing an incoming request to be able to send it as a caf
 /// message.
 class http_request_description {
@@ -156,19 +151,87 @@ public:
   /// Unique identification of the request endpoint.
   std::string canonical_path;
 
-  /// Request parameters. (unvalidated)
-  /// Query parameters, path parameters, and JSON body parameters
-  /// all get merged into this map.
+  /// Query parameters, path parameters, x-www-urlencoded body parameters
   detail::stable_map<std::string, std::string> params;
+
+  /// The POST JSON body, if it existed.
+  std::string json_body;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, http_request_description& e) {
     return f.object(e)
       .pretty_name("vast.http_request_description")
       .fields(f.field("canonical_path", e.canonical_path),
-              f.field("params", e.params));
+              f.field("params", e.params), f.field("json_body", e.json_body));
   }
 };
+
+/// Structured parameter data.
+struct http_parameter_map {
+  http_parameter_map() = default;
+  http_parameter_map(const http_parameter_map&) = default;
+  http_parameter_map(http_parameter_map&&) = default;
+  auto operator=(const http_parameter_map&) -> http_parameter_map& = default;
+  auto operator=(http_parameter_map&&) -> http_parameter_map& = default;
+  ~http_parameter_map() = default;
+
+  static auto from_json(std::string_view) -> caf::expected<http_parameter_map>;
+
+  /// Access to the internal data.
+  [[nodiscard]] auto params() const
+    -> const detail::stable_map<std::string, vast::data>&;
+
+  /// Insert a new key and value.
+  auto emplace(std::string&& key, vast::data&& value) -> void;
+
+  /// Unchecked access to the internal data.
+  auto get_unsafe() -> detail::stable_map<std::string, vast::data>&;
+
+private:
+  /// Partially parsed request parameters.
+  // Contains the combined request parameters from all sources (ie. query
+  // parameters, path parameters, body parameters) The web server is responsible
+  // for deciding if and how duplicates are merged or rejected.
+  //
+  // The key is the parameter name, the value is a "mildly parsed" version of
+  // the original request parameter. In particular, if the incoming data was a
+  // JSON POST body then the object structure is retained, nulls are discarded,
+  // and all other values are passed as string. For example:
+  //
+  //      {"foo": "T",
+  //       "bar": ["x", "y"],
+  //       "baz": 3}
+  //
+  //  -> stable_map{
+  //      {"foo"s, "T"s},
+  //      {"bar"s, list{"x"s, "y"s}},
+  //      {"baz"s, "3"s}}
+  //
+  // The leaf values are kept as unparsed strings since the server does not have
+  // the requisite type information to parse the JSON correctly. On the other
+  // hand, we don't require actual JSON objects since we also can't safely
+  // convert query parameters into the correct JSON representation without the
+  // type information.
+  // http_parameter_map params;
+  detail::stable_map<std::string, vast::data> params_;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, http_parameter_map& pm) {
+    return f.object(pm)
+      .pretty_name("vast.http_parameter_map")
+      .fields(f.field("params", pm.params_));
+  }
+};
+
+/// Go through the provided parameters; discard those that are not understood by
+/// the endpoint and attempt to parse the rest to the expected type.
+auto parse_endpoint_parameters(const vast::rest_endpoint& endpoint,
+                               const http_parameter_map& params)
+  -> caf::expected<vast::record>;
+
+/// Parse from JSON data.
+auto parse_skeleton(simdjson::ondemand::value value, size_t depth = 0)
+  -> vast::data;
 
 } // namespace vast
 
