@@ -76,7 +76,7 @@ async function createConfig() {
     baseUrl: '/',
     onBrokenLinks: 'throw',
     onBrokenMarkdownLinks: 'throw',
-    favicon: 'img/favicon.ico',
+    favicon: 'img/tenzir-logo-black.svg',
     organizationName: 'tenzir', // Usually your GitHub org/user name.
     projectName: 'tenzir', // Usually your repo name.
     trailingSlash: false, // GitHub Pages already adds a slash
