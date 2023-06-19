@@ -11,4 +11,4 @@ invalid partitions that were produced by older versions of VAST when a large
 `max-partition-size` was set in combination with badly compressible input data.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v2.3.1
-[compaction]: https://vast.io/docs/use/transform#transform-old-data-when-reaching-storage-quota
+[compaction]: https://vast.io/VAST%20v3.0/use/transform#transform-old-data-when-reaching-storage-quota

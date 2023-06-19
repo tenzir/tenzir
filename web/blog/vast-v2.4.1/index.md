@@ -50,7 +50,7 @@ We performed three tests:
 2. Export all events (20 times)
 3. [Rebuild][rebuild-docs] the entire database (3 times)
 
-[rebuild-docs]: /docs/setup/tune#rebuild-partitions
+[rebuild-docs]: /VAST%20v3.0/setup/tune#rebuild-partitions
 
 The results are astonishingly good:
 

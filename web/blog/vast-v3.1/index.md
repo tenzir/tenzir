@@ -27,26 +27,26 @@ on the VAST Language.
 
 We introduced several new operators:
 
-- [`tail`](/docs/next/operators/transformations/tail): limits the
+- [`tail`](/next/operators/transformations/tail): limits the
   input to the last N events.
-- [`unique`](/docs/next/operators/transformations/unique): removes
+- [`unique`](/next/operators/transformations/unique): removes
   adjacent duplicates
-- [`measure`](/docs/next/operators/transformations/measure): replaces
+- [`measure`](/next/operators/transformations/measure): replaces
   the input with incremental metrics describing the input.
-- [`version`](/docs/next/operators/sources/version): returns a single
+- [`version`](/next/operators/sources/version): returns a single
   event displaying version information of VAST.
-- [`from`](/docs/next/operators/sources/from): produces events by
+- [`from`](/next/operators/sources/from): produces events by
   combining a connector and a format.
-- [`read`](/docs/next/operators/sources/read): a short form of `from`
+- [`read`](/next/operators/sources/read): a short form of `from`
   that allows for omitting the connector.
-- [`to`](/docs/next/operators/sinks/to): consumes events by combining
+- [`to`](/next/operators/sinks/to): consumes events by combining
   a connector and format.
-- [`write`](/docs/next/operators/sinks/write): a short form of `to`
+- [`write`](/next/operators/sinks/write): a short form of `to`
   that allows for omitting the connector.
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
 work with selectors and extractors. Check out the [growing list of
-operators](/docs/next/operators/).
+operators](/next/operators/).
 
 ## Operator Aliases
 

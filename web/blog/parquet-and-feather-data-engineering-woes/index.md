@@ -31,8 +31,8 @@ This blog post is the last part of a 3-piece series on Parquet and Feather.
 
 While our Feather implementation proved to be straight-forward, the Parquet
 store implementation turned out to be more difficult. Recall that VAST has its
-own [type system](https://vast.io/docs/understand-vast/data-model/type-system)
-relying on [Arrow extension
+own [type system](/VAST%20v3.0/understand/data-model/type-system) relying on
+[Arrow extension
 types](https://arrow.apache.org/docs/format/Columnar.html#extension-types) to
 express domain-specific concepts like IP addresses, subnets, or enumerations. We
 hit a few places where the Arrow C++ implementation does not support all VAST
@@ -44,13 +44,13 @@ In Apache Parquet, a [row group](https://parquet.apache.org/docs/concepts/) is a
 subset of a Parquet file that's itself written in a columnar fashion. Smaller
 row groups allow for higher granularity in reading parts of an individual file,
 at the expense of a potentially increased file size due to less optimal
-encoding. In VAST, we send around [batches of
-data](https://vast.io/docs/setup-vast/tune) that are considerably smaller than
-what a recommended Parquet file size would look like. A typical Parquet file
-size recommendation is 1GB, which translates to 5–10GB of data in memory when
-reading the entire file. To produce files sized in this order of magnitude, we
-planned to use individual row groups, each of which aligned with the size of our
-Arrow record batches that comprise 2<sup>16</sup> events occupying a few MBs.
+encoding. In VAST, we send around [batches of data](/VAST%20v3.0/setup/tune)
+that are considerably smaller than what a recommended Parquet file size would
+look like. A typical Parquet file size recommendation is 1GB, which translates
+to 5–10GB of data in memory when reading the entire file. To produce files sized
+in this order of magnitude, we planned to use individual row groups, each of
+which aligned with the size of our Arrow record batches that comprise
+2<sup>16</sup> events occupying a few MBs.
 
 However, attempting to read a Parquet file that was split into multiple row
 groups doesn't work for some of our schemas, yielding:

@@ -68,7 +68,7 @@ in a modern SOC.
 Our vision for this is to show how VAST as a modular platform can power modern
 and sustainable approaches to composable security.
 
-[docker-compose]: /docs/setup/deploy/docker-compose
+[docker-compose]: /VAST%20v3.0/setup/deploy/docker-compose
 
 ### REST API and Frontend User Interface
 
@@ -89,7 +89,7 @@ The frontend UI currently displays a status page for the installed VAST node.
 
 We have some exciting features planned for both of these. Stay tuned!
 
-[rest-api]: /docs/use/integrate/rest-api
+[rest-api]: /VAST%20v3.0/use/integrate/rest-api
 [frontend-code]: https://github.com/tenzir/vast/tree/v2.4.0/plugins/web/ui
 
 ### Python Bindings
