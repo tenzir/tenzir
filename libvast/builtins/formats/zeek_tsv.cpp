@@ -665,7 +665,7 @@ public:
     std::optional<char> set_sep;
     std::optional<std::string> empty_field;
     std::optional<std::string> unset_field;
-    bool disable_timestamp_tags;
+    bool disable_timestamp_tags = false;
 
     friend auto inspect(auto& f, args& x) -> bool {
       return f.object(x).fields(
@@ -752,6 +752,7 @@ public:
     parser.add("-s,--set-separator", set_separator, "<sep>");
     parser.add("-e,--empty-field", args.empty_field, "<str>");
     parser.add("-u,--unset-field", args.unset_field, "<str>");
+    parser.add("-d,--disable-timestamp-tags", args.disable_timestamp_tags);
     parser.parse(p);
     if (set_separator) {
       auto converted = to_xsv_sep(set_separator->inner);
@@ -769,20 +770,12 @@ public:
       }
       args.set_sep = *converted;
     }
-    args.disable_timestamp_tags = disable_timestamp_tags_;
     return std::make_unique<zeek_tsv_printer>(std::move(args));
   }
 
-  auto initialize(const record&, const record& global_config)
-    -> caf::error override {
-    disable_timestamp_tags_
-      = get_or(global_config, "vast.export.zeek.disable-timestamp-tags",
-               disable_timestamp_tags_);
+  auto initialize(const record&, const record&) -> caf::error override {
     return caf::none;
   }
-
-private:
-  bool disable_timestamp_tags_{false};
 };
 
 } // namespace vast::plugins::zeek_tsv
