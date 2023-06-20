@@ -20,6 +20,8 @@ from <connector> [read <format>]
 to <connector> [write <format>]
 ```
 
+If the format is omitted, the default depends on the connector.
+
 Tenzir ships with the following connectors:
 
 import DocCardList from '@theme/DocCardList';

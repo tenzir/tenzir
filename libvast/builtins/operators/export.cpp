@@ -32,6 +32,8 @@ namespace vast::plugins::export_ {
 
 class export_operator final : public crtp_operator<export_operator> {
 public:
+  export_operator() = default;
+
   explicit export_operator(expression expr) : expr_{std::move(expr)} {
   }
 
@@ -98,12 +100,8 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    auto string = std::string{"export"};
-    if (expr_ != trivially_true_expression()) {
-      string.append(fmt::format(" | where {}", expr_));
-    }
-    return string;
+  auto name() const -> std::string override {
+    return "export";
   }
 
   auto detached() const -> bool override {
@@ -121,22 +119,16 @@ public:
       std::make_unique<export_operator>(conjunction{expr_, expr})};
   }
 
+  friend auto inspect(auto& f, export_operator& x) -> bool {
+    return f.apply(x.expr_);
+  }
+
 private:
   expression expr_;
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<export_operator> {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "export";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;

@@ -83,8 +83,6 @@ event:
 }
 ```
 
-The default loader for the `cef` parser is [`stdin`](../connectors/stdin.md).
-
 ## Examples
 
 Read a CEF file:

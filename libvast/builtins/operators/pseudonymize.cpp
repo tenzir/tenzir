@@ -51,6 +51,8 @@ class pseudonymize_operator final
   : public schematic_operator<pseudonymize_operator,
                               std::vector<indexed_transformation>> {
 public:
+  pseudonymize_operator() = default;
+
   pseudonymize_operator(configuration config) : config_{std::move(config)} {
     parse_seed_string();
   }
@@ -107,6 +109,14 @@ public:
     return transform_columns(slice, state);
   }
 
+  auto name() const -> std::string override {
+    return "pseudonymize";
+  }
+
+  friend auto inspect(auto& f, pseudonymize_operator& x) -> bool {
+    return f.apply(x.config_);
+  }
+
   auto to_string() const -> std::string override {
     auto result
       = fmt::format("pseudonymize --method=\"{}\" ",
@@ -139,17 +149,8 @@ private:
 
 // -- plugin ------------------------------------------------------------------
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<pseudonymize_operator> {
 public:
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
-    return "pseudonymize";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

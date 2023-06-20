@@ -15,6 +15,7 @@
 #include <vast/concept/parseable/vast/time.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
+#include <vast/parser_interface.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
@@ -71,6 +72,12 @@ struct configuration {
     std::string function_name; ///< The aggregation function name.
     std::vector<std::string> input_extractors; ///< Unresolved input extractors.
     std::string output;                        ///< The output field name.
+
+    friend auto inspect(auto& f, aggregation& x) -> bool {
+      return f.object(x).fields(f.field("function_name", x.function_name),
+                                f.field("input_extractors", x.input_extractors),
+                                f.field("output", x.output));
+    }
   };
 
   /// Unresolved group-by extractors.
@@ -81,6 +88,13 @@ struct configuration {
 
   /// Configuration for aggregation columns.
   std::vector<aggregation> aggregations = {};
+
+  friend auto inspect(auto& f, configuration& x) -> bool {
+    return f.object(x).fields(f.field("group_by_extractors",
+                                      x.group_by_extractors),
+                              f.field("time_resolution", x.time_resolution),
+                              f.field("aggregations", x.aggregations));
+  }
 };
 
 /// A group-by column that was bound to a given schema.
@@ -520,11 +534,12 @@ private:
     buckets = {};
 };
 
-
 /// The summarize pipeline operator implementation.
 class summarize_operator final
   : public schematic_operator<summarize_operator, std::optional<aggregation>> {
 public:
+  summarize_operator() = default;
+
   /// Creates a pipeline operator from its configuration.
   /// @param config The parsed configuration of the summarize operator.
   explicit summarize_operator(configuration config) noexcept
@@ -593,25 +608,22 @@ public:
     return result;
   }
 
+  auto name() const -> std::string override {
+    return "summarize";
+  }
+
+  friend auto inspect(auto& f, summarize_operator& x) -> bool {
+    return f.apply(x.config_);
+  }
+
 private:
   /// The underlying configuration of the summary transformation.
   configuration config_ = {};
 };
 
 /// The summarize pipeline operator plugin.
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<summarize_operator> {
 public:
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    // Native plugins never have any plugin-specific configuration, so there's
-    // nothing to do here.
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
-    return "summarize";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

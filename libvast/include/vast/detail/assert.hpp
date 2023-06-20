@@ -67,3 +67,7 @@
 // expensive by default, cheap assertions need to be marked as such
 // by using `VAST_ASSERT_CHEAP()` instead.
 #define VAST_ASSERT(...) VAST_ASSERT_EXPENSIVE(__VA_ARGS__)
+
+/// Unlike `__builtin_unreachable()`, reaching this macro is not UB, and unlike
+/// `die("unreachable")`, it prints a backtrace.
+#define VAST_UNREACHABLE() VAST_ASSERT_CHEAP(false)

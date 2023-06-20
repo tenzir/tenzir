@@ -24,9 +24,6 @@ Tenzir's [`json`](json.md) can handle EVE JSON correctly, but for the schema
 names to match the value from the `event_type` field, we need to pass the option
 `--selector=event_type:suricata`. The `suricata` parser does this by default.
 
-The default loader for the `suricata` parser is
-[`stdin`](../connectors/stdin.md).
-
 ## Parser
 
 The `import suricata` command format consumes EVE JSON logs. The command

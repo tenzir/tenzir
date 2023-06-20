@@ -129,7 +129,7 @@ While all environment variables are strings on the shell, Tenzir parses them
 into a typed value internally. In general, parsing values from the environment
 follows the same syntactical rules as command line parsing.
 
-In particular, this applies to lists. For example, `TENZIR_PLUGINS="sigma,pcap"`
+In particular, this applies to lists. For example, `TENZIR_PLUGINS="foo,bar"`
 is equivalent to `--plugins=foo,bar`.
 
 Tenzir ignores environment variables with an empty value because the type cannot

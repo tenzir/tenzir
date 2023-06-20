@@ -1,0 +1,3 @@
+version
+-----
+located("version", false, location(0, 7))

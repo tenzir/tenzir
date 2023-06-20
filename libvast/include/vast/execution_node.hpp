@@ -26,6 +26,8 @@ struct execution_node_state {
   /// The node actor (iff available).
   node_actor node;
 
+  receiver_actor<diagnostic> diag;
+
   /// Entry point for the source.
   auto start(std::vector<caf::actor> next) -> caf::result<void>;
 
@@ -42,6 +44,7 @@ struct execution_node_state {
 /// spawn the actor as a detached actor if desired.
 auto execution_node(
   execution_node_actor::stateful_pointer<execution_node_state> self,
-  operator_ptr op, node_actor node) -> execution_node_actor::behavior_type;
+  operator_ptr op, node_actor node, receiver_actor<diagnostic> diag)
+  -> execution_node_actor::behavior_type;
 
 } // namespace vast

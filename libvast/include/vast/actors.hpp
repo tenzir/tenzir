@@ -12,6 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/atoms.hpp"
+#include "vast/diagnostics.hpp"
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
@@ -430,7 +431,7 @@ using node_actor = typed_actor_fwd<
   auto(atom::config)->caf::result<record>,
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
-  auto(atom::spawn, pipeline)
+  auto(atom::spawn, pipeline, receiver_actor<diagnostic>)
     ->caf::result<std::vector<std::pair<execution_node_actor, std::string>>>>::
   unwrap;
 
@@ -439,7 +440,8 @@ using pipeline_executor_actor = typed_actor_fwd<
   // Execute a pipeline, returning the result asynchronously. This must be
   // called at most once per executor.
   auto(atom::run)->caf::result<void>,
-  auto(atom::run, node_actor)->caf::result<void>>::unwrap;
+  auto(atom::run, node_actor)
+    ->caf::result<void>>::extend_with<receiver_actor<diagnostic>>::unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.
@@ -480,6 +482,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::partition_actor))
   VAST_ADD_TYPE_ID((vast::partition_creation_listener_actor))
   VAST_ADD_TYPE_ID((vast::receiver_actor<vast::atom::done>))
+  VAST_ADD_TYPE_ID((vast::receiver_actor<vast::diagnostic>))
   VAST_ADD_TYPE_ID((vast::rest_handler_actor))
   VAST_ADD_TYPE_ID((vast::status_client_actor))
   VAST_ADD_TYPE_ID((vast::stream_sink_actor<vast::table_slice>))

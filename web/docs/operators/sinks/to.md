@@ -14,13 +14,14 @@ write <format> [to <connector>]
 The `to` operator consumes events at the end of a pipeline by bringing together
 a [connector][connectors] and a [format][formats].
 
-Some connectors have a default format, and some formats have a default
-connector. This enables a shorter syntax, e.g., `write json` uses the
-`stdout` connector and `to stdout` the `json` format.
+All connectors have a default format, which depends on the connector. Similarly,
+all formats have a default connector, which is `stdin` or `stdout`. This enables
+a shorter syntax, e.g., `write json` uses the`stdout` connector and `to stdout`
+the `json` format.
 
 The `to` operator is a pipeline under the hood. For most cases, it is equal to
 `print <format> | save <connector>`. However, for some combinations of
-connectors and formats the underlying pipeline is a lot more complex. We
+connectors and formats the underlying pipeline is a bit more complex. We
 recommend always using `to` or [`write`](write.md) over
 [`print`](../transformations/print.md) and [`save`](save.md).
 

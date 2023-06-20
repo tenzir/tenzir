@@ -118,8 +118,13 @@ public:
                  : "");
   }
 
-  auto to_string() const -> std::string override {
+  auto name() const -> std::string override {
     return "import";
+  }
+
+  friend auto inspect(auto& f, import_operator& x) -> bool {
+    (void)f, (void)x;
+    return true;
   }
 
   auto location() const -> operator_location override {
@@ -127,18 +132,8 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<import_operator> {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  auto name() const -> std::string override {
-    return "import";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;

@@ -110,14 +110,14 @@ public:
     : slices_{std::move(slices)} {
   }
 
+  auto name() const -> std::string override {
+    return "<fixed_source>";
+  }
+
   auto operator()() const -> generator<table_slice> {
     for (const auto& slice : slices_) {
       co_yield slice;
     }
-  }
-
-  auto to_string() const -> std::string override {
-    return "<fixed_source>";
   }
 
 private:
@@ -131,6 +131,10 @@ public:
     VAST_ASSERT(result_);
   }
 
+  auto name() const -> std::string override {
+    return "<collecting_sink>";
+  }
+
   auto operator()(generator<table_slice> input) const
     -> generator<std::monostate> {
     for (auto&& slice : input) {
@@ -138,10 +142,6 @@ public:
         result_->push_back(std::move(slice));
       co_yield {};
     }
-  }
-
-  auto to_string() const -> std::string override {
-    return "<collecting_sink>";
   }
 
 private:

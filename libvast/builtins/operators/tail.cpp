@@ -22,6 +22,8 @@ namespace {
 
 class tail_operator final : public crtp_operator<tail_operator> {
 public:
+  tail_operator() = default;
+
   explicit tail_operator(uint64_t limit) : limit_{limit} {
   }
 
@@ -50,23 +52,20 @@ public:
     return fmt::format("tail {}", limit_);
   }
 
+  auto name() const -> std::string override {
+    return "tail";
+  }
+
+  friend auto inspect(auto& f, tail_operator& x) -> bool {
+    return f.apply(x.limit_);
+  }
+
 private:
   uint64_t limit_;
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<tail_operator> {
 public:
-  // plugin API
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  [[nodiscard]] auto name() const -> std::string override {
-    return "tail";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,

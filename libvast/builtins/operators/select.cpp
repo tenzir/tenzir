@@ -48,6 +48,8 @@ struct configuration {
 class select_operator final
   : public schematic_operator<select_operator, std::vector<offset>> {
 public:
+  select_operator() = default;
+
   explicit select_operator(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
@@ -73,23 +75,21 @@ public:
     return fmt::format("select {}", fmt::join(config_.fields, ", "));
   }
 
+  auto name() const -> std::string override {
+    return "select";
+  }
+
+  friend auto inspect(auto& f, select_operator& x) -> bool {
+    return f.apply(x.config_);
+  }
+
 private:
   /// The underlying configuration of the transformation.
   configuration config_ = {};
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<select_operator> {
 public:
-  // plugin API
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
-    return {};
-  }
-
-  [[nodiscard]] std::string name() const override {
-    return "select";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

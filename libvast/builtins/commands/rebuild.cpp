@@ -99,7 +99,7 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
+  auto name() const -> std::string override {
     return "<rebatch>";
   }
 

@@ -51,10 +51,6 @@ record:
 
 Note that nested records have dot-separated field names.
 
-The default loader for the `xsv` parser is [`stdin`](../connectors/stdin.md).
-
-The default saver for the `xsv` printer is [`stdout`](../connectors/stdout.md).
-
 ### `<field-sep>`
 
 Specifies the string that separates fields.

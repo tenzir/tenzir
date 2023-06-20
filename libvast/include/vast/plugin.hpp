@@ -14,6 +14,7 @@
 #include "vast/command.hpp"
 #include "vast/config_options.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/detail/pp.hpp"
 #include "vast/detail/weak_handle.hpp"
 #include "vast/http_api.hpp"
@@ -21,6 +22,7 @@
 #include "vast/pipeline.hpp"
 #include "vast/type.hpp"
 
+#include <caf/detail/pretty_type_name.hpp>
 #include <caf/error.hpp>
 #include <caf/init_global_meta_objects.hpp>
 #include <caf/stream.hpp>
@@ -31,6 +33,7 @@
 #include <filesystem>
 #include <memory>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 namespace vast {
@@ -123,9 +126,13 @@ public:
   /// @param plugin_config The relevant subsection of the configuration.
   /// @param global_config The entire VAST configuration for potential access to
   /// global options.
-  [[nodiscard]] virtual caf::error
+  [[nodiscard]] virtual auto
   initialize(const record& plugin_config, const record& global_config)
-    = 0;
+    -> caf::error {
+    (void)plugin_config;
+    (void)global_config;
+    return {};
+  }
 
   /// Returns the unique name of the plugin.
   [[nodiscard]] virtual std::string name() const = 0;
@@ -255,22 +262,333 @@ public:
   make_writer(const caf::settings& options) const = 0;
 };
 
-// -- transform plugin ---------------------------------------------------------
+// -- serialization plugin -----------------------------------------------------
 
-class operator_plugin : public virtual plugin {
+/// This plugin interface can be used to serialize and deserialize classes
+/// derived from `Base`. To this end, the base class provides a virtual
+/// `Base::name()` function, which is matched against `plugin::name()`.
+template <class Base>
+class serialization_plugin : public virtual plugin {
 public:
+  /// @pre `x.name() == name()`
+  [[nodiscard]] virtual auto serialize(inspector& f, const Base& x) const
+    -> bool
+    = 0;
+
+  /// @post `!x || x->name() == name()`
+  virtual void deserialize(inspector& f, std::unique_ptr<Base>& x) const = 0;
+};
+
+/// Inspects a polymorphic object `x` by using the serialization plugin with the
+/// name that matches `x->name()`.
+template <class Inspector, class Base>
+auto plugin_inspect(Inspector& f, std::unique_ptr<Base>& x) -> bool {
+  if constexpr (Inspector::is_loading) {
+    auto name = std::string{};
+    if (!f.apply(name)) {
+      return false;
+    }
+    auto const* p = plugins::find<serialization_plugin<Base>>(name);
+    if (!p) {
+      f.set_error(caf::make_error(
+        ec::serialization_error,
+        fmt::format("serialization plugin `{}` for `{}` not found", name,
+                    caf::detail::pretty_type_name(typeid(Base)))));
+      return false;
+    }
+    auto g = inspector{f};
+    p->deserialize(g, x);
+    return x != nullptr;
+  } else {
+    VAST_ASSERT(x);
+    auto name = x->name();
+    if (!f.apply(name)) {
+      return false;
+    }
+    auto const* p = plugins::find<serialization_plugin<Base>>(name);
+    if (!p) {
+      f.set_error(caf::make_error(
+        ec::serialization_error,
+        fmt::format("serialization plugin `{}` for `{}` not found", name,
+                    caf::detail::pretty_type_name(typeid(Base)))));
+      return false;
+    }
+    auto g = inspector{f};
+    return p->serialize(g, *x);
+  }
+}
+
+/// Implements `serialization_plugin` for a concrete class derived from `Base`
+/// by using its `inspect()` overload. Also provides a default implemenetation
+/// of `plugin::name()` based on `Concrete::name()`.
+template <class Base, class Concrete>
+  requires std::is_base_of_v<Base, Concrete>
+           && std::is_default_constructible_v<Concrete>
+           && std::is_final_v<Concrete>
+class inspection_plugin : public virtual serialization_plugin<Base> {
+public:
+  auto name() const -> std::string override {
+    return Concrete{}.name();
+  }
+
+  auto serialize(inspector& f, const Base& op) const -> bool override {
+    VAST_ASSERT(op.name() == name());
+    auto x = dynamic_cast<const Concrete*>(&op);
+    VAST_ASSERT(x);
+    // TODO: Can probably remove this const_cast by splitting up `inspector`.
+    auto y = const_cast<Concrete*>(x);
+    return f.apply(*y);
+  }
+
+  void deserialize(inspector& f, std::unique_ptr<Base>& x) const override {
+    x = std::visit(
+      [this]<class Inspector>(
+        std::reference_wrapper<Inspector> g) -> std::unique_ptr<Concrete> {
+        if constexpr (Inspector::is_loading) {
+          auto x = std::make_unique<Concrete>();
+          auto& f = g.get();
+          if (!f.apply(*x)) {
+            f.set_error(
+              caf::make_error(ec::serialization_error,
+                              fmt::format("inspector of `{}` failed: {}",
+                                          name(), f.get_error())));
+            return nullptr;
+          }
+          return x;
+        } else {
+          die("unreachable");
+        }
+      },
+      f);
+  }
+};
+
+// -- operator plugin ----------------------------------------------------------
+
+/// Deriving from this plugin will add an operator with the name of this plugin
+/// to the pipeline parser. Derive from this class when you want to introduce an
+/// alias to existing operators. This plugin itself does not add a new operator,
+/// but only a parser for it. For most use cases: @see operator_plugin
+class operator_parser_plugin : public virtual plugin {
+public:
+  /// @throws diagnostic
+  virtual auto parse_operator(parser_interface& p) const -> operator_ptr {
+    // TODO: Remove this default implementation and adjust `parser.cpp`
+    // accordingly when all operators are converted.
+    (void)p;
+    return nullptr;
+  }
+
   virtual auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>>
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> {
+    return {pipeline,
+            caf::make_error(ec::unspecified, "this operator does not support "
+                                             "the legacy parsing API")};
+  }
+};
+
+using operator_serialization_plugin = serialization_plugin<operator_base>;
+
+template <class Operator>
+using operator_inspection_plugin = inspection_plugin<operator_base, Operator>;
+
+/// This plugin adds a new operator with the name `Operator::name()` and
+/// internal systems. Most operator plugins should use this class, but if you
+/// only want to add an alias to existing operators, use
+/// `operator_parser_plugin` instead.
+template <class Operator>
+class operator_plugin : public virtual operator_inspection_plugin<Operator>,
+                        public virtual operator_parser_plugin {};
+
+// -- loader plugin -----------------------------------------------------------
+
+class plugin_loader {
+public:
+  virtual ~plugin_loader() = default;
+
+  virtual auto name() const -> std::string = 0;
+
+  virtual auto instantiate(operator_control_plane& ctrl) const
+    -> std::optional<generator<chunk_ptr>>
+    = 0;
+
+  virtual auto default_parser() const -> std::string {
+    return "json";
+  }
+
+  // TODO: Consider adding a default implementation.
+  virtual auto to_string() const -> std::string = 0;
+};
+
+/// @see operator_parser_plugin
+class loader_parser_plugin : public virtual plugin {
+public:
+  virtual auto parse_loader(parser_interface& p) const
+    -> std::unique_ptr<plugin_loader>
     = 0;
 };
+
+using loader_serialization_plugin = serialization_plugin<plugin_loader>;
+
+template <class Loader>
+using loader_inspection_plugin = inspection_plugin<plugin_loader, Loader>;
+
+/// @see operator_plugin
+template <class Loader>
+class loader_plugin : public virtual loader_inspection_plugin<Loader>,
+                      public virtual loader_parser_plugin {};
+
+// -- parser plugin -----------------------------------------------------------
+
+class plugin_parser {
+public:
+  virtual ~plugin_parser() = default;
+
+  virtual auto name() const -> std::string = 0;
+
+  virtual auto
+  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> std::optional<generator<table_slice>>
+    = 0;
+};
+
+/// @see operator_parser_plugin
+class parser_parser_plugin : public virtual plugin {
+public:
+  virtual auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser>
+    = 0;
+};
+
+using parser_serialization_plugin = serialization_plugin<plugin_parser>;
+
+template <class Parser>
+using parser_inspection_plugin = inspection_plugin<plugin_parser, Parser>;
+
+/// @see operator_plugin
+template <class Parser>
+class parser_plugin : public virtual parser_parser_plugin,
+                      public virtual parser_inspection_plugin<Parser> {};
+
+// -- printer plugin ----------------------------------------------------------
+
+class printer_instance {
+public:
+  virtual ~printer_instance() = default;
+
+  virtual auto process(table_slice slice) -> generator<chunk_ptr> = 0;
+
+  virtual auto finish() -> generator<chunk_ptr> {
+    return {};
+  }
+
+  template <class F>
+  static auto make(F f) -> std::unique_ptr<printer_instance> {
+    class func_printer : public printer_instance {
+    public:
+      explicit func_printer(F f) : f_{std::move(f)} {
+      }
+
+      auto process(table_slice slice) -> generator<chunk_ptr> override {
+        return f_(std::move(slice));
+      }
+
+    private:
+      F f_;
+    };
+    return std::make_unique<func_printer>(std::move(f));
+  }
+};
+
+class plugin_printer {
+public:
+  virtual ~plugin_printer() = default;
+
+  virtual auto name() const -> std::string = 0;
+
+  /// Returns a printer for a specified schema. If `allows_joining()`,
+  /// then `input_schema`can also be `type{}`, which means that the printer
+  /// should expect a hetergenous input instead.
+  virtual auto
+  instantiate(type input_schema, operator_control_plane& ctrl) const
+    -> caf::expected<std::unique_ptr<printer_instance>>
+    = 0;
+
+  /// Returns whether the printer allows for joining output streams into a
+  /// single saver.
+  virtual auto allows_joining() const -> bool = 0;
+};
+
+/// @see operator_parser_plugin
+class printer_parser_plugin : public virtual plugin {
+public:
+  virtual auto parse_printer(parser_interface& p) const
+    -> std::unique_ptr<plugin_printer>
+    = 0;
+};
+
+using printer_serialization_plugin = serialization_plugin<plugin_printer>;
+
+template <class Printer>
+using printer_inspection_plugin = inspection_plugin<plugin_printer, Printer>;
+
+/// @see operator_plugin
+template <class Printer>
+class printer_plugin : public virtual printer_inspection_plugin<Printer>,
+                       public virtual printer_parser_plugin {};
+
+// -- saver plugin ------------------------------------------------------------
+
+struct printer_info {
+  type input_schema{};
+  std::string format{};
+};
+
+class plugin_saver {
+public:
+  virtual ~plugin_saver() = default;
+
+  virtual auto name() const -> std::string = 0;
+
+  virtual auto
+  instantiate(operator_control_plane& ctrl, std::optional<printer_info> info)
+    -> caf::expected<std::function<void(chunk_ptr)>>
+    = 0;
+
+  /// Returns true if the saver joins the output from its preceding printer. If
+  /// so, `instantiate()` will only be called once.
+  virtual auto is_joining() const -> bool = 0;
+
+  virtual auto default_printer() const -> std::string {
+    return "json";
+  }
+};
+
+/// @see operator_parser_plugin
+class saver_parser_plugin : public virtual plugin {
+public:
+  virtual auto parse_saver(parser_interface& p) const
+    -> std::unique_ptr<plugin_saver>
+    = 0;
+};
+
+using saver_serialization_plugin = serialization_plugin<plugin_saver>;
+
+template <class Saver>
+using saver_inspection_plugin = inspection_plugin<plugin_saver, Saver>;
+
+/// @see operator_plugin
+template <class Saver>
+class saver_plugin : public virtual saver_inspection_plugin<Saver>,
+                     public virtual saver_parser_plugin {};
 
 // -- aggregation function plugin ---------------------------------------------
 
 /// A base class for plugins that add new aggregation functions.
 class aggregation_function_plugin : public virtual plugin {
 public:
-  /// Creates a new aggregation function that maps incrementally added input to
-  /// a single output value.
+  /// Creates a new aggregation function that maps incrementally added input
+  /// to a single output value.
   /// @param input_types The input types for which to create the aggregation
   /// function.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<aggregation_function>>
@@ -319,137 +637,17 @@ public:
     = 0;
 };
 
-// -- loader plugin -----------------------------------------------------------
-
-/// A loader plugin transfers input data into a stream of chunks.
-/// @relates plugin
-class loader_plugin : public virtual plugin {
-public:
-  /// Returns the loader.
-  virtual auto make_loader(std::span<std::string const> args,
-                           operator_control_plane& ctrl) const
-    -> caf::expected<generator<chunk_ptr>>
-    = 0;
-
-  /// Returns the default parser for this loader.
-  virtual auto default_parser(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>>
-    = 0;
-};
-
-// -- parser plugin -----------------------------------------------------------
-
-/// A parser plugin transfers a stream of chunks to a stream of table slices.
-/// @relates plugin
-class parser_plugin : public virtual plugin {
-public:
-  using parser = generator<table_slice>;
-
-  virtual auto
-  make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,
-              operator_control_plane& ctrl) const -> caf::expected<parser>
-    = 0;
-
-  virtual auto default_loader(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>>
-    = 0;
-};
-
-// -- printer plugin ----------------------------------------------------------
-
-/// A printer plugin formats and transfers output data into a stream of chunks.
-/// @relates plugin
-class printer_plugin : public virtual plugin {
-public:
-  class printer_base {
-  public:
-    virtual ~printer_base() = default;
-
-    virtual auto process(table_slice slice) -> generator<chunk_ptr> = 0;
-
-    virtual auto finish() -> generator<chunk_ptr> {
-      return {};
-    }
-  };
-
-  using printer = std::unique_ptr<printer_base>;
-
-  template <class F>
-  static auto to_printer(F f) -> printer {
-    class func_printer : public printer_base {
-    public:
-      explicit func_printer(F f) : f_{std::move(f)} {
-      }
-
-      auto process(table_slice slice) -> generator<chunk_ptr> override {
-        return f_(std::move(slice));
-      }
-
-    private:
-      F f_;
-    };
-    return std::make_unique<func_printer>(std::move(f));
-  }
-
-  /// Returns a printer for a specified schema. If `printer_allows_joining()`,
-  /// then `input_schema`can also be `type{}`, which means that the printer
-  /// should expect a hetergenous input instead.
-  virtual auto
-  make_printer(std::span<std::string const> args, type input_schema,
-               operator_control_plane& ctrl) const -> caf::expected<printer>
-    = 0;
-
-  /// Returns the default saver for this printer.
-  virtual auto default_saver(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>>
-    = 0;
-
-  /// Returns whether the printer allows for joining output streams into a
-  /// single saver.
-  virtual auto printer_allows_joining() const -> bool = 0;
-};
-
-// -- saver plugin ------------------------------------------------------------
-
-/// A saver plugin transfers a stream of chunks to a sink.
-/// @relates plugin
-class saver_plugin : public virtual plugin {
-public:
-  struct printer_info {
-    type input_schema{};
-    std::string format{};
-  };
-
-  // Alias for the byte chunk dumping function.
-  using saver = std::function<auto(chunk_ptr)->void>;
-
-  /// Returns the saver.
-  virtual auto make_saver(std::span<std::string const> args, printer_info info,
-                          operator_control_plane& ctrl) const
-    -> caf::expected<saver>
-    = 0;
-
-  /// Returns the default printer for this saver.
-  virtual auto default_printer(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>>
-    = 0;
-
-  /// Returns whether the saver joins output from its preceding
-  /// printer.
-  virtual auto saver_does_joining() const -> bool = 0;
-};
-
 // -- store plugin ------------------------------------------------------------
 
 /// A base class for plugins that add new store backends.
-/// @note Consider using the simler `store_plugin` instead, which abstracts the
-/// actor system logic away with a default implementation, which usually
+/// @note Consider using the simler `store_plugin` instead, which abstracts
+/// the actor system logic away with a default implementation, which usually
 /// suffices for most store backends.
 class store_actor_plugin : public virtual plugin {
 public:
-  /// A store_builder actor and a chunk called the "header". The contents of the
-  /// header will be persisted on disk, and should allow the plugin to retrieve
-  /// the correct store actor when `make_store()` below is called.
+  /// A store_builder actor and a chunk called the "header". The contents of
+  /// the header will be persisted on disk, and should allow the plugin to
+  /// retrieve the correct store actor when `make_store()` below is called.
   struct builder_and_header {
     store_builder_actor store_builder;
     chunk_ptr header;
@@ -484,8 +682,8 @@ public:
 
 /// A base class for plugins that add new store backends.
 class store_plugin : public virtual store_actor_plugin,
-                     public virtual parser_plugin,
-                     public virtual printer_plugin {
+                     public virtual parser_parser_plugin,
+                     public virtual printer_parser_plugin {
 public:
   /// Create a store for passive partitions.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
@@ -505,21 +703,11 @@ private:
   make_store(accountant_actor accountant, filesystem_actor fs,
              std::span<const std::byte> header) const final;
 
-  auto make_parser(std::vector<std::string> args, generator<chunk_ptr> loader,
-                   operator_control_plane& ctrl) const
-    -> caf::expected<parser> final;
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> final;
 
-  auto default_loader(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> final;
-
-  auto make_printer(std::span<std::string const> args, type input_schema,
-                    operator_control_plane& ctrl) const
-    -> caf::expected<printer> final;
-
-  auto default_saver(std::span<std::string const> args) const
-    -> std::pair<std::string, std::vector<std::string>> final;
-
-  auto printer_allows_joining() const -> bool final;
+  auto parse_printer(parser_interface& p) const
+    -> std::unique_ptr<plugin_printer> final;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------
@@ -633,7 +821,6 @@ private:
 // -- template function definitions -------------------------------------------
 
 namespace vast::plugins {
-
 template <class Plugin>
 const Plugin* find(std::string_view name) noexcept {
   const auto& plugins = get();

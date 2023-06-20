@@ -9,8 +9,13 @@
 #include "vast/pipeline.hpp"
 
 #include "vast/collect.hpp"
+#include "vast/diagnostics.hpp"
 #include "vast/modules.hpp"
 #include "vast/plugin.hpp"
+#include "vast/tql/parser.hpp"
+
+#include <caf/detail/stringification_inspector.hpp>
+#include <caf/fwd.hpp>
 
 namespace vast {
 
@@ -49,6 +54,25 @@ public:
     return vast::modules::concepts();
   }
 
+  auto diagnostics() noexcept -> diagnostic_handler& override {
+    class handler final : public diagnostic_handler {
+    public:
+      void emit(diagnostic d) override {
+        VAST_WARN("got diagnostic: {}", d);
+        error_ |= d.severity == severity::error;
+      }
+
+      auto has_seen_error() const -> bool override {
+        return error_;
+      }
+
+    private:
+      bool error_ = false;
+    };
+    static auto diag = handler{};
+    return diag;
+  }
+
 private:
   caf::error error_{};
 };
@@ -66,34 +90,57 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
   }
 }
 
-auto pipeline::parse(std::string_view repr) -> caf::expected<pipeline> {
-  // Get all query languages, but make sure that VAST is at the front.
-  // TODO: let the user choose exactly one language instead.
-  auto languages = collect(plugins::get<language_plugin>());
-  if (const auto* vast = plugins::find<language_plugin>("VAST")) {
-    const auto it = std::find(languages.begin(), languages.end(), vast);
-    VAST_ASSERT_CHEAP(it != languages.end());
-    std::rotate(languages.begin(), it, it + 1);
+auto pipeline::deserialize_op(inspector& f) -> operator_ptr {
+  auto name = std::string{};
+  if (!f.apply(name)) {
+    return nullptr;
   }
-  auto first_error = caf::error{};
-  for (const auto& language : languages) {
-    if (auto parsed = language->parse_query(repr))
-      return parsed;
-    else {
-      VAST_DEBUG("failed to parse query as {} language: {}", language->name(),
-                 parsed.error());
-      if (!first_error) {
-        first_error = std::move(parsed.error());
-      }
+  if (name == pipeline{}.name()) {
+    // There is no pipeline plugin (maybe there should be?), so we
+    // special-case this here.
+    auto pipe = std::make_unique<pipeline>();
+    if (!f.apply(*pipe)) {
+      return nullptr;
     }
+    return pipe;
   }
-  return caf::make_error(ec::syntax_error,
-                         fmt::format("invalid query: {}", first_error));
+  auto const* p = plugins::find<operator_serialization_plugin>(name);
+  if (!p) {
+    f.set_error(
+      caf::make_error(ec::serialization_error,
+                      fmt::format("could not find plugin `{}`", name)));
+    return nullptr;
+  }
+  auto op = operator_ptr{};
+  p->deserialize(f, op);
+  if (!op) {
+    f.set_error(caf::make_error(ec::serialization_error,
+                                fmt::format("plugin `{}` returned nullptr: {}",
+                                            p->name(), f.get_error())));
+    return nullptr;
+  }
+  return op;
 }
 
-auto pipeline::parse_as_operator(std::string_view repr)
+auto pipeline::serialize_op(const operator_base& op, inspector& f) -> bool {
+  auto name = op.name();
+  auto const* p = plugins::find<operator_serialization_plugin>(name);
+  if (!p) {
+    f.set_error(
+      caf::make_error(ec::serialization_error, "could not find plugin"));
+    return false;
+  }
+  return f.apply(name) && p->serialize(f, op);
+}
+
+auto pipeline::internal_parse(std::string_view repr)
+  -> caf::expected<pipeline> {
+  return tql::parse_internal(std::string{repr});
+}
+
+auto pipeline::internal_parse_as_operator(std::string_view repr)
   -> caf::expected<operator_ptr> {
-  auto result = parse(repr);
+  auto result = internal_parse(repr);
   if (not result)
     return std::move(result.error());
   return std::make_unique<pipeline>(std::move(*result));
@@ -138,8 +185,8 @@ auto pipeline::optimize() const -> caf::expected<pipeline> {
                              *this, optimized->first);
     }
     // Prepend where operator as a hacky way to handle pipelines without source.
-    auto where
-      = pipeline::parse_as_operator(fmt::format("where {}", optimized->first));
+    auto where = pipeline::internal_parse_as_operator(
+      fmt::format("where {}", optimized->first));
     VAST_ASSERT(where);
     optimized->second.prepend(std::move(*where));
   }
@@ -229,14 +276,13 @@ auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
       current = new_expr;
     } else {
       if (current != trivially_true_expression()) {
-        // TODO: We just want to create a `where current` operator. However, we
-        // currently only have the interface for parsing this from a string.
-        auto where_plugin = plugins::find<operator_plugin>("where");
-        auto string = fmt::format(" {}", current);
-        auto [rest, op] = where_plugin->make_operator(string);
-        VAST_ASSERT(rest.empty());
-        VAST_ASSERT(op);
-        new_rev.push_back(std::move(*op));
+        // TODO: We just want to create a `where {current}` operator. However,
+        // we currently only have the interface for parsing this from a string.
+        auto pipe = tql::parse_internal(fmt::format("where {}", current));
+        VAST_ASSERT(pipe);
+        auto ops = std::move(*pipe).unwrap();
+        VAST_ASSERT(ops.size() == 1);
+        new_rev.push_back(std::move(ops[0]));
         current = trivially_true_expression();
       }
       auto copy = (*it)->copy();
@@ -247,6 +293,39 @@ auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
 
   std::reverse(new_rev.begin(), new_rev.end());
   return std::pair{std::move(current), pipeline{std::move(new_rev)}};
+}
+
+auto operator_base::copy() const -> operator_ptr {
+  // TODO
+  auto p = plugins::find<operator_serialization_plugin>(name());
+  VAST_ASSERT(p);
+  auto buffer = caf::byte_buffer{};
+  auto serializer = caf::binary_serializer{nullptr, buffer};
+  auto f = inspector{serializer};
+  auto success = p->serialize(f, *this);
+  VAST_ASSERT(success);
+  auto deserializer = caf::binary_deserializer{nullptr, buffer};
+  f = inspector{deserializer};
+  auto copy = operator_ptr{};
+  p->deserialize(f, copy);
+  VAST_ASSERT(copy);
+  return copy;
+}
+
+auto operator_base::to_string() const -> std::string {
+  // TODO: Improve this output, perhaps by using JSON and rendering some field
+  // type, for instance expressions, as strings.
+  auto s = std::string{};
+  auto f = caf::detail::stringification_inspector{s};
+  auto g = inspector{f};
+  auto const* p = plugins::find<operator_serialization_plugin>(name());
+  if (!p) {
+    return fmt::format("{} <error: plugin not found>", name());
+  }
+  if (!p->serialize(g, *this)) {
+    return fmt::format("{} <error: serialize failed>", name());
+  }
+  return fmt::format("{} {}", name(), s);
 }
 
 auto operator_base::infer_type_impl(operator_type input) const
@@ -335,6 +414,30 @@ auto pipeline::operator=(pipeline const& other) -> pipeline& {
     *this = pipeline{other};
   }
   return *this;
+}
+
+auto inspector::is_loading() -> bool {
+  return std::visit(
+    [&]<class Inspector>(std::reference_wrapper<Inspector>) {
+      return Inspector::is_loading;
+    },
+    *this);
+}
+
+void inspector::set_error(caf::error e) {
+  return std::visit(
+    [&](auto& f) {
+      f.get().set_error(e);
+    },
+    *this);
+}
+
+auto inspector::get_error() const -> const caf::error& {
+  return std::visit(
+    [](auto&& f) -> const caf::error& {
+      return f.get().get_error();
+    },
+    *this);
 }
 
 } // namespace vast

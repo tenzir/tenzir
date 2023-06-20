@@ -272,7 +272,8 @@ static constexpr auto rank(T x) {
 /// @returns *rank_i(x)*.
 /// @pre `i < width`
 template <bool Bit = true, concepts::unsigned_integral T>
-requires(Bit) static constexpr auto rank(T x, detail::word_size_type i) {
+  requires(Bit)
+static constexpr auto rank(T x, detail::word_size_type i) {
   T masked = x & word<T>::lsb_fill(i + 1);
   return rank<1>(masked);
 }
@@ -288,24 +289,28 @@ static constexpr auto rank(T x, detail::word_size_type i) {
 /// @param x The block to search.
 /// @param i The position relative to the LSB to start searching.
 template <bool Bit = true, concepts::unsigned_integral T>
-requires(Bit) static constexpr auto find_first(T x) {
+  requires(Bit)
+static constexpr auto find_first(T x) {
   auto tzs = word<T>::count_trailing_zeros(x);
   return tzs == word<T>::width ? word<T>::npos : tzs;
 }
 
 template <bool Bit, concepts::unsigned_integral T>
-requires(!Bit) static constexpr auto find_first(T x) {
+  requires(!Bit)
+static constexpr auto find_first(T x) {
   return find_first<1>(static_cast<T>(~x));
 }
 
 template <bool Bit = true, concepts::unsigned_integral T>
-requires(Bit) static constexpr auto find_last(T x) {
+  requires(Bit)
+static constexpr auto find_last(T x) {
   auto lzs = word<T>::count_leading_zeros(x);
   return lzs == word<T>::width ? word<T>::npos : (word<T>::width - lzs - 1);
 }
 
 template <bool Bit, concepts::unsigned_integral T>
-requires(!Bit) static constexpr auto find_last(T x) {
+  requires(!Bit)
+static constexpr auto find_last(T x) {
   return find_last<1>(static_cast<T>(~x));
 }
 
@@ -329,9 +334,8 @@ static constexpr auto find_prev(T x, detail::word_size_type i) {
   if (i == 0)
     return word<T>::npos;
   T low = x & ~(word<T>::all << i);
-  return low == 0
-    ? word<T>::npos
-    : word<T>::width - word<T>::count_leading_zeros(low) - 1;
+  return low == 0 ? word<T>::npos
+                  : word<T>::width - word<T>::count_leading_zeros(low) - 1;
 }
 
 /// Computes the position of the i-th occurrence of a bit.
@@ -359,4 +363,3 @@ static constexpr detail::word_size_type select(T x, detail::word_size_type i) {
 }
 
 } // namespace vast
-

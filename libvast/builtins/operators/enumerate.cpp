@@ -32,6 +32,8 @@ class enumerate_operator final : public crtp_operator<enumerate_operator> {
   static constexpr auto default_field_name = "#";
 
 public:
+  enumerate_operator() = default;
+
   explicit enumerate_operator(std::string field) : field_{std::move(field)} {
     if (field_.empty())
       field_ = default_field_name;
@@ -118,23 +120,20 @@ public:
     return fmt::format("enumerate \"{}\"", detail::escape(field_, escaper));
   }
 
+  auto name() const -> std::string override {
+    return "enumerate";
+  }
+
 private:
+  friend auto inspect(auto& f, enumerate_operator& x) -> bool {
+    return f.apply(x.field_);
+  }
+
   std::string field_;
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<enumerate_operator> {
 public:
-  // plugin API
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  [[nodiscard]] auto name() const -> std::string override {
-    return "enumerate";
-  };
-
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

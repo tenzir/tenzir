@@ -217,9 +217,9 @@ const command& root(const command& cmd);
 /// @returns A pointer to the corresponding command on success, or nullptr
 ///          on error.
 /// @relates command
-const command* resolve(const command& cmd,
-                       std::vector<std::string_view>::iterator position,
-                       std::vector<std::string_view>::iterator end);
+const command*
+resolve(const command& cmd, std::vector<std::string_view>::iterator position,
+        std::vector<std::string_view>::iterator end);
 
 /// Gets a subcommand from its full name.
 /// @param cmd The parent to search for *position.

@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/diagnostics.hpp"
+#include "vast/tql/parser.hpp"
+
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
@@ -17,6 +20,7 @@
 #include <vast/test/fixtures/actor_system.hpp>
 #include <vast/test/fixtures/actor_system_and_events.hpp>
 #include <vast/test/fixtures/events.hpp>
+#include <vast/test/serialization.hpp>
 #include <vast/test/stdin_file_inut.hpp>
 #include <vast/test/test.hpp>
 #include <vast/test/utils.hpp>
@@ -62,24 +66,33 @@ public:
     FAIL("not implemented");
   }
 
+  auto diagnostics() noexcept -> diagnostic_handler& override {
+    static auto diag = null_diagnostic_handler{};
+    return diag;
+  }
+
 private:
   caf::error error_{};
 };
 
 struct command final : public crtp_operator<command> {
+  auto name() const -> std::string override {
+    return "command";
+  }
+
   auto operator()() const -> generator<std::monostate> {
     MESSAGE("hello, world!");
     co_return;
-  }
-
-  auto to_string() const -> std::string override {
-    return "command";
   }
 };
 
 struct source final : public crtp_operator<source> {
   explicit source(std::vector<table_slice> events)
     : events_(std::move(events)) {
+  }
+
+  auto name() const -> std::string override {
+    return "source";
   }
 
   auto operator()() const -> generator<table_slice> {
@@ -93,16 +106,16 @@ struct source final : public crtp_operator<source> {
     MESSAGE("source return");
   }
 
-  auto to_string() const -> std::string override {
-    return "source";
-  }
-
   std::vector<table_slice> events_;
 };
 
 struct sink final : public crtp_operator<sink> {
   explicit sink(std::function<void(table_slice)> callback)
     : callback_(std::move(callback)) {
+  }
+
+  auto name() const -> std::string override {
+    return "sink";
   }
 
   auto operator()(generator<table_slice> input) const
@@ -121,10 +134,6 @@ struct sink final : public crtp_operator<sink> {
     MESSAGE("sink return");
   }
 
-  auto to_string() const -> std::string override {
-    return "sink";
-  }
-
   std::function<void(table_slice)> callback_;
 };
 
@@ -135,7 +144,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   auto execute(pipeline p) -> caf::expected<void> {
     MESSAGE("executing pipeline: " << p.to_string());
     auto self = caf::scoped_actor{sys};
-    auto executor = self->spawn(pipeline_executor, std::move(p));
+    auto executor = self->spawn(pipeline_executor, std::move(p),
+                                std::make_unique<null_diagnostic_handler>());
     auto handle = self->request(executor, caf::infinite, atom::run_v);
     run();
     auto result = std::optional<caf::expected<void>>{};
@@ -157,7 +167,8 @@ FIXTURE_SCOPE(pipeline_fixture, fixture)
 
 TEST(actor executor success) {
   for (auto num : {0, 1, 4, 5}) {
-    auto v = unbox(pipeline::parse(fmt::format("head {}", num))).unwrap();
+    auto v
+      = unbox(pipeline::internal_parse(fmt::format("head {}", num))).unwrap();
     v.insert(v.begin(),
              std::make_unique<source>(std::vector<table_slice>{
                head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
@@ -176,14 +187,14 @@ TEST(actor executor execution error) {
   class execution_error_operator final
     : public crtp_operator<execution_error_operator> {
   public:
+    auto name() const -> std::string override {
+      return "error";
+    }
+
     auto operator()(generator<table_slice>, operator_control_plane& ctrl) const
       -> generator<table_slice> {
       ctrl.abort(caf::make_error(ec::unspecified));
       co_return;
-    }
-
-    auto to_string() const -> std::string override {
-      return "error";
     }
   };
 
@@ -201,13 +212,13 @@ TEST(actor executor instantiation error) {
   class instantiation_error_operator final
     : public crtp_operator<instantiation_error_operator> {
   public:
+    auto name() const -> std::string override {
+      return "error";
+    }
+
     auto operator()(generator<table_slice>, operator_control_plane&) const
       -> caf::expected<generator<table_slice>> {
       return caf::make_error(ec::unspecified);
-    }
-
-    auto to_string() const -> std::string override {
-      return "error";
     }
   };
 
@@ -222,7 +233,7 @@ TEST(actor executor instantiation error) {
 }
 
 TEST(taste 42) {
-  auto v = unbox(pipeline::parse("taste 42")).unwrap();
+  auto v = unbox(pipeline::internal_parse("taste 42")).unwrap();
   v.insert(v.begin(),
            std::make_unique<source>(std::vector<table_slice>{
              head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
@@ -240,7 +251,8 @@ TEST(taste 42) {
 
 TEST(source | where #schema == "zeek.conn" | sink) {
   auto count = size_t{0};
-  auto v = unbox(pipeline::parse(R"(taste 42 | where #schema == "zeek.conn")"))
+  auto v = unbox(pipeline::internal_parse(
+                   R"(taste 42 | where #schema == "zeek.conn")"))
              .unwrap();
   v.insert(v.begin(),
            std::make_unique<source>(std::vector<table_slice>{
@@ -259,7 +271,7 @@ TEST(source | where #schema == "zeek.conn" | sink) {
 
 TEST(tail 5) {
   {
-    auto v = unbox(pipeline::parse("tail 5")).unwrap();
+    auto v = unbox(pipeline::internal_parse("tail 5")).unwrap();
     v.insert(v.begin(),
              std::make_unique<source>(std::vector<table_slice>{
                head(zeek_conn_log.at(0), 1), head(zeek_conn_log.at(0), 1),
@@ -277,7 +289,8 @@ TEST(tail 5) {
 }
 
 TEST(unique) {
-  auto ops = unbox(pipeline::parse("select id.orig_h | unique")).unwrap();
+  auto ops
+    = unbox(pipeline::internal_parse("select id.orig_h | unique")).unwrap();
   ops.insert(ops.begin(), std::make_unique<source>(std::vector<table_slice>{
                             head(zeek_conn_log.at(0), 1), // = 1
                             head(zeek_conn_log.at(0), 1), // + 0
@@ -304,7 +317,7 @@ FIXTURE_SCOPE_END()
 TEST(pipeline operator typing) {
   dummy_control_plane ctrl;
   {
-    auto p = unbox(pipeline::parse(""));
+    auto p = unbox(pipeline::internal_parse(""));
     REQUIRE_NOERROR((p.check_type<void, void>()));
     REQUIRE(std::holds_alternative<generator<std::monostate>>(
       unbox(p.instantiate(std::monostate{}, ctrl))));
@@ -316,7 +329,7 @@ TEST(pipeline operator typing) {
       unbox(p.instantiate(generator<table_slice>{}, ctrl))));
   }
   {
-    auto p = unbox(pipeline::parse("pass"));
+    auto p = unbox(pipeline::internal_parse("pass"));
     REQUIRE(!p.infer_type<void>());
     REQUIRE_ERROR(p.instantiate(std::monostate{}, ctrl));
     REQUIRE(p.infer_type<chunk_ptr>().value().is<chunk_ptr>());
@@ -327,7 +340,7 @@ TEST(pipeline operator typing) {
       unbox(p.instantiate(generator<table_slice>{}, ctrl))));
   }
   {
-    auto p = unbox(pipeline::parse("taste 42"));
+    auto p = unbox(pipeline::internal_parse("taste 42"));
     REQUIRE(!p.infer_type<void>());
     REQUIRE_ERROR(p.instantiate(std::monostate{}, ctrl));
     REQUIRE_ERROR(p.infer_type<chunk_ptr>());
@@ -337,7 +350,7 @@ TEST(pipeline operator typing) {
       unbox(p.instantiate(generator<table_slice>{}, ctrl))));
   }
   {
-    auto p = unbox(pipeline::parse("where :ip"));
+    auto p = unbox(pipeline::internal_parse("where :ip"));
     REQUIRE(!p.infer_type<void>());
     REQUIRE_ERROR(p.instantiate(std::monostate{}, ctrl));
     REQUIRE_ERROR(p.infer_type<chunk_ptr>());
@@ -347,7 +360,8 @@ TEST(pipeline operator typing) {
       unbox(p.instantiate(generator<table_slice>{}, ctrl))));
   }
   {
-    auto p = unbox(pipeline::parse("taste 13 | pass | where abc == 123"));
+    auto p
+      = unbox(pipeline::internal_parse("taste 13 | pass | where abc == 123"));
     REQUIRE(!p.infer_type<void>());
     REQUIRE_ERROR(p.instantiate(std::monostate{}, ctrl));
     REQUIRE_ERROR(p.infer_type<chunk_ptr>());
@@ -367,10 +381,8 @@ TEST(command) {
   }
 }
 
-TEST(to_string) {
-  // The behavior tested here should not be relied upon and may change.
-  auto expected = std::string{
-    "drop xyz, :ip "
+const auto potpourri_pipeline
+  = "drop xyz, :ip "
     "| hash --salt=\"eIudsnREd\" name "
     "| head 42 "
     "| pseudonymize --method=\"crypto-pan\" --seed=\"abcd1234\" a "
@@ -380,13 +392,24 @@ TEST(to_string) {
     "| select :ip, timestamp "
     "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
     "| taste 123 "
-    "| unique"};
-  auto actual = unbox(pipeline::parse(expected)).to_string();
-  CHECK_EQUAL(actual, expected);
+    "| unique";
+
+TEST(parse_potpourri) {
+  REQUIRE_NOERROR(pipeline::internal_parse(potpourri_pipeline));
+}
+
+TEST(pipeline serialization) {
+  check_binary_serialization(unbox(pipeline::internal_parse("pass")));
+  check_binary_serialization(
+    unbox(pipeline::internal_parse("pass | pass | pass")));
+  check_binary_serialization(
+    unbox(pipeline::internal_parse(potpourri_pipeline)));
+  // check_serialization(unbox(pipeline::internal_parse(potpourri_pipeline)));
 }
 
 TEST(predicate pushdown into empty pipeline) {
-  auto pipeline = unbox(pipeline::parse("where x == 1 | where y == 2"));
+  auto pipeline
+    = unbox(pipeline::internal_parse("where x == 1 | where y == 2"));
   auto result
     = pipeline.predicate_pushdown_pipeline(unbox(to<expression>("z == 3")));
   REQUIRE(result);
@@ -397,8 +420,8 @@ TEST(predicate pushdown into empty pipeline) {
 }
 
 TEST(predicate pushdown select conflict) {
-  auto pipeline = unbox(pipeline::parse("where x == 0 | select x, z | "
-                                        "where y > 0 | where y < 5"));
+  auto pipeline = unbox(pipeline::internal_parse("where x == 0 | select x, z | "
+                                                 "where y > 0 | where y < 5"));
   auto result = pipeline.predicate_pushdown(unbox(to<expression>("z == 3")));
   REQUIRE(result);
   auto [expr, op] = std::move(*result);
@@ -408,20 +431,8 @@ TEST(predicate pushdown select conflict) {
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);
 }
 
-TEST(to -) {
-  auto to_pipeline = pipeline::parse("to stdout");
-  REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "local print json | save stdout");
-}
-
-TEST(to - write json) {
-  auto to_pipeline = pipeline::parse("to stdout write json");
-  REQUIRE_NOERROR(to_pipeline);
-  REQUIRE_EQUAL(to_pipeline->to_string(), "local print json | save stdout");
-}
-
 TEST(to with invalid inputs) {
-  REQUIRE_ERROR(pipeline::parse("to json write stdout"));
+  REQUIRE_ERROR(pipeline::internal_parse("to json write stdout"));
 }
 
 TEST(stdin with json parser with all from and read combinations) {
@@ -435,7 +446,7 @@ TEST(stdin with json parser with all from and read combinations) {
   for (auto definition : definitions) {
     MESSAGE("trying '" << definition << "'");
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
-    auto source = unbox(pipeline::parse(definition));
+    auto source = unbox(pipeline::internal_parse(definition));
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<pipeline>(std::move(source)));
     auto sink_called = false;
@@ -458,17 +469,14 @@ TEST(stdin with json parser with all from and read combinations) {
 TEST(user defined operator alias) {
   // We could detect some errors in the config file when loading the config.
   // This test assumes that the error is only triggered when using the alias.
-  auto config_data = unbox(from_yaml(R"__(
-vast:
-  operators:
-    something_random: put something_random=123
-    anonymize_urls: put net.url="xxx" | something_random
-    self_recursive: self_recursive | self_recursive
-    mut_recursive1: mut_recursive2
-    mut_recursive2: mut_recursive1
-    head: tail
-  pipelines: # <-- TODO: This is deprecated. Remove.
-    aggregate_flows: |
+  auto map = std::unordered_map<std::string, std::string>{
+    {"something_random", "put something_random=123"},
+    {"anonymize_urls", "put net.url=\"xxx\" | something_random"},
+    {"self_recursive", "self_recursive | self_recursive"},
+    {"mut_recursive1", "mut_recursive2"},
+    {"mut_recursive2", "mut_recursive1"},
+    {"head", "tail"},
+    {"aggregate_flows", R"_(
        summarize
          pkts_toserver=sum(flow.pkts_toserver),
          pkts_toclient=sum(flow.pkts_toclient),
@@ -482,21 +490,20 @@ vast:
          dest_ip
        resolution
          10 mins
-  )__"));
-  auto config = caf::get_if<record>(&config_data);
-  REQUIRE(config);
-  test::reinit_vast_language(*config);
+  )_"}};
+  // TODO: This can lead to errors if multiple tests are run in parallel.
+  tql::set_operator_aliases(std::move(map));
   auto guard = caf::detail::scope_guard([] {
     // The config makes `head` unusable, so we have to restore.
-    test::reinit_vast_language(record{});
+    tql::set_operator_aliases({});
   });
-  auto ops
-    = unbox(pipeline::parse("anonymize_urls | aggregate_flows")).unwrap();
+  auto ops = unbox(pipeline::internal_parse("anonymize_urls | aggregate_flows"))
+               .unwrap();
   REQUIRE_EQUAL(ops.size(), size_t{3});
-  REQUIRE_ERROR(pipeline::parse("aggregate_urls"));
-  REQUIRE_ERROR(pipeline::parse("self_recursive"));
-  REQUIRE_ERROR(pipeline::parse("mut_recursive1"));
-  REQUIRE_ERROR(pipeline::parse("head"));
+  REQUIRE_ERROR(pipeline::internal_parse("aggregate_urls"));
+  REQUIRE_ERROR(pipeline::internal_parse("self_recursive"));
+  REQUIRE_ERROR(pipeline::internal_parse("mut_recursive1"));
+  REQUIRE_ERROR(pipeline::internal_parse("head"));
 }
 
 auto execute(pipeline pipe) -> caf::expected<void> {
@@ -515,17 +522,12 @@ TEST(load_stdin_arguments) {
   for (auto x : success) {
     MESSAGE(x);
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
-    REQUIRE_NOERROR(
-      execute(unbox(pipeline::parse(fmt::format("{} | save stdout", x)))));
+    REQUIRE_NOERROR(execute(
+      unbox(pipeline::internal_parse(fmt::format("{} | save stdout", x)))));
   }
   for (auto x : error) {
     MESSAGE(x);
-    test::stdin_file_input<"artifacts/inputs/json.txt"> file;
-    // This test shows that pipeline parsing still succeeds. This is because
-    // arguments are only checked when the actual loader is created, which
-    // currently happens during instantiation.
-    REQUIRE_ERROR(
-      execute(unbox(pipeline::parse(fmt::format("{} | to stdout", x)))));
+    REQUIRE_ERROR(pipeline::internal_parse(fmt::format("{} | to stdout", x)));
   }
 }
 
@@ -564,7 +566,6 @@ TEST(file loader - arguments) {
     "read json from file --follow " VAST_TEST_PATH "artifacts/inputs/json.json",
     "read json from file -f " VAST_TEST_PATH "artifacts/inputs/json.json",
     "read json from file -",
-    "read json from file stdin",
     "load file " VAST_TEST_PATH "artifacts/inputs/json.json | parse json",
     "load file - | parse json",
     "load file " VAST_TEST_PATH
@@ -572,12 +573,10 @@ TEST(file loader - arguments) {
   auto error
     = {"from - --timeout",
        "from - --timeout nope",
-       "from file stdin --timeout 1s",
        "from - --t1me0ut 2m",
        "from - --timeout 20s 23s",
        "from file",
        "from file --timeout 2m",
-       "load file stdin | parse json",
        "load stdin --timeout 1s /home/dakostu/Documents/vast2/version.json",
        "load file " VAST_TEST_PATH
        "artifacts/inputs/json.json --timeout | parse json",
@@ -585,14 +584,11 @@ TEST(file loader - arguments) {
        "artifacts/inputs/json.json --timeout wtf | parse json"};
   for (const auto* x : success) {
     MESSAGE(x);
-    test::stdin_file_input<"artifacts/inputs/json.json"> file;
-    REQUIRE_NOERROR(pipeline::parse(fmt::format("{} | to stdout", x)));
+    REQUIRE_NOERROR(pipeline::internal_parse(fmt::format("{} | to stdout", x)));
   }
   for (const auto* x : error) {
     MESSAGE(x);
-    test::stdin_file_input<"artifacts/inputs/json.json"> file;
-    REQUIRE_ERROR(
-      execute(unbox(pipeline::parse(fmt::format("{} | to stdout", x)))));
+    REQUIRE_ERROR(pipeline::internal_parse(fmt::format("{} | to stdout", x)));
   }
 }
 
