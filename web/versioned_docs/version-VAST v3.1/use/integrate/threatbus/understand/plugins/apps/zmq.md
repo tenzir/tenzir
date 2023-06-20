@@ -225,9 +225,8 @@ Threat Bus is a publish-subscribe broker for security content. It expects that
 applications register themselves at the bus. Since VAST cannot do so on its own,
 VAST Threat Bus implements that functionality in the meantime.
 
-VAST Threat Bus provides a thin layer around
-[PyVAST](/docs/use/integrate/python), VAST's Python CLI bindings. It
-facilitates message exchange between Threat Bus and a VAST instance,
+VAST Threat Bus provides a thin layer around PyVAST, VAST's Python CLI bindings.
+It facilitates message exchange between Threat Bus and a VAST instance,
 transporting and converting STIX-2 Indicators and Sightings.
 
 ### Installation
@@ -267,9 +266,8 @@ and
 [Sightings](https://docs.oasis-open.org/cti/stix/v2.1/cs02/stix-v2.1-cs02.html#_a795guqsap3r).
 The Threat Bus ZeroMQ app plugin simply exposes Indicators and Sightings in
 STIX-2 format to subscribing apps, like VAST Threat Bus. Because VAST comes with
-its own query language and its own internal IoC format for [live
-matching](/docs/use/detect/match-threat-intel), VAST Threat Bus must
-convert between the STIX-2 format and VAST formats.
+its own query language and its own internal IoC format for live matching, VAST
+Threat Bus must convert between the STIX-2 format and VAST formats.
 
 The conversion currently only regards *point indicators*. A point indicator
 consists of a single value and type, like a hostname or IP address.  VAST

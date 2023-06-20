@@ -3,9 +3,8 @@ title: Visibility Across Space and Time is now Tenzir
 description: Renaming our project from VAST to Tenzir
 authors: mavam
 image: /img/blog/vast-to-tenzir.excalidraw.svg
-date: 2023-06-22
+date: 2023-06-20
 tags: [tenzir, vast, community, project]
-draft: true
 ---
 
 After 5 years of developing two identities, the VAST project and Tenzir

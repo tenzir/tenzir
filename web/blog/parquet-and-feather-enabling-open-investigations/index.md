@@ -43,7 +43,7 @@ files to load a dataset in memory for subsequent analysis.
 
 The data science community has long built on this foundation, but the majority
 of infosec tooling [does not build on an open
-foundation](/docs/about/vision#the-soc-architecture-maze). Too many
+foundation](/VAST%20v3.0/about/vision#the-soc-architecture-maze). Too many
 products hide their data behind silos, either wrapped behind a SaaS with a thin
 API, or in a custom format that requires cumbersome ETL pipelines. Nearly all
 advanced use cases require full access to the data. Especially when
@@ -99,7 +99,7 @@ batches to disk. The diagram below illustrates the architecture:
 
 [arrow-table]: https://arrow.apache.org/docs/python/data.html#tables
 [arrow-record-batch]: https://arrow.apache.org/docs/python/data.html#record-batches
-[store-plugin]: /docs/VAST%20v3.0/understand/architecture/plugins#store
+[store-plugin]: /VAST%20v3.0/understand/architecture/plugins#store
 
 This architecture makes it easy to point an analytics application directly to
 the store files, without the need for ETLing it into a dedicated warehouse, such
@@ -131,8 +131,8 @@ for the analysis.
 [blog-arrow]: /blog/apache-arrow-as-platform-for-security-data-engineering
 [ipaddress]: https://docs.python.org/3/library/ipaddress.html
 
-Here's how [VAST's type system](/docs/understand/data-model/type-system) looks
-like:
+Here's how [VAST's type system](/VAST%20v3.0/understand/data-model/type-system)
+looks like:
 
 ![Type System - VAST](type-system-vast.excalidraw.svg)
 

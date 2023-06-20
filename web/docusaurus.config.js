@@ -71,14 +71,14 @@ async function createConfig() {
   /// END CUSTOM CODE ///
   return {
     title: 'Tenzir',
-    tagline: 'The open-source pipeline and storage engine for security.',
-    url: 'https://vast.io',
+    tagline: 'Easy data pipelines for security teams.',
+    url: 'https://docs.tenzir.com',
     baseUrl: '/',
     onBrokenLinks: 'throw',
     onBrokenMarkdownLinks: 'throw',
-    favicon: 'img/favicon.ico',
+    favicon: 'img/tenzir-logo-black.svg',
     organizationName: 'tenzir', // Usually your GitHub org/user name.
-    projectName: 'vast', // Usually your repo name.
+    projectName: 'tenzir', // Usually your repo name.
     trailingSlash: false, // GitHub Pages already adds a slash
 
     markdown: {
@@ -93,28 +93,32 @@ async function createConfig() {
         {
           redirects: [
             {
-              to: '/docs/next/why-tenzir',
+              to: '/next/why-tenzir',
               from: '/docs/about-vast',
             },
             {
-              to: '/docs/next/get-started',
+              to: '/next/get-started',
               from: '/docs/try-vast',
             },
             {
-              to: '/docs/next/setup-guides',
+              to: '/next/setup-guides',
               from: '/docs/setup-vast',
             },
             {
-              to: '/docs/next/user-guides',
+              to: '/next/user-guides',
               from: '/docs/use-vast',
             },
             {
-              to: '/docs/next/developer-guides',
+              to: '/next/developer-guides',
               from: '/docs/develop-vast',
             },
             {
-              to: '/docs/next/contribute',
+              to: '/next/contribute',
               from: '/docs/develop-vast/contributing',
+            },
+            {
+              to: '/',
+              from: '/docs',
             },
           ],
         },
@@ -127,8 +131,10 @@ async function createConfig() {
         /** @type {import('@docusaurus/preset-classic').Options} */
         ({
           docs: {
+            path: 'docs', // The directory in the filesystem.
+            routeBasePath: '/', // Serve the docs at the site's root.
             sidebarPath: require.resolve('./sidebars.js'),
-            editUrl: 'https://github.com/tenzir/vast/tree/main/web',
+            editUrl: 'https://github.com/tenzir/tenzir/tree/main/web',
             // TODO: The last update author and time is always the person that
             // triggered the last deployment and the time of that deployment.
             // Ideally we'd show this information, but as-is it's unnecessary.
@@ -138,7 +144,7 @@ async function createConfig() {
           },
           blog: {
             blogTitle: 'Blog',
-            blogDescription: 'News from the VAST community',
+            blogDescription: 'News from the Tenzir community',
             blogSidebarCount: 20,
             blogSidebarTitle: 'Blog Posts',
             postsPerPage: 20,
@@ -188,6 +194,7 @@ async function createConfig() {
         navbar: {
           logo: {
             alt: 'Tenzir',
+            href: 'https://tenzir.com',
             src: 'img/tenzir-black.svg',
             srcDark: 'img/tenzir-white.svg',
             width: 120,
@@ -204,7 +211,7 @@ async function createConfig() {
             //  label: 'Docs',
             //},
             {
-              to: '/docs/next/get-started',
+              to: '/next/get-started',
               label: 'Docs',
               position: 'left',
             },
@@ -224,13 +231,13 @@ async function createConfig() {
               position: 'left',
             },
             {
-              href: 'https://vast.io/discord',
+              to: '/discord',
               'aria-label': 'Discord',
               className: 'header-discord-link',
               position: 'right',
             },
             {
-              href: 'https://github.com/tenzir/vast',
+              href: 'https://github.com/tenzir/tenzir',
               'aria-label': 'GitHub',
               className: 'header-github-link',
               position: 'right',
@@ -248,7 +255,7 @@ async function createConfig() {
         },
         announcementBar: {
           content:
-            'Leave us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">a GitHub star</a> ⭐️',
+            'Leave us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/tenzir/stargazers">a GitHub star</a> ⭐️',
           backgroundColor: '#f1f2f2',
           isCloseable: true,
         },
@@ -259,7 +266,7 @@ async function createConfig() {
               items: [
                 {
                   label: 'Docs',
-                  to: '/docs',
+                  to: '/',
                 },
                 {
                   label: 'API',
@@ -288,7 +295,7 @@ async function createConfig() {
                 },
                 {
                   label: 'GitHub',
-                  href: 'https://github.com/tenzir/vast',
+                  href: 'https://github.com/tenzir/tenzir',
                 },
                 {
                   label: 'Twitter',

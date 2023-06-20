@@ -13,9 +13,9 @@ available endpoints also provides an
 [OpenAPI](https://spec.openapis.org/oas/latest.html) spec for download. This
 blog post shows how we built the API and what you can do with it.
 
-[rest-api]: /docs/VAST%20v3.0/use/integrate/rest-api
-[plugins]: /docs/VAST%20v3.0/understand/architecture/plugins
-[actors]: /docs/VAST%20v3.0/understand/architecture/actor-model
+[rest-api]: /VAST%20v3.0/use/integrate/rest-api
+[plugins]: /VAST%20v3.0/understand/architecture/plugins
+[actors]: /VAST%20v3.0/understand/architecture/actor-model
 
 <!--truncate-->
 
@@ -194,7 +194,7 @@ curl "https://vast.example.org:42001/api/v0/status?verbosity=detailed" \
 :::caution Status changes in v3.0
 In the upcoming v3.0 release, the statistics under the key `.index.statistics`
 will move to `.catalog`. This change is already merged into the master branch.
-Consult the [status key reference](/docs/VAST%20v3.0/setup/monitor#reference) for details.
+Consult the [status key reference](/VAST%20v3.0/setup/monitor#reference) for details.
 :::
 
 ### Perform a HTTP health check

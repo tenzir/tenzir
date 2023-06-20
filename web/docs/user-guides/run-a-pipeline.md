@@ -23,6 +23,17 @@ a single event (the Tenzir versions) and the
 {"version": "v3.1.0-377-ga790da3049-dirty", "plugins": [{"name": "parquet", "version": "bundled"}, {"name": "pcap", "version": "bundled"}, {"name": "sigma", "version": "bundled"}, {"name": "web", "version": "bundled"}]}
 ```
 
+## Run from file
+
+Instead of passing the pipeline description to the `tenzir` executable, you can
+also load the definition from a file via `-f`:
+
+```bash
+tenzir -f pipeline.tql
+```
+
+This will interpret the file contents as pipeline and run it.
+
 :::tip Easy-Button Pipelines
 Want it managed? Head to [tenzir.com](https://tenzir.com) and sign up for the
 free Community Edition to experience easy-button pipeline management from the

@@ -15,6 +15,14 @@
   --ifm-color-primary-lightest: #3ac0ff;
   --ifm-footer-background-color: #f1f2f2;
   --ifm-color-carousel-bg: #f2f2f2;
+
+  /* Top navbar */
+  --ifm-navbar-item-padding-horizontal: 1rem;
+
+  /* Algolia DocSearch */
+  --docsearch-searchbox-background: transparent !important;
+  --docsearch-searchbox-focus-background: var(--ifm-color-white);
+  --docsearch-searchbox-shadow: transparent !important;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */

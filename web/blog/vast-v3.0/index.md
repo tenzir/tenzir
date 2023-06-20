@@ -42,9 +42,9 @@ altogether in a future version. The new pipeline operators [`head`][head-op] and
 [`taste`][taste-op] have no YAML equivalent.
 :::
 
-[pipeline-doc]: /docs/VAST%20v3.0/understand/language/pipelines#define-a-pipeline
-[head-op]: /docs/VAST%20v3.0/understand/language/operators/head
-[taste-op]: /docs/VAST%20v3.0/understand/language/operators/taste
+[pipeline-doc]: /VAST%20v3.0/understand/language/pipelines#define-a-pipeline
+[head-op]: /VAST%20v3.0/understand/language/operators/head
+[taste-op]: /VAST%20v3.0/understand/language/operators/taste
 
 ## Language Upgrades
 

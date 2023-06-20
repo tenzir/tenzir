@@ -35,7 +35,7 @@ Here are the top four reasons why we are switching:
 
 - **Moderation**: Discord has solid moderation tools that rely on role-based
   access, and makes it possible adhere to our [Code of
-  Conduct](/docs/next/contribute/code-of-conduct) upon joining.
+  Conduct](/next/contribute/code-of-conduct) upon joining.
 
 - **Invitation**: Unlimited invite links that do not expire.
 

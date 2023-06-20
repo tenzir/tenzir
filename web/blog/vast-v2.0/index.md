@@ -132,8 +132,8 @@ environment variables having the form `VAST_{KEY}=VALUE`. For example,
 
 Regarding precedence, environment variables override configuration file
 settings, and command line arguments override environment variables. Please
-consult the [documentation](/docs/setup/configure#environment-variables)
-for a more detailed explanation of how to specify keys and values.
+consult the documentation for a more detailed explanation of how to specify keys
+and values.
 
 ## VLAN Tag Extraction and Better Packet Decapsulation
 
@@ -150,7 +150,7 @@ vast export pcap 'vlan.outer > 0 || vlan.inner in [1, 2, 3]' | tcpdump -r - -nl
 VLAN tags occur in many variations, and VAST extracts them in case of
 single-tagging and  [QinQ
 double-tagging](https://en.wikipedia.org/wiki/IEEE_802.1ad). Consult the [PCAP
-documentation](/docs/understand/formats/pcap) for details on this feature.
+documentation](/VAST%20v3.0/understand/formats/pcap) for details on this feature.
 
 Internally, the packet decapsulation logic has been rewritten to follow a
 layered approach: frames, packets, and segments are the building blocks. The
