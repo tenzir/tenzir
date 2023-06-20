@@ -1074,7 +1074,7 @@ jobs:
       - configure
       - changelog
       - docker-vast
-      - docker-/ompose
+      - docker-compose
       - docs
       - vast-thehive-app
       - example-notebooks
