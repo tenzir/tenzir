@@ -13,8 +13,10 @@
 #include <vast/concept/parseable/core.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/concept/parseable/vast/time.hpp>
+#include <vast/detail/zip_iterator.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
+#include <vast/operator_control_plane.hpp>
 #include <vast/parser_interface.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
@@ -36,8 +38,8 @@ namespace {
 /// Converts a duration into the options required for Arrow Compute's
 /// {Round,Floor,Ceil}Temporal functions.
 /// @param time_resolution The multiple to round to.
-arrow::compute::RoundTemporalOptions
-make_round_temporal_options(duration time_resolution) noexcept {
+auto make_round_temporal_options(duration time_resolution) noexcept
+  -> arrow::compute::RoundTemporalOptions {
   // Note that using any calendar unit lower than milliseconds causes Arrow
   // Compute to just not round at all, which is really weird and not documented.
   // You'd expect at least a NotImplemented status, but you actually just get
@@ -50,33 +52,30 @@ make_round_temporal_options(duration time_resolution) noexcept {
   };
 }
 
-/// The configuration of a summarize pipeline operator, for example:
-///
-///   summarize:
-///     group-by:
-///       - community_id
-///       - proto
-///     time-resolution: 1 hour
-///     aggregate:
-///       ts: min
-///       ips:
-///         distinct:
-///           - net.src.ip
-///           - net.dst.ip
-///       max_ts:
-///         max: :timestamp
-///
+/// The configuration of a summarize pipeline operator.
 struct configuration {
   /// The configuration of a single aggregation.
   struct aggregation {
-    std::string function_name; ///< The aggregation function name.
-    std::vector<std::string> input_extractors; ///< Unresolved input extractors.
-    std::string output;                        ///< The output field name.
+    /// The output field name.
+    std::string output;
+
+    /// The aggregation function.
+    const aggregation_function_plugin* function;
+
+    /// Unresolved input extractor.
+    std::string input;
 
     friend auto inspect(auto& f, aggregation& x) -> bool {
-      return f.object(x).fields(f.field("function_name", x.function_name),
-                                f.field("input_extractors", x.input_extractors),
-                                f.field("output", x.output));
+      auto get = [&]() {
+        return x.function->name();
+      };
+      auto set = [&](std::string_view name) {
+        x.function = plugins::find<aggregation_function_plugin>(name);
+        return x.function != nullptr;
+      };
+      return f.object(x).fields(f.field("output", x.output),
+                                f.field("function", get, set),
+                                f.field("input", x.input));
     }
   };
 
@@ -95,159 +94,6 @@ struct configuration {
                               f.field("time_resolution", x.time_resolution),
                               f.field("aggregations", x.aggregations));
   }
-};
-
-/// A group-by column that was bound to a given schema.
-struct group_by_column {
-  /// Creates a set of group-by columns by binding the configuration to a
-  /// given schema.
-  /// @param schema The schema to bind to.
-  /// @param config The configuration to bind.
-  static caf::expected<std::vector<group_by_column>>
-  make(const type& schema, const configuration& config) {
-    auto result = std::vector<group_by_column>{};
-    const auto& schema_rt = caf::get<record_type>(schema);
-    for (const auto& extractor : config.group_by_extractors) {
-      for (auto offset :
-           schema_rt.resolve_key_suffix(extractor, schema.name())) {
-        auto field = schema_rt.field(offset);
-        auto& column = result.emplace_back();
-        column.input = offset;
-        column.time_resolution
-          = config.time_resolution.has_value()
-                && caf::holds_alternative<time_type>(field.type)
-              ? *config.time_resolution
-              : std::optional<duration>{};
-        column.name = schema_rt.key(offset);
-        column.type = field.type;
-      }
-    }
-    if (result.empty())
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("group-by extractors {} did not "
-                                         "resolve for schema {}",
-                                         config.group_by_extractors, schema));
-    std::sort(result.begin(), result.end(),
-              [](const group_by_column& lhs,
-                 const group_by_column& rhs) noexcept {
-                return lhs.input < rhs.input;
-              });
-    result.erase(std::unique(result.begin(), result.end()), result.end());
-    return result;
-  }
-
-  /// Compare two group-by columns for equality. This is required for
-  /// deduplication of group-by columns.
-  friend bool
-  operator==(const group_by_column& lhs, const group_by_column& rhs) noexcept {
-    return lhs.input == rhs.input;
-  }
-
-  /// The offset describing the input column.
-  offset input = {};
-
-  /// The optional time resolution for time columns.
-  std::optional<duration> time_resolution = {};
-
-  /// The output field's name.
-  std::string name = {};
-
-  /// The output field's type.
-  class type type = {};
-};
-
-/// An aggregation column that was bound to a given schema.
-struct aggregation_column {
-  /// Creates a set of aggregation columns by binding the configuration to a
-  /// given schema.
-  /// @param schema The schema to bind to.
-  /// @param config The configuration to bind.
-  static caf::expected<std::vector<aggregation_column>>
-  make(const type& schema, const configuration& config) {
-    auto result = std::vector<aggregation_column>{};
-    const auto& schema_rt = caf::get<record_type>(schema);
-    for (const auto& aggregation : config.aggregations) {
-      // Sanity-check that the configured aggregation function actually
-      // exists.
-      const auto* aggregation_function
-        = plugins::find<aggregation_function_plugin>(aggregation.function_name);
-      if (!aggregation_function)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("unknown aggregation function {}",
-                                           aggregation.function_name));
-      auto inputs = std::vector<offset>{};
-      for (const auto& extractor : aggregation.input_extractors) {
-        for (auto offset :
-             schema_rt.resolve_key_suffix(extractor, schema.name()))
-          inputs.push_back(std::move(offset));
-      }
-      // If we did not find any input columns we can skip this aggregation for
-      // the current schema and don't need to configure it further at all.
-      if (inputs.empty())
-        continue;
-      std::sort(inputs.begin(), inputs.end());
-      inputs.erase(std::unique(inputs.begin(), inputs.end()), inputs.end());
-      // Check that all columns resolve to the same (pruned) type.
-      const auto prune = [](const class type& type) noexcept {
-        return caf::visit(
-          [](const concrete_type auto& pruned) noexcept {
-            return vast::type{pruned};
-          },
-          type);
-      };
-      auto input_type = prune(schema_rt.field(inputs.front()).type);
-      const auto type_mismatch = std::any_of(
-        inputs.begin() + 1, inputs.end(), [&](const offset& input) noexcept {
-          return input_type != prune(schema_rt.field(input).type);
-        });
-      if (type_mismatch)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("aggregation function {} cannot "
-                                           "operate on fields {} of "
-                                           "mismatching types",
-                                           aggregation.function_name,
-                                           aggregation.input_extractors));
-      // Attempt to create the aggregation once ahead of time to check if that
-      // actually is supported for the input type.
-      auto instance
-        = aggregation_function->make_aggregation_function(input_type);
-      if (!instance)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("aggregation function {} failed "
-                                           "to instantiate for input type "
-                                           "{}: {}",
-                                           aggregation.function_name,
-                                           input_type, instance.error()));
-      auto output_type = (*instance)->output_type();
-      if (!output_type)
-        return caf::make_error(
-          ec::logic_error, fmt::format("aggregation function {} returned null "
-                                       "type output for input type {}",
-                                       aggregation.function_name, input_type));
-      auto& column = result.emplace_back();
-      column.function_name = aggregation.function_name;
-      column.inputs = std::move(inputs);
-      column.input_type = std::move(input_type);
-      column.output_name = aggregation.output;
-      column.output_type = std::move(output_type);
-    }
-    return result;
-  }
-
-  /// The name of the aggregation function to load.
-  std::string function_name = {};
-
-  /// The offsets describing the input columns.
-  std::vector<offset> inputs = {};
-
-  /// The input field's pruned type.
-  class type input_type = {};
-
-  /// The output field's name.
-  std::string output_name = {};
-
-  /// The output field's type.
-  class type output_type = {};
 };
 
 /// The key by which aggregations are grouped. Essentially, this is a vector of
@@ -321,212 +167,368 @@ struct group_by_key_equal {
   }
 };
 
-/// A configured aggregation that is bound to a single schema.
+struct column {
+  struct offset offset;
+  class type type;
+};
+
+/// Stores offsets and types of group-by and aggregation columns.
+struct binding {
+  std::vector<std::optional<column>> group_by_columns;
+  std::vector<std::optional<column>> aggregation_columns;
+
+  /// Try to resolve all aggregation and group-by columns for a given schema.
+  static auto make(const type& schema, const configuration& config)
+    -> caf::expected<binding> {
+    auto result = binding{};
+    result.group_by_columns.reserve(config.group_by_extractors.size());
+    result.aggregation_columns.reserve(config.aggregations.size());
+    auto const& rt = caf::get<record_type>(schema);
+    for (auto const& field : config.group_by_extractors) {
+      if (auto offset = rt.resolve_key(field)) {
+        auto type = rt.field(*offset).type;
+        result.group_by_columns.emplace_back(
+          column{std::move(*offset), std::move(type)});
+      } else {
+        result.group_by_columns.emplace_back(std::nullopt);
+      }
+    }
+    for (auto const& aggr : config.aggregations) {
+      if (auto offset = rt.resolve_key(aggr.input)) {
+        auto type = rt.field(*offset).type;
+        // Check that the type of this field is compatible with the function
+        // ahead of time. We will use that we know that it is compatiable later
+        // when instantiating the function for a given group.
+        auto instantiation = aggr.function->make_aggregation_function(type);
+        if (!instantiation) {
+          return caf::make_error(
+            ec::type_clash,
+            fmt::format("could not instantiate `{}` with `{}`: {}",
+                        aggr.function->name(), type, instantiation.error()));
+        }
+        result.aggregation_columns.emplace_back(
+          column{std::move(*offset), std::move(type)});
+      } else {
+        result.aggregation_columns.emplace_back(std::nullopt);
+      }
+    }
+    return result;
+  };
+
+  /// Read the input arrays for the configured group-by columns.
+  auto make_group_by_arrays(const arrow::RecordBatch& batch,
+                            const configuration& config) const
+    -> std::vector<std::optional<std::shared_ptr<arrow::Array>>> {
+    auto result = std::vector<std::optional<std::shared_ptr<arrow::Array>>>{};
+    result.reserve(group_by_columns.size());
+    for (const auto& column : group_by_columns) {
+      if (column) {
+        auto array = column->offset.get(batch);
+        if (config.time_resolution
+            && caf::holds_alternative<time_type>(column->type)) {
+          array = arrow::compute::FloorTemporal(
+                    array, make_round_temporal_options(*config.time_resolution))
+                    .ValueOrDie()
+                    .make_array();
+        }
+        result.emplace_back(std::move(array));
+      } else {
+        result.emplace_back(std::nullopt);
+      }
+    }
+    return result;
+  };
+
+  /// Read the input arrays for the configured aggregation columns.
+  auto make_aggregation_arrays(const arrow::RecordBatch& batch) const
+    -> std::vector<std::optional<std::shared_ptr<arrow::Array>>> {
+    auto result = std::vector<std::optional<std::shared_ptr<arrow::Array>>>{};
+    result.reserve(aggregation_columns.size());
+    for (const auto& column : aggregation_columns) {
+      if (column) {
+        result.emplace_back(column->offset.get(batch));
+      } else {
+        result.emplace_back(std::nullopt);
+      }
+    }
+    return result;
+  };
+};
+
+/// An instantiation of the inter-schematic aggregation process.
 class aggregation {
 public:
-  /// The buckets to aggregate into. Essentially, this is an ordered list of
-  /// aggregation functions which are incrementally fed input from rows with
-  /// matching group-by keys.
-  using bucket = std::vector<std::unique_ptr<aggregation_function>>;
-
-  /// Create an aggregation by binding the summarize pipeline operator
-  /// configuration to a given schema.
-  [[nodiscard]] static caf::expected<aggregation>
-  make(const type& schema, const configuration& config) noexcept {
-    auto group_by_columns = group_by_column::make(schema, config);
-    if (!group_by_columns)
-      return group_by_columns.error();
-    auto aggregation_columns = aggregation_column::make(schema, config);
-    if (!aggregation_columns)
-      return aggregation_columns.error();
-    auto result = aggregation{};
-    result.group_by_columns = std::move(*group_by_columns);
-    result.aggregation_columns = std::move(*aggregation_columns);
-    result.output_schema = [&]() noexcept -> type {
-      auto fields = std::vector<record_type::field_view>{};
-      fields.reserve(result.group_by_columns.size()
-                     + result.aggregation_columns.size());
-      for (const auto& column : result.group_by_columns)
-        fields.emplace_back(column.name, column.type);
-      for (const auto& column : result.aggregation_columns)
-        fields.emplace_back(column.output_name, column.output_type);
-      return {schema.name(), record_type{fields}};
-    }();
-    return result;
-  }
-
-  /// Aggregate a batch.
-  /// @param batch The record batch to aggregate. Must exactly match the
-  /// configured schema.
-  void add(const std::shared_ptr<arrow::RecordBatch>& batch) {
-    VAST_ASSERT(batch);
-    // Determine the inputs only once ahead of time.
-    const auto group_by_arrays = make_group_by_arrays(*batch);
-    const auto aggregation_arrays = make_aggregation_arrays(*batch);
-    // Helper lambda for updating a bucket.
-    const auto update_bucket = [&](bucket& bucket, int offset,
-                                   int length) noexcept {
-      VAST_ASSERT(length > 0);
-      if (length == 1) {
-        for (size_t column = 0; column < aggregation_columns.size(); ++column) {
-          for (const auto& array : aggregation_arrays[column])
-            bucket[column]->add(
-              value_at(aggregation_columns[column].input_type, *array, offset));
-        }
-      } else {
-        for (size_t column = 0; column < aggregation_columns.size(); ++column) {
-          for (const auto& array : aggregation_arrays[column])
-            bucket[column]->add(*array->Slice(offset, length));
+  /// Divides the input into groups and feeds it to the aggregation function.
+  auto add(const table_slice& slice, const configuration& config)
+    -> caf::error {
+    // Step 1: Resolve extractor names (if possible).
+    auto it = bindings.find(slice.schema());
+    if (it == bindings.end()) {
+      auto bound = binding::make(slice.schema(), config);
+      if (!bound) {
+        return bound.error();
+      }
+      it = bindings.try_emplace(it, slice.schema(), std::move(*bound));
+    }
+    auto const& bound = it->second;
+    // Step 2: Collect the aggregation columns and group-by columns into arrays.
+    auto batch = to_record_batch(slice);
+    auto group_by_arrays = bound.make_group_by_arrays(*batch, config);
+    auto aggregation_arrays = bound.make_aggregation_arrays(*batch);
+    // A key view used to determine the bucket for a single row.
+    auto reusable_key_view = group_by_key_view{};
+    reusable_key_view.resize(bound.group_by_columns.size(), {});
+    // Returns the group that the given row belongs to, creating new groups
+    // whenever necessary.
+    auto find_or_create_bucket = [&](int64_t row) -> caf::expected<bucket*> {
+      for (size_t col = 0; col < bound.group_by_columns.size(); ++col) {
+        if (bound.group_by_columns[col]) {
+          VAST_ASSERT(group_by_arrays[col].has_value());
+          reusable_key_view[col] = value_at(bound.group_by_columns[col]->type,
+                                            **group_by_arrays[col], row);
+        } else {
+          VAST_ASSERT(!group_by_arrays[col].has_value());
+          reusable_key_view[col] = caf::none;
         }
       }
-    };
-    // A key view used to determine the bucket for the current row.
-    auto reusable_key_view = group_by_key_view{};
-    reusable_key_view.resize(group_by_columns.size(), {});
-    // Helper lambda for finding a bucket, or creating a new one lazily.
-    const auto find_or_create_bucket = [&](int row) -> bucket* {
-      for (size_t column = 0; column < group_by_columns.size(); ++column)
-        reusable_key_view[column] = value_at(group_by_columns[column].type,
-                                             *group_by_arrays[column], row);
-      if (auto bucket = buckets.find(reusable_key_view);
-          bucket != buckets.end())
-        return bucket.value().get();
+      if (auto it = buckets.find(reusable_key_view); it != buckets.end()) {
+        auto&& bucket = *it->second;
+        // Check that the group-by values also have matching types.
+        VAST_ASSERT(bucket.group_by_types.size()
+                    == bound.group_by_columns.size());
+        for (auto&& [existing, other] :
+             detail::zip{bucket.group_by_types, bound.group_by_columns}) {
+          if (!other) {
+            // If this group-by column does not exist in the input schema, we
+            // assume `null` values and ignore its type.
+            continue;
+          }
+          if (other->type != existing) {
+            // If the types mismatch, we have found equal values with not-equal
+            // types. This can happen e.g. for `null` values. TODO: Prune type?
+            if (existing == type{}) {
+              // In this case, we found a bucket for a schema which does not
+              // have the group-by extractor at all (hence the type is also
+              // `null`). Thus, we can just change the type.
+              static_assert(std::is_reference_v<decltype(existing)>);
+              existing = other->type;
+            } else {
+              return caf::make_error(
+                ec::type_clash,
+                fmt::format("summarize found matching group for key `{}`, but "
+                            "the existing type `{}` clashes with `{}`",
+                            reusable_key_view, existing, other->type));
+            }
+          }
+        }
+        // Check that the aggregation extractors have the same type.
+        VAST_ASSERT(bucket.functions.size()
+                    == bound.aggregation_columns.size());
+        for (auto&& [func, column] :
+             detail::zip{bucket.functions, bound.aggregation_columns}) {
+          auto func_type = func ? func->input : type{};
+          auto col_type = column ? column->type : type{};
+          if (func_type != col_type) {
+            return caf::make_error(
+              ec::type_clash,
+              fmt::format("summarize aggregation function for group `{}` "
+                          "expected type `{}`, but got `{}`",
+                          reusable_key_view, func_type, col_type));
+          }
+        }
+        return it->second.get();
+      }
+      // Did not find existing bucket, create a new one.
       auto new_bucket = std::make_shared<bucket>();
-      new_bucket->reserve(aggregation_columns.size());
-      for (const auto& column : aggregation_columns) {
-        auto function
-          = plugins::find<aggregation_function_plugin>(column.function_name)
-              ->make_aggregation_function(column.input_type);
-        // We check whether it's possible to create the aggregation function for
-        // the column's input type ahead of time, so there's no need to check
-        // again here.
-        VAST_ASSERT(function);
-        new_bucket->push_back(std::move(*function));
+      new_bucket->group_by_types.reserve(bound.group_by_columns.size());
+      for (auto&& column : bound.group_by_columns) {
+        if (column) {
+          new_bucket->group_by_types.push_back(column->type);
+        } else {
+          new_bucket->group_by_types.emplace_back();
+        }
+      }
+      new_bucket->functions.reserve(bound.aggregation_columns.size());
+      for (auto col = size_t{0}; col < bound.aggregation_columns.size();
+           ++col) {
+        // If this aggregation column exists, we create an instance of the
+        // aggregation function with the type of the column. If it does not
+        // exist, we store `std::nullopt` instead of an aggregation function, as
+        // we will later use this as a signal to set the result column to null.
+        if (bound.aggregation_columns[col]) {
+          auto input_type = bound.aggregation_columns[col]->type;
+          auto instance
+            = config.aggregations[col].function->make_aggregation_function(
+              input_type);
+          // We checked whether it's possible to create the aggregation function
+          // for the column type when binding the schema.
+          VAST_ASSERT(instance);
+          new_bucket->functions.emplace_back(
+            function{std::move(input_type), std::move(*instance)});
+        } else {
+          new_bucket->functions.emplace_back(std::nullopt);
+        }
       }
       auto [it, inserted] = buckets.emplace(materialize(reusable_key_view),
                                             std::move(new_bucket));
       VAST_ASSERT(inserted);
       return it.value().get();
     };
-    // Iterate over all rows of the batch, and determine a sliding window of
-    // rows beloging to the same batch as large as possible, and then update the
-    // corresponding bucket.
-    auto first_row = 0;
-    auto* first_bucket = find_or_create_bucket(first_row);
-    VAST_ASSERT(batch->num_rows() > 0);
-    for (auto row = 1; row < batch->num_rows(); ++row) {
-      auto* bucket = find_or_create_bucket(row);
-      if (bucket == first_bucket)
+    // This lambda is called for consecutive rows that belong to the same group
+    // and updates its aggregation functions.
+    auto update_bucket = [&](bucket& bucket, int64_t offset,
+                             int64_t length) noexcept {
+      VAST_ASSERT(length > 0);
+      VAST_ASSERT(bucket.functions.size() == aggregation_arrays.size());
+      VAST_ASSERT(bucket.functions.size() == bound.aggregation_columns.size());
+      for (size_t col = 0; col < bound.aggregation_columns.size(); ++col) {
+        if (bucket.functions[col]) {
+          VAST_ASSERT(aggregation_arrays[col]);
+          bucket.functions[col]->func->add(
+            *(*aggregation_arrays[col])->Slice(offset, length));
+        } else {
+          VAST_ASSERT(!aggregation_arrays[col]);
+        }
+      }
+    };
+    // Step 3: Iterate over all rows of the batch, and determine a slidin window
+    // of rows beloging to the same batch that is as large as possible, then
+    // update the corresponding bucket.
+    auto first_row = int64_t{0};
+    auto first_bucket = find_or_create_bucket(first_row);
+    if (!first_bucket) {
+      return std::move(first_bucket.error());
+    }
+    VAST_ASSERT(slice.rows() > 0);
+    for (auto row = int64_t{1}; row < detail::narrow<int64_t>(slice.rows());
+         ++row) {
+      auto bucket = find_or_create_bucket(row);
+      if (!bucket) {
+        return std::move(first_bucket.error());
+      }
+      if (*bucket == *first_bucket)
         continue;
-      update_bucket(*first_bucket, first_row, row - first_row);
+      update_bucket(**first_bucket, first_row, row - first_row);
       first_row = row;
       first_bucket = bucket;
     }
-    update_bucket(*first_bucket, first_row,
-                  detail::narrow_cast<int>(batch->num_rows()) - first_row);
+    update_bucket(**first_bucket, first_row,
+                  detail::narrow<int64_t>(slice.rows()) - first_row);
+    return {};
   }
 
-  /// Finish the buckets into a new batch.
-  [[nodiscard]] caf::expected<table_slice> finish() {
-    VAST_ASSERT(output_schema);
-    auto builder = caf::get<record_type>(output_schema)
-                     .make_arrow_builder(arrow::default_memory_pool());
-    VAST_ASSERT(builder);
-    const auto num_rows = detail::narrow_cast<int>(buckets.size());
-    const auto reserve_status = builder->Reserve(num_rows);
-    if (!reserve_status.ok())
-      return caf::make_error(ec::system_error,
-                             fmt::format("failed to reserve: {}",
-                                         reserve_status.ToString()));
-    for (auto [key, bucket] : std::exchange(buckets, {})) {
-      const auto append_row_status = builder->Append();
-      if (!append_row_status.ok())
-        return caf::make_error(ec::system_error,
-                               fmt::format("failed to append row: {}",
-                                           append_row_status.ToString()));
-      for (size_t column = 0; column < key.size(); ++column) {
-        const auto append_status = append_builder(
-          group_by_columns[column].type,
-          *builder->field_builder(detail::narrow_cast<int>(column)),
-          make_data_view(key[column]));
-        if (!append_status.ok())
-          return caf::make_error(ec::system_error,
-                                 fmt::format("failed to append grouped {}: {}",
-                                             key[column],
-                                             append_status.ToString()));
+  /// Returns the summarization results after the input is done.
+  auto finish(
+    const configuration& config) && -> generator<caf::expected<table_slice>> {
+    // TODO: Must summarizations yield events with equal output schemas. The
+    // code below will create a single table slice for each group, but we could
+    // use this knowledge to create batches instead.
+    for (auto&& [group, bucket] : buckets) {
+      VAST_ASSERT(config.aggregations.size() == bucket->functions.size());
+      // When building the output schema, we use the `string` type if the
+      // associated column was not present in the input schema. This is because
+      // we have to pick a type for the `null` values.
+      auto output_schema = std::invoke([&]() noexcept -> type {
+        auto fields = std::vector<record_type::field_view>{};
+        fields.reserve(config.group_by_extractors.size()
+                       + config.aggregations.size());
+        for (auto&& [extractor, group_type] :
+             detail::zip(config.group_by_extractors, bucket->group_by_types)) {
+          fields.emplace_back(
+            extractor, group_type == type{} ? type{string_type{}} : group_type);
+        }
+        for (auto&& [aggr, aggr_col] :
+             detail::zip(config.aggregations, bucket->functions)) {
+          fields.emplace_back(aggr.output, aggr_col
+                                             ? aggr_col->func->output_type()
+                                             : type{string_type{}});
+        }
+        return {"tenzir.summarize", record_type{fields}};
+      });
+      auto builder = caf::get<record_type>(output_schema)
+                       .make_arrow_builder(arrow::default_memory_pool());
+      VAST_ASSERT(builder);
+      auto status = builder->Append();
+      if (!status.ok()) {
+        co_yield caf::make_error(ec::system_error,
+                                 fmt::format("failed to append row: {}",
+                                             status.ToString()));
+        co_return;
       }
-      for (size_t column = 0; column < bucket->size(); ++column) {
-        auto value = std::move(*(*bucket)[column]).finish();
-        if (!value)
-          return value.error();
-        const auto append_status
-          = append_builder(aggregation_columns[column].output_type,
-                           *builder->field_builder(
-                             detail::narrow_cast<int>(key.size() + column)),
-                           make_data_view(*value));
-        if (!append_status.ok())
-          return caf::make_error(
-            ec::system_error, fmt::format("failed to append aggregated {}: {}",
-                                          *value, append_status.ToString()));
+      VAST_ASSERT(bucket->group_by_types.size() == group.size());
+      for (auto i = size_t{0}; i < group.size(); ++i) {
+        auto col = detail::narrow<int>(i);
+        // TODO: group_by_types
+        auto ty = bucket->group_by_types[i];
+        if (ty == type{}) {
+          ty = type{string_type{}};
+        }
+        status = append_builder(ty, *builder->field_builder(col),
+                                make_data_view(group[i]));
+        if (!status.ok()) {
+          co_yield caf::make_error(
+            ec::system_error,
+            fmt::format("failed to append group value: {}", status.ToString()));
+          co_return;
+        }
       }
+      for (auto i = size_t{0}; i < bucket->functions.size(); ++i) {
+        auto col = detail::narrow<int>(group.size() + i);
+        if (bucket->functions[i]) {
+          auto& func = bucket->functions[i]->func;
+          auto output_type = func->output_type();
+          auto value = std::move(*func).finish();
+          if (!value) {
+            co_yield std::move(value.error());
+            co_return;
+          }
+          status = append_builder(output_type, *builder->field_builder(col),
+                                  make_data_view(*value));
+        } else {
+          status = builder->field_builder(col)->AppendNull();
+        }
+        if (!status.ok()) {
+          co_yield caf::make_error(ec::system_error,
+                                   fmt::format("failed to append aggregation "
+                                               "value: {}",
+                                               status.ToString()));
+          co_return;
+        }
+      }
+      auto array = builder->Finish();
+      if (!array.ok()) {
+        co_yield caf::make_error(ec::system_error,
+                                 fmt::format("failed to finish builder: {}",
+                                             array.status().ToString()));
+        co_return;
+      }
+      auto batch = arrow::RecordBatch::Make(
+        output_schema.to_arrow_schema(), 1,
+        caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
+          .fields());
+      co_yield table_slice{batch, output_schema};
     }
-    auto array = builder->Finish();
-    if (!array.ok())
-      return caf::make_error(ec::system_error,
-                             fmt::format("failed to finish: {}",
-                                         array.status().ToString()));
-    auto batch = arrow::RecordBatch::Make(
-      output_schema.to_arrow_schema(), num_rows,
-      caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
-        .fields());
-    return table_slice{batch, output_schema};
   }
 
 private:
-  /// Read the input arrays for the configured group-by columns.
-  /// @param batch The record batch to extract from.
-  arrow::ArrayVector
-  make_group_by_arrays(const arrow::RecordBatch& batch) noexcept {
-    auto result = arrow::ArrayVector{};
-    result.reserve(group_by_columns.size());
-    for (const auto& group_by_column : group_by_columns) {
-      auto array = group_by_column.input.get(batch);
-      if (group_by_column.time_resolution) {
-        array = arrow::compute::FloorTemporal(
-                  array,
-                  make_round_temporal_options(*group_by_column.time_resolution))
-                  .ValueOrDie()
-                  .make_array();
-      }
-      result.push_back(std::move(array));
-    }
-    return result;
+  /// An `aggregation_function` together with its parameter type.
+  struct function {
+    type input;
+    std::unique_ptr<aggregation_function> func;
   };
 
-  /// Read the input arrays for the configured aggregation columns.
-  /// @param batch The record batch to extract from.
-  std::vector<arrow::ArrayVector>
-  make_aggregation_arrays(const arrow::RecordBatch& batch) noexcept {
-    auto result = std::vector<arrow::ArrayVector>{};
-    result.reserve(aggregation_columns.size());
-    for (const auto& column : aggregation_columns) {
-      auto sub_result = arrow::ArrayVector{};
-      sub_result.reserve(column.inputs.size());
-      for (const auto& input : column.inputs)
-        sub_result.push_back(input.get(batch));
-      result.push_back(std::move(sub_result));
-    }
-    return result;
+  /// The buckets to aggregate into. Essentially, this is an ordered list of
+  /// aggregation functions which are incrementally fed input from rows with
+  /// matching group-by keys. We also store the types of the `group_by` clause.
+  /// This is because we use only the underlying data for lookup, but need their
+  /// type to add the data to the output.
+  struct bucket {
+    std::vector<type> group_by_types;
+    std::vector<std::optional<function>> functions;
   };
 
-  /// The configured and bound group-by columns.
-  std::vector<group_by_column> group_by_columns = {};
-
-  /// The configured and bound aggregation columns.
-  std::vector<aggregation_column> aggregation_columns = {};
-
-  /// The output schema.
-  type output_schema = {};
+  /// We cache the offsets and types of the resolved columns for each schema.
+  tsl::robin_map<type, binding> bindings = {};
 
   /// The buckets for the ongoing aggregation.
   tsl::robin_map<group_by_key, std::shared_ptr<bucket>, group_by_key_hash,
@@ -535,8 +537,7 @@ private:
 };
 
 /// The summarize pipeline operator implementation.
-class summarize_operator final
-  : public schematic_operator<summarize_operator, std::optional<aggregation>> {
+class summarize_operator final : public crtp_operator<summarize_operator> {
 public:
   summarize_operator() = default;
 
@@ -547,38 +548,26 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema, operator_control_plane&) const
-    -> caf::expected<state_type> override {
-    auto result = aggregation::make(schema, config_);
-    if (!result) {
-      VAST_WARN("summarize operator does not apply to schema {} and discards "
-                "events: {}",
-                schema, result.error());
-      return std::nullopt;
-    }
-    return *result;
-  }
-
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
-    if (state) {
-      state->add(to_record_batch(slice));
-    }
-    return {};
-  }
-
-  auto finish(std::unordered_map<type, state_type> states,
-              operator_control_plane& ctrl) const
-    -> generator<output_type> override {
-    for (auto& [_, state] : states) {
-      if (state) {
-        if (auto batch = state->finish()) {
-          co_yield std::move(*batch);
-        } else {
-          ctrl.abort(batch.error());
-          break;
-        }
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    auto aggr = aggregation{};
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
       }
+      if (auto error = aggr.add(slice, config_)) {
+        ctrl.abort(std::move(error));
+        co_return;
+      }
+    }
+    for (auto&& result : std::move(aggr).finish(config_)) {
+      if (!result) {
+        ctrl.abort(std::move(result.error()));
+        co_return;
+      }
+      co_yield std::move(*result);
     }
   }
 
@@ -586,8 +575,7 @@ public:
     auto result = fmt::format("summarize");
     bool first = true;
     for (auto& aggr : config_.aggregations) {
-      auto rhs = fmt::format("{}({})", aggr.function_name,
-                             fmt::join(aggr.input_extractors, ","));
+      auto rhs = fmt::format("{}({})", aggr.function->name(), aggr.input);
       if (first) {
         first = false;
         result += ' ';
@@ -637,7 +625,7 @@ public:
                                           >> required_ws_or_comment >> duration)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
-                                      std::vector<std::string>>>,
+                                      std::string>>,
                std::vector<std::string>, std::optional<vast::duration>>
       parsed_aggregations{};
     if (!p(f, l, parsed_aggregations)) {
@@ -650,28 +638,28 @@ public:
       };
     }
     auto config = configuration{};
-    for (const auto& [output, function_name, arguments] :
+    for (const auto& [output, function_name, argument] :
          std::get<0>(parsed_aggregations)) {
       configuration::aggregation new_aggregation{};
-      if (!plugins::find<aggregation_function_plugin>(function_name)) {
+      auto const* function
+        = plugins::find<aggregation_function_plugin>(function_name);
+      if (!function) {
         return {
           std::string_view{f, l},
-          caf::make_error(ec::syntax_error, fmt::format("invalid aggregation "
-                                                        "name: '{}'",
+          caf::make_error(ec::syntax_error, fmt::format("invalid "
+                                                        "aggregation "
+                                                        "function `{}`",
                                                         function_name)),
         };
       }
-      new_aggregation.function_name = function_name;
-      new_aggregation.input_extractors = arguments;
+      new_aggregation.function = function;
+      new_aggregation.input = argument;
       new_aggregation.output
-        = (output)
-            ? *output
-            : fmt::format("{}({})", function_name, fmt::join(arguments, ","));
+        = (output) ? *output : fmt::format("{}({})", function_name, argument);
       config.aggregations.push_back(std::move(new_aggregation));
     }
     config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
     config.time_resolution = std::move(std::get<2>(parsed_aggregations));
-
     return {
       std::string_view{f, l},
       std::make_unique<summarize_operator>(std::move(config)),

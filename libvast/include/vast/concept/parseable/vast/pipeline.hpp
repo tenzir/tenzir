@@ -56,7 +56,7 @@ const inline auto extractor_value_assignment_list
 const inline auto aggregation_function
   = -(extractor >> optional_ws_or_comment >> '=' >> optional_ws_or_comment)
     >> plugin_name >> optional_ws_or_comment >> '(' >> optional_ws_or_comment
-    >> extractor_list >> optional_ws_or_comment >> ')';
+    >> extractor >> optional_ws_or_comment >> ')';
 const inline auto aggregation_function_list
   = (aggregation_function % (',' >> optional_ws_or_comment));
 

@@ -390,7 +390,7 @@ const auto potpourri_pipeline
     "| put a=\"xyz\", b=[1, 2, 3], c=[\"foo\"] "
     "| tail 1 "
     "| select :ip, timestamp "
-    "| summarize abc=sum(:uint64,def), any(:ip) by ghi, :subnet resolution 5ns "
+    "| summarize abc=sum(def), any(ghi) by jkl, mno resolution 5ns "
     "| taste 123 "
     "| unique";
 

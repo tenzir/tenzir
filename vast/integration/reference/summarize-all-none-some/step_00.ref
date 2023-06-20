@@ -1,0 +1,202 @@
+{
+  "_path": "sip",
+  "x": [
+    "sip"
+  ]
+}
+{
+  "_path": "ssl",
+  "x": [
+    "ssl"
+  ]
+}
+{
+  "_path": "tunnel",
+  "x": [
+    "tunnel"
+  ]
+}
+{
+  "_path": "weird.123.190",
+  "x": [
+    "weird.123.190"
+  ]
+}
+{
+  "_path": "notice",
+  "x": [
+    "notice"
+  ]
+}
+{
+  "_path": "software",
+  "x": [
+    "software"
+  ]
+}
+{
+  "_path": "dhcp",
+  "x": [
+    "dhcp"
+  ]
+}
+{
+  "_path": "corelight_metrics_cpu",
+  "x": [
+    "corelight_metrics_cpu"
+  ]
+}
+{
+  "_path": "smtp",
+  "x": [
+    "smtp"
+  ]
+}
+{
+  "_path": "conn",
+  "x": [
+    "conn"
+  ]
+}
+{
+  "_path": "rdp",
+  "x": [
+    "rdp"
+  ]
+}
+{
+  "_path": "_0_0_2",
+  "x": [
+    "_0_0_2"
+  ]
+}
+{
+  "_path": "syslog",
+  "x": [
+    "syslog"
+  ]
+}
+{
+  "_path": "corelight_metrics_memory",
+  "x": [
+    "corelight_metrics_memory"
+  ]
+}
+{
+  "_path": "files",
+  "x": [
+    "files"
+  ]
+}
+{
+  "_path": "weird",
+  "x": [
+    "weird"
+  ]
+}
+{
+  "_path": "dnp3",
+  "x": [
+    "dnp3"
+  ]
+}
+{
+  "_path": "modbus",
+  "x": [
+    "modbus"
+  ]
+}
+{
+  "_path": "irc",
+  "x": [
+    "irc"
+  ]
+}
+{
+  "_path": "pe",
+  "x": [
+    "pe"
+  ]
+}
+{
+  "_path": "conn_long",
+  "x": [
+    "conn_long"
+  ]
+}
+{
+  "_path": null,
+  "x": []
+}
+{
+  "_path": "corelight_metrics_system",
+  "x": [
+    "corelight_metrics_system"
+  ]
+}
+{
+  "_path": "reporter",
+  "x": [
+    "reporter"
+  ]
+}
+{
+  "_path": "ftp",
+  "x": [
+    "ftp"
+  ]
+}
+{
+  "_path": "kerberos",
+  "x": [
+    "kerberos"
+  ]
+}
+{
+  "_path": "radius",
+  "x": [
+    "radius"
+  ]
+}
+{
+  "_path": "dpd",
+  "x": [
+    "dpd"
+  ]
+}
+{
+  "_path": "corelight_metrics_bro",
+  "x": [
+    "corelight_metrics_bro"
+  ]
+}
+{
+  "_path": "dns",
+  "x": [
+    "dns"
+  ]
+}
+{
+  "_path": "snmp",
+  "x": [
+    "snmp"
+  ]
+}
+{
+  "_path": "http",
+  "x": [
+    "http"
+  ]
+}
+{
+  "_path": "corelight_metrics_iface",
+  "x": [
+    "corelight_metrics_iface"
+  ]
+}
+{
+  "_path": "corelight_metrics_disk",
+  "x": [
+    "corelight_metrics_disk"
+  ]
+}

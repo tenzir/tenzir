@@ -20,8 +20,8 @@ are dropped from the output.
 ### `[field=]aggregation`
 
 Aggregation functions compute a single value of one or more columns in a given
-group. Syntactically, `aggregation` has the form `f(xs...)` where `f` is the
-aggregation function and `xs` a comma-separated list arguments.
+group. Syntactically, `aggregation` has the form `f(x)` where `f` is the
+aggregation function and `x` is a field.
 
 By default, the name for the new field `aggregation` is its string
 representation, e.g., `min(timestamp)`. You can specify a different name by
