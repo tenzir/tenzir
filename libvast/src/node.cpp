@@ -555,7 +555,11 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         // spawn) here.
         return rest_response::make_error(500, "failed to get rest handler",
                                          caf::error{});
-      auto params = parse_endpoint_parameters(endpoint, desc.params);
+      auto unparsed_params = http_parameter_map::from_json(desc.json_body);
+      if (!unparsed_params)
+        return rest_response::make_error(400, "invalid json",
+                                         unparsed_params.error());
+      auto params = parse_endpoint_parameters(endpoint, *unparsed_params);
       if (!params)
         return rest_response::make_error(400, "invalid parameters",
                                          params.error());

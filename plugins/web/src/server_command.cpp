@@ -19,6 +19,7 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/detail/flat_map.hpp>
 #include <vast/format/json.hpp>
 #include <vast/logger.hpp>
 #include <vast/node.hpp>
@@ -131,8 +132,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       if (!query_params)
         return response->abort(400, "failed to parse query\n",
                                query_params.error());
-      auto parser = simdjson::dom::parser{};
-      auto body_params = std::optional<simdjson::dom::object>{};
+      auto body_params = vast::http_parameter_map{};
       // POST requests can contain request parameters in their body in any
       // format supported by the server. The client indicates the data format
       // they used in the `Content-Type` header. See also
@@ -151,20 +151,12 @@ request_dispatcher_actor::behavior_type request_dispatcher(
               query_params.error());
         } else if (content_type == "application/json") {
           auto const& json_body = !body.empty() ? body : "{}";
-          auto json_params = parser.parse(json_body);
-          if (!json_params.is_object()) {
-            if (json_params.error() != simdjson::SUCCESS) {
-              return response->abort(
-                400, "encountered JSON parsing error\n",
-                caf::make_error(ec::invalid_query,
-                                simdjson::error_message(json_params.error())));
-            }
-            return response->abort(
-              400, "invalid JSON body\n",
-              caf::make_error(ec::invalid_query,
-                              simdjson::to_string(json_params)));
+          auto json_params = http_parameter_map::from_json(json_body);
+          if (!json_params) {
+            return response->abort(400, fmt::format("invalid JSON body\n"),
+                                   std::move(json_params.error()));
           }
-          body_params = json_params.get_object();
+          body_params = std::move(*json_params);
         } else {
           return response->abort(
             400, "unsupported content type\n",
@@ -173,32 +165,27 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         }
       }
       auto const& route_params = response->route_params();
-      auto combined_params = detail::stable_map<std::string, std::string>{};
+      // If we encounter body and query parameters with the same
+      // name, we treat the query parameter with the higher precedence
+      // and override the body parameter.
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
           // TODO: Warn and/or return an error if the same parameter
           // is passed using multiple methods.
-          auto maybe_param = std::optional<std::string>{};
+          // TODO: Attempt to parse lists in query parameters, as in
+          // `?x=1,2,3&y=[a,b]`
+          auto maybe_param = std::optional<vast::data>{};
           if (auto query_param = query_params->get_param(name))
             maybe_param = std::string{*query_param};
           if (auto route_param = route_params.get_param(name))
             maybe_param = std::string{*route_param};
-          if (body_params.has_value())
-            if (auto maybe_value = body_params->at_key(name);
-                maybe_value.error() != simdjson::NO_SUCH_FIELD) {
-              if (not maybe_value.value().is_null()) {
-                maybe_param = simdjson::minify(maybe_value.value());
-                if (maybe_value.is_string())
-                  maybe_param = detail::json_unescape(*maybe_param);
-              }
-            }
           if (!maybe_param)
             continue;
-          combined_params[name] = *maybe_param;
+          body_params.emplace(std::string{name}, std::move(*maybe_param));
         }
       }
-      auto params = parse_endpoint_parameters(endpoint, combined_params);
+      auto params = parse_endpoint_parameters(endpoint, body_params);
       if (!params)
         return response->abort(
           422, "failed to parse endpoint parameters: ", params.error());

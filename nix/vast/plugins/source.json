@@ -2,7 +2,7 @@
   "name": "tenzir-plugins",
   "url": "git@github.com:tenzir/tenzir-plugins",
   "ref": "main",
-  "rev": "7ed804ec4b935426ae135d639607a722dfbded4d",
+  "rev": "c0f941adc40e4d31e752d2372d10e8ebb0f3d4e2",
   "submodules": true,
   "shallow": true
 }
