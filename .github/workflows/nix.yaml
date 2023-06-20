@@ -67,7 +67,7 @@ jobs:
         if: steps.cfg.outputs.needs-tenzir-plugins == 'true'
         uses: webfactory/ssh-agent@v0.8.0
         with:
-          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Login to GitHub Container Registry
         if: steps.cfg.outputs.needs-ghcr
         uses: docker/login-action@v2

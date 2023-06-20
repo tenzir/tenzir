@@ -337,7 +337,7 @@ jobs:
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.8.0
         with:
-          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Require contrib/tenzir-plugins to be on a main branch commit
         run: |
           git submodule update --init contrib/tenzir-plugins
@@ -891,7 +891,7 @@ jobs:
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.8.0
         with:
-          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Checkout
         uses: actions/checkout@v3
         with:
