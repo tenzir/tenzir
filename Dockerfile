@@ -128,11 +128,11 @@ CMD ["--help"]
 FROM development AS plugins-source
 
 WORKDIR /tmp/tenzir
-COPY contrib/vast-plugins ./contrib/vast-plugins
+COPY contrib/tenzir-plugins ./contrib/tenzir-plugins
 
 FROM plugins-source AS compaction-plugin
 
-RUN cmake -S contrib/vast-plugins/compaction -B build-compaction -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-compaction --parallel && \
       DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
@@ -140,7 +140,7 @@ RUN cmake -S contrib/vast-plugins/compaction -B build-compaction -G Ninja \
 
 FROM plugins-source AS inventory-plugin
 
-RUN cmake -S contrib/vast-plugins/inventory -B build-inventory -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/inventory -B build-inventory -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-inventory --parallel && \
       DESTDIR=/plugin/inventory cmake --install build-inventory --strip --component Runtime && \
@@ -148,7 +148,7 @@ RUN cmake -S contrib/vast-plugins/inventory -B build-inventory -G Ninja \
 
 FROM plugins-source AS matcher-plugin
 
-RUN cmake -S contrib/vast-plugins/matcher -B build-matcher -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/matcher -B build-matcher -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-matcher --parallel && \
       DESTDIR=/plugin/matcher cmake --install build-matcher --strip --component Runtime && \
@@ -156,7 +156,7 @@ RUN cmake -S contrib/vast-plugins/matcher -B build-matcher -G Ninja \
 
 FROM plugins-source AS netflow-plugin
 
-RUN cmake -S contrib/vast-plugins/netflow -B build-netflow -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/netflow -B build-netflow -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-netflow --parallel && \
       DESTDIR=/plugin/netflow cmake --install build-netflow --strip --component Runtime && \
@@ -164,7 +164,7 @@ RUN cmake -S contrib/vast-plugins/netflow -B build-netflow -G Ninja \
 
 FROM plugins-source AS pipeline-manager-plugin
 
-RUN cmake -S contrib/vast-plugins/pipeline_manager -B build-pipeline_manager -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/pipeline_manager -B build-pipeline_manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-pipeline_manager --parallel && \
       DESTDIR=/plugin/pipeline_manager cmake --install build-pipeline_manager --strip --component Runtime && \
@@ -172,7 +172,7 @@ RUN cmake -S contrib/vast-plugins/pipeline_manager -B build-pipeline_manager -G 
 
 FROM plugins-source AS platform-plugin
 
-RUN cmake -S contrib/vast-plugins/platform -B build-platform -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-platform --parallel && \
       DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \

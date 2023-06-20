@@ -1,6 +1,6 @@
 {
-  "name": "vast-plugins",
-  "url": "git@github.com:tenzir/vast-plugins",
+  "name": "tenzir-plugins",
+  "url": "git@github.com:tenzir/tenzir-plugins",
   "ref": "main",
   "rev": "7ed804ec4b935426ae135d639607a722dfbded4d",
   "submodules": true,

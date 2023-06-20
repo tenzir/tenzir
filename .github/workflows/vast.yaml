@@ -78,7 +78,7 @@ jobs:
       run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
       nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
       run-vast: ${{ steps.configure.outputs.run-vast }}
-      run-vast-plugins: ${{ steps.configure.outputs.run-vast-plugins }}
+      run-tenzir-plugins: ${{ steps.configure.outputs.run-tenzir-plugins }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
     steps:
@@ -167,7 +167,7 @@ jobs:
           echo "run-vast-thehive-app=false" >> $GITHUB_OUTPUT
           echo "run-vast-nix=false" >> $GITHUB_OUTPUT
           echo "run-vast=false" >> $GITHUB_OUTPUT
-          echo "run-vast-plugins=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir-plugins=false" >> $GITHUB_OUTPUT
           # A little helper to enable all checks.
           shopt -s expand_aliases
           alias run_all_checks=' \
@@ -181,7 +181,7 @@ jobs:
             echo "run-vast-thehive-app=true" >> $GITHUB_OUTPUT
             echo "run-vast-nix=true" >> $GITHUB_OUTPUT; \
             echo "run-vast=true" >> $GITHUB_OUTPUT; \
-            echo "run-vast-plugins=true" >> $GITHUB_OUTPUT;'
+            echo "run-tenzir-plugins=true" >> $GITHUB_OUTPUT;'
           # Run all if this is a release.
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
@@ -222,8 +222,8 @@ jobs:
           run_if_changed changelog "changelog/" "web/" "python/"
           VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ tenzir.yaml.example version.json)
           run_if_changed vast "${VAST_SOURCES[@]}"
-          run_if_changed_default vast-plugins $run_vast "plugins/" "contrib/vast-plugins/"
-          # The vast-plugins job downloads the VAST artifact from GCS, so we
+          run_if_changed_default tenzir-plugins $run_vast "plugins/" "contrib/tenzir-plugins/"
+          # The tenzir-plugins job downloads the VAST artifact from GCS, so we
           # need to run the vast job in case it is missing.
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
             deb_package="$(echo "vast-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
@@ -244,7 +244,7 @@ jobs:
           run_if_changed_default docker-vast $run_docker_vast
           run_if_changed_default regression-tests $run_docker_vast
           run_if_changed vast-nix \
-            "${VAST_SOURCES[@]}" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/ \
+            "${VAST_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
             ".github/workflows/nix.nu" \
             ".github/workflows/nix.yaml" \
             ".github/workflows/nix-config-base.json"
@@ -337,14 +337,14 @@ jobs:
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.8.0
         with:
-          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
-      - name: Require contrib/vast-plugins to be on a main branch commit
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
+      - name: Require contrib/tenzir-plugins to be on a main branch commit
         run: |
-          git submodule update --init contrib/vast-plugins
-          git -C contrib/vast-plugins fetch origin main
-          git -C contrib/vast-plugins merge-base --is-ancestor \
-            $(git -C contrib/vast-plugins rev-parse HEAD) \
-            $(git -C contrib/vast-plugins rev-parse origin/main)
+          git submodule update --init contrib/tenzir-plugins
+          git -C contrib/tenzir-plugins fetch origin main
+          git -C contrib/tenzir-plugins merge-base --is-ancestor \
+            $(git -C contrib/tenzir-plugins rev-parse HEAD) \
+            $(git -C contrib/tenzir-plugins rev-parse origin/main)
       - name: Install Nix
         uses: cachix/install-nix-action@v22
         with:
@@ -785,13 +785,13 @@ jobs:
           asset_name: "VAST.spdx"
           asset_content_type: text/plain
 
-  vast-plugins:
+  tenzir-plugins:
     needs:
       - vast
       - configure
     if: >-
       always() &&
-      needs.configure.outputs.run-vast-plugins == 'true' &&
+      needs.configure.outputs.run-tenzir-plugins == 'true' &&
       !contains(join(needs.*.result, ','), 'failure') &&
       !contains(join(needs.*.result, ','), 'cancelled')
     runs-on: ${{ matrix.setup.os }}
@@ -824,25 +824,25 @@ jobs:
             path: plugins/pcap
           - name: Compaction
             target: compaction
-            path: contrib/vast-plugins/compaction
+            path: contrib/tenzir-plugins/compaction
           - name: Inventory
             target: inventory
-            path: contrib/vast-plugins/inventory
+            path: contrib/tenzir-plugins/inventory
           - name: Matcher
             target: matcher
-            path: contrib/vast-plugins/matcher
+            path: contrib/tenzir-plugins/matcher
           - name: Netflow
             target: netflow
-            path: contrib/vast-plugins/netflow
+            path: contrib/tenzir-plugins/netflow
           # The pipeline manager integration tests require that the web
           # plugin exists, which is why we're building the web plugin
           # already in the main VAST job.
           - name: Pipeline Manager
             target: pipeline-manager
-            path: contrib/vast-plugins/pipeline_manager
+            path: contrib/tenzir-plugins/pipeline_manager
           - name: Platform
             target: platform
-            path: contrib/vast-plugins/platform
+            path: contrib/tenzir-plugins/platform
         exclude:
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
@@ -891,7 +891,7 @@ jobs:
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.8.0
         with:
-          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -1080,7 +1080,7 @@ jobs:
       - regression-tests
       - vast
       - vast-nix
-      - vast-plugins
+      - tenzir-plugins
     if: always() && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Pass Branch Protections
