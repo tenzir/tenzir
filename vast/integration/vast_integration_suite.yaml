@@ -920,3 +920,5 @@ tests:
         expected_result: error
       - command: exec 'export | top | to stdout'
         expected_result: error
+      - command: exec 'export | top "" | to stdout'
+        expected_result: error

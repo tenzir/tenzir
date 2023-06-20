@@ -38,8 +38,8 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
     parser.parse(p);
     if (count_field) {
       if (count_field->inner.empty()) {
-        diagnostic::error("need a string value for `count-field` parameter")
-          .primary(field.source)
+        diagnostic::error("`--count-field` must not be empty")
+          .primary(count_field->source)
           .throw_();
       }
       if (count_field->inner == field.inner) {
@@ -47,7 +47,7 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
                           "value fields",
                           field.inner)
           .primary(field.source)
-          .secondary(count_field->source)
+          .primary(count_field->source)
           .throw_();
       }
     } else {
@@ -62,13 +62,19 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
         count_field->inner = default_count_field;
       }
     }
+
     // TODO: Replace this textual parsing with a subpipeline to improve
     // diagnostics for this operator.
     auto repr = fmt::format("summarize "
                             "{0}=count({1}) by "
                             "{1} | sort {0} {2}",
                             count_field->inner, field.inner, SortOrder.str());
-    return std::move(*pipeline::internal_parse_as_operator(repr));
+    auto parsed = pipeline::internal_parse_as_operator(repr);
+    if (not parsed) {
+      // TODO: Improve error message.
+      diagnostic::error("{}", parsed.error()).throw_();
+    }
+    return std::move(*parsed);
   }
 
 private:
