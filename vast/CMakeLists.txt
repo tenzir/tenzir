@@ -148,8 +148,8 @@ install(
 # -- add plugins ---------------------------------------------------------------
 
 set(plugins_default "plugins/*")
-if (EXISTS contrib/vast-plugins/.git)
-  list(APPEND plugins_default "contrib/vast-plugins/*")
+if (EXISTS contrib/tenzir-plugins/.git)
+  list(APPEND plugins_default "contrib/tenzir-plugins/*")
 endif ()
 
 set(VAST_PLUGINS

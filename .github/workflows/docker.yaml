@@ -55,23 +55,23 @@ jobs:
                    end
                  | @sh' \
                  <<< '${{ inputs.config }}' >> "${GITHUB_OUTPUT}"
-          echo "::notice checking vast-plugins..."
-          echo "needs-vast-plugins=false" >> "$GITHUB_OUTPUT"
+          echo "::notice checking tenzir-plugins..."
+          echo "needs-tenzir-plugins=false" >> "$GITHUB_OUTPUT"
           if [[ $(comm -12 \
                  <(jq -r '[(.editions[] | .name)] | sort | .[]' <<< '${{ inputs.config }}') \
                  <(echo tenzir-{ce,ee}| tr ' ' '\n' | sort)) \
           ]]; then
-            echo "needs-vast-plugins=true" >> "$GITHUB_OUTPUT"
+            echo "needs-tenzir-plugins=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Configure ssh-agent
-        if: steps.cfg.outputs.needs-vast-plugins == 'true'
+        if: steps.cfg.outputs.needs-tenzir-plugins == 'true'
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Update submodules
-        if: steps.cfg.outputs.needs-vast-plugins == 'true'
+        if: steps.cfg.outputs.needs-tenzir-plugins == 'true'
         run: |
-          git submodule update --init --recursive contrib/vast-plugins
+          git submodule update --init --recursive contrib/tenzir-plugins
       # Login to ghcr before the build because we use it for caching.
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
