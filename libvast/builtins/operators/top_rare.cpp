@@ -20,34 +20,12 @@ namespace vast::plugins::top_rare {
 
 namespace {
 
-template <detail::string_literal Name>
-// This operator does nothing but provide the operator name - the actual
-// functionality is currently implemented as a "summarize | sort" subpipeline.
-class top_rare_operator final : public crtp_operator<top_rare_operator<Name>> {
-public:
-  template <operator_input_batch T>
-  auto operator()(T x) const -> T {
-    return x;
-  }
-
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override {
-    return std::pair{expr, std::make_unique<top_rare_operator>(*this)};
-  }
-
+template <detail::string_literal Name, detail::string_literal SortOrder>
+class top_rare_plugin final : public virtual operator_parser_plugin {
   auto name() const -> std::string override {
     return std::string{Name.str()};
   }
 
-  friend auto
-  inspect([[maybe_unused]] auto&, [[maybe_unused]] top_rare_operator&) -> bool {
-    return true;
-  }
-};
-
-template <detail::string_literal Name, detail::string_literal SortOrder>
-class top_rare_plugin final
-  : public virtual operator_plugin<top_rare_operator<Name>> {
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{
       std::string{Name.str()}, fmt::format("https://docs.tenzir.com/docs/next/"
@@ -60,12 +38,12 @@ class top_rare_plugin final
     parser.parse(p);
     if (count_field) {
       if (count_field->inner.empty()) {
-        diagnostic::error("Need a string value for 'count-field' parameter")
+        diagnostic::error("need a string value for `count-field` parameter")
           .primary(field.source)
           .throw_();
       }
       if (count_field->inner == field.inner) {
-        diagnostic::error("Invalid duplicate field value `{}` for count and "
+        diagnostic::error("invalid duplicate field value `{}` for count and "
                           "value fields",
                           field.inner)
           .primary(field.source)
@@ -74,7 +52,7 @@ class top_rare_plugin final
       }
     } else {
       if (field.inner == default_count_field) {
-        diagnostic::error("Invalid duplicate field value `{}` for count and "
+        diagnostic::error("invalid duplicate field value `{}` for count and "
                           "value fields",
                           field.inner)
           .primary(field.source)
