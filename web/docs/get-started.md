@@ -24,7 +24,7 @@ import TabItem from '@theme/TabItem';
 Let our installer take care of getting started:
 
 ```bash
-curl https://get.tenzir.com/ | sh
+curl -L get.tenzir.app | sh
 ```
 
 </TabItem>
