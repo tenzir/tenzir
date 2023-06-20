@@ -4,8 +4,8 @@
   <ShortName>Tenzir</ShortName>
   <Description>Search Tenzir</Description>
   <InputEncoding>UTF-8</InputEncoding>
-  <Image width="16" height="16" type="image/x-icon">https://vast.io/img/favicon.ico</Image>
-  <Url type="text/html" method="get" template="https://vast.io/search?q={searchTerms}"/>
-  <Url type="application/opensearchdescription+xml" rel="self" template="https://vast.io/opensearch.xml" />
-  <moz:SearchForm>https://vast.io/</moz:SearchForm>
+  <Image width="16" height="16" type="image/x-icon">https://docs.tenzir.com/img/tenzir-logo-black.svg</Image>
+  <Url type="text/html" method="get" template="https://docs.tenzir.com/search?q={searchTerms}"/>
+  <Url type="application/opensearchdescription+xml" rel="self" template="https://docs.tenzir.com/opensearch.xml" />
+  <moz:SearchForm>https://docs.tenzir.com/</moz:SearchForm>
 </OpenSearchDescription>
