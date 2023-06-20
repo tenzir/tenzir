@@ -68,7 +68,7 @@ jobs:
       cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
       vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
-      run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
+      run-docs: ${{ steps.configure.outputs.run-docs }}
       run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
@@ -161,7 +161,7 @@ jobs:
           echo "run-regression-tests=false" >> $GITHUB_OUTPUT
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
-          echo "run-vast-io=false" >> $GITHUB_OUTPUT
+          echo "run-docs=false" >> $GITHUB_OUTPUT
           echo "run-docker-vast=false" >> $GITHUB_OUTPUT
           echo "run-docker-compose=false" >> $GITHUB_OUTPUT
           echo "run-vast-thehive-app=false" >> $GITHUB_OUTPUT
@@ -175,7 +175,7 @@ jobs:
             echo "run-example-notebooks=true" >> $GITHUB_OUTPUT; \
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
-            echo "run-vast-io=true" >> $GITHUB_OUTPUT; \
+            echo "run-docs=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-vast=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-compose=true" >> $GITHUB_OUTPUT; \
             echo "run-vast-thehive-app=true" >> $GITHUB_OUTPUT
@@ -218,7 +218,7 @@ jobs:
             exit 0
           fi
           run_if_changed python "python/"
-          run_if_changed vast-io "web/" "python/"
+          run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
           VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ tenzir.yaml.example version.json)
           run_if_changed vast "${VAST_SOURCES[@]}"
@@ -240,7 +240,7 @@ jobs:
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
           run_if_changed_default vast-thehive-app $run_docker_compose
-          run_docker_vast="$(any ${run_docker_compose} ${run_vast_io} ${run_python})"
+          run_docker_vast="$(any ${run_docker_compose} ${run_docs} ${run_python})"
           run_if_changed_default docker-vast $run_docker_vast
           run_if_changed_default regression-tests $run_docker_vast
           run_if_changed vast-nix \
@@ -392,13 +392,13 @@ jobs:
           path: build/CHANGELOG.md
           if-no-files-found: error
 
-  vast-io:
+  docs:
     needs:
       - configure
       - changelog
       - docker-vast
-    if: ${{ needs.configure.outputs.run-vast-io == 'true' }}
-    name: vast.io
+    if: ${{ needs.configure.outputs.run-docs == 'true' }}
+    name: Documentation
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -439,7 +439,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: web/build
-          cname: vast.io
+          cname: docs.tenzir.com
           user_name: tenzir-bot
           user_email: engineering@tenzir.com
 
@@ -1073,16 +1073,15 @@ jobs:
       - policy-enforcement
       - configure
       - changelog
-      - vast-io
       - docker-vast
-      - docker-compose
+      - docker-/ompose
+      - docs
       - vast-thehive-app
       - example-notebooks
       - python
       - python-package
       - regression-tests
       - vast
-      - vast-io
       - vast-nix
       - vast-plugins
     if: always() && github.event_name != 'workflow_dispatch'
