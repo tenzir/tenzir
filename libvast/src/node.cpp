@@ -559,8 +559,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       if (!unparsed_params)
         return rest_response::make_error(400, "invalid json",
                                          unparsed_params.error());
-      for (auto&& [key, value] : std::exchange(desc.params, {}))
-        unparsed_params->emplace(std::move(key), vast::data{value});
       auto params = parse_endpoint_parameters(endpoint, *unparsed_params);
       if (!params)
         return rest_response::make_error(400, "invalid parameters",

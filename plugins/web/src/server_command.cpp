@@ -143,7 +143,6 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         auto content_type
           = header.opt_value_of(restinio::http_field_t::content_type)
               .value_or("application/json");
-        VAST_INFO("content type is '{}'", content_type);
         if (content_type == "application/x-www-form-urlencoded") {
           query_params = parse_query_params(body);
           if (!query_params)

@@ -21,10 +21,10 @@ auto rest_endpoint::canonical_path() const -> std::string {
   return fmt::format("{} {} ({})", method, path, version);
 }
 
-auto parse_skeleton(simdjson::ondemand::value value, size_t depth)
+auto parse_skeleton(simdjson::ondemand::value value, size_t depth = 0)
   -> vast::data {
   if (depth > vast::defaults::max_recursion)
-    throw std::runtime_error("nesting too deep");
+    return vast::data{"nesting too deep"};
   switch (value.type()) {
     case simdjson::ondemand::json_type::null:
       return vast::data{};
@@ -91,6 +91,10 @@ auto http_parameter_map::emplace(std::string&& key, vast::data&& value)
   params_.emplace(std::move(key), std::move(value));
 }
 
+// Note that we currently only supports basic types and lists of basic
+// types as endpoint parameters. Ultimately, we probably want to switch
+// to a recursive algorithm here to allow endpoints to declare arbitrarily
+// complex types as input.
 auto parse_endpoint_parameters(const vast::rest_endpoint& endpoint,
                                const http_parameter_map& parameter_map)
   -> caf::expected<vast::record> {
@@ -98,14 +102,13 @@ auto parse_endpoint_parameters(const vast::rest_endpoint& endpoint,
   if (!endpoint.params)
     return result;
   auto const& params = parameter_map.params();
-  for (auto const& leaf : endpoint.params->leaves()) {
-    auto const& name = leaf.field.name;
+  for (auto const& field : endpoint.params->fields()) {
+    auto const& name = field.name;
     auto maybe_param = params.find(name);
     if (maybe_param == params.end())
       continue;
     auto const& param_data = maybe_param->second;
     auto is_string = caf::holds_alternative<std::string>(param_data);
-    auto is_list = caf::holds_alternative<vast::list>(param_data);
     auto typed_value = caf::visit(
       detail::overload{
         [&](const string_type&) -> caf::expected<data> {
@@ -123,11 +126,11 @@ auto parse_endpoint_parameters(const vast::rest_endpoint& endpoint,
           return data{result};
         },
         [&](const list_type& lt) -> caf::expected<data> {
-          if (!is_list)
+          auto const* list = caf::get_if<vast::list>(&param_data);
+          if (!list)
             return caf::make_error(ec::invalid_argument, "expected a list");
-          auto list = caf::get<vast::list>(param_data);
           auto result = vast::list{};
-          for (auto const& x : list) {
+          for (auto const& x : *list) {
             if (!caf::holds_alternative<std::string>(x))
               return caf::make_error(ec::invalid_argument, "expected a string");
             auto const& x_as_string = caf::get<std::string>(x);
@@ -172,7 +175,7 @@ auto parse_endpoint_parameters(const vast::rest_endpoint& endpoint,
                                  "parameters");
         },
       },
-      leaf.field.type);
+      field.type);
     if (!typed_value)
       return caf::make_error(ec::invalid_argument,
                              fmt::format("failed to parse parameter "

@@ -17,7 +17,6 @@
 #include <caf/expected.hpp>
 #include <caf/optional.hpp>
 
-#include <simdjson.h>
 #include <string>
 
 namespace vast {
@@ -152,7 +151,10 @@ public:
   std::string canonical_path;
 
   /// Query parameters, path parameters, x-www-urlencoded body parameters
-  detail::stable_map<std::string, std::string> params;
+  // TODO: Currently this is unused since platform plugin only accepts
+  // json bodies, but it will become necessary once the web plugin
+  // also goes through the node.
+  // detail::stable_map<std::string, std::string> params;
 
   /// The POST JSON body, if it existed.
   std::string json_body;
@@ -162,7 +164,7 @@ public:
     return f.object(e)
       .pretty_name("vast.http_request_description")
       .fields(f.field("canonical_path", e.canonical_path),
-              f.field("params", e.params), f.field("json_body", e.json_body));
+              f.field("json_body", e.json_body));
   }
 };
 
@@ -184,7 +186,7 @@ struct http_parameter_map {
   /// Insert a new key and value.
   auto emplace(std::string&& key, vast::data&& value) -> void;
 
-  /// Unchecked access to the internal data.
+  /// Unchecked access to the internal data. Used by unit tests.
   auto get_unsafe() -> detail::stable_map<std::string, vast::data>&;
 
 private:
@@ -228,10 +230,6 @@ private:
 auto parse_endpoint_parameters(const vast::rest_endpoint& endpoint,
                                const http_parameter_map& params)
   -> caf::expected<vast::record>;
-
-/// Parse from JSON data.
-auto parse_skeleton(simdjson::ondemand::value value, size_t depth = 0)
-  -> vast::data;
 
 } // namespace vast
 

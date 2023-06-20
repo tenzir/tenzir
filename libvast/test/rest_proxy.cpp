@@ -30,6 +30,8 @@ TEST(parameter parsing) {
       {"uid", vast::uint64_type{}},
       {"timeout", vast::duration_type{}},
       {"value", vast::string_type{}},
+      {"li", vast::list_type{vast::ip_type{}}},
+      {"ls", vast::list_type{vast::string_type{}}},
     },
     .version = vast::api_version::v0,
     .content_type = vast::http_content_type::json,
@@ -39,6 +41,8 @@ TEST(parameter parsing) {
     {"uid", std::string{"0"}},
     {"timeout", std::string{"1m"}},
     {"value", std::string{"1"}},
+    {"li", vast::list{std::string{"12.34.1.2"}}},
+    {"ls", vast::list{std::string{"1"}, std::string{"2"}}},
   };
   vast::http_parameter_map pmap;
   pmap.get_unsafe() = params;
@@ -52,7 +56,6 @@ TEST(proxy requests) {
   // /status
   auto desc = vast::http_request_description{
     .canonical_path = "POST /status (v0)",
-    .params = {},
     .json_body
     = R"_({"verbosity": "detailed", "components": ["catalog", "index"]})_",
   };
@@ -76,9 +79,7 @@ TEST(proxy requests) {
   // "serve-manager".
   // auto desc2 = vast::http_request_description{
   //   .canonical_path = "POST /serve (v0)",
-  //   .params = {
-  //     {"serve_id", "foo"},
-  //     {"max_events", "1"},
+  //   .json_body = R"_({"serve_id": "foo", "max_events", "1"})_",
   //   },
   // };
   // auto rp2 = self->request(test_node, caf::infinite, vast::atom::proxy_v,
@@ -103,7 +104,6 @@ TEST(invalid request) {
   MESSAGE("invalid path");
   auto desc = vast::http_request_description{
     .canonical_path = "foo",
-    .params = {},
     .json_body = {},
   };
   auto rp = self->request(test_node, caf::infinite, vast::atom::proxy_v, desc);
@@ -119,7 +119,6 @@ TEST(invalid request) {
   MESSAGE("invalid params");
   auto desc2 = vast::http_request_description{
     .canonical_path = "POST /status (v0)",
-    .params = {},
     .json_body = R"_({"verbosity": "jklo"})_",
   };
   auto rp2
