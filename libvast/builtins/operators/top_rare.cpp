@@ -49,10 +49,10 @@ template <detail::string_literal Name, detail::string_literal SortOrder>
 class top_rare_plugin final
   : public virtual operator_plugin<top_rare_operator<Name>> {
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{std::string{Name.str()},
-                                  fmt::format("https://vast.io/docs/next/"
-                                              "operators/transformations/{}",
-                                              Name.str())};
+    auto parser = argument_parser{
+      std::string{Name.str()}, fmt::format("https://docs.tenzir.com/docs/next/"
+                                           "operators/transformations/{}",
+                                           Name.str())};
     auto field = located<std::string>{};
     auto count_field = std::optional<located<std::string>>{};
     parser.add(field, "<str>");
