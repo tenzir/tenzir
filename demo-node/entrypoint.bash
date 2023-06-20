@@ -5,7 +5,7 @@ coproc NODE { exec tenzir-node --print-endpoint; }
 read -r -u "${NODE[0]}" DUMMY
 
 # Reset the verbosity so the logs don't get spammed by dozens
-# of vast processes.
+# of Tenzir processes.
 export TENZIR_CONSOLE_VERBOSITY=info
 
 replay_zeek() {
