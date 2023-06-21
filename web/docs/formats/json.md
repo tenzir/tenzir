@@ -7,7 +7,8 @@ Reads and writes JSON.
 Parser:
 
 ```
-json [--selector=field[:prefix]] [--unnest-separator=<string>]
+json [--selector=field[:prefix]] [--unnest-separator=<string>] [--no-infer]
+     [--ndjson]
 ```
 
 Printer:
@@ -21,6 +22,71 @@ json [--pretty] [--omit-nulls] [--omit-empty-records] [--omit-empty-lists]
 
 The `json` format provides a parser and printer for JSON and [line-delimited
 JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects.
+
+### Type inference (Parser)
+
+By default the `parser` will infer the types of a fields in the input events.
+This behaviour can be switched off with a usage of [--no-infer](#--no-infer)
+option. This means that the input doesn't require a `schema`. All the types will
+be inferred base on the input data. It is also possible for a field to
+represent a different type in different events. E.g.
+
+```json
+{
+  "a" : "string"
+}
+{
+  "a" : 5
+}
+```
+
+In such case the `parser` will try to `cast` the `5` into a first inferred type
+(`string` in this particular case). This conversion is allowed, so the ouput of
+parsing this data would be:
+
+```json
+{
+  "a" : "string"
+}
+{
+  "a" : "5"
+}
+```
+
+It is also possible for the types to not be compatible. E.g.
+
+```json
+{
+  "a" : "10ns"
+}
+{
+  "a" : "20ns"
+}
+{
+  "a" : true
+}
+```
+
+The first inferred type would be a `duration` and the second one a `bool`.
+In this case the `"a"` field will be cast into a type that can represent both
+types (`common type`), which is a `string` type in this particular case. The output would be:
+
+```json
+{
+  "a" : "10ns"
+}
+{
+  "a" : "20ns"
+}
+{
+  "a" : "true"
+}
+```
+
+This logic also applies when the schema is specified. All of the input values
+that don't match the schema's field type will be cast to it. The `common type`
+logic will also be used when the schema's type is not compatible with the field
+type.
 
 ### `--selector=field[:prefix]` (Parser)
 
@@ -63,6 +129,34 @@ With the unnest separator set to `.`, Tenzir reads the events like this:
     "resp_h" : "1.1.1.2",
     "resp_p" : 5
   }
+}
+```
+
+### `--no-infer` (Parser)
+
+This option only has an effect when combined with [--selector=field[:prefix]](#--selector=field[:prefix]).
+Each field in the input events must have a type that matches the selected schema.
+The type mismatch will emit a warning and the data will be discarded.
+Lack of selector field or a schema pointed by this field will result in
+discarding of the whole event.
+
+### `--ndjson` (Parser)
+
+Makes the parser treat the data as NDJSON.
+Each line must contain only one event. Multiple events in a single line e.g.
+
+```json
+{"foo": "baz"}{"foo": "qux"}
+```
+
+will result in a parse error and these events will be discarded.
+Events that span over multiple lines will also emit an error and the events
+will be discarded.
+
+Example:
+```json
+{"foo":
+{"bar": "baz"}
 }
 ```
 
