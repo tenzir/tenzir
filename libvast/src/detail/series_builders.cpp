@@ -255,8 +255,7 @@ auto fixed_fields_record_builder::get_arrow_builder()
   return record_series_builder_base::get_arrow_builder(type_);
 }
 
-series_builder::series_builder(const vast::type& type, bool are_fields_fixed)
-  : can_change_builder_type_{not are_fields_fixed} {
+series_builder::series_builder(const vast::type& type, bool are_fields_fixed) {
   caf::visit(
     detail::overload{
       [this, &type]<class Type>(const Type&) {
@@ -278,6 +277,7 @@ series_builder::series_builder(const vast::type& type, bool are_fields_fixed)
       },
     },
     type);
+  can_change_builder_type_ = not are_fields_fixed;
 }
 
 arrow_length_type series_builder::length() const {
@@ -330,7 +330,7 @@ auto series_builder::remove_last_row() -> void {
     [this](auto& actual) {
       if constexpr (std::is_same_v<bool, decltype(actual.remove_last_row())>) {
         if (auto all_values_are_null = actual.remove_last_row();
-            all_values_are_null) {
+            all_values_are_null and can_change_builder_type_) {
           *this = unknown_type_builder(actual.length());
         }
       } else {
