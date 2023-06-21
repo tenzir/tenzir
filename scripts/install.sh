@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #
 # This script installs the latest release of Tenzir.
 #
@@ -27,15 +27,6 @@ normal="$(escape 0)"
 # steps this script takes.
 action() {
   printf "${blue}==>${bold} %s${normal}\n" "$@"
-}
-
-# Gets a single character from stdin.
-getc() {
-  local save_state
-  save_state="$(/bin/stty -g)"
-  /bin/stty raw -echo
-  IFS='' read -r -n 1 -d '' "$@"
-  /bin/stty "${save_state}"
 }
 
 #
@@ -111,8 +102,8 @@ echo "Successfully downloaded ${PACKAGE}"
 # Trigger installation.
 PREFIX=/opt/tenzir
 action "Installing package into ${PREFIX}"
-echo "Press any key to continue..."
-getc dummy
+echo "Press ${bold}ENTER${normal} to continue..."
+read -r
 if [ "${PLATFORM}" = "Debian" ]
 then
   echo "Installing via dpkg"
