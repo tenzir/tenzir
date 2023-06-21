@@ -305,7 +305,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             nix_config="$(jq -c '(.editions[] | ."package-stores") |= [] |
               (.editions[] | ."image-registries") |= [] |
-              (.editions[] | select(.name == "vast-static") | ."image-registries") |= ["ghcr.io"]' \
+              (.editions[] | select(.name == "tenzir") | ."image-registries") |= ["ghcr.io"]' \
               <<< "${nix_config}")"
           fi
           # Reshape the config so that each edition is in a dedicated config.
