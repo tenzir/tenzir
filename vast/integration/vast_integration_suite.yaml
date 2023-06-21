@@ -906,10 +906,14 @@ tests:
       - command: exec 'read zeek-tsv | import'
         input: data/zeek/conn.log.gz
       - command: flush
+      - command: exec 'export | top 5 by id.orig_h | to stdout'
+      - command: exec 'export | rare 5 by id.orig_h | to stdout'
+      - command: exec 'export | top 3 by id.orig_h --count-field=amount | to stdout'
+      - command: exec 'export | rare 3 by id.orig_h -c amount | to stdout'
       - command: exec 'export | top id.orig_h | to stdout'
-      - command: exec 'export | rare id.orig_h | to stdout'
-      - command: exec 'export | top id.orig_h --count-field=amount | to stdout'
-      - command: exec 'export | rare id.orig_h -c amount | to stdout'
+        expected_result: error
+      - command: exec 'export | rare by id.orig_h | to stdout'
+        expected_result: error
       - command: exec 'export | top count | to stdout'
         expected_result: error
       - command: exec 'export | top id.orig_h --count-field=id.orig_h | to stdout'

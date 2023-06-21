@@ -31,11 +31,18 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
       std::string{Name.str()}, fmt::format("https://docs.tenzir.com/docs/next/"
                                            "operators/transformations/{}",
                                            Name.str())};
+    auto n = located<uint64_t>{};
+    auto by = located<std::string>{};
     auto field = located<std::string>{};
     auto count_field = std::optional<located<std::string>>{};
+    parser.add(n, "<limit>");
+    parser.add(by, "by");
     parser.add(field, "<str>");
     parser.add("-c,--count-field", count_field, "<str>");
     parser.parse(p);
+    if (by.inner != "by") {
+      diagnostic::error("expected `by`").primary(by.source).throw_();
+    }
     if (count_field) {
       if (count_field->inner.empty()) {
         diagnostic::error("`--count-field` must not be empty")
@@ -65,10 +72,11 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
 
     // TODO: Replace this textual parsing with a subpipeline to improve
     // diagnostics for this operator.
-    auto repr = fmt::format("summarize "
-                            "{0}=count({1}) by "
-                            "{1} | sort {0} {2}",
-                            count_field->inner, field.inner, SortOrder.str());
+    auto repr
+      = fmt::format("summarize "
+                    "{0}=count({1}) by "
+                    "{1} | sort {0} {2} | head {3}",
+                    count_field->inner, field.inner, SortOrder.str(), n.inner);
     auto parsed = pipeline::internal_parse_as_operator(repr);
     if (not parsed) {
       // TODO: Improve error message.
