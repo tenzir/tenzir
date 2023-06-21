@@ -80,6 +80,17 @@ then
 elif [ "${PLATFORM}" = "Linux" ]
 then
   PACKAGE="tenzir-linux-static.tar.gz"
+elif [ "${PLATFORM}" = "NixOS" ]
+then
+  echo "Try Tenzir with our ${bold}flake.nix${normal}:"
+  echo
+  echo "    ${bold}nix run github:tenzir/tenzir/stable${normal}"
+  echo
+  echo "Install Tenzir by adding" \
+    "${bold}github:tenzir/tenzir/stable${normal} to your"
+  echo "flake inputs, or use your preferred method to include third-party"
+  echo "modules on classic NixOS."
+  exit 0
 else
   echo "We do not offer pre-built packages for ${bold}${PLATFORM}${normal}." \
        "Your options:"
@@ -87,7 +98,7 @@ else
   echo "1. Use Docker"
   echo "2. Build from source"
   echo
-  echo "See https://docs.tenzir.com for further information."
+  echo "See ${bold}https://docs.tenzir.com${normal} for further information."
   exit 1
 fi
 echo "Using ${PACKAGE}"
