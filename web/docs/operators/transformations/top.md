@@ -5,16 +5,12 @@ Shows the most common values. The dual to [`rare`](rare.md).
 ## Synopsis
 
 ```
-top <limit> by <field> [--count-field=<count-field>|-c <count-field>]
+top <field> [--count-field=<count-field>|-c <count-field>]
 ```
 
 ## Description
 
-Shows the most common values for a given field. For each unique value, a new event containing its count will be produced.
-
-### `<limit>`
-
-The number of results to return.
+Shows the most common values for a given field. For each field value, the result will be a singular event containing the value's count.
 
 ### `<field>`
 

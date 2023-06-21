@@ -5,16 +5,12 @@ Shows the least common values. The dual to [`top`](top.md).
 ## Synopsis
 
 ```
-rare <limit> by <field> [--count-field=<count-field>|-c <count-field>]
+rare <field> [--count-field=<count-field>|-c <count-field>]
 ```
 
 ## Description
 
-Shows the least common values for a given field. For each unique value, a new event containing its count will be produced.
-
-### `<limit>`
-
-The number of results to return.
+Shows the least common values for a given field. For each field value, the result will be a singular event containing the value's count.
 
 ### `<field>`
 
