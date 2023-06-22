@@ -111,13 +111,15 @@ base="https://github.com/tenzir/tenzir/releases/latest/download"
 url="${base}/${package}"
 tmpdir="$(dirname "$(mktemp -u --tmpdir)")"
 action "Downloading ${url}"
-if check wget; then
+if check wget
+then
   wget -q --show-progress -O "${tmpdir}/${package}" "${url}"
-elif check curl; then
+elif check curl
+then
   curl --progress-bar -L -o "${tmpdir}/${package}" "${url}"
 else
   echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
-    "in ${bold}\$PATH${normal}, aborting"
+    "found in \$PATH."
   exit 1
 fi
 echo "Successfully downloaded ${package}"
@@ -152,17 +154,22 @@ then
 fi
 
 # Trigger installation.
+if ! check sudo
+then
+  echo "Could not find ${bold}sudo${normal} in \$PATH."
+  exit 1
+fi
 action "Installing package into ${prefix}"
 if [ "${platform}" = "Debian" ]
 then
   action "Installing via dpkg"
-  dpkg -i "${tmpdir}/${package}"
+  sudo dpkg -i "${tmpdir}/${package}"
   action "Checking node status"
-  systemctl status tenzir
+  sudo systemctl status tenzir
 elif [ "${platform}" = "Linux" ]
 then
   action "Unpacking tarball"
-  tar xzf "${tmpdir}/${package}" -C /
+  sudo tar xzf "${tmpdir}/${package}" -C /
 fi
 
 # Test the installation.
