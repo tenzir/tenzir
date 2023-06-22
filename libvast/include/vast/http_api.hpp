@@ -131,7 +131,7 @@ private:
   size_t code_ = 200;
 
   // The response body
-  std::string body_ = {};
+  std::string body_ = "{}";
 
   // Whether this is an error response. We can't just check `code_` because
   // HTTP defines many different "success" values, and we can't just check
