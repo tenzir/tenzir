@@ -216,7 +216,14 @@ auto rest_response::release() && -> std::string {
 
 auto rest_response::make_error(uint16_t error_code, std::string message,
                                caf::error detail) -> rest_response {
-  auto result = rest_response{fmt::format("{{\"error\": {:?}}}\n", message)};
+  return make_error_raw(error_code,
+                        fmt::format("{{\"error\": {:?}}}\n", message),
+                        std::move(detail));
+}
+
+auto rest_response::make_error_raw(uint16_t error_code, std::string body,
+                                   caf::error detail) -> rest_response {
+  auto result = rest_response{std::move(body)};
   result.code_ = error_code;
   result.is_error_ = true;
   result.detail_ = std::move(detail);

@@ -133,6 +133,15 @@ auto pipeline::serialize_op(const operator_base& op, inspector& f) -> bool {
   return f.apply(name) && p->serialize(f, op);
 }
 
+auto pipeline::parse(std::string source, diagnostic_handler& diag)
+  -> std::optional<pipeline> {
+  auto parsed = tql::parse(std::move(source), diag);
+  if (!parsed) {
+    return {};
+  }
+  return tql::to_pipeline(std::move(*parsed));
+}
+
 auto pipeline::internal_parse(std::string_view repr)
   -> caf::expected<pipeline> {
   return tql::parse_internal(std::string{repr});
