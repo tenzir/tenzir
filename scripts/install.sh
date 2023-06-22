@@ -53,35 +53,35 @@ echo
 
 # Detect OS.
 action "Identifying platform"
-PLATFORM=
-OS=$(uname -s)
-if [ "${OS}" = "Linux" ]
+platform=
+os=$(uname -s)
+if [ "${os}" = "Linux" ]
 then
     if [ -f "/etc/debian_version" ]
     then
-        PLATFORM=Debian
+        platform=Debian
     elif [ -f "/etc/NIXOS" ]
     then
-        PLATFORM=NixOS
+        platform=NixOS
     else
-        PLATFORM=Linux
+        platform=Linux
     fi
-elif [ "${OS}" = "Darwin" ]
+elif [ "${os}" = "Darwin" ]
 then
-  PLATFORM=macOS
+  platform=macOS
 fi
-echo "Found ${PLATFORM}."
+echo "Found ${platform}."
 
 # Select appropriate package.
 action "Identifying package"
-PACKAGE=
-if [ "${PLATFORM}" = "Debian" ]
+package=
+if [ "${platform}" = "Debian" ]
 then
-  PACKAGE="tenzir-linux-static.deb"
-elif [ "${PLATFORM}" = "Linux" ]
+  package="tenzir-linux-static.deb"
+elif [ "${platform}" = "Linux" ]
 then
-  PACKAGE="tenzir-linux-static.tar.gz"
-elif [ "${PLATFORM}" = "NixOS" ]
+  package="tenzir-linux-static.tar.gz"
+elif [ "${platform}" = "NixOS" ]
 then
   echo "Try Tenzir with our ${bold}flake.nix${normal}:"
   echo
@@ -93,7 +93,7 @@ then
   echo "modules on classic NixOS."
   exit 0
 else
-  echo "We do not offer pre-built packages for ${PLATFORM}." \
+  echo "We do not offer pre-built packages for ${platform}." \
        "Your options:"
   echo
   echo "  1. Use Docker"
@@ -102,25 +102,25 @@ else
   echo "Visit ${bold}https://docs.tenzir.com${normal} for further instructions."
   exit 1
 fi
-echo "Using ${PACKAGE}"
+echo "Using ${package}"
 
 # Download package.
-BASE="https://github.com/tenzir/tenzir/releases/latest/download"
-URL="${BASE}/${PACKAGE}"
-action "Downloading ${URL}"
-curl --progress-bar -L "${URL}" -o "${PACKAGE}" || exit 1
-echo "Successfully downloaded ${PACKAGE}"
+base="https://github.com/tenzir/tenzir/releases/latest/download"
+url="${base}/${package}"
+action "Downloading ${url}"
+curl --progress-bar -L "${url}" -o "${package}" || exit 1
+echo "Successfully downloaded ${package}"
 
 # Get platform config.
-PREFIX=/opt/tenzir
-CONFIG="${PREFIX}/etc/tenzir/plugin/platform.yaml"
+prefix=/opt/tenzir
+config="${prefix}/etc/tenzir/plugin/platform.yaml"
 echo
 echo "Unlock the full potential of your Tenzir node as follows:"
 echo
 echo "  1. Go to ${bold}https://app.tenzir.com${normal}"
 echo "  2. Sign up for a free account"
 echo "  3. Configure a node and download a ${bold}platform.yaml${normal} config"
-echo "  4. Move the config to ${bold}${CONFIG}${normal}"
+echo "  4. Move the config to ${bold}${config}${normal}"
 echo
 echo "(You can skip these steps, but then only open source features will be"
 echo "available. Visit ${bold}https://tenzir.com/pricing${normal} for a" \
@@ -130,33 +130,33 @@ echo "Press ${green}ENTER${normal} to proceed with the installation."
 read -r
 
 # Check for platform configuration.
-if ! [ -f "${CONFIG}" ]
+if ! [ -f "${config}" ]
 then
-  OPEN_SOURCE=1
+  open_source=1
 fi
-if [ -n "${OPEN_SOURCE}" ]
+if [ -n "${open_source}" ]
 then
-  echo "Could not find platform config at ${bold}${CONFIG}${normal}."
+  echo "Could not find platform config at ${bold}${config}${normal}."
   action "Using open source edition"
 fi
 
 # Trigger installation.
-action "Installing package into ${PREFIX}"
-if [ "${PLATFORM}" = "Debian" ]
+action "Installing package into ${prefix}"
+if [ "${platform}" = "Debian" ]
 then
   action "Installing via dpkg"
-  dpkg -i "${PACKAGE}"
+  dpkg -i "${package}"
   action "Checking node status"
   systemctl status tenzir || exit 1
-elif [ "${PLATFORM}" = "Linux" ]
+elif [ "${platform}" = "Linux" ]
 then
   action "Unpacking tarball"
-  tar xzf "${PACKAGE}" -C /
+  tar xzf "${package}" -C /
 fi
 
 # Test the installation.
 action "Checking version"
-PATH="${PREFIX}:$PATH"
+PATH="${prefix}:$PATH"
 tenzir -q 'version | select version | write json' || exit 1
 
 # Inform about next steps.
@@ -164,11 +164,11 @@ action "Providing guidance"
 echo "You're all set! Next steps:"
 echo
 echo "  - Run a pipeline via ${green}tenzir <pipeline>${normal}"
-if [ "${PLATFORM}" = "Linux" ]
+if [ "${platform}" = "Linux" ]
 then
   echo "  - Spawn a node via ${green}tenzir-node${normal}"
 fi
-if [ -z "${OPEN_SOURCE}" ]
+if [ -z "${open_source}" ]
 then
   echo "  - Explore your node and manage pipelines at" \
     "${bold}https://app.tenzir.com${normal}"
