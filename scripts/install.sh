@@ -130,7 +130,7 @@ echo "available. Visit ${bold}https://tenzir.com/pricing${normal} for a" \
   "feature comparison.)"
 echo
 echo "Press ${green}ENTER${normal} to proceed with the installation."
-read -r
+read -r dummy_
 
 # Check for platform configuration.
 if ! [ -f "${config}" ]
