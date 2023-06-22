@@ -102,14 +102,15 @@ else
   echo "  2. Build from source"
   echo
   echo "Visit ${bold}https://docs.tenzir.com${normal} for further instructions."
-  exit 1
+  #exit 1
+  package="vast-linux-static.tar.gz"
 fi
 echo "Using ${package}"
 
 # Download package.
 base="https://github.com/tenzir/tenzir/releases/latest/download"
 url="${base}/${package}"
-tmpdir="$(dirname "$(mktemp -u --tmpdir)")"
+tmpdir="$(mktemp -u)"
 action "Downloading ${url}"
 if check wget
 then
