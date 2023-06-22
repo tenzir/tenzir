@@ -1,0 +1,6 @@
+# This configuration is equivalent to the librdkafka configuration documented at
+# https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md.
+bootstrap.servers: localhost
+group.id: rdkafka_consumer_example
+auto.offset.reset: largest
+enable.auto.commit: true

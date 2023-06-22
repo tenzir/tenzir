@@ -8,6 +8,10 @@
 
 #include "kafka/configuration.hpp"
 
+#include <vast/concept/printable/to_string.hpp>
+#include <vast/concept/printable/vast/data.hpp>
+#include <vast/data.hpp>
+#include <vast/detail/overload.hpp>
 #include <vast/die.hpp>
 #include <vast/error.hpp>
 
@@ -15,18 +19,7 @@
 
 namespace vast::plugins::kafka {
 
-auto configuration::defaults()
-  -> std::vector<std::pair<std::string, std::string>> {
-  return {
-    {"bootstrap.servers", "localhost"},
-    {"group.id", "rdkafka_consumer_example"},
-    {"auto.offset.reset", "beginning"},
-    {"enable.auto.commit", "false"},
-  };
-}
-
-auto configuration::make(
-  const std::vector<std::pair<std::string, std::string>>& options)
+auto configuration::make(const record& options)
   -> caf::expected<configuration> {
   configuration result;
   if (auto err = result.set(options))
@@ -62,11 +55,17 @@ auto configuration::set(const std::string& key, const std::string& value)
   return {};
 }
 
-auto configuration::set(
-  const std::vector<std::pair<std::string, std::string>>& options)
-  -> caf::error {
+auto configuration::set(const record& options) -> caf::error {
+  auto stringify = detail::overload{
+    [](const auto& x) {
+      return to_string(x);
+    },
+    [](const std::string& x) {
+      return x;
+    },
+  };
   for (const auto& [key, value] : options)
-    if (auto err = set(key, value))
+    if (auto err = set(key, caf::visit(stringify, value)))
       return err;
   return {};
 }

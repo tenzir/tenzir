@@ -31,27 +31,21 @@ namespace vast::plugins::kafka {
 
 namespace {
 
-/// The configuration for the `kafka` operator.
-struct plugin_configuration {
-  std::vector<std::string> options;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, plugin_configuration& x) {
-    return detail::apply_all(f, x.options);
-  }
-
-  static inline auto schema() noexcept -> const record_type& {
-    static auto result = record_type{
-      {"options", list_type{string_type{}}},
-    };
-    return result;
-  }
-};
+/// Default settings no configuration is present..
+auto defaults() -> record {
+  return {
+    {"bootstrap.servers", "localhost"},
+    {"group.id", "rdkafka_consumer_example"},
+    {"auto.offset.reset", "beginning"},
+    {"enable.auto.commit", false},
+  };
+}
 
 class plugin : public virtual loader_plugin, saver_plugin {
 public:
-  auto initialize(const record& config, const record& global_config)
+  auto initialize(const record& config, const record& /* global_config */)
     -> caf::error override {
+    settings_ = config;
     return caf::none;
   }
 
@@ -59,8 +53,11 @@ public:
   make_loader(std::span<std::string const> args, operator_control_plane&) const
     -> caf::expected<generator<chunk_ptr>> override {
     auto f = [=]() -> generator<chunk_ptr> {
+      // TODO: -c
+      auto commit = false;
+      // TODO: -t
       auto topics = std::vector<std::string>{"test"};
-      auto cfg = configuration::make();
+      auto cfg = configuration::make(settings_);
       if (!cfg) {
         VAST_ERROR("kafka failed to create configuration: {}", cfg.error());
         co_return;
@@ -87,10 +84,12 @@ public:
           continue;
         }
         auto payload = chunk::copy(msg->payload());
-        if (auto err = client->commit(*msg)) {
-          VAST_WARN("kafka failed to commit message: {}", *payload);
-          co_yield {};
-          continue;
+        if (commit) {
+          if (auto err = client->commit(*msg)) {
+            VAST_WARN("kafka failed to commit message: {}", *payload);
+            co_yield {};
+            continue;
+          }
         }
         co_yield payload;
       }
@@ -102,7 +101,7 @@ public:
                   operator_control_plane& ctrl) const
     -> caf::expected<saver> override {
     auto topics = std::vector<std::string>{"test"};
-    auto cfg = configuration::make();
+    auto cfg = configuration::make(settings_);
     if (!cfg) {
       VAST_ERROR("kafka failed to create configuration: {}", cfg.error());
       return cfg.error();
@@ -157,6 +156,9 @@ public:
   auto name() const -> std::string override {
     return "kafka";
   }
+
+private:
+  record settings_;
 };
 
 } // namespace

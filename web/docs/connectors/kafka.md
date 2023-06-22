@@ -7,13 +7,15 @@ Loads bytes from and saves bytes to Kafka.
 Loader:
 
 ```
-kafka -t <topic> [-o|--option=<key=value>]
+kafka -t <topic> [-e|--exit] [-o|--offset <offset>]
+      [-X|--set <key=value>]
 ```
 
 Saver:
 
 ```
-kafka -t <topic>
+kafka -t <topic> [-X|--set <key=value>]
+
 ```
 
 ## Description
@@ -40,6 +42,16 @@ Consult the list of available [configuration options][librdkafka-options] to
 configure Kafka according to your needs.
 
 [librdkafka-options]: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
+
+### `<offset>` (Loader)
+
+The offset to start consuming from. Possible values are:
+
+- `beginning`, `end`, `stored`
+- `<value>` (absolute offset)
+- `-<value>` (relative offset from end)
+- `s@<value>` (timestamp in ms to start at)
+- `e@<value>` (timestamp in ms to stop at (not included))
 
 ## Examples
 
