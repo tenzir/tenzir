@@ -113,7 +113,7 @@ echo "Successfully downloaded ${PACKAGE}"
 
 # Get platform config.
 PREFIX=/opt/tenzir
-CONFIG="${PREFIX}/etc/tenzir/plugins/platform.yaml"
+CONFIG="${PREFIX}/etc/tenzir/plugin/platform.yaml"
 echo
 echo "Unlock the full potential of your Tenzir node as follows:"
 echo
