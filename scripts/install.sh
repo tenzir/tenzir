@@ -42,12 +42,6 @@ action() {
 # Execution
 #
 
-if [ -z "${BASH_VERSION:-}" ]
-then
-  echo "Bash is required to interpret this script."
-  exit 1
-fi
-
 # Print welcome banner.
 echo "${blue}"
 echo "                _____ _____ _   _ ________ ____  "
