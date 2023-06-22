@@ -13,6 +13,11 @@ set -e
 # Helper utilities
 #
 
+# Check whether a command exists.
+check() {
+  command -v "$1" >/dev/null 2>&1
+}
+
 # Only use colors when we have a TTY.
 if [ -t 1 ]
 then
@@ -110,8 +115,17 @@ echo "Using ${package}"
 # Download package.
 base="https://github.com/tenzir/tenzir/releases/latest/download"
 url="${base}/${package}"
+tmpdir="$(dirname "$(mktemp -u --tmpdir)")"
 action "Downloading ${url}"
-curl --progress-bar -L "${url}" -o "${package}" || exit 1
+if check wget; then
+  wget -q --show-progress -O "${tmpdir}/${package}" "${url}"
+elif check curl; then
+  curl --progress-bar -L -o "${tmpdir}/${package}" "${url}"
+else
+  echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
+    "in ${bold}\$PATH${normal}, aborting"
+  exit 1
+fi
 echo "Successfully downloaded ${package}"
 
 # Get platform config.
@@ -148,13 +162,13 @@ action "Installing package into ${prefix}"
 if [ "${platform}" = "Debian" ]
 then
   action "Installing via dpkg"
-  dpkg -i "${package}"
+  dpkg -i "${tmpdir}/${package}"
   action "Checking node status"
   systemctl status tenzir
 elif [ "${platform}" = "Linux" ]
 then
   action "Unpacking tarball"
-  tar xzf "${package}" -C /
+  tar xzf "${tmpdir}/${package}" -C /
 fi
 
 # Test the installation.
