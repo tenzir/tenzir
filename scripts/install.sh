@@ -6,6 +6,9 @@
 # Treat unset variables as an error when substituting.
 set -u
 
+# Abort on error.
+set -e
+
 #
 # Helper utilities
 #
@@ -147,7 +150,7 @@ then
   action "Installing via dpkg"
   dpkg -i "${package}"
   action "Checking node status"
-  systemctl status tenzir || exit 1
+  systemctl status tenzir
 elif [ "${platform}" = "Linux" ]
 then
   action "Unpacking tarball"
@@ -157,7 +160,7 @@ fi
 # Test the installation.
 action "Checking version"
 PATH="${prefix}:$PATH"
-tenzir -q 'version | select version | write json' || exit 1
+tenzir -q 'version | select version | write json'
 
 # Inform about next steps.
 action "Providing guidance"
