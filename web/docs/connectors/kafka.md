@@ -7,8 +7,8 @@ Loads bytes from and saves bytes to Kafka.
 Loader:
 
 ```
-kafka -t <topic> [-e|--exit] [-o|--offset <offset>]
-      [-X|--set <key=value>]
+kafka -t <topic> [-c|--count <n>] [-e|--exit] [-o|--offset <offset>]
+      [-X|--set <key=value>,...]
 ```
 
 Saver:
@@ -23,48 +23,73 @@ kafka -t <topic> [-X|--set <key=value>]
 The `kafka` loaders reads bytes from a Kafka topic. The `kafka` saver writes
 bytes to a Kafka topic.
 
-Tenzir uses the official [librdkafka][librdkafka] from Confluent.
+The implementation uses the official [librdkafka][librdkafka] from Confluent and
+supports all [configuration options][librdkafka-options]. You can specify them
+via `-X <key=value>,...`. We recommend putting your Kafka options into the
+dedicated `kafka.yaml` [plugin config file](../command-line.md#load-plugins).
+This way you can configure your all your environment-specific options once,
+independent of the per-connector invocations.
 
 [librdkafka]: https://github.com/confluentinc/librdkafka
+[librdkafka-options]: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
 
 The default format for the `kafka` connector is [`json`](../formats/json.md).
 
-### `<topic>` (Loader, Saver)
+### `-t|--topic <topic>` (Loader, Saver)
 
 The Kafka topic use.
 
-### `<key=value>` (Loader, Saver)
+### `-c|--count <n>` (Loader)
 
-A key-value configuration option for [librdkafka][librdkafka].
+Exit successfully after having consumed `n` messages.
 
-The `kafka` operator passes key and value directly to [librdkafka][librdkafka].
-Consult the list of available [configuration options][librdkafka-options] to
-configure Kafka according to your needs.
+### `-e|--exit` (Loader)
 
-[librdkafka-options]: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
+Exit successfully after having received the last message.
 
-### `<offset>` (Loader)
+Without this option, the loader waits for new messages after having consumed the
+last one.
+
+### `-o|--offset <offset>` (Loader)
 
 The offset to start consuming from. Possible values are:
 
-- `beginning`, `end`, `stored`
-- `<value>` (absolute offset)
-- `-<value>` (relative offset from end)
-- `s@<value>` (timestamp in ms to start at)
-- `e@<value>` (timestamp in ms to stop at (not included))
+- `beginning`: first offset
+- `end`: last offset
+- `stored`: stored offset
+- `<value>`: absolute offset
+- `-<value>`: relative offset from end
+
+<!--
+- `s@<value>`: timestamp in ms to start at
+- `e@<value>`: timestamp in ms to stop at (not included)
+-->
+
+### `-X|--set <key=value>` (Loader, Saver)
+
+A comma-separated list of key-value configuration options for
+[librdkafka][librdkafka], e.g., `-X
+auto.offset.reset=earliest,enable.partition.eof=true`.
+
+The `kafka` operator passes the key-value pairs directly to
+[librdkafka][librdkafka]. Consult the list of available [configuration
+options][librdkafka-options] to configure Kafka according to your needs.
+
+We recommand factoring these options into the plugin-specific `kafka.yaml` so
+that they are indpendent of the `kafka` connector arguments.
 
 ## Examples
 
-Read JSON messages from the topic `tenzir`:
+Read 100 JSON messages from the topic `tenzir`:
 
 ```
-from kafka -t tenzir read json
+from kafka -t tenzir -c 100 read json
 ```
 
-Read Zeek Streaming JSON logs from topic `zeek`:
+Read Zeek Streaming JSON logs from topic `zeek` starting at the beginning:
 
 ```
-from kafka -t zeek read zeek-json
+from kafka -t zeek -o beginning read zeek-json
 ```
 
 Write the Tenzir version to topic `tenzir`:

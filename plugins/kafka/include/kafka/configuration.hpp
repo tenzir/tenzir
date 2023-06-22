@@ -42,10 +42,25 @@ public:
   /// librdkafa.
   auto set(const record& options) -> caf::error;
 
+  /// Sets a rebalance callback.
+  auto set_rebalance_cb(int64_t offset) -> caf::error;
+
 private:
+  class rebalancer : public RdKafka::RebalanceCb {
+  public:
+    explicit rebalancer(int offset);
+
+    auto rebalance_cb(RdKafka::KafkaConsumer*, RdKafka::ErrorCode,
+                      std::vector<RdKafka::TopicPartition*>&) -> void override;
+
+  private:
+    int64_t offset_ = RdKafka::Topic::OFFSET_INVALID;
+  };
+
   configuration();
 
   std::shared_ptr<RdKafka::Conf> conf_{};
+  std::shared_ptr<rebalancer> rebalance_callback_;
 };
 
 } // namespace vast::plugins::kafka

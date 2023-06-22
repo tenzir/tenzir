@@ -70,6 +70,62 @@ auto configuration::set(const record& options) -> caf::error {
   return {};
 }
 
+auto configuration::set_rebalance_cb(int64_t offset) -> caf::error {
+  rebalance_callback_ = std::make_shared<rebalancer>(offset);
+  std::string error;
+  auto result = conf_->set("rebalance_cb", rebalance_callback_.get(), error);
+  if (result != RdKafka::Conf::ConfResult::CONF_OK)
+    return caf::make_error(ec::unspecified, "failed to set rebalance_cb: {}",
+                           error);
+  return {};
+}
+
+configuration::rebalancer::rebalancer(int offset) : offset_{offset} {
+}
+
+auto configuration::rebalancer::rebalance_cb(
+  RdKafka::KafkaConsumer* consumer, RdKafka::ErrorCode err,
+  std::vector<RdKafka::TopicPartition*>& partitions) -> void {
+  // This branching logic comes from the librdkafka consumer example. See the
+  // implementation of ExampleRebalanceCb for details. The only thing we added
+  // is the offset assignment at the beginning.
+  if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
+    if (offset_ != RdKafka::Topic::OFFSET_INVALID) {
+      VAST_DEBUG("setting offset to {}", offset_);
+      for (auto* partition : partitions)
+        partition->set_offset(offset_);
+    }
+    if (consumer->rebalance_protocol() == "COOPERATIVE") {
+      if (auto err = consumer->incremental_assign(partitions)) {
+        VAST_ERROR("failed to assign incrementally: {}", err->str());
+        delete err;
+      };
+    } else {
+      auto err = consumer->assign(partitions);
+      if (err != RdKafka::ERR_NO_ERROR)
+        VAST_ERROR("failed to assign partitions: {}", RdKafka::err2str(err));
+    }
+  } else if (err == RdKafka::ERR__REVOKE_PARTITIONS) {
+    // Application may commit offsets manually here
+    // if auto.commit.enable=false
+    if (consumer->rebalance_protocol() == "COOPERATIVE") {
+      if (auto err = consumer->incremental_unassign(partitions)) {
+        VAST_ERROR("failed to unassign incrementally: {}", err->str());
+        delete err;
+      };
+    } else {
+      auto err = consumer->unassign();
+      if (err != RdKafka::ERR_NO_ERROR)
+        VAST_ERROR("failed to unassign partitions: {}", RdKafka::err2str(err));
+    }
+  } else {
+    VAST_ERROR("rebalancing error: {}", RdKafka::err2str(err));
+    auto err = consumer->unassign();
+    if (err != RdKafka::ERR_NO_ERROR)
+      VAST_ERROR("failed to unassign partitions: {}", RdKafka::err2str(err));
+  }
+}
+
 configuration::configuration() {
   conf_.reset(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
   if (!conf_)

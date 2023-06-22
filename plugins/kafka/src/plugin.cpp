@@ -11,7 +11,10 @@
 #include "kafka/message.hpp"
 #include "kafka/producer.hpp"
 
+#include <vast/argument_parser.hpp>
 #include <vast/chunk.hpp>
+#include <vast/concept/parseable/numeric.hpp>
+#include <vast/concept/parseable/string.hpp>
 #include <vast/concept/parseable/vast/option_set.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/data.hpp>
@@ -22,6 +25,7 @@
 #include <vast/plugin.hpp>
 #include <vast/table_slice.hpp>
 
+#include <charconv>
 #include <chrono>
 #include <string>
 
@@ -31,77 +35,221 @@ namespace vast::plugins::kafka {
 
 namespace {
 
-/// Default settings no configuration is present..
-auto defaults() -> record {
-  return {
-    {"bootstrap.servers", "localhost"},
-    {"group.id", "rdkafka_consumer_example"},
-    {"auto.offset.reset", "beginning"},
-    {"enable.auto.commit", false},
+// Valid values:
+// - beginning | end | stored |
+// - <value>  (absolute offset) |
+// - -<value> (relative offset from end)
+// - s@<value> (timestamp in ms to start at)
+// - e@<value> (timestamp in ms to stop at (not included))
+auto offset_parser() {
+  using namespace parsers;
+  using namespace parser_literals;
+  auto beginning = "beginning"_p->*[] {
+    return RdKafka::Topic::OFFSET_BEGINNING;
   };
+  auto end = "end"_p->*[] {
+    return RdKafka::Topic::OFFSET_END;
+  };
+  auto stored = "stored"_p->*[] {
+    return RdKafka::Topic::OFFSET_STORED;
+  };
+  auto value = i64->*[](int64_t x) {
+    return x >= 0 ? x : RdKafka::Consumer::OffsetTail(-x);
+  };
+  // TODO: support start and stop
+  // auto start = "s@" >> i64;
+  // auto stop = "3@" >> i64;
+  // return beginning | end | stored | value | start | stop;
+  return beginning | end | stored | value;
 }
 
-class plugin : public virtual loader_plugin, saver_plugin {
+auto kvp_parser() {
+  using namespace parsers;
+  using namespace parser_literals;
+  using parsers::printable;
+  auto key = *(printable - '=');
+  auto value = *(printable - ',');
+  auto kvp = key >> '=' >> value;
+  return kvp % ',';
+}
+
+struct loader_args {
+  located<std::string> topic;
+  std::optional<located<size_t>> count;
+  std::optional<location> exit;
+  std::optional<located<std::string>> offset;
+  std::optional<located<std::string>> options;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, loader_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("loader_args")
+      .fields(f.field("topic", x.topic), f.field("count", x.count),
+              f.field("exit", x.exit), f.field("offset", x.offset),
+              f.field("options", x.options));
+  }
+};
+
+class kafka_loader final : public plugin_loader {
 public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
-    settings_ = config;
-    return caf::none;
+  kafka_loader() = default;
+
+  kafka_loader(loader_args args, record config)
+    : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto
-  make_loader(std::span<std::string const> args, operator_control_plane&) const
-    -> caf::expected<generator<chunk_ptr>> override {
-    auto f = [=]() -> generator<chunk_ptr> {
-      // TODO: -c
-      auto commit = false;
-      // TODO: -t
-      auto topics = std::vector<std::string>{"test"};
-      auto cfg = configuration::make(settings_);
-      if (!cfg) {
-        VAST_ERROR("kafka failed to create configuration: {}", cfg.error());
-        co_return;
-      };
-      auto client = consumer::make(*cfg);
-      if (!client) {
-        VAST_ERROR(client.error());
-        co_return;
-      };
-      if (auto value = cfg->get("bootstrap.servers")) {
-        VAST_INFO("kafka consumer connected to: {}", *value);
+  auto instantiate(operator_control_plane& ctrl) const
+    -> std::optional<generator<chunk_ptr>> override {
+    auto cfg = configuration::make(config_);
+    if (!cfg) {
+      ctrl.diagnostics().emit(
+        diagnostic::error("failed to create configuration: {}", cfg.error())
+          .done());
+      return {};
+    }
+    // If we want to exit when we're done, we need to tell Kafka to emit a
+    // signal so that we known when to terminate.
+    if (args_.exit) {
+      if (auto err = cfg->set("enable.partition.eof", "true")) {
+        ctrl.diagnostics().emit(
+          diagnostic::error("failed to enable partition EOF: {}", err).done());
+        return {};
       }
-      VAST_INFO("kafka subscribes to topics {}", topics);
-      if (auto err = client->subscribe(topics)) {
-        VAST_ERROR(err);
-        co_return;
+    }
+    // Adjust rebalance callback to set desired offset.
+    auto offset = RdKafka::Topic::OFFSET_END;
+    if (args_.offset) {
+      auto success = offset_parser()(args_.offset->inner, offset);
+      VAST_ASSERT(success); // validated earlier;
+      VAST_INFO("kafka adjusts offset to {} ({})", args_.offset->inner, offset);
+    }
+    if (auto err = cfg->set_rebalance_cb(offset)) {
+      ctrl.diagnostics().emit(
+        diagnostic::error("failed to set rebalance callback: {}", err).done());
+      return {};
+    }
+    // Override configuration with arguments.
+    if (args_.options) {
+      std::vector<std::pair<std::string, std::string>> options;
+      if (!kvp_parser()(args_.options->inner, options)) {
+        ctrl.diagnostics().emit(
+          diagnostic::error("invalid list of key=value pairs")
+            .primary(args_.options->source)
+            .done());
+        return {};
       }
+      for (const auto& [key, value] : options) {
+        VAST_INFO("providing librdkafka option {}={}", key, value);
+        if (auto err = cfg->set(key, value)) {
+          ctrl.diagnostics().emit(
+            diagnostic::error("failed to set librdkafka option {}={}: {}", key,
+                              value, err)
+              .primary(args_.options->source)
+              .done());
+          return {};
+        }
+      }
+    }
+    // Create the consumer.
+    auto client = consumer::make(*cfg);
+    if (!client) {
+      ctrl.diagnostics().emit(
+        diagnostic::error("failed to create consumer: {}", client.error())
+          .done());
+      return {};
+    };
+    if (auto value = cfg->get("bootstrap.servers")) {
+      VAST_INFO("kafka consumer connected to: {}", *value);
+    }
+    VAST_INFO("kafka subscribes to topic {}", args_.topic.inner);
+    if (auto err = client->subscribe({args_.topic.inner})) {
+      ctrl.diagnostics().emit(
+        diagnostic::error("failed to subscribe to topic: {}", err).done());
+      return {};
+    }
+    // Setup the coroutine factory.
+    auto make
+      = [](loader_args args, consumer client) mutable -> generator<chunk_ptr> {
+      auto num_messages = size_t{0};
       while (true) {
-        auto msg = client->consume(500ms);
+        auto msg = client.consume(500ms);
         if (!msg) {
-          if (msg.error() != ec::timeout)
-            VAST_WARN(msg.error());
           co_yield {};
-          continue;
+          if (msg.error() == ec::timeout)
+            continue;
+          if (msg.error() == ec::end_of_input)
+            // FIXME: currently doesn't work for N partitions with N > 1.
+            // Upgrade to a counter and only break out of the loop once this
+            // signal has been received N times.
+            break;
+          VAST_ERROR(msg.error());
+          break;
         }
         auto payload = chunk::copy(msg->payload());
-        if (commit) {
-          if (auto err = client->commit(*msg)) {
-            VAST_WARN("kafka failed to commit message: {}", *payload);
-            co_yield {};
-            continue;
-          }
-        }
         co_yield payload;
+        if (args.count && args.count->inner == ++num_messages)
+          break;
       }
     };
-    return std::invoke(f);
+    return make(args_, std::move(*client));
   }
 
-  auto make_saver(std::span<std::string const> /* args */, printer_info,
-                  operator_control_plane& ctrl) const
-    -> caf::expected<saver> override {
-    auto topics = std::vector<std::string>{"test"};
-    auto cfg = configuration::make(settings_);
+  auto to_string() const -> std::string override {
+    auto result = name();
+    result += fmt::format(" --topic {}", args_.topic);
+    if (args_.count)
+      result += fmt::format(" --count {}", args_.count->inner);
+    if (args_.exit)
+      result += "--exit";
+    if (args_.offset)
+      result += fmt::format(" --offset {}", args_.offset->inner);
+    if (args_.options)
+      result += fmt::format(" --set {}", args_.options->inner);
+    return result;
+  }
+
+  auto name() const -> std::string override {
+    return "kafka";
+  }
+
+  auto default_parser() const -> std::string override {
+    return "json";
+  }
+
+  friend auto inspect(auto& f, kafka_loader& x) -> bool {
+    return f.object(x)
+      .pretty_name("kafka_loader")
+      .fields(f.field("args", x.args_), f.field("config", x.config_));
+  }
+
+private:
+  loader_args args_;
+  record config_;
+};
+
+struct saver_args {
+  located<std::string> topic;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, saver_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("saver_args")
+      .fields(f.field("topic", x.topic));
+  }
+};
+
+class kafka_saver final : public plugin_saver {
+public:
+  kafka_saver() = default;
+
+  kafka_saver(saver_args args, record config)
+    : args_{std::move(args)}, config_{std::move(config)} {
+  }
+
+  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+    -> caf::expected<std::function<void(chunk_ptr)>> override {
+    auto topics = std::vector<std::string>{args_.topic.inner};
+    auto cfg = configuration::make(config_);
     if (!cfg) {
       VAST_ERROR("kafka failed to create configuration: {}", cfg.error());
       return cfg.error();
@@ -139,18 +287,96 @@ public:
     };
   }
 
-  auto default_parser(std::span<std::string const>) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"json", {}};
+  // FIXME: why can't I override this for savers when it's possible for
+  // loaders? auto to_string() const -> std::string override {
+  //  auto result = name();
+  //  result += fmt::format(" --topic {}", args_.topic);
+  //  return result;
+  //}
+
+  auto name() const -> std::string override {
+    return "kafka";
   }
 
-  auto default_printer(std::span<std::string const>) const
-    -> std::pair<std::string, std::vector<std::string>> override {
-    return {"json", {}};
+  auto default_printer() const -> std::string override {
+    return "json";
   }
 
-  auto saver_does_joining() const -> bool override {
+  auto is_joining() const -> bool override {
     return true;
+  }
+
+  friend auto inspect(auto& f, kafka_saver& x) -> bool {
+    return f.object(x)
+      .pretty_name("kafka_saver")
+      .fields(f.field("args", x.args_), f.field("config", x.config_));
+  }
+
+private:
+  saver_args args_;
+  record config_;
+};
+
+class plugin final : public virtual loader_plugin<kafka_loader>,
+                     saver_plugin<kafka_saver> {
+public:
+  auto initialize(const record& config, const record& /* global_config */)
+    -> caf::error override {
+    config_ = config;
+    if (!config_.contains("bootstrap.servers"))
+      config_["bootstrap.servers"] = "localhost";
+    if (!config_.contains("group.id"))
+      config_["group.id"] = "rdkafka_consumer_example";
+    return caf::none;
+  }
+
+  auto parse_loader(parser_interface& p) const
+    -> std::unique_ptr<plugin_loader> override {
+    auto parser = argument_parser{
+      name(),
+      fmt::format("https://docs.tenzir.com/docs/next/connectors/{}", name())};
+    auto args = loader_args{};
+    parser.add("-t,--topic", args.topic, "<topic>");
+    parser.add("-c,--count", args.count, "<n>");
+    parser.add("-e,--exit", args.exit);
+    parser.add("-o,--offset", args.offset, "<offset>");
+    // We use -X because that's standard in Kafka applications, cf. kcat.
+    parser.add("-X,--set", args.options, "<key=value>,...");
+    parser.parse(p);
+    if (args.topic.inner.empty()) {
+      diagnostic::error("`--topic` must not be empty")
+        .primary(args.topic.source)
+        .throw_();
+    }
+    if (args.offset) {
+      if (!offset_parser()(args.offset->inner))
+        diagnostic::error("invalid `--offset` value")
+          .primary(args.offset->source)
+          .note("valid values are:")
+          .note("- beginning")
+          .note("- end")
+          .note("- store")
+          .note("- <value> (absolute offset)")
+          .note("- -<value> (relative offset from end)")
+          .throw_();
+    }
+    return std::make_unique<kafka_loader>(std::move(args), config_);
+  }
+
+  auto parse_saver(parser_interface& p) const
+    -> std::unique_ptr<plugin_saver> override {
+    auto parser = argument_parser{
+      name(),
+      fmt::format("https://docs.tenzir.com/docs/next/connectors/{}", name())};
+    auto args = saver_args{};
+    parser.add("-t,--topic", args.topic, "<topic>");
+    parser.parse(p);
+    if (args.topic.inner.empty()) {
+      diagnostic::error("`--topic` must not be empty")
+        .primary(args.topic.source)
+        .throw_();
+    }
+    return std::make_unique<kafka_saver>(std::move(args), config_);
   }
 
   auto name() const -> std::string override {
@@ -158,7 +384,7 @@ public:
   }
 
 private:
-  record settings_;
+  record config_;
 };
 
 } // namespace
