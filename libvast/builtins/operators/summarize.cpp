@@ -240,18 +240,17 @@ struct binding {
       if (auto offset = rt.resolve_key(aggr.input)) {
         auto type = rt.field(*offset).type;
         // Check that the type of this field is compatible with the function
-        // ahead of time. We will use that we know that it is compatiable later
-        // when instantiating the function for a given group.
+        // ahead of time. We only use this to emit a warning. We do not set the
+        // column to `std::nullopt`, because we will have to differentiate the
+        // error and the missing case later on.
         auto instantiation = aggr.function->make_aggregation_function(type);
         if (!instantiation) {
           VAST_WARN("cannot instantiate `{}` with `{}` for schema `{}`: {}",
                     aggr.function->name(), type, schema.name(),
                     instantiation.error());
-          result.aggregation_columns.emplace_back(std::nullopt);
-        } else {
-          result.aggregation_columns.emplace_back(
-            column{std::move(*offset), std::move(type)});
         }
+        result.aggregation_columns.emplace_back(
+          column{std::move(*offset), std::move(type)});
       } else {
         VAST_WARN("aggregation column `{}` does not exist for schema `{}`",
                   aggr.input, schema.name());
@@ -399,11 +398,13 @@ public:
           }
           if (aggr.is_empty()) {
             // We can now instantiate the missing function because we have a type.
-            auto instance
-              = cfg.function->make_aggregation_function(column->type);
-            // We would have set `column` to `std::nullopt` if this fails.
-            VAST_ASSERT(instance);
-            aggr.set_active(std::move(*instance));
+            if (auto instance
+                = cfg.function->make_aggregation_function(column->type)) {
+              aggr.set_active(std::move(*instance));
+            } else {
+              // We already noticed this and emitted a warning previously.
+              aggr.set_dead();
+            }
             continue;
           }
           auto& func = aggr.get_active();
@@ -437,14 +438,15 @@ public:
         // we will later use this as a signal to set the result column to null.
         if (bound.aggregation_columns[col].has_value()) {
           auto input_type = bound.aggregation_columns[col]->type;
-          auto instance
-            = config.aggregations[col].function->make_aggregation_function(
-              input_type);
-          // We checked whether it's possible to create the aggregation function
-          // for the column type when binding the schema.
-          VAST_ASSERT(instance);
-          new_bucket->aggregations.push_back(
-            aggregation::make_active(std::move(*instance)));
+          if (auto instance
+              = config.aggregations[col].function->make_aggregation_function(
+                input_type)) {
+            new_bucket->aggregations.push_back(
+              aggregation::make_active(std::move(*instance)));
+          } else {
+            // We already emitted a warning for this earlier.
+            new_bucket->aggregations.push_back(aggregation::make_dead());
+          }
         } else {
           // If the column does not exist, we cannot instantiate the function
           // yet because we don't know which type to use.
@@ -613,6 +615,10 @@ private:
   template <class T>
   class dead_empty_or {
   public:
+    static auto make_dead() -> dead_empty_or {
+      return dead_empty_or{std::nullopt};
+    }
+
     static auto make_empty() -> dead_empty_or {
       return dead_empty_or{T{}};
     }
