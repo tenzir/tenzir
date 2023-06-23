@@ -5,7 +5,7 @@ Groups events and applies aggregate functions on each group.
 ## Synopsis
 
 ```
-summarize <[field=]aggregation>... by <extractor>... [resolution <duration>]
+summarize <[field=]aggregation>... [by <extractor>... [resolution <duration>]]
 ```
 
 ## Description
@@ -20,8 +20,8 @@ are dropped from the output.
 ### `[field=]aggregation`
 
 Aggregation functions compute a single value of one or more columns in a given
-group. Syntactically, `aggregation` has the form `f(xs...)` where `f` is the
-aggregation function and `xs` a comma-separated list arguments.
+group. Syntactically, `aggregation` has the form `f(x)` where `f` is the
+aggregation function and `x` is a field.
 
 By default, the name for the new field `aggregation` is its string
 representation, e.g., `min(timestamp)`. You can specify a different name by
@@ -44,7 +44,8 @@ The following aggregation functions are available:
 
 ### `by <extractor>`
 
-The extractors specified after the `by` clause partitions the input into groups.
+The extractors specified after the optional `by` clause partition the input into
+groups. If `by` is omitted, all events are assigned to the same group.
 
 ### `resolution <duration>`
 
@@ -76,6 +77,12 @@ Compute minimum, maximum of the `timestamp` field per `src_ip` group:
 
 ```
 summarize min(timestamp), max(timestamp) by src_ip
+```
+
+Compute minimum, maximum of the `timestamp` field over all events:
+
+```
+summarize min(timestamp), max(timestamp)
 ```
 
 Create a boolean flag `originator` that is `true` if any value in the group is

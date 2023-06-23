@@ -1,0 +1,136 @@
+{
+  "_path": "sip",
+  "x": null
+}
+{
+  "_path": "ssl",
+  "x": null
+}
+{
+  "_path": "tunnel",
+  "x": null
+}
+{
+  "_path": "weird.123.190",
+  "x": null
+}
+{
+  "_path": "notice",
+  "x": null
+}
+{
+  "_path": "software",
+  "x": null
+}
+{
+  "_path": "dhcp",
+  "x": null
+}
+{
+  "_path": "corelight_metrics_cpu",
+  "x": null
+}
+{
+  "_path": "smtp",
+  "x": null
+}
+{
+  "_path": "conn",
+  "x": null
+}
+{
+  "_path": "rdp",
+  "x": null
+}
+{
+  "_path": "_0_0_2",
+  "x": null
+}
+{
+  "_path": "syslog",
+  "x": null
+}
+{
+  "_path": "corelight_metrics_memory",
+  "x": null
+}
+{
+  "_path": "files",
+  "x": null
+}
+{
+  "_path": "weird",
+  "x": null
+}
+{
+  "_path": "dnp3",
+  "x": null
+}
+{
+  "_path": "modbus",
+  "x": null
+}
+{
+  "_path": "irc",
+  "x": null
+}
+{
+  "_path": "pe",
+  "x": null
+}
+{
+  "_path": "conn_long",
+  "x": null
+}
+{
+  "_path": null,
+  "x": null
+}
+{
+  "_path": "corelight_metrics_system",
+  "x": null
+}
+{
+  "_path": "reporter",
+  "x": null
+}
+{
+  "_path": "ftp",
+  "x": null
+}
+{
+  "_path": "kerberos",
+  "x": null
+}
+{
+  "_path": "radius",
+  "x": null
+}
+{
+  "_path": "dpd",
+  "x": null
+}
+{
+  "_path": "corelight_metrics_bro",
+  "x": null
+}
+{
+  "_path": "dns",
+  "x": null
+}
+{
+  "_path": "snmp",
+  "x": null
+}
+{
+  "_path": "http",
+  "x": null
+}
+{
+  "_path": "corelight_metrics_iface",
+  "x": null
+}
+{
+  "_path": "corelight_metrics_disk",
+  "x": null
+}

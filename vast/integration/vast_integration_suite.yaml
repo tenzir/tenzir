@@ -927,3 +927,49 @@ tests:
         expected_result: error
       - command: exec 'export | top "" | to stdout'
         expected_result: error
+
+  # The summarize operator supports using fields which do not exist, using
+  # `null` instead of their value. Here, we test many combinations of this
+  # behavior. We use the letters A, N and S for all, none and some,
+  # respectively. For example, SA means that the some (but not all)
+  # schemas do not have the aggregation column present, but for all
+  # of them, the group-by column exists.
+  Summarize All None Some:
+    tags: [pipelines]
+    steps:
+      # AA (no warnings)
+      - command: exec 'read zeek-json | summarize x=distinct(_path) by _path'
+        input: data/zeek/zeek.json
+      # NN
+      - command: exec 'read zeek-json | summarize x=distinct(y) by z'
+        input: data/zeek/zeek.json
+      # NA
+      - command: exec 'read zeek-json | summarize x=distinct(y) by _path'
+        input: data/zeek/zeek.json
+      # AN
+      - command: exec 'read zeek-json | summarize x=distinct(_path) by z'
+        input: data/zeek/zeek.json
+      # NS
+      - command: exec 'read zeek-json | summarize x=distinct(y) by id.orig_h'
+        input: data/zeek/zeek.json
+      # SN
+      - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by z'
+        input: data/zeek/zeek.json
+      # AS
+      - command: exec 'read zeek-json | summarize x=distinct(_path) by id.orig_h'
+        input: data/zeek/zeek.json
+      # SA
+      - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by _path'
+        input: data/zeek/zeek.json
+      # SS
+      - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by id.orig_h'
+        input: data/zeek/zeek.json
+      # A (no warnings)
+      - command: exec 'read zeek-json | summarize x=distinct(_path)'
+        input: data/zeek/zeek.json
+      # S
+      - command: exec 'read zeek-json | summarize x=distinct(id.orig_h)'
+        input: data/zeek/zeek.json
+      # N
+      - command: exec 'read zeek-json | summarize x=distinct(y)'
+        input: data/zeek/zeek.json

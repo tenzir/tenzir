@@ -532,14 +532,6 @@ public:
     -> output_type
     = 0;
 
-  /// Called when the input is exhausted.
-  virtual auto finish(std::unordered_map<type, state_type> states,
-                      operator_control_plane&) const
-    -> generator<remove_generator_t<output_type>> {
-    (void)states;
-    co_return;
-  }
-
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<remove_generator_t<output_type>> {
@@ -567,9 +559,6 @@ public:
           co_yield std::move(x);
         }
       }
-    }
-    for (auto&& output : finish(std::move(states), ctrl)) {
-      co_yield output;
     }
   }
 };
