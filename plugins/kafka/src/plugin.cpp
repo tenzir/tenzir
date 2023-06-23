@@ -96,6 +96,8 @@ public:
 
   kafka_loader(loader_args args, record config)
     : args_{std::move(args)}, config_{std::move(config)} {
+    if (!config_.contains("group.id"))
+      config_["group.id"] = "tenzir";
   }
 
   auto instantiate(operator_control_plane& ctrl) const
@@ -325,8 +327,6 @@ public:
     config_ = config;
     if (!config_.contains("bootstrap.servers"))
       config_["bootstrap.servers"] = "localhost";
-    if (!config_.contains("group.id"))
-      config_["group.id"] = "tenzir";
     return caf::none;
   }
 
