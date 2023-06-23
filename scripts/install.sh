@@ -173,7 +173,6 @@ then
   echo
   echo "  - ${cmd1}"
   echo "  - ${cmd2}"
-  echo
   read -r dummy_
   action "Installing via dpkg"
   eval "${cmd1}"
@@ -185,7 +184,6 @@ then
   echo "Press ${green}ENTER${normal} to continue with the following commands:"
   echo
   echo "  - ${cmd1}"
-  echo
   action "Unpacking tarball"
   eval "${cmd1}"
 fi
