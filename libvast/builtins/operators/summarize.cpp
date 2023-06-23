@@ -219,9 +219,8 @@ struct binding {
   std::vector<std::optional<column>> group_by_columns;
   std::vector<std::optional<column>> aggregation_columns;
 
-  /// Try to resolve all aggregation and group-by columns for a given schema.
-  static auto make(const type& schema, const configuration& config)
-    -> caf::expected<binding> {
+  /// Resolve all aggregation and group-by columns for a given schema.
+  static auto make(const type& schema, const configuration& config) -> binding {
     auto result = binding{};
     result.group_by_columns.reserve(config.group_by_extractors.size());
     result.aggregation_columns.reserve(config.aggregations.size());
@@ -232,6 +231,8 @@ struct binding {
         result.group_by_columns.emplace_back(
           column{std::move(*offset), std::move(type)});
       } else {
+        VAST_WARN("group-by column `{}` does not exist for schema `{}`", field,
+                  schema.name());
         result.group_by_columns.emplace_back(std::nullopt);
       }
     }
@@ -243,14 +244,17 @@ struct binding {
         // when instantiating the function for a given group.
         auto instantiation = aggr.function->make_aggregation_function(type);
         if (!instantiation) {
-          return caf::make_error(
-            ec::type_clash,
-            fmt::format("could not instantiate `{}` with `{}`: {}",
-                        aggr.function->name(), type, instantiation.error()));
+          VAST_WARN("cannot instantiate `{}` with `{}` for schema `{}`: {}",
+                    aggr.function->name(), type, schema.name(),
+                    instantiation.error());
+          result.aggregation_columns.emplace_back(std::nullopt);
+        } else {
+          result.aggregation_columns.emplace_back(
+            column{std::move(*offset), std::move(type)});
         }
-        result.aggregation_columns.emplace_back(
-          column{std::move(*offset), std::move(type)});
       } else {
+        VAST_WARN("aggregation column `{}` does not exist for schema `{}`",
+                  aggr.input, schema.name());
         result.aggregation_columns.emplace_back(std::nullopt);
       }
     }
@@ -297,8 +301,16 @@ struct binding {
   };
 };
 
+template <class T, class... Ts>
+auto zip_equal(T& x, Ts&... xs) -> detail::zip<T, Ts...> {
+  auto size = x.size();
+  auto match = ((xs.size() == size) && ...);
+  VAST_ASSERT(match);
+  return detail::zip{x, xs...};
+}
+
 /// An instantiation of the inter-schematic aggregation process.
-class aggregation {
+class implementation {
 public:
   /// Divides the input into groups and feeds it to the aggregation function.
   auto add(const table_slice& slice, const configuration& config)
@@ -306,11 +318,8 @@ public:
     // Step 1: Resolve extractor names (if possible).
     auto it = bindings.find(slice.schema());
     if (it == bindings.end()) {
-      auto bound = binding::make(slice.schema(), config);
-      if (!bound) {
-        return bound.error();
-      }
-      it = bindings.try_emplace(it, slice.schema(), std::move(*bound));
+      it = bindings.try_emplace(it, slice.schema(),
+                                binding::make(slice.schema(), config));
     }
     auto const& bound = it->second;
     // Step 2: Collect the aggregation columns and group-by columns into arrays.
@@ -322,7 +331,7 @@ public:
     reusable_key_view.resize(bound.group_by_columns.size(), {});
     // Returns the group that the given row belongs to, creating new groups
     // whenever necessary.
-    auto find_or_create_bucket = [&](int64_t row) -> caf::expected<bucket*> {
+    auto find_or_create_bucket = [&](int64_t row) -> bucket* {
       for (size_t col = 0; col < bound.group_by_columns.size(); ++col) {
         if (bound.group_by_columns[col]) {
           VAST_ASSERT(group_by_arrays[col].has_value());
@@ -336,23 +345,21 @@ public:
       if (auto it = buckets.find(reusable_key_view); it != buckets.end()) {
         auto&& bucket = *it->second;
         // Check that the group-by values also have matching types.
-        VAST_ASSERT(bucket.group_by_types.size()
-                    == bound.group_by_columns.size());
         for (auto&& [existing, other] :
-             detail::zip{bucket.group_by_types, bound.group_by_columns}) {
+             zip_equal(bucket.group_by_types, bound.group_by_columns)) {
           if (!other) {
             // If this group-by column does not exist in the input schema, we
-            // assume `null` values and ignore its type.
+            // already warned. We assume `null` values and ignore its type.
             continue;
           }
-          if (!existing) {
+          if (!existing.has_value()) {
             // In this case, we already encountered a type mismatch for this
-            // group.
+            // group. We already warned, and the output will `null`.
             continue;
           }
           if (other->type != *existing) {
             // If the types mismatch, we have found equal values with not-equal
-            // types. This can happen e.g. for `null` values. TODO: Prune type?
+            // types. This can happen e.g. for `null` values.
             if (!*existing) {
               // In this case, we found a bucket for a schema which does not
               // have the group-by extractor at all (hence the type is also
@@ -379,18 +386,34 @@ public:
           }
         }
         // Check that the aggregation extractors have the same type.
-        VAST_ASSERT(bucket.functions.size()
-                    == bound.aggregation_columns.size());
-        for (auto&& [func, column] :
-             detail::zip{bucket.functions, bound.aggregation_columns}) {
-          auto func_type = func ? func->input : type{};
-          auto col_type = column ? column->type : type{};
-          if (func_type != col_type) {
-            return caf::make_error(
-              ec::type_clash,
-              fmt::format("summarize aggregation function for group `{}` "
-                          "expected type `{}`, but got `{}`",
-                          reusable_key_view, func_type, col_type));
+        for (auto&& [aggr, column, cfg] :
+             zip_equal(bucket.aggregations, bound.aggregation_columns,
+                       config.aggregations)) {
+          if (!aggr.is_dead()) {
+            continue;
+          }
+          if (!column) {
+            // We already warned that this column does not exist. Since we
+            // assume `null` values for it, and also assume that `nulls` don't
+            // change the function value, we ignore it.
+            continue;
+          }
+          if (aggr.is_empty()) {
+            // We can now instantiate the missing function because we have a type.
+            auto instance
+              = cfg.function->make_aggregation_function(column->type);
+            // We would have set `column` to `std::nullopt` if this fails.
+            VAST_ASSERT(instance);
+            aggr.set_function(std::move(*instance));
+            continue;
+          }
+          VAST_ASSERT(aggr.is_function());
+          auto& func = aggr.get_function();
+          if (func.input_type() != column->type) {
+            VAST_WARN("summarize aggregation function for group `{}` "
+                      "expected type `{}`, but got `{}`",
+                      reusable_key_view, func.input_type(), column->type);
+            aggr.set_dead();
           }
         }
         return it->second.get();
@@ -402,17 +425,18 @@ public:
         if (column) {
           new_bucket->group_by_types.emplace_back(column->type);
         } else {
+          // We use `type{}` as a special value here to denote a missing column.
           new_bucket->group_by_types.emplace_back(type{});
         }
       }
-      new_bucket->functions.reserve(bound.aggregation_columns.size());
+      new_bucket->aggregations.reserve(bound.aggregation_columns.size());
       for (auto col = size_t{0}; col < bound.aggregation_columns.size();
            ++col) {
         // If this aggregation column exists, we create an instance of the
         // aggregation function with the type of the column. If it does not
         // exist, we store `std::nullopt` instead of an aggregation function, as
         // we will later use this as a signal to set the result column to null.
-        if (bound.aggregation_columns[col]) {
+        if (bound.aggregation_columns[col].has_value()) {
           auto input_type = bound.aggregation_columns[col]->type;
           auto instance
             = config.aggregations[col].function->make_aggregation_function(
@@ -420,10 +444,12 @@ public:
           // We checked whether it's possible to create the aggregation function
           // for the column type when binding the schema.
           VAST_ASSERT(instance);
-          new_bucket->functions.emplace_back(
-            function{std::move(input_type), std::move(*instance)});
+          new_bucket->aggregations.push_back(
+            aggregation::from_function(std::move(*instance)));
         } else {
-          new_bucket->functions.emplace_back(std::nullopt);
+          // If the column does not exist, we cannot instantiate the function
+          // yet because we don't know which type to use.
+          new_bucket->aggregations.emplace_back(aggregation::make_empty());
         }
       }
       auto [it, inserted] = buckets.emplace(materialize(reusable_key_view),
@@ -433,43 +459,39 @@ public:
     };
     // This lambda is called for consecutive rows that belong to the same group
     // and updates its aggregation functions.
-    auto update_bucket = [&](bucket& bucket, int64_t offset,
-                             int64_t length) noexcept {
-      VAST_ASSERT(length > 0);
-      VAST_ASSERT(bucket.functions.size() == aggregation_arrays.size());
-      VAST_ASSERT(bucket.functions.size() == bound.aggregation_columns.size());
-      for (size_t col = 0; col < bound.aggregation_columns.size(); ++col) {
-        if (bucket.functions[col]) {
-          VAST_ASSERT(aggregation_arrays[col]);
-          bucket.functions[col]->func->add(
-            *(*aggregation_arrays[col])->Slice(offset, length));
-        } else {
-          VAST_ASSERT(!aggregation_arrays[col]);
+    auto update_bucket = [&](bucket& bucket, int64_t offset, int64_t length) {
+      for (auto [aggr, input] :
+           zip_equal(bucket.aggregations, aggregation_arrays)) {
+        if (!input) {
+          // If the input column does not exist, we have nothing to do.
+          continue;
         }
+        if (!aggr.is_function()) {
+          // If the aggregation is dead, we have nothing to do. If it is
+          // empty, we know that the aggregation column does not exist in
+          // this schema, and thus have nothing to do as well. The only
+          // remaining case to handle is where it is a function.
+          continue;
+        }
+        aggr.get_function().add(*(*input)->Slice(offset, length));
       }
     };
     // Step 3: Iterate over all rows of the batch, and determine a slidin window
     // of rows beloging to the same batch that is as large as possible, then
     // update the corresponding bucket.
     auto first_row = int64_t{0};
-    auto first_bucket = find_or_create_bucket(first_row);
-    if (!first_bucket) {
-      return std::move(first_bucket.error());
-    }
+    auto* first_bucket = find_or_create_bucket(first_row);
     VAST_ASSERT(slice.rows() > 0);
     for (auto row = int64_t{1}; row < detail::narrow<int64_t>(slice.rows());
          ++row) {
-      auto bucket = find_or_create_bucket(row);
-      if (!bucket) {
-        return std::move(first_bucket.error());
-      }
-      if (*bucket == *first_bucket)
+      auto* bucket = find_or_create_bucket(row);
+      if (bucket == first_bucket)
         continue;
-      update_bucket(**first_bucket, first_row, row - first_row);
+      update_bucket(*first_bucket, first_row, row - first_row);
       first_row = row;
       first_bucket = bucket;
     }
-    update_bucket(**first_bucket, first_row,
+    update_bucket(*first_bucket, first_row,
                   detail::narrow<int64_t>(slice.rows()) - first_row);
     return {};
   }
@@ -481,26 +503,28 @@ public:
     // code below will create a single table slice for each group, but we could
     // use this knowledge to create batches instead.
     for (auto&& [group, bucket] : buckets) {
-      VAST_ASSERT(config.aggregations.size() == bucket->functions.size());
+      VAST_ASSERT(config.aggregations.size() == bucket->aggregations.size());
       // When building the output schema, we use the `string` type if the
       // associated column was not present in the input schema. This is because
       // we have to pick a type for the `null` values.
-      auto output_schema = std::invoke([&]() noexcept -> type {
+      auto output_schema = std::invoke([&]() -> type {
         auto fields = std::vector<record_type::field_view>{};
         fields.reserve(config.group_by_extractors.size()
                        + config.aggregations.size());
         for (auto&& [extractor, group_type] :
-             detail::zip(config.group_by_extractors, bucket->group_by_types)) {
+             zip_equal(config.group_by_extractors, bucket->group_by_types)) {
           auto ty = group_type.value_or(type{});
           // Since there is no `null` type, we use `string` as a fallback for now.
           ty = ty ? ty : type{string_type{}};
           fields.emplace_back(extractor, ty);
         }
-        for (auto&& [aggr, aggr_col] :
-             detail::zip(config.aggregations, bucket->functions)) {
-          fields.emplace_back(aggr.output, aggr_col
-                                             ? aggr_col->func->output_type()
-                                             : type{string_type{}});
+        for (auto&& [aggr, cfg] :
+             zip_equal(bucket->aggregations, config.aggregations)) {
+          if (aggr.is_function()) {
+            fields.emplace_back(cfg.output, aggr.get_function().output_type());
+          } else {
+            fields.emplace_back(cfg.output, type{string_type{}});
+          }
         }
         return {"tenzir.summarize", record_type{fields}};
       });
@@ -529,13 +553,14 @@ public:
           co_return;
         }
       }
-      for (auto i = size_t{0}; i < bucket->functions.size(); ++i) {
+      for (auto i = size_t{0}; i < bucket->aggregations.size(); ++i) {
         auto col = detail::narrow<int>(group.size() + i);
-        if (bucket->functions[i]) {
-          auto& func = bucket->functions[i]->func;
-          auto output_type = func->output_type();
-          auto value = std::move(*func).finish();
+        if (bucket->aggregations[i].is_function()) {
+          auto& func = bucket->aggregations[i].get_function();
+          auto output_type = func.output_type();
+          auto value = std::move(func).finish();
           if (!value) {
+            // TODO: We could warn instead and insert `null`.
             co_yield std::move(value.error());
             co_return;
           }
@@ -568,10 +593,64 @@ public:
   }
 
 private:
-  /// An `aggregation_function` together with its parameter type.
-  struct function {
-    type input;
-    std::unique_ptr<aggregation_function> func;
+  /// Every aggregation column can be in one of three states:
+  ///
+  /// - `dead`: There was an error (currently only: type clash in input columns).
+  ///   We never change away from this state once we are there. The result of
+  ///   the aggregation will be `null`.
+  ///
+  /// - `function: An active aggregation function for a specific type. Can
+  ///   change to `dead` if an error occurs.
+  ///
+  /// - `empty`: If we create a group, but the input column is missing, then we
+  ///   don't know how to instantiate the function yet. This state can change to
+  ///   `function` once the group receives a schema where the column exists. If
+  ///   the aggregation stays `empty` until the end, we TODO
+  class aggregation {
+  public:
+    static auto make_empty() -> aggregation {
+      return aggregation{nullptr};
+    }
+
+    static auto from_function(std::unique_ptr<aggregation_function> func)
+      -> aggregation {
+      VAST_ASSERT(func);
+      return aggregation{std::move(func)};
+    }
+
+    auto is_dead() const -> bool {
+      return !state_.has_value();
+    }
+
+    auto is_function() const -> bool {
+      return state_ && (*state_ != nullptr);
+    }
+
+    auto is_empty() const -> bool {
+      return state_ && (*state_ == nullptr);
+    }
+
+    void set_function(std::unique_ptr<aggregation_function> func) {
+      VAST_ASSERT(func);
+      state_ = std::move(func);
+    }
+
+    auto get_function() -> aggregation_function& {
+      VAST_ASSERT(is_function());
+      return **state_;
+    }
+
+    void set_dead() {
+      state_ = std::nullopt;
+    }
+
+  private:
+    explicit aggregation(
+      std::optional<std::unique_ptr<aggregation_function>> state)
+      : state_{std::move(state)} {
+    }
+
+    std::optional<std::unique_ptr<aggregation_function>> state_;
   };
 
   /// The buckets to aggregate into. Essentially, this is an ordered list of
@@ -586,10 +665,13 @@ private:
     /// conflict (which always results in `null` and cannot get upgraded.)
     std::vector<std::optional<type>> group_by_types;
 
-    /// The aggregation column functions. The optional is only set if the input
-    /// column exists, and if we were able to instantiate the function for the
-    /// input type.
-    std::vector<std::optional<function>> functions;
+    /// The aggregation column functions. The optional is empty if there was an
+    /// error that forces the output to be `null`, for example because there was
+    /// a type clash between columns. We store `nullptr` if we have only seen
+    /// schemas where the input column is missing, which means that we don't
+    /// know which type to use until we get schema where the column exists.
+    // TODO
+    std::vector<aggregation> aggregations;
   };
 
   /// We cache the offsets and types of the resolved columns for each schema.
@@ -616,18 +698,18 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto aggr = aggregation{};
+    auto impl = implementation{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      if (auto error = aggr.add(slice, config_)) {
+      if (auto error = impl.add(slice, config_)) {
         ctrl.abort(std::move(error));
         co_return;
       }
     }
-    for (auto&& result : std::move(aggr).finish(config_)) {
+    for (auto&& result : std::move(impl).finish(config_)) {
       if (!result) {
         ctrl.abort(std::move(result.error()));
         co_return;

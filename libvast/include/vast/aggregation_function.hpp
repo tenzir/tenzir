@@ -43,14 +43,14 @@ public:
   /// Finish the aggregation into a single materialized value.
   [[nodiscard]] virtual caf::expected<data> finish() && = 0;
 
+  /// Return the input type of the function.
+  [[nodiscard]] const type& input_type() const noexcept;
+
 protected:
   /// Constructs the aggregation function. Must be called from implementing base
   /// classes.
   /// @param input_type The input type from the aggregation function plugin.
   explicit aggregation_function(type input_type) noexcept;
-
-  /// Return the input type of the function.
-  [[nodiscard]] const type& input_type() const noexcept;
 
 private:
   /// The input type of the function.

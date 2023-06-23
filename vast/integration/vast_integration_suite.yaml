@@ -932,7 +932,7 @@ tests:
   Summarize All None Some:
     tags: [pipelines]
     steps:
-      # AA
+      # AA: No warnings.
       - command: exec 'read zeek-json | summarize x=distinct(_path) by _path'
         input: data/zeek/zeek.json
       # NN
@@ -947,12 +947,10 @@ tests:
       # NS
       - command: exec 'read zeek-json | summarize x=distinct(y) by id.orig_h'
         input: data/zeek/zeek.json
-      # SN
-      # TODO: Fix hanging issue after `ctrl.abort(...)` and then enable this test.
-      # - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by z'
-      #   input: data/zeek/zeek.json
-      #   expected_result: error
-      #   # reason: only one group (`z == null`) and `id.orig_h` conflicts in group
+      # SN: There is only one group (`z == null`). For some of its schemas,
+      #     `id.orig_h` does not exist. Thus, `x` is set to `null`.
+      - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by z'
+        input: data/zeek/zeek.json
       # AS
       - command: exec 'read zeek-json | summarize x=distinct(_path) by id.orig_h'
         input: data/zeek/zeek.json
@@ -960,10 +958,5 @@ tests:
       - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by _path'
         input: data/zeek/zeek.json
       # SS
-      # TODO: This test should succeed, but it fails because the current JSON
-      # parser inference adds a `id.orig_h: ip` with the value `null` to schemas
-      # which should not have it. The bucket `id.orig_h == null` therefore
-      # receives a schema for which `id.orig_h` does not exist, and one for
-      # which it is `null`, which leads to an error.
-      # - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by id.orig_h'
-      #   input: data/zeek/zeek.json
+      - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by id.orig_h'
+        input: data/zeek/zeek.json
