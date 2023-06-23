@@ -119,7 +119,7 @@ private:
 class plugin final : public virtual operator_plugin<where_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"where", "https://vast.io/docs/next/"
+    auto parser = argument_parser{"where", "https://docs.tenzir.com/next/"
                                            "operators/transformations/where"};
     auto expr = located<vast::expression>{};
     parser.add(expr, "<expr>");

@@ -1094,6 +1094,43 @@ TEST(Fixed fields builder remove record type row) {
               }));
 }
 
+TEST(Field type changes when it was first discovered with a different one but
+       the value got removed and a different type value was added) {
+  auto sut = adaptive_table_slice_builder{};
+  {
+    auto row = sut.push_row();
+    REQUIRE(not row.push_field("int").add(int64_t{5}));
+    row.cancel();
+  }
+  {
+    auto row = sut.push_row();
+    REQUIRE(not row.push_field("int").add("string"));
+  }
+  auto out = sut.finish();
+  CHECK_EQUAL(out.rows(), 1u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), "string");
+}
+
+TEST(Dont add a value of a different type to a fixed type field which had its
+       only value removed) {
+  const auto schema
+    = vast::type{"a nice name", record_type{{"int", int64_type{}}}};
+  auto sut = adaptive_table_slice_builder{schema};
+  {
+    auto row = sut.push_row();
+    REQUIRE(not row.push_field("int").add(int64_t{5}));
+    row.cancel();
+  }
+  {
+    auto row = sut.push_row();
+    // this returns an error because the "int" field is fixed to be of
+    // int64_type. We can't add a values that represent a different type.
+    REQUIRE(row.push_field("int").add("string"));
+  }
+  auto out = sut.finish();
+  CHECK_EQUAL(out.rows(), 0u);
+}
+
 TEST(successful cast to list value type) {
   adaptive_table_slice_builder sut;
   {

@@ -118,7 +118,7 @@ auto parse_default_parser(std::string definition)
   diagnostic::error("loader `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://vast.io/docs/next/connectors")
+    .docs("https://docs.tenzir.com/next/connectors")
     .throw_();
 }
 
@@ -130,7 +130,7 @@ auto parse_default_parser(std::string definition)
   diagnostic::error("parser `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://vast.io/docs/next/formats")
+    .docs("https://docs.tenzir.com/next/formats")
     .throw_();
 }
 
@@ -142,7 +142,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "from <loader> <args>... [read <parser> <args>...]";
-    auto docs = "https://vast.io/docs/next/operators/sources/from";
+    auto docs = "https://docs.tenzir.com/next/operators/sources/from";
     auto l_name = p.accept_shell_arg();
     if (!l_name) {
       diagnostic::error("expected loader name")
@@ -205,7 +205,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "read <parser> <args>... [from <loader> <args>...]";
-    auto docs = "https://vast.io/docs/next/operators/sources/read";
+    auto docs = "https://docs.tenzir.com/next/operators/sources/read";
     auto p_name = p.accept_shell_arg();
     if (!p_name) {
       diagnostic::error("expected parser name")
@@ -254,7 +254,7 @@ class load_plugin final : virtual public operator_plugin<load_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "load <loader> <args>...";
-    auto docs = "https://vast.io/docs/next/operators/sources/load";
+    auto docs = "https://docs.tenzir.com/next/operators/sources/load";
     auto name = p.accept_shell_arg();
     if (!name) {
       diagnostic::error("expected loader name", p.current_span())
@@ -277,7 +277,7 @@ class parse_plugin final : virtual public operator_plugin<parse_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "parse <parser> <args>...";
-    auto docs = "https://vast.io/docs/next/operators/transformations/parse";
+    auto docs = "https://docs.tenzir.com/next/operators/transformations/parse";
     auto name = p.accept_shell_arg();
     if (!name) {
       diagnostic::error("expected parser name")

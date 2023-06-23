@@ -349,7 +349,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto sep_str = located<std::string>{};
-    auto parser = argument_parser{"xsv", "https://vast.io/docs/next/"
+    auto parser = argument_parser{"xsv", "https://docs.tenzir.com/next/"
                                          "formats/xsv"};
     parser.add(sep_str, "<sep>");
     parser.parse(p);
@@ -367,7 +367,7 @@ public:
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
     auto parser
-      = argument_parser{"xsv", "https://vast.io/docs/next/formats/xsv"};
+      = argument_parser{"xsv", "https://docs.tenzir.com/next/formats/xsv"};
     parser.add(field_sep_str, "<field-sep>");
     parser.add(list_sep_str, "<list-sep>");
     parser.add(null_value, "<null-value>");

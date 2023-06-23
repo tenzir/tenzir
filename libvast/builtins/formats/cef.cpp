@@ -417,7 +417,7 @@ class plugin final : public virtual reader_plugin,
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    argument_parser{"cef", "https://vast.io/docs/next/formats/cef"}.parse(p);
+    argument_parser{"cef", "https://docs.tenzir.com/next/formats/cef"}.parse(p);
     return std::make_unique<cef_parser>();
   }
 };

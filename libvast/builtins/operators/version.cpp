@@ -231,7 +231,7 @@ private:
 class plugin final : public virtual operator_plugin<version_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"version", "https://vast.io/docs/next/"
+    auto parser = argument_parser{"version", "https://docs.tenzir.com/next/"
                                              "operators/sources/version"};
     auto dev = false;
     parser.add("--dev", dev);

@@ -353,7 +353,7 @@ private:
     if (!plugin) {
       diagnostic::error("no such operator: `{}`", ident.name)
         .primary(ident.source)
-        .docs("https://vast.io/docs/next/operators")
+        .docs("https://docs.tenzir.com/next/operators")
         .throw_();
     }
     try {

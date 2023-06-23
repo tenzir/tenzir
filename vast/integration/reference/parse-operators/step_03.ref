@@ -5,7 +5,7 @@ error: unexpected positional argument
   |         ^^ 
   |
   = usage: version [--dev]
-  = docs: https://vast.io/docs/next/operators/sources/version
+  = docs: https://docs.tenzir.com/next/operators/sources/version
 ---
 [1m[31merror[39m: unexpected positional argument[0m
  [1m[34m-->[0m <input>:1:9
@@ -14,7 +14,7 @@ error: unexpected positional argument
   [1m[34m| [31m        ^^ [0m
   [1m[34m|[0m
   [1m[34m=[39m usage:[0m version [--dev]
-  [1m[34m=[39m docs:[0m https://vast.io/docs/next/operators/sources/version
+  [1m[34m=[39m docs:[0m https://docs.tenzir.com/next/operators/sources/version
 ---
 {
   "@type": "vast::diagnostic",
@@ -37,7 +37,7 @@ error: unexpected positional argument
     },
     {
       "kind": "docs",
-      "message": "https://vast.io/docs/next/operators/sources/version"
+      "message": "https://docs.tenzir.com/next/operators/sources/version"
     }
   ]
 }

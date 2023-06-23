@@ -5,7 +5,7 @@ error: loader `a/b/c.json` could not be found
   |      ^^^^^^^^^^ 
   |
   = hint: must be one of -, file, stdin
-  = docs: https://vast.io/docs/next/connectors
+  = docs: https://docs.tenzir.com/next/connectors
 ---
 [1m[31merror[39m: loader `a/b/c.json` could not be found[0m
  [1m[34m-->[0m <input>:1:6
@@ -14,7 +14,7 @@ error: loader `a/b/c.json` could not be found
   [1m[34m| [31m     ^^^^^^^^^^ [0m
   [1m[34m|[0m
   [1m[34m=[39m hint:[0m must be one of -, file, stdin
-  [1m[34m=[39m docs:[0m https://vast.io/docs/next/connectors
+  [1m[34m=[39m docs:[0m https://docs.tenzir.com/next/connectors
 ---
 {
   "@type": "vast::diagnostic",
@@ -37,7 +37,7 @@ error: loader `a/b/c.json` could not be found
     },
     {
       "kind": "docs",
-      "message": "https://vast.io/docs/next/connectors"
+      "message": "https://docs.tenzir.com/next/connectors"
     }
   ]
 }

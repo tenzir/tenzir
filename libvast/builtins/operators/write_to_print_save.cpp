@@ -38,7 +38,7 @@ namespace {
   diagnostic::error("printer `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://vast.io/docs/next/formats")
+    .docs("https://docs.tenzir.com/next/formats")
     .throw_();
 }
 
@@ -50,7 +50,7 @@ namespace {
   diagnostic::error("saver `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://vast.io/docs/next/connectors")
+    .docs("https://docs.tenzir.com/next/connectors")
     .throw_();
 }
 
@@ -138,7 +138,7 @@ class print_plugin final : public virtual operator_plugin<print_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "print <printer> <args>...";
-    auto docs = "https://vast.io/docs/next/operators/transformations/print";
+    auto docs = "https://docs.tenzir.com/next/operators/transformations/print";
     auto name = p.accept_shell_arg();
     if (!name) {
       diagnostic::error("expected printer name")
@@ -206,7 +206,7 @@ class save_plugin final : public virtual operator_plugin<save_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "save <saver> <args>...";
-    auto docs = "https://vast.io/docs/next/operators/sinks/save";
+    auto docs = "https://docs.tenzir.com/next/operators/sinks/save";
     auto name = p.accept_shell_arg();
     if (!name) {
       diagnostic::error("expected saver name", p.current_span())
@@ -301,7 +301,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "write <printer> <args>... [to <saver> <args>...]";
-    auto docs = "https://vast.io/docs/next/operators/sinks/write";
+    auto docs = "https://docs.tenzir.com/next/operators/sinks/write";
     auto l_name = p.accept_shell_arg();
     if (!l_name) {
       diagnostic::error("expected printer name")
@@ -381,7 +381,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "to <saver> <args>... [write <printer> <args>...]";
-    auto docs = "https://vast.io/docs/next/operators/sinks/to";
+    auto docs = "https://docs.tenzir.com/next/operators/sinks/to";
     auto l_name = p.accept_shell_arg();
     if (!l_name) {
       diagnostic::error("expected saver name")

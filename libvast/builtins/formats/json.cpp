@@ -516,6 +516,11 @@ struct config {
   }
 };
 
+auto add_common_options_to_parser(argument_parser& parser, config& cfg)
+  -> void {
+  parser.add("--no-infer", cfg.no_infer);
+}
+
 class json_parser final : public plugin_parser {
 public:
   json_parser() = default;
@@ -607,11 +612,11 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto cfg = config{};
     auto selector = std::optional<located<std::string>>{};
-    auto parser = argument_parser{"json", "https://vast.io/docs/next/"
-                                          "formats/json"};
+    auto parser
+      = argument_parser{"json", "https://docs.tenzir.com/next/formats/json"};
     parser.add("--selector", selector, "<selector>");
     parser.add("--unnest-separator", cfg.unnest_separator, "<separator>");
-    parser.add("--no-infer", cfg.no_infer);
+    add_common_options_to_parser(parser, cfg);
     parser.parse(p);
     if (selector) {
       cfg.selector = parse_selector(selector->inner, selector->source);
@@ -622,8 +627,8 @@ public:
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
     auto pretty = false;
-    auto parser = argument_parser{"json", "https://vast.io/docs/next/"
-                                          "formats/json"};
+    auto parser
+      = argument_parser{"json", "https://docs.tenzir.com/next/formats/json"};
     parser.add("--pretty", pretty);
     parser.parse(p);
     return std::make_unique<json_printer>(pretty);
@@ -640,8 +645,11 @@ public:
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    argument_parser{name()}.parse(p);
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/next/formats/{}", name())};
     auto cfg = config{};
+    add_common_options_to_parser(parser, cfg);
+    parser.parse(p);
     cfg.selector = parse_selector(Selector.str(), location::unknown);
     cfg.unnest_separator = Separator.str();
     return std::make_unique<json_parser>(std::move(cfg));
