@@ -236,12 +236,14 @@ private:
 struct saver_args {
   std::optional<located<std::string>> topic;
   std::optional<located<std::string>> key;
+  std::optional<located<std::string>> timestamp;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
-      .fields(f.field("topic", x.topic), f.field("key", x.key));
+      .fields(f.field("topic", x.topic), f.field("key", x.key),
+              f.field("timestamp", x.timestamp));
   }
 };
 
@@ -281,7 +283,12 @@ public:
     std::string key;
     if (args_.key)
       key = args_.key->inner;
-    return [&ctrl, client = *client, key = std::move(key),
+    time timestamp;
+    if (args_.timestamp) {
+      auto result = parsers::time(args_.timestamp->inner, timestamp);
+      VAST_ASSERT(result); // validated earlier
+    }
+    return [&ctrl, client = *client, key = std::move(key), ts = timestamp,
             topics = std::move(topics),
             guard = std::make_shared<decltype(guard)>(std::move(guard))](
              chunk_ptr chunk) mutable {
@@ -290,7 +297,7 @@ public:
       }
       for (const auto& topic : topics) {
         VAST_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
-        if (auto error = client.produce(topic, key, as_bytes(*chunk))) {
+        if (auto error = client.produce(topic, as_bytes(*chunk), key, ts)) {
           ctrl.abort(std::move(error));
           return;
         }
@@ -378,7 +385,13 @@ public:
     auto args = saver_args{};
     parser.add("-t,--topic", args.topic, "<topic>");
     parser.add("-k,--key", args.key, "<key>");
+    parser.add("-T,--timestamp", args.timestamp, "<time>");
     parser.parse(p);
+    if (args.timestamp)
+      if (!parsers::time(args.timestamp->inner))
+        diagnostic::error("could not parse `--timestamp` as time")
+          .primary(args.timestamp->source)
+          .throw_();
     return std::make_unique<kafka_saver>(std::move(args), config_);
   }
 

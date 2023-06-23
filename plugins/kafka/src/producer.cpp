@@ -27,10 +27,14 @@ auto producer::make(configuration config) -> caf::expected<producer> {
   return result;
 }
 
-auto producer::produce(std::string topic, std::string_view key, std::span<const
-    std::byte> bytes)
-  -> caf::error {
+auto producer::produce(std::string topic, std::span<const std::byte> bytes,
+                       std::string_view key, time timestamp) -> caf::error {
   auto done = false;
+  auto ms = int64_t{0};
+  if (timestamp != time{})
+    ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+           timestamp.time_since_epoch())
+           .count();
   while (!done) {
     auto result = producer_->produce(
       /// The message topic.
@@ -45,8 +49,8 @@ auto producer::produce(std::string topic, std::string_view key, std::span<const
       bytes.size(),
       // Message key.
       key.data(), key.size(),
-      // Timestamp (default to current time).
-      0,
+      // Timestamp (ms since UTC epoch; 0 = current time).
+      ms,
       // Per-message opaque value passed to delivery report.
       nullptr);
     switch (result) {

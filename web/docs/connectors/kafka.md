@@ -14,7 +14,8 @@ kafka [-t <topic>] [-c|--count <n>] [-e|--exit] [-o|--offset <offset>]
 Saver:
 
 ```
-kafka [-t <topic>] [-k|--key <key>] [-X|--set <key=value>]
+kafka [-t <topic>] [-k|--key <key>] [-T|--timestamp <time>]
+      [-X|--set <key=value>]
 
 ```
 
@@ -90,7 +91,11 @@ that they are indpendent of the `kafka` connector arguments.
 
 ### `-k|--key <key>` (Saver)
 
-Sets a fixed per-message key.
+Sets a fixed key for all messages.
+
+### `-T|--timestamp <time>` (Saver)
+
+Sets a fixed timestamp for all messages.
 
 ## Examples
 
@@ -106,10 +111,10 @@ Read Zeek Streaming JSON logs from topic `zeek` starting at the beginning:
 from kafka -t zeek -o beginning read zeek-json
 ```
 
-Write the Tenzir version to topic `tenzir`:
+Write the Tenzir version to topic `tenzir` with timestamp from the past:
 
 ```
-version | to kafka
+version | to kafka -T 1984-01-01
 ```
 
 Follow a CSV file and publish it to topic `data`:
