@@ -778,9 +778,10 @@ public:
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
     const auto p = required_ws_or_comment >> aggregation_function_list
-                   >> required_ws_or_comment >> ("by") >> required_ws_or_comment
-                   >> extractor_list >> -(required_ws_or_comment >> "resolution"
-                                          >> required_ws_or_comment >> duration)
+                   >> -(required_ws_or_comment >> "by" >> required_ws_or_comment
+                        >> extractor_list)
+                   >> -(required_ws_or_comment >> "resolution"
+                        >> required_ws_or_comment >> duration)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
                                       std::string>>,
