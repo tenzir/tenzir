@@ -318,8 +318,8 @@ auto zip_equal(T& x, Ts&... xs) -> detail::zip<T, Ts...> {
 class implementation {
 public:
   /// Divides the input into groups and feeds it to the aggregation function.
-  auto add(const table_slice& slice, const configuration& config,
-           diagnostic_handler& diag) -> caf::error {
+  void add(const table_slice& slice, const configuration& config,
+           diagnostic_handler& diag) {
     // Step 1: Resolve extractor names (if possible).
     auto it = bindings.find(slice.schema());
     if (it == bindings.end()) {
@@ -503,7 +503,6 @@ public:
     }
     update_bucket(*first_bucket, first_row,
                   detail::narrow<int64_t>(slice.rows()) - first_row);
-    return {};
   }
 
   /// Returns the summarization results after the input is done.
@@ -724,10 +723,7 @@ public:
         co_yield {};
         continue;
       }
-      if (auto error = impl.add(slice, config_, ctrl.diagnostics())) {
-        ctrl.abort(std::move(error));
-        co_return;
-      }
+      impl.add(slice, config_, ctrl.diagnostics());
     }
     for (auto&& result : std::move(impl).finish(config_)) {
       if (!result) {
