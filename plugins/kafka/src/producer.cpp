@@ -48,7 +48,7 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes,
       // The payload size.
       bytes.size(),
       // Message key.
-      key.data(), key.size(),
+      (key.empty() ? nullptr : key.data()), key.size(),
       // Timestamp (ms since UTC epoch; 0 = current time).
       ms,
       // Per-message opaque value passed to delivery report.
