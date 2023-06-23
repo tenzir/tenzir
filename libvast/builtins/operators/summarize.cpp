@@ -394,7 +394,7 @@ public:
         for (auto&& [aggr, column, cfg] :
              zip_equal(bucket.aggregations, bound.aggregation_columns,
                        config.aggregations)) {
-          if (!aggr.is_dead()) {
+          if (aggr.is_dead()) {
             continue;
           }
           if (!column) {
