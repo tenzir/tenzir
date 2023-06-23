@@ -143,37 +143,51 @@ echo "(You can skip these steps, but then only open source features will be"
 echo "available. Visit ${bold}https://tenzir.com/pricing${normal} for a" \
   "feature comparison.)"
 echo
-echo "Press ${green}ENTER${normal} to proceed with the installation."
+echo "Press ${green}ENTER${normal} to continue."
 read -r dummy_
 
 # Check for platform configuration.
+action "Checking for existence of platform configuration"
 if ! [ -f "${config}" ]
 then
+  echo "Could not find config at ${bold}${config}${normal}."
+  action "Using open source feature set"
   open_source=1
-fi
-if [ -n "${open_source}" ]
-then
-  echo "Could not find platform config at ${bold}${config}${normal}."
-  action "Using open source edition"
+else
+  echo "Found config at ${bold}${config}${normal}."
+  action "Using complete feature set"
 fi
 
 # Trigger installation.
+action "Installing package into ${prefix}"
 if ! check sudo
 then
   echo "Could not find ${bold}sudo${normal} in \$PATH."
   exit 1
 fi
-action "Installing package into ${prefix}"
 if [ "${platform}" = "Debian" ]
 then
+  cmd1="sudo dpkg -i \"${tmpdir}/${package}\""
+  cmd2="sudo systemctl status tenzir"
+  echo "Press ${green}ENTER${normal} to continue with the following commands:"
+  echo
+  echo "  - ${cmd1}"
+  echo "  - ${cmd2}"
+  echo
+  read -r dummy_
   action "Installing via dpkg"
-  sudo dpkg -i "${tmpdir}/${package}"
+  eval "${cmd1}"
   action "Checking node status"
-  sudo systemctl status tenzir
+  eval "${cmd2}"
 elif [ "${platform}" = "Linux" ]
 then
+  cmd1="sudo tar xzf \"${tmpdir}/${package}\" -C /"
+  echo "Press ${green}ENTER${normal} to continue with the following commands:"
+  echo
+  echo "  - ${cmd1}"
+  echo
   action "Unpacking tarball"
-  sudo tar xzf "${tmpdir}/${package}" -C /
+  eval "${cmd1}"
 fi
 
 # Test the installation.
