@@ -109,7 +109,7 @@ echo "Using ${package}"
 # Download package.
 base="https://github.com/tenzir/tenzir/releases/latest/download"
 url="${base}/${package}"
-tmpdir="$(mktemp -u)"
+tmpdir="$(dirname "$(mktemp -u)")"
 action "Downloading ${url}"
 if check wget
 then
