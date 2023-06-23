@@ -38,6 +38,7 @@ case no configuration file is present, or when the configuration does not
 include them:
 
 - `bootstrap.servers`: `localhost`
+- `client.id`: `tenzir`
 - `group.id`: `tenzir`
 
 The default format for the `kafka` connector is [`json`](../formats/json.md).

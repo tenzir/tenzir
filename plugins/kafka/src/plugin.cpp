@@ -327,6 +327,8 @@ public:
     config_ = config;
     if (!config_.contains("bootstrap.servers"))
       config_["bootstrap.servers"] = "localhost";
+    if (!config_.contains("client.id"))
+      config_["client.id"] = "tenzir";
     return caf::none;
   }
 
