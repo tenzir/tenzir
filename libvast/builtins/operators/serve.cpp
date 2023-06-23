@@ -697,14 +697,10 @@ struct serve_handler_state {
     }
     VAST_DEBUG("{} handles /serve request for endpoint id {} with params {}",
                *self, endpoint_id, params);
-    auto request = try_parse_request(params);
-    if (not request) {
-      rest_response::make_error(400,
-                                fmt::format(R"({{"error":{:?}}}{})",
-                                            fmt::to_string(request.error()),
-                                            '\n'),
-                                {});
-      return {};
+    auto maybe_request = try_parse_request(params);
+    if (auto* error = std::get_if<parse_error>(&maybe_request)) {
+      return rest_response::make_error(400, std::move(error->message),
+                                       std::move(error->detail));
     }
     auto rp = self->make_response_promise<rest_response>();
     self
