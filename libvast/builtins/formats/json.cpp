@@ -612,8 +612,8 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto cfg = config{};
     auto selector = std::optional<located<std::string>>{};
-    auto parser = argument_parser{"json", "https://vast.io/docs/next/"
-                                          "formats/json"};
+    auto parser
+      = argument_parser{"json", "https://docs.tenzir.com/next/formats/json"};
     parser.add("--selector", selector, "<selector>");
     parser.add("--unnest-separator", cfg.unnest_separator, "<separator>");
     add_common_options_to_parser(parser, cfg);
@@ -627,8 +627,8 @@ public:
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
     auto pretty = false;
-    auto parser = argument_parser{"json", "https://vast.io/docs/next/"
-                                          "formats/json"};
+    auto parser
+      = argument_parser{"json", "https://docs.tenzir.com/next/formats/json"};
     parser.add("--pretty", pretty);
     parser.parse(p);
     return std::make_unique<json_printer>(pretty);
@@ -645,10 +645,8 @@ public:
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto parser
-      = argument_parser{name(), fmt::format("https://vast.io/docs/next/"
-                                            "formats/{}",
-                                            name())};
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/next/formats/{}", name())};
     auto cfg = config{};
     add_common_options_to_parser(parser, cfg);
     parser.parse(p);

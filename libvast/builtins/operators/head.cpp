@@ -64,7 +64,7 @@ private:
 class plugin final : public virtual operator_plugin<head_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"head", "https://vast.io/docs/next/"
+    auto parser = argument_parser{"head", "https://docs.tenzir.com/next/"
                                           "operators/transformations/head"};
     auto count = std::optional<uint64_t>{};
     parser.add(count, "<limit>");
