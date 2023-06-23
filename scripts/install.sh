@@ -71,6 +71,10 @@ then
 elif [ "${os}" = "Darwin" ]
 then
   platform=macOS
+elif [ -z "${os}" ]
+then
+  echo "Could not identify platform."
+  exit 1
 fi
 echo "Found ${platform}."
 
