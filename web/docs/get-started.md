@@ -15,46 +15,50 @@ command line examples.
 
 Select your platform to download and install Tenzir.
 
+[tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.deb
+[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.tar.gz
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs>
 <TabItem value="universal" label="All Platforms" default>
 
-Let our installer take care of getting started:
+Use our installer to perform a platform-specific installation:
 
 ```bash
-curl https://get.tenzir.com/ | sh
+curl -L get.tenzir.app | sh
 ```
+
+The shell script asks you once to confirm the installation.
 
 </TabItem>
 <TabItem value="debian" label="Debian">
 
-Download the latest [Debian
-package](https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.deb)
-and install it via `dpdk`:
+Download the latest [Debian package][tenzir-debian-package] and install it via
+`dpkg`:
 
 ```bash
-dpdk -i tenzir-linux-static.deb
+dpkg -i tenzir-linux-static.deb
 ```
 
 </TabItem>
 <TabItem value="nix" label="Nix">
 
-We provide a `flake.nix` so that you can use
-`tenzir = "github:tenzir/tenzir/stable"` as an input in your own flake, or just
-try it out with:
+Try Tenzir with our `flake.nix`:
 
 ```bash
 nix run github:tenzir/tenzir/stable
 ```
 
+Install Tenzir by adding `github:tenzir/tenzir/stable` to your flake inputs, or
+use your preferred method to include third-party modules on classic NixOS.
+
 </TabItem>
 <TabItem value="linux" label="Linux">
 
-Download a tarball with our [static
-binary](https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.tar.gz)
-for all Linux distributions and unpack it into `/opt/tenzir`:
+Download a tarball with our [static binary][tenzir-tarball] for all Linux
+distributions and unpack it into `/opt/tenzir`:
 
 ```bash
 tar xzf tenzir-linux-static.tar.gz -C /
@@ -78,7 +82,7 @@ until we offer a native package.
 </TabItem>
 <TabItem value="docker" label="Docker">
 
-Pull the open source image:
+Pull the image:
 
 ```bash
 docker pull tenzir/tenzir
