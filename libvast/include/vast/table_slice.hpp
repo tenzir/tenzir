@@ -391,17 +391,24 @@ auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
 auto resolve_operand(const table_slice& slice, const operand& op)
   -> std::pair<type, std::shared_ptr<arrow::Array>>;
 
-/// @brief Unflattens the table slice (e.g a "foo.bar" field will be transformed
-/// into a "foo" record field with a "bar" child field). NOTICE: Doesn't support
-/// unflattening of nested records (list of records, record of records).
-/// @param slice Table slice to unflatten.
-/// @param nested_field_separator A string treated as a separator of a nested
-/// fields. E.g with a field "a.b" and a separator ".", the function will create
-/// a record field "a" that contains a field "b".
-/// @return Unflattened table slice which preserves the original slice schema
-/// name.
-auto unflatten(const table_slice& slice,
-               std::string_view nested_field_separator) -> table_slice;
+/// @related flatten
+struct flatten_result {
+  table_slice slice = {};
+  std::vector<std::string> renamed_fields = {};
+};
+
+/// Flattens a table slice such that it no longer contains nested data
+/// structures by joining nested records over the provided separator and merging
+/// nested lists. Flattening removes all null elements in lists.
+///
+/// The operator renames later occurences of conflicting joined field names by
+/// appending `_<idx>` to them, and returns a description of the renamed fields
+/// alongside the flattened slice.
+///
+/// @param slice The unflattened table slice.
+/// @param separator The separator to join record field names with.
+auto flatten(table_slice slice, std::string_view separator = ".")
+  -> flatten_result;
 
 } // namespace vast
 

@@ -281,6 +281,8 @@ tests:
       - command: '-N export csv "where #schema == /suricata.*/"'
       - command: '-N export zeek "where #schema == /suricata.alert/"'
       - command: -N export json --omit-nulls --omit-empty-records
+      - command: |
+          -N export json 'where #type != "suricata.dns" | flatten'
 
   Node suricata rrdata:
     tags: [node, import-export, suricata, eve]
@@ -289,6 +291,9 @@ tests:
         input: data/suricata/rrdata-eve.json
       - command: -N export ascii
       - command: -N export json
+        # TODO: We should test this with the `flatten` operator, but that is
+        # currently defunct for lists in records in lists.
+        # - command: -N export json 'flatten'
 
   Node argus csv:
     tags: [node, import-export, argus, csv]

@@ -164,19 +164,19 @@ TEST(batch transform nested column) {
     REQUIRE(new_array.ok());
     return {{field, new_array.MoveValueUnsafe()}};
   };
-  auto [schema, batch] = transform_columns(
-    slice.schema(), to_record_batch(slice), {{{2, 0}, transform_fn}});
-  REQUIRE(caf::holds_alternative<record_type>(schema));
+  auto output_slice = transform_columns(slice, {{{2, 0}, transform_fn}});
+  REQUIRE(caf::holds_alternative<record_type>(output_slice.schema()));
   const auto expected_t = record_type{
     {"f3.1", string_type{}},
     {"f3.2", int64_type{}},
   };
-  CHECK_EQUAL(caf::get<record_type>(schema).field(2).name, "f3_rec");
-  CHECK_EQUAL(
-    type{caf::get<record_type>(caf::get<record_type>(schema).field(2).type)},
-    type{expected_t});
+  CHECK_EQUAL(caf::get<record_type>(output_slice.schema()).field(2).name,
+              "f3_rec");
+  CHECK_EQUAL(type{caf::get<record_type>(
+                caf::get<record_type>(output_slice.schema()).field(2).type)},
+              type{expected_t});
   auto fp = arrow::FieldPath{2, 0};
-  auto col = fp.Get(*batch);
+  auto col = fp.Get(*to_record_batch(output_slice));
   if (!col.ok())
     FAIL(col.status().ToString());
   const auto& typed_col
