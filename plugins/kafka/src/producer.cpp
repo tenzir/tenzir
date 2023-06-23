@@ -44,6 +44,20 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes,
       // Make a copy of the buffer.
       RdKafka::Producer::RK_MSG_COPY,
       // The payload data.
+      // Following the call chain, it's unclear why librdkafka uses a non-const
+      // pointer here. The pointer should not be mutated. The pointer ends up as
+      // payload in rdkafka_msg.c and get's simply copied into rkm_payload:
+      //
+      //  if (payload && msgflags & RD_KAFKA_MSG_F_COPY) {
+      //          /* Copy payload to space following the ..msg_t */
+      //          rkm->rkm_payload = p;
+      //          memcpy(rkm->rkm_payload, payload, len);
+      //          p += len;
+      //  } else {
+      //          /* Just point to the provided payload. */
+      //          rkm->rkm_payload = payload;
+      //
+      // Further git-grepping for rkm_payload didn't show anything fishy.
       const_cast<char*>(reinterpret_cast<const char*>(bytes.data())),
       // The payload size.
       bytes.size(),
