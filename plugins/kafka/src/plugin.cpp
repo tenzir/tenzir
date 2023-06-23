@@ -35,6 +35,9 @@ namespace vast::plugins::kafka {
 
 namespace {
 
+// Default topic if the user doesn't provide one.
+constexpr auto default_topic = "tenzir";
+
 // Valid values:
 // - beginning | end | stored |
 // - <value>  (absolute offset) |
@@ -74,7 +77,7 @@ auto kvp_parser() {
 }
 
 struct loader_args {
-  located<std::string> topic;
+  std::optional<located<std::string>> topic;
   std::optional<located<size_t>> count;
   std::optional<location> exit;
   std::optional<located<std::string>> offset;
@@ -163,8 +166,9 @@ public:
     if (auto value = cfg->get("bootstrap.servers")) {
       VAST_INFO("kafka consumer connected to: {}", *value);
     }
-    VAST_INFO("kafka subscribes to topic {}", args_.topic.inner);
-    if (auto err = client->subscribe({args_.topic.inner})) {
+    auto topic = args_.topic ? args_.topic->inner : default_topic;
+    VAST_INFO("kafka subscribes to topic {}", topic);
+    if (auto err = client->subscribe({topic})) {
       ctrl.diagnostics().emit(
         diagnostic::error("failed to subscribe to topic: {}", err).done());
       return {};
@@ -230,7 +234,7 @@ private:
 };
 
 struct saver_args {
-  located<std::string> topic;
+  std::optional<located<std::string>> topic;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
@@ -250,7 +254,6 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto topics = std::vector<std::string>{args_.topic.inner};
     auto cfg = configuration::make(config_);
     if (!cfg) {
       VAST_ERROR("kafka failed to create configuration: {}", cfg.error());
@@ -272,6 +275,8 @@ public:
       if (num_messages > 0)
         VAST_ERROR("{} messages were not delivered", num_messages);
     });
+    auto topic = args_.topic ? args_.topic->inner : default_topic;
+    auto topics = std::vector<std::string>{std::move(topic)};
     return [&ctrl, topics = std::move(topics), client = *client,
             guard = std::make_shared<decltype(guard)>(std::move(guard))](
              chunk_ptr chunk) mutable {
@@ -345,11 +350,6 @@ public:
     // We use -X because that's standard in Kafka applications, cf. kcat.
     parser.add("-X,--set", args.options, "<key=value>,...");
     parser.parse(p);
-    if (args.topic.inner.empty()) {
-      diagnostic::error("`--topic` must not be empty")
-        .primary(args.topic.source)
-        .throw_();
-    }
     if (args.offset) {
       if (!offset_parser()(args.offset->inner))
         diagnostic::error("invalid `--offset` value")
@@ -373,11 +373,6 @@ public:
     auto args = saver_args{};
     parser.add("-t,--topic", args.topic, "<topic>");
     parser.parse(p);
-    if (args.topic.inner.empty()) {
-      diagnostic::error("`--topic` must not be empty")
-        .primary(args.topic.source)
-        .throw_();
-    }
     return std::make_unique<kafka_saver>(std::move(args), config_);
   }
 

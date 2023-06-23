@@ -7,14 +7,14 @@ Loads bytes from and saves bytes to Kafka.
 Loader:
 
 ```
-kafka -t <topic> [-c|--count <n>] [-e|--exit] [-o|--offset <offset>]
+kafka [-t <topic>] [-c|--count <n>] [-e|--exit] [-o|--offset <offset>]
       [-X|--set <key=value>,...]
 ```
 
 Saver:
 
 ```
-kafka -t <topic> [-X|--set <key=value>]
+kafka [-t <topic>] [-X|--set <key=value>]
 
 ```
 
@@ -46,6 +46,8 @@ The default format for the `kafka` connector is [`json`](../formats/json.md).
 ### `-t|--topic <topic>` (Loader, Saver)
 
 The Kafka topic use.
+
+Defaults to `tenzir`.
 
 ### `-c|--count <n>` (Loader)
 
@@ -91,7 +93,7 @@ that they are indpendent of the `kafka` connector arguments.
 Read 100 JSON messages from the topic `tenzir`:
 
 ```
-from kafka -t tenzir -c 100 read json
+from kafka -c 100 read json
 ```
 
 Read Zeek Streaming JSON logs from topic `zeek` starting at the beginning:
@@ -103,7 +105,7 @@ from kafka -t zeek -o beginning read zeek-json
 Write the Tenzir version to topic `tenzir`:
 
 ```
-version | to kafka -t tenzir
+version | to kafka
 ```
 
 Follow a CSV file and publish it to topic `data`:
