@@ -736,6 +736,17 @@ public:
     return "zeek-tsv";
   }
 
+  auto
+  accepts_file_path([[maybe_unused]] const std::filesystem::path& path) const
+    -> bool override {
+    return false;
+  }
+
+  auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool override {
+    return path.extension() == ".tsv";
+  }
+
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     argument_parser{"zeek-tsv", "https://vast.io/docs/next/formats/zeek-tsv"}

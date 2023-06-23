@@ -400,6 +400,17 @@ class plugin final : public virtual reader_plugin,
     return "cef";
   }
 
+  auto
+  accepts_file_path([[maybe_unused]] const std::filesystem::path& path) const
+    -> bool override {
+    return false;
+  }
+
+  auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool override {
+    return path.extension() == fmt::format(".{}", reader_format());
+  }
+
   [[nodiscard]] const char* reader_help() const override {
     return "imports logs in Common Event Format (CEF)";
   }

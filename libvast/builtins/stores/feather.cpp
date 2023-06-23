@@ -282,6 +282,17 @@ class plugin final : public virtual store_plugin {
     return "feather";
   }
 
+  auto
+  accepts_file_path([[maybe_unused]] const std::filesystem::path& path) const
+    -> bool override {
+    return false;
+  }
+
+  auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool override {
+    return path.extension() == ".feather";
+  }
+
   [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>
   make_passive_store() const override {
     return std::make_unique<passive_feather_store>();
