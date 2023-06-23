@@ -326,7 +326,7 @@ public:
     if (!config_.contains("bootstrap.servers"))
       config_["bootstrap.servers"] = "localhost";
     if (!config_.contains("group.id"))
-      config_["group.id"] = "rdkafka_consumer_example";
+      config_["group.id"] = "tenzir";
     return caf::none;
   }
 
