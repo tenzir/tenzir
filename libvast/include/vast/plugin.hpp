@@ -440,6 +440,17 @@ class loader_plugin : public virtual loader_inspection_plugin<Loader>,
 
 // -- parser plugin -----------------------------------------------------------
 
+class file_io_plugin : public virtual plugin {
+public:
+  virtual auto accepts_file_path(const std::filesystem::path& path) const
+    -> bool
+    = 0;
+
+  virtual auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool
+    = 0;
+};
+
 class plugin_parser {
 public:
   virtual ~plugin_parser() = default;
@@ -453,18 +464,10 @@ public:
 };
 
 /// @see operator_parser_plugin
-class parser_parser_plugin : public virtual plugin {
+class parser_parser_plugin : public virtual file_io_plugin {
 public:
   virtual auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser>
-    = 0;
-
-  virtual auto accepts_file_path(const std::filesystem::path& path) const
-    -> bool
-    = 0;
-
-  virtual auto accepts_file_extension(const std::filesystem::path& path) const
-    -> bool
     = 0;
 };
 
@@ -527,8 +530,8 @@ public:
   virtual auto allows_joining() const -> bool = 0;
 };
 
-/// @see operator_parser_plugin
-class printer_parser_plugin : public virtual plugin {
+/// @see operator_parser_plugin^
+class printer_parser_plugin : public virtual file_io_plugin {
 public:
   virtual auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer>
@@ -872,9 +875,7 @@ extern const char* VAST_PLUGIN_VERSION;
     struct auto_register_plugin;                                               \
     template <>                                                                \
     struct auto_register_plugin<name> {                                        \
-      auto_register_plugin() {                                                 \
-        static_cast<void>(flag);                                               \
-      }                                                                        \
+      auto_register_plugin() { static_cast<void>(flag); }                      \
       static auto init() -> bool {                                             \
         ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
           new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \
@@ -889,9 +890,7 @@ extern const char* VAST_PLUGIN_VERSION;
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     struct auto_register_type_id_##name {                                      \
-      auto_register_type_id_##name() {                                         \
-        static_cast<void>(flag);                                               \
-      }                                                                        \
+      auto_register_type_id_##name() { static_cast<void>(flag); }              \
       static auto init() -> bool {                                             \
         ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name::begin,           \

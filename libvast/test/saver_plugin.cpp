@@ -62,15 +62,20 @@ struct fixture {
     }
   };
 
+  auto make_saver(std::string_view name, std::string args)
+    -> std::unique_ptr<plugin_saver> {
+    saver_plugin = vast::plugins::find<vast::saver_parser_plugin>(name);
+    REQUIRE(saver_plugin);
+    auto diag = null_diagnostic_handler{};
+    auto p = tql::make_parser_interface(std::move(args), diag);
+    return saver_plugin->parse_saver(*p);
+  }
+
   fixture() {
     // TODO: Move this into a separate fixture when we are starting to test more
     // than one saver type.
-    saver_plugin = vast::plugins::find<vast::saver_parser_plugin>("stdout");
-    REQUIRE(saver_plugin);
-    auto diag = null_diagnostic_handler{};
-    auto p = tql::make_parser_interface("", diag);
     auto saver
-      = saver_plugin->parse_saver(*p)->instantiate(control_plane, std::nullopt);
+      = make_saver("stdout", "")->instantiate(control_plane, std::nullopt);
     REQUIRE(saver);
     current_saver = std::move(*saver);
   }
@@ -155,6 +160,14 @@ TEST(stdout saver - multiple chunks) {
   auto output = capture.flush_captured_stdout_output();
   REQUIRE_EQUAL(states.size(), size_t{2});
   REQUIRE_EQUAL(output, "first output\nsecond output\n");
+}
+
+TEST(file saver - printer deduction) {
+  CHECK_EQUAL(make_saver("file", "foo.csv")->default_printer(), "csv");
+  CHECK_EQUAL(make_saver("file", "foo.ndjson")->default_printer(), "json");
+  // We don't have a suricata printer, only parser -> default to JSON
+  CHECK_EQUAL(make_saver("file", "eve.json")->default_printer(), "json");
+  CHECK_EQUAL(make_saver("file", "-")->default_printer(), "json");
 }
 
 FIXTURE_SCOPE_END()

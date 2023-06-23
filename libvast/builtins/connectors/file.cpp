@@ -56,6 +56,38 @@ auto expand_path(std::string path) -> std::string {
   return path;
 }
 
+auto find_default_io(const std::filesystem::path& file_path,
+                     std::string_view obj) -> const file_io_plugin* {
+  const file_io_plugin* default_io = nullptr;
+  for (const auto* plugin : plugins::get<file_io_plugin>()) {
+    if (plugin->accepts_file_path(file_path)) {
+      if (default_io) {
+        diagnostic::error("could not determine default {0} for file path "
+                          "`{1}`: {0}s `{2}` and `{3}` both accept file path",
+                          obj, file_path, plugin->name(), default_io->name())
+          .throw_();
+      }
+      default_io = plugin;
+    }
+  }
+  if (default_io) {
+    return default_io;
+  }
+  for (const auto* plugin : plugins::get<file_io_plugin>()) {
+    if (plugin->accepts_file_extension(file_path)) {
+      if (default_io) {
+        diagnostic::error("could not determine default {0} for file path "
+                          "`{1}`: {0}s `{2}` and `{3}` both accept file "
+                          "extension",
+                          obj, file_path, plugin->name(), default_io->name())
+          .throw_();
+      }
+      default_io = plugin;
+    }
+  }
+  return default_io;
+}
+
 class writer {
 public:
   virtual ~writer() = default;
@@ -351,35 +383,7 @@ public:
   }
 
   auto default_parser() const -> std::string override {
-    const parser_parser_plugin* default_parser = nullptr;
-    for (const auto* plugin : plugins::get<parser_parser_plugin>()) {
-      if (plugin->accepts_file_path(args_.path.inner)) {
-        if (default_parser) {
-          diagnostic::error("could not determine default parser for file path "
-                            "`{}`: parsers `{}` and `{}` both accept file path",
-                            args_.path.inner, plugin->name(),
-                            default_parser->name())
-            .throw_();
-        }
-        default_parser = plugin;
-      }
-    }
-    if (default_parser) {
-      return default_parser->name();
-    }
-    for (const auto* plugin : plugins::get<parser_parser_plugin>()) {
-      if (plugin->accepts_file_extension(args_.path.inner)) {
-        if (default_parser) {
-          diagnostic::error("could not determine default parser for file path "
-                            "`{}`: parsers `{}` and `{}` both accept file "
-                            "extension",
-                            args_.path.inner, plugin->name(),
-                            default_parser->name())
-            .throw_();
-        }
-        default_parser = plugin;
-      }
-    }
+    const auto* default_parser = find_default_io(args_.path.inner, "parser");
     return default_parser ? default_parser->name()
                           : plugin_loader::default_parser();
   }
@@ -401,6 +405,12 @@ public:
 
   auto name() const -> std::string override {
     return "file";
+  }
+
+  auto default_printer() const -> std::string override {
+    const auto* default_printer = find_default_io(args_.path.inner, "printer");
+    return default_printer ? default_printer->name()
+                           : plugin_saver::default_printer();
   }
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
