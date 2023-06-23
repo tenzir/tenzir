@@ -947,8 +947,7 @@ tests:
       # NS
       - command: exec 'read zeek-json | summarize x=distinct(y) by id.orig_h'
         input: data/zeek/zeek.json
-      # SN: There is only one group (`z == null`). For some of its schemas,
-      #     `id.orig_h` does not exist. Thus, `x` is set to `null`.
+      # SN
       - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by z'
         input: data/zeek/zeek.json
       # AS

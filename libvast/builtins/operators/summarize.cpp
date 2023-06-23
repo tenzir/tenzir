@@ -345,44 +345,43 @@ public:
       if (auto it = buckets.find(reusable_key_view); it != buckets.end()) {
         auto&& bucket = *it->second;
         // Check that the group-by values also have matching types.
-        for (auto&& [existing, other] :
+        for (auto [existing, other] :
              zip_equal(bucket.group_by_types, bound.group_by_columns)) {
           if (!other) {
             // If this group-by column does not exist in the input schema, we
-            // already warned. We assume `null` values and ignore its type.
+            // already warned and can ignore it.
             continue;
           }
-          if (!existing.has_value()) {
-            // In this case, we already encountered a type mismatch for this
-            // group. We already warned, and the output will `null`.
+          if (existing.is_dead()) {
             continue;
           }
-          if (other->type != *existing) {
-            // If the types mismatch, we have found equal values with not-equal
-            // types. This can happen e.g. for `null` values.
-            if (!*existing) {
-              // In this case, we found a bucket for a schema which does not
-              // have the group-by extractor at all (hence the type is also
-              // `null`). Thus, we can just change the type.
-              static_assert(std::is_reference_v<decltype(existing)>);
-              *existing = other->type;
-            } else {
-              auto pruned = existing->prune();
-              if (pruned == other->type.prune()) {
-                // If the type mismatch is only caused by metadata, we remove
-                // it. This for example can unify `:port` and `:uint64` into
-                // `:uint64`, which we consider an acceptable conversion.
-                *existing = pruned;
-              } else {
-                // Otherwise, we have a bucket (and thus matching data) where
-                // the types are conflicting. This can only happen if the
-                // conflicting group column has `null` values.
-                VAST_WARN("summarize found matching group for key `{}`, "
-                          "but the existing type `{}` clashes with `{}`",
-                          reusable_key_view, existing, other->type);
-                existing = std::nullopt;
-              }
-            }
+          if (existing.is_empty()) {
+            // If the group-by column did not have a type before (because the
+            // column was missing when the group was created), we can set it here.
+            existing.set_active(other->type);
+            continue;
+          }
+          auto existing_type = existing.get_active();
+          if (other->type == existing_type) {
+            // No conflict, nothing to do.
+            continue;
+          }
+          // Otherwise, there is a type mismatch for the same data. This can
+          // only happen with `null` or metadata mismatches.
+          auto pruned = existing_type.prune();
+          if (other->type.prune() == pruned) {
+            // If the type mismatch is only caused by metadata, we remove
+            // it. This for example can unify `:port` and `:uint64` into
+            // `:uint64`, which we consider an acceptable conversion.
+            existing.set_active(std::move(pruned));
+          } else {
+            // Otherwise, we have a bucket (and thus matching data) where
+            // the types are conflicting. This can only happen if the
+            // conflicting group columns both have `null` values.
+            VAST_WARN("summarize found matching group for key `{}`, "
+                      "but the existing type `{}` clashes with `{}`",
+                      reusable_key_view, existing_type, other->type);
+            existing.set_dead();
           }
         }
         // Check that the aggregation extractors have the same type.
@@ -404,15 +403,15 @@ public:
               = cfg.function->make_aggregation_function(column->type);
             // We would have set `column` to `std::nullopt` if this fails.
             VAST_ASSERT(instance);
-            aggr.set_function(std::move(*instance));
+            aggr.set_active(std::move(*instance));
             continue;
           }
-          VAST_ASSERT(aggr.is_function());
-          auto& func = aggr.get_function();
-          if (func.input_type() != column->type) {
+          auto& func = aggr.get_active();
+          VAST_ASSERT(func);
+          if (func->input_type() != column->type) {
             VAST_WARN("summarize aggregation function for group `{}` "
                       "expected type `{}`, but got `{}`",
-                      reusable_key_view, func.input_type(), column->type);
+                      reusable_key_view, func->input_type(), column->type);
             aggr.set_dead();
           }
         }
@@ -423,10 +422,10 @@ public:
       new_bucket->group_by_types.reserve(bound.group_by_columns.size());
       for (auto&& column : bound.group_by_columns) {
         if (column) {
-          new_bucket->group_by_types.emplace_back(column->type);
+          new_bucket->group_by_types.push_back(
+            group_type::make_active(column->type));
         } else {
-          // We use `type{}` as a special value here to denote a missing column.
-          new_bucket->group_by_types.emplace_back(type{});
+          new_bucket->group_by_types.push_back(group_type::make_empty());
         }
       }
       new_bucket->aggregations.reserve(bound.aggregation_columns.size());
@@ -445,7 +444,7 @@ public:
           // for the column type when binding the schema.
           VAST_ASSERT(instance);
           new_bucket->aggregations.push_back(
-            aggregation::from_function(std::move(*instance)));
+            aggregation::make_active(std::move(*instance)));
         } else {
           // If the column does not exist, we cannot instantiate the function
           // yet because we don't know which type to use.
@@ -466,14 +465,14 @@ public:
           // If the input column does not exist, we have nothing to do.
           continue;
         }
-        if (!aggr.is_function()) {
+        if (!aggr.is_active()) {
           // If the aggregation is dead, we have nothing to do. If it is
           // empty, we know that the aggregation column does not exist in
           // this schema, and thus have nothing to do as well. The only
           // remaining case to handle is where it is a function.
           continue;
         }
-        aggr.get_function().add(*(*input)->Slice(offset, length));
+        aggr.get_active()->add(*(*input)->Slice(offset, length));
       }
     };
     // Step 3: Iterate over all rows of the batch, and determine a slidin window
@@ -511,20 +510,19 @@ public:
         auto fields = std::vector<record_type::field_view>{};
         fields.reserve(config.group_by_extractors.size()
                        + config.aggregations.size());
-        for (auto&& [extractor, group_type] :
+        for (auto&& [extractor, group] :
              zip_equal(config.group_by_extractors, bucket->group_by_types)) {
-          auto ty = group_type.value_or(type{});
-          // Since there is no `null` type, we use `string` as a fallback for now.
-          ty = ty ? ty : type{string_type{}};
-          fields.emplace_back(extractor, ty);
+          // Since there is no `null` type, we use `string` as a fallback here.
+          fields.emplace_back(extractor, group.is_active()
+                                           ? group.get_active()
+                                           : type{string_type{}});
         }
         for (auto&& [aggr, cfg] :
              zip_equal(bucket->aggregations, config.aggregations)) {
-          if (aggr.is_function()) {
-            fields.emplace_back(cfg.output, aggr.get_function().output_type());
-          } else {
-            fields.emplace_back(cfg.output, type{string_type{}});
-          }
+          // Same as above.
+          fields.emplace_back(cfg.output, aggr.is_active()
+                                            ? aggr.get_active()->output_type()
+                                            : type{string_type{}});
         }
         return {"tenzir.summarize", record_type{fields}};
       });
@@ -538,13 +536,11 @@ public:
                                              status.ToString()));
         co_return;
       }
-      VAST_ASSERT(bucket->group_by_types.size() == group.size());
+      // Assign data of group-by fields.
       for (auto i = size_t{0}; i < group.size(); ++i) {
         auto col = detail::narrow<int>(i);
-        // TODO: group_by_types
-        auto ty = bucket->group_by_types[i].value_or(type{});
-        status = append_builder(ty ? ty : type{string_type{}},
-                                *builder->field_builder(col),
+        auto ty = caf::get<record_type>(output_schema).field(i).type;
+        status = append_builder(ty, *builder->field_builder(col),
                                 make_data_view(group[i]));
         if (!status.ok()) {
           co_yield caf::make_error(
@@ -553,12 +549,13 @@ public:
           co_return;
         }
       }
+      // Assign data of aggregations.
       for (auto i = size_t{0}; i < bucket->aggregations.size(); ++i) {
         auto col = detail::narrow<int>(group.size() + i);
-        if (bucket->aggregations[i].is_function()) {
-          auto& func = bucket->aggregations[i].get_function();
-          auto output_type = func.output_type();
-          auto value = std::move(func).finish();
+        if (bucket->aggregations[i].is_active()) {
+          auto& func = bucket->aggregations[i].get_active();
+          auto output_type = func->output_type();
+          auto value = std::move(*func).finish();
           if (!value) {
             // TODO: We could warn instead and insert `null`.
             co_yield std::move(value.error());
@@ -593,51 +590,58 @@ public:
   }
 
 private:
-  /// Every aggregation column can be in one of three states:
+  /// This class takes a `T` that is contextually convertible to `bool`. It
+  /// exposes three states: The state is `empty` if the underlying value is
+  /// false. This class does not allow access to the value in that case. Other
+  /// values of `T` correspond to the state `active`. This class also adds a
+  /// third state, `dead`, which also does not allow accessing the value.
   ///
-  /// - `dead`: There was an error (currently only: type clash in input columns).
-  ///   We never change away from this state once we are there. The result of
-  ///   the aggregation will be `null`.
+  /// To show how this is used, let us consider the aggregation columns, which
+  /// use `T = std::unique_ptr<aggregation_function>`.
   ///
-  /// - `function: An active aggregation function for a specific type. Can
+  /// - `dead`: There was an error, which we only get if there was a type clash
+  ///   in the input columns. We never change away from this state once we are
+  ///   there. The result of the aggregation will be `null`.
+  ///
+  /// - `active: An active aggregation function for a specific type. Can
   ///   change to `dead` if an error occurs.
   ///
   /// - `empty`: If we create a group, but the input column is missing, then we
   ///   don't know how to instantiate the function yet. This state can change to
   ///   `function` once the group receives a schema where the column exists. If
-  ///   the aggregation stays `empty` until the end, we TODO
-  class aggregation {
+  ///   the aggregation stays `empty` until the end, we emit `null`.
+  template <class T>
+  class dead_empty_or {
   public:
-    static auto make_empty() -> aggregation {
-      return aggregation{nullptr};
+    static auto make_empty() -> dead_empty_or {
+      return dead_empty_or{T{}};
     }
 
-    static auto from_function(std::unique_ptr<aggregation_function> func)
-      -> aggregation {
-      VAST_ASSERT(func);
-      return aggregation{std::move(func)};
+    static auto make_active(T x) -> dead_empty_or {
+      VAST_ASSERT(x);
+      return dead_empty_or{std::move(x)};
     }
 
     auto is_dead() const -> bool {
       return !state_.has_value();
     }
 
-    auto is_function() const -> bool {
-      return state_ && (*state_ != nullptr);
+    auto is_active() const -> bool {
+      return state_ && *state_;
     }
 
     auto is_empty() const -> bool {
-      return state_ && (*state_ == nullptr);
+      return state_ && !*state_;
     }
 
-    void set_function(std::unique_ptr<aggregation_function> func) {
-      VAST_ASSERT(func);
-      state_ = std::move(func);
+    void set_active(T x) {
+      VAST_ASSERT(x);
+      state_ = std::move(x);
     }
 
-    auto get_function() -> aggregation_function& {
-      VAST_ASSERT(is_function());
-      return **state_;
+    auto get_active() -> T& {
+      VAST_ASSERT(is_active());
+      return *state_;
     }
 
     void set_dead() {
@@ -645,13 +649,14 @@ private:
     }
 
   private:
-    explicit aggregation(
-      std::optional<std::unique_ptr<aggregation_function>> state)
-      : state_{std::move(state)} {
+    explicit dead_empty_or(std::optional<T> state) : state_{std::move(state)} {
     }
 
-    std::optional<std::unique_ptr<aggregation_function>> state_;
+    std::optional<T> state_;
   };
+
+  using group_type = dead_empty_or<type>;
+  using aggregation = dead_empty_or<std::unique_ptr<aggregation_function>>;
 
   /// The buckets to aggregate into. Essentially, this is an ordered list of
   /// aggregation functions which are incrementally fed input from rows with
@@ -663,7 +668,7 @@ private:
     /// column (which can get upgraded to another type if we encounter a column
     /// that has a `null` value but exists), and `std::nullopt` denotes a type
     /// conflict (which always results in `null` and cannot get upgraded.)
-    std::vector<std::optional<type>> group_by_types;
+    std::vector<group_type> group_by_types;
 
     /// The aggregation column functions. The optional is empty if there was an
     /// error that forces the output to be `null`, for example because there was
