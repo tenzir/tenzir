@@ -102,8 +102,7 @@ else
   echo "  2. Build from source"
   echo
   echo "Visit ${bold}https://docs.tenzir.com${normal} for further instructions."
-  #exit 1
-  package="vast-linux-static.tar.gz"
+  exit 1
 fi
 echo "Using ${package}"
 
