@@ -220,7 +220,8 @@ struct binding {
   std::vector<std::optional<column>> aggregation_columns;
 
   /// Resolve all aggregation and group-by columns for a given schema.
-  static auto make(const type& schema, const configuration& config) -> binding {
+  static auto make(const type& schema, const configuration& config,
+                   diagnostic_handler& diag) -> binding {
     auto result = binding{};
     result.group_by_columns.reserve(config.group_by_extractors.size());
     result.aggregation_columns.reserve(config.aggregations.size());
@@ -231,8 +232,10 @@ struct binding {
         result.group_by_columns.emplace_back(
           column{std::move(*offset), std::move(type)});
       } else {
-        VAST_WARN("group-by column `{}` does not exist for schema `{}`", field,
-                  schema.name());
+        diagnostic::warning("group-by column `{}` does not exist for schema "
+                            "`{}`",
+                            field, schema.name())
+          .emit(diag);
         result.group_by_columns.emplace_back(std::nullopt);
       }
     }
@@ -245,15 +248,18 @@ struct binding {
         // error and the missing case later on.
         auto instantiation = aggr.function->make_aggregation_function(type);
         if (!instantiation) {
-          VAST_WARN("cannot instantiate `{}` with `{}` for schema `{}`: {}",
-                    aggr.function->name(), type, schema.name(),
-                    instantiation.error());
+          diagnostic::warning(
+            "cannot instantiate `{}` with `{}` for schema `{}`: {}",
+            aggr.function->name(), type, schema.name(), instantiation.error())
+            .emit(diag);
         }
         result.aggregation_columns.emplace_back(
           column{std::move(*offset), std::move(type)});
       } else {
-        VAST_WARN("aggregation column `{}` does not exist for schema `{}`",
-                  aggr.input, schema.name());
+        diagnostic::warning("aggregation column `{}` does not exist for schema "
+                            "`{}`",
+                            aggr.input, schema.name())
+          .emit(diag);
         result.aggregation_columns.emplace_back(std::nullopt);
       }
     }
@@ -312,13 +318,13 @@ auto zip_equal(T& x, Ts&... xs) -> detail::zip<T, Ts...> {
 class implementation {
 public:
   /// Divides the input into groups and feeds it to the aggregation function.
-  auto add(const table_slice& slice, const configuration& config)
-    -> caf::error {
+  auto add(const table_slice& slice, const configuration& config,
+           diagnostic_handler& diag) -> caf::error {
     // Step 1: Resolve extractor names (if possible).
     auto it = bindings.find(slice.schema());
     if (it == bindings.end()) {
       it = bindings.try_emplace(it, slice.schema(),
-                                binding::make(slice.schema(), config));
+                                binding::make(slice.schema(), config, diag));
     }
     auto const& bound = it->second;
     // Step 2: Collect the aggregation columns and group-by columns into arrays.
@@ -377,9 +383,10 @@ public:
             // Otherwise, we have a bucket (and thus matching data) where
             // the types are conflicting. This can only happen if the
             // conflicting group columns both have `null` values.
-            VAST_WARN("summarize found matching group for key `{}`, "
-                      "but the existing type `{}` clashes with `{}`",
-                      reusable_key_view, existing_type, other->type);
+            diagnostic::warning("summarize found matching group for key `{}`, "
+                                "but the existing type `{}` clashes with `{}`",
+                                reusable_key_view, existing_type, other->type)
+              .emit(diag);
             existing.set_dead();
           }
         }
@@ -410,9 +417,11 @@ public:
           auto& func = aggr.get_active();
           VAST_ASSERT(func);
           if (func->input_type() != column->type) {
-            VAST_WARN("summarize aggregation function for group `{}` "
-                      "expected type `{}`, but got `{}`",
-                      reusable_key_view, func->input_type(), column->type);
+            diagnostic::warning("summarize aggregation function for group `{}` "
+                                "expected type `{}`, but got `{}`",
+                                reusable_key_view, func->input_type(),
+                                column->type)
+              .emit(diag);
             aggr.set_dead();
           }
         }
@@ -715,7 +724,7 @@ public:
         co_yield {};
         continue;
       }
-      if (auto error = impl.add(slice, config_)) {
+      if (auto error = impl.add(slice, config_, ctrl.diagnostics())) {
         ctrl.abort(std::move(error));
         co_return;
       }
