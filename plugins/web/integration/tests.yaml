@@ -86,3 +86,14 @@ tests:
     steps:
       - command: "@./scripts/serve.sh"
         prepend_vast: false
+  Serve Errors:
+    tags: [rest, serve]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/conn.log.gz
+      - command: flush
+      - command: curl -XPOST http://127.0.0.1:42025/api/v0/serve
+        prepend_vast: false
+      - command: curl -XPOST http://127.0.0.1:42025/api/v0/serve?serve_id=foo&timeout=10m
+        prepend_vast: false
