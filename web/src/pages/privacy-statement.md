@@ -31,7 +31,7 @@ how to object to the use of your personal data, please visit the section
 
 We host this website on [GitHub Pages](https://pages.github.com). The web site
 is open source and you can inspect the source code at
-<https://github.com/tenzir/vast>.
+<https://github.com/tenzir/tenzir>.
 
 By visiting this website, Github collects information (e.g., in the form of web
 server log files), including your IP address, your browser type, language
@@ -51,7 +51,7 @@ with GDPR, CCPA and PECR**. Plausible is made and hosted in the EU, powered by
 European-owned cloud infrastructure.
 
 For maximum transparency, we share our analytics dashboard publicly at
-<https://plausible.io/vast.io>.
+<https://plausible.io/docs.tenzir.com>.
 
 Please refer to Plausible's [data policy](https://plausible.io/data-policy) for
 a complete list of collected metrics.

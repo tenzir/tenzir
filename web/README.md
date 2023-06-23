@@ -1,8 +1,8 @@
-# VAST Website
+# Tenzir Website
 
-This directory contains code and content of the official VAST website at
-https://vast.io. We use [Docusaurus](https://docusaurus.io/) as driving
-framework and an [enhanced flavor of
+This directory contains code and content of the official Tenzir documentation
+site at <https://docs.tenzir.com> We use [Docusaurus](https://docusaurus.io/) as
+driving framework and an [enhanced flavor of
 Markdown](https://docusaurus.io/docs/markdown-features) for primary content.
 
 ## Structure
@@ -18,10 +18,8 @@ Key files and directories of the `/web` directory include:
 ## Adding and Editing Content
 
 Please consult the section on [writing
-documentation](https://vast.io/docs/develop/write-documentation) for
-instructions on how to change existing or add new content (which corresponds
-to the local file
-[`/docs/develop/write-documentation.md`](/docs/develop/write-documentation.md)).
+documentation](https://docs.tenzir.com/next/contribute/documentation) for
+instructions on how to change existing or add new content.
 
 ## Build and View Locally
 

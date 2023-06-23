@@ -352,7 +352,7 @@ async function createConfig() {
         src: 'https://plausible.io/js/script.js',
         aysnc: true,
         defer: true,
-        'data-domain': 'vast.io',
+        'data-domain': 'docs.tenzir.com',
       },
     ],
   };
