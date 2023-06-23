@@ -31,7 +31,7 @@ how to object to the use of your personal data, please visit the section
 
 We host this website on [GitHub Pages](https://pages.github.com). The web site
 is open source and you can inspect the source code at
-<https://github.com/tenzir/vast>.
+<https://github.com/tenzir/tenzir>.
 
 By visiting this website, Github collects information (e.g., in the form of web
 server log files), including your IP address, your browser type, language
