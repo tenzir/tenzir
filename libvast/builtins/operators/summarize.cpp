@@ -345,21 +345,36 @@ public:
             // assume `null` values and ignore its type.
             continue;
           }
-          if (other->type != existing) {
+          if (!existing) {
+            // In this case, we already encountered a type mismatch for this
+            // group.
+            continue;
+          }
+          if (other->type != *existing) {
             // If the types mismatch, we have found equal values with not-equal
             // types. This can happen e.g. for `null` values. TODO: Prune type?
-            if (existing == type{}) {
+            if (!*existing) {
               // In this case, we found a bucket for a schema which does not
               // have the group-by extractor at all (hence the type is also
               // `null`). Thus, we can just change the type.
               static_assert(std::is_reference_v<decltype(existing)>);
-              existing = other->type;
+              *existing = other->type;
             } else {
-              return caf::make_error(
-                ec::type_clash,
-                fmt::format("summarize found matching group for key `{}`, but "
-                            "the existing type `{}` clashes with `{}`",
-                            reusable_key_view, existing, other->type));
+              auto pruned = existing->prune();
+              if (pruned == other->type.prune()) {
+                // If the type mismatch is only caused by metadata, we remove
+                // it. This for example can unify `:port` and `:uint64` into
+                // `:uint64`, which we consider an acceptable conversion.
+                *existing = pruned;
+              } else {
+                // Otherwise, we have a bucket (and thus matching data) where
+                // the types are conflicting. This can only happen if the
+                // conflicting group column has `null` values.
+                VAST_WARN("summarize found matching group for key `{}`, "
+                          "but the existing type `{}` clashes with `{}`",
+                          reusable_key_view, existing, other->type);
+                existing = std::nullopt;
+              }
             }
           }
         }
@@ -385,9 +400,9 @@ public:
       new_bucket->group_by_types.reserve(bound.group_by_columns.size());
       for (auto&& column : bound.group_by_columns) {
         if (column) {
-          new_bucket->group_by_types.push_back(column->type);
+          new_bucket->group_by_types.emplace_back(column->type);
         } else {
-          new_bucket->group_by_types.emplace_back();
+          new_bucket->group_by_types.emplace_back(type{});
         }
       }
       new_bucket->functions.reserve(bound.aggregation_columns.size());
@@ -476,8 +491,10 @@ public:
                        + config.aggregations.size());
         for (auto&& [extractor, group_type] :
              detail::zip(config.group_by_extractors, bucket->group_by_types)) {
-          fields.emplace_back(
-            extractor, group_type == type{} ? type{string_type{}} : group_type);
+          auto ty = group_type.value_or(type{});
+          // Since there is no `null` type, we use `string` as a fallback for now.
+          ty = ty ? ty : type{string_type{}};
+          fields.emplace_back(extractor, ty);
         }
         for (auto&& [aggr, aggr_col] :
              detail::zip(config.aggregations, bucket->functions)) {
@@ -501,11 +518,9 @@ public:
       for (auto i = size_t{0}; i < group.size(); ++i) {
         auto col = detail::narrow<int>(i);
         // TODO: group_by_types
-        auto ty = bucket->group_by_types[i];
-        if (ty == type{}) {
-          ty = type{string_type{}};
-        }
-        status = append_builder(ty, *builder->field_builder(col),
+        auto ty = bucket->group_by_types[i].value_or(type{});
+        status = append_builder(ty ? ty : type{string_type{}},
+                                *builder->field_builder(col),
                                 make_data_view(group[i]));
         if (!status.ok()) {
           co_yield caf::make_error(
@@ -565,7 +580,15 @@ private:
   /// This is because we use only the underlying data for lookup, but need their
   /// type to add the data to the output.
   struct bucket {
-    std::vector<type> group_by_types;
+    /// The type of the grouping extractors, where `type{}` denotes a missing
+    /// column (which can get upgraded to another type if we encounter a column
+    /// that has a `null` value but exists), and `std::nullopt` denotes a type
+    /// conflict (which always results in `null` and cannot get upgraded.)
+    std::vector<std::optional<type>> group_by_types;
+
+    /// The aggregation column functions. The optional is only set if the input
+    /// column exists, and if we were able to instantiate the function for the
+    /// input type.
     std::vector<std::optional<function>> functions;
   };
 
