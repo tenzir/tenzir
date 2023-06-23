@@ -33,6 +33,13 @@ independent of the per-connector invocations.
 [librdkafka]: https://github.com/confluentinc/librdkafka
 [librdkafka-options]: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
 
+The connector injects the following default librdkafka configuration values in
+case no configuration file is present, or when the configuration does not
+include them:
+
+- `bootstrap.servers`: `localhost`
+- `group.id`: `tenzir`
+
 The default format for the `kafka` connector is [`json`](../formats/json.md).
 
 ### `-t|--topic <topic>` (Loader, Saver)
