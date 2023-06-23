@@ -14,7 +14,7 @@ kafka [-t <topic>] [-c|--count <n>] [-e|--exit] [-o|--offset <offset>]
 Saver:
 
 ```
-kafka [-t <topic>] [-X|--set <key=value>]
+kafka [-t <topic>] [-k|--key <key>] [-X|--set <key=value>]
 
 ```
 
@@ -87,6 +87,10 @@ options][librdkafka-options] to configure Kafka according to your needs.
 
 We recommand factoring these options into the plugin-specific `kafka.yaml` so
 that they are indpendent of the `kafka` connector arguments.
+
+### `-k|--key <key>` (Saver)
+
+Sets a fixed per-message key.
 
 ## Examples
 

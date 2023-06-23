@@ -27,7 +27,8 @@ auto producer::make(configuration config) -> caf::expected<producer> {
   return result;
 }
 
-auto producer::produce(std::string topic, std::span<const std::byte> bytes)
+auto producer::produce(std::string topic, std::string_view key, std::span<const
+    std::byte> bytes)
   -> caf::error {
   auto done = false;
   while (!done) {
@@ -43,7 +44,7 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes)
       // The payload size.
       bytes.size(),
       // Message key.
-      nullptr, 0,
+      key.data(), key.size(),
       // Timestamp (default to current time).
       0,
       // Per-message opaque value passed to delivery report.

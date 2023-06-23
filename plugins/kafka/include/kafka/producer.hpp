@@ -30,8 +30,8 @@ public:
   static auto make(configuration config) -> caf::expected<producer>;
 
   /// Produces a message in the form of opaque bytes.
-  auto produce(std::string topic, std::span<const std::byte> bytes)
-    -> caf::error;
+  auto produce(std::string topic, std::string_view key,
+               std::span<const std::byte> bytes) -> caf::error;
 
   /// Polls the producer for events and invokes callbacks.
   auto poll(std::chrono::milliseconds timeout) -> int;
