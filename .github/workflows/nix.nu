@@ -19,9 +19,6 @@ def upload_packages [
   aliases # annotation breaks in nu 0.78 : list<string>
   copy: bool
 ] {
-  if ($package_stores == []) {
-    return
-  }
   let pkg_dir = (nix --accept-flake-config --print-build-logs build $".#($name)^package" --no-link --print-out-paths)
   let debs = (glob $"($pkg_dir)/*.deb")
   let tgzs = (glob $"($pkg_dir)/*.tar.gz")
@@ -48,18 +45,19 @@ def upload_packages [
     }
   }
   if $copy {
+    print $"::notice copying artifacts to /packages/{debian,tarball}"
     mkdir ./packages/debian ./packages/tarball
     for deb in $debs {
-      cp $deb ./packages/debian
+      cp -v $deb ./packages/debian
     }
     for tgz in $tgzs {
-      cp $tgz ./packages/tarball
+      cp -v $tgz ./packages/tarball
     }
   }
   if $copy {
     mkdir ./release/debian ./release/tarball
-    cp ($debs | get 0) ./packages/debian/vast-linux-static.deb
-    cp ($tgzs | get 0) ./packages/tarball/vast-linux-static.tar.gz
+    cp ($debs | get 0) ./packages/debian/tenzir-linux-static.deb
+    cp ($tgzs | get 0) ./packages/tarball/tenzir-linux-static.tar.gz
   }
 }
 
