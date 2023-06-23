@@ -14,7 +14,6 @@
 #include <vast/detail/env.hpp>
 #include <vast/detail/fdinbuf.hpp>
 #include <vast/detail/fdoutbuf.hpp>
-#include <vast/detail/file_path_to_parser.hpp>
 #include <vast/detail/posix.hpp>
 #include <vast/detail/string.hpp>
 #include <vast/diagnostics.hpp>
@@ -352,7 +351,37 @@ public:
   }
 
   auto default_parser() const -> std::string override {
-    return detail::file_path_to_parser(args_.path.inner);
+    const parser_parser_plugin* default_parser = nullptr;
+    for (const auto* plugin : plugins::get<parser_parser_plugin>()) {
+      if (plugin->accepts_file_path(args_.path.inner)) {
+        if (default_parser) {
+          diagnostic::error("could not determine default parser for file path "
+                            "`{}`: parsers `{}` and `{}` both accept file path",
+                            args_.path.inner, plugin->name(),
+                            default_parser->name())
+            .throw_();
+        }
+        default_parser = plugin;
+      }
+    }
+    if (default_parser) {
+      return default_parser->name();
+    }
+    for (const auto* plugin : plugins::get<parser_parser_plugin>()) {
+      if (plugin->accepts_file_extension(args_.path.inner)) {
+        if (default_parser) {
+          diagnostic::error("could not determine default parser for file path "
+                            "`{}`: parsers `{}` and `{}` both accept file "
+                            "extension",
+                            args_.path.inner, plugin->name(),
+                            default_parser->name())
+            .throw_();
+        }
+        default_parser = plugin;
+      }
+    }
+    return default_parser ? default_parser->name()
+                          : plugin_loader::default_parser();
   }
 
   friend auto inspect(auto& f, file_loader& x) -> bool {

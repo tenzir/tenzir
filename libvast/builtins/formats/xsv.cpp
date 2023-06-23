@@ -346,6 +346,17 @@ public:
     return "xsv";
   }
 
+  auto
+  accepts_file_path([[maybe_unused]] const std::filesystem::path& path) const
+    -> bool override {
+    return false;
+  }
+
+  auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool override {
+    return path.extension() == fmt::format(".{}", name());
+  }
+
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto sep_str = located<std::string>{};
@@ -421,6 +432,16 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     argument_parser{name()}.parse(p);
     return std::make_unique<xsv_parser>(Sep);
+  }
+
+  auto
+  accepts_file_path([[maybe_unused]] const std::filesystem::path& path) const
+    -> bool override {
+    return false;
+  }
+
+  auto accepts_file_extension(const std::filesystem::path& path) const -> bool {
+    return path.extension() == fmt::format(".{}", name());
   }
 
   auto parse_printer(parser_interface& p) const

@@ -608,6 +608,18 @@ public:
     return "json";
   }
 
+  auto
+  accepts_file_path([[maybe_unused]] const std::filesystem::path& path) const
+    -> bool override {
+    return false;
+  }
+
+  auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool override {
+    auto extension = path.extension();
+    return extension == fmt::format(".{}", name()) or extension == ".ndjson";
+  }
+
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto cfg = config{};
@@ -636,11 +648,31 @@ public:
 };
 
 template <detail::string_literal Name, detail::string_literal Selector,
+          detail::string_literal AcceptedFilePath,
+          detail::string_literal AcceptedFileExtension,
           detail::string_literal Separator = "">
 class selector_parser final : public virtual parser_parser_plugin {
 public:
   auto name() const -> std::string override {
     return std::string{Name.str()};
+  }
+
+  auto accepts_file_path(const std::filesystem::path& path) const
+    -> bool override {
+    auto accepted_file_path = AcceptedFilePath.str();
+    if (accepted_file_path.empty()) {
+      return false;
+    }
+    return path == accepted_file_path;
+  }
+
+  auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool override {
+    auto accepted_file_extension = AcceptedFileExtension.str();
+    if (accepted_file_extension.empty()) {
+      return false;
+    }
+    return path.extension() == accepted_file_extension;
   }
 
   auto parse_parser(parser_interface& p) const
@@ -656,8 +688,9 @@ public:
   }
 };
 
-using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
-using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
+using suricata_parser
+  = selector_parser<"suricata", "event_type:suricata", "eve.json", "">;
+using zeek_parser = selector_parser<"zeek-json", "_path:zeek", "", ".log", ".">;
 
 } // namespace
 

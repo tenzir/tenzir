@@ -458,6 +458,14 @@ public:
   virtual auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser>
     = 0;
+
+  virtual auto accepts_file_path(const std::filesystem::path& path) const
+    -> bool
+    = 0;
+
+  virtual auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool
+    = 0;
 };
 
 using parser_serialization_plugin = serialization_plugin<plugin_parser>;
