@@ -181,6 +181,7 @@ tenzir -q 'version | select version | write json'
 action "Providing guidance"
 echo "You're all set! Next steps:"
 echo
+echo "  - Ensure that ${bold}${prefix}/bin${normal} is in your \$PATH"
 echo "  - Run a pipeline via ${green}tenzir <pipeline>${normal}"
 if [ "${platform}" = "Linux" ]
 then
