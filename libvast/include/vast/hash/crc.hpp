@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/bit.hpp"
-
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -19,7 +18,7 @@ namespace vast {
 /// The [CRC32](http://en.wikipedia.org/wiki/Cyclic_redundancy_check) algorithm.
 class crc32 {
 public:
-  static constexpr detail::endian endian = detail::endian::native;
+  static constexpr std::endian endian = std::endian::native;
 
   using result_type = uint32_t;
   using seed_type = result_type;

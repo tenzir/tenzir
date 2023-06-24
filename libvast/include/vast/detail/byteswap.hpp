@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/bit.hpp"
-
+#include <bit>
 #include <cstdint>
 
 namespace vast::detail {
@@ -18,30 +17,30 @@ namespace vast::detail {
 /// @param x The value whose bytes to swap.
 /// @returns The value with swapped byte order.
 /// @see to_network_order to_host_order
-inline uint8_t byte_swap(uint8_t x) {
+inline auto byteswap(uint8_t x) -> uint8_t {
   return x;
 }
 
-inline uint16_t byte_swap(uint16_t x) {
+inline auto byteswap(uint16_t x) -> uint16_t {
   return __builtin_bswap16(x);
 }
 
-inline uint32_t byte_swap(uint32_t x) {
+inline auto byteswap(uint32_t x) -> uint32_t {
   return __builtin_bswap32(x);
 }
 
-inline uint64_t byte_swap(uint64_t x) {
+inline auto byteswap(uint64_t x) -> uint64_t {
   return __builtin_bswap64(x);
 }
 
 /// Converts the bytes of an unsigned integer from host order to network order.
 /// @param x The value to convert.
 /// @returns The value with bytes in network order.
-/// @see byte_swap to_host_order
+/// @see byteswap to_host_order
 template <class T>
-T to_network_order(T x) {
-  if constexpr (endian::native == endian::little)
-    return byte_swap(x);
+auto to_network_order(T x) -> T {
+  if constexpr (std::endian::native == std::endian::little)
+    return byteswap(x);
   else
     return x;
 }
@@ -49,9 +48,9 @@ T to_network_order(T x) {
 /// Converts the bytes of an unsigned integer from network order to host order.
 /// @param x The value to convert.
 /// @returns The value with bytes in host order.
-/// @see byte_swap to_network_order
+/// @see byteswap to_network_order
 template <class T>
-T to_host_order(T x) {
+auto to_host_order(T x) -> T {
   return to_network_order(x);
 }
 
@@ -60,14 +59,14 @@ T to_host_order(T x) {
 /// @tparam To The endian of the result
 /// @param x The value to convert.
 /// @returns The value in with `To` endian.
-/// @see endian byte_swap to_host_order to_network_order
-template <endian From, endian To, class T>
-T swap(T x) {
-  if constexpr ((From == endian::little && To == endian::little)
-                || (From == endian::big && To == endian::big))
+/// @see endian byte swap to_host_order to_network_order
+template <std::endian From, std::endian To, class T>
+auto swap(T x) -> T {
+  if constexpr ((From == std::endian::little && To == std::endian::little)
+                || (From == std::endian::big && To == std::endian::big))
     return x;
   else
-    return byte_swap(x);
+    return byteswap(x);
 }
 
 } // namespace vast::detail

@@ -8,11 +8,11 @@
 
 #include "vast/hash/hash_append.hpp"
 
-#include "vast/detail/bit.hpp"
 #include "vast/hash/default_hash.hpp"
 #include "vast/hash/uhash.hpp"
 #include "vast/test/test.hpp"
 
+#include <bit>
 #include <cstdint>
 #include <tuple>
 
@@ -21,7 +21,7 @@ using namespace vast;
 namespace {
 
 struct fake_hasher {
-  static constexpr detail::endian endian = detail::endian::native;
+  static constexpr std::endian endian = std::endian::native;
 
   using result_type = size_t;
 
