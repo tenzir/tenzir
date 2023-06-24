@@ -395,6 +395,90 @@ TEST(0 slices and abort from event that is properly formatted JSON among
   CHECK(abort_issued);
 }
 
+TEST(no output slices for ndjson parser with a json that is a well defined in two lines)
+{
+  auto issued_warnings = 0u;
+  auto mock = operator_control_plane_mock{[&issued_warnings](auto&&) {
+    ++issued_warnings;
+  }};
+  auto json = R"({"a" :
+    "b"}
+)";
+  auto sut
+    = create_sut(make_chunk_generator({json, json, json}), mock, "--ndjson");
+  auto output_slices = std::vector<vast::table_slice>{};
+  for (auto slice : sut) {
+    if (slice.rows() > 0)
+      output_slices.push_back(std::move(slice));
+  }
+  CHECK(output_slices.empty());
+  // At least warn for each line.
+  CHECK(issued_warnings >= 2u);
+}
+
+TEST(no output slices for ndjson parser with a json that has two json objects in one line)
+{
+  auto issued_warnings = 0u;
+  auto mock = operator_control_plane_mock{[&issued_warnings](auto&&) {
+    ++issued_warnings;
+  }};
+  auto json = R"({"a" : "b"}{"c" : "d"}
+)";
+  auto sut
+    = create_sut(make_chunk_generator({json, json, json}), mock, "--ndjson");
+  auto output_slices = std::vector<vast::table_slice>{};
+  for (auto slice : sut) {
+    if (slice.rows() > 0)
+      output_slices.push_back(std::move(slice));
+  }
+  CHECK(output_slices.empty());
+  // At least warn for each line.
+  CHECK(issued_warnings >= 1u);
+}
+
+TEST(single output slices for ndjson parser with an input that has a nested object in one line)
+{
+  auto issued_warnings = 0u;
+  auto mock = operator_control_plane_mock{[&issued_warnings](auto&&) {
+    ++issued_warnings;
+  }};
+  auto json = R"({"foo":
+  {"bar": "baz"}
+  }
+)";
+  auto sut = create_sut(make_chunk_generator({json}), mock, "--ndjson");
+  auto output_slices = std::vector<vast::table_slice>{};
+  for (auto slice : sut) {
+    if (slice.rows() > 0)
+      output_slices.push_back(std::move(slice));
+  }
+  REQUIRE_EQUAL(output_slices.size(), 1u);
+  // Warn for first line and the last one.
+  CHECK(issued_warnings >= 2u);
+  CHECK_EQUAL(output_slices.front().rows(), 1u);
+  CHECK_EQUAL(output_slices.front().columns(), 1u);
+  CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), "baz");
+}
+
+TEST(ndjson parser with input split over multiple chunks) {
+  auto json1 = R"({"foo":)";
+  auto json2 = R"("ba)";
+  auto json3 = R"(z", "a" : 5}
+)";
+  auto sut = create_sut(make_chunk_generator({json1, json2, json3}),
+                        control_plane_mock, "--ndjson");
+  auto output_slices = std::vector<vast::table_slice>{};
+  for (auto slice : sut) {
+    if (slice.rows() > 0)
+      output_slices.push_back(std::move(slice));
+  }
+  REQUIRE_EQUAL(output_slices.size(), 1u);
+  REQUIRE_EQUAL(output_slices.front().rows(), 1u);
+  REQUIRE_EQUAL(output_slices.front().columns(), 2u);
+  CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), "baz");
+  CHECK_EQUAL(materialize(output_slices.front().at(0u, 1u)), int64_t{5});
+}
+
 FIXTURE_SCOPE_END()
 
 struct known_schema_no_infer_fixture : public unknown_schema_fixture {

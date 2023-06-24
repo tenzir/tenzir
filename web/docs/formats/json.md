@@ -7,7 +7,8 @@ Reads and writes JSON.
 Parser:
 
 ```
-json [--selector=field[:prefix]] [--unnest-separator=<string>]
+json [--selector=field[:prefix]] [--unnest-separator=<string>] [--no-infer]
+     [--ndjson]
 ```
 
 Printer:
@@ -24,13 +25,23 @@ JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects.
 
 ### `--selector=field[:prefix]` (Parser)
 
-Designates a field value as schema name, optionally with an added dot-separated
-prefix.
+Designates a field value as schema name with an optional dot-separated prefix.
 
 For example, the [Suricata EVE JSON](suricata.md) format includes a field
-`event_type` that signifies the log type. If we pass
-`--selector=event_type:suricata`, a field value of `flow` will create a schema
-with the name `suricata.flow`.
+`event_type` that contains the event type. Setting the selector to
+`event_type:suricata` causes an event with the value `flow` for the field
+`event_type` to map onto the schema `suricata.flow`.
+
+### `--no-infer` (Parser)
+
+The JSON parser automatically infers types in the input JSON.
+
+The flag `--no-infer` toggles this behavior, and requires the user to provide an
+input schema for the JSON to explicitly parse into, e.g., using the `--selector`
+option.
+
+Schema inference happens on a best-effort basis, and is constantly being
+improved to match Tenzir's type system.
 
 ### `--unnest-separator=<string>` (Parser)
 
@@ -65,6 +76,18 @@ With the unnest separator set to `.`, Tenzir reads the events like this:
   }
 }
 ```
+
+### `--ndjson` (Parser)
+
+Treat the input as newline-delimited JSON (NDJSON).
+
+NDJSON requires that exactly one event exists per line. This allows for better
+error recovery in cases of malformed input, as unlike for the regular JSON
+parser malformed lines can be skipped.
+
+Popular examples of NDJSON include the Suricat Eve JSON and the Zeek Streaming
+JSON formats. Tenzir supports [`suricata`][suricata.md] and
+[`zeek-json`][zeek-json.md] parsers out of the box that utilize this mechanism.
 
 ### `--pretty` (Printer)
 

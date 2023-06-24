@@ -1,7 +1,11 @@
 # suricata
 
 Reads [Suricata][suricata]'s [EVE JSON][eve-json] output. The parser is an alias
-for [`json`](json.md) with the option `--selector=event_type:suricata`.
+for [`json`](json.md) with the arguments:
+- `--selector=event_type:suricata`
+- `--ndjson"`
+
+All other options from [`json`](json.md) are also supported.
 
 ## Synopsis
 

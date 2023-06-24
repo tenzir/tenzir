@@ -56,7 +56,7 @@ inline auto to_lines(generator<chunk_ptr> input)
     co_yield std::nullopt;
   }
   if (!buffer.empty()) {
-    co_yield std::move(buffer);
+    co_yield buffer;
   }
 }
 
