@@ -30,7 +30,7 @@ public:
     : on_abort_{std::move(on_abort)} {
   }
 
-  auto self() noexcept -> execution_node_actor::base& override {
+  auto self() noexcept -> exec_node_actor::base& override {
     FAIL("no mock implementation available");
   }
 

@@ -31,7 +31,7 @@ namespace {
 
 struct fixture {
   struct mock_control_plane final : operator_control_plane {
-    auto self() noexcept -> execution_node_actor::base& override {
+    auto self() noexcept -> exec_node_actor::base& override {
       FAIL("no mock implementation available");
     }
 

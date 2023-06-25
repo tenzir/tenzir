@@ -393,15 +393,24 @@ using datagram_source_actor = typed_actor_fwd<
   // Conform to the protocol of the SOURCE actor.
   ::extend_with<source_actor>::unwrap_as_broker;
 
-/// The interface of a EXECUTION NODE actor.
-using execution_node_actor = typed_actor_fwd<
-  // source
-  auto(atom::run, std::vector<caf::actor> next)->caf::result<void>,
-  // stage / sink
-  auto(caf::stream<framed<table_slice>> in, std::vector<caf::actor> next)
-    ->caf::result<caf::inbound_stream_slot<framed<table_slice>>>,
-  auto(caf::stream<framed<chunk_ptr>> in, std::vector<caf::actor> next)
-    ->caf::result<caf::inbound_stream_slot<framed<chunk_ptr>>>>::unwrap;
+using exec_node_sink_actor = typed_actor_fwd<
+  // Push events.
+  auto(atom::push, std::vector<table_slice> events)->caf::result<void>,
+  // Push bytes.
+  auto(atom::push, std::vector<chunk_ptr> bytes)->caf::result<void>>::unwrap;
+
+using exec_node_source_actor = typed_actor_fwd<
+  // Uodate demand.
+  auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size,
+       duration batch_timeout)
+    ->caf::result<void>>::unwrap;
+
+/// The interface of a EXEC NODE actor.
+using exec_node_actor = typed_actor_fwd<>
+  // Source.
+  ::extend_with<exec_node_sink_actor>
+  // Sink.
+  ::extend_with<exec_node_source_actor>::unwrap;
 
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
@@ -431,17 +440,18 @@ using node_actor = typed_actor_fwd<
   auto(atom::config)->caf::result<record>,
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
-  auto(atom::spawn, pipeline, receiver_actor<diagnostic>)
-    ->caf::result<std::vector<std::pair<execution_node_actor, std::string>>>>::
-  unwrap;
+  auto(atom::spawn, pipeline, operator_type, exec_node_actor,
+       receiver_actor<diagnostic>)
+    ->caf::result<std::vector<
+      std::tuple<exec_node_actor, operator_type, std::string>>>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.
 using pipeline_executor_actor = typed_actor_fwd<
   // Execute a pipeline, returning the result asynchronously. This must be
   // called at most once per executor.
-  auto(atom::run)->caf::result<void>,
-  auto(atom::run, node_actor)
-    ->caf::result<void>>::extend_with<receiver_actor<diagnostic>>::unwrap;
+  auto(atom::run)->caf::result<void>>
+  // Conform to the protocol of the diagnostic handler actor.
+  ::extend_with<receiver_actor<diagnostic>>::unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.
@@ -461,7 +471,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID(
     (std::vector<std::pair<std::filesystem::path, std::filesystem::path>>))
   VAST_ADD_TYPE_ID(
-    (std::vector<std::pair<vast::execution_node_actor, std::string>>))
+    (std::vector<
+      std::tuple<vast::exec_node_actor, vast::operator_type, std::string>>))
 
   VAST_ADD_TYPE_ID((vast::accountant_actor))
   VAST_ADD_TYPE_ID((vast::active_indexer_actor))
@@ -472,6 +483,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::default_passive_store_actor))
   VAST_ADD_TYPE_ID((vast::disk_monitor_actor))
   VAST_ADD_TYPE_ID((vast::evaluator_actor))
+  VAST_ADD_TYPE_ID((vast::exec_node_actor))
+  VAST_ADD_TYPE_ID((vast::exec_node_sink_actor))
   VAST_ADD_TYPE_ID((vast::exporter_actor))
   VAST_ADD_TYPE_ID((vast::filesystem_actor))
   VAST_ADD_TYPE_ID((vast::flush_listener_actor))

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/config.hpp" // IWYU pragma: export
+#include "vast/tag.hpp"
 #include "vast/tql/fwd.hpp"
 
 #include <caf/config.hpp>
@@ -284,6 +285,7 @@ class legacy_deserializer;
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using operator_ptr = std::unique_ptr<operator_base>;
+using operator_type = tag_variant<void, table_slice, chunk_ptr>;
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
@@ -390,8 +392,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::conjunction))
   VAST_ADD_TYPE_ID((vast::count_query_context))
   VAST_ADD_TYPE_ID((vast::curried_predicate))
-  VAST_ADD_TYPE_ID((vast::data_extractor))
   VAST_ADD_TYPE_ID((vast::data))
+  VAST_ADD_TYPE_ID((vast::data_extractor))
   VAST_ADD_TYPE_ID((vast::diagnostic))
   VAST_ADD_TYPE_ID((vast::disjunction))
   VAST_ADD_TYPE_ID((vast::ec))
@@ -406,13 +408,14 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::module))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::null_bitmap))
+  VAST_ADD_TYPE_ID((vast::operator_type))
   VAST_ADD_TYPE_ID((vast::partition_info))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_pair))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_ptr))
   VAST_ADD_TYPE_ID((vast::pattern))
   VAST_ADD_TYPE_ID((vast::pipeline))
-  VAST_ADD_TYPE_ID((vast::port_type))
   VAST_ADD_TYPE_ID((vast::port))
+  VAST_ADD_TYPE_ID((vast::port_type))
   VAST_ADD_TYPE_ID((vast::predicate))
   VAST_ADD_TYPE_ID((vast::qualified_record_field))
   VAST_ADD_TYPE_ID((vast::query_context))
@@ -421,14 +424,17 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::rest_endpoint))
   VAST_ADD_TYPE_ID((vast::rest_response))
   VAST_ADD_TYPE_ID((vast::subnet))
-  VAST_ADD_TYPE_ID((vast::table_slice_column))
   VAST_ADD_TYPE_ID((vast::table_slice))
+  VAST_ADD_TYPE_ID((vast::table_slice_column))
   VAST_ADD_TYPE_ID((vast::taxonomies))
+  VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
-  VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::uuid))
   VAST_ADD_TYPE_ID((vast::wah_bitmap))
+
+  VAST_ADD_TYPE_ID((vast::tag<vast::table_slice>))
+  VAST_ADD_TYPE_ID((vast::tag<vast::chunk_ptr>))
 
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See vast/aliases.hpp for their definitions.

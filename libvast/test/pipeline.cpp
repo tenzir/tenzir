@@ -37,7 +37,7 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> execution_node_actor::base& override {
+  auto self() noexcept -> exec_node_actor::base& override {
     FAIL("no mock implementation available");
   }
 

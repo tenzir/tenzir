@@ -54,8 +54,8 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
                                        pipe.to_string()));
   }
   caf::scoped_actor self{sys};
-  auto executor
-    = self->spawn(pipeline_executor, std::move(pipe), std::move(diag));
+  auto executor = self->spawn(pipeline_executor, std::move(pipe),
+                              std::move(diag), node_actor{});
   auto result = caf::expected<void>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This

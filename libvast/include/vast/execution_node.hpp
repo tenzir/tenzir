@@ -3,48 +3,32 @@
 #include "vast/fwd.hpp"
 
 #include "vast/actors.hpp"
-#include "vast/operator_control_plane.hpp"
 #include "vast/pipeline.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
+#include <queue>
+
 namespace vast {
 
-struct execution_node_state {
-  static constexpr auto name = "execution-node";
-
-  /// A pointer to the parent actor.
-  execution_node_actor::pointer self;
-
-  /// The operator owned by this execution node.
-  operator_ptr op;
-
-  /// A pointer to the control plane passed to this operator during execution,
-  /// which allows operators to control this actor.
-  std::unique_ptr<operator_control_plane> ctrl;
-
-  /// The node actor (iff available).
-  node_actor node;
-
-  receiver_actor<diagnostic> diag;
-
-  /// Entry point for the source.
-  auto start(std::vector<caf::actor> next) -> caf::result<void>;
-
-  /// Entry point for stages and the sink.
-  /// @note This function is defined for all possible inputs in the
-  /// corresponding execution_node.cpp file.
-  template <class Input>
-  auto start(caf::stream<framed<Input>> in, std::vector<caf::actor> next)
-    -> caf::result<caf::inbound_stream_slot<framed<Input>>>;
-};
-
-/// Start an execution node that wraps an operator for asynchronous execution.
-/// Before spawning this actor, check whether `op->detached()` returns true, and
-/// spawn the actor as a detached actor if desired.
-auto execution_node(
-  execution_node_actor::stateful_pointer<execution_node_state> self,
-  operator_ptr op, node_actor node, receiver_actor<diagnostic> diag)
-  -> execution_node_actor::behavior_type;
+/// Spawns an execution node for the given operator and a known input type.
+/// @param sys The actor system to spawn the actor in.
+/// @param op The operator to execute.
+/// @param input_type The input type to assume for the operator.
+/// @param previous The previous execution node actor in the pipeline to pull
+/// events from. Must be set if the input type is not void.
+/// @param node The node actor to expose in the control plane. Must be set if
+/// the operator runs at a remote node.
+/// @param diagnostics_handler The handler asked to spawn diagnostics.
+/// @returns The execution node actor and its output type, or an error.
+/// @pre op != nullptr
+/// @pre node != nullptr or not (op->location() == operator_location::remote)
+/// @pre previous != nullptr or input_type.is<void>()
+/// @pre diagnostics_handler != nullptr
+auto spawn_exec_node(caf::actor_system& sys, operator_ptr op,
+                     operator_type input_type, exec_node_actor previous,
+                     node_actor node,
+                     receiver_actor<diagnostic> diagnostics_handler)
+  -> caf::expected<std::pair<exec_node_actor, operator_type>>;
 
 } // namespace vast

@@ -340,6 +340,11 @@ table_slice tail(table_slice slice, size_t num_rows);
 std::pair<table_slice, table_slice>
 split(const table_slice& slice, size_t partition_point);
 
+/// Splits a vector of table slices into two vectors of table slices without
+/// copying data.
+auto split(std::vector<table_slice> events, uint64_t partition_point)
+  -> std::pair<std::vector<table_slice>, std::vector<table_slice>>;
+
 /// Selects the rows with indices `[begin, end)`.
 /// @pre `begin <= end && end <= slice.rows()`
 auto subslice(const table_slice& slice, size_t begin, size_t end)
