@@ -30,6 +30,10 @@ macro (create_tenzir_symlink name)
     TARGET tenzir
     APPEND
     PROPERTY ADDITIONAL_CLEAN_FILES "$<TARGET_FILE_DIR:tenzir>/${name}")
+  # The generated code in cmake_install.cmake for executable targets is
+  # different depending on whether the CMAKE_INSTALL_BINDIR is set to an
+  # absolute path or not. We emulate this behavior for the symlinks here so they
+  # will always end up in the same location.
   if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
     install(
       CODE "
