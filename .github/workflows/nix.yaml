@@ -108,6 +108,7 @@ jobs:
           pushFilter: "tenzir-[[:alnum:]]+-(static|slim|[[:digit:]])"
       - name: Build Nix Packages
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
           RCLONE_GCS_BUCKET_POLICY_ONLY: True
         run: |
@@ -122,51 +123,12 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: tarball
-          path: "./packages/tarball"
+          path: "./packages/tarball/*.tar.gz"
           if-no-files-found: ignore
       - name: Upload Debian Package to Github
         if: steps.cfg.outputs.upload-to-github == 'true'
         uses: actions/upload-artifact@v3
         with:
           name: debian
-          path: "./packages/debian"
+          path: "./packages/debian/*.deb"
           if-no-files-found: ignore
-      - name: Delete Release Assets
-        if: github.event_name == 'release' && steps.cfg.outputs.upload-to-github == 'true'
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          # don't fail if no previous assets exist
-          fail-if-no-assets: false
-          # only delete assets when `tag` refers to a release
-          fail-if-no-release: true
-          assets: |
-            "tenzir-linux-static.deb"
-            "tenzir-linux-static.tar.gz"
-      - name: Upload Debian Release Package
-        if: github.event_name == 'release' && steps.cfg.outputs.upload-to-github == 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "release/tarball/tenzir-linux-static.deb"
-          # The asset name is constant so we can permanently link to
-          # https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.deb
-          # for a build of the latest release.
-          asset_name: "tenzir-linux-static.deb"
-          asset_content_type: application/vnd.debian.binary-package
-      - name: Upload Release Tarball
-        if: github.event_name == 'release' && steps.cfg.outputs.upload-to-github == 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "release/tarball/tenzir-linux-static.tar.gz"
-          # The asset name is constant so we can permanently link to
-          # https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.tar.gz
-          # for a build of the latest release.
-          asset_name: "tenzir-linux-static.tar.gz"
-          asset_content_type: application/gzip

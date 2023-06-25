@@ -281,25 +281,30 @@ jobs:
         if: steps.configure.outputs.run-vast-nix == 'true'
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            tags=("${{ steps.configure.outputs.head-ref-slug }}")
+            container_tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            tags=('latest' "${{ github.sha }}")
+            container_tags=('latest' "${{ github.sha }}")
             aliases=('latest')
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            container_tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
             aliases=('stable')
           else
             echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
           fi
           nix_config="$(jq -c \
-            '."tags" = $ARGS.positional' \
+            '."container-tags" = $ARGS.positional' \
             .github/workflows/nix-config-base.json \
-            --args -- "${tags[@]}")"
+            --args -- "${container_tags[@]}")"
           nix_config="$(jq -c \
             '."aliases" = $ARGS.positional' \
             --args -- "${aliases[@]}" \
             <<< "${nix_config}")"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            nix_config="$(jq -c --arg git_tag "${GITHUB_REF#refs/tags/}" \
+              '."git-tag" = $git_tag' \
+              <<< "${nix_config}")"
+          fi
           # Clear push repos in case we're in a PR, but push the developer
           # edition to ghcr.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
@@ -313,11 +318,12 @@ jobs:
           # We do this because the static editions that we build here are
           # independent derivations, meaning there is no sharing of build
           # products.
-          nix_matrix="$(jq -c '.aliases as $aliases | .tags as $tags |
+          nix_matrix="$(jq -c '.aliases as $aliases | ."container-tags" as $tags | ."git-tag" as $git_tag |
             .targets = (.editions | map(. as $e |{}|
               .editions = [$e] |
               .aliases = $aliases |
-              .tags = $tags)
+              ."container-tags" = $tags |
+              ."git-tag" = $git_tag)
             ) | .targets | map({"name": .editions[0].name, "config": .})' \
             <<< "${nix_config}")"
           echo "nix-matrix=${nix_matrix}" >> "$GITHUB_OUTPUT"
