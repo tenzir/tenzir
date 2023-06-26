@@ -24,6 +24,16 @@ image from our [container registry at DockerHub][dockerhub]:
 docker pull tenzir/tenzir
 ```
 
+:::tip Slim Images
+We also provide slim images that contain only the necessary dependencies to
+run tenzir. You can get them by appending the `-slim` suffix to the tag you want
+to pull, e.g.:
+
+```bash
+docker pull tenzir/tenzir:latest-slim
+```
+:::
+
 Thereafter, you're ready to start a Tenzir node in a container.
 
 [dockerhub]: https://hub.docker.com/repository/docker/tenzir/tenzir
