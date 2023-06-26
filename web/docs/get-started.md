@@ -15,8 +15,8 @@ command line examples.
 
 Select your platform to download and install Tenzir.
 
-[tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.deb
-[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-linux-static.tar.gz
+[tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.deb
+[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-x86_64-linux.tar.gz
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -39,7 +39,7 @@ Download the latest [Debian package][tenzir-debian-package] and install it via
 `dpkg`:
 
 ```bash
-dpkg -i tenzir-linux-static.deb
+dpkg -i tenzir-static-amd64-linux.deb
 ```
 
 </TabItem>
@@ -61,7 +61,7 @@ Download a tarball with our [static binary][tenzir-tarball] for all Linux
 distributions and unpack it into `/opt/tenzir`:
 
 ```bash
-tar xzf tenzir-linux-static.tar.gz -C /
+tar xzf tenzir-static-x86_64-linux.tar.gz -C /
 ```
 
 We also offer prebuilt statically linked binaries for every Git commit to the
