@@ -1,8 +1,7 @@
 ---
 title: Migrating from VAST to Tenzir
 authors: dominiklohmann
-date: 2023-06-29
-draft: true
+date: 2023-06-26
 tags: [tenzir, vast, community, project]
 ---
 
