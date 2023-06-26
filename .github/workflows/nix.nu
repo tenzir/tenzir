@@ -116,7 +116,7 @@ export def run [
   # Run local effects by building all requested editions.
   let targets = ($cfg.editions | each {|e| $".#(attribute_name $e)" })
   print $"::notice building ($targets)"
-  nix --print-build-logs build --no-link $targets
+  nix --accept-flake-config --print-build-logs build --no-link $targets
   # Run remote effects by uploading packages and images.
   for e in $cfg.editions {
     let stores = (if ($e.package-stores? == null) {[]} else {$e.package-stores})

@@ -102,10 +102,10 @@ jobs:
       - name: Setup Cachix
         uses: cachix/cachix-action@v12
         with:
-          name: vast
-          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
-          # Avoid pushing any editions that are not fully open source.
-          pushFilter: "tenzir-[[:alnum:]]+-(static|slim|[[:digit:]])"
+          name: tenzir
+          authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
+          # Avoid pushing the full enterprise edition.
+          pushFilter: "tenzir-ee"
       - name: Build Nix Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

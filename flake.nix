@@ -2,8 +2,12 @@
   description = "Tenzir as a standalone app or NixOS module";
 
   nixConfig = {
-    extra-substituters = "https://vast.cachix.org";
-    extra-trusted-public-keys = "vast.cachix.org-1:0L8rErLUuFAdspyGYYQK3Sgs9PYRMzkLEqS2GxfaQhA=";
+    extra-substituters = ["https://tenzir.cachix.org" "https://vast.cachix.org"];
+    extra-trusted-public-keys =
+      [
+        "tenzir.cachix.org-1:+MLwldLx9GLGLsi9mDr5RrVYyI64iVobWpntJaPM50E="
+        "vast.cachix.org-1:0L8rErLUuFAdspyGYYQK3Sgs9PYRMzkLEqS2GxfaQhA="
+      ];
   };
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/b31c968ff28927d477eed85012e8090578c70852";
