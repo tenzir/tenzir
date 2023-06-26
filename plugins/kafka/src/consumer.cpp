@@ -8,8 +8,6 @@
 
 #include "kafka/consumer.hpp"
 
-#include "kafka/message.hpp"
-
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 
@@ -36,11 +34,12 @@ auto consumer::subscribe(const std::vector<std::string>& topics) -> caf::error {
 }
 
 auto consumer::consume(std::chrono::milliseconds timeout)
-  -> caf::expected<message> {
+  -> caf::expected<chunk_ptr> {
   auto ms = detail::narrow_cast<int>(timeout.count());
-  std::shared_ptr<RdKafka::Message> ptr;
-  ptr.reset(consumer_->consume(ms));
-  VAST_ASSERT(ptr != nullptr);
+  auto* ptr = consumer_->consume(ms);
+  auto result = chunk::make(ptr->payload(), ptr->len(), [ptr]() noexcept {
+    delete ptr; // NOLINT
+  });
   switch (ptr->err()) {
     case RdKafka::ERR_NO_ERROR:
       break;
@@ -54,18 +53,7 @@ auto consumer::consume(std::chrono::milliseconds timeout)
                                          ptr->errstr(),
                                          static_cast<int>(ptr->err())));
   }
-  message result;
-  result.message_ = std::move(ptr);
   return result;
-}
-
-auto consumer::commit(message& msg) -> caf::error {
-  auto result = consumer_->commitSync(msg.message_.get());
-  if (result != RdKafka::ERR_NO_ERROR)
-    return caf::make_error(ec::unspecified,
-                           fmt::format("failed to commit message: {}",
-                                       RdKafka::err2str(result)));
-  return {};
 }
 
 } // namespace vast::plugins::kafka

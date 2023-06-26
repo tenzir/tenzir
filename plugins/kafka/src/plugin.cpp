@@ -8,7 +8,6 @@
 
 #include "kafka/configuration.hpp"
 #include "kafka/consumer.hpp"
-#include "kafka/message.hpp"
 #include "kafka/producer.hpp"
 
 #include <vast/argument_parser.hpp>
@@ -39,8 +38,8 @@ namespace {
 constexpr auto default_topic = "tenzir";
 
 // Valid values:
-// - beginning | end | stored |
-// - <value>  (absolute offset) |
+// - beginning | end | stored
+// - <value>  (absolute offset)
 // - -<value> (relative offset from end)
 // - s@<value> (timestamp in ms to start at)
 // - e@<value> (timestamp in ms to stop at (not included))
@@ -113,7 +112,7 @@ public:
       return {};
     }
     // If we want to exit when we're done, we need to tell Kafka to emit a
-    // signal so that we known when to terminate.
+    // signal so that we know when to terminate.
     if (args_.exit) {
       if (auto err = cfg->set("enable.partition.eof", "true")) {
         ctrl.diagnostics().emit(
@@ -156,6 +155,9 @@ public:
       }
     }
     // Create the consumer.
+    if (auto value = cfg->get("bootstrap.servers")) {
+      VAST_INFO("kafka connects to broker: {}", *value);
+    }
     auto client = consumer::make(*cfg);
     if (!client) {
       ctrl.diagnostics().emit(
@@ -163,9 +165,6 @@ public:
           .done());
       return {};
     };
-    if (auto value = cfg->get("bootstrap.servers")) {
-      VAST_INFO("kafka consumer connected to: {}", *value);
-    }
     auto topic = args_.topic ? args_.topic->inner : default_topic;
     VAST_INFO("kafka subscribes to topic {}", topic);
     if (auto err = client->subscribe({topic})) {
@@ -191,8 +190,7 @@ public:
           VAST_ERROR(msg.error());
           break;
         }
-        auto payload = chunk::copy(msg->payload());
-        co_yield payload;
+        co_yield *msg;
         if (args.count && args.count->inner == ++num_messages)
           break;
       }
@@ -263,7 +261,7 @@ public:
       return cfg.error();
     };
     if (auto value = cfg->get("bootstrap.servers")) {
-      VAST_INFO("kafka consumer connected to: {}", *value);
+      VAST_INFO("kafka connects to broker: {}", *value);
     }
     auto client = producer::make(*cfg);
     if (!client) {
@@ -292,9 +290,8 @@ public:
             topics = std::move(topics),
             guard = std::make_shared<decltype(guard)>(std::move(guard))](
              chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0) {
+      if (!chunk || chunk->size() == 0)
         return;
-      }
       for (const auto& topic : topics) {
         VAST_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
         if (auto error = client.produce(topic, as_bytes(*chunk), key, ts)) {
@@ -302,16 +299,11 @@ public:
           return;
         }
       }
+      // It's advised to call poll periodically to tell Kafka "you can flush
+      // buffered messages if you like".
       client.poll(0ms);
     };
   }
-
-  // FIXME: why can't I override this for savers when it's possible for
-  // loaders? auto to_string() const -> std::string override {
-  //  auto result = name();
-  //  result += fmt::format(" --topic {}", args_.topic);
-  //  return result;
-  //}
 
   auto name() const -> std::string override {
     return "kafka";

@@ -22,8 +22,6 @@
 
 namespace vast::plugins::kafka {
 
-class message;
-
 /// Wraps a `RdKafka::Consumer` in a friendly interface.
 class consumer {
 public:
@@ -34,10 +32,7 @@ public:
   auto subscribe(const std::vector<std::string>& topics) -> caf::error;
 
   /// Consumes a message, blocking for a given maximum timeout.
-  auto consume(std::chrono::milliseconds timeout) -> caf::expected<message>;
-
-  /// Commits a message.
-  auto commit(message& msg) -> caf::error;
+  auto consume(std::chrono::milliseconds timeout) -> caf::expected<chunk_ptr>;
 
 private:
   consumer() = default;
