@@ -3,11 +3,10 @@
 
   nixConfig = {
     extra-substituters = ["https://tenzir.cachix.org" "https://vast.cachix.org"];
-    extra-trusted-public-keys =
-      [
-        "tenzir.cachix.org-1:+MLwldLx9GLGLsi9mDr5RrVYyI64iVobWpntJaPM50E="
-        "vast.cachix.org-1:0L8rErLUuFAdspyGYYQK3Sgs9PYRMzkLEqS2GxfaQhA="
-      ];
+    extra-trusted-public-keys = [
+      "tenzir.cachix.org-1:+MLwldLx9GLGLsi9mDr5RrVYyI64iVobWpntJaPM50E="
+      "vast.cachix.org-1:0L8rErLUuFAdspyGYYQK3Sgs9PYRMzkLEqS2GxfaQhA="
+    ];
   };
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/b31c968ff28927d477eed85012e8090578c70852";
@@ -95,8 +94,8 @@
           flake-utils.lib.flattenTree {
             tenzir-de = pkgs.tenzir-de;
             tenzir-de-static = pkgs.pkgsStatic.tenzir-de;
-            tenzir-ce = pkgs.tenzir-ce;
-            tenzir-ce-static = pkgs.pkgsStatic.tenzir-ce;
+            tenzir = pkgs.tenzir;
+            tenzir-static = pkgs.pkgsStatic.tenzir;
             tenzir-cm = pkgs.tenzir-cm;
             tenzir-cm-static = pkgs.pkgsStatic.tenzir-cm;
             tenzir-ee = pkgs.tenzir-ee;
@@ -106,12 +105,12 @@
             };
           }
           // {
-            default = self.packages.${system}.tenzir;
+            default = self.packages.${system}.tenzir-static;
             # Legacy aliases for backwards compatibility.
             vast = self.packages.${system}.tenzir-de;
             vast-static = self.packages.${system}.tenzir-de-static;
-            vast-ce = self.packages.${system}.tenzir-ce;
-            vast-ce-static = self.packages.${system}.tenzir-ce-static;
+            vast-ce = self.packages.${system}.tenzir;
+            vast-ce-static = self.packages.${system}.tenzir-static;
             vast-cm = self.packages.${system}.tenzir-cm;
             vast-cm-static = self.packages.${system}.tenzir-cm-static;
             vast-ee = self.packages.${system}.tenzir-ee;
@@ -120,10 +119,10 @@
           };
         apps.tenzir-de = flake-utils.lib.mkApp {drv = self.packages.tenzir-de;};
         apps.tenzir-de-static = flake-utils.lib.mkApp {drv = self.packages.tenzir-de-static;};
-        apps.tenzir-ce = flake-utils.lib.mkApp {drv = self.packages.tenzir-ce;};
-        apps.tenzir-ce-static = flake-utils.lib.mkApp {
+        apps.tenzir = flake-utils.lib.mkApp {drv = self.packages.tenzir;};
+        apps.tenzir-static = flake-utils.lib.mkApp {
           drv =
-            self.packages.tenzir-ce-static;
+            self.packages.tenzir-static;
         };
         apps.tenzir-ee = flake-utils.lib.mkApp {drv = self.packages.tenzir-ee;};
         apps.tenzir-ee-static = flake-utils.lib.mkApp {
@@ -152,26 +151,26 @@
           pkg = self.packages.${system}.tenzir-de-static;
           tag = "latest-slim";
         };
-        apps.stream-tenzir-ce-image = stream-image {
+        apps.stream-tenzir-image = stream-image {
           entrypoint = "tenzir";
-          name = "tenzir/tenzir-ce";
-          pkg = self.packages.${system}.tenzir-ce;
+          name = "tenzir/tenzir";
+          pkg = self.packages.${system}.tenzir;
         };
-        apps.stream-tenzir-node-ce-image = stream-image {
+        apps.stream-tenzir-node-image = stream-image {
           entrypoint = "tenzir-node";
-          name = "tenzir/tenzir-ce";
-          pkg = self.packages.${system}.tenzir-ce;
+          name = "tenzir/tenzir";
+          pkg = self.packages.${system}.tenzir;
         };
-        apps.stream-tenzir-ce-slim-image = stream-image {
+        apps.stream-tenzir-slim-image = stream-image {
           entrypoint = "tenzir";
-          name = "tenzir/tenzir-ce-slim";
-          pkg = self.packages.${system}.tenzir-ce-static;
+          name = "tenzir/tenzir-slim";
+          pkg = self.packages.${system}.tenzir-static;
           tag = "latest-slim";
         };
-        apps.stream-tenzir-node-ce-slim-image = stream-image {
+        apps.stream-tenzir-node-slim-image = stream-image {
           entrypoint = "tenzir-node";
-          name = "tenzir/tenzir-ce-slim";
-          pkg = self.packages.${system}.tenzir-ce-static;
+          name = "tenzir/tenzir-slim";
+          pkg = self.packages.${system}.tenzir-static;
           tag = "latest-slim";
         };
         apps.stream-tenzir-ee-image = stream-image {
@@ -196,25 +195,20 @@
           pkg = self.packages.${system}.tenzir-ee-static;
           tag = "latest-slim";
         };
-        apps.stream-tenzir-image = self.apps.stream-tenzir-ce-image;
-        apps.stream-tenzir-node-image = self.apps.stream-tenzir-node-ce-image;
-        apps.stream-tenzir-slim-image = self.apps.stream-tenzir-ce-slim-image;
-        apps.stream-tenzir-node-slim-image = self.apps.stream-tenzir-node-ce-slim-image;
-        apps.tenzir = self.apps.tenzir-ce;
         apps.default = self.apps.tenzir;
         # Legacy aliases for backwards compatibility.
         apps.vast = self.apps.tenzir-de;
         apps.vast-static = self.apps.tenzir-de-static;
-        apps.vast-ce = self.apps.tenzir-ce;
-        apps.vast-ce-static = self.apps.tenzir-ce-static;
+        apps.vast-ce = self.apps.tenzir;
+        apps.vast-ce-static = self.apps.tenzir-static;
         apps.vast-cm = self.apps.tenzir-cm;
         apps.vast-cm-static = self.apps.tenzir-cm-static;
         apps.vast-ee = self.apps.tenzir-ee;
         apps.vast-ee-static = self.apps.tenzir-ee-static;
         apps.stream-vast-image = self.apps.stream-tenzir-de-image;
         apps.stream-vast-slim-image = self.apps.stream-tenzir-de-slim-image;
-        apps.stream-vast-ce-image = self.apps.stream-tenzir-ce-image;
-        apps.stream-vast-ce-slim-image = self.apps.stream-tenzir-ce-slim-image;
+        apps.stream-vast-ce-image = self.apps.stream-tenzir-image;
+        apps.stream-vast-ce-slim-image = self.apps.stream-tenzir-slim-image;
         apps.stream-vast-cm-image = self.apps.stream-tenzir-cm-image;
         apps.stream-vast-cm-slim-image = self.apps.stream-tenzir-cm-slim-image;
         apps.stream-vast-ee-image = self.apps.stream-tenzir-ee-image;

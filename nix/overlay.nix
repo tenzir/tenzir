@@ -168,10 +168,13 @@ in {
   };
   tenzir-de = final.callPackage ./tenzir {
     inherit stdenv versionShortOverride versionLongOverride;
+    pname = "tenzir-de";
   };
-  tenzir-ce = let
+  # Policy: The suffix-less `tenzir' packages come with a few closed source
+  # plugins.
+  tenzir = let
     pkg = final.tenzir-de.override {
-      pname = "tenzir-ce";
+      pname = "tenzir";
     };
   in
     pkg.withPlugins (ps: [
@@ -202,8 +205,6 @@ in {
       ps.pipeline_manager
       ps.platform
     ]);
-  # For the time being we default to the community edition.
-  tenzir = final.tenzir-ce;
   tenzir-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [

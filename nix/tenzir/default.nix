@@ -4,7 +4,7 @@
     lib,
     stdenv,
     callPackage,
-    pname ? "tenzir",
+    pname,
     tenzir-source,
     cmake,
     cmake-format,
