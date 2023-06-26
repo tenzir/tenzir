@@ -54,10 +54,12 @@ void restinio_response::finish(caf::expected<std::string> body) {
 void restinio_response::abort(uint16_t error_code, std::string message,
                               caf::error detail) {
   response_.header().status_code(restinio::http_status_code_t{error_code});
+  std::string body;
   if (enable_detailed_errors_)
     message = fmt::format("{}{}", message, detail);
-  body_size_ = message.size();
-  response_.set_body(std::move(message));
+  body = fmt::format(R"_({{"error": {:?} }})_", message);
+  body_size_ = body.size();
+  response_.set_body(std::move(body));
   // TODO: Proactively call `done()` here, and add some flag to prevent
   // it from being called multiple times.
 }
