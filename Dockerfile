@@ -63,12 +63,12 @@ EXPOSE 5158/tcp
 WORKDIR /var/lib/tenzir
 VOLUME ["/var/lib/tenzir"]
 
-ENTRYPOINT ["tenzir-ctl"]
+ENTRYPOINT ["tenzir"]
 CMD ["--help"]
 
-# -- production ----------------------------------------------------------------
+# -- tenzir-de -----------------------------------------------------------------
 
-FROM debian:bookworm-slim AS production
+FROM debian:bookworm-slim AS tenzir-de
 
 # When changing these, make sure to also update the entries in the flake.nix
 # file.
@@ -120,8 +120,14 @@ VOLUME ["/var/lib/tenzir"]
 # Verify that Tenzir starts up correctly.
 RUN tenzir version
 
-ENTRYPOINT ["tenzir-ctl"]
+ENTRYPOINT ["tenzir"]
 CMD ["--help"]
+
+# -- tenzir-node-de ------------------------------------------------------------
+
+FROM tenzir-de AS tenzir-node-de
+
+ENTRYPOINT ["tenzir-node"]
 
 # -- plugins -------------------------------------------------------------------
 
@@ -180,12 +186,18 @@ RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
 
 # -- tenzir-ce -------------------------------------------------------------------
 
-FROM production AS tenzir-ce
+FROM tenzir-de AS tenzir-ce
 
 COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
 COPY --from=netflow-plugin --chown=tenzir:tenzir /plugin/netflow /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline_manager /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
+
+# -- tenzir-node-ce ------------------------------------------------------------
+
+FROM tenzir-ce AS tenzir-node-ce
+
+ENTRYPOINT ["tenzir-node"]
 
 # -- tenzir-demo --------------------------------------------------------------
 
@@ -208,8 +220,18 @@ FROM tenzir-ce AS tenzir-ee
 
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 
+# -- tenzir-node-ee ------------------------------------------------------------
+
+FROM tenzir-ee AS tenzir-node-ee
+
+ENTRYPOINT ["tenzir-node"]
+
+# -- tenzir-node -----------------------------------------------------------------
+
+FROM tenzir-node-ce AS tenzir-node
+
 # -- tenzir ----------------------------------------------------------------------
 
-# As a last stage we re-introduce tenzir without proprietary plugins so that it's
+# As a last stage we re-introduce the community edition as tenzir so that it's
 # the default when not specifying a build target.
-FROM production AS tenzir
+FROM tenzir-ce AS tenzir

@@ -6,9 +6,9 @@ on:
         type: boolean
         default: false
         required: false
-      push-ce-to-ecr:
+      push-ce-to-ghcr:
         type: boolean
-        default: false
+        default: true
         required: false
       push-demo-to-ecr:
         type: boolean
@@ -62,17 +62,17 @@ jobs:
             '."editions" = [
               if ${{ inputs.push-de-to-ghcr }} then
                 {
-                  "name": "tenzir-de", "target": "tenzir", "registries": [
+                  "name": "tenzir-de", "target": "tenzir-de", "registries": [
                    "ghcr.io"
                   ]
                 }
               else
                 empty
               end,
-              if ${{ inputs.push-ce-to-ecr }} then
+              if ${{ inputs.push-ce-to-ghcr }} then
                 {
-                  "name": "tenzir-ce", "target": "tenzir-ce", "registries": [
-                   "622024652768.dkr.ecr.eu-west-1.amazonaws.com"
+                  "name": "tenzir", "target": "tenzir", "registries": [
+                   "ghcr.io"
                   ]
                 }
               else

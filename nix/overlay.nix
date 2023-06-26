@@ -166,11 +166,11 @@ in {
       ../version.json
     ];
   };
-  tenzir = final.callPackage ./tenzir {
+  tenzir-de = final.callPackage ./tenzir {
     inherit stdenv versionShortOverride versionLongOverride;
   };
   tenzir-ce = let
-    pkg = final.tenzir.override {
+    pkg = final.tenzir-de.override {
       pname = "tenzir-ce";
     };
   in
@@ -181,7 +181,7 @@ in {
       ps.platform
     ]);
   tenzir-cm = let
-    pkg = final.tenzir.override {
+    pkg = final.tenzir-de.override {
       pname = "tenzir-cm";
     };
   in
@@ -190,7 +190,7 @@ in {
       ps.matcher
     ]);
   tenzir-ee = let
-    pkg = final.tenzir.override {
+    pkg = final.tenzir-de.override {
       pname = "tenzir-ee";
     };
   in
@@ -202,6 +202,8 @@ in {
       ps.pipeline_manager
       ps.platform
     ]);
+  # For the time being we default to the community edition.
+  tenzir = final.tenzir-ce;
   tenzir-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [
