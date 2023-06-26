@@ -4,13 +4,13 @@
   name,
   src,
   cmake,
-  vast,
+  tenzir,
 }:
 stdenv.mkDerivation {
   inherit name src;
 
   nativeBuildInputs = [cmake];
-  buildInputs = [vast];
+  buildInputs = [tenzir];
 
   meta = with lib; {
     platforms = platforms.linux;

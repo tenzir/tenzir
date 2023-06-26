@@ -3,12 +3,12 @@
   inherit (pkgs.stdenv.hostPlatform) isStatic;
 in
   pkgs.mkShell ({
-      name = "vast-dev";
+      name = "tenzir-dev";
       hardeningDisable = ["fortify"] ++ lib.optional isStatic "pic";
-      inputsFrom = [pkgs.vast];
+      inputsFrom = [pkgs.tenzir];
       nativeBuildInputs =
         [pkgs.ccache pkgs.speeve pkgs.clang-tools]
-        ++ pkgs.vast-integration-test-deps
+        ++ pkgs.tenzir-integration-test-deps
         ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
           # Make clang available as alternative compiler when it isn't the default.
           pkgs.clang_16

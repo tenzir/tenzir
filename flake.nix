@@ -34,27 +34,27 @@
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [overlay];
         inherit
           (builtins.fromJSON (builtins.readFile ./version.json))
-          vast-version-fallback
-          vast-version-rev-count
+          tenzir-version-fallback
+          tenzir-version-rev-count
           ;
         hasVersionSuffix = builtins.hasAttr "revCount" self;
         versionSuffix =
           if hasVersionSuffix
-          then "-${builtins.toString (self.revCount - vast-version-rev-count)}-g${builtins.substring 0 10 self.rev}"
+          then "-${builtins.toString (self.revCount - tenzir-version-rev-count)}-g${builtins.substring 0 10 self.rev}"
           else "";
         # Simulate `git describe --abbrev=10 --match='v[0-9]*`.
         # We would like to simulate `--dirty` too, but that is currently not
         # possible (yet?: https://github.com/NixOS/nix/pull/5385).
         versionShortOverride =
-          "${vast-version-fallback}"
+          "${tenzir-version-fallback}"
           # If self.revCount is equal to the refCount of the tagged commit, then
           # self.rev must be the tagged commit and the fallback itself is the
           # correct version. If not we append the difference between both counts
           # and the abbreviated commit hash.
-          + pkgs.lib.optionalString (hasVersionSuffix && self.revCount > vast-version-rev-count)
+          + pkgs.lib.optionalString (hasVersionSuffix && self.revCount > tenzir-version-rev-count)
           versionSuffix;
         # Simulate `git describe --abbrev=10 --long --match='v[0-9]*`.
-        versionLongOverride = "${vast-version-fallback}${versionSuffix}";
+        versionLongOverride = "${tenzir-version-fallback}${versionSuffix}";
         stream-image = {
           name,
           pkg,
@@ -65,39 +65,39 @@
             # Don't overwrite "latest" Dockerfile based build.
             tag = "latest-nix";
             config = let
-              vast-dir = "/var/lib/vast";
+              tenzir-dir = "/var/lib/tenzir";
             in {
-              Entrypoint = ["${pkgs.lib.getBin pkg}/bin/vast"];
+              Entrypoint = ["${pkgs.lib.getBin pkg}/bin/tenzir"];
               CMD = ["--help"];
               Env = [
                 # When changing these, make sure to also update the entries in the
                 # Dockerfile.
-                "VAST_ENDPOINT=0.0.0.0"
-                "VAST_DB_DIRECTORY=${vast-dir}"
-                "VAST_LOG_FILE=/var/log/vast/server.log"
+                "TENZIR_ENDPOINT=0.0.0.0"
+                "TENZIR_DB_DIRECTORY=${tenzir-dir}"
+                "TENZIR_LOG_FILE=/var/log/tenzir/server.log"
               ];
               ExposedPorts = {
                 "5158/tcp" = {};
               };
-              WorkingDir = "${vast-dir}";
+              WorkingDir = "${tenzir-dir}";
               Volumes = {
-                "${vast-dir}" = {};
+                "${tenzir-dir}" = {};
               };
             };
           }}";
         };
       in {
         packages = flake-utils.lib.flattenTree {
-          tenzir = pkgs.vast;
-          tenzir-static = pkgs.pkgsStatic.vast;
-          tenzir-ce = pkgs.vast-ce;
-          tenzir-ce-static = pkgs.pkgsStatic.vast-ce;
-          tenzir-cm = pkgs.vast-cm;
-          tenzir-cm-static = pkgs.pkgsStatic.vast-cm;
-          tenzir-ee = pkgs.vast-ee;
-          tenzir-ee-static = pkgs.pkgsStatic.vast-ee;
+          tenzir = pkgs.tenzir;
+          tenzir-static = pkgs.pkgsStatic.tenzir;
+          tenzir-ce = pkgs.tenzir;
+          tenzir-ce-static = pkgs.pkgsStatic.tenzir;
+          tenzir-cm = pkgs.tenzir;
+          tenzir-cm-static = pkgs.pkgsStatic.tenzir;
+          tenzir-ee = pkgs.tenzir;
+          tenzir-ee-static = pkgs.pkgsStatic.tenzir;
           integration-test-shell = pkgs.mkShell {
-            packages = pkgs.vast-integration-test-deps;
+            packages = pkgs.tenzir;
           };
         } // {
           default = self.packages.${system}.tenzir;
@@ -112,35 +112,37 @@
           vast-ee-static = self.packages.${system}.tenzir-ee-static;
           vast-integration-test-shell = self.packages.${system}.integration-test-shell;
         };
-        apps.tenzir = flake-utils.lib.mkApp {drv = self.packages.vast;};
-        apps.tenzir-static = flake-utils.lib.mkApp {drv = self.packages.vast-static;};
-        apps.tenzir-ce = flake-utils.lib.mkApp {drv = self.packages.vast-ce;};
-        apps.tenzir-ce-static = flake-utils.lib.mkApp {drv = self.packages.vast-ce-static;};
-        apps.tenzir-ee = flake-utils.lib.mkApp {drv = self.packages.vast-ee;};
-        apps.tenzir-ee-static = flake-utils.lib.mkApp {drv = self.packages.vast-ee-static;};
+        apps.tenzir = flake-utils.lib.mkApp {drv = self.packages.tenzir;};
+        apps.tenzir-static = flake-utils.lib.mkApp {drv = self.packages.tenzir-static;};
+        apps.tenzir-ce = flake-utils.lib.mkApp {drv = self.packages.tenzir-ce;};
+        apps.tenzir-ce-static = flake-utils.lib.mkApp {drv =
+          self.packages.tenzir-ce-static;};
+        apps.tenzir-ee = flake-utils.lib.mkApp {drv = self.packages.tenzir-ee;};
+        apps.tenzir-ee-static = flake-utils.lib.mkApp {drv =
+          self.packages.tenzir-ee-static;};
         apps.stream-tenzir-image = stream-image {
           name = "tenzir/tenzir";
-          pkg = self.packages.${system}.vast;
+          pkg = self.packages.${system}.tenzir;
         };
         apps.stream-tenzir-slim-image = stream-image {
           name = "tenzir/tenzir-slim";
-          pkg = self.packages.${system}.vast-static;
+          pkg = self.packages.${system}.tenzir-static;
         };
         apps.stream-tenzir-ce-image = stream-image {
           name = "tenzir/tenzir-ce";
-          pkg = self.packages.${system}.vast-ce;
+          pkg = self.packages.${system}.tenzir-ce;
         };
         apps.stream-tenzir-ce-slim-image = stream-image {
           name = "tenzir/tenzir-ce-slim";
-          pkg = self.packages.${system}.vast-ce-static;
+          pkg = self.packages.${system}.tenzir-ce-static;
         };
         apps.stream-tenzir-ee-image = stream-image {
           name = "tenzir/tenzir-ee";
-          pkg = self.packages.${system}.vast-ee;
+          pkg = self.packages.${system}.tenzir-ee;
         };
         apps.stream-tenzir-ee-slim-image = stream-image {
           name = "tenzir/tenzir-ee-slim";
-          pkg = self.packages.${system}.vast-ee-static;
+          pkg = self.packages.${system}.tenzir-ee-static;
         };
         apps.default = self.apps.tenzir;
         # Legacy aliases for backwards compatibility.
