@@ -2,10 +2,6 @@ add_executable(tenzir tenzir.cpp)
 VASTTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE vast::internal vast::libvast)
 VASTTargetLinkWholeArchive(tenzir PRIVATE vast::libvast_builtins)
-install(
-  TARGETS tenzir
-  DESTINATION "${CMAKE_INSTALL_BINDIR}"
-  COMPONENT Runtime)
 add_executable(vast::tenzir ALIAS tenzir)
 
 # Install vast in PREFIX/lib and headers in PREFIX/include/vast.
@@ -17,20 +13,42 @@ install(
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
 macro (create_tenzir_symlink name)
+  # Implicitly create tenzir-ctl and tenzir-node symlinks when building tenzir.
+  # That means that the links get re-created every time tenzir is built, but we
+  # tolerate this overhead to avoid the inconvenience of missing links.
   add_custom_command(
-    OUTPUT "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/${name}"
+    TARGET tenzir
+    POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E create_symlink "./tenzir"
-            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/${name}"
-    DEPENDS tenzir
-    COMMENT "Creating ${name} symlink")
-  add_custom_target(
-    "${name}" ALL DEPENDS "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/${name}")
-  install(
-    CODE "
-    execute_process(COMMAND
-      \"${CMAKE_COMMAND}\" -E create_symlink \"./tenzir\"
-      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${name}\")"
-    COMPONENT Runtime)
+            "$<TARGET_FILE_DIR:tenzir>/${name}"
+    COMMENT "Creating ${name} symlink"
+    VERBATIM)
+  # We want the clean target to remove the symlinks, but TARGET* generator
+  # expressions aren't allowed in BYPRODUCTS. We can work around that with a
+  # low-level mechanism.
+  set_property(
+    TARGET tenzir
+    APPEND
+    PROPERTY ADDITIONAL_CLEAN_FILES "$<TARGET_FILE_DIR:tenzir>/${name}")
+  # The generated code in cmake_install.cmake for executable targets is
+  # different depending on whether the CMAKE_INSTALL_BINDIR is set to an
+  # absolute path or not. We emulate this behavior for the symlinks here so they
+  # will always end up in the same location.
+  if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+    install(
+      CODE "
+      execute_process(COMMAND
+        \"${CMAKE_COMMAND}\" -E create_symlink \"./tenzir\"
+        \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/${name}\")"
+      COMPONENT Runtime)
+  else ()
+    install(
+      CODE "
+      execute_process(COMMAND
+        \"${CMAKE_COMMAND}\" -E create_symlink \"./tenzir\"
+        \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_BINDIR}/${name}\")"
+      COMPONENT Runtime)
+  endif ()
 endmacro ()
 
 create_tenzir_symlink(tenzir-node)
@@ -39,8 +57,8 @@ create_tenzir_symlink(vast)
 
 # -- example configuration file -----------------------------------------------
 
-VASTInstallExampleConfiguration(vast "${PROJECT_SOURCE_DIR}/tenzir.yaml.example"
-                                "" "vast.yaml")
+VASTInstallExampleConfiguration(
+  tenzir "${PROJECT_SOURCE_DIR}/tenzir.yaml.example" "" "tenzir.yaml")
 
 # -- init system integration ---------------------------------------------------
 
@@ -209,7 +227,7 @@ if (VAST_ENABLE_MANPAGES)
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     COMMENT "Generating vast.1"
     VERBATIM)
-  add_dependencies(vast vast-manpage)
+  add_dependencies(tenzir vast-manpage)
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
