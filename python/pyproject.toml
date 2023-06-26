@@ -32,7 +32,7 @@ pandas = ">=1.5,<3.0"
 pyarrow = ">=11,<13"
 
 [tool.poetry.dev-dependencies]
-pytest = "^7.3"
+pytest = "^7.4"
 pytest-asyncio = "^0.21.0"
 
 [tool.pytest.ini_options]
