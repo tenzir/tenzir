@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/argument_parser.hpp"
 #include "vast/pipeline.hpp"
 
 #include <vast/concept/parseable/string/char_class.hpp>
@@ -20,9 +21,12 @@ namespace vast::plugins::flatten {
 
 namespace {
 
-// Does nothing with the input.
+constexpr auto default_flatten_separator = ".";
+
 class flatten_operator final : public crtp_operator<flatten_operator> {
 public:
+  flatten_operator() = default;
+
   flatten_operator(std::string separator) : separator_{std::move(separator)} {
   }
 
@@ -49,54 +53,28 @@ public:
     return fmt::format("flatten '{}'", separator_);
   }
 
-private:
-  std::string separator_ = {};
-};
-
-class plugin final : public virtual operator_plugin {
-public:
-  // plugin API
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
   auto name() const -> std::string override {
     return "flatten";
-  };
+  }
 
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator,
-      parsers::operator_arg;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = -(optional_ws_or_comment >> operator_arg)
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto separator = std::string{};
-    if (!p(f, l, separator)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "flatten operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    if (separator.find('\'') != std::string::npos) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error,
-                        "failed to parse flatten operator: separator must not "
-                        "contain a single quote"),
-      };
-    }
-    if (separator.empty())
-      separator = ".";
-    return {
-      std::string_view{f, l},
-      std::make_unique<flatten_operator>(std::move(separator)),
-    };
+  friend auto inspect(auto& f, flatten_operator& x) -> bool {
+    return f.apply(x.separator_);
+  }
+
+private:
+  std::string separator_ = default_flatten_separator;
+};
+
+class plugin final : public virtual operator_plugin<flatten_operator> {
+public:
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"head", "https://vast.io/next/"
+                                          "operators/transformations/flatten"};
+    auto sep = std::optional<located<std::string>>{};
+    parser.add(sep, "<sep>");
+    parser.parse(p);
+    auto separator = (sep) ? sep->inner : default_flatten_separator;
+    return std::make_unique<flatten_operator>(separator);
   }
 };
 
