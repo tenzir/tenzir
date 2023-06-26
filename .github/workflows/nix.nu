@@ -76,10 +76,11 @@ def push_images [
   }
   let image_name = ($name | str replace "static" "slim")
   let repo_name = ($name | str replace "-static" "")
+  let tag_suffix = if ($name | str contains "-static") {"-slim"} else {""}
   nix run $".#stream-($image_name)-image" | zstd -fo image.tar.zst
   for reg in $image_registries {
     for tag in $container_tags {
-      let dest = $"docker://($reg)/tenzir/($repo_name):($tag)"
+      let dest = $"docker://($reg)/tenzir/($repo_name):($tag)($tag_suffix)"
       print $"::notice pushing ($dest)"
       skopeo copy docker-archive:./image.tar.zst $dest
     }
