@@ -159,9 +159,8 @@ in {
       ../VERSIONING.md
       ../CMakeLists.txt
       ../LICENSE
-      ../VAST.spdx
       ../README.md
-      ../VAST.spdx
+      ../Tenzir.spdx
       ../VERSIONING.md
       ../tenzir.yaml.example
       ../version.json

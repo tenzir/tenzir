@@ -22,7 +22,7 @@ COPY plugins ./plugins
 COPY python ./python
 COPY schema ./schema
 COPY vast ./vast
-COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
+COPY CMakeLists.txt LICENSE README.md Tenzir.spdx VERSIONING.md \
      tenzir.yaml.example version.json ./
 
 # -- development ---------------------------------------------------------------

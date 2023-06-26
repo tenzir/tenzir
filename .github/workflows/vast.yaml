@@ -780,15 +780,15 @@ jobs:
           # for builds of the latest release.
           asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
           asset_content_type: application/gzip
-      - name: Publish VAST.spdx to GitHub Release
+      - name: Publish Tenzir.spdx to GitHub Release
         if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "VAST.spdx"
-          asset_name: "VAST.spdx"
+          asset_path: "Tenzir.spdx"
+          asset_name: "Tenzir.spdx"
           asset_content_type: text/plain
 
   tenzir-plugins:
