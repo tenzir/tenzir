@@ -918,24 +918,21 @@ auto flatten_record(
   std::string_view separator, std::string_view name_prefix,
   const std::vector<std::shared_ptr<arrow::Array>>& list_offsets,
   struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
-  -> std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>;
+  -> indexed_transformation::result_type;
 
 auto flatten_list(std::string_view separator, std::string_view name_prefix,
                   std::vector<std::shared_ptr<arrow::Array>> list_offsets,
                   struct record_type::field field,
                   const std::shared_ptr<arrow::Array>& array)
-  -> std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-  using result_type = std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>;
+  -> indexed_transformation::result_type {
   const auto& lt = caf::get<list_type>(field.type);
   auto list_array
     = std::static_pointer_cast<type_to_arrow_array_t<list_type>>(array);
   list_offsets.push_back(list_array->offsets());
   auto f = detail::overload{
-    [&]<concrete_type Type>(const Type&) -> result_type {
-      auto result = result_type{};
+    [&]<concrete_type Type>(
+      const Type&) -> indexed_transformation::result_type {
+      auto result = indexed_transformation::result_type{};
       if (list_offsets.empty()) {
         result.push_back({
           {
@@ -957,11 +954,11 @@ auto flatten_list(std::string_view separator, std::string_view name_prefix,
       }
       return result;
     },
-    [&](const list_type& lt) -> result_type {
+    [&](const list_type& lt) -> indexed_transformation::result_type {
       return flatten_list(separator, name_prefix, std::move(list_offsets),
                           {field.name, lt}, list_array->values());
     },
-    [&](const record_type& rt) -> result_type {
+    [&](const record_type& rt) -> indexed_transformation::result_type {
       return flatten_record(separator, name_prefix, list_offsets,
                             {field.name, rt}, list_array->values());
     },
@@ -973,10 +970,7 @@ auto flatten_record(
   std::string_view separator, std::string_view name_prefix,
   const std::vector<std::shared_ptr<arrow::Array>>& list_offsets,
   struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
-  -> std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-  using result_type = std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>;
+  -> indexed_transformation::result_type {
   const auto& rt = caf::get<record_type>(field.type);
   auto struct_array
     = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
@@ -992,7 +986,7 @@ auto flatten_record(
     = transform_columns(field.type, struct_array, transformations);
   VAST_ASSERT(output_type);
   VAST_ASSERT(output_struct_array);
-  auto result = result_type{};
+  auto result = indexed_transformation::result_type{};
   result.reserve(output_struct_array->num_fields());
   const auto& output_rt = caf::get<record_type>(output_type);
   for (int i = 0; i < output_struct_array->num_fields(); ++i) {
@@ -1011,12 +1005,10 @@ auto make_flatten_transformation(
   -> indexed_transformation::function_type {
   return [=](struct record_type::field field,
              std::shared_ptr<arrow::Array> array)
-           -> std::vector<std::pair<struct record_type::field,
-                                    std::shared_ptr<arrow::Array>>> {
-    using result_type = std::vector<
-      std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>;
+           -> indexed_transformation::result_type {
     auto f = detail::overload{
-      [&]<concrete_type Type>(const Type&) -> result_type {
+      [&]<concrete_type Type>(
+        const Type&) -> indexed_transformation::result_type {
         // Return unchanged, but use prefix, and wrap in a list if we need to.
         if (list_offsets.empty()) {
           return {
@@ -1040,11 +1032,11 @@ auto make_flatten_transformation(
           },
         };
       },
-      [&](const list_type&) -> result_type {
+      [&](const list_type&) -> indexed_transformation::result_type {
         return flatten_list(separator, name_prefix, list_offsets,
                             std::move(field), array);
       },
-      [&](const record_type&) -> result_type {
+      [&](const record_type&) -> indexed_transformation::result_type {
         return flatten_record(separator, name_prefix, list_offsets,
                               std::move(field), array);
       },

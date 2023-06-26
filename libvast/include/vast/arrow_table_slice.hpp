@@ -341,8 +341,9 @@ auto values(const type& type,
 }
 
 struct indexed_transformation {
-  using function_type = std::function<std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>(
+  using result_type = std::vector<
+    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>;
+  using function_type = std::function<result_type(
     struct record_type::field, std::shared_ptr<arrow::Array>)>;
 
   offset index;      ///< The index of the field to transform.
