@@ -1145,4 +1145,105 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   };
 }
 
+auto unflatten(const table_slice& slice,
+               std::string_view nested_field_separator) -> table_slice {
+  if (slice.rows() == 0u)
+    return slice;
+  auto slice_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+  // Used to map parent fields to it's children for unflattening purposes.
+  // Given foo.bar and foo.baz as fields of input slice the algorithm will first
+  // create an instance of unflattened_field for 'foo' key. The created instance
+  // will combine 'bar' and 'baz' fields into a struct array. All the fields
+  // that should be combined under the 'foo' key will use this map to find the
+  // approperiate object which should aggregate it.
+  std::unordered_map<std::string_view, unflatten_field> unflattened_field_map;
+  std::unordered_map<std::string_view, unflatten_field*>
+    original_field_name_to_new_field_map;
+  // Aggregates all flattened field names under the key that represents the
+  // count of nested_field_separator occurrences. The algorithm starts iterating
+  // over this map so that it can distinguish if a separator separates nested
+  // fields or if it is a part of a field_name. E.g the field cpu : 5 and
+  // cpu.logger : 10 are a valid input. We may also have other
+  // nested fields that are separated by a '.', but these two can't be nested
+  // fields. The algorithm will start with the 'cpu' field and add it to the
+  // unflattened_field_map as it doesn't have any separator in it's field name.
+  // The cpu.logger will be split into 'cpu' and 'logger'. The presence of
+  // 'cpu' in the map indicates that this name is reserved for a field. In such
+  // cases the cpu.logger must itself be a field that cannot be unflattened.
+  std::map<std::size_t, std::vector<std::string_view>> fields_to_resolve;
+  for (const auto& k : slice_array->struct_type()->fields()) {
+    const auto& field_name = k->name();
+    auto separator_count
+      = count_substring_occurrences(field_name, nested_field_separator);
+    if (separator_count > 0u) {
+      fields_to_resolve[separator_count].push_back(field_name);
+      continue;
+    }
+    unflattened_field_map[field_name]
+      = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
+    original_field_name_to_new_field_map[field_name]
+      = std::addressof(unflattened_field_map[field_name]);
+  }
+  for (const auto& [_, fields] : fields_to_resolve) {
+    for (const auto& field : fields) {
+      auto prefix_separator = field.find_last_of(nested_field_separator);
+      auto prefix = std::string_view{field.data(), prefix_separator};
+      // Presence of a prefix means that we cannot unflatten the current
+      // field so it is an unflattend field itself.
+      if (original_field_name_to_new_field_map.contains(prefix)) {
+        unflattened_field_map[field] = unflatten_field{
+          field, slice_array->GetFieldByName(std::string{field})};
+        original_field_name_to_new_field_map[field]
+          = std::addressof(unflattened_field_map[field]);
+        continue;
+      }
+      // Try to find the parent field name. E.g with input fields "foo.bar.x",
+      // "foo.bar.z", "foo", "foo.bar.z.b" The fields with least separators are
+      // handled first. The "foo" is unflattened to "foo". The "foo.bar.x" will
+      // be split into "foo.bar" and "x". The "x" is a field name if
+      // unflattening is successful. The loop should start checking at "foo". If
+      // this field is unflattened then it advanced to the next separator
+      // ("foo.bar") The "foo.bar" is not unflattened field so it can be the
+      // parent for "x". The "foo.bar.z" will be added as a child of the
+      // "foo.bar" as the "foo.bar" is not a name of a field after unflattening.
+      // The "foo.bar.z.b" will be left as "foo.bar.z.b" because "foo.bar.z"
+      // already is mapped to a parent.
+      auto current_pos = field.find_first_of(nested_field_separator);
+      for (; current_pos != std::string_view::npos;
+           current_pos
+           = field.find_first_of(nested_field_separator, current_pos + 1)) {
+        auto parent_field_name = std::string_view{field.data(), current_pos};
+        if (not original_field_name_to_new_field_map.contains(
+              parent_field_name)) {
+          auto& struct_field = unflattened_field_map[parent_field_name];
+          struct_field.field_name_ = parent_field_name;
+          struct_field.add(field.substr(current_pos + 1),
+                           nested_field_separator,
+                           slice_array->GetFieldByName(std::string{field}));
+          original_field_name_to_new_field_map[field]
+            = std::addressof(unflattened_field_map[parent_field_name]);
+          break;
+        }
+      }
+      // No parent found
+      if (current_pos == std::string_view::npos) {
+        auto& struct_field = unflattened_field_map[field];
+        struct_field.field_name_ = field;
+        original_field_name_to_new_field_map[field]
+          = std::addressof(struct_field);
+      }
+    }
+  }
+  auto new_arr = make_unflattened_struct_array(
+    slice_array->struct_type()->fields(), original_field_name_to_new_field_map);
+  auto schema
+    = vast::type{slice.schema().name(), type::from_arrow(*new_arr->type())};
+  const auto new_batch = arrow::RecordBatch::Make(
+    schema.to_arrow_schema(), new_arr->length(), new_arr->fields());
+  auto ret = table_slice{new_batch, std::move(schema)};
+  ret.import_time(slice.import_time());
+  ret.offset(slice.offset());
+  return ret;
+}
+
 } // namespace vast
