@@ -87,39 +87,45 @@
           }}";
         };
       in {
-        packages = flake-utils.lib.flattenTree {
-          tenzir = pkgs.tenzir;
-          tenzir-static = pkgs.pkgsStatic.tenzir;
-          tenzir-ce = pkgs.tenzir;
-          tenzir-ce-static = pkgs.pkgsStatic.tenzir;
-          tenzir-cm = pkgs.tenzir;
-          tenzir-cm-static = pkgs.pkgsStatic.tenzir;
-          tenzir-ee = pkgs.tenzir;
-          tenzir-ee-static = pkgs.pkgsStatic.tenzir;
-          integration-test-shell = pkgs.mkShell {
-            packages = pkgs.tenzir;
+        packages =
+          flake-utils.lib.flattenTree {
+            tenzir = pkgs.tenzir;
+            tenzir-static = pkgs.pkgsStatic.tenzir;
+            tenzir-ce = pkgs.tenzir;
+            tenzir-ce-static = pkgs.pkgsStatic.tenzir;
+            tenzir-cm = pkgs.tenzir;
+            tenzir-cm-static = pkgs.pkgsStatic.tenzir;
+            tenzir-ee = pkgs.tenzir;
+            tenzir-ee-static = pkgs.pkgsStatic.tenzir;
+            integration-test-shell = pkgs.mkShell {
+              packages = pkgs.tenzir;
+            };
+          }
+          // {
+            default = self.packages.${system}.tenzir;
+            # Legacy aliases for backwards compatibility.
+            vast = self.packages.${system}.tenzir;
+            vast-static = self.packages.${system}.tenzir-static;
+            vast-ce = self.packages.${system}.tenzir-ce;
+            vast-ce-static = self.packages.${system}.tenzir-ce-static;
+            vast-cm = self.packages.${system}.tenzir-cm;
+            vast-cm-static = self.packages.${system}.tenzir-cm-static;
+            vast-ee = self.packages.${system}.tenzir-ee;
+            vast-ee-static = self.packages.${system}.tenzir-ee-static;
+            vast-integration-test-shell = self.packages.${system}.integration-test-shell;
           };
-        } // {
-          default = self.packages.${system}.tenzir;
-          # Legacy aliases for backwards compatibility.
-          vast = self.packages.${system}.tenzir;
-          vast-static = self.packages.${system}.tenzir-static;
-          vast-ce = self.packages.${system}.tenzir-ce;
-          vast-ce-static = self.packages.${system}.tenzir-ce-static;
-          vast-cm = self.packages.${system}.tenzir-cm;
-          vast-cm-static = self.packages.${system}.tenzir-cm-static;
-          vast-ee = self.packages.${system}.tenzir-ee;
-          vast-ee-static = self.packages.${system}.tenzir-ee-static;
-          vast-integration-test-shell = self.packages.${system}.integration-test-shell;
-        };
         apps.tenzir = flake-utils.lib.mkApp {drv = self.packages.tenzir;};
         apps.tenzir-static = flake-utils.lib.mkApp {drv = self.packages.tenzir-static;};
         apps.tenzir-ce = flake-utils.lib.mkApp {drv = self.packages.tenzir-ce;};
-        apps.tenzir-ce-static = flake-utils.lib.mkApp {drv =
-          self.packages.tenzir-ce-static;};
+        apps.tenzir-ce-static = flake-utils.lib.mkApp {
+          drv =
+            self.packages.tenzir-ce-static;
+        };
         apps.tenzir-ee = flake-utils.lib.mkApp {drv = self.packages.tenzir-ee;};
-        apps.tenzir-ee-static = flake-utils.lib.mkApp {drv =
-          self.packages.tenzir-ee-static;};
+        apps.tenzir-ee-static = flake-utils.lib.mkApp {
+          drv =
+            self.packages.tenzir-ee-static;
+        };
         apps.stream-tenzir-image = stream-image {
           name = "tenzir/tenzir";
           pkg = self.packages.${system}.tenzir;
