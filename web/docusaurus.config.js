@@ -255,7 +255,8 @@ async function createConfig() {
         },
         announcementBar: {
           content:
-            'Leave us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/tenzir/stargazers">a GitHub star</a> ⭐️',
+//            'Leave us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/tenzir/stargazers">a GitHub star</a> ⭐️',
+            'VAST is now Tenzir! <a target="_blank" rel="noopener noreferrer" href="/blog/vast-to-tenzir">Read why</a> and learn <a target="_blank" rel="noopener noreferrer" href="/blog/migrating-from-vast-to-tenzir">how to migrate</a>.',
           backgroundColor: '#f1f2f2',
           isCloseable: true,
         },
