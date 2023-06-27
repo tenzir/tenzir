@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#pragma once
-
 #include "vast/pcap.hpp"
 
 #include "vast/detail/byteswap.hpp"
