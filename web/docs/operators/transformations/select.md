@@ -1,6 +1,6 @@
 # select
 
-Selects fields from the input. The dual to [`drop`](drop.md).
+Selects fields from the input.
 
 ## Synopsis
 
@@ -11,14 +11,14 @@ select <extractor>...
 ## Description
 
 The `select` operator keeps only the fields matching the provided extractors and
-removes all other fields.
+removes all other fields. It is the dual to [`drop`](drop.md).
 
 In relational algebra, `select` performs a *projection* of the provided
 arguments.
 
 ### `<extractor>...`
 
-The list of extractors identifying fields to keep.
+The comma-separator list of extractors that identifies the fields to keep.
 
 ## Examples
 
