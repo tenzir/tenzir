@@ -111,15 +111,15 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     return false;
   }
   bool is_server = cmd_invocation.full_name == "start"
-                   || caf::get_or(cmd_invocation.options, "vast.node", false);
+                   || caf::get_or(cmd_invocation.options, "tenzir.node", false);
   const auto& cfg_cmd = cmd_invocation.options;
   std::string console_verbosity = vast::defaults::logger::console_verbosity;
   auto cfg_console_verbosity
-    = caf::get_if<std::string>(&cfg_file, "vast.console-verbosity");
+    = caf::get_if<std::string>(&cfg_file, "tenzir.console-verbosity");
   if (cfg_console_verbosity) {
     if (loglevel_to_int(*cfg_console_verbosity, -1) < 0) {
       fmt::print(stderr,
-                 "failed to start logger; vast.console-verbosity '{}' is "
+                 "failed to start logger; tenzir.console-verbosity '{}' is "
                  "invalid\n",
                  *cfg_console_verbosity);
       return false;
@@ -129,12 +129,13 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   }
   std::string file_verbosity = vast::defaults::logger::file_verbosity;
   auto cfg_file_verbosity
-    = caf::get_if<std::string>(&cfg_file, "vast.file-verbosity");
+    = caf::get_if<std::string>(&cfg_file, "tenzir.file-verbosity");
   if (cfg_file_verbosity) {
     if (loglevel_to_int(*cfg_file_verbosity, -1) < 0) {
-      fmt::print(
-        stderr, "failed to start logger; vast.file-verbosity '{}' is invalid\n",
-        *cfg_file_verbosity);
+      fmt::print(stderr,
+                 "failed to start logger; tenzir.file-verbosity '{}' is "
+                 "invalid\n",
+                 *cfg_file_verbosity);
       return false;
     } else {
       file_verbosity = *cfg_file_verbosity;
@@ -145,7 +146,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   auto vast_verbosity = std::max(vast_file_verbosity, vast_console_verbosity);
   // Helper to set the color mode
   spdlog::color_mode log_color = [&]() -> spdlog::color_mode {
-    auto config_value = caf::get_or(cfg_file, "vast.console", "automatic");
+    auto config_value = caf::get_or(cfg_file, "tenzir.console", "automatic");
     if (config_value == "automatic")
       return spdlog::color_mode::automatic;
     if (config_value == "always")
@@ -153,16 +154,16 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
 
     return spdlog::color_mode::never;
   }();
-  auto log_file = caf::get_or(cfg_file, "vast.log-file",
+  auto log_file = caf::get_or(cfg_file, "tenzir.log-file",
                               std::string{defaults::logger::log_file});
-  auto cmdline_log_file = caf::get_if<std::string>(&cfg_cmd, "vast.log-file");
+  auto cmdline_log_file = caf::get_if<std::string>(&cfg_cmd, "tenzir.log-file");
   if (cmdline_log_file)
     log_file = *cmdline_log_file;
   if (is_server) {
     if (log_file == defaults::logger::log_file
         && vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
       std::filesystem::path log_dir = caf::get_or(
-        cfg_file, "vast.db-directory", defaults::db_directory.data());
+        cfg_file, "tenzir.db-directory", defaults::db_directory.data());
       std::error_code err{};
       if (!std::filesystem::exists(log_dir, err)) {
         const auto created_log_dir
@@ -180,10 +181,10 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   } else {
     // Please note, client file does not go to db_directory!
     auto client_log_file
-      = caf::get_if<std::string>(&cfg_cmd, "vast.client-log-file");
+      = caf::get_if<std::string>(&cfg_cmd, "tenzir.client-log-file");
     if (!client_log_file)
       client_log_file
-        = caf::get_if<std::string>(&cfg_file, "vast.client-log-file");
+        = caf::get_if<std::string>(&cfg_file, "tenzir.client-log-file");
     if (client_log_file)
       log_file = *client_log_file;
     else // If there is no client log file, turn off file logging
@@ -192,7 +193,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   auto default_queue_size = is_server ? defaults::logger::server_queue_size
                                       : defaults::logger::client_queue_size;
   auto queue_size
-    = caf::get_or(cfg_file, "vast.log-queue-size", default_queue_size);
+    = caf::get_or(cfg_file, "tenzir.log-queue-size", default_queue_size);
   spdlog::init_thread_pool(queue_size, defaults::logger::logger_threads);
   std::vector<spdlog::sink_ptr> sinks;
   // Add console sink.
@@ -201,7 +202,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
         ? "journald"
         : "stderr";
   auto sink_type
-    = caf::get_or(cfg_file, "vast.console-sink", default_sink_type);
+    = caf::get_or(cfg_file, "tenzir.console-sink", default_sink_type);
   auto console_sink = [&]() -> spdlog::sink_ptr {
     if (sink_type == "stderr") {
       auto stderr_sink
@@ -209,8 +210,9 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       return stderr_sink;
     } else if (sink_type == "journald") {
 #if !VAST_ENABLE_JOURNALD_LOGGING
-      fmt::print(stderr, "failed to start logger; vast.console-sink 'journald' "
-                         "required VAST built with systemd support\n");
+      fmt::print(stderr,
+                 "failed to start logger; tenzir.console-sink 'journald' "
+                 "required VAST built with systemd support\n");
       return nullptr;
 #else
       auto spdlog_sink = std::make_shared<spdlog::sinks::systemd_sink_mt>();
@@ -222,7 +224,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       return std::static_pointer_cast<spdlog::sinks::sink>(syslog_sink);
     } else {
       fmt::print(stderr,
-                 "failed to start logger; vast.console-sink '{}' is invalid "
+                 "failed to start logger; tenzir.console-sink '{}' is invalid "
                  "(expected 'stderr', 'journald', or 'syslog')\n",
                  sink_type);
     }
@@ -231,23 +233,23 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   if (!console_sink)
     return false;
   auto console_format
-    = caf::get_or(cfg_file, "vast.console-format",
+    = caf::get_or(cfg_file, "tenzir.console-format",
                   std::string{defaults::logger::console_format});
   console_sink->set_pattern(console_format);
   console_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
   sinks.push_back(console_sink);
   // Add file sink.
   if (vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
-    bool disable_rotation = caf::get_or(cfg_file, "vast.disable-log-rotation",
+    bool disable_rotation = caf::get_or(cfg_file, "tenzir.disable-log-rotation",
                                         defaults::logger::disable_log_rotation);
     spdlog::sink_ptr file_sink = nullptr;
     if (!disable_rotation) {
       auto threshold_str
-        = detail::get_bytesize(cfg_file, "vast.log-rotation-threshold",
+        = detail::get_bytesize(cfg_file, "tenzir.log-rotation-threshold",
                                defaults::logger::rotate_threshold);
       if (!threshold_str) {
         fmt::print(stderr,
-                   "failed to start logger; vast.log-rotation-threshold is "
+                   "failed to start logger; tenzir.log-rotation-threshold is "
                    "invalid: {}\n",
                    threshold_str.error());
         return false;
@@ -258,7 +260,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file);
     }
     file_sink->set_level(vast_loglevel_to_spd(vast_file_verbosity));
-    auto file_format = caf::get_or(cfg_file, "vast.file-format",
+    auto file_format = caf::get_or(cfg_file, "tenzir.file-format",
                                    std::string{defaults::logger::file_format});
     file_sink->set_pattern(file_format);
     sinks.push_back(file_sink);

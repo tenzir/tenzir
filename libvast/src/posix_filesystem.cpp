@@ -48,7 +48,7 @@ filesystem_actor::behavior_type posix_filesystem(
   filesystem_actor::stateful_pointer<posix_filesystem_state> self,
   std::filesystem::path root, const accountant_actor& accountant) {
   if (self->getf(caf::local_actor::is_detached_flag))
-    caf::detail::set_thread_name("vast.posix-filesystem");
+    caf::detail::set_thread_name("tenzir.posix-filesystem");
   self->state.root = std::move(root);
   if (accountant) {
     self->state.accountant = accountant;

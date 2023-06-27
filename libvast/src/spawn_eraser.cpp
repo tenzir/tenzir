@@ -29,7 +29,7 @@ spawn_eraser(node_actor::stateful_pointer<node_state> self,
   using namespace std::string_literals;
   VAST_TRACE_SCOPE("{} {}", VAST_ARG(*self), VAST_ARG(args));
   // Parse options.
-  auto eraser_query = caf::get_or(args.inv.options, "vast.aging-query", ""s);
+  auto eraser_query = caf::get_or(args.inv.options, "tenzir.aging-query", ""s);
   if (eraser_query.empty()) {
     VAST_VERBOSE("{} has no aging-query and skips starting the eraser", *self);
     return ec::no_error;
@@ -39,7 +39,7 @@ spawn_eraser(node_actor::stateful_pointer<node_state> self,
     return expr.error();
   }
   auto aging_frequency = defaults::aging_frequency;
-  if (auto str = caf::get_if<std::string>(&args.inv.options, "vast.aging-"
+  if (auto str = caf::get_if<std::string>(&args.inv.options, "tenzir.aging-"
                                                              "frequency")) {
     auto parsed = to<duration>(*str);
     if (!parsed)

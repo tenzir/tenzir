@@ -88,7 +88,7 @@ inhale(const char* filename, table_slice::size_type slice_size) {
   caf::settings settings;
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
-  caf::put(settings, "vast.import.batch-timeout", "0s");
+  caf::put(settings, "tenzir.import.batch-timeout", "0s");
   auto input = std::make_unique<std::ifstream>(filename);
   Reader reader{settings, std::move(input)};
   return extract(reader, slice_size);
@@ -101,8 +101,8 @@ inhale<format::json::reader>(const char* filename,
   caf::settings settings;
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
-  caf::put(settings, "vast.import.batch-timeout", "0s");
-  caf::put(settings, "vast.import.json.selector", "event_type:suricata");
+  caf::put(settings, "tenzir.import.batch-timeout", "0s");
+  caf::put(settings, "tenzir.import.json.selector", "event_type:suricata");
   auto input = std::make_unique<std::ifstream>(filename);
   format::json::reader reader{settings, std::move(input)};
   REQUIRE_EQUAL(reader.module(events::suricata_module), caf::error{});
@@ -166,8 +166,8 @@ events::events() {
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
   // Create random table slices.
   caf::settings opts;
-  caf::put(opts, "vast.import.test.seed", std::size_t{42});
-  caf::put(opts, "vast.import.max-events", std::size_t{1000});
+  caf::put(opts, "tenzir.import.test.seed", std::size_t{42});
+  caf::put(opts, "tenzir.import.max-events", std::size_t{1000});
   vast::format::test::reader rd{std::move(opts), nullptr};
   random = extract(rd, slice_size);
   REQUIRE_EQUAL(rows(random), 1000u);

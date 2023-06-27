@@ -37,9 +37,9 @@ reader::reader(const caf::settings& options) {
     }
     return *timeout_value;
   };
-  batch_timeout_ = parse_timeout("vast.import.batch-timeout",
+  batch_timeout_ = parse_timeout("tenzir.import.batch-timeout",
                                  vast::defaults::import::batch_timeout);
-  read_timeout_ = parse_timeout("vast.import.read-timeout",
+  read_timeout_ = parse_timeout("tenzir.import.read-timeout",
                                 vast::defaults::import::read_timeout);
   last_batch_sent_ = reader_clock::now();
 }

@@ -114,8 +114,8 @@ caf::expected<module> get_module(const caf::settings& options) {
   VAST_DIAGNOSTIC_POP
   auto module = module_reg_ptr ? *module_reg_ptr : vast::module{};
   // Update with an alternate module, if requested.
-  auto sc = caf::get_if<std::string>(&options, "vast.import.schema");
-  auto mf = caf::get_if<std::string>(&options, "vast.import.schema-file");
+  auto sc = caf::get_if<std::string>(&options, "tenzir.import.schema");
+  auto mf = caf::get_if<std::string>(&options, "tenzir.import.schema-file");
   if (sc && mf)
     return caf::make_error(ec::invalid_configuration,
                            "had both schema and schema-file "
@@ -134,7 +134,7 @@ caf::expected<module> get_module(const caf::settings& options) {
 
 detail::stable_set<std::filesystem::path>
 get_module_dirs(const caf::actor_system_config& cfg) {
-  const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
+  const auto bare_mode = caf::get_or(cfg, "tenzir.bare-mode", false);
   detail::stable_set<std::filesystem::path> result;
   const auto datadir = detail::install_datadir();
   result.insert(datadir / "schema");
@@ -154,7 +154,7 @@ get_module_dirs(const caf::actor_system_config& cfg) {
                     / "schema");
   }
   if (auto dirs = detail::unpack_config_list_to_vector<std::string>( //
-        cfg, "vast.schema-dirs"))
+        cfg, "tenzir.schema-dirs"))
     result.insert(dirs->begin(), dirs->end());
   return result;
 }

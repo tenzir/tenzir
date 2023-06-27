@@ -59,7 +59,7 @@ spawn_counter(node_actor::stateful_pointer<node_state> self,
   auto [index] = self->state.registry.find<index_actor>();
   if (!index)
     return caf::make_error(ec::missing_component, "index");
-  auto estimate = caf::get_or(args.inv.options, "vast.count.estimate", false);
+  auto estimate = caf::get_or(args.inv.options, "tenzir.count.estimate", false);
   auto handle = self->spawn(counter, expr, index, estimate);
   VAST_VERBOSE("{} spawned a counter for {}", *self, to_string(expr));
   return handle;

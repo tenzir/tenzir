@@ -215,8 +215,7 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
                                fmt::format("failed to read config file {}: not "
                                            "a map of key-value pairs",
                                            config));
-      // Rewrite the top-level key 'tenzir' to 'vast' for compatibility.
-      // TODO: Invert the logic to rewrite 'vast' to 'tenzir'.
+      // Rewrite the top-level key 'vast' to 'tenzir' for compatibility.
       auto tenzir_section
         = std::find_if(rec->begin(), rec->end(), [&](const auto& x) {
             return x.first == "tenzir";
@@ -231,15 +230,15 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
                    "in favor of 'tenzir'\n",
                    config);
       }
-      if (tenzir_section != rec->end()) {
-        if (vast_section != rec->end()) {
+      if (vast_section != rec->end()) {
+        if (tenzir_section != rec->end()) {
           return caf::make_error(
             ec::parse_error,
             fmt::format("failed to read config file {}: using 'tenzir' and "
                         "'vast' sections in the same file is not allowed.",
                         config));
         }
-        tenzir_section->first = "vast";
+        vast_section->first = "tenzir";
       }
       merge(*rec, merged_config, policy::merge_lists::yes);
       loaded_config_files_singleton.push_back(config);
@@ -270,11 +269,11 @@ caf::error merge_environment(record& config) {
       if (auto config_key = compat_to_config_key(key)) {
         if (!config_key->starts_with("caf.")
             && !config_key->starts_with("plugins."))
-          config_key->insert(0, "vast.");
+          config_key->insert(0, "tenzir.");
         // These environment variables have been manually checked already.
         // Inserting them into the config would ignore higher-precedence values
         // from the command line.
-        if (*config_key == "vast.bare-mode" || *config_key == "vast.config")
+        if (*config_key == "tenzir.bare-mode" || *config_key == "tenzir.config")
           continue;
         // Try first as vast::data, which is richer.
         if (auto x = to<data>(value)) {
@@ -312,7 +311,7 @@ caf::expected<caf::settings> to_settings(record config) {
 
 std::vector<std::filesystem::path>
 config_dirs(const caf::actor_system_config& config) {
-  const auto bare_mode = caf::get_or(config.content, "vast.bare-mode", false);
+  const auto bare_mode = caf::get_or(config.content, "tenzir.bare-mode", false);
   if (bare_mode)
     return {};
   auto result = std::vector<std::filesystem::path>{};
@@ -413,14 +412,14 @@ caf::error configuration::parse(int argc, char** argv) {
   if (auto it
       = std::find(command_line.begin(), command_line.end(), "--bare-mode");
       it != command_line.end()) {
-    caf::put(content, "vast.bare-mode", true);
+    caf::put(content, "tenzir.bare-mode", true);
   } else if (auto vast_bare_mode = detail::getenv("TENZIR_BARE_MODE")) {
     if (*vast_bare_mode == "true") {
-      caf::put(content, "vast.bare-mode", true);
+      caf::put(content, "tenzir.bare-mode", true);
     }
   } else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE")) {
     if (*vast_bare_mode == "true") {
-      caf::put(content, "vast.bare-mode", true);
+      caf::put(content, "tenzir.bare-mode", true);
     }
   }
   // Gather and parse all to-be-considered configuration files.
@@ -486,9 +485,9 @@ caf::error configuration::parse(int argc, char** argv) {
   command_line.erase(plugin_opt, command_line.end());
   auto plugin_opts
     = config_options{}
-        .add<std::vector<std::string>>("?vast", "schema-dirs", "")
-        .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
-        .add<std::vector<std::string>>("?vast", "plugins", "");
+        .add<std::vector<std::string>>("?tenzir", "schema-dirs", "")
+        .add<std::vector<std::string>>("?tenzir", "plugin-dirs", "")
+        .add<std::vector<std::string>>("?tenzir", "plugins", "");
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   if (ec != caf::pec::success) {
     VAST_ASSERT(it != plugin_args.end());

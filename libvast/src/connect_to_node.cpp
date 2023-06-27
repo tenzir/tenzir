@@ -46,7 +46,8 @@ namespace details {
 
 auto get_node_endpoint(const caf::settings& opts) -> caf::expected<endpoint> {
   endpoint node_endpoint;
-  auto endpoint_str = get_or(opts, "vast.endpoint", defaults::endpoint.data());
+  auto endpoint_str
+    = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
   if (!parsers::endpoint(endpoint_str, node_endpoint))
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());
@@ -68,7 +69,7 @@ auto node_connection_timeout(const caf::settings& options) -> caf::timespan;
 auto get_retry_delay(const caf::settings& settings)
   -> std::optional<caf::timespan> {
   auto retry_delay
-    = caf::get_or<caf::timespan>(settings, "vast.connection-retry-delay",
+    = caf::get_or<caf::timespan>(settings, "tenzir.connection-retry-delay",
                                  defaults::node_connection_retry_delay);
   if (retry_delay == caf::timespan::zero())
     return {};
@@ -117,7 +118,7 @@ get_deadline(caf::timespan timeout) {
 
 std::optional<caf::timespan> get_retry_delay(const caf::settings& settings) {
   auto retry_delay
-    = caf::get_or<caf::timespan>(settings, "vast.connection-retry-delay",
+    = caf::get_or<caf::timespan>(settings, "tenzir.connection-retry-delay",
                                  defaults::node_connection_retry_delay);
   if (retry_delay == caf::timespan::zero())
     return {};
@@ -126,7 +127,8 @@ std::optional<caf::timespan> get_retry_delay(const caf::settings& settings) {
 
 caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
   endpoint node_endpoint;
-  auto endpoint_str = get_or(opts, "vast.endpoint", defaults::endpoint.data());
+  auto endpoint_str
+    = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
   if (!parsers::endpoint(endpoint_str, node_endpoint))
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());

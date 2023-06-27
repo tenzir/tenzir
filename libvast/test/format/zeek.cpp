@@ -203,8 +203,8 @@ struct fixture : fixtures::deterministic_actor_system {
        size_t num_events, bool expect_eof, bool expect_stall) {
     using reader_type = format::zeek::reader;
     auto settings = caf::settings{};
-    caf::put(settings, "vast.import.batch-timeout", "500ms");
-    caf::put(settings, "vast.import.read-timeout", "200ms");
+    caf::put(settings, "tenzir.import.batch-timeout", "500ms");
+    caf::put(settings, "tenzir.import.read-timeout", "200ms");
     reader_type reader{std::move(settings), std::move(input)};
     std::vector<table_slice> slices;
     auto add_slice
@@ -394,7 +394,7 @@ FIXTURE_SCOPE(zeek_writer_tests, writer_fixture)
 TEST(zeek writer) {
   // Perform the writing.
   caf::settings options;
-  caf::put(options, "vast.export.write", directory.string());
+  caf::put(options, "tenzir.export.write", directory.string());
   format::zeek::writer writer{options};
   for (auto& slice : zeek_conn_log)
     if (auto err = writer.write(slice))

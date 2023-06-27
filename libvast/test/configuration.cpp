@@ -35,7 +35,7 @@ struct fixture {
     auto argc = static_cast<int>(cmd_line.size());
     auto argv = cmd_line.data();
     REQUIRE_EQUAL(cfg.parse(argc, argv), caf::none);
-    // Application setup, as VAST main does it.
+    // Application setup, as Tenzir main does it.
     auto [root, _] = make_application(argv[0]);
     REQUIRE(root);
     // Parse the CLI.
@@ -96,86 +96,86 @@ struct fixture {
 FIXTURE_SCOPE(configuration_tests, fixture)
 
 TEST(environment key mangling and value parsing) {
-  env("VAST_ENDPOINT", "");      // empty values are not considered.
-  env("VAST_BARE_MODE", "true"); // bool parsed manually
+  env("TENZIR_ENDPOINT", "");      // empty values are not considered.
+  env("TENZIR_BARE_MODE", "true"); // bool parsed manually
   env("VAST_NODE", "true");      // bool parsed late (via automatic conversion)
-  env("VAST_IMPORT__BATCH_SIZE", "42"); // numbers should not be strings
-  env("VAST_PLUGINS", "foo,bar");       // list parsed manually
-  env("VAST_INVALID", "foo,bar");       // list parsed late
+  env("TENZIR_IMPORT__BATCH_SIZE", "42"); // numbers should not be strings
+  env("TENZIR_PLUGINS", "foo,bar");       // list parsed manually
+  env("TENZIR_INVALID", "foo,bar");       // list parsed late
   parse();
-  CHECK(!holds_alternative<std::string>("vast.endpoint"));
-  CHECK(get<bool>("vast.bare-mode"));
-  CHECK(get<bool>("vast.node"));
-  CHECK_EQUAL(get<caf::config_value::integer>("vast.import.batch-size"), 42);
+  CHECK(!holds_alternative<std::string>("tenzir.endpoint"));
+  CHECK(get<bool>("tenzir.bare-mode"));
+  CHECK(get<bool>("tenzir.node"));
+  CHECK_EQUAL(get<caf::config_value::integer>("tenzir.import.batch-size"), 42);
   auto foo_bar = std::vector<std::string>{"foo", "bar"};
-  CHECK_EQUAL(get_vec<std::string>("vast.plugins"), foo_bar);
-  CHECK_EQUAL(get_vec<std::string>("vast.invalid"), foo_bar);
+  CHECK_EQUAL(get_vec<std::string>("tenzir.plugins"), foo_bar);
+  CHECK_EQUAL(get_vec<std::string>("tenzir.invalid"), foo_bar);
 }
 
 TEST(environment only) {
-  env("VAST_BARE_MODE", "true");
-  env("VAST_ENDPOINT", "1.2.3.4");
+  env("TENZIR_BARE_MODE", "true");
+  env("TENZIR_ENDPOINT", "1.2.3.4");
   parse();
-  CHECK(get<bool>("vast.bare-mode"));
-  CHECK_EQUAL(get<std::string>("vast.endpoint"), "1.2.3.4");
+  CHECK(get<bool>("tenzir.bare-mode"));
+  CHECK_EQUAL(get<std::string>("tenzir.endpoint"), "1.2.3.4");
 }
 
 TEST(command line overrides environment) {
-  env("VAST_BARE_MODE", "true");
-  env("VAST_ENDPOINT", "1.2.3.4");
+  env("TENZIR_BARE_MODE", "true");
+  env("TENZIR_ENDPOINT", "1.2.3.4");
   parse("--endpoint=5.6.7.8");
-  CHECK(get<bool>("vast.bare-mode"));
+  CHECK(get<bool>("tenzir.bare-mode"));
   fmt::print("{}\n", deep_to_string(content(cfg)));
-  CHECK_EQUAL(get<std::string>("vast.endpoint"), "5.6.7.8");
+  CHECK_EQUAL(get<std::string>("tenzir.endpoint"), "5.6.7.8");
 }
 
 TEST(command line no value for list generates empty list value) {
   parse("--plugins=");
-  CHECK(get_vec<std::string>("vast.plugins").empty());
+  CHECK(get_vec<std::string>("tenzir.plugins").empty());
 }
 
 TEST(command line empty list value for list generates empty list value) {
   parse("--plugins=");
-  CHECK(get_vec<std::string>("vast.plugins").empty());
+  CHECK(get_vec<std::string>("tenzir.plugins").empty());
 }
 
 TEST(environment key no value for plugin list generates empty list value) {
-  env("VAST_PLUGINS", "");
+  env("TENZIR_PLUGINS", "");
   parse();
-  CHECK(get_vec<std::string>("vast.plugins").empty());
+  CHECK(get_vec<std::string>("tenzir.plugins").empty());
 }
 
 TEST(environment key empty value for plugin list generates empty list value) {
-  env("VAST_PLUGINS", "");
+  env("TENZIR_PLUGINS", "");
   parse();
-  CHECK(get_vec<std::string>("vast.plugins").empty());
+  CHECK(get_vec<std::string>("tenzir.plugins").empty());
 }
 
 TEST(command line overrides environment even for plugins) {
-  env("VAST_PLUGINS", "plugin1");
+  env("TENZIR_PLUGINS", "plugin1");
   parse("--plugins=plugin2");
-  CHECK_EQUAL(get_vec<std::string>("vast.plugins"),
+  CHECK_EQUAL(get_vec<std::string>("tenzir.plugins"),
               std::vector<std::string>{"plugin2"});
 }
 
 TEST(command line no value for integer values generates default value) {
   using cfg_int = caf::config_value::integer;
   parse(std::vector<std::string>{"start", "--disk-budget-check-interval="});
-  CHECK_EQUAL(get<cfg_int>("vast.start.disk-budget-check-interval"),
+  CHECK_EQUAL(get<cfg_int>("tenzir.start.disk-budget-check-interval"),
               cfg_int{0});
   parse(std::vector<std::string>{"import", "--batch-size="});
-  CHECK_EQUAL(get<cfg_int>("vast.import.batch-size"), cfg_int{0});
+  CHECK_EQUAL(get<cfg_int>("tenzir.import.batch-size"), cfg_int{0});
 }
 
 TEST(command line no value for timespan value generates default value) {
   parse("--active-partition-timeout=");
-  CHECK_EQUAL(get<caf::timespan>("vast.active-partition-timeout").count(),
+  CHECK_EQUAL(get<caf::timespan>("tenzir.active-partition-timeout").count(),
               std::chrono::milliseconds{0}.count());
 }
 
 TEST(command line no value for bool value generates default true value by CAF) {
   parse(std::vector<std::string>{"rebuild", "--all="});
-  CHECK_EQUAL(get<bool>("vast.rebuild.all"), true);
+  CHECK_EQUAL(get<bool>("tenzir.rebuild.all"), true);
 }
 
 TEST(command line parse caf settings correctly) {

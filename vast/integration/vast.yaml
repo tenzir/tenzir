@@ -3,7 +3,7 @@ caf:
     file:
       excluded-components: []
       verbosity: trace
-vast:
+tenzir:
   endpoint: '127.0.0.1:5158'
   plugins: []
   export:

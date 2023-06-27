@@ -293,10 +293,10 @@ public:
   explicit reader(const caf::settings& options) : super(options) {
     using defaults_t = vast::defaults::import::pcap;
     using caf::get_if;
-    std::string category = "vast.import.pcap";
+    std::string category = "tenzir.import.pcap";
     if (auto interface = get_if<std::string>(&options, category + ".interface"))
       interface_ = *interface;
-    input_ = get_or(options, "vast.import.read",
+    input_ = get_or(options, "tenzir.import.read",
                     vast::defaults::import::read.data());
     cutoff_ = get_or(options, category + ".cutoff", defaults_t::cutoff);
     max_flows_
@@ -650,9 +650,9 @@ public:
   /// Constructs a PCAP writer.
   /// @param options The configuration options for the writer.
   explicit writer(const caf::settings& options) {
-    flush_interval_ = get_or(options, "vast.export.pcap.flush-interval",
+    flush_interval_ = get_or(options, "tenzir.export.pcap.flush-interval",
                              defaults::flush_interval);
-    trace_ = get_or(options, "vast.export.write",
+    trace_ = get_or(options, "tenzir.export.write",
                     vast::defaults::export_::write.data());
   }
 

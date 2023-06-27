@@ -83,9 +83,9 @@ make_input_stream(const std::string& input,
 caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const caf::settings& options) {
   auto input
-    = get_or(options, "vast.import.read", defaults::import::read.data());
-  auto uds = get_or(options, "vast.import.uds", false);
-  auto fifo = get_or(options, "vast.import.fifo", false);
+    = get_or(options, "tenzir.import.read", defaults::import::read.data());
+  auto uds = get_or(options, "tenzir.import.uds", false);
+  auto fifo = get_or(options, "tenzir.import.fifo", false);
   const auto pt = uds ? std::filesystem::file_type::socket
                       : (fifo ? std::filesystem::file_type::fifo
                               : std::filesystem::file_type::regular);
@@ -144,9 +144,9 @@ make_output_stream(const std::string& output,
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const caf::settings& options) {
   auto output
-    = get_or(options, "vast.export.write", defaults::export_::write.data());
-  auto uds = get_or(options, "vast.export.uds", false);
-  auto fifo = get_or(options, "vast.export.fifo", false);
+    = get_or(options, "tenzir.export.write", defaults::export_::write.data());
+  auto uds = get_or(options, "tenzir.export.uds", false);
+  auto fifo = get_or(options, "tenzir.export.fifo", false);
   const auto pt = uds ? std::filesystem::file_type::socket
                       : (fifo ? std::filesystem::file_type::fifo
                               : std::filesystem::file_type::regular);

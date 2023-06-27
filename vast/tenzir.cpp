@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
   if (app_name == "vast" || app_name == "tenzir-ctl") {
     bool is_server = invocation->full_name == "start"
                      || invocation->full_name == "exec"
-                     || caf::get_or(cfg.content, "vast.node", false);
+                     || caf::get_or(cfg.content, "tenzir.node", false);
     std::string_view max_threads_key = "caf.scheduler.max-threads";
     if (!is_server
         && !caf::holds_alternative<caf::config_value::integer>(cfg,
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
     auto compression_level
-      = caf::get_or(cfg, "vast.zstd-compression-level",
+      = caf::get_or(cfg, "tenzir.zstd-compression-level",
                     default_compression_level.ValueUnsafe());
     auto min_level
       = arrow::util::Codec::MinimumCompressionLevel(arrow::Compression::ZSTD);
@@ -155,8 +155,8 @@ int main(int argc, char** argv) {
   }
   // Warn if vast.pipeline-triggers are defined, as the functionality went away
   // alongside the old pipeline executor.
-  if (caf::get_if<caf::settings>(&cfg, "vast.pipeline-triggers")) {
-    VAST_WARN("the 'vast.pipeline-triggers' option is no longer functional"
+  if (caf::get_if<caf::settings>(&cfg, "tenzir.pipeline-triggers")) {
+    VAST_WARN("the 'tenzir.pipeline-triggers' option is no longer functional"
               "use inline import and export pipelines instead");
   }
   // Set up the modules singleton.
@@ -174,11 +174,11 @@ int main(int argc, char** argv) {
   // Set up pipeline aliases.
   using namespace std::literals;
   auto aliases = std::unordered_map<std::string, std::string>{};
-  for (auto prefix : {"vast.operators"sv, "vast.pipelines"sv}) {
+  for (auto prefix : {"tenzir.operators"sv, "tenzir.pipelines"sv}) {
     if (auto const* settings = caf::get_if<caf::settings>(&cfg, prefix)) {
-      if (prefix == "vast.pipelines") {
-        VAST_WARN("the config section `vast.pipelines` is deprecated, use "
-                  "`vast.operators` instead");
+      if (prefix == "tenzir.pipelines") {
+        VAST_WARN("the config section `tenzir.pipelines` is deprecated, use "
+                  "`tenzir.operators` instead");
       }
       auto r = to<record>(*settings);
       if (!r) {

@@ -461,7 +461,7 @@ public:
   auto initialize(const record&, const record& global_config)
     -> caf::error override {
     auto timeout
-      = try_get<vast::duration>(global_config, "vast.import.read-timeout");
+      = try_get<vast::duration>(global_config, "tenzir.import.read-timeout");
     if (!timeout.engaged()) {
       return std::move(timeout.error());
     }
