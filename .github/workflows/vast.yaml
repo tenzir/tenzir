@@ -826,9 +826,9 @@ jobs:
           - name: Parquet
             target: parquet
             path: plugins/parquet
-          - name: PCAP
-            target: pcap
-            path: plugins/pcap
+          - name: NIC
+            target: nic
+            path: plugins/nic
           - name: Compaction
             target: compaction
             path: contrib/tenzir-plugins/compaction
