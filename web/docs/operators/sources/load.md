@@ -1,6 +1,6 @@
 # load
 
-The `load` operator acquires raw bytes from a [connector][connectors].
+The `load` operator acquires raw bytes from a [connector](../../connectors.md).
 
 :::warning Expert Operator
 The `load` operator is a lower-level building block of the [`from`](from.md) and
