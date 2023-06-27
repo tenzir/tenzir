@@ -12,3 +12,17 @@ write <format> [to <connector>]
 ## Description
 
 Please refer to the documentation of [`to`](to.md).
+
+## Examples
+
+Write JSON to stdout:
+
+```
+write json
+```
+
+Write JSON to the Kafka topic `tenzir`:
+
+```
+write json to kafka
+```
