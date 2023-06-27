@@ -8,6 +8,9 @@ read -r -u "${NODE[0]}" DUMMY
 # of Tenzir processes.
 export TENZIR_CONSOLE_VERBOSITY=info
 
+# Allow unrestricted access, so we can run `from file` or `shell` operators.
+export TENZIR_ALLOW_UNSAFE_PIPELINES=true
+
 replay_zeek() {
   :
 }
