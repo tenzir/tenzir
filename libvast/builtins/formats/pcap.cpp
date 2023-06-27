@@ -160,14 +160,7 @@ public:
       }
       if (need_byte_swap)
         file = byteswap(file);
-      VAST_DEBUG("Parsed PCAP file header:");
-      VAST_DEBUG("Magic Number: {0:x}", file.magic_number);
-      VAST_DEBUG("Major Version: {0:x}", file.major_version);
-      VAST_DEBUG("Minor Version: {0:x}", file.minor_version);
-      VAST_DEBUG("Reserved1: {0:x}", file.reserved1);
-      VAST_DEBUG("Reserved2: {0:x}", file.reserved2);
-      VAST_DEBUG("SnapLen: {}", file.snaplen);
-      VAST_DEBUG("LinkType: {0:x}", file.linktype);
+      VAST_DEBUG("parsed PCAP file header");
       // After the header, the remainder of the file are Packet Records,
       // consisting of a 16-byte header and variable-length payload.
       auto builder = table_slice_builder{packet_record_type()};
