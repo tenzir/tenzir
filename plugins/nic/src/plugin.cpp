@@ -157,9 +157,9 @@ public:
         auto delay = timestamp - last_yield;
         if (num_buffered_packets == max_buffer_packets
             || (timestamp > last_yield && delay >= max_buffer_delay)) {
-          VAST_WARN("yielding buffer after {} with {} packets ({} bytes)",
-                       vast::to_string(vast::data{delay}), num_buffered_packets,
-                       buffer.size());
+          VAST_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
+                     vast::to_string(vast::data{delay}), num_buffered_packets,
+                     buffer.size());
           co_yield chunk::copy(buffer);
           std::exchange(buffer, {});
           // Reduce number of small allocations based on what we've seen
