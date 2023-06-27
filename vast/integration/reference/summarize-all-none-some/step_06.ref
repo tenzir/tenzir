@@ -132,7 +132,7 @@
 }
 {
   "id.orig_h": "193.10.255.99",
-  "x": []
+  "x": null
 }
 {
   "id.orig_h": "192.88.99.1",
@@ -146,6 +146,13 @@
     "radius"
   ]
 }
+warning: aggregation column `_path` does not exist for schema `9940eae275d3b1fa`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
 warning: group-by column `id.orig_h` does not exist for schema `zeek.dhcp`
 warning: group-by column `id.orig_h` does not exist for schema `zeek.files`
 warning: group-by column `id.orig_h` does not exist for schema `zeek.pe`

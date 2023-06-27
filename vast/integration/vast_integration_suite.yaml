@@ -940,7 +940,7 @@ tests:
   Summarize All None Some:
     tags: [pipelines]
     steps:
-      # AA (no warnings)
+      # AA
       - command: exec 'read zeek-json | summarize x=distinct(_path) by _path'
         input: data/zeek/zeek.json
       # NN
@@ -967,7 +967,7 @@ tests:
       # SS
       - command: exec 'read zeek-json | summarize x=distinct(id.orig_h) by id.orig_h'
         input: data/zeek/zeek.json
-      # A (no warnings)
+      # A
       - command: exec 'read zeek-json | summarize x=distinct(_path)'
         input: data/zeek/zeek.json
       # S
