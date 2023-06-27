@@ -267,11 +267,12 @@ jobs:
             .github/workflows/docker-config-base.json \
             --arg v "${{ steps.configure.outputs.build-version-short }}" \
             --args -- "${tags[@]}")"
-          # Clear push repos in case we're in a PR, but push the developer
+          # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             docker_config="$(jq -c '(.editions[] | .registries) |= [] |
-              (.editions[] | select(.name == "tenzir") | .registries) |= ["ghcr.io"]' \
+              (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
+              .registries) |= ["ghcr.io"]' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
