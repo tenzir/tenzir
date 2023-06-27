@@ -27,7 +27,7 @@ import TabItem from '@theme/TabItem';
 Use our installer to perform a platform-specific installation:
 
 ```bash
-curl -L get.tenzir.app | sh
+curl https://get.tenzir.app | sh
 ```
 
 The shell script asks you once to confirm the installation.
