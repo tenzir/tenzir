@@ -287,25 +287,25 @@ def run_step(
                 with open(baseline, "w") as ref_handle:
                     for line in output_lines:
                         ref_handle.write(line)
-                return Result.SUCCESS
-            baseline_lines = []
-            if baseline.exists():
-                baseline_lines = open(baseline).readlines()
-            diff = difflib.unified_diff(
-                baseline_lines,
-                output_lines,
-                fromfile=str(baseline),
-                tofile=str(stdout),
-            )
-            delta = list(diff)
-            if delta:
-                if (
-                    expected_result != Result.FAILURE
-                    and expected_result != Result.IGNORE
-                ):
-                    LOGGER.warning("baseline comparison failed")
-                    sys.stdout.writelines(delta)
-                return Result.FAILURE
+            else:
+                baseline_lines = []
+                if baseline.exists():
+                    baseline_lines = open(baseline).readlines()
+                diff = difflib.unified_diff(
+                    baseline_lines,
+                    output_lines,
+                    fromfile=str(baseline),
+                    tofile=str(stdout),
+                )
+                delta = list(diff)
+                if delta:
+                    if (
+                        expected_result != Result.FAILURE
+                        and expected_result != Result.IGNORE
+                    ):
+                        LOGGER.warning("baseline comparison failed")
+                        sys.stdout.writelines(delta)
+                    return Result.FAILURE
     except subprocess.CalledProcessError as err:
         if expected_result != Result.ERROR and expected_result != Result.IGNORE:
             LOGGER.error(err)
@@ -367,7 +367,7 @@ class Server:
         """Stops the server"""
         try:
             self.process.send_signal(signal.SIGINT)
-        except: 
+        except:
             try:
                 self.process.wait(STEP_TIMEOUT)
             except:
