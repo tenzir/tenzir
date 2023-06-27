@@ -22,7 +22,7 @@ follows:
 Unlike the legacy `sigmac` compiler that tailors a rule to specific backend,
 like Elastic or Splunk, the `sigma` operator only transpiles the structural YAML
 rules to produce an expression that is then used to filter a dataflow. In the
-future, we would like to write a native Tenzir for
+future, we would like to write a native Tenzir backend for
 [pySigma](https://github.com/SigmaHQ/pySigma). Please reach out on our
 [Discord](/discord) if you would like to help us with that!
 :::
