@@ -573,57 +573,68 @@ struct serve_handler_state {
   serve_handler_actor::pointer self = {};
   serve_manager_actor serve_manager = {};
 
+  struct parse_error {
+    std::string message;
+    caf::error detail;
+  };
+
   static auto try_parse_request(const vast::record& params)
-    -> caf::expected<serve_request> {
+    // TODO: Switch to std::expected<serve_request, parse_error> after C++23.
+    -> std::variant<serve_request, parse_error> {
     auto result = serve_request{};
     auto serve_id = try_get<std::string>(params, "serve_id");
     if (not serve_id) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to read serve_id parameter: "
-                                         "{}; got parameters {}",
-                                         serve_id.error(), params));
+      return parse_error{
+        .message = "failed to read serve_id parameter",
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("{}; got parameters {}",
+                                              serve_id.error(), params))};
     }
     if (not *serve_id) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("serve_id must be specified; got "
-                                         "parameters {}",
-                                         params));
+      return parse_error{
+        .message = "serve_id must be specified",
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("got parameters {}", params))};
     }
     result.serve_id = std::move(**serve_id);
     auto continuation_token
       = try_get<std::string>(params, "continuation_token");
     if (not continuation_token) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to read continuation_token "
-                                         "parameter: {}; got parameters {}",
-                                         continuation_token.error(), params));
+      return parse_error{.message = "failed to read continuation_token",
+                         .detail = caf::make_error(
+                           ec::invalid_argument,
+                           fmt::format("{}; got parameters {}",
+                                       continuation_token.error(), params))};
     }
     if (*continuation_token) {
       result.continuation_token = std::move(**continuation_token);
     }
     auto max_events = try_get<uint64_t>(params, "max_events");
     if (not max_events) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to read max_events "
-                                         "parameter: {}; got params {}",
-                                         max_events.error(), params));
+      return parse_error{
+        .message = "failed to read max_events",
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("parameter: {}; got params {}",
+                                              max_events.error(), params))};
     }
     if (*max_events) {
       result.limit = **max_events;
     }
     auto timeout = try_get<duration>(params, "timeout");
     if (not timeout) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to read timeout "
-                                         "parameter: {}; got params {}",
-                                         timeout.error(), params));
+      auto detail_msg
+        = fmt::format("{}; got params {}", timeout.error(), params);
+      auto detail
+        = caf::make_error(ec::invalid_argument, std::move(detail_msg));
+      return parse_error{.message = "failed to read timeout parameter",
+                         .detail = std::move(detail)};
     }
     if (*timeout) {
       if (**timeout > std::chrono::seconds{5}) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("timeout parameter {} exceeds limit "
-                                           "of 5 seconds; got params {}",
-                                           data{**timeout}, params));
+        auto detail = caf::make_error(
+          ec::invalid_argument, fmt::format("got timeout {}", data{**timeout}));
+        return parse_error{.message = "timeout exceeds limit of 5 seconds",
+                           .detail = std::move(detail)};
       }
       result.timeout = **timeout;
     }
@@ -697,19 +708,16 @@ struct serve_handler_state {
     }
     VAST_DEBUG("{} handles /serve request for endpoint id {} with params {}",
                *self, endpoint_id, params);
-    auto request = try_parse_request(params);
-    if (not request) {
-      rest_response::make_error(400,
-                                fmt::format(R"({{"error":{:?}}}{})",
-                                            fmt::to_string(request.error()),
-                                            '\n'),
-                                {});
-      return {};
+    auto maybe_request = try_parse_request(params);
+    if (auto* error = std::get_if<parse_error>(&maybe_request)) {
+      return rest_response::make_error(400, std::move(error->message),
+                                       std::move(error->detail));
     }
+    auto& request = std::get<serve_request>(maybe_request);
     auto rp = self->make_response_promise<rest_response>();
     self
-      ->request(serve_manager, caf::infinite, atom::get_v, request->serve_id,
-                request->continuation_token, request->limit, request->timeout)
+      ->request(serve_manager, caf::infinite, atom::get_v, request.serve_id,
+                request.continuation_token, request.limit, request.timeout)
       .then(
         [rp](const std::tuple<std::string, std::vector<table_slice>>&
                result) mutable {

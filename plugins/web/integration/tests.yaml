@@ -48,6 +48,7 @@ tests:
       # Invalid parameter
       - command: curl -XPOST http://127.0.0.1:42025/api/v0/status?verbosity=!~asdf
         prepend_vast: false
+        transformation: jq
   Authenticated Endpoints:
     tags: [rest, authentication]
     fixture: AuthenticatedServerTester
@@ -57,6 +58,7 @@ tests:
       - command: flush
       - command: curl -XPOST http://127.0.0.1:42025/api/v0/status
         prepend_vast: false
+        transformation: jq
       - command: web generate-token
         transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
       - command: curl -H @token.txt -XPOST http://127.0.0.1:42025/api/v0/status
@@ -75,6 +77,7 @@ tests:
       # Explicitly trust the self-signed server certificate with `--cacert`
       - command: curl --cacert @./data/client.pem -XPOST https://127.0.0.1:42025/api/v0/status
         prepend_vast: false
+        transformation: jq
       - command: web generate-token
         transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
       - command: curl -H @token.txt --cacert @./data/client.pem -XPOST  https://127.0.0.1:42025/api/v0/status
@@ -85,4 +88,15 @@ tests:
     fixture: ServerTester
     steps:
       - command: "@./scripts/serve.sh"
+        prepend_vast: false
+  Serve Errors:
+    tags: [rest, serve]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/conn.log.gz
+      - command: flush
+      - command: curl -XPOST http://127.0.0.1:42025/api/v0/serve
+        prepend_vast: false
+      - command: curl -XPOST http://127.0.0.1:42025/api/v0/serve?serve_id=foo&timeout=10m
         prepend_vast: false
