@@ -8,7 +8,7 @@
 
 #include "vast/ether_type.hpp"
 
-#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/byteswap.hpp"
 
 #include <cstddef>
 #include <span>

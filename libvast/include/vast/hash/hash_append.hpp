@@ -9,7 +9,6 @@
 #pragma once
 
 #include "vast/as_bytes.hpp"
-#include "vast/detail/bit.hpp"
 #include "vast/detail/inspection_common.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -19,6 +18,7 @@
 #include <caf/variant.hpp>
 
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -84,7 +84,7 @@ void hash_append(HashAlgorithm& h, T x) noexcept {
     // When hashing, we treat -0 and 0 the same.
     if (x == 0)
       x = 0;
-    if constexpr (HashAlgorithm::endian != detail::endian::native)
+    if constexpr (HashAlgorithm::endian != std::endian::native)
       detail::reverse_bytes(x);
     h.add(as_bytes(std::addressof(x), sizeof(x)));
   } else {
@@ -95,7 +95,7 @@ void hash_append(HashAlgorithm& h, T x) noexcept {
 template <class HashAlgorithm>
 void hash_append(HashAlgorithm& h, std::nullptr_t) noexcept {
   const void* p = nullptr;
-  if constexpr (HashAlgorithm::endian != detail::endian::native)
+  if constexpr (HashAlgorithm::endian != std::endian::native)
     detail::reverse_bytes(p);
   h.add(as_bytes(std::addressof(p), sizeof(p)));
 }

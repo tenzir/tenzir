@@ -11,7 +11,6 @@
 #include "vast/base.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/vast/base.hpp"
-#include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/index/arithmetic_index.hpp"
 #include "vast/index/enumeration_index.hpp"
@@ -27,6 +26,7 @@
 #include <caf/optional.hpp>
 #include <caf/settings.hpp>
 
+#include <bit>
 #include <cmath>
 
 using namespace std::string_view_literals;
@@ -62,24 +62,27 @@ value_index_ptr make(type x, caf::settings opts) {
       if (i == opts.end())
         // Default to a 40-bit hash value -> good for 2^20 unique digests.
         return std::make_unique<hash_index<5>>(std::move(x));
-      auto cardinality = caf::get_if<int_type>(&i->second);
-      VAST_ASSERT(cardinality); // checked in make(x, opts)
+      const auto* cardinality_option = caf::get_if<int_type>(&i->second);
+      VAST_ASSERT(cardinality_option); // checked in make(x, opts)
       // caf::settings doesn't support unsigned integers, but the
       // cardinality is a size_t, so we may get negative values if someone
       // provides an uint64_t value, e.g., numeric_limits<size_t>::max().
-      if (*cardinality < 0) {
+      if (*cardinality_option < 0) {
         VAST_WARN("{} got an explicit cardinality of 2^64, using "
                   "max digest size of 8 bytes",
                   __func__);
         return std::make_unique<hash_index<8>>(std::move(x));
       }
-      if (!detail::has_single_bit(*cardinality))
+      // Need an unsigned value for bit-level operations below.
+      auto cardinality
+        = static_cast<std::make_unsigned_t<int_type>>(*cardinality_option);
+      if (!std::has_single_bit(cardinality))
         VAST_WARN("{} cardinality not a power of 2", __func__);
       // For 2^n unique values, we expect collisions after sqrt(2^n).
       // Thus, we use 2n bits as digest size.
-      size_t digest_bits = detail::has_single_bit(*cardinality)
-                             ? (detail::bit_width(*cardinality) - 1) * 2
-                             : detail::bit_width(*cardinality) * 2;
+      size_t digest_bits = std::has_single_bit(cardinality)
+                             ? (std::bit_width(cardinality) - 1) * 2
+                             : std::bit_width(cardinality) * 2;
       auto digest_bytes = digest_bits / 8;
       if (digest_bits % 8 > 0)
         ++digest_bytes;
@@ -93,7 +96,7 @@ value_index_ptr make(type x, caf::settings opts) {
       }
       switch (digest_bytes) {
         default:
-          VAST_ERROR("{} invalid digest size {}", __func__, *cardinality);
+          VAST_ERROR("{} invalid digest size {}", __func__, cardinality);
           return nullptr;
         case 1:
           return std::make_unique<hash_index<1>>(std::move(x), std::move(opts));

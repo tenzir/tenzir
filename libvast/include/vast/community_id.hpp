@@ -10,7 +10,7 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/base64.hpp"
-#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/byteswap.hpp"
 #include "vast/detail/coding.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"

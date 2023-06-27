@@ -18,7 +18,7 @@
 
 #include "vast/hash/sha1.hpp"
 
-#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/byteswap.hpp"
 
 #include <cstring>
 
@@ -104,11 +104,11 @@ void sha1::finalize() {
     pos_ = 0;
   }
   std::memset(&m_[0] + pos_, 0, 56 - pos_);
-  uint64_t mlen = detail::byte_swap(total_);
+  uint64_t mlen = detail::byteswap(total_);
   std::memcpy(&m_[0] + (64 - 8), &mlen, 64 / 8);
   transform(&m_[0], 1);
   for (int i = 0; i < 5; i++)
-    H_[i] = detail::byte_swap(H_[i]);
+    H_[i] = detail::byteswap(H_[i]);
 }
 
 void sha1::transform(const unsigned char* data, size_t num_blks) {
@@ -116,7 +116,7 @@ void sha1::transform(const unsigned char* data, size_t num_blks) {
     uint32_t m[16];
     auto xs = reinterpret_cast<const uint32_t*>(data);
     for (uint32_t i = 0; i < 64 / 4; i++)
-      m[i] = detail::byte_swap(xs[blk * 16 + i]);
+      m[i] = detail::byteswap(xs[blk * 16 + i]);
     uint32_t w[80];
     for (int t = 0; t <= 15; t++)
       w[t] = m[t];

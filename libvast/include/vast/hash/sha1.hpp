@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "vast/detail/bit.hpp"
-
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -23,7 +22,7 @@ class sha1 {
 public:
   using result_type = std::array<uint32_t, 5>;
 
-  static constexpr detail::endian endian = detail::endian::native;
+  static constexpr std::endian endian = std::endian::native;
 
   sha1() noexcept;
 

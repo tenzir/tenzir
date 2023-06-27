@@ -9,7 +9,7 @@
 #pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
-#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/byteswap.hpp"
 
 #include <cstdint>
 #include <type_traits>
@@ -24,7 +24,7 @@ struct extract;
 template <>
 struct extract<1> {
   template <class Iterator, class Attribute>
-  static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
+  static auto parse(Iterator& f, const Iterator& l, Attribute& a) -> bool {
     if (f == l)
       return false;
     a |= *f++ & 0xFF;
@@ -35,7 +35,7 @@ struct extract<1> {
 template <>
 struct extract<2> {
   template <class Iterator, class Attribute>
-  static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
+  static auto parse(Iterator& f, const Iterator& l, Attribute& a) -> bool {
     if (!extract<1>::parse(f, l, a))
       return false;
     a <<= 8;
@@ -46,7 +46,7 @@ struct extract<2> {
 template <>
 struct extract<4> {
   template <class Iterator, class Attribute>
-  static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
+  static auto parse(Iterator& f, const Iterator& l, Attribute& a) -> bool {
     if (!extract<2>::parse(f, l, a))
       return false;
     a <<= 8;
@@ -57,7 +57,7 @@ struct extract<4> {
 template <>
 struct extract<8> {
   template <class Iterator, class Attribute>
-  static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
+  static auto parse(Iterator& f, const Iterator& l, Attribute& a) -> bool {
     if (!extract<4>::parse(f, l, a))
       return false;
     a <<= 8;
@@ -79,7 +79,7 @@ struct byte_parser : parser_base<byte_parser<T, Policy, Bytes>> {
   using attribute = T;
 
   template <class Iterator>
-  static bool extract(Iterator& f, const Iterator& l, T& x) {
+  static auto extract(Iterator& f, const Iterator& l, T& x) -> bool {
     auto save = f;
     x = 0;
     if (!detail::extract<Bytes>::parse(save, l, x))
@@ -89,7 +89,7 @@ struct byte_parser : parser_base<byte_parser<T, Policy, Bytes>> {
   }
 
   template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
+  auto parse(Iterator& f, const Iterator& l, unused_type) const -> bool {
     for (auto i = 0u; i < Bytes; ++i)
       if (f != l)
         ++f;
@@ -99,13 +99,13 @@ struct byte_parser : parser_base<byte_parser<T, Policy, Bytes>> {
   }
 
   template <class Iterator>
-    bool parse(Iterator& f, const Iterator& l, T& x) const {
-      if (!extract(f, l, x))
-          return false;
-      if constexpr (std::is_same_v<Policy, policy::little_endian>)
-        x = detail::byte_swap(x);
-      return true;
-    }
+  auto parse(Iterator& f, const Iterator& l, T& x) const -> bool {
+    if (!extract(f, l, x))
+      return false;
+    if constexpr (std::is_same_v<Policy, policy::little_endian>)
+      x = detail::byteswap(x);
+    return true;
+  }
 };
 
 template <size_t N, class T = uint8_t>
@@ -115,7 +115,8 @@ struct static_bytes_parser : parser_base<static_bytes_parser<N>> {
   using attribute = std::array<T, N>;
 
   template <typename Iterator>
-  bool parse(Iterator& f, const Iterator& l, std::array<T, N>& x) const {
+  auto parse(Iterator& f, const Iterator& l, std::array<T, N>& x) const
+    -> bool {
     auto save = f;
     for (auto i = 0u; i < N; i++) {
       if (save == l)
@@ -137,7 +138,7 @@ struct dynamic_bytes_parser : parser_base<dynamic_bytes_parser<N, T>> {
   }
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& xs) const {
+  auto parse(Iterator& f, const Iterator& l, Attribute& xs) const -> bool {
     auto save = f;
     auto out = std::back_inserter(xs);
     for (auto i = N{0}; i < n_; i++) {
@@ -150,7 +151,8 @@ struct dynamic_bytes_parser : parser_base<dynamic_bytes_parser<N, T>> {
   }
 
   template <class Iterator, size_t M>
-  bool parse(Iterator& f, const Iterator& l, std::array<T, M>& xs) const {
+  auto parse(Iterator& f, const Iterator& l, std::array<T, M>& xs) const
+    -> bool {
     if (M < n_ || static_cast<N>(l - f) < n_)
       return false;
     for (auto i = N{0}; i < n_; i++)

@@ -9,8 +9,8 @@
 #pragma once
 
 #include "vast/detail/assert.hpp"
-#include "vast/detail/bit.hpp"
 
+#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
@@ -32,8 +32,8 @@ static constexpr int xxh_force_memory_access = 0;
 
 class xxh64 {
 public:
-  static constexpr detail::endian endian
-    = XXH_CPU_LITTLE_ENDIAN ? detail::endian::little : detail::endian::big;
+  static constexpr std::endian endian
+    = XXH_CPU_LITTLE_ENDIAN ? std::endian::little : std::endian::big;
 
   using result_type = XXH64_hash_t;
   using seed_type = XXH64_hash_t;
@@ -72,7 +72,7 @@ private:
 
 class xxh3_64 {
 public:
-  static constexpr detail::endian endian = detail::endian::native;
+  static constexpr std::endian endian = std::endian::native;
 
   using result_type = XXH64_hash_t;
   using seed_type = XXH64_hash_t;
@@ -118,7 +118,7 @@ private:
 
 class xxh3_128 {
 public:
-  static constexpr detail::endian endian = detail::endian::native;
+  static constexpr std::endian endian = std::endian::native;
 
   using result_type = XXH128_hash_t;
   using seed_type = XXH64_hash_t;

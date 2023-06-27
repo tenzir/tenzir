@@ -13,7 +13,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
