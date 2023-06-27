@@ -24,7 +24,7 @@ body:
     attributes:
       label: Environment
       description: |
-        Describe the environment you've encountered the bug in, e.g., the operating system and the VAST version used. If customized, please attach the VAST configuration file.
+        Describe the environment you've encountered the bug in, e.g., the operating system and the Tenzir version used. If customized, please attach your Tenzir configuration file.
     validations:
       required: true
   - type: textarea
