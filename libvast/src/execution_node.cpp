@@ -212,17 +212,16 @@ struct outbound_state_mixin {
   uint64_t outbound_buffer_size = {};
   uint64_t outbound_total = {};
 
-  /// The queue of open requests for more events from the next operator.
-  /// TODO: rename to demand for consistency
-  struct pull_request {
+  /// The currently open demand.
+  struct demand {
     caf::typed_response_promise<void> rp = {};
     exec_node_sink_actor sink = {};
     const uint64_t batch_size = {};
     const std::chrono::steady_clock::time_point batch_timeout = {};
     bool ongoing = {};
   };
-  std::optional<pull_request> current_pull_request = {};
-  bool reject_pull_requests = {};
+  std::optional<demand> current_demand = {};
+  bool reject_demand = {};
 };
 
 template <>
@@ -294,7 +293,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
                     msg.reason);
           self->quit(msg.reason);
         }
-        schedule_run();
       });
     }
     // Instantiate the operator with its input type.
@@ -431,21 +429,20 @@ struct exec_node_state : inbound_state_mixin<Input>,
     -> void
     requires(not std::is_same_v<Output, std::monostate>)
   {
-    if (not this->current_pull_request or this->current_pull_request->ongoing) {
+    if (not this->current_demand or this->current_demand->ongoing) {
       return;
     }
     VAST_ASSERT(instance);
     if (not force
         and ((instance->it == instance->gen.end()
-              or this->outbound_buffer_size
-                   < this->current_pull_request->batch_size)
-             and (this->current_pull_request->batch_timeout > now))) {
+              or this->outbound_buffer_size < this->current_demand->batch_size)
+             and (this->current_demand->batch_timeout > now))) {
       return;
     }
-    this->current_pull_request->ongoing = true;
+    this->current_demand->ongoing = true;
     auto handle_result = [this]() {
       auto [lhs, rhs]
-        = split(this->outbound_buffer, this->current_pull_request->batch_size);
+        = split(this->outbound_buffer, this->current_demand->batch_size);
       this->outbound_buffer = std::move(rhs);
       this->outbound_buffer_size
         = std::transform_reduce(this->outbound_buffer.begin(),
@@ -453,20 +450,19 @@ struct exec_node_state : inbound_state_mixin<Input>,
                                 std::plus{}, [](const Output& x) {
                                   return size(x);
                                 });
-      this->current_pull_request->rp.deliver();
-      this->current_pull_request.reset();
+      this->current_demand->rp.deliver();
+      this->current_demand.reset();
       schedule_run();
     };
     auto handle_error = [this](caf::error& error) {
-      this->current_pull_request->rp.deliver(std::move(error));
-      this->current_pull_request.reset();
+      this->current_demand->rp.deliver(std::move(error));
+      this->current_demand.reset();
       schedule_run();
     };
     auto [lhs, _]
-      = split(this->outbound_buffer, this->current_pull_request->batch_size);
-    auto response_handle
-      = self->request(this->current_pull_request->sink, caf::infinite,
-                      atom::push_v, std::move(lhs));
+      = split(this->outbound_buffer, this->current_demand->batch_size);
+    auto response_handle = self->request(
+      this->current_demand->sink, caf::infinite, atom::push_v, std::move(lhs));
     if (force) {
       std::move(response_handle)
         .await(std::move(handle_result), std::move(handle_error));
@@ -494,8 +490,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
       if constexpr (not std::is_same_v<Output, std::monostate>) {
         // TODO: 'version | repeat 10000 | top version' returns less than 10k
         // events. Likely because this logic is not correct quite yet. Not sure.
-        if (this->current_pull_request or this->outbound_buffer_size > 0) {
-          this->reject_pull_requests = true;
+        if (this->current_demand or this->outbound_buffer_size > 0) {
+          this->reject_demand = true;
           deliver_batches(now, true);
           schedule_run(defaults::max_batch_timeout);
           return;
@@ -520,7 +516,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     if constexpr (std::is_same_v<Output, std::monostate>) {
       schedule_run();
     } else {
-      if (this->current_pull_request
+      if (this->current_demand
           or (this->outbound_buffer_size < defaults::max_buffered
               and instance->it != instance->gen.end())) {
         schedule_run();
@@ -533,10 +529,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
     -> caf::result<void>
     requires(not std::is_same_v<Output, std::monostate>)
   {
-    if (this->current_pull_request) {
+    if (this->current_demand) {
       return caf::make_error(ec::logic_error, "concurrent pull");
     }
-    if (this->reject_pull_requests) {
+    if (this->reject_demand) {
       auto rp = self->make_response_promise<void>();
       detail::weak_run_delayed(self, batch_timeout, [rp]() mutable {
         rp.deliver();
@@ -544,7 +540,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       return {};
     }
     schedule_run();
-    auto& pr = this->current_pull_request.emplace(
+    auto& pr = this->current_demand.emplace(
       self->make_response_promise<void>(), std::move(sink), batch_size,
       std::chrono::steady_clock::now() + batch_timeout);
     return pr.rp;
