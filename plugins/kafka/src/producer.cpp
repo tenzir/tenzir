@@ -29,13 +29,12 @@ auto producer::make(configuration config) -> caf::expected<producer> {
 
 auto producer::produce(std::string topic, std::span<const std::byte> bytes,
                        std::string_view key, time timestamp) -> caf::error {
-  auto done = false;
   auto ms = int64_t{0};
   if (timestamp != time{})
     ms = std::chrono::duration_cast<std::chrono::milliseconds>(
            timestamp.time_since_epoch())
            .count();
-  while (!done) {
+  while (true) {
     auto result = producer_->produce(
       /// The message topic.
       std::move(topic),
@@ -70,8 +69,10 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes,
     switch (result) {
       default:
         return caf::make_error(ec::unspecified, err2str(result));
-      case RdKafka::ERR_NO_ERROR:
+      case RdKafka::ERR_NO_ERROR: {
+        producer_->poll(0);
         return {};
+      }
       case RdKafka::ERR__QUEUE_FULL: {
         // The internal queue represents both messages to be sent and messages
         // that have been sent or failed, awaiting their delivery report
@@ -86,7 +87,6 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes,
       }
     }
   }
-  producer_->poll(0);
   __builtin_unreachable();
 }
 
