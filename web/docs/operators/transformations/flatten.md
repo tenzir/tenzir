@@ -5,14 +5,13 @@ Flattens nested data structures.
 ## Synopsis
 
 ```
-flatten [<separator>]
+flatten [<separator>] [-l|--ignore-lists]
 ```
 
 ## Description
 
 The `flatten` operator removes any nested lists or records by merging lists and
-joining nested records with a separator. Flattening removes null values inside
-lists.
+joining nested records with a separator. Flattening removes null values.
 
 :::info
 Unlike for most data models, flattening is an (almost) free operation in VAST's
@@ -24,6 +23,12 @@ data model.
 The separator string to join nested records with.
 
 Defaults to `.`.
+
+### `[-l|--ignore-lists]`
+
+Ignore all lists during flattening, leaving the values unflattened.
+
+Defaults to `false`.
 
 ## Examples
 
