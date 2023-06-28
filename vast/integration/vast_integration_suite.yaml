@@ -99,7 +99,7 @@ tests:
       - command: -N export ascii 'where orig_bytes > 1k && orig_bytes < 1Ki'
       - command: -N export ascii 'where :string == "OrfTtuI5G4e" || :port == 67 || :uint64 == 67'
       - command: '-N export ascii "where #schema == \"zeek.conn\" && resp_h == 192.168.1.104"'
-      - command: '-N export ascii "where #schema != \"zeek.conn\" && #schema != \"vast.metrics\""'
+      - command: '-N export ascii "where #schema != \"zeek.conn\" && #schema != \"tenzir.metrics\""'
       - command: '-N export ascii "where #schema != \"foobar\" && resp_h == 192.168.1.104"'
 
   Node Zeek multiple imports:
@@ -111,7 +111,7 @@ tests:
         input: data/zeek/dns.log.gz
       - command: -N export ascii 'where resp_h == 192.168.1.104'
       - command: -N export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
-      - command: '-N count ":timestamp >= 1970-01-01 && #schema != \"vast.metrics\""'
+      - command: '-N count ":timestamp >= 1970-01-01 && #schema != \"tenzir.metrics\""'
       - command: -N count '#schema == "zeek.conn"'
 
   Node Zeek dns log:
@@ -223,7 +223,7 @@ tests:
         input: data/zeek/dns.log.gz
       - command: export ascii 'where resp_h == 192.168.1.104'
       - command: export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
-      - command: 'count ":timestamp >= 1970-01-01 && #schema != \"vast.metrics\""'
+      - command: 'count ":timestamp >= 1970-01-01 && #schema != \"tenzir.metrics\""'
       - command: count '#schema == "zeek.conn"'
       - command: show schemas --yaml
 

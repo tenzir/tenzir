@@ -42,7 +42,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   const auto indexdir = args.dir / args.label;
   namespace sd = vast::defaults;
   vast::index_config index_config;
-  const auto* settings = get_if(&args.inv.options, "vast.index");
+  const auto* settings = get_if(&args.inv.options, "tenzir.index");
   if (settings) {
     vast::data as_data{};
     if (!convert(*settings, as_data))
@@ -56,13 +56,13 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   auto handle = self->spawn(
     index, accountant, filesystem, catalog, indexdir,
     // TODO: Pass these options as a vast::data object instead.
-    opt("vast.store-backend", std::string{sd::store_backend}),
-    opt("vast.max-partition-size", sd::max_partition_size),
-    opt("vast.active-partition-timeout", sd::active_partition_timeout),
-    opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
-    opt("vast.max-taste-partitions", sd::taste_partitions),
-    opt("vast.max-queries", sd::num_query_supervisors),
-    std::filesystem::path{opt("vast.catalog-dir", indexdir.string())},
+    opt("tenzir.store-backend", std::string{sd::store_backend}),
+    opt("tenzir.max-partition-size", sd::max_partition_size),
+    opt("tenzir.active-partition-timeout", sd::active_partition_timeout),
+    opt("tenzir.max-resident-partitions", sd::max_in_mem_partitions),
+    opt("tenzir.max-taste-partitions", sd::taste_partitions),
+    opt("tenzir.max-queries", sd::num_query_supervisors),
+    std::filesystem::path{opt("tenzir.catalog-dir", indexdir.string())},
     std::move(index_config));
   VAST_VERBOSE("{} spawned the index", *self);
   return caf::actor_cast<caf::actor>(handle);

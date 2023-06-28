@@ -28,10 +28,10 @@ node::node(std::string_view suite)
   auto vast_settings = caf::settings{};
   // Don't run the catalog in a separate thread, otherwise it is
   // invisible to the `test_coordinator`.
-  caf::put(settings, "vast.detach-components", false);
+  caf::put(settings, "tenzir.detach-components", false);
   // Set the timeout to zero to prevent the index telemetry loop,
   // which will cause any call to `run()` to hang indefinitely.
-  caf::put(settings, "vast.active-partition-timeout", caf::timespan{0});
+  caf::put(settings, "tenzir.active-partition-timeout", caf::timespan{0});
   spawn_component("catalog", {}, settings);
   spawn_component("index", {}, settings);
   spawn_component("importer");

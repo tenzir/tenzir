@@ -33,11 +33,11 @@ caf::expected<scope_linked<node_actor>>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   using namespace std::string_literals;
   // Fetch values from config.
-  auto id = get_or(opts, "vast.node-id", defaults::node_id.data());
+  auto id = get_or(opts, "tenzir.node-id", defaults::node_id.data());
   auto db_dir
-    = get_or(opts, "vast.db-directory", defaults::db_directory.data());
-  auto detach_components
-    = caf::get_or(opts, "vast.detach-components", defaults::detach_components);
+    = get_or(opts, "tenzir.db-directory", defaults::db_directory.data());
+  auto detach_components = caf::get_or(opts, "tenzir.detach-components",
+                                       defaults::detach_components);
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   if (err)

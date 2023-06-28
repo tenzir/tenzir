@@ -30,7 +30,7 @@
 namespace vast {
 
 /// Retrieves the node connection timeout as specified under the option
-/// `vast.connection-timeout` from the given settings.
+/// `tenzir.connection-timeout` from the given settings.
 caf::timespan node_connection_timeout(const caf::settings& options);
 
 caf::expected<caf::actor>

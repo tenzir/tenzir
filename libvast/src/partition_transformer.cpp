@@ -313,7 +313,7 @@ auto partition_transformer(
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);
   self->state.synopsis_path_template = std::move(synopsis_path_template);
-  // For historic reasons, the `vast.max-partition-size` is stored as the
+  // For historic reasons, the `tenzir.max-partition-size` is stored as the
   // `cardinality` in the value index options.
   self->state.partition_capacity
     = caf::get_or(index_opts, "cardinality", defaults::max_partition_size);

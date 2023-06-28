@@ -42,8 +42,9 @@ make_random_table_slices(size_t num_slices, size_t slice_size, type schema,
   // table slice type here. This ignores any user-defined overrides. However,
   // this function is only meant for testing anyways.
   caf::settings opts;
-  caf::put(opts, "vast.import.test.seed", seed);
-  caf::put(opts, "vast.import.max-events", std::numeric_limits<size_t>::max());
+  caf::put(opts, "tenzir.import.test.seed", seed);
+  caf::put(opts, "tenzir.import.max-events",
+           std::numeric_limits<size_t>::max());
   format::test::reader src{std::move(opts), nullptr};
   REQUIRE_EQUAL(src.module(std::move(mo)), caf::error{});
   std::vector<table_slice> result;

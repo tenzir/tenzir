@@ -108,8 +108,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
           // the index is in the same process because otherwise it can
           // happen that the index gets an exit message before the first
           // table slice arrives on the stream.
-          if (caf::get_or(inv.options, "vast.import.blocking", false)
-              || caf::get_or(inv.options, "vast.node", false))
+          if (caf::get_or(inv.options, "tenzir.import.blocking", false)
+              || caf::get_or(inv.options, "tenzir.node", false))
             self->send(importer, atom::subscribe_v, atom::flush_v,
                        caf::actor_cast<flush_listener_actor>(self));
           else
@@ -136,7 +136,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   // The flush listener based blocking mechanism is flawed and fails quite
   // often. As a workaround we force a flush-to-disk of all data that is
   // currently held in memory.
-  if (caf::get_or(inv.options, "vast.import.blocking", false)) {
+  if (caf::get_or(inv.options, "tenzir.import.blocking", false)) {
     auto components = get_node_components<index_actor>(self, node);
     if (!components)
       return caf::make_message(std::move(components.error()));

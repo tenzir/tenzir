@@ -140,10 +140,10 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
-  auto dump_ast = caf::get_or(inv.options, "vast.exec.dump-ast", false);
+  auto dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
   auto dump_diagnostics
-    = caf::get_or(inv.options, "vast.exec.dump-diagnostics", false);
-  auto as_file = caf::get_or(inv.options, "vast.exec.file", false);
+    = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
+  auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
   auto filename = std::string{};
   auto content = std::string{};
   if (as_file) {
@@ -184,7 +184,7 @@ public:
     -> std::pair<std::unique_ptr<command>, command::factory> override {
     auto exec = std::make_unique<command>(
       "exec", "execute a pipeline locally",
-      command::opts("?vast.exec")
+      command::opts("?tenzir.exec")
         .add<bool>("file,f", "load the pipeline definition from a file")
         .add<bool>("dump-ast",
                    "print a textual description of the AST and then exit")

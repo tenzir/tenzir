@@ -33,10 +33,10 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
   auto opts = args.inv.options;
   std::optional<std::string> command;
   if (auto cmd = caf::get_if<std::string>( //
-        &opts, "vast.start.disk-budget-check-binary"))
+        &opts, "tenzir.start.disk-budget-check-binary"))
     command = *cmd;
-  auto hiwater = detail::get_bytesize(opts, "vast.start.disk-budget-high", 0);
-  auto lowater = detail::get_bytesize(opts, "vast.start.disk-budget-low", 0);
+  auto hiwater = detail::get_bytesize(opts, "tenzir.start.disk-budget-high", 0);
+  auto lowater = detail::get_bytesize(opts, "tenzir.start.disk-budget-low", 0);
   if (!hiwater)
     return hiwater.error();
   if (!lowater)
@@ -44,11 +44,11 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
   // Set low == high as the default value.
   if (!*lowater)
     *lowater = *hiwater;
-  auto step_size = caf::get_or(opts, "vast.start.disk-budget-step-size",
+  auto step_size = caf::get_or(opts, "tenzir.start.disk-budget-step-size",
                                defaults::disk_monitor_step_size);
   auto default_seconds
     = std::chrono::seconds{defaults::disk_scan_interval}.count();
-  auto interval = caf::get_or(opts, "vast.start.disk-budget-check-interval",
+  auto interval = caf::get_or(opts, "tenzir.start.disk-budget-check-interval",
                               default_seconds);
   struct disk_monitor_config config
     = {*hiwater, *lowater, step_size, command, std::chrono::seconds{interval}};
@@ -56,16 +56,18 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
     return error;
   if (!*hiwater) {
     if (command)
-      VAST_WARN("'vast.start.disk-budget-check-binary' is configured but "
-                "'vast.start.disk-budget-high' is unset; disk-monitor will not "
-                "be spawned");
+      VAST_WARN(
+        "'tenzir.start.disk-budget-check-binary' is configured but "
+        "'tenzir.start.disk-budget-high' is unset; disk-monitor will not "
+        "be spawned");
     else
-      VAST_VERBOSE("'vast.start.disk-budget-high' is unset; disk-monitor will "
-                   "not be spawned");
+      VAST_VERBOSE(
+        "'tenzir.start.disk-budget-high' is unset; disk-monitor will "
+        "not be spawned");
     return ec::no_error;
   }
   const auto db_dir
-    = caf::get_or(opts, "vast.db-directory", defaults::db_directory.data());
+    = caf::get_or(opts, "tenzir.db-directory", defaults::db_directory.data());
   const auto db_dir_path = std::filesystem::path{db_dir};
   std::error_code err{};
   const auto db_dir_abs = std::filesystem::absolute(db_dir_path, err);

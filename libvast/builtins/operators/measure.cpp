@@ -31,7 +31,7 @@ public:
   auto operator()(generator<table_slice> input) const
     -> generator<table_slice> {
     static const auto schema = type{
-      "vast.metrics.events",
+      "tenzir.metrics.events",
       record_type{
         {"timestamp", time_type{}},
         {"events", uint64_type{}},
@@ -68,7 +68,7 @@ public:
 
   auto operator()(generator<chunk_ptr> input) const -> generator<table_slice> {
     static const auto schema = type{
-      "vast.metrics.bytes",
+      "tenzir.metrics.bytes",
       record_type{
         {"timestamp", time_type{}},
         {"bytes", uint64_type{}},

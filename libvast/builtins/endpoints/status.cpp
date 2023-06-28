@@ -83,9 +83,9 @@ auto status_handler(
         if (verbosity == "info")
           /* nop */;
         else if (verbosity == "detailed")
-          caf::put(options, "vast.status.detailed", true);
+          caf::put(options, "tenzir.status.detailed", true);
         else if (verbosity == "debug")
-          caf::put(options, "vast.status.debug", true);
+          caf::put(options, "tenzir.status.debug", true);
         else
           return rest_response::make_error(422, "invalid verbosity\n",
                                            caf::error{});

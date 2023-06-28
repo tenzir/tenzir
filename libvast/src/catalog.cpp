@@ -609,7 +609,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         accountant_actor accountant,
         const std::filesystem::path& type_reg_dir) {
   if (self->getf(caf::local_actor::is_detached_flag))
-    caf::detail::set_thread_name("vast.catalog");
+    caf::detail::set_thread_name("tenzir.catalog");
   self->state.self = self;
   self->state.type_registry_dir = type_reg_dir;
   // Register the exit handler.

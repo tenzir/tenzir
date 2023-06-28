@@ -248,11 +248,12 @@ using default_randomizer = randomizer<std::mt19937_64>;
 reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
   : super{options},
     generator_{vast::defaults::import::test::seed(options)},
-    num_events_{caf::get_or(options, "vast.import.max-events",
+    num_events_{caf::get_or(options, "tenzir.import.max-events",
                             vast::defaults::import::max_events)} {
   if (num_events_ == 0)
     num_events_ = std::numeric_limits<size_t>::max();
-  if (caf::holds_alternative<std::string>(options, "vast.import.read-timeout"))
+  if (caf::holds_alternative<std::string>(options,
+                                          "tenzir.import.read-timeout"))
     VAST_VERBOSE("{} ingnores the unsupported read timeout option",
                  detail::pretty_type_name(this));
 }
