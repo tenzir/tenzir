@@ -262,6 +262,21 @@ public:
   make_writer(const caf::settings& options) const = 0;
 };
 
+// -- format plugin -----------------------------------------------------
+
+/// This plugin can be used to create bindings between a file's path and
+/// extension, which enables automatic parser/printer deduction from a file path.
+class format_plugin : public virtual plugin {
+public:
+  virtual auto accepts_file_path(const std::filesystem::path& path) const
+    -> bool
+    = 0;
+
+  virtual auto accepts_file_extension(const std::filesystem::path& path) const
+    -> bool
+    = 0;
+};
+
 // -- serialization plugin -----------------------------------------------------
 
 /// This plugin interface can be used to serialize and deserialize classes
@@ -440,17 +455,6 @@ class loader_plugin : public virtual loader_inspection_plugin<Loader>,
 
 // -- parser plugin -----------------------------------------------------------
 
-class file_io_plugin : public virtual plugin {
-public:
-  virtual auto accepts_file_path(const std::filesystem::path& path) const
-    -> bool
-    = 0;
-
-  virtual auto accepts_file_extension(const std::filesystem::path& path) const
-    -> bool
-    = 0;
-};
-
 class plugin_parser {
 public:
   virtual ~plugin_parser() = default;
@@ -464,7 +468,7 @@ public:
 };
 
 /// @see operator_parser_plugin
-class parser_parser_plugin : public virtual file_io_plugin {
+class parser_parser_plugin : public virtual format_plugin {
 public:
   virtual auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser>
@@ -531,7 +535,7 @@ public:
 };
 
 /// @see operator_parser_plugin^
-class printer_parser_plugin : public virtual file_io_plugin {
+class printer_parser_plugin : public virtual format_plugin {
 public:
   virtual auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer>

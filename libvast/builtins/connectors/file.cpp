@@ -56,36 +56,38 @@ auto expand_path(std::string path) -> std::string {
   return path;
 }
 
-auto find_default_io(const std::filesystem::path& file_path,
-                     std::string_view obj) -> const file_io_plugin* {
-  const file_io_plugin* default_io = nullptr;
-  for (const auto* plugin : plugins::get<file_io_plugin>()) {
-    if (plugin->accepts_file_path(file_path)) {
-      if (default_io) {
+auto find_default_format(const std::filesystem::path& file_path,
+                         std::string_view obj) -> const format_plugin* {
+  const format_plugin* default_format = nullptr;
+  for (const auto* plugin : plugins::get<format_plugin>()) {
+    if (plugin->accepts_file_name(file_path)) {
+      if (default_format) {
         diagnostic::error("could not determine default {0} for file path "
                           "`{1}`: {0}s `{2}` and `{3}` both accept file path",
-                          obj, file_path, plugin->name(), default_io->name())
+                          obj, file_path, plugin->name(),
+                          default_format->name())
           .throw_();
       }
-      default_io = plugin;
+      default_format = plugin;
     }
   }
-  if (default_io) {
-    return default_io;
+  if (default_format) {
+    return default_format;
   }
-  for (const auto* plugin : plugins::get<file_io_plugin>()) {
+  for (const auto* plugin : plugins::get<format_plugin>()) {
     if (plugin->accepts_file_extension(file_path)) {
-      if (default_io) {
+      if (default_format) {
         diagnostic::error("could not determine default {0} for file path "
                           "`{1}`: {0}s `{2}` and `{3}` both accept file "
                           "extension",
-                          obj, file_path, plugin->name(), default_io->name())
+                          obj, file_path, plugin->name(),
+                          default_format->name())
           .throw_();
       }
-      default_io = plugin;
+      default_format = plugin;
     }
   }
-  return default_io;
+  return default_format;
 }
 
 class writer {
@@ -383,7 +385,8 @@ public:
   }
 
   auto default_parser() const -> std::string override {
-    const auto* default_parser = find_default_io(args_.path.inner, "parser");
+    const auto* default_parser
+      = find_default_format(args_.path.inner, "parser");
     return default_parser ? default_parser->name()
                           : plugin_loader::default_parser();
   }
@@ -408,7 +411,8 @@ public:
   }
 
   auto default_printer() const -> std::string override {
-    const auto* default_printer = find_default_io(args_.path.inner, "printer");
+    const auto* default_printer
+      = find_default_format(args_.path.inner, "printer");
     return default_printer ? default_printer->name()
                            : plugin_saver::default_printer();
   }

@@ -401,7 +401,7 @@ class plugin final : public virtual reader_plugin,
   }
 
   auto
-  accepts_file_path([[maybe_unused]] const std::filesystem::path& path) const
+  accepts_file_name([[maybe_unused]] const std::filesystem::path& path) const
     -> bool override {
     return false;
   }
