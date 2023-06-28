@@ -32,12 +32,12 @@ make_reader(caf::settings options) {
     static_assert(std::is_same_v<Reader, format::json::reader>,
                   "selectors are currently only implemented for the JSON "
                   "reader");
-    caf::put(options, "vast.import.json.selector",
+    caf::put(options, "tenzir.import.json.selector",
              fmt::format("{}:{}", Selector::field_name, Selector::type_prefix));
     // If the user did not provide a type restriction, we can use the type
     // prefix to restrict the types as a good default.
-    if (!caf::holds_alternative<std::string>(options, "vast.import.type"))
-      caf::put(options, "vast.import.type", Selector::type_prefix);
+    if (!caf::holds_alternative<std::string>(options, "tenzir.import.type"))
+      caf::put(options, "tenzir.import.type", Selector::type_prefix);
   }
   using istream_ptr = std::unique_ptr<std::istream>;
   if constexpr (std::is_constructible_v<Reader, caf::settings, istream_ptr>) {

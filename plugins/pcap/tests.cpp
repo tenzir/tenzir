@@ -67,12 +67,12 @@ TEST(PCAP read 1) {
   // Initialize a PCAP source with no cutoff (-1), and at most 5 flow table
   // entries.
   caf::settings settings;
-  caf::put(settings, "vast.import.read", artifacts::traces::nmap_vsn);
-  caf::put(settings, "vast.import.pcap.cutoff", static_cast<uint64_t>(-1));
-  caf::put(settings, "vast.import.pcap.max-flows", static_cast<size_t>(5));
+  caf::put(settings, "tenzir.import.read", artifacts::traces::nmap_vsn);
+  caf::put(settings, "tenzir.import.pcap.cutoff", static_cast<uint64_t>(-1));
+  caf::put(settings, "tenzir.import.pcap.max-flows", static_cast<size_t>(5));
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
-  caf::put(settings, "vast.import.batch-timeout", "0s");
+  caf::put(settings, "tenzir.import.batch-timeout", "0s");
   auto reader = format::reader::make("pcap", settings);
   REQUIRE(reader);
   size_t events_produced = 0;
@@ -102,7 +102,7 @@ TEST(PCAP read 1) {
                         community_ids[row]);
   MESSAGE("write out read packets");
   const auto file = std::filesystem::path{"vast-unit-test-nmap-vsn.pacp"};
-  caf::put(settings, "vast.export.write", file.string());
+  caf::put(settings, "tenzir.export.write", file.string());
   auto writer = format::writer::make("pcap", settings);
   REQUIRE(writer);
   auto deleter = caf::detail::make_scope_guard([&] {
@@ -115,14 +115,14 @@ TEST(PCAP read 2) {
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   caf::settings settings;
-  caf::put(settings, "vast.import.read", artifacts::traces::nmap_vsn);
-  caf::put(settings, "vast.import.pcap.cutoff", static_cast<uint64_t>(64));
-  caf::put(settings, "vast.import.pcap.max-flows", static_cast<size_t>(100));
-  caf::put(settings, "vast.import.pcap.max-flow-age", static_cast<size_t>(5));
-  caf::put(settings, "vast.import.pcap.flow-expiry", static_cast<size_t>(2));
+  caf::put(settings, "tenzir.import.read", artifacts::traces::nmap_vsn);
+  caf::put(settings, "tenzir.import.pcap.cutoff", static_cast<uint64_t>(64));
+  caf::put(settings, "tenzir.import.pcap.max-flows", static_cast<size_t>(100));
+  caf::put(settings, "tenzir.import.pcap.max-flow-age", static_cast<size_t>(5));
+  caf::put(settings, "tenzir.import.pcap.flow-expiry", static_cast<size_t>(2));
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
-  caf::put(settings, "vast.import.batch-timeout", "0s");
+  caf::put(settings, "tenzir.import.batch-timeout", "0s");
   auto reader = format::reader::make("pcap", settings);
   REQUIRE(reader);
   table_slice slice{};
@@ -142,7 +142,7 @@ TEST(PCAP read 2) {
   MESSAGE("write out read packets");
   const auto file
     = std::filesystem::path{"vast-unit-test-workshop-2011-browse.pcap"};
-  caf::put(settings, "vast.export.write", file.string());
+  caf::put(settings, "tenzir.export.write", file.string());
   auto writer = format::writer::make("pcap", settings);
   REQUIRE(writer);
   auto deleter = caf::detail::make_scope_guard([&] {

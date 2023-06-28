@@ -59,7 +59,7 @@ public:
   make_command() const override {
     auto flush = std::make_unique<command>(
       "flush", "write all currently active partitions to disk",
-      command::opts("?vast.flush"));
+      command::opts("?tenzir.flush"));
     auto factory = command::factory{
       {"flush", flush_command},
     };

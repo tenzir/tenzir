@@ -62,15 +62,15 @@ auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
   auto pipe = std::move(*parse_result);
   // Parse query options.
   auto query_opts = no_query_options;
-  if (get_or(args.inv.options, "vast.export.continuous", false))
+  if (get_or(args.inv.options, "tenzir.export.continuous", false))
     query_opts = query_opts + continuous;
-  if (get_or(args.inv.options, "vast.export.unified", false))
+  if (get_or(args.inv.options, "tenzir.export.unified", false))
     query_opts = unified;
   // Default to historical if no options provided.
   if (query_opts == no_query_options)
     query_opts = historical;
   // Mark the query as low priority if explicitly requested.
-  if (get_or(args.inv.options, "vast.export.low-priority", false))
+  if (get_or(args.inv.options, "tenzir.export.low-priority", false))
     query_opts = query_opts + low_priority;
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();

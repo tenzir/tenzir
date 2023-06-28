@@ -123,8 +123,8 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
       ec::invalid_argument, "show command expects at most one argument"));
   const auto filter
     = inv.arguments.empty() ? std::string_view{} : inv.arguments[0];
-  const auto expand = caf::get_or(inv.options, "vast.show.expand", false);
-  const auto as_yaml = caf::get_or(inv.options, "vast.show.yaml", false);
+  const auto expand = caf::get_or(inv.options, "tenzir.show.expand", false);
+  const auto as_yaml = caf::get_or(inv.options, "tenzir.show.yaml", false);
   const auto show_concepts
     = inv.full_name == "show" || inv.full_name == "show concepts";
   const auto show_models
@@ -234,7 +234,7 @@ public:
   make_command() const override {
     auto show = std::make_unique<command>(
       "show", "print configuration objects as JSON",
-      command::opts("?vast.show")
+      command::opts("?tenzir.show")
         .add<bool>("expand",
                    "use long-form notiation in output where applicable")
         .add<bool>("yaml", "format output as YAML"));

@@ -224,15 +224,15 @@ register_component(node_actor::stateful_pointer<node_state> self,
 /// Spawns the accountant actor.
 accountant_actor
 spawn_accountant(node_actor::stateful_pointer<node_state> self) {
-  if (!caf::get_or(content(self->system().config()), "vast.enable-metrics",
+  if (!caf::get_or(content(self->system().config()), "tenzir.enable-metrics",
                    false))
     return {};
   // It doesn't make much sense to run the accountant for one-shot commands
   // with a local database using `--node`, so this prevents spawning it.
-  if (caf::get_or(content(self->system().config()), "vast.node", false))
+  if (caf::get_or(content(self->system().config()), "tenzir.node", false))
     return {};
   const auto metrics_opts = caf::get_or(content(self->system().config()),
-                                        "vast.metrics", caf::settings{});
+                                        "tenzir.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
   if (!cfg) {
     VAST_ERROR("{} failed to parse metrics configuration: {}", *self,
@@ -251,20 +251,20 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
 } // namespace
 
 caf::message status_command(const invocation& inv, caf::actor_system&) {
-  if (caf::get_or(inv.options, "vast.node", false)) {
+  if (caf::get_or(inv.options, "tenzir.node", false)) {
     return caf::make_message(caf::make_error( //
       ec::invalid_configuration,
       "unable to execute status command when spawning a "
       "node locally instead of connecting to one; please "
-      "unset the option vast.node"));
+      "unset the option tenzir.node"));
   }
   auto self = this_node;
   auto verbosity = status_verbosity::info;
-  if (caf::get_or(inv.options, "vast.status.detailed", false))
+  if (caf::get_or(inv.options, "tenzir.status.detailed", false))
     verbosity = status_verbosity::detailed;
-  if (caf::get_or(inv.options, "vast.status.debug", false))
+  if (caf::get_or(inv.options, "tenzir.status.debug", false))
     verbosity = status_verbosity::debug;
-  auto timeout_value = get_or_duration(inv.options, "vast.status.timeout",
+  auto timeout_value = get_or_duration(inv.options, "tenzir.status.timeout",
                                        defaults::status_request_timeout);
   if (!timeout_value) {
     return caf::make_message(caf::make_error(
@@ -284,7 +284,7 @@ caf::expected<caf::actor>
 spawn_accountant(node_actor::stateful_pointer<node_state> self,
                  spawn_arguments& args) {
   const auto& options = args.inv.options;
-  auto metrics_opts = caf::get_or(options, "vast.metrics", caf::settings{});
+  auto metrics_opts = caf::get_or(options, "tenzir.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
   if (!cfg)
     return cfg.error();
@@ -373,7 +373,7 @@ node_state::spawn_command(const invocation& inv,
   std::string comp_type{inv_name_split[1]};
   // Auto-generate label if none given.
   std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "vast.spawn."
+  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "tenzir.spawn."
                                                               "label")) {
     label = *label_ptr;
     if (label.empty()) {

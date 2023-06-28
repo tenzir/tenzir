@@ -101,7 +101,7 @@ struct csv {
 /// Contains settings for the csv subcommand.
 struct infer {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.infer";
+  static constexpr const char* category = "tenzir.infer";
 
   /// Path for reading input events.
   static constexpr auto read = defaults::import::read;

@@ -47,7 +47,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   });
   self->monitor(snk);
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(inv, "vast.export.read", must_provide_query::no);
+  auto query = read_query(inv, "tenzir.export.read", must_provide_query::no);
   if (!query)
     return caf::make_message(std::move(query.error()));
   // Get VAST node.
@@ -92,7 +92,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   self->send(exporter, atom::run_v);
   // Set the configured timeout, if any.
   if (auto timeout_str = caf::get_if<std::string>(&inv.options, //
-                                                  "vast.export.timeout")) {
+                                                  "tenzir.export.timeout")) {
     if (auto timeout = to<duration>(*timeout_str))
       self->delayed_send(self, *timeout, atom::shutdown_v, *timeout);
     else

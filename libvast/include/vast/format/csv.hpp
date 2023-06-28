@@ -55,7 +55,7 @@ public:
   using iterator_type = std::string::const_iterator;
   using parser_type = type_erased_parser<iterator_type>;
 
-  constexpr static const defaults csv = {"vast.import.csv"};
+  constexpr static const defaults csv = {"tenzir.import.csv"};
 
   /// Constructs a CSV reader.
   /// @param options Additional options.

@@ -450,12 +450,12 @@ caf::error reader::parse_header() {
 }
 
 writer::writer(const caf::settings& options) {
-  auto output = get_or(options, "vast.export.write",
+  auto output = get_or(options, "tenzir.export.write",
                        vast::defaults::export_::write.data());
   if (output != "-")
     dir_ = std::filesystem::path{std::move(output)};
   show_timestamp_tags_
-    = !caf::get_or(options, "vast.export.zeek.disable-timestamp-tags", false);
+    = !caf::get_or(options, "tenzir.export.zeek.disable-timestamp-tags", false);
 }
 
 namespace {

@@ -175,13 +175,13 @@ public:
                   [[maybe_unused]] const record& global_config)
     -> caf::error override {
     // We don't use any plugin-specific configuration under
-    // vast.plugins.rename, so nothing is needed here.
+    // tenzir.plugins.rename, so nothing is needed here.
     if (plugin_config.empty()) {
       return caf::none;
     }
     return caf::make_error(ec::invalid_configuration, "expected empty "
                                                       "configuration under "
-                                                      "vast.plugins.rename");
+                                                      "tenzir.plugins.rename");
   }
 
   auto make_operator(std::string_view pipeline) const

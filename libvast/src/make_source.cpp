@@ -62,16 +62,16 @@ make_source(caf::actor_system& sys, const std::string& format,
   const auto& options = inv.options;
   auto max_events = to_optional(
     caf::get_if<caf::config_value::integer>(&options, //
-                                            "vast.import.max-events"));
-  auto uri = caf::get_if<std::string>(&options, "vast.import.listen");
-  auto file = caf::get_if<std::string>(&options, "vast.import.read");
-  auto type = caf::get_if<std::string>(&options, "vast.import.type");
+                                            "tenzir.import.max-events"));
+  auto uri = caf::get_if<std::string>(&options, "tenzir.import.listen");
+  auto file = caf::get_if<std::string>(&options, "tenzir.import.read");
+  auto type = caf::get_if<std::string>(&options, "tenzir.import.type");
   auto encoding = defaults::import::table_slice_type;
-  if (!extract_settings(encoding, options, "vast.import.batch-encoding"))
+  if (!extract_settings(encoding, options, "tenzir.import.batch-encoding"))
     return caf::make_error(ec::invalid_configuration, "failed to extract "
                                                       "batch-encoding option");
   VAST_ASSERT(encoding != table_slice_encoding::none);
-  auto slice_size = caf::get_or(options, "vast.import.batch-size",
+  auto slice_size = caf::get_or(options, "tenzir.import.batch-size",
                                 defaults::import::table_slice_size);
   if (slice_size == 0)
     slice_size = std::numeric_limits<decltype(slice_size)>::max();

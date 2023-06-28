@@ -136,7 +136,7 @@ struct accountant_state_impl {
       for (const auto& [key, _] : meta2)
         schema_fields.emplace_back(key, string_type{});
       auto schema = type{
-        fmt::format("vast.metrics.{}", key),
+        fmt::format("tenzir.metrics.{}", key),
         record_type{schema_fields},
       };
       builder = std::make_shared<table_slice_builder>(schema);

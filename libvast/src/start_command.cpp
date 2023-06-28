@@ -65,15 +65,15 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
                    VAST_ARG("args", inv.arguments.begin(),
                             inv.arguments.end()));
   // Bail out early for bogus invocations.
-  if (caf::get_or(inv.options, "vast.node", false))
+  if (caf::get_or(inv.options, "tenzir.node", false))
     return caf::make_message(
       caf::make_error(ec::invalid_configuration,
                       "unable to run 'vast start' when spawning a "
                       "node locally instead of connecting to one; please "
-                      "unset the option vast.node"));
+                      "unset the option tenzir.node"));
   // Construct an endpoint.
   endpoint node_endpoint;
-  auto str = get_or(inv.options, "vast.endpoint", defaults::endpoint.data());
+  auto str = get_or(inv.options, "tenzir.endpoint", defaults::endpoint.data());
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
       caf::make_error(ec::parse_error, "invalid endpoint", str));
@@ -112,13 +112,13 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   auto stop = false;
   self->monitor(node);
   // A single line of output to publish out address for scripts.
-  if (caf::get_or(inv.options, "vast.start.print-endpoint", false))
+  if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false))
     std::cout << listen_addr << std::endl;
-  auto commands = caf::get_or(inv.options, "vast.start.commands",
+  auto commands = caf::get_or(inv.options, "tenzir.start.commands",
                               std::vector<std::string>{});
   if (commands.empty()) {
     if (auto const* command
-        = caf::get_if<std::string>(&inv.options, "vast.start.commands"))
+        = caf::get_if<std::string>(&inv.options, "tenzir.start.commands"))
       commands.push_back(*command);
   }
   std::vector<command_runner_actor> command_runners;

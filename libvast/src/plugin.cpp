@@ -46,12 +46,12 @@ namespace {
 detail::stable_set<std::filesystem::path>
 get_plugin_dirs(const caf::actor_system_config& cfg) {
   detail::stable_set<std::filesystem::path> result;
-  const auto bare_mode = caf::get_or(cfg, "vast.bare-mode", false);
+  const auto bare_mode = caf::get_or(cfg, "tenzir.bare-mode", false);
   // Since we do not read configuration files that were not explicitly
   // specified when in bare-mode, it is safe to just read the option
-  // `vast.plugin-dirs` even with bare-mode enabled.
+  // `tenzir.plugin-dirs` even with bare-mode enabled.
   if (auto dirs = detail::unpack_config_list_to_vector<std::string>( //
-        cfg, "vast.plugin-dirs"))
+        cfg, "tenzir.plugin-dirs"))
     result.insert(dirs->begin(), dirs->end());
   else
     VAST_WARN("failed to to extract plugin dirs: {}", dirs.error());
@@ -207,7 +207,7 @@ load(const std::vector<std::string>& bundled_plugins,
   auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
   // Get the necessary options.
   auto paths_or_names
-    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{"all"});
+    = caf::get_or(cfg, "tenzir.plugins", std::vector<std::string>{"all"});
   if (paths_or_names.empty() && bundled_plugins.empty())
     return loaded_plugin_paths;
   const auto plugin_dirs = get_plugin_dirs(cfg);

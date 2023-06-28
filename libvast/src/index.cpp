@@ -1485,9 +1485,9 @@ index(index_actor::stateful_pointer<index_state> self,
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
       query_state::type_query_context_map query_contexts;
-      if (not caf::get_or(content(self->system().config()),
-                          "vast.experimental-disable-active-partition-queries",
-                          false)) {
+      if (not caf::get_or(
+            content(self->system().config()),
+            "tenzir.experimental-disable-active-partition-queries", false)) {
         for (const auto& [active_partition_type, active_partition] :
              self->state.active_partitions) {
           candidates.emplace_back(active_partition.id, active_partition_type);
