@@ -55,13 +55,6 @@ jobs:
                  | @text' \
                  <<< '${{ inputs.config }}' >> "${GITHUB_OUTPUT}"
           echo "::notice checking tenzir-plugins..."
-          echo "needs-tenzir-plugins=false" >> "$GITHUB_OUTPUT"
-          if [[ $(comm -12 \
-                 <(jq -r '[(.editions[] | .name)] | sort | .[]' <<< '${{ inputs.config }}') \
-                 <(echo tenzir-{ce,ee}| tr ' ' '\n' | sort)) \
-          ]]; then
-            echo "needs-tenzir-plugins=true" >> "$GITHUB_OUTPUT"
-          fi
           jq -r '@text "upload-to-github=\(.editions | any(."upload-package-to-github"))"' \
                    <<< '${{ inputs.config }}' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
@@ -69,7 +62,6 @@ jobs:
         run: |
           echo 'cfg outputs: ${{ toJSON(steps.cfg.outputs) }}'
       - name: Configure ssh-agent
-        if: steps.cfg.outputs.needs-tenzir-plugins == 'true'
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
@@ -102,10 +94,10 @@ jobs:
       - name: Setup Cachix
         uses: cachix/cachix-action@v12
         with:
-          name: vast
-          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
-          # Avoid pushing any editions that are not fully open source.
-          pushFilter: "tenzir-[[:alnum:]]+-(static|slim|[[:digit:]])"
+          name: tenzir
+          authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
+          # Avoid pushing the full enterprise edition.
+          pushFilter: "tenzir-ee"
       - name: Build Nix Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

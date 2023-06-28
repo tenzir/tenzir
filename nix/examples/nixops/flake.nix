@@ -1,11 +1,11 @@
 {
-  description = "VAST nixops example";
+  description = "Tenzir nixops example";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     nixops-plugged.url = "github:lukebfox/nixops-plugged";
-    vast.url = "github:tenzir/vast/stable";
+    tenzir.url = "github:tenzir/tenzir/stable";
   };
 
   outputs = {
@@ -13,7 +13,7 @@
     nixpkgs,
     nixops-plugged,
     flake-utils,
-    vast,
+    tenzir,
     ...
   }: let
     pkgsFor = system:
@@ -24,16 +24,16 @@
     {
       nixopsConfigurations.default = {
         inherit nixpkgs;
-        network.description = "vast";
+        network.description = "tenzir";
 
-        vast = {
-          imports = [vast.nixosModules.vast];
+        tenzir = {
+          imports = [tenzir.nixosModules.tenzir];
           nixpkgs.pkgs = pkgsFor "x86_64-linux";
-          services.vast = {
+          services.tenzir = {
             enable = true;
             openFirewall = true;
             settings = {
-              vast = {
+              tenzir = {
                 # Ensure the service is reachable from the network.
                 endpoint = "0.0.0.0:5158";
 
@@ -49,7 +49,7 @@
                   self-sink.enable = false;
                   uds-sink = {
                     enable = false;
-                    path = "/tmp/vast-metrics.sock";
+                    path = "/tmp/tenzir-metrics.sock";
                     type = "datagram";
                   };
                 };

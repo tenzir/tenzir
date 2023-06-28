@@ -16,6 +16,8 @@ services:
     ports:
       - ${VAST_WEB_PORT:-5160}:5160
       - ${VAST_PORT:-5158}:5158
+    entrypoint:
+      - tenzir-ctl
     command:
       - start
     networks:

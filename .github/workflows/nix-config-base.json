@@ -13,15 +13,13 @@
       ]
     },
     {
-      "name": "tenzir-ce",
+      "name": "tenzir-ee",
       "static": true,
       "upload-package-to-github": false,
       "package-stores": [
         "gcs:tenzir-dist-private/packages/main"
       ],
-      "image-registries": [
-        "622024652768.dkr.ecr.eu-west-1.amazonaws.com"
-      ]
+      "image-registries": []
     }
   ]
 }

@@ -255,9 +255,9 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            tags=('latest' "${{ github.sha }}")
+            tags=('main' "${{ github.sha }}")
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
           else
             echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
@@ -267,11 +267,12 @@ jobs:
             .github/workflows/docker-config-base.json \
             --arg v "${{ steps.configure.outputs.build-version-short }}" \
             --args -- "${tags[@]}")"
-          # Clear push repos in case we're in a PR, but push the developer
+          # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             docker_config="$(jq -c '(.editions[] | .registries) |= [] |
-              (.editions[] | select(.name == "tenzir") | .registries) |= ["ghcr.io"]' \
+              (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
+              .registries) |= ["ghcr.io"]' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
@@ -283,11 +284,11 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             container_tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            container_tags=('latest' "${{ github.sha }}")
-            aliases=('latest')
+            container_tags=('main' "${{ github.sha }}")
+            aliases=('main')
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            container_tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
-            aliases=('stable')
+            container_tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            aliases=('latest')
           else
             echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
@@ -780,15 +781,15 @@ jobs:
           # for builds of the latest release.
           asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
           asset_content_type: application/gzip
-      - name: Publish VAST.spdx to GitHub Release
+      - name: Publish Tenzir.spdx to GitHub Release
         if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "VAST.spdx"
-          asset_name: "VAST.spdx"
+          asset_path: "Tenzir.spdx"
+          asset_name: "Tenzir.spdx"
           asset_content_type: text/plain
 
   tenzir-plugins:

@@ -110,7 +110,7 @@ in {
         propagatedBuildInputs = [final.openssl];
         NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer";
         # Building statically implies using -flto. Since we produce a final binary with
-        # link time optimizaitons in VAST, we need to make sure that type definitions that
+        # link time optimizaitons in Tenzir, we need to make sure that type definitions that
         # are parsed in both projects are the same, otherwise the compiler will complain
         # at the optimization stage.
         # https://github.com/NixOS/nixpkgs/issues/130963
@@ -141,7 +141,7 @@ in {
     configureFlags = old.configureFlags ++ ["--enable-prof" "--enable-stats"];
     doCheck = !isStatic;
   });
-  vast-source = inputs.nix-filter.lib.filter {
+  tenzir-source = inputs.nix-filter.lib.filter {
     root = ./..;
     include = [
       (inputs.nix-filter.lib.inDirectory ../changelog)
@@ -159,20 +159,22 @@ in {
       ../VERSIONING.md
       ../CMakeLists.txt
       ../LICENSE
-      ../VAST.spdx
       ../README.md
-      ../VAST.spdx
+      ../Tenzir.spdx
       ../VERSIONING.md
       ../tenzir.yaml.example
       ../version.json
     ];
   };
-  vast = final.callPackage ./vast {
+  tenzir-de = final.callPackage ./tenzir {
     inherit stdenv versionShortOverride versionLongOverride;
+    pname = "tenzir-de";
   };
-  vast-ce = let
-    pkg = final.vast.override {
-      pname = "tenzir-ce";
+  # Policy: The suffix-less `tenzir' packages come with a few closed source
+  # plugins.
+  tenzir = let
+    pkg = final.tenzir-de.override {
+      pname = "tenzir";
     };
   in
     pkg.withPlugins (ps: [
@@ -181,8 +183,8 @@ in {
       ps.pipeline_manager
       ps.platform
     ]);
-  vast-cm = let
-    pkg = final.vast.override {
+  tenzir-cm = let
+    pkg = final.tenzir-de.override {
       pname = "tenzir-cm";
     };
   in
@@ -190,8 +192,8 @@ in {
       ps.compaction
       ps.matcher
     ]);
-  vast-ee = let
-    pkg = final.vast.override {
+  tenzir-ee = let
+    pkg = final.tenzir-de.override {
       pname = "tenzir-ee";
     };
   in
@@ -203,7 +205,7 @@ in {
       ps.pipeline_manager
       ps.platform
     ]);
-  vast-integration-test-deps = let
+  tenzir-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [
         coloredlogs

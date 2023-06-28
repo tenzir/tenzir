@@ -14,20 +14,20 @@ usage() {
   echo 'options:'
   echo "    -h,--help               print this message"
   echo "       --with-plugin=<path> add <path> to the list of bundled plugins"
-  echo "    -D<CMake option>        options starting with "-D" are passed to CMake"
+  echo "    -D<CMake option>        options starting with \"-D\" are passed to CMake"
   echo
 }
 
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
 
-VAST_BUILD_VERSION="${VAST_BUILD_VERSION:=$(git -C "${toplevel}" describe --abbrev=10 --long --dirty --match='v[0-9]*')}"
-VAST_BUILD_VERSION_SHORT="${VAST_BUILD_VERSION_SHORT:=$(git -C "${toplevel}" describe --abbrev=10 --match='v[0-9]*')}"
+TENZIR_BUILD_VERSION="${TENZIR_BUILD_VERSION:=$(git -C "${toplevel}" describe --abbrev=10 --long --dirty --match='v[0-9]*')}"
+TENZIR_BUILD_VERSION_SHORT="${TENZIR_BUILD_VERSION_SHORT:=$(git -C "${toplevel}" describe --abbrev=10 --match='v[0-9]*')}"
 
-desc="${VAST_BUILD_VERSION}"
-desc_short="${VAST_BUILD_VERSION_SHORT}"
-vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
-log "rev is ${vast_rev}"
+desc="${TENZIR_BUILD_VERSION}"
+desc_short="${TENZIR_BUILD_VERSION_SHORT}"
+tenzir_rev="$(git -C "${toplevel}" rev-parse HEAD)"
+log "rev is ${tenzir_rev}"
 
 cmakeFlags=""
 declare -a extraPlugins
@@ -73,7 +73,7 @@ done
 
 read -r -d '' exp <<EOF || true
 let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
-(pkgs.pkgsStatic.vast.override {
+(pkgs.pkgsStatic.tenzir.override {
   versionLongOverride = "${desc}";
   versionShortOverride = "${desc_short}";
   extraPlugins = [ ${extraPlugins[@]} ];

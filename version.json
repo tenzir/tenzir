@@ -1,18 +1,18 @@
 {
-  "vast-version-fallback_COMMENT": [
+  "tenzir-version-fallback_COMMENT": [
     "The main version fragment. This should be identical to the closest",
     "annotated git tag without the leading 'v'.",
     "This value gets updated automatically by `scripts/prepare-release`."
   ],
-  "vast-version-fallback": "3.1.0",
-  "vast-version-rev-count_COMMENT": [
+  "tenzir-version-fallback": "3.1.0",
+  "tenzir-version-rev-count_COMMENT": [
     "This value stores the ancestor count of the tagged commit, calculated",
     "with `git rev-list --count HEAD`, then incremented by 1. This operates",
     "under the assumption that the release-preparing PR contains exactly one",
     "commit and is rebased before merging."
   ],
-  "vast-version-rev-count": 16369,
-  "vast-partition-version_COMMENT": [
+  "tenzir-version-rev-count": 16369,
+  "tenzir-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",
     "layout of VAST's partitions."

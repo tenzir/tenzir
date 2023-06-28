@@ -39,8 +39,7 @@ VAST_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e VAST_CONSOLE_VER
 # Pull the new version to verify database compatibility.
 docker run \
   $VAST_RUN_FLAGS \
-  ghcr.io/tenzir/tenzir:$NEW_VERSION \
-  start
+  ghcr.io/tenzir/tenzir-node:$NEW_VERSION
 
 sleep 3
 
