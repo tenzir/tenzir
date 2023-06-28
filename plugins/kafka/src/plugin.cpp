@@ -358,12 +358,8 @@ public:
       if (!offset_parser()(args.offset->inner))
         diagnostic::error("invalid `--offset` value")
           .primary(args.offset->source)
-          .note("valid values are:")
-          .note("- beginning")
-          .note("- end")
-          .note("- store")
-          .note("- <value> (absolute offset)")
-          .note("- -<value> (relative offset from end)")
+          .note(
+            "must be `beginning`, `end`, `store`, `<offset>` or `-<offset>`")
           .throw_();
     }
     return std::make_unique<kafka_loader>(std::move(args), config_);
