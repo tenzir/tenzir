@@ -9,3 +9,5 @@ tenzir:
   export:
     zeek:
       disable-timestamp-tags: true
+  exec:
+    dump-diagnostics: true

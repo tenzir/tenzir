@@ -65,9 +65,12 @@ tests:
     steps:
       - command: exec --dump-ast "version"
       - command: exec --dump-ast "version --dev"
-      - command: exec --dump-error "version --tev"
-      - command: exec --dump-error "version 42"
-      - command: exec --dump-error "from a/b/c.json read json"
+      - command: exec "version --tev"
+        expected_result: error
+      - command: exec "version 42"
+        expected_result: error
+      - command: exec "from a/b/c.json read json"
+        expected_result: error
       - command: exec --dump-ast "from file a/b/c.json"
       - command: exec --dump-ast "from file a/b/c.json read cef"
       - command: exec --dump-ast "parse zeek-tsv"

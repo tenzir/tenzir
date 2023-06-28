@@ -24,3 +24,9 @@
     "223.149.205.1"
   ]
 }
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.dhcp`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.files`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.pe`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.reporter`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.software`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.weird.123.190`

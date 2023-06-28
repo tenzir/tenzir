@@ -1,0 +1,12 @@
+warning: !! invalid_configuration: sort key uid does not apply to schema cef.event; events of this schema will not be sorted
+ = note: from `sort anonymous("uid", false, false)`
+warning: !! invalid_configuration: sort key uid does not apply to schema cef.event; events of this schema will not be sorted
+ = note: from `sort anonymous("uid", false, false)`
+warning: !! invalid_configuration: sort key uid does not apply to schema cef.event; events of this schema will not be sorted
+ = note: from `sort anonymous("uid", false, false)`
+warning: !! invalid_configuration: sort key uid does not apply to schema cef.event; events of this schema will not be sorted
+ = note: from `sort anonymous("uid", false, false)`
+warning: !! invalid_configuration: sort key uid does not apply to schema cef.event; events of this schema will not be sorted
+ = note: from `sort anonymous("uid", false, false)`
+warning: !! invalid_configuration: sort key uid does not apply to schema cef.event; events of this schema will not be sorted
+ = note: from `sort anonymous("uid", false, false)`
