@@ -198,6 +198,7 @@ struct inbound_state_mixin {
 
   std::vector<Input> inbound_buffer = {};
   uint64_t inbound_buffer_size = {};
+  uint64_t inbound_total = {};
 };
 
 template <>
@@ -209,6 +210,7 @@ struct outbound_state_mixin {
   /// transported to the next operator's execution node.
   std::vector<Output> outbound_buffer = {};
   uint64_t outbound_buffer_size = {};
+  uint64_t outbound_total = {};
 
   /// The queue of open requests for more events from the next operator.
   /// TODO: rename to demand for consistency
@@ -375,6 +377,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       ++instance->it;
       if (size(next) > 0) {
         this->outbound_buffer_size += size(next);
+        this->outbound_total += size(next);
         this->outbound_buffer.push_back(std::move(next));
       }
     } else {
@@ -391,7 +394,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
   auto make_input_adapter() -> generator<Input>
     requires(not std::is_same_v<Input, std::monostate>)
   {
-    while (this->previous or this->inbound_buffer_size > 0) {
+    while (this->previous or this->inbound_buffer_size > 0
+           or this->signaled_demand) {
       if (this->inbound_buffer_size == 0) {
         VAST_ASSERT(this->inbound_buffer.empty());
         co_yield {};
@@ -560,6 +564,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
                                 std::make_move_iterator(input.begin()),
                                 std::make_move_iterator(input.end()));
     this->inbound_buffer_size += input_size;
+    this->inbound_total += input_size;
     return {};
   }
 };
