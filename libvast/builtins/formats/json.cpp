@@ -36,6 +36,7 @@ namespace {
 /// bytes that are safe to read.
 inline auto to_padded_lines(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
+  constexpr auto padding = simdjson::SIMDJSON_PADDING;
   auto buffer = std::string{};
   bool ended_on_linefeed = false;
   for (auto&& chunk : input) {
@@ -55,12 +56,21 @@ inline auto to_padded_lines(generator<chunk_ptr> input)
       }
       const auto capacity = static_cast<size_t>(end - begin);
       const auto size = static_cast<size_t>(current - begin);
-      if (buffer.empty() and capacity >= size + simdjson::SIMDJSON_PADDING) {
+      if (buffer.empty() and capacity >= size + padding) {
         co_yield simdjson::padded_string_view{begin, size, capacity};
       } else {
         buffer.append(begin, current);
-        buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
+        buffer.reserve(buffer.size() + padding);
+#if VAST_ENABLE_ASAN
+        // With ASan enabled we must zero padding bytes because we otherwise run
+        // into false positives when accessing them via simdjson, regardless of
+        // whether their content matters or not.
+        std::fill_n(std::back_inserter(buffer), padding, '\0');
+        co_yield simdjson::padded_string_view{
+          buffer.data(), buffer.size() - padding, buffer.size()};
+#else
         co_yield simdjson::padded_string_view{buffer};
+#endif
         buffer.clear();
       }
       if (*current == '\r') {
@@ -77,8 +87,14 @@ inline auto to_padded_lines(generator<chunk_ptr> input)
     co_yield std::nullopt;
   }
   if (!buffer.empty()) {
-    buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
+    buffer.reserve(buffer.size() + padding);
+#if VAST_ENABLE_ASAN
+    std::fill_n(std::back_inserter(buffer), padding, '\0');
+    co_yield simdjson::padded_string_view{
+      buffer.data(), buffer.size() - padding, buffer.size()};
+#else
     co_yield simdjson::padded_string_view{buffer};
+#endif
   }
 }
 
