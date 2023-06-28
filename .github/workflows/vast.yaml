@@ -220,7 +220,7 @@ jobs:
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
-          VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ tenzir.yaml.example version.json)
+          VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ schema/ tools/ vast/ tenzir.yaml.example version.json)
           run_if_changed vast "${VAST_SOURCES[@]}"
           run_if_changed_default tenzir-plugins $run_vast "plugins/" "contrib/tenzir-plugins/"
           # The tenzir-plugins job downloads the VAST artifact from GCS, so we
