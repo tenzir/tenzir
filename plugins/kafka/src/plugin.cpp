@@ -329,7 +329,7 @@ private:
 };
 
 class plugin final : public virtual loader_plugin<kafka_loader>,
-                     saver_plugin<kafka_saver> {
+                     public virtual saver_plugin<kafka_saver> {
 public:
   auto initialize(const record& config, const record& /* global_config */)
     -> caf::error override {
