@@ -254,6 +254,76 @@ struct exec_node_state : inbound_state_mixin<Input>,
   /// The next run of this actor's internal run loop.
   bool run_scheduled = {};
 
+  auto start(std::vector<caf::actor> previous) -> caf::result<void> {
+    if (instance.has_value()) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("{} was already started", *self));
+    }
+    if constexpr (std::is_same_v<Input, std::monostate>) {
+      if (not previous.empty()) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} runs a source operator and must "
+                                           "not have a previous exec-node",
+                                           *self));
+      }
+    } else {
+      // The previous exec-node must be set when the operator is not a source.
+      if (previous.empty()) {
+        return caf::make_error(
+          ec::logic_error, fmt::format("{} runs a transformation/sink operator "
+                                       "and must have a previous exec-node",
+                                       *self));
+      }
+      this->previous
+        = caf::actor_cast<exec_node_actor>(std::move(previous.back()));
+      previous.pop_back();
+      self->monitor(this->previous);
+      self->set_down_handler([this](const caf::down_msg& msg) {
+        if (msg.source != this->previous.address()) {
+          // FIXME: ctrl warn
+          VAST_WARN("ignores down msg from unknown source: {}", msg.reason);
+          return;
+        }
+        this->previous = nullptr;
+        if (msg.reason) {
+          // FIXME: ctrl abort
+          VAST_WARN("shuts down because of irregular exit of previous exec "
+                    "node: {}",
+                    msg.reason);
+          self->quit(msg.reason);
+        } else {
+          schedule_run();
+        }
+      });
+      self->set_exit_handler([this](const caf::exit_msg& msg) {
+        if (this->previous) {
+          self->send_exit(this->previous, msg.reason);
+        }
+        self->quit(msg.reason);
+      });
+    }
+    // Instantiate the operator with its input type.
+    auto input_adapter = op->instantiate(make_input_adapter(), *ctrl);
+    if (not input_adapter) {
+      return caf::make_error(
+        ec::unspecified, fmt::format("{} failed to instantiate operator: {}",
+                                     *self, input_adapter.error()));
+    }
+    if (not std::holds_alternative<generator<Output>>(*input_adapter)) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("{} failed to instantiate operator",
+                                         *self));
+    }
+    instance.emplace();
+    instance->gen = std::get<generator<Output>>(std::move(*input_adapter));
+    instance->it = instance->gen.begin();
+    schedule_run();
+    if constexpr (not std::is_same_v<Input, std::monostate>) {
+      return self->delegate(this->previous, atom::start_v, std::move(previous));
+    }
+    return {};
+  }
+
   auto request_more_input() -> void
     requires(not std::is_same_v<Input, std::monostate>)
   {
@@ -504,47 +574,13 @@ struct exec_node_state : inbound_state_mixin<Input>,
 template <class Input, class Output>
 auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-  operator_ptr op, exec_node_actor previous, node_actor node,
+  operator_ptr op, node_actor node,
   receiver_actor<diagnostic> diagnostic_handler)
   -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self->state, std::move(diagnostic_handler));
-  // The previous exec-node must be set when the operator is not a source.
-  if constexpr (not std::is_same_v<Input, std::monostate>) {
-    self->state.previous = std::move(previous);
-    self->monitor(self->state.previous);
-    self->set_down_handler([self](const caf::down_msg& msg) {
-      if (msg.source != self->state.previous.address()) {
-        // FIXME: ctrl warn
-        VAST_WARN("ignores down msg from unknown source: {}", msg.reason);
-        return;
-      }
-      self->state.previous = nullptr;
-      if (msg.reason) {
-        // FIXME: ctrl abort
-        VAST_WARN("shuts down because of irregular exit of previous exec node: "
-                  "{}",
-                  msg.reason);
-        self->quit(msg.reason);
-      } else {
-        self->state.schedule_run();
-      }
-    });
-    self->set_exit_handler([self](const caf::exit_msg& msg) {
-      if (self->state.previous) {
-        self->send_exit(self->state.previous, msg.reason);
-      }
-      self->quit(msg.reason);
-    });
-  } else if (previous) {
-    self->quit(caf::make_error(ec::logic_error,
-                               fmt::format("{} runs a source operator and must "
-                                           "not have a previous exec-node",
-                                           *self)));
-    return exec_node_actor::behavior_type::make_empty_behavior();
-  }
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->quit(caf::make_error(
@@ -553,32 +589,11 @@ auto exec_node(
     return exec_node_actor::behavior_type::make_empty_behavior();
   }
   self->state.weak_node = node;
-  // Instantiate the operator with its input type.
-  auto input_adapter = self->state.op->instantiate(
-    self->state.make_input_adapter(), *self->state.ctrl);
-  if (not input_adapter) {
-    self->quit(caf::make_error(
-      ec::incomplete, fmt::format("{} failed to instantiate operator: {}",
-                                  *self, input_adapter.error())));
-    return exec_node_actor::behavior_type::make_empty_behavior();
-  }
-  if (not std::holds_alternative<generator<Output>>(*input_adapter)) {
-    self->quit(
-      caf::make_error(ec::logic_error,
-                      fmt::format("{} failed to instantiate operator", *self)));
-    return exec_node_actor::behavior_type::make_empty_behavior();
-  }
-  // TODO: Prime the generator explicitly.
-  self->state.instance.emplace();
-  self->state.instance->gen
-    = std::get<generator<Output>>(std::move(*input_adapter));
-  self->state.instance->it = self->state.instance->gen.begin();
-  // We kick off the internal run loop for sinks implicitly. This causes the
-  // startup order to be deterministic.
-  if constexpr (std::is_same_v<Output, std::monostate>) {
-    self->state.schedule_run();
-  }
   return {
+    [self](atom::start,
+           std::vector<caf::actor>& previous) -> caf::result<void> {
+      return self->state.start(std::move(previous));
+    },
     [self](atom::push, std::vector<table_slice>& events) -> caf::result<void> {
       if constexpr (std::is_same_v<Input, table_slice>) {
         return self->state.push(std::move(events));
@@ -613,14 +628,12 @@ auto exec_node(
 } // namespace
 
 auto spawn_exec_node(caf::actor_system& sys, operator_ptr op,
-                     operator_type input_type, exec_node_actor previous,
-                     node_actor node,
+                     operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostic_handler)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   VAST_ASSERT(op != nullptr);
   VAST_ASSERT(node != nullptr
               or not(op->location() == operator_location::remote));
-  VAST_ASSERT(previous != nullptr or input_type.is<void>());
   VAST_ASSERT(diagnostic_handler != nullptr);
   auto output_type = op->infer_type(input_type);
   if (not output_type) {
@@ -642,8 +655,7 @@ auto spawn_exec_node(caf::actor_system& sys, operator_ptr op,
                  ? SpawnOptions
                  : SpawnOptions + caf::lazy_init
                      > (exec_node<input_type, output_type>, std::move(op),
-                        std::move(previous), std::move(node),
-                        std::move(diagnostic_handler));
+                        std::move(node), std::move(diagnostic_handler));
       }
     };
   };

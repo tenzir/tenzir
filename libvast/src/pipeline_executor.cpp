@@ -42,8 +42,7 @@ auto pipeline_executor_state::run() -> caf::result<void> {
     // FIXME: check if op is remote
     auto description = op->to_string();
     auto spawn_result
-      = spawn_exec_node(self->system(), std::move(op), input_type,
-                        std::move(previous), node,
+      = spawn_exec_node(self->system(), std::move(op), input_type, node,
                         static_cast<receiver_actor<diagnostic>>(self));
     if (not spawn_result) {
       return caf::make_error(
@@ -56,6 +55,15 @@ auto pipeline_executor_state::run() -> caf::result<void> {
     exec_nodes.push_back(previous);
   }
   done_rp = self->make_response_promise<void>();
+  // TODO: Empty?
+  if (not exec_nodes.empty()) {
+    auto previous = std::vector<caf::actor>{};
+    for (auto node : exec_nodes) {
+      previous.push_back(caf::actor_cast<caf::actor>(node));
+    }
+    previous.pop_back();
+    self->send(exec_nodes.back(), atom::start_v, std::move(previous));
+  }
   return done_rp;
 }
 

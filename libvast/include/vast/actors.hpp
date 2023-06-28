@@ -399,18 +399,16 @@ using exec_node_sink_actor = typed_actor_fwd<
   // Push bytes.
   auto(atom::push, std::vector<chunk_ptr> bytes)->caf::result<void>>::unwrap;
 
-using exec_node_source_actor = typed_actor_fwd<
+/// The interface of a EXEC NODE actor.
+using exec_node_actor = typed_actor_fwd<
+  // TODO
+  auto(atom::start, std::vector<caf::actor> previous)->caf::result<void>,
   // Uodate demand.
   auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size,
        duration batch_timeout)
-    ->caf::result<void>>::unwrap;
-
-/// The interface of a EXEC NODE actor.
-using exec_node_actor = typed_actor_fwd<>
+    ->caf::result<void>>
   // Source.
-  ::extend_with<exec_node_sink_actor>
-  // Sink.
-  ::extend_with<exec_node_source_actor>::unwrap;
+  ::extend_with<exec_node_sink_actor>::unwrap;
 
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
