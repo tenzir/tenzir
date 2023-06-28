@@ -205,6 +205,14 @@ storage.
   </TabItem>
 </Tabs>
 
+:::caution Unsafe Pipelines
+Some operators are inherently unsafe because of their side effects, e.g.,
+reading a file, acquiring packets from the network, or using a third-party
+library. We do not allow these operators by default in managed pipelines. You
+can lift this restriction by setting `tenzir.allow-unsafe-pipelines: true` in
+the `tenzir.yaml` of your node.
+:::
+
 ### Import data into a node
 
 End a pipeline with the [`import`](operators/sinks/import.md) operator to ingest

@@ -25,6 +25,20 @@ tenzir-node --endpoint=[::1]:42000
 Check out the various [deployment options](../setup-guides/deploy/README.md) for
 other methods of spinning up a node, e.g., via systemd, Ansible, or Docker.
 
+:::caution Unsafe Pipelines
+Some pipeline operators are inherently unsafe because of their side effects,
+e.g., reading a file, acquiring packets from the network, or using a third-party
+library. Once you connect your node to the Tenzir platform and start managing it
+via [app.tenzir.com](https://app.tenzir.com) or API calls, you can easily reach
+access all files that the `tenzir-node` process can read. This may not be
+obvious and can become a security risk.
+
+We therefore forbid pipelines with such side effects by default. If you are
+aware of the implications, you can unlock unrestricted pipeline execution by
+setting `tenzir.allow-unsafe-pipelines: true` in the `tenzir.yaml` of the
+respective node.
+:::
+
 ## Stop a node
 
 There exist two ways stop a server:
