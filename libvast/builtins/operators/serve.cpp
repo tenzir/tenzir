@@ -725,10 +725,9 @@ struct serve_handler_state {
             create_response(std::get<0>(result), std::get<1>(result))});
         },
         [rp](caf::error& err) mutable {
-          auto rsp = rest_response::make_error(
-            400,
-            fmt::format(R"({{"error":{:?}}}{})", fmt::to_string(err), '\n'),
-            {});
+          // TODO: Use a struct with distinct fields for user-facing
+          // error message and detail here.
+          auto rsp = rest_response::make_error(400, fmt::to_string(err), {});
           rp.deliver(std::move(rsp));
         });
     return rp;
