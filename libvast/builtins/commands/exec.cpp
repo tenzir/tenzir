@@ -47,12 +47,6 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
     }
     pipe.append(std::move(*op));
   }
-  if (not pipe.is_closed()) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("cannot execute pipeline that is not "
-                                       "closed: {}",
-                                       pipe.to_string()));
-  }
   caf::scoped_actor self{sys};
   auto executor = self->spawn<caf::monitored>(
     pipeline_executor, std::move(pipe), std::move(diag), node_actor{});
@@ -61,7 +55,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
   // asynchronous executor, so we may as well wait until then.
-  self->send(executor, caf::infinite, atom::start_v);
+  self->send(executor, atom::start_v);
   auto running = true;
   self->receive_while(running)(
     []() {
@@ -70,6 +64,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
     [&](caf::error& err) {
       VAST_DEBUG("failed to start pipeline: {}", err);
       result = err;
+      running = false;
     },
     [&](caf::down_msg& msg) {
       VAST_DEBUG("pipeline execution finished: {}", msg.reason);

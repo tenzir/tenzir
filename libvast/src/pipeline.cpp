@@ -364,7 +364,7 @@ auto pipeline::infer_type_impl(operator_type input) const
     auto first = &op == &operators_.front();
     if (!first && current.is<void>()) {
       return caf::make_error(ec::type_clash, fmt::format("pipeline continues "
-                                                         "with {} after sink",
+                                                         "with '{}' after sink",
                                                          op->to_string()));
     }
     auto next = op->infer_type(current);

@@ -43,19 +43,20 @@ auto pipeline_executor_state::start() -> caf::result<void> {
     // FIXME: check if op is remote
     auto description = op->to_string();
     auto spawn_result
-      = spawn_exec_node(self->system(), std::move(op), input_type, node,
+      = spawn_exec_node(self, std::move(op), input_type, node,
                         static_cast<receiver_actor<diagnostic>>(self));
     if (not spawn_result) {
-      return caf::make_error(
+      auto error = caf::make_error(
         ec::logic_error, fmt::format("{} failed to spawn execution node "
                                      "for operator '{}': {}",
                                      *self, description, spawn_result.error()));
+      // TODO: Twice the same error?
+      self->quit(error);
+      return error;
     }
     std::tie(previous, input_type) = std::move(*spawn_result);
-    self->monitor(previous);
     exec_nodes.push_back(previous);
   }
-  // TODO: Empty?
   if (exec_nodes.empty()) {
     self->quit();
     return {};
@@ -65,8 +66,19 @@ auto pipeline_executor_state::start() -> caf::result<void> {
     untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
   }
   untyped_exec_nodes.pop_back();
-  return self->delegate(exec_nodes.back(), atom::start_v,
-                        std::move(untyped_exec_nodes));
+  auto rp = self->make_response_promise<void>();
+  self
+    ->request(exec_nodes.back(), caf::infinite, atom::start_v,
+              std::move(untyped_exec_nodes))
+    .then(
+      [rp]() mutable {
+        rp.deliver();
+      },
+      [this, rp](caf::error& err) mutable {
+        self->quit(err);
+        rp.deliver(std::move(err));
+      });
+  return rp;
 }
 
 auto pipeline_executor(
@@ -77,14 +89,20 @@ auto pipeline_executor(
   self->state.node = std::move(node);
   self->set_down_handler([self](caf::down_msg& msg) {
     VAST_DEBUG("pipeline executor node down: {}; remaining: {}; reason: {}",
-               msg.source, self->state.exec_nodes.size(), msg.reason);
+               msg.source, self->state.exec_nodes.size() - 1, msg.reason);
     const auto exec_node
       = std::find_if(self->state.exec_nodes.begin(),
                      self->state.exec_nodes.end(), [&](const auto& exec_node) {
                        return exec_node.address() == msg.source;
                      });
-    VAST_ASSERT(exec_node != self->state.exec_nodes.end());
-    self->state.exec_nodes.erase(exec_node);
+    if (exec_node == self->state.exec_nodes.end()) {
+      return;
+    }
+    for (auto it = self->state.exec_nodes.begin(); it != exec_node; ++it) {
+      self->demonitor(*it);
+      self->send_exit(*it, msg.reason);
+    }
+    self->state.exec_nodes.erase(self->state.exec_nodes.begin(), exec_node + 1);
     if (msg.reason != caf::error{}
         && msg.reason != caf::exit_reason::unreachable) {
       self->quit(std::move(msg.reason));

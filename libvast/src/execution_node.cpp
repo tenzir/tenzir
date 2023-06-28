@@ -291,31 +291,24 @@ struct exec_node_state : inbound_state_mixin<Input>,
                     "node: {}",
                     msg.reason);
           self->quit(msg.reason);
-        } else {
-          schedule_run();
         }
-      });
-      self->set_exit_handler([this](const caf::exit_msg& msg) {
-        if (this->previous) {
-          self->send_exit(this->previous, msg.reason);
-        }
-        self->quit(msg.reason);
+        schedule_run();
       });
     }
     // Instantiate the operator with its input type.
-    auto input_adapter = op->instantiate(make_input_adapter(), *ctrl);
-    if (not input_adapter) {
+    auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
+    if (not output_generator) {
       return caf::make_error(
         ec::unspecified, fmt::format("{} failed to instantiate operator: {}",
-                                     *self, input_adapter.error()));
+                                     *self, output_generator.error()));
     }
-    if (not std::holds_alternative<generator<Output>>(*input_adapter)) {
+    if (not std::holds_alternative<generator<Output>>(*output_generator)) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} failed to instantiate operator",
                                          *self));
     }
     instance.emplace();
-    instance->gen = std::get<generator<Output>>(std::move(*input_adapter));
+    instance->gen = std::get<generator<Output>>(std::move(*output_generator));
     instance->it = instance->gen.begin();
     schedule_run();
     if constexpr (not std::is_same_v<Input, std::monostate>) {
@@ -415,7 +408,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
   }
 
   auto schedule_run(duration delay = duration::zero()) -> void {
-    if (run_scheduled) {
+    if (not instance or run_scheduled) {
       return;
     }
     run_scheduled = true;
@@ -627,10 +620,11 @@ auto exec_node(
 
 } // namespace
 
-auto spawn_exec_node(caf::actor_system& sys, operator_ptr op,
+auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostic_handler)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
+  VAST_ASSERT(self);
   VAST_ASSERT(op != nullptr);
   VAST_ASSERT(node != nullptr
               or not(op->location() == operator_location::remote));
@@ -651,11 +645,10 @@ auto spawn_exec_node(caf::actor_system& sys, operator_ptr op,
       if constexpr (std::is_void_v<Input> and std::is_void_v<Output>) {
         die("unimplemented");
       } else {
-        return sys.spawn < std::is_void_v<Output>
-                 ? SpawnOptions
-                 : SpawnOptions + caf::lazy_init
-                     > (exec_node<input_type, output_type>, std::move(op),
-                        std::move(node), std::move(diagnostic_handler));
+        auto result = self->spawn<SpawnOptions + caf::monitored + caf::linked>(
+          exec_node<input_type, output_type>, std::move(op), std::move(node),
+          std::move(diagnostic_handler));
+        return result;
       }
     };
   };
