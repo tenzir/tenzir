@@ -30,7 +30,7 @@
 
 namespace vast {
 
-auto pipeline_executor_state::run() -> caf::result<void> {
+auto pipeline_executor_state::start() -> caf::result<void> {
   if (not pipe) {
     return caf::make_error(ec::logic_error,
                            "pipeline exeuctor can only run pipeline once");
@@ -38,6 +38,7 @@ auto pipeline_executor_state::run() -> caf::result<void> {
   // Spawn pipeline piece by piece.
   auto input_type = operator_type{tag_v<void>};
   auto previous = exec_node_actor{};
+  // TODO: Rewrite me.
   for (auto&& op : (*std::exchange(pipe, {})).unwrap()) {
     // FIXME: check if op is remote
     auto description = op->to_string();
@@ -54,22 +55,23 @@ auto pipeline_executor_state::run() -> caf::result<void> {
     self->monitor(previous);
     exec_nodes.push_back(previous);
   }
-  done_rp = self->make_response_promise<void>();
   // TODO: Empty?
-  if (not exec_nodes.empty()) {
-    auto previous = std::vector<caf::actor>{};
-    for (auto node : exec_nodes) {
-      previous.push_back(caf::actor_cast<caf::actor>(node));
-    }
-    previous.pop_back();
-    self->send(exec_nodes.back(), atom::start_v, std::move(previous));
+  if (exec_nodes.empty()) {
+    self->quit();
+    return {};
   }
-  return done_rp;
+  auto untyped_exec_nodes = std::vector<caf::actor>{};
+  for (auto node : exec_nodes) {
+    untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
+  }
+  untyped_exec_nodes.pop_back();
+  return self->delegate(exec_nodes.back(), atom::start_v,
+                        std::move(untyped_exec_nodes));
 }
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  const pipeline& pipe, std::unique_ptr<diagnostic_handler> diagnostic_handler,
+  pipeline pipe, std::unique_ptr<diagnostic_handler> diagnostic_handler,
   node_actor node) -> pipeline_executor_actor::behavior_type {
   self->state.self = self;
   self->state.node = std::move(node);
@@ -83,24 +85,26 @@ auto pipeline_executor(
                      });
     VAST_ASSERT(exec_node != self->state.exec_nodes.end());
     self->state.exec_nodes.erase(exec_node);
-    if (self->state.exec_nodes.empty()) {
-      VAST_ASSERT(self->state.done_rp.pending());
-      self->state.done_rp.deliver();
+    if (msg.reason != caf::error{}
+        && msg.reason != caf::exit_reason::unreachable) {
+      self->quit(std::move(msg.reason));
+    } else if (self->state.exec_nodes.empty()) {
+      self->quit();
     }
   });
-  auto optimized = pipe.optimize();
-  if (not optimized) {
-    self->quit(std::move(optimized.error()));
+  auto checked = pipe.check_type<void, void>();
+  if (not checked) {
+    self->quit(checked.error());
     return pipeline_executor_actor::behavior_type::make_empty_behavior();
   }
-  self->state.pipe = std::move(*optimized);
+  self->state.pipe = std::move(pipe);
   self->state.diagnostic_handler = std::move(diagnostic_handler);
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "vast.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
   return {
-    [self](atom::run) -> caf::result<void> {
-      return self->state.run();
+    [self](atom::start) -> caf::result<void> {
+      return self->state.start();
     },
     [self](diagnostic& d) -> caf::result<void> {
       VAST_DEBUG("{} received diagnostic: {}", *self, d);

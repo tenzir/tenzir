@@ -22,7 +22,6 @@ struct pipeline_executor_state {
   /// The currently running pipeline.
   std::optional<pipeline> pipe = {};
   std::vector<exec_node_actor> exec_nodes = {};
-  caf::typed_response_promise<void> done_rp = {};
 
   // The diagnostic handler that receives diagnostics from all the execution
   // nodes.
@@ -31,13 +30,13 @@ struct pipeline_executor_state {
   /// Flag for allowing unsafe pipelines.
   bool allow_unsafe_pipelines = {};
 
-  auto run() -> caf::result<void>;
+  auto start() -> caf::result<void>;
 };
 
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  const pipeline& pipe, std::unique_ptr<diagnostic_handler> diagnostic_handler,
+  pipeline pipe, std::unique_ptr<diagnostic_handler> diagnostic_handler,
   node_actor node) -> pipeline_executor_actor::behavior_type;
 
 } // namespace vast

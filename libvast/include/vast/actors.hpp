@@ -447,7 +447,7 @@ using node_actor = typed_actor_fwd<
 using pipeline_executor_actor = typed_actor_fwd<
   // Execute a pipeline, returning the result asynchronously. This must be
   // called at most once per executor.
-  auto(atom::run)->caf::result<void>>
+  auto(atom::start)->caf::result<void>>
   // Conform to the protocol of the diagnostic handler actor.
   ::extend_with<receiver_actor<diagnostic>>::unwrap;
 
