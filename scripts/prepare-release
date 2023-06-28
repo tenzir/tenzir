@@ -34,6 +34,10 @@ last_rc_version="$(git -C "${source_dir}" describe --abbrev=0 --match='v[0-9]*')
 last_version="$(git -C "${source_dir}" describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*')"
 new_version="$1"
 new_version_major_minor="${new_version%.*}"
+if [[ "${new_version}" == *"-rc"* ]]; then
+  rc="${new_version#}"
+  new_version_major_minor="${new_version%.*}-${new_version##*-}"
+fi
 
 # Determine the build directory.
 build_dir=$(mktemp -d 2>/dev/null || mktemp -d -t "build-${new_version}")
@@ -57,7 +61,9 @@ echo -E "${version_json}" > version.json
 
 # If the new version is not a release candidate, change mentions of the version
 # in README.md as well, and create a new docs version.
-if [[ "${new_version}" != *"-rc"* ]]; then
+# TODO: Re-enable the check.
+# if [[ "${new_version}" != *"-rc"* ]]; then
+if [[ true ]]; then
   perl -i -pe "s/${last_version}/${new_version}/g" "${source_dir}/README.md"
   pushd "${source_dir}/web"
   # In the documentation on docs.tenzir.com we tag using the major and minor
@@ -70,10 +76,10 @@ if [[ "${new_version}" != *"-rc"* ]]; then
   #
   # This bit removes the already tagged version:
   new_version_name="Tenzir ${new_version_major_minor}"
-  jq "map(select(. != \"${new_version_name}\"))" < versions.json > versions.json.tmp
+  jq "map(select(. | startswith(\"${new_version_name%-*}\") | not)" < versions.json > versions.json.tmp
   mv -f versions.json.tmp versions.json
-  rm -rf "versioned_docs/version-${new_version_name}"
-  rm -rf "versioned_sidebars/version-${new_version_name}-sidebars.json"
+  rm -rf "versioned_docs/version-${new_version_name%-*}"*
+  rm -rf "versioned_sidebars/version-${new_version_name%-*}"*-sidebars.json
   # And this actually cuts a new docs version:
   yarn install --frozen-lockfile
   yarn docusaurus docs:version "${new_version_name}"
