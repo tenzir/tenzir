@@ -411,7 +411,8 @@ struct flatten_result {
 
 /// @related flatten
 struct flatten_options {
-  std::string separator;
+  static constexpr auto default_flatten_separator = ".";
+  std::string separator = default_flatten_separator;
   bool ignore_lists = false;
 };
 

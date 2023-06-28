@@ -21,8 +21,6 @@ namespace vast::plugins::flatten {
 
 namespace {
 
-constexpr auto default_flatten_separator = ".";
-
 class flatten_operator final : public crtp_operator<flatten_operator> {
 public:
   flatten_operator() = default;
@@ -66,7 +64,7 @@ public:
   }
 
 private:
-  std::string separator_ = default_flatten_separator;
+  std::string separator_ = flatten_options::default_flatten_separator;
   bool ignore_lists_ = false;
 };
 
@@ -80,7 +78,8 @@ public:
     parser.add(sep, "<sep>");
     parser.add("-l,--ignore-lists", ignore_lists);
     parser.parse(p);
-    auto separator = (sep) ? sep->inner : default_flatten_separator;
+    auto separator
+      = (sep) ? sep->inner : flatten_options::default_flatten_separator;
     return std::make_unique<flatten_operator>(std::move(separator),
                                               ignore_lists);
   }
