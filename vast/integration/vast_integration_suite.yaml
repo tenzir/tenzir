@@ -281,8 +281,6 @@ tests:
       - command: '-N export csv "where #schema == /suricata.*/"'
       - command: '-N export zeek "where #schema == /suricata.alert/"'
       - command: -N export json --omit-nulls --omit-empty-records
-      - command: |
-          -N export json 'where #type != "suricata.dns" | flatten'
 
   Node suricata rrdata:
     tags: [node, import-export, suricata, eve]
@@ -978,3 +976,23 @@ tests:
       # N
       - command: exec 'read zeek-json | summarize x=distinct(y)'
         input: data/zeek/zeek.json
+
+  Flatten Operator:
+    tags: [pipelines, zeek]
+    steps:
+      - command: exec 'read zeek-tsv | tail 10 | flatten | to stdout'
+        input: data/zeek/dns.log.gz
+      - command: exec 'read zeek-tsv | tail 10 | flatten -l | to stdout'
+        input: data/zeek/dns.log.gz
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/nested-object.json
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/nested-structure.json
+      - command: exec 'read json | flatten -l | to stdout'
+        input: data/json/nested-structure.json
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/record-in-list.json
+      - command: exec 'read json | flatten -l | to stdout'
+        input: data/json/record-in-list.json
+      - command: exec 'read suricata | flatten | to stdout'
+        input: data/suricata/eve.json
