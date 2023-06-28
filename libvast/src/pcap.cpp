@@ -33,6 +33,22 @@ auto byteswap(packet_header hdr) -> packet_header {
   return result;
 }
 
+auto file_header_type() -> type {
+  const auto timestamp_type = type{"timestamp", time_type{}};
+  return type{
+    "pcap.file_header",
+    record_type{
+      {"magic_number", uint64_type{}}, // uint32
+      {"major_version", uint64_type{}}, // uint32
+      {"minor_version", uint64_type{}}, // uint32
+      {"reserved1", uint64_type{}}, // uint32
+      {"reserved2", uint64_type{}}, // uint32
+      {"snaplen", uint64_type{}}, // uint32
+      {"linktype", uint64_type{}}, // uint16
+    },
+  };
+}
+
 auto packet_record_type() -> type {
   const auto timestamp_type = type{"timestamp", time_type{}};
   return type{

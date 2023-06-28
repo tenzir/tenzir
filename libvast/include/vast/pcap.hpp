@@ -69,7 +69,11 @@ struct packet_record {
   std::span<const std::byte> data;
 };
 
-/// Creates a Tenzir type for the above packet record.
+/// Creates the `pcap.file_header` type.
+/// @relates file_header
+auto file_header_type() -> type;
+
+/// Creates the `pcap.packet` type.
 /// @relates packet_record
 auto packet_record_type() -> type;
 

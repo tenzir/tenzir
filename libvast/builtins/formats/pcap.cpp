@@ -102,10 +102,14 @@ auto make_byte_reader(generator<chunk_ptr> input) {
 }
 
 struct parser_args {
-  // template <class Inspector>
-  // friend auto inspect(Inspector& f, parser_args& x) -> bool {
-  //   return f.object(x).pretty_name("parser_args");
-  // }
+  std::optional<location> emit_file_header;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, parser_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("parser_args")
+      .fields(f.field("emit-file-header", x.emit_file_header));
+  }
 };
 
 class pcap_parser final : public plugin_parser {
@@ -122,8 +126,8 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    auto make
-      = [](auto& ctrl, generator<chunk_ptr> input) -> generator<table_slice> {
+    auto make = [](auto& ctrl, generator<chunk_ptr> input,
+                   bool emit_file_header) -> generator<table_slice> {
       // A PCAP file starts with a 24-byte header.
       file_header file{};
       auto read_n = make_byte_reader(std::move(input));
@@ -161,6 +165,19 @@ public:
       if (need_byte_swap)
         file = byteswap(file);
       VAST_DEBUG("parsed PCAP file header");
+      if (emit_file_header) {
+        auto builder = table_slice_builder{file_header_type()};
+        if (!(builder.add(file.magic_number) && builder.add(file.major_version)
+              && builder.add(file.minor_version) && builder.add(file.reserved1)
+              && builder.add(file.reserved2) && builder.add(file.snaplen)
+              && builder.add(file.linktype))) {
+          diagnostic::error("failed to emit PCAP file header")
+            .note("from `pcap`")
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+        co_yield builder.finish();
+      }
       // After the header, the remainder of the file are Packet Records,
       // consisting of a 16-byte header and variable-length payload.
       auto builder = table_slice_builder{packet_record_type()};
@@ -234,7 +251,7 @@ public:
         co_yield builder.finish();
       }
     };
-    return make(ctrl, std::move(input));
+    return make(ctrl, std::move(input), !!args_.emit_file_header);
   }
 
   friend auto inspect(auto& f, pcap_parser& x) -> bool {
@@ -394,6 +411,7 @@ public:
       name(),
       fmt::format("https://docs.tenzir.com/docs/next/formats/{}", name())};
     auto args = parser_args{};
+    parser.add("-e,--emit-file-header", args.emit_file_header);
     parser.parse(p);
     return std::make_unique<pcap_parser>(std::move(args));
   }
