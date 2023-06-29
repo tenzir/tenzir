@@ -389,7 +389,7 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{
     .fields = {},
-    .arrays = struct_array->fields(),
+    .arrays = struct_array->Flatten().ValueOrDie(),
   };
   const auto num_columns
     = detail::narrow_cast<size_t>(struct_array->num_fields());
