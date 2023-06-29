@@ -41,6 +41,9 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
     untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
   }
   untyped_exec_nodes.pop_back();
+  // The exec nodes delegate the `atom::start` message to the preceding exec
+  // node. Thus, when we start the last node, all nodes before are started as
+  // well, and the request is completed only afterwards.
   self
     ->request(exec_nodes.back(), caf::infinite, atom::start_v,
               std::move(untyped_exec_nodes))
@@ -55,12 +58,12 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
 }
 
 void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
-  // Spawn pipeline piece by piece.
-  auto input_type = operator_type{tag_v<void>};
+  auto input_type = operator_type::make<void>();
   auto previous = exec_node_actor{};
-  // TODO: Rewrite me.
   bool spawn_remote = false;
+  // Spawn pipeline piece by piece.
   for (auto&& op : std::move(pipe).unwrap()) {
+    // Only switch locations if necessary.
     if (spawn_remote and op->location() == operator_location::local) {
       spawn_remote = false;
     } else if (not spawn_remote
@@ -78,7 +81,8 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
         self->quit(error);
         return;
       }
-      // TODO: Consider doing this differently.
+      // The node will instantiate the operator for us, but we already need its
+      // output type to spawn the following operator.
       auto output_type = op->infer_type(input_type);
       if (not output_type) {
         auto error
@@ -88,6 +92,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
         self->quit(error);
         return;
       }
+      // Allocate an empty handle in the list of exec nodes. When the node actor
+      // returns the handle, we set the handle. This is also used to detect when
+      // all exec nodes are spawned.
       auto index = exec_nodes.size();
       exec_nodes.emplace_back();
       self
@@ -106,7 +113,6 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
           },
           [this](caf::error& err) {
             self->quit(err);
-            // TODO: Is this safe?
             start_rp.deliver(err);
           });
       input_type = *output_type;
@@ -120,7 +126,6 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
           fmt::format("{} failed to spawn execution node "
                       "for operator '{}': {}",
                       *self, description, spawn_result.error()));
-        // TODO: Twice the same error?
         self->quit(error);
         start_rp.deliver(error);
         return;

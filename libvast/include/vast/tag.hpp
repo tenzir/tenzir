@@ -33,6 +33,11 @@ template <typename... Ts>
 struct tag_variant : std::variant<tag<Ts>...> {
   using std::variant<tag<Ts>...>::variant;
 
+  template <class T>
+  static auto make() -> tag_variant {
+    return tag_variant{tag_v<T>};
+  }
+
   /// Returns whether this holds `tag<T>`.
   template <typename T>
   auto is() const -> bool {
