@@ -78,8 +78,8 @@ if [[ true ]]; then
   new_version_name="Tenzir ${new_version_major_minor}"
   jq "map(select(. | startswith(\"${new_version_name%-*}\") | not))" < versions.json > versions.json.tmp
   mv -f versions.json.tmp versions.json
-  rm -rf "versioned_docs/version-${new_version_name%-*}"*
-  rm -rf "versioned_sidebars/version-${new_version_name%-*}"*-sidebars.json
+  rm -rf "versioned_docs/version-${new_version_name%-*}"* || true
+  rm -rf "versioned_sidebars/version-${new_version_name%-*}"*-sidebars.json || true
   # And this actually cuts a new docs version:
   yarn install --frozen-lockfile
   yarn docusaurus docs:version "${new_version_name}"
