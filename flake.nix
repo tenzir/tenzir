@@ -195,7 +195,7 @@
           pkg = self.packages.${system}.tenzir-ee-static;
           tag = "latest-slim";
         };
-        apps.default = self.apps.tenzir;
+        apps.default = self.apps.tenzir-static;
         # Legacy aliases for backwards compatibility.
         apps.vast = self.apps.tenzir-de;
         apps.vast-static = self.apps.tenzir-de-static;
