@@ -39,7 +39,7 @@ struct operator_control_plane {
 
   /// Emit a warning that gets transported via the executor's side-channel.
   /// An executor may treat warnings as errors. Warnings additionally get
-  /// reported to the executor's side-channel as `vast.warning` events.
+  /// reported to the executor's side-channel as `tenzir.warning` events.
   virtual auto warn(caf::error warning) noexcept -> void = 0;
 
   /// Emit events to the executor's side-channel, e.g., metrics.

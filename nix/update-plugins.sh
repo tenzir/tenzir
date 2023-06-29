@@ -11,22 +11,22 @@ get-submodule-rev() {
 }
 
 echo "Updating contrib/tenzir-plugins"
-vast_plugins_rev="$(get-submodule-rev "${toplevel}/contrib/tenzir-plugins")"
-vast_plugins_json="$(jq --arg rev "${vast_plugins_rev#rev}" \
-  '."rev" = $rev' "${dir}/vast/plugins/source.json")"
+tenzir_plugins_rev="$(get-submodule-rev "${toplevel}/contrib/tenzir-plugins")"
+tenzir_plugins_json="$(jq --arg rev "${tenzir_plugins_rev#rev}" \
+  '."rev" = $rev' "${dir}/tenzir/plugins/source.json")"
 
 if git -C "${toplevel}/contrib/tenzir-plugins" merge-base --is-ancestor \
   "$(git -C "${toplevel}/contrib/tenzir-plugins" rev-parse HEAD)" \
   "$(git -C "${toplevel}/contrib/tenzir-plugins" rev-parse origin/main)"; then
   # Remove 'allRefs = true' in case it was there before.
-  vast_plugins_json="$(jq 'del(.allRefs)' <<< "$vast_plugins_json")"
+  tenzir_plugins_json="$(jq 'del(.allRefs)' <<< "$tenzir_plugins_json")"
 else
   # Insert 'allRefs = true' so Nix will find the rev that is not on the main
   # branch.
-  vast_plugins_json="$(jq '."allRefs" = true' <<< "$vast_plugins_json")"
+  tenzir_plugins_json="$(jq '."allRefs" = true' <<< "$tenzir_plugins_json")"
 fi
 
-echo -E "${vast_plugins_json}" > "${dir}/vast/plugins/source.json"
+echo -E "${tenzir_plugins_json}" > "${dir}/tenzir/plugins/source.json"
 
 echo "Extracting plugin versions..."
 {
@@ -36,4 +36,4 @@ echo "Extracting plugin versions..."
     echo "  \"$plugin\""
   done
   printf "]\n"
-} > "${dir}/vast/plugins/names.nix"
+} > "${dir}/tenzir/plugins/names.nix"

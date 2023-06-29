@@ -1,0 +1,8 @@
+error: expected 1 positional arguments, but got 0
+ --> <input>:1:13
+  |
+1 | export | top | to stdout
+  |             ^ 
+  |
+  = usage: top <str> [-c|--count-field <str>]
+  = docs: https://docs.tenzir.com/docs/next/operators/transformations/top

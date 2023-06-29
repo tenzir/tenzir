@@ -23,7 +23,7 @@
       else (lib.recursiveUpdate cfg.settings (lib.importJSON toJsonFile))
     );
 
-  port = lib.toInt (lib.last (lib.splitString ":" cfg.settings.vast.endpoint));
+  port = lib.toInt (lib.last (lib.splitString ":" cfg.settings.tenzir.endpoint));
 in {
   options.services.tenzir = {
     enable = mkEnableOption "enable Tenzir";
@@ -55,7 +55,7 @@ in {
       type = lib.types.submodule {
         freeformType = format.type;
         options = {
-          vast = mkOption {
+          tenzir = mkOption {
             default = {};
             type = lib.types.submodule {
               freeformType = format.type;
@@ -85,14 +85,14 @@ in {
       default = {};
       example = lib.literalExpression ''
         {
-          vast = {
+          tenzir = {
             max-partition-size = 524288;
           };
         }
       '';
       description = ''
         Configuration for Tenzir. See
-        https://github.com/tenzir/vast/tree/tenzir.yaml.example for supported
+        https://github.com/tenzir/tenzir/tree/tenzir.yaml.example for supported
         options.
       '';
     };
@@ -108,7 +108,7 @@ in {
         ExecStart = "${cfg.package}/bin/tenzir-node --config=${configFile}";
         DynamicUser = true;
         NoNewPrivileges = true;
-        PIDFile = "${cfg.settings.vast.db-directory}/pid.lock";
+        PIDFile = "${cfg.settings.tenzir.db-directory}/pid.lock";
         ProtectKernelTunables = true;
         ProtectControlGroups = true;
         ProtectKernelModules = true;

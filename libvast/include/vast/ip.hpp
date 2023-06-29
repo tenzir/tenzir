@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/bit.hpp"
-#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/byteswap.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/hash/legacy_hash.hpp"
@@ -17,6 +16,7 @@
 #include "vast/hash/uniquely_represented.hpp"
 
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <span>
@@ -56,10 +56,10 @@ public:
   /// @tparam Endian the address byte order.
   /// @param bytes The 32-bit integer representing an IPv4 address.
   /// @returns The IP address.
-  template <detail::endian Endian = detail::endian::native>
+  template <std::endian Endian = std::endian::native>
   static ip v4(uint32_t bytes) {
-    if constexpr (Endian == detail::endian::little)
-      bytes = detail::byte_swap(bytes);
+    if constexpr (Endian == std::endian::little)
+      bytes = detail::byteswap(bytes);
     auto ptr = reinterpret_cast<const byte_type*>(&bytes);
     return v4(std::span<const byte_type, 4>{ptr, 4});
   }
@@ -75,15 +75,15 @@ public:
     return result;
   }
 
-  template <detail::endian Endian = detail::endian::native>
+  template <std::endian Endian = std::endian::native>
   static ip v6(std::span<uint32_t, 4> bytes) {
     ip result;
     std::memcpy(result.bytes_.data(), bytes.data(), 16);
-    if constexpr (Endian == detail::endian::little) {
+    if constexpr (Endian == std::endian::little) {
       auto ptr = reinterpret_cast<uint32_t*>(result.bytes_.data());
       auto span = std::span<uint32_t, 4>{ptr, 4};
       for (auto& block : span)
-        block = detail::byte_swap(block);
+        block = detail::byteswap(block);
     }
     return result;
   }

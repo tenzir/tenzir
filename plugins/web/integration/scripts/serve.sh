@@ -7,7 +7,7 @@ set -euxo pipefail
 sleep 3
 
 # Query the first set.
-first_result="$(curl -XPOST -H "Content-Type: application/json" -d '{"serve_id": "version", "timeout": "5s", "max_events": 1}' http://127.0.0.1:42025/api/v0/serve)"
+first_result="$(curl -XPOST -H "Content-Type: application/json" -d '{"serve_id": "version", "timeout": "5s", "max_events": 1, "continuation_token": null}' http://127.0.0.1:42025/api/v0/serve)"
 continuation_token="$(jq -rnec "${first_result} | .next_continuation_token")"
 
 # The first set should be 1 results exactly.

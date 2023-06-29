@@ -75,88 +75,19 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   return result;
 }
 
-auto parse_and_dump_error(std::string filename, std::string content)
-  -> caf::expected<void> {
-  // First parse and collect diagnostics.
-  auto diag = collecting_diagnostic_handler{};
-  auto parsed = tql::parse(content, diag);
-  if (parsed) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("expected to fail, but "
-                                       "succeeded:\n\n{}",
-                                       fmt::join(*parsed, "\n")));
-  }
-  auto diagnostics = std::move(diag).collect();
-
-  // Then replay diagnostics to reconstruct `stderr` output.
-  auto stream = std::stringstream{};
+void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
+                                std::string filename, std::string content) {
+  // Replay diagnostics to reconstruct `stderr` on `stdout`.
   auto printer = make_diagnostic_printer(std::move(filename),
-                                         std::move(content), true, stream);
-  for (auto& diag : diagnostics) {
+                                         std::move(content), false, std::cout);
+  for (auto&& diag : diagnostics) {
     printer->emit(diag);
   }
-  auto with_colors = std::move(stream).str();
-
-  // Create a copy of the output with all colors removed.
-  auto without_colors = std::string{};
-  for (auto it = with_colors.begin(); it != with_colors.end(); ++it) {
-    if (*it == '\033' && it + 1 != with_colors.end() && *(it + 1) == '[') {
-      while (it != with_colors.end() && *it != 'm') {
-        ++it;
-      }
-    } else {
-      without_colors.push_back(*it);
-    }
-  }
-  std::cout << without_colors << "---\n" << with_colors << "---\n";
-
-  // Finally, print the JSON representation of the diagnostics.
-  auto writer = caf::json_writer{};
-  writer.indentation(2);
-  for (auto& diag : diagnostics) {
-    if (writer.apply(diag)) {
-      std::cout << writer.str() << "\n";
-    } else {
-      fmt::print("<error: {}>", writer.get_error());
-    }
-    writer.reset();
-  }
-  return {};
 }
 
-auto exec_command(const invocation& inv, caf::actor_system& sys)
-  -> caf::expected<void> {
-  const auto& args = inv.arguments;
-  if (args.size() != 1)
-    return caf::make_error(
-      ec::invalid_argument,
-      fmt::format("expected exactly one argument, but got {}", args.size()));
-  auto dump_ast = caf::get_or(inv.options, "vast.exec.dump-ast", false);
-  auto dump_error = caf::get_or(inv.options, "vast.exec.dump-error", false);
-  auto as_file = caf::get_or(inv.options, "vast.exec.file", false);
-  auto filename = std::string{};
-  auto content = std::string{};
-  if (as_file) {
-    filename = args[0];
-    auto result = detail::load_contents(filename);
-    if (!result) {
-      // TODO: Better error message.
-      return result.error();
-    }
-    content = std::move(*result);
-  } else {
-    filename = "<input>";
-    content = args[0];
-  }
-  if (dump_ast && dump_error) {
-    return caf::make_error(ec::invalid_argument,
-                           "cannot have both --dump-ast and --dump-error");
-  }
-  if (dump_error) {
-    return parse_and_dump_error(std::move(filename), std::move(content));
-  }
-  auto diag = make_diagnostic_printer(filename, content, true, std::cerr);
-  auto parsed = tql::parse(content, *diag);
+auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
+               bool dump_ast, caf::actor_system& sys) -> caf::expected<void> {
+  auto parsed = tql::parse(std::move(content), *diag);
   if (not parsed) {
     if (not diag->has_seen_error()) {
       return caf::make_error(ec::unspecified,
@@ -188,6 +119,60 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
                        std::move(diag));
 }
 
+class diagnostic_handler_ref final : public diagnostic_handler {
+public:
+  explicit diagnostic_handler_ref(diagnostic_handler& inner) : inner_{inner} {
+  }
+
+  void emit(diagnostic d) override {
+    inner_.emit(std::move(d));
+  }
+
+  auto has_seen_error() const -> bool override {
+    return inner_.has_seen_error();
+  }
+
+private:
+  diagnostic_handler& inner_;
+};
+
+auto exec_command(const invocation& inv, caf::actor_system& sys)
+  -> caf::expected<void> {
+  const auto& args = inv.arguments;
+  if (args.size() != 1)
+    return caf::make_error(
+      ec::invalid_argument,
+      fmt::format("expected exactly one argument, but got {}", args.size()));
+  auto dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
+  auto dump_diagnostics
+    = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
+  auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
+  auto filename = std::string{};
+  auto content = std::string{};
+  if (as_file) {
+    filename = args[0];
+    auto result = detail::load_contents(filename);
+    if (!result) {
+      // TODO: Better error message.
+      return result.error();
+    }
+    content = std::move(*result);
+  } else {
+    filename = "<input>";
+    content = args[0];
+  }
+  if (dump_diagnostics) {
+    auto diag = collecting_diagnostic_handler{};
+    auto result = exec_impl(
+      content, std::make_unique<diagnostic_handler_ref>(diag), dump_ast, sys);
+    dump_diagnostics_to_stdout(std::move(diag).collect(), filename,
+                               std::move(content));
+    return result;
+  }
+  auto printer = make_diagnostic_printer(filename, content, true, std::cerr);
+  return exec_impl(std::move(content), std::move(printer), dump_ast, sys);
+}
+
 class plugin final : public virtual command_plugin {
 public:
   plugin() = default;
@@ -201,12 +186,12 @@ public:
     -> std::pair<std::unique_ptr<command>, command::factory> override {
     auto exec = std::make_unique<command>(
       "exec", "execute a pipeline locally",
-      command::opts("?vast.exec")
+      command::opts("?tenzir.exec")
         .add<bool>("file,f", "load the pipeline definition from a file")
         .add<bool>("dump-ast",
                    "print a textual description of the AST and then exit")
-        .add<bool>("dump-error",
-                   "expect that parsing fails and print an error"));
+        .add<bool>("dump-diagnostics",
+                   "print all diagnostics to stdout before exiting"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {

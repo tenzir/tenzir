@@ -341,8 +341,9 @@ auto values(const type& type,
 }
 
 struct indexed_transformation {
-  using function_type = std::function<std::vector<
-    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>(
+  using result_type = std::vector<
+    std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>;
+  using function_type = std::function<result_type(
     struct record_type::field, std::shared_ptr<arrow::Array>)>;
 
   offset index;      ///< The index of the field to transform.
@@ -359,14 +360,13 @@ struct indexed_transformation {
   }
 };
 
-/// Applies a list of transformations to both a VAST schema and an Arrow record
-/// batch.
-/// @pre VAST schema and Arrow schema must match.
+/// Applies a list of transformations to both a VAST schema and an Arrow struct
+/// array.
 /// @pre Transformations must be sorted by index.
 /// @pre Transformation indices must not be a subset of the following
 /// transformation's index.
-std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
-  type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
+std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
+  type schema, const std::shared_ptr<arrow::StructArray>& struct_array,
   const std::vector<indexed_transformation>& transformations) noexcept;
 
 /// Applies a list of transformations to a table slice.

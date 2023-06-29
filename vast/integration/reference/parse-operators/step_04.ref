@@ -6,38 +6,3 @@ error: loader `a/b/c.json` could not be found
   |
   = hint: must be one of -, file, stdin
   = docs: https://docs.tenzir.com/next/connectors
----
-[1m[31merror[39m: loader `a/b/c.json` could not be found[0m
- [1m[34m-->[0m <input>:1:6
-  [1m[34m|[0m
-[1m[34m1 |[0m from a/b/c.json read json
-  [1m[34m| [31m     ^^^^^^^^^^ [0m
-  [1m[34m|[0m
-  [1m[34m=[39m hint:[0m must be one of -, file, stdin
-  [1m[34m=[39m docs:[0m https://docs.tenzir.com/next/connectors
----
-{
-  "@type": "vast::diagnostic",
-  "severity": "error",
-  "message": "loader `a/b/c.json` could not be found",
-  "annotations": [
-    {
-      "primary": true,
-      "text": "",
-      "source": {
-        "begin": 5,
-        "end": 15
-      }
-    }
-  ],
-  "notes": [
-    {
-      "kind": "hint",
-      "message": "must be one of -, file, stdin"
-    },
-    {
-      "kind": "docs",
-      "message": "https://docs.tenzir.com/next/connectors"
-    }
-  ]
-}

@@ -196,17 +196,17 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
     reset(std::move(in));
   using defaults = vast::defaults::import::csv;
   opt_.separator = defaults::separator[0];
-  auto seperator_option
-    = get_or(options, "vast.import.csv.separator", defaults::separator.data());
+  auto seperator_option = get_or(options, "tenzir.import.csv.separator",
+                                 defaults::separator.data());
   if (auto separator = get_separator_from_option_string(seperator_option))
     opt_.separator = *separator;
   else
-    VAST_WARN("{} unable to utilize vast.import.csv.separator '{}'. Using "
+    VAST_WARN("{} unable to utilize tenzir.import.csv.separator '{}'. Using "
               "default comma instead",
               detail::pretty_type_name(*this), seperator_option);
-  opt_.set_separator = get_or(options, "vast.import.csv.set_separator",
+  opt_.set_separator = get_or(options, "tenzir.import.csv.set_separator",
                               defaults::set_separator.data());
-  opt_.kvp_separator = get_or(options, "vast.import.csv.kvp_separator",
+  opt_.kvp_separator = get_or(options, "tenzir.import.csv.kvp_separator",
                               defaults::kvp_separator.data());
 }
 

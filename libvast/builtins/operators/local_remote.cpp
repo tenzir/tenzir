@@ -50,7 +50,7 @@ public:
     return caf::make_error(ec::invalid_configuration,
                            "operator location overrides must be explicitly "
                            "allowed by setting "
-                           "'vast.allow-unsafe-pipelines' to 'true'");
+                           "'tenzir.allow-unsafe-pipelines' to 'true'");
   }
 
   auto copy() const -> operator_ptr override {
@@ -92,11 +92,11 @@ public:
   auto initialize([[maybe_unused]] const record& plugin_config,
                   const record& global_config) -> caf::error override {
     auto allow_unsafe_pipelines = try_get_or(
-      global_config, "vast.allow-unsafe-pipelines", allow_unsafe_pipelines_);
+      global_config, "tenzir.allow-unsafe-pipelines", allow_unsafe_pipelines_);
     if (not allow_unsafe_pipelines) {
       return caf::make_error(
         ec::invalid_configuration,
-        fmt::format("failed to parse vast.allow-unsafe-pipelines option: {}",
+        fmt::format("failed to parse tenzir.allow-unsafe-pipelines option: {}",
                     allow_unsafe_pipelines.error()));
     }
     allow_unsafe_pipelines_ = *allow_unsafe_pipelines;

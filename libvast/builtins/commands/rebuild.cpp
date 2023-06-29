@@ -109,7 +109,7 @@ private:
 };
 
 /// The threshold at which to consider a partition undersized, relative to the
-/// configured 'vast.max-partition-size'.
+/// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
 
 /// The parsed options of the `vast rebuild start` command.
@@ -595,16 +595,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   self->state.index = std::move(index);
   self->state.accountant = std::move(accountant);
   self->state.max_partition_size
-    = caf::get_or(self->system().config(), "vast.max-partition-size",
+    = caf::get_or(self->system().config(), "tenzir.max-partition-size",
                   defaults::max_partition_size);
   self->state.desired_batch_size
-    = caf::get_or(self->system().config(), "vast.import.batch-size",
+    = caf::get_or(self->system().config(), "tenzir.import.batch-size",
                   defaults::import::table_slice_size);
-  self->state.automatic_rebuild
-    = caf::get_or(self->system().config(), "vast.automatic-rebuild", size_t{1});
+  self->state.automatic_rebuild = caf::get_or(
+    self->system().config(), "tenzir.automatic-rebuild", size_t{1});
   if (self->state.automatic_rebuild > 0) {
     self->state.rebuild_interval
-      = caf::get_or(self->system().config(), "vast.active-partition-timeout",
+      = caf::get_or(self->system().config(), "tenzir.active-partition-timeout",
                     defaults::active_partition_timeout);
     self->state.schedule();
   }
@@ -644,11 +644,11 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
 caf::expected<rebuilder_actor>
 get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
   auto self = caf::scoped_actor{sys};
-  if (caf::get_or(config, "vast.node", false)
-      && caf::get_or(config, "vast.rebuild.detached", false))
+  if (caf::get_or(config, "tenzir.node", false)
+      && caf::get_or(config, "tenzir.rebuild.detached", false))
     return caf::make_error(ec::invalid_configuration,
-                           "the options 'vast.node' and "
-                           "'vast.rebuild.detached' "
+                           "the options 'tenzir.node' and "
+                           "'tenzir.rebuild.detached' "
                            "are incompatible");
   auto node_opt = spawn_or_connect_to_node(self, config, content(sys.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt))
@@ -693,7 +693,7 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
   if (!rebuilder)
     return caf::make_message(std::move(rebuilder.error()));
   // Parse the query expression, iff it exists.
-  auto query = read_query(inv, "vast.rebuild.read", must_provide_query::no);
+  auto query = read_query(inv, "tenzir.rebuild.read", must_provide_query::no);
   if (!query)
     return caf::make_message(std::move(query.error()));
   auto expr = expression{};
@@ -706,13 +706,13 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
     expr = std::move(*parsed);
   }
   auto options = start_options{
-    .all = caf::get_or(inv.options, "vast.rebuild.all", false),
-    .undersized = caf::get_or(inv.options, "vast.rebuild.undersized", false),
-    .parallel = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1}),
-    .max_partitions = caf::get_or(inv.options, "vast.rebuild.max-partitions",
+    .all = caf::get_or(inv.options, "tenzir.rebuild.all", false),
+    .undersized = caf::get_or(inv.options, "tenzir.rebuild.undersized", false),
+    .parallel = caf::get_or(inv.options, "tenzir.rebuild.parallel", size_t{1}),
+    .max_partitions = caf::get_or(inv.options, "tenzir.rebuild.max-partitions",
                                   std::numeric_limits<size_t>::max()),
     .expression = std::move(expr),
-    .detached = caf::get_or(inv.options, "vast.rebuild.detached", false),
+    .detached = caf::get_or(inv.options, "tenzir.rebuild.detached", false),
     .automatic = false,
   };
   auto result = caf::message{};
@@ -737,7 +737,7 @@ rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(rebuilder.error()));
   auto result = caf::message{};
   auto options = stop_options{
-    .detached = caf::get_or(inv.options, "vast.rebuild.detached", false),
+    .detached = caf::get_or(inv.options, "tenzir.rebuild.detached", false),
   };
   self->request(*rebuilder, caf::infinite, atom::stop_v, std::move(options))
     .receive(
@@ -780,7 +780,7 @@ public:
       "rebuild",
       "rebuilds outdated partitions matching the "
       "(optional) query expression",
-      command::opts("?vast.rebuild")
+      command::opts("?tenzir.rebuild")
         .add<bool>("all", "rebuild all partitions")
         .add<bool>("undersized", "consider only undersized partitions")
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
@@ -796,7 +796,7 @@ public:
                             rebuild->options);
     rebuild->add_subcommand(
       "stop", "stop an ongoing rebuild process",
-      command::opts("?vast.rebuild")
+      command::opts("?tenzir.rebuild")
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
                                  "rebuild to be stopped"));
     auto factory = command::factory{

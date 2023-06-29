@@ -18,7 +18,7 @@
 namespace vast::defaults::import {
 
 size_t test::seed(const caf::settings& options) {
-  constexpr auto key = std::string_view{"vast.import.test.seed"};
+  constexpr auto key = std::string_view{"tenzir.import.test.seed"};
   if (auto val = caf::get_if<caf::config_value::integer>(&options, key))
     return *val;
   std::random_device rd;

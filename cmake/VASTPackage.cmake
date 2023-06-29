@@ -12,11 +12,11 @@ else ()
   endif ()
 endif ()
 
-# VAST switched it's versioning scheme from CalVer to SemVer, so we have to set
-# the package epoch so an older package with calendar-based versioning is not
-# considered newer than this one. This for whatever reason implies that the
-# package revision must be set, which is just zero for us.
-set(CPACK_DEBIAN_PACKAGE_EPOCH "1")
+# Tenzir replaces VAST, and that mechanism binds stronger than the package
+# version, so we currently don't need EPOCHs. We still keep this setting in a
+# commented out state here because it is ordering sensitive and having it
+# simplifies a re-addition if it becomes necessary in the future.
+#set(CPACK_DEBIAN_PACKAGE_EPOCH "1")
 
 # Lowercase fits better for file names and such.
 set(CPACK_PACKAGE_NAME "tenzir")
@@ -34,8 +34,6 @@ if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
     string(APPEND CPACK_PACKAGE_FILE_NAME "-${VAST_PACKAGE_FILE_NAME_SUFFIX}")
   endif ()
   if (NOT DEFINED CPACK_DEBIAN_FILE_NAME)
-    set(_debian_package_version
-        "${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_PACKAGE_VERSION}")
     # Taken from CPackDeb.cmake (BSD 3-Clause).
     # BEGIN SNIPPET
     find_program(DPKG_CMD dpkg)
@@ -50,7 +48,7 @@ if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
       OUTPUT_STRIP_TRAILING_WHITESPACE)
     # END SNIPPET
     set(CPACK_DEBIAN_FILE_NAME
-        "${_edition_name_lower}_${_debian_package_version}_${_debian_package_architecture}.deb"
+        "${_edition_name_lower}_${CPACK_PACKAGE_VERSION}_${_debian_package_architecture}.deb"
     )
     unset(_debian_package_architecture)
     unset(_debian_package_version)

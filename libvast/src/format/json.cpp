@@ -1057,21 +1057,21 @@ writer::writer(std::unique_ptr<std::ostream> out, const caf::settings& options)
     out_{std::move(out)},
     printer_{{
       .oneline = true,
-      .flattened = get_or(options, "vast.export.json.flatten", false),
+      .flattened = get_or(options, "tenzir.export.json.flatten", false),
       .numeric_durations
-      = get_or(options, "vast.export.json.numeric-durations", false),
+      = get_or(options, "tenzir.export.json.numeric-durations", false),
       .omit_nulls
-      = get_or(options, "vast.export.json.omit-nulls",
-               get_or(options, "vast.export.json.omit-empty", false)),
+      = get_or(options, "tenzir.export.json.omit-nulls",
+               get_or(options, "tenzir.export.json.omit-empty", false)),
       .omit_empty_records
-      = get_or(options, "vast.export.json.omit-empty-records",
-               get_or(options, "vast.export.json.omit-empty", false)),
+      = get_or(options, "tenzir.export.json.omit-empty-records",
+               get_or(options, "tenzir.export.json.omit-empty", false)),
       .omit_empty_lists
-      = get_or(options, "vast.export.json.omit-empty-lists",
-               get_or(options, "vast.export.json.omit-empty", false)),
+      = get_or(options, "tenzir.export.json.omit-empty-lists",
+               get_or(options, "tenzir.export.json.omit-empty", false)),
       .omit_empty_maps
-      = get_or(options, "vast.export.json.omit-empty-maps",
-               get_or(options, "vast.export.json.omit-empty", false)),
+      = get_or(options, "tenzir.export.json.omit-empty-maps",
+               get_or(options, "tenzir.export.json.omit-empty", false)),
     }} {
   // nop
 }
@@ -1111,7 +1111,7 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   if (in != nullptr)
     reset(std::move(in));
   if (const auto selector_opt
-      = caf::get_if<std::string>(&options, "vast.import.json.selector")) {
+      = caf::get_if<std::string>(&options, "tenzir.import.json.selector")) {
     auto split = detail::split(*selector_opt, ":");
     VAST_ASSERT(!split.empty());
     if (split.size() > 2 || split[0].empty()) {

@@ -32,7 +32,7 @@ FIXTURE_SCOPE(sink_tests, fixture)
 TEST(zeek sink) {
   MESSAGE("constructing a sink");
   caf::settings options;
-  caf::put(options, "vast.export.write", directory.string());
+  caf::put(options, "tenzir.export.write", directory.string());
   auto writer = std::make_unique<format::zeek::writer>(options);
   auto snk = self->spawn(sink, std::move(writer), 20u);
   MESSAGE("sending table slices");

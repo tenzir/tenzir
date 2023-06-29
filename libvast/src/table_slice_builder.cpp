@@ -12,7 +12,6 @@
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/config.hpp"
-#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"

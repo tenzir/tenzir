@@ -9,7 +9,7 @@
 #pragma once
 
 #include "vast/as_bytes.hpp"
-#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/byteswap.hpp"
 #include "vast/detail/inspection_common.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"

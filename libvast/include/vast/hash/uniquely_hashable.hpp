@@ -9,9 +9,9 @@
 #pragma once
 
 #include "vast/concepts.hpp"
-#include "vast/detail/bit.hpp"
 #include "vast/hash/uniquely_represented.hpp"
 
+#include <bit>
 #include <type_traits>
 
 namespace vast {
@@ -21,23 +21,19 @@ namespace vast {
 // (ii) the endianness of `H` equals to the host endian. All (fixed) byte
 // sequences are uniquely represented by definition.
 
-// clang-format off
 template <class T, class HashAlgorithm>
 struct is_uniquely_hashable
   : std::bool_constant<
       concepts::fixed_byte_sequence<T>
       || (uniquely_represented<T>
-          && (sizeof(T) == 1
-              || HashAlgorithm::endian == detail::endian::native))
-    > {};
-// clang-format on
+          && (sizeof(T) == 1 || HashAlgorithm::endian == std::endian::native))> {
+};
 
 template <class T, size_t N, class HashAlgorithm>
 struct is_uniquely_hashable<T[N], HashAlgorithm>
-  : std::bool_constant<
-      uniquely_represented<
-        T[N]> && (sizeof(T) == 1 || HashAlgorithm::endian == detail::endian::native)> {
-};
+  : std::bool_constant<uniquely_represented<T[N]>
+                       && (sizeof(T) == 1
+                           || HashAlgorithm::endian == std::endian::native)> {};
 
 template <class T, class HashAlgorithm>
 concept uniquely_hashable = is_uniquely_hashable<T, HashAlgorithm>::value;

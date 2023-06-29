@@ -206,7 +206,7 @@ auto pipeline_executor(
   self->state.pipe = std::move(pipe);
   self->state.diagnostic_handler = std::move(diagnostic_handler);
   self->state.allow_unsafe_pipelines
-    = caf::get_or(self->system().config(), "vast.allow-unsafe-pipelines",
+    = caf::get_or(self->system().config(), "tenzir.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
   return {
     [self](atom::start) -> caf::result<void> {

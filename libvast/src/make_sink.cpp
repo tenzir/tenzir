@@ -28,8 +28,8 @@ make_sink(caf::actor_system& sys, const std::string& output_format,
   auto writer = format::writer::make(output_format, options);
   if (!writer)
     return writer.error();
-  auto max_events
-    = get_or(options, "vast.export.max-events", defaults::export_::max_events);
+  auto max_events = get_or(options, "tenzir.export.max-events",
+                           defaults::export_::max_events);
   return sys.spawn(sink, std::move(*writer), max_events);
 }
 

@@ -65,9 +65,12 @@ tests:
     steps:
       - command: exec --dump-ast "version"
       - command: exec --dump-ast "version --dev"
-      - command: exec --dump-error "version --tev"
-      - command: exec --dump-error "version 42"
-      - command: exec --dump-error "from a/b/c.json read json"
+      - command: exec "version --tev"
+        expected_result: error
+      - command: exec "version 42"
+        expected_result: error
+      - command: exec "from a/b/c.json read json"
+        expected_result: error
       - command: exec --dump-ast "from file a/b/c.json"
       - command: exec --dump-ast "from file a/b/c.json read cef"
       - command: exec --dump-ast "parse zeek-tsv"
@@ -96,7 +99,7 @@ tests:
       - command: -N export ascii 'where orig_bytes > 1k && orig_bytes < 1Ki'
       - command: -N export ascii 'where :string == "OrfTtuI5G4e" || :port == 67 || :uint64 == 67'
       - command: '-N export ascii "where #schema == \"zeek.conn\" && resp_h == 192.168.1.104"'
-      - command: '-N export ascii "where #schema != \"zeek.conn\" && #schema != \"vast.metrics\""'
+      - command: '-N export ascii "where #schema != \"zeek.conn\" && #schema != \"tenzir.metrics\""'
       - command: '-N export ascii "where #schema != \"foobar\" && resp_h == 192.168.1.104"'
 
   Node Zeek multiple imports:
@@ -108,7 +111,7 @@ tests:
         input: data/zeek/dns.log.gz
       - command: -N export ascii 'where resp_h == 192.168.1.104'
       - command: -N export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
-      - command: '-N count ":timestamp >= 1970-01-01 && #schema != \"vast.metrics\""'
+      - command: '-N count ":timestamp >= 1970-01-01 && #schema != \"tenzir.metrics\""'
       - command: -N count '#schema == "zeek.conn"'
 
   Node Zeek dns log:
@@ -220,7 +223,7 @@ tests:
         input: data/zeek/dns.log.gz
       - command: export ascii 'where resp_h == 192.168.1.104'
       - command: export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
-      - command: 'count ":timestamp >= 1970-01-01 && #schema != \"vast.metrics\""'
+      - command: 'count ":timestamp >= 1970-01-01 && #schema != \"tenzir.metrics\""'
       - command: count '#schema == "zeek.conn"'
       - command: show schemas --yaml
 
@@ -973,3 +976,26 @@ tests:
       # N
       - command: exec 'read zeek-json | summarize x=distinct(y)'
         input: data/zeek/zeek.json
+
+  Flatten Operator:
+    tags: [pipelines, zeek]
+    steps:
+      - command: exec 'read zeek-tsv | tail 10 | flatten | to stdout'
+        input: data/zeek/dns.log.gz
+    # TODO: Reenable tests with only record flattening.
+    # - command: exec 'read zeek-tsv | tail 10 | flatten -l | to stdout'
+    #   input: data/zeek/dns.log.gz
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/nested-object.json
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/nested-structure.json
+    # - command: exec 'read json | flatten -l | to stdout'
+    #   input: data/json/nested-structure.json
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/record-in-list.json
+    # - command: exec 'read json | flatten -l | to stdout'
+    #   input: data/json/record-in-list.json
+      - command: exec 'read suricata | flatten | to stdout'
+        input: data/suricata/eve.json
+      - command: exec 'read suricata | flatten | to stdout'
+        input: data/suricata/rrdata-eve.json

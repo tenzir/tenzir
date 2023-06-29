@@ -220,7 +220,7 @@ jobs:
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
-          VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ tenzir.yaml.example version.json)
+          VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ schema/ tools/ vast/ tenzir.yaml.example version.json)
           run_if_changed vast "${VAST_SOURCES[@]}"
           run_if_changed_default tenzir-plugins $run_vast "plugins/" "contrib/tenzir-plugins/"
           # The tenzir-plugins job downloads the VAST artifact from GCS, so we
@@ -255,9 +255,9 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            tags=('latest' "${{ github.sha }}")
+            tags=('main' "${{ github.sha }}")
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
           else
             echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
@@ -267,11 +267,12 @@ jobs:
             .github/workflows/docker-config-base.json \
             --arg v "${{ steps.configure.outputs.build-version-short }}" \
             --args -- "${tags[@]}")"
-          # Clear push repos in case we're in a PR, but push the developer
+          # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             docker_config="$(jq -c '(.editions[] | .registries) |= [] |
-              (.editions[] | select(.name == "tenzir") | .registries) |= ["ghcr.io"]' \
+              (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
+              .registries) |= ["ghcr.io"]' \
               <<< "${docker_config}")"
           fi
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
@@ -281,31 +282,36 @@ jobs:
         if: steps.configure.outputs.run-vast-nix == 'true'
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            tags=("${{ steps.configure.outputs.head-ref-slug }}")
+            container_tags=("${{ steps.configure.outputs.head-ref-slug }}")
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            tags=('latest' "${{ github.sha }}")
-            aliases=('latest')
+            container_tags=('main' "${{ github.sha }}")
+            aliases=('main')
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
-            aliases=('stable')
+            container_tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            aliases=('latest')
           else
             echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
           fi
           nix_config="$(jq -c \
-            '."tags" = $ARGS.positional' \
+            '."container-tags" = $ARGS.positional' \
             .github/workflows/nix-config-base.json \
-            --args -- "${tags[@]}")"
+            --args -- "${container_tags[@]}")"
           nix_config="$(jq -c \
             '."aliases" = $ARGS.positional' \
             --args -- "${aliases[@]}" \
             <<< "${nix_config}")"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            nix_config="$(jq -c --arg git_tag "${GITHUB_REF#refs/tags/}" \
+              '."git-tag" = $git_tag' \
+              <<< "${nix_config}")"
+          fi
           # Clear push repos in case we're in a PR, but push the developer
           # edition to ghcr.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             nix_config="$(jq -c '(.editions[] | ."package-stores") |= [] |
               (.editions[] | ."image-registries") |= [] |
-              (.editions[] | select(.name == "vast-static") | ."image-registries") |= ["ghcr.io"]' \
+              (.editions[] | select(.name == "tenzir") | ."image-registries") |= ["ghcr.io"]' \
               <<< "${nix_config}")"
           fi
           # Reshape the config so that each edition is in a dedicated config.
@@ -313,11 +319,12 @@ jobs:
           # We do this because the static editions that we build here are
           # independent derivations, meaning there is no sharing of build
           # products.
-          nix_matrix="$(jq -c '.aliases as $aliases | .tags as $tags |
+          nix_matrix="$(jq -c '.aliases as $aliases | ."container-tags" as $tags | ."git-tag" as $git_tag |
             .targets = (.editions | map(. as $e |{}|
               .editions = [$e] |
               .aliases = $aliases |
-              .tags = $tags)
+              ."container-tags" = $tags |
+              ."git-tag" = $git_tag)
             ) | .targets | map({"name": .editions[0].name, "config": .})' \
             <<< "${nix_config}")"
           echo "nix-matrix=${nix_matrix}" >> "$GITHUB_OUTPUT"
@@ -774,15 +781,15 @@ jobs:
           # for builds of the latest release.
           asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
           asset_content_type: application/gzip
-      - name: Publish VAST.spdx to GitHub Release
+      - name: Publish Tenzir.spdx to GitHub Release
         if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "VAST.spdx"
-          asset_name: "VAST.spdx"
+          asset_path: "Tenzir.spdx"
+          asset_name: "Tenzir.spdx"
           asset_content_type: text/plain
 
   tenzir-plugins:

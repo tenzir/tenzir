@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <memory>
+#include <numeric>
 #include <span>
 #include <tuple>
 #include <unistd.h>

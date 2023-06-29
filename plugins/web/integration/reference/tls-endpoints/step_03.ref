@@ -1,1 +1,3 @@
-missing header X-VAST-Token
+{
+  "error": "missing header X-VAST-Token\n"
+}

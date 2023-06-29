@@ -25,7 +25,7 @@ concept incremental_hash
   // clang-format off
   typename HashAlgorithm::result_type;
   { h.add(bytes) } noexcept -> std::same_as<void>;
-  { h.finish() } noexcept 
+  { h.finish() } noexcept
     -> std::same_as<typename HashAlgorithm::result_type>;
   // clang-format on
 };

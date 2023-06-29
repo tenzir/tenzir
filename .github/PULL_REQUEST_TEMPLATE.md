@@ -4,7 +4,7 @@ Please make sure to follow our pull request conventions:
    is consumable by everyone, not just developers who know the context of the
    change you've made.
 2. Ensure that all user-facing changes have changelog entries according to our
-   guidelines: https://vast.io/docs/contribute/changelog
+   guidelines: https://docs.tenzir.com/next/contribute/changelog
 3. Provide instructions for the reviewer.
 4. Remove this comment so it doesn't show up in the merge commit.
 -->

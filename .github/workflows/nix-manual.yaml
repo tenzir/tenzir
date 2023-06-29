@@ -14,13 +14,17 @@ on:
         type: boolean
         default: false
         required: false
-      tag:
+      container-tag:
         type: string
         required: false
-      tag-sha:
+      container-tag-sha:
         type: boolean
         required: false
         default: false
+      upload-de-package-to-github:
+        type: boolean
+        required: false
+        default: true
 
 jobs:
   configure:
@@ -45,10 +49,10 @@ jobs:
         run: |
           echo '::notice inputs = ${{ toJSON(inputs) }}'
           tags=()
-          if [[ '${{ inputs.tag }}' != "" ]]; then
-            tags+=('${{ inputs.tag }}')
+          if [[ '${{ inputs.container-tag }}' != "" ]]; then
+            tags+=('${{ inputs.container-tag }}')
           fi
-          if [[ '${{ inputs.tag-sha }}' == 'true' ]]; then
+          if [[ '${{ inputs.container-tag-sha }}' == 'true' ]]; then
             tags+=('${{ github.sha }}')
           fi
           if [[ '${{ inputs.build }}' == 'true' ]]; then
@@ -60,7 +64,7 @@ jobs:
                 {
                   "name": "tenzir",
                   "static": true,
-                  "upload-package-to-github": true,
+                  "upload-package-to-github": ${{ inputs.upload-de-package-to-github }},
                   "package-stores": [
                     "gcs:tenzir-dist-public/packages/manual"
                   ],
@@ -76,7 +80,7 @@ jobs:
                 {
                   "name": "tenzir-ce",
                   "static": true,
-                  "upload-package-to-github": true,
+                  "upload-package-to-github": false,
                   "package-stores": [
                     "gcs:tenzir-dist-private/packages/manual"
                   ],
@@ -91,7 +95,7 @@ jobs:
                 {
                   "name": "tenzir-cm",
                   "static": true,
-                  "upload-package-to-github": true,
+                  "upload-package-to-github": false,
                   "package-stores": [
                     "gcs:tenzir-dist-private/packages/manual"
                   ],
@@ -104,7 +108,7 @@ jobs:
                 {
                   "name": "tenzir-ee",
                   "static": true,
-                  "upload-package-to-github": true,
+                  "upload-package-to-github": false,
                   "package-stores": [
                     "gcs:tenzir-dist-private/packages/manual"
                   ],
@@ -118,6 +122,11 @@ jobs:
             ] | ."version" = $v | ."tags" = $ARGS.positional' \
             --arg v "${{ steps.version.outputs.version }}" \
             --args -- "${tags[@]}")"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            nix_config="$(jq -c --arg git_tag "${GITHUB_REF#refs/tags/}" \
+              '."git-tag" = $git_tag' \
+              <<< "${nix_config}")"
+          fi
           # Reshape the config so that each edition is in a dedicated config.
           # This will be supplied as a matrix to the nix job.
           # We do this because the static editions that we build here are

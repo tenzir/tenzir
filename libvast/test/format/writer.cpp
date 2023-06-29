@@ -68,7 +68,7 @@ TEST(JSON writer - defaults) {
 
 TEST(JSON writer - omit - nulls) {
   caf::settings options;
-  caf::put(options, "vast.export.json.omit-nulls", true);
+  caf::put(options, "tenzir.export.json.omit-nulls", true);
   auto lines = generate<format::json::writer>(zeek_http_log, options);
   CHECK_EQUAL(lines.back(), last_zeek_http_log_line_json);
 }

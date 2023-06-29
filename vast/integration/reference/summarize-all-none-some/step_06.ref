@@ -146,3 +146,9 @@
     "radius"
   ]
 }
+warning: group-by column `id.orig_h` does not exist for schema `zeek.dhcp`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.files`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.pe`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.reporter`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.software`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.weird.123.190`

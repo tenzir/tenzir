@@ -21,7 +21,7 @@ caf::expected<caf::actor>
 spawn_catalog(node_actor::stateful_pointer<node_state> self,
               spawn_arguments& args) {
   auto [accountant] = self->state.registry.find<accountant_actor>();
-  auto detached = caf::get_or(args.inv.options, "vast.detach-components",
+  auto detached = caf::get_or(args.inv.options, "tenzir.detach-components",
                               defaults::detach_components);
   auto handle
     = detached

@@ -1,0 +1,1 @@
+error: !! parse_error: could not parse pipeline: [{severity: error, message: "could not parse `summarize` operator", annotations: [{primary: true, text: "", source: {begin: 0, end: 0}}], notes: [{kind: note, message: "!! syntax_error: failed to parse summarize operator: ' count=count() by  | sort count desc'"}]}]
