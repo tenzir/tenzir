@@ -49,6 +49,11 @@ constexpr uint64_t min_batch_size = 8_Ki;
 /// execution node.
 constexpr uint64_t max_buffered = 254_Ki;
 
+/// Defines the timeout before an execution node is invoked again that has no
+/// input and was not able to produce any output.
+/// TODO: Consider using an exponential back-off mechanism.
+constexpr duration wakeup_delay = 20ms;
+
 } // namespace defaults
 
 template <class Input, class Output>
@@ -288,6 +293,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
           return;
         }
         this->previous = nullptr;
+        schedule_run();
         if (msg.reason) {
           ctrl->abort(caf::make_error(
             ec::unspecified, fmt::format("{} shuts down because of irregular "
@@ -414,7 +420,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
       return;
     }
     run_scheduled = true;
-    // TODO: Explain why we always use the delayed variant.
+    // We *always* use the delayed variant here instead of scheduling
+    // immediately as that has two distinct advantages:
+    // - It allows for using a weak actor pointer on the click, i.e., it does
+    //   not prohibit shutdown.
+    // - It does not get run immediately, which would conflict with operators
+    //   using `ctrl.self().request(...).await(...)`.
     self->clock().schedule(self->clock().now() + delay,
                            caf::make_action(
                              [this] {
@@ -481,8 +492,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
   };
 
   auto run() -> void {
-    VAST_ASSERT(instance); // FIXME: What if this hasn't been set yet? Can we
-                           // error instead? no-op?
+    VAST_TRACE("{} enters run loop", op->name());
+    VAST_ASSERT(instance);
     const auto now = std::chrono::steady_clock::now();
     // Check if we're done.
     if (instance->it == instance->gen.end()) {
@@ -521,14 +532,16 @@ struct exec_node_state : inbound_state_mixin<Input>,
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       request_more_input();
     }
-    // Produce more output if there's more to be produced.
-    advance_generator();
-    // Schedule the next run. For sinks, this happens immediately. For
+    // Produce more output if there's more to be produced, then schedule the
+    // next run. For sinks, this happens delayed when there is no input. For
     // everything else, it needs to happen only when there's enough space in the
     // outbound buffer.
     if constexpr (std::is_same_v<Output, std::monostate>) {
-      schedule_run();
+      const auto has_inbound = this->inbound_buffer_size > 0;
+      advance_generator();
+      schedule_run(has_inbound ? duration::zero() : defaults::wakeup_delay);
     } else {
+      advance_generator();
       if (this->current_demand
           or (this->outbound_buffer_size < defaults::max_buffered
               and instance->it != instance->gen.end())) {

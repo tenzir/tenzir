@@ -34,6 +34,8 @@ namespace vast {
 ///   it can yield. This corresponds to the Volcano model's _close_ function.
 /// - Yielding from an operator's generator is guaranteed to return control to
 ///   the scheduler before the generator is resumed.
+/// - Execution nodes are guaranteed to be started right-to-left in the
+///   pipeline, and should be spawned left-to-right by the pipeline executor.
 ///
 /// @param self The actor that spawns and monitors the execution node.
 /// @param op The operator to execute.

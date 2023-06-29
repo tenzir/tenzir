@@ -144,11 +144,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   auto execute(pipeline p) -> caf::expected<void> {
     MESSAGE("executing pipeline: " << p.to_string());
     auto self = caf::scoped_actor{sys};
-    auto executor = self->spawn(pipeline_executor, std::move(p),
-                                std::make_unique<null_diagnostic_handler>());
-    auto handle = self->request(executor, caf::infinite, atom::run_v);
-    run();
+    auto executor
+      = self->spawn(pipeline_executor, std::move(p),
+                    std::make_unique<null_diagnostic_handler>(), node_actor{});
     auto result = std::optional<caf::expected<void>>{};
+    auto handle = self->request(executor, caf::infinite, atom::start_v);
+    run();
     std::move(handle).receive(
       [&, executor] {
         (void)executor;
@@ -159,7 +160,22 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
         result.emplace(std::move(error));
       });
     REQUIRE(result.has_value());
-    return std::move(*result);
+    if (not *result) {
+      return result->error();
+    }
+    result.reset();
+    executor->attach_functor([&](const caf::error& error) {
+      if (error and error != caf::exit_reason::unreachable
+          and error != caf::exit_reason::user_shutdown) {
+        result.emplace(error);
+      } else {
+        result.emplace();
+      }
+    });
+    run();
+    self->wait_for(executor);
+    REQUIRE(result);
+    return *result;
   }
 };
 
