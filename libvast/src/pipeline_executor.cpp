@@ -54,8 +54,7 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
       });
 }
 
-void pipeline_executor_state::spawn_execution_nodes(pipeline pipe,
-                                                    node_actor remote) {
+void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
   // Spawn pipeline piece by piece.
   auto input_type = operator_type{tag_v<void>};
   auto previous = exec_node_actor{};
@@ -70,7 +69,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe,
     }
     auto description = op->to_string();
     if (spawn_remote) {
-      if (not remote) {
+      if (not node) {
         auto error
           = caf::make_error(ec::invalid_argument,
                             "encountered remote operator, but remote node "
@@ -92,7 +91,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe,
       auto index = exec_nodes.size();
       exec_nodes.emplace_back();
       self
-        ->request(remote, caf::infinite, atom::spawn_v,
+        ->request(node, caf::infinite, atom::spawn_v,
                   operator_box{std::move(op)}, input_type,
                   static_cast<receiver_actor<diagnostic>>(self))
         .then(
@@ -143,29 +142,29 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe,
 auto pipeline_executor_state::start() -> caf::result<void> {
   if (not this->pipe) {
     return caf::make_error(ec::logic_error,
-                           "pipeline exeuctor can only run pipeline once");
+                           "pipeline exeuctor can only start once");
   }
   auto pipe = *std::exchange(this->pipe, std::nullopt);
   start_rp = self->make_response_promise<void>();
-  // Find remote note if we need one. TODO: this->node?
-  auto remote_node = node_actor{};
-  for (const auto& op : pipe.operators()) {
-    if (op->location() == operator_location::remote) {
-      connect_to_node(
-        self, content(self->system().config()),
-        // We use a shared_ptr because of non-copyable operator_ptr.
-        [this, pipe = std::move(pipe)](caf::expected<node_actor> node) mutable {
-          if (not node) {
-            start_rp.deliver(node.error());
-            self->quit(node.error());
-            return;
-          }
-          spawn_execution_nodes(std::move(pipe), *node);
-        });
-      return start_rp;
+  if (not node) {
+    for (const auto& op : pipe.operators()) {
+      if (op->location() == operator_location::remote) {
+        connect_to_node(self, content(self->system().config()),
+                        [this, pipe = std::move(pipe)](
+                          caf::expected<node_actor> result) mutable {
+                          if (not result) {
+                            start_rp.deliver(result.error());
+                            self->quit(result.error());
+                            return;
+                          }
+                          node = *result;
+                          spawn_execution_nodes(std::move(pipe));
+                        });
+        return start_rp;
+      }
     }
   }
-  spawn_execution_nodes(std::move(pipe), node_actor{});
+  spawn_execution_nodes(std::move(pipe));
   return start_rp;
 }
 

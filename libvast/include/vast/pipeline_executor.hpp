@@ -35,7 +35,7 @@ struct pipeline_executor_state {
 
   void start_nodes_if_all_spawned();
 
-  void spawn_execution_nodes(pipeline pipe, node_actor remote);
+  void spawn_execution_nodes(pipeline pipe);
 };
 
 /// Start a pipeline executor for a given pipeline.
