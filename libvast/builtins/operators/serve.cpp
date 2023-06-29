@@ -727,17 +727,12 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    // This is not ideal, but the current CAF streaming-based execution node
-    // only throttles for sinks when sinks actually block in the execution path.
-    // So until we have a proper async execution model we instead use a blocking
-    // actor here and make the operator detached.
-    auto blocking_self = caf::scoped_actor{ctrl.self().system()};
     // Step 1: Get a handle to the SERVE MANAGER actor.
     auto serve_manager = serve_manager_actor{};
-    blocking_self
-      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-                "serve-manager")
-      .receive(
+    ctrl.self()
+      .request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
+               "serve-manager")
+      .await(
         [&](std::vector<caf::actor>& actors) {
           VAST_ASSERT(actors.size() == 1);
           serve_manager
@@ -750,10 +745,10 @@ public:
         });
     co_yield {};
     // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
-    blocking_self
-      ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
-                buffer_size_)
-      .receive(
+    ctrl.self()
+      .request(serve_manager, caf::infinite, atom::start_v, serve_id_,
+               buffer_size_)
+      .await(
         [&]() {
           VAST_VERBOSE("serve for id {} is now available",
                        escape_operator_arg(serve_id_));
@@ -767,10 +762,10 @@ public:
     // Step 3: Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
       // Send slice to SERVE MANAGER.
-      blocking_self
-        ->request(serve_manager, caf::infinite, atom::put_v, serve_id_,
-                  std::move(slice))
-        .receive(
+      ctrl.self()
+        .request(serve_manager, caf::infinite, atom::put_v, serve_id_,
+                 std::move(slice))
+        .await(
           []() {
             // nop
           },
@@ -783,9 +778,9 @@ public:
       co_yield {};
     }
     // Step 4: Wait until all events were fetched.
-    blocking_self
-      ->request(serve_manager, caf::infinite, atom::stop_v, serve_id_)
-      .receive(
+    ctrl.self()
+      .request(serve_manager, caf::infinite, atom::stop_v, serve_id_)
+      .await(
         []() {
           // nop
         },
@@ -794,6 +789,7 @@ public:
             ec::logic_error,
             fmt::format("failed to deregister at serve-manager: {}", err)));
         });
+    co_yield {};
   }
 
   auto to_string() const -> std::string override {
