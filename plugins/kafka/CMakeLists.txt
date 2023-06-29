@@ -35,10 +35,16 @@ if (NOT RdKafka_FOUND)
       STATUS
         "Cannot find installed RdKafka; falling back to bundled version")
   endif ()
+  set(RDKAFKA_BUILD_EXAMPLES OFF)
+  set(RDKAFKA_BUILD_TESTS OFF)
+  if (VAST_ENABLE_STATIC_EXECUTABLE)
+    set(RDKAFKA_BUILD_STATIC ON)
+  endif ()
   add_subdirectory(aux/librdkafka)
   dependency_summary("librdkafka" "${CMAKE_CURRENT_SOURCE_DIR}/aux/librdkafka"
                      "Dependencies")
+  add_library(RdKafka::rdkafka++ ALIAS rdkafka++)
 endif ()
 
 target_link_libraries(kafka PUBLIC vast::libvast vast::internal)
-target_link_libraries(kafka PUBLIC rdkafka++)
+target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)
