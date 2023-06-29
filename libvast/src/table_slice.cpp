@@ -1072,18 +1072,7 @@ auto make_rename_transformation(std::string new_name)
 auto flatten(table_slice slice, flatten_options opt) -> flatten_result {
   if (slice.rows() == 0)
     return {std::move(slice), {}};
-  // This version of flatten sometimes breaks if there's a record in a list. We
-  // detect this and warn if in that case.
-  for (const auto& leaf : caf::get<record_type>(slice.schema()).leaves()) {
-    if (const auto* lt = caf::get_if<list_type>(&leaf.field.type)) {
-      if (caf::holds_alternative<record_type>(lt->value_type())) {
-        VAST_WARN("flatten may produce wrong results for records inside lists "
-                  "inside records; this bug will be fixed in a future release");
-        break;
-      }
-    }
-  }
-  // NOTE: We cannot use arrow::StructArray::Flatten here because that does not
+  // We cannot use arrow::StructArray::Flatten here because that does not
   // work recursively, see apache/arrow#20683. Hence, we roll our own version
   // here.
   auto renamed_fields = std::vector<std::string>{};
