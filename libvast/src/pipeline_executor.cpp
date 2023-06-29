@@ -187,8 +187,8 @@ auto pipeline_executor(
       self->send_exit(*it, msg.reason);
     }
     self->state.exec_nodes.erase(self->state.exec_nodes.begin(), exec_node + 1);
-    if (msg.reason != caf::error{}
-        && msg.reason != caf::exit_reason::unreachable) {
+    if (msg.reason and msg.reason != caf::exit_reason::unreachable
+        and msg.reason != caf::exit_reason::user_shutdown) {
       self->quit(std::move(msg.reason));
     } else if (self->state.exec_nodes.empty()) {
       self->quit();

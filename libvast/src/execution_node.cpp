@@ -198,7 +198,6 @@ struct inbound_state_mixin {
 
   std::vector<Input> inbound_buffer = {};
   uint64_t inbound_buffer_size = {};
-  uint64_t inbound_total = {};
 };
 
 template <>
@@ -210,7 +209,6 @@ struct outbound_state_mixin {
   /// transported to the next operator's execution node.
   std::vector<Output> outbound_buffer = {};
   uint64_t outbound_buffer_size = {};
-  uint64_t outbound_total = {};
 
   /// The currently open demand.
   struct demand {
@@ -244,6 +242,11 @@ struct exec_node_state : inbound_state_mixin<Input>,
     generator<Output>::iterator it = {};
   };
   std::optional<resumable_generator> instance = {};
+
+  // Metrics that track the total number of inbound and outbound elements that
+  // passed through this operator.
+  uint64_t inbound_total = {};
+  uint64_t outbound_total = {};
 
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.
@@ -281,17 +284,15 @@ struct exec_node_state : inbound_state_mixin<Input>,
       self->monitor(this->previous);
       self->set_down_handler([this](const caf::down_msg& msg) {
         if (msg.source != this->previous.address()) {
-          // FIXME: ctrl warn
-          VAST_WARN("ignores down msg from unknown source: {}", msg.reason);
+          VAST_DEBUG("ignores down msg from unknown source: {}", msg.reason);
           return;
         }
         this->previous = nullptr;
         if (msg.reason) {
-          // FIXME: ctrl abort
-          VAST_WARN("shuts down because of irregular exit of previous exec "
-                    "node: {}",
-                    msg.reason);
-          self->quit(msg.reason);
+          ctrl->abort(caf::make_error(
+            ec::unspecified, fmt::format("{} shuts down because of irregular "
+                                         "exit of previous operator: {}",
+                                         op, msg.reason)));
         }
       });
     }
@@ -375,7 +376,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
       ++instance->it;
       if (size(next) > 0) {
         this->outbound_buffer_size += size(next);
-        this->outbound_total += size(next);
         this->outbound_buffer.push_back(std::move(next));
       }
     } else {
@@ -440,9 +440,19 @@ struct exec_node_state : inbound_state_mixin<Input>,
       return;
     }
     this->current_demand->ongoing = true;
-    auto handle_result = [this]() {
-      auto [lhs, rhs]
-        = split(this->outbound_buffer, this->current_demand->batch_size);
+    const auto capped_demand
+      = std::min(this->outbound_buffer_size, this->current_demand->batch_size);
+    if (capped_demand == 0) {
+      VAST_DEBUG("{} short-circuits delivery of zero batches", op);
+      this->current_demand->rp.deliver();
+      this->current_demand.reset();
+      schedule_run();
+      return;
+    }
+    auto [lhs, _] = split(this->outbound_buffer, capped_demand);
+    auto handle_result = [this, capped_demand]() {
+      outbound_total += capped_demand;
+      auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
       this->outbound_buffer = std::move(rhs);
       this->outbound_buffer_size
         = std::transform_reduce(this->outbound_buffer.begin(),
@@ -459,8 +469,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
       this->current_demand.reset();
       schedule_run();
     };
-    auto [lhs, _]
-      = split(this->outbound_buffer, this->current_demand->batch_size);
     auto response_handle = self->request(
       this->current_demand->sink, caf::infinite, atom::push_v, std::move(lhs));
     if (force) {
@@ -479,24 +487,29 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // Check if we're done.
     if (instance->it == instance->gen.end()) {
       // Shut down the previous execution node immediately if we're done.
+      // We send an unreachable error here slightly before this execution
+      // node shuts down. This is merely an optimization; we call self->quit
+      // a tiny bit later anyways, which would send the same exit reason
+      // upstream implicitly. However, doing this early is nice because we
+      // can prevent the upstream operators from running unnecessarily.
       if constexpr (not std::is_same_v<Input, std::monostate>) {
         if (this->previous) {
-          // TODO: Should this send an error so the previous node shuts down
-          // immediately?
-          self->send_exit(this->previous, {});
+          self->send_exit(this->previous, caf::exit_reason::unreachable);
         }
       }
-      // If we've got further batches to deliver, do that right away.
+      // When we're done, we must make sure that we have delivered all results
+      // to the next operator. This has the following pre-requisites:
+      // - The generator must be completed (already checked here).
+      // - There must not be any outstanding demand.
+      // - There must not be anything remaining in the buffer.
       if constexpr (not std::is_same_v<Output, std::monostate>) {
-        // TODO: 'version | repeat 10000 | top version' returns less than 10k
-        // events. Likely because this logic is not correct quite yet. Not sure.
         if (this->current_demand or this->outbound_buffer_size > 0) {
           this->reject_demand = true;
           deliver_batches(now, true);
-          schedule_run(defaults::max_batch_timeout);
           return;
         }
       }
+      VAST_DEBUG("{} is done; in={} out={}", op, inbound_total, outbound_total);
       self->quit();
       return;
     }
@@ -553,6 +566,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
       input.begin(), input.end(), uint64_t{}, std::plus{}, [](const Input& x) {
         return size(x);
       });
+    if (input_size == 0) {
+      return caf::make_error(ec::logic_error, "received empty batch");
+    }
     if (this->inbound_buffer_size + input_size > defaults::max_buffered) {
       return caf::make_error(ec::logic_error, "inbound buffer full");
     }
@@ -560,7 +576,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
                                 std::make_move_iterator(input.begin()),
                                 std::make_move_iterator(input.end()));
     this->inbound_buffer_size += input_size;
-    this->inbound_total += input_size;
+    inbound_total += input_size;
     return {};
   }
 };
