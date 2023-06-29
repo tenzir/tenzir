@@ -772,15 +772,7 @@ table_slice resolve_enumerations(table_slice slice) {
     };
     transformations.push_back({index, transformation});
   }
-  if (transformations.empty())
-    return slice;
-  auto transform_result = transform_columns(
-    slice.schema(), to_record_batch(slice), transformations);
-  return table_slice{
-    std::move(transform_result).second,
-    std::move(transform_result).first,
-    table_slice::serialize::no,
-  };
+  return transform_columns(slice, transformations);
 }
 
 auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
@@ -888,6 +880,249 @@ auto resolve_operand(const table_slice& slice, const operand& op)
   return {
     std::move(inferred_type),
     std::move(array),
+  };
+}
+
+namespace {
+
+/// Combines offsets such that starting with the first array the list offsets
+/// are replaced with the values of the next list offsets array, repeated until
+/// all list offsets arrays have been combined into one. This allows for
+/// flattening lists in Arrow's data model.
+auto combine_offsets(
+  const std::vector<std::shared_ptr<arrow::Array>>& list_offsets)
+  -> std::shared_ptr<arrow::Array> {
+  VAST_ASSERT(not list_offsets.empty());
+  auto it = list_offsets.begin();
+  auto result = *it++;
+  auto builder = arrow::Int32Builder{};
+  for (; it < list_offsets.end(); ++it) {
+    for (const auto& index : static_cast<const arrow::Int32Array&>(*result)) {
+      VAST_ASSERT(index);
+      const auto& next = static_cast<const arrow::Int32Array&>(**it);
+      VAST_ASSERT(not next.IsNull(*index));
+      auto append_result = builder.Append(next.Value(*index));
+      VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+    }
+    result = builder.Finish().ValueOrDie();
+  }
+  return result;
+}
+
+auto make_flatten_transformation(
+  std::string_view separator, const std::string& name_prefix,
+  std::vector<std::shared_ptr<arrow::Array>> list_offsets)
+  -> indexed_transformation::function_type;
+
+auto flatten_record(
+  std::string_view separator, std::string_view name_prefix,
+  const std::vector<std::shared_ptr<arrow::Array>>& list_offsets,
+  struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
+  -> indexed_transformation::result_type;
+
+auto flatten_list(std::string_view separator, std::string_view name_prefix,
+                  std::vector<std::shared_ptr<arrow::Array>> list_offsets,
+                  struct record_type::field field,
+                  const std::shared_ptr<arrow::Array>& array)
+  -> indexed_transformation::result_type {
+  const auto& lt = caf::get<list_type>(field.type);
+  auto list_array
+    = std::static_pointer_cast<type_to_arrow_array_t<list_type>>(array);
+  list_offsets.push_back(list_array->offsets());
+  auto f = detail::overload{
+    [&]<concrete_type Type>(
+      const Type&) -> indexed_transformation::result_type {
+      auto result = indexed_transformation::result_type{};
+      if (list_offsets.empty()) {
+        result.push_back({
+          {
+            fmt::format("{}{}", name_prefix, field.name),
+            field.type,
+          },
+          array,
+        });
+      } else {
+        auto combined_offsets = combine_offsets(list_offsets);
+        result.push_back({
+          {
+            fmt::format("{}{}", name_prefix, field.name),
+            field.type,
+          },
+          arrow::ListArray::FromArrays(*combined_offsets, *list_array->values())
+            .ValueOrDie(),
+        });
+      }
+      return result;
+    },
+    [&](const list_type& lt) -> indexed_transformation::result_type {
+      return flatten_list(separator, name_prefix, std::move(list_offsets),
+                          {field.name, lt}, list_array->values());
+    },
+    [&](const record_type& rt) -> indexed_transformation::result_type {
+      return flatten_record(separator, name_prefix, list_offsets,
+                            {field.name, rt}, list_array->values());
+    },
+  };
+  return caf::visit(f, lt.value_type());
+}
+
+auto flatten_record(
+  std::string_view separator, std::string_view name_prefix,
+  const std::vector<std::shared_ptr<arrow::Array>>& list_offsets,
+  struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
+  -> indexed_transformation::result_type {
+  const auto& rt = caf::get<record_type>(field.type);
+  auto struct_array
+    = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
+  const auto next_name_prefix
+    = fmt::format("{}{}{}", name_prefix, field.name, separator);
+  auto transformations = std::vector<indexed_transformation>{};
+  for (size_t i = 0; i < rt.num_fields(); ++i) {
+    transformations.push_back(
+      {offset{i},
+       make_flatten_transformation(separator, next_name_prefix, list_offsets)});
+  }
+  auto [output_type, output_struct_array]
+    = transform_columns(field.type, struct_array, transformations);
+  VAST_ASSERT(output_type);
+  VAST_ASSERT(output_struct_array);
+  auto result = indexed_transformation::result_type{};
+  result.reserve(output_struct_array->num_fields());
+  const auto& output_rt = caf::get<record_type>(output_type);
+  for (int i = 0; i < output_struct_array->num_fields(); ++i) {
+    const auto field_view = output_rt.field(i);
+    result.push_back({
+      {std::string{field_view.name}, field_view.type},
+      output_struct_array->field(i),
+    });
+  }
+  return result;
+}
+
+auto make_flatten_transformation(
+  std::string_view separator, const std::string& name_prefix,
+  std::vector<std::shared_ptr<arrow::Array>> list_offsets)
+  -> indexed_transformation::function_type {
+  return [=](struct record_type::field field,
+             std::shared_ptr<arrow::Array> array)
+           -> indexed_transformation::result_type {
+    auto f = detail::overload{
+      [&]<concrete_type Type>(
+        const Type&) -> indexed_transformation::result_type {
+        // Return unchanged, but use prefix, and wrap in a list if we need to.
+        if (list_offsets.empty()) {
+          return {
+            {
+              {
+                fmt::format("{}{}", name_prefix, field.name),
+                field.type,
+              },
+              array,
+            },
+          };
+        }
+        auto combined_offsets = combine_offsets(list_offsets);
+        return {
+          {
+            {
+              fmt::format("{}{}", name_prefix, field.name),
+              type{list_type{field.type}},
+            },
+            arrow::ListArray::FromArrays(*combined_offsets, *array).ValueOrDie(),
+          },
+        };
+      },
+      [&](const list_type&) -> indexed_transformation::result_type {
+        return flatten_list(separator, name_prefix, list_offsets,
+                            std::move(field), array);
+      },
+      [&](const record_type&) -> indexed_transformation::result_type {
+        return flatten_record(separator, name_prefix, list_offsets,
+                              std::move(field), array);
+      },
+    };
+    auto result = caf::visit(f, field.type);
+    return result;
+  };
+}
+
+auto make_rename_transformation(std::string new_name)
+  -> indexed_transformation::function_type {
+  return [new_name = std::move(new_name)](struct record_type::field field,
+                                          std::shared_ptr<arrow::Array> array)
+           -> std::vector<std::pair<struct record_type::field,
+                                    std::shared_ptr<arrow::Array>>> {
+    return {
+      {
+        {
+          new_name,
+          field.type,
+        },
+        array,
+      },
+    };
+  };
+}
+
+} // namespace
+
+auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
+  if (slice.rows() == 0)
+    return {std::move(slice), {}};
+  // We cannot use arrow::StructArray::Flatten here because that does not
+  // work recursively, see apache/arrow#20683. Hence, we roll our own version
+  // here.
+  auto renamed_fields = std::vector<std::string>{};
+  auto transformations = std::vector<indexed_transformation>{};
+  auto num_fields = caf::get<record_type>(slice.schema()).num_fields();
+  transformations.reserve(num_fields);
+  for (size_t i = 0; i < num_fields; ++i) {
+    transformations.push_back(
+      {offset{i}, make_flatten_transformation(separator, "", {})});
+  }
+  slice = transform_columns(slice, transformations);
+  // Flattening cannot fail.
+  VAST_ASSERT(slice.rows() > 0);
+  // The slice may contain duplicate field name here, so we perform an
+  // additional transformation to rename them in case we detect any.
+  transformations.clear();
+  const auto& layout = caf::get<record_type>(slice.schema());
+  VAST_ASSERT(layout.num_fields() == layout.num_leaves());
+  for (const auto& leaf : layout.leaves()) {
+    size_t num_occurences = 0;
+    if (std::any_of(transformations.begin(), transformations.end(),
+                    [&](const auto& t) {
+                      return t.index == leaf.index;
+                    }))
+      continue;
+    for (const auto& index : layout.resolve_key_suffix(leaf.field.name)) {
+      if (index <= leaf.index)
+        continue;
+      while (true) {
+        ++num_occurences;
+        if (num_occurences > 0) {
+          auto new_name = fmt::format("{}_{}", leaf.field.name, num_occurences);
+          if (layout.resolve_key(new_name).has_value()) {
+            // The new field name also already exists, so we just continue
+            // incrementing until we find a non-conflicting name.
+            continue;
+          }
+          renamed_fields.push_back(
+            fmt::format("{} -> {}", leaf.field.name, new_name));
+          transformations.push_back(
+            {index, make_rename_transformation(std::move(new_name))});
+        }
+        break;
+      }
+    }
+  }
+  VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end()));
+  slice = transform_columns(slice, transformations);
+  // Renaming cannot fail.
+  VAST_ASSERT(slice.rows() > 0);
+  return {
+    std::move(slice),
+    std::move(renamed_fields),
   };
 }
 

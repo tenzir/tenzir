@@ -680,37 +680,38 @@ public:
   explicit zeek_tsv_printer(args a) : args_{std::move(a)} {
   }
 
-  auto instantiate(type input_schema, operator_control_plane&) const
+  auto
+  instantiate([[maybe_unused]] type input_schema, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto printer = zeek_printer{args_.set_sep.value_or(','),
                                 args_.empty_field.value_or("(empty)"),
                                 args_.unset_field.value_or("-"),
                                 args_.disable_timestamp_tags};
-    return printer_instance::make(
-      [printer = std::move(printer), input_schema = std::move(input_schema)](
-        table_slice slice) -> generator<chunk_ptr> {
-        auto input_type = caf::get<record_type>(input_schema);
-        auto buffer = std::vector<char>{};
-        auto out_iter = std::back_inserter(buffer);
-        auto resolved_slice = resolve_enumerations(slice);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-        auto first = true;
-        for (const auto& row : values(input_type, *array)) {
-          VAST_ASSERT_CHEAP(row);
-          if (first) {
-            printer.print_header(out_iter, input_schema);
-            first = false;
-            out_iter = fmt::format_to(out_iter, "\n");
-          }
-          const auto ok = printer.print_values(out_iter, *row);
-          VAST_ASSERT_CHEAP(ok);
+    return printer_instance::make([printer = std::move(printer)](
+                                    table_slice slice) -> generator<chunk_ptr> {
+      auto buffer = std::vector<char>{};
+      auto out_iter = std::back_inserter(buffer);
+      auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
+      auto input_schema = resolved_slice.schema();
+      auto input_type = caf::get<record_type>(input_schema);
+      auto array
+        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto first = true;
+      for (const auto& row : values(input_type, *array)) {
+        VAST_ASSERT_CHEAP(row);
+        if (first) {
+          printer.print_header(out_iter, input_schema);
+          first = false;
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        printer.print_closing_line(out_iter);
-        auto chunk = chunk::make(std::move(buffer));
-        co_yield std::move(chunk);
-      });
+        const auto ok = printer.print_values(out_iter, *row);
+        VAST_ASSERT_CHEAP(ok);
+        out_iter = fmt::format_to(out_iter, "\n");
+      }
+      printer.print_closing_line(out_iter);
+      auto chunk = chunk::make(std::move(buffer));
+      co_yield std::move(chunk);
+    });
   }
 
   auto allows_joining() const -> bool override {

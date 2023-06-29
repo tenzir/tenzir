@@ -289,11 +289,9 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 
 // -- utility functions -------------------------------------------------------
 
-std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
-  type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
+std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
+  type schema, const std::shared_ptr<arrow::StructArray>& struct_array,
   const std::vector<indexed_transformation>& transformations) noexcept {
-  VAST_ASSERT(batch->schema()->Equals(schema.to_arrow_schema()),
-              "VAST schema and Arrow schema must match");
   VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
               "transformations must be sorted by index");
   VAST_ASSERT(transformations.end()
@@ -386,14 +384,15 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
     return result;
   };
   if (transformations.empty())
-    return {schema, batch};
+    return {schema, struct_array};
   auto current = transformations.begin();
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{
     .fields = {},
-    .arrays = batch->ToStructArray().ValueOrDie()->Flatten().ValueOrDie(),
+    .arrays = struct_array->Flatten().ValueOrDie(),
   };
-  const auto num_columns = detail::narrow_cast<size_t>(batch->num_columns());
+  const auto num_columns
+    = detail::narrow_cast<size_t>(struct_array->num_fields());
   layer.fields.reserve(num_columns);
   for (auto&& [name, type] : caf::get<record_type>(schema).fields())
     layer.fields.push_back({std::string{name}, type});
@@ -406,17 +405,19 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
     return {};
   auto new_schema = type{record_type{layer.fields}};
   new_schema.assign_metadata(schema);
-  auto arrow_schema = new_schema.to_arrow_schema();
-  const auto num_rows = layer.arrays[0]->length();
-  auto new_batch = arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
-                                            std::move(layer.arrays));
+  auto arrow_fields = arrow::FieldVector{};
+  arrow_fields.reserve(layer.fields.size());
+  for (const auto& field : layer.fields)
+    arrow_fields.push_back(field.type.to_arrow_field(field.name));
+  auto new_struct_array
+    = arrow::StructArray::Make(layer.arrays, arrow_fields).ValueOrDie();
 #if VAST_ENABLE_ASSERTIONS
-  auto validate_status = new_batch->ValidateFull();
+  auto validate_status = new_struct_array->Validate();
   VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
 #endif // VAST_ENABLE_ASSERTIONS
   return {
     std::move(new_schema),
-    std::move(new_batch),
+    std::move(new_struct_array),
   };
 }
 
@@ -425,11 +426,16 @@ table_slice transform_columns(
   const std::vector<indexed_transformation>& transformations) noexcept {
   if (slice.encoding() == table_slice_encoding::none)
     return {};
-  auto [schema, batch] = transform_columns(
-    slice.schema(), to_record_batch(slice), transformations);
-  if (!schema)
+  auto input_batch = to_record_batch(slice);
+  auto input_struct_array = input_batch->ToStructArray().ValueOrDie();
+  auto [output_schema, output_struct_array]
+    = transform_columns(slice.schema(), input_struct_array, transformations);
+  if (!output_schema)
     return {};
-  auto result = table_slice{batch, std::move(schema)};
+  auto output_batch = arrow::RecordBatch::Make(output_schema.to_arrow_schema(),
+                                               output_struct_array->length(),
+                                               output_struct_array->fields());
+  auto result = table_slice{output_batch, std::move(output_schema)};
   result.offset(slice.offset());
   result.import_time(slice.import_time());
   return result;

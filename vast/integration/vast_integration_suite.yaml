@@ -976,3 +976,26 @@ tests:
       # N
       - command: exec 'read zeek-json | summarize x=distinct(y)'
         input: data/zeek/zeek.json
+
+  Flatten Operator:
+    tags: [pipelines, zeek]
+    steps:
+      - command: exec 'read zeek-tsv | tail 10 | flatten | to stdout'
+        input: data/zeek/dns.log.gz
+    # TODO: Reenable tests with only record flattening.
+    # - command: exec 'read zeek-tsv | tail 10 | flatten -l | to stdout'
+    #   input: data/zeek/dns.log.gz
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/nested-object.json
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/nested-structure.json
+    # - command: exec 'read json | flatten -l | to stdout'
+    #   input: data/json/nested-structure.json
+      - command: exec 'read json | flatten | to stdout'
+        input: data/json/record-in-list.json
+    # - command: exec 'read json | flatten -l | to stdout'
+    #   input: data/json/record-in-list.json
+      - command: exec 'read suricata | flatten | to stdout'
+        input: data/suricata/eve.json
+      - command: exec 'read suricata | flatten | to stdout'
+        input: data/suricata/rrdata-eve.json
