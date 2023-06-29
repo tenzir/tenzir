@@ -598,6 +598,7 @@ jobs:
     runs-on: ${{ matrix.tenzir.os }}
     container: ${{ matrix.tenzir.container }}
     strategy:
+      fail-fast: false
       matrix:
         tenzir:
           - os: ubuntu-20.04
