@@ -26,7 +26,7 @@ struct pipeline_executor_state {
 
   // The diagnostic handler that receives diagnostics from all the execution
   // nodes.
-  std::unique_ptr<diagnostic_handler> diagnostic_handler = {};
+  std::unique_ptr<diagnostic_handler> diagnostics = {};
 
   /// Flag for allowing unsafe pipelines.
   bool allow_unsafe_pipelines = {};
@@ -41,7 +41,7 @@ struct pipeline_executor_state {
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, std::unique_ptr<diagnostic_handler> diagnostic_handler,
+  pipeline pipe, std::unique_ptr<diagnostic_handler> diagnostics,
   node_actor node) -> pipeline_executor_actor::behavior_type;
 
 } // namespace vast

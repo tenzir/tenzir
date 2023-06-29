@@ -171,7 +171,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, std::unique_ptr<diagnostic_handler> diagnostic_handler,
+  pipeline pipe, std::unique_ptr<diagnostic_handler> diagnostics,
   node_actor node) -> pipeline_executor_actor::behavior_type {
   self->state.self = self;
   self->state.node = std::move(node);
@@ -204,7 +204,7 @@ auto pipeline_executor(
     return pipeline_executor_actor::behavior_type::make_empty_behavior();
   }
   self->state.pipe = std::move(pipe);
-  self->state.diagnostic_handler = std::move(diagnostic_handler);
+  self->state.diagnostics = std::move(diagnostics);
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "tenzir.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
@@ -214,7 +214,7 @@ auto pipeline_executor(
     },
     [self](diagnostic& d) -> caf::result<void> {
       VAST_DEBUG("{} received diagnostic: {}", *self, d);
-      self->state.diagnostic_handler->emit(std::move(d));
+      self->state.diagnostics->emit(std::move(d));
       return {};
     },
   };
