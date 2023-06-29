@@ -1,0 +1,5 @@
+# This configuration is equivalent to the librdkafka configuration documented at
+# https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md.
+bootstrap.servers: localhost
+group.id: tenzir
+enable.auto.commit: true

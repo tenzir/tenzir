@@ -12,6 +12,7 @@ brew install \
     gnu-sed \
     http-parser \
     libpcap \
+    librdkafka \
     libunwind-headers \
     llvm \
     ninja \

@@ -25,6 +25,7 @@
     jemalloc,
     libunwind,
     xxHash,
+    rdkafka,
     re2,
     dpkg,
     restinio,
@@ -56,10 +57,7 @@
     extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
     bundledPlugins =
       [
-        "plugins/cef"
-        "plugins/parquet"
-        "plugins/pcap"
-        "plugins/web"
+        "plugins/*"
       ]
       ++ extraPlugins';
   in
@@ -92,6 +90,7 @@
           libpcap
           libunwind
           libyamlcpp
+          rdkafka
           re2
           restinio
         ];
