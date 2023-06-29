@@ -91,6 +91,8 @@ if [[ true ]]; then
     * Removed the docs for the previous release candidate.'
   else
   fi
+  # The `|| true`s in the next two lines work around a `zsh` behavior where
+  # a globbed `rm` fails if the glob doesn't match anything.
   rm -rf "versioned_docs/version-${new_version_name%-*}"* || true
   rm -rf "versioned_sidebars/version-${new_version_name%-*}"*-sidebars.json || true
   # And this actually cuts a new docs version:
