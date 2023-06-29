@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/connect_to_node.hpp>
 #include <vast/detail/load_contents.hpp>
 #include <vast/diagnostics.hpp>
 #include <vast/logger.hpp>
@@ -47,7 +48,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
     }
     pipe.append(std::move(*op));
   }
-  caf::scoped_actor self{sys};
+  auto self = caf::scoped_actor{sys};
   auto executor = self->spawn<caf::monitored>(
     pipeline_executor, std::move(pipe), std::move(diag), node_actor{});
   auto result = caf::expected<void>{};

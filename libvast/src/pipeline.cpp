@@ -170,6 +170,10 @@ auto pipeline::unwrap() && -> std::vector<operator_ptr> {
   return std::move(operators_);
 }
 
+auto pipeline::operators() const& -> std::span<const operator_ptr> {
+  return operators_;
+}
+
 auto pipeline::optimize() const -> caf::expected<pipeline> {
   auto optimized = predicate_pushdown_pipeline(trivially_true_expression());
   if (not optimized) {

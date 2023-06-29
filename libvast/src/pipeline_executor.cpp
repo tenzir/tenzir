@@ -9,6 +9,7 @@
 #include "vast/pipeline_executor.hpp"
 
 #include "vast/actors.hpp"
+#include "vast/atoms.hpp"
 #include "vast/connect_to_node.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/diagnostics.hpp"
@@ -30,55 +31,138 @@
 
 namespace vast {
 
-auto pipeline_executor_state::start() -> caf::result<void> {
-  if (not pipe) {
-    return caf::make_error(ec::logic_error,
-                           "pipeline exeuctor can only run pipeline once");
-  }
-  // Spawn pipeline piece by piece.
-  auto input_type = operator_type{tag_v<void>};
-  auto previous = exec_node_actor{};
-  // TODO: Rewrite me.
-  for (auto&& op : (*std::exchange(pipe, {})).unwrap()) {
-    // FIXME: check if op is remote
-    auto description = op->to_string();
-    auto spawn_result
-      = spawn_exec_node(self, std::move(op), input_type, node,
-                        static_cast<receiver_actor<diagnostic>>(self));
-    if (not spawn_result) {
-      auto error = caf::make_error(
-        ec::logic_error, fmt::format("{} failed to spawn execution node "
-                                     "for operator '{}': {}",
-                                     *self, description, spawn_result.error()));
-      // TODO: Twice the same error?
-      self->quit(error);
-      return error;
-    }
-    std::tie(previous, input_type) = std::move(*spawn_result);
-    exec_nodes.push_back(previous);
-  }
-  if (exec_nodes.empty()) {
-    self->quit();
-    return {};
-  }
+void pipeline_executor_state::start_nodes_if_all_spawned() {
   auto untyped_exec_nodes = std::vector<caf::actor>{};
   for (auto node : exec_nodes) {
+    if (not node) {
+      // Not all spawned yet.
+      return;
+    }
     untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
   }
   untyped_exec_nodes.pop_back();
-  auto rp = self->make_response_promise<void>();
   self
     ->request(exec_nodes.back(), caf::infinite, atom::start_v,
               std::move(untyped_exec_nodes))
     .then(
-      [rp]() mutable {
-        rp.deliver();
+      [this]() mutable {
+        start_rp.deliver();
       },
-      [this, rp](caf::error& err) mutable {
+      [this](caf::error& err) mutable {
         self->quit(err);
-        rp.deliver(std::move(err));
+        start_rp.deliver(std::move(err));
       });
-  return rp;
+}
+
+void pipeline_executor_state::spawn_execution_nodes(pipeline pipe,
+                                                    node_actor remote) {
+  // Spawn pipeline piece by piece.
+  auto input_type = operator_type{tag_v<void>};
+  auto previous = exec_node_actor{};
+  // TODO: Rewrite me.
+  bool spawn_remote = false;
+  for (auto&& op : std::move(pipe).unwrap()) {
+    if (spawn_remote and op->location() == operator_location::local) {
+      spawn_remote = false;
+    } else if (not spawn_remote
+               and op->location() == operator_location::remote) {
+      spawn_remote = true;
+    }
+    auto description = op->to_string();
+    if (spawn_remote) {
+      if (not remote) {
+        auto error
+          = caf::make_error(ec::invalid_argument,
+                            "encountered remote operator, but remote node "
+                            "is nullptr");
+        start_rp.deliver(error);
+        self->quit(error);
+        return;
+      }
+      // TODO: Consider doing this differently.
+      auto output_type = op->infer_type(input_type);
+      if (not output_type) {
+        auto error
+          = caf::make_error(ec::invalid_argument, "could not spawn '{}' for {}",
+                            description, input_type);
+        start_rp.deliver(error);
+        self->quit(error);
+        return;
+      }
+      auto index = exec_nodes.size();
+      exec_nodes.emplace_back();
+      self
+        ->request(remote, caf::infinite, atom::spawn_v,
+                  operator_box{std::move(op)}, input_type,
+                  static_cast<receiver_actor<diagnostic>>(self))
+        .then(
+          [this, index](exec_node_actor exec_node) {
+            // TODO: We should call `quit()` whenever `start()` fails to
+            // ensure that this will not be called afterwards (or we check for
+            // this case).
+            exec_nodes[index] = std::move(exec_node);
+            start_nodes_if_all_spawned();
+          },
+          [this](caf::error& err) {
+            self->quit(err);
+            // TODO: Is this safe?
+            start_rp.deliver(err);
+          });
+      input_type = *output_type;
+    } else {
+      auto spawn_result
+        = spawn_exec_node(self, std::move(op), input_type, node,
+                          static_cast<receiver_actor<diagnostic>>(self));
+      if (not spawn_result) {
+        auto error = caf::make_error(
+          ec::logic_error,
+          fmt::format("{} failed to spawn execution node "
+                      "for operator '{}': {}",
+                      *self, description, spawn_result.error()));
+        // TODO: Twice the same error?
+        self->quit(error);
+        start_rp.deliver(error);
+        return;
+      }
+      std::tie(previous, input_type) = std::move(*spawn_result);
+      exec_nodes.push_back(previous);
+    }
+  }
+  if (exec_nodes.empty()) {
+    self->quit();
+    start_rp.deliver();
+    return;
+  }
+  start_nodes_if_all_spawned();
+}
+
+auto pipeline_executor_state::start() -> caf::result<void> {
+  if (not this->pipe) {
+    return caf::make_error(ec::logic_error,
+                           "pipeline exeuctor can only run pipeline once");
+  }
+  auto pipe = *std::exchange(this->pipe, std::nullopt);
+  start_rp = self->make_response_promise<void>();
+  // Find remote note if we need one. TODO: this->node?
+  auto remote_node = node_actor{};
+  for (const auto& op : pipe.operators()) {
+    if (op->location() == operator_location::remote) {
+      connect_to_node(
+        self, content(self->system().config()),
+        // We use a shared_ptr because of non-copyable operator_ptr.
+        [this, pipe = std::move(pipe)](caf::expected<node_actor> node) mutable {
+          if (not node) {
+            start_rp.deliver(node.error());
+            self->quit(node.error());
+            return;
+          }
+          spawn_execution_nodes(std::move(pipe), *node);
+        });
+      return start_rp;
+    }
+  }
+  spawn_execution_nodes(std::move(pipe), node_actor{});
+  return start_rp;
 }
 
 auto pipeline_executor(

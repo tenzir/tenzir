@@ -22,6 +22,7 @@ struct pipeline_executor_state {
   /// The currently running pipeline.
   std::optional<pipeline> pipe = {};
   std::vector<exec_node_actor> exec_nodes = {};
+  caf::typed_response_promise<void> start_rp = {};
 
   // The diagnostic handler that receives diagnostics from all the execution
   // nodes.
@@ -31,6 +32,10 @@ struct pipeline_executor_state {
   bool allow_unsafe_pipelines = {};
 
   auto start() -> caf::result<void>;
+
+  void start_nodes_if_all_spawned();
+
+  void spawn_execution_nodes(pipeline pipe, node_actor remote);
 };
 
 /// Start a pipeline executor for a given pipeline.

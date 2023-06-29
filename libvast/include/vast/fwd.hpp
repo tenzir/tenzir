@@ -152,6 +152,7 @@ class map_type;
 class module;
 class null_bitmap;
 class operator_base;
+class operator_box;
 class parser_interface;
 class passive_store;
 class pattern;
@@ -408,6 +409,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::module))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::null_bitmap))
+  VAST_ADD_TYPE_ID((vast::operator_box))
   VAST_ADD_TYPE_ID((vast::operator_type))
   VAST_ADD_TYPE_ID((vast::partition_info))
   VAST_ADD_TYPE_ID((vast::partition_synopsis_pair))

@@ -438,10 +438,8 @@ using node_actor = typed_actor_fwd<
   auto(atom::config)->caf::result<record>,
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
-  auto(atom::spawn, pipeline, operator_type, exec_node_actor,
-       receiver_actor<diagnostic>)
-    ->caf::result<std::vector<
-      std::tuple<exec_node_actor, operator_type, std::string>>>>::unwrap;
+  auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>)
+    ->caf::result<exec_node_actor>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.
 using pipeline_executor_actor = typed_actor_fwd<
