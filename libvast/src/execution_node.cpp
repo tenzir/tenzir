@@ -662,9 +662,10 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       if constexpr (std::is_void_v<Input> and std::is_void_v<Output>) {
         die("unimplemented");
       } else {
-        auto result = self->spawn<SpawnOptions + caf::monitored + caf::linked>(
-          exec_node<input_type, output_type>, std::move(op), std::move(node),
-          std::move(diagnostic_handler));
+        auto result
+          = self->spawn<SpawnOptions>(exec_node<input_type, output_type>,
+                                      std::move(op), std::move(node),
+                                      std::move(diagnostic_handler));
         return result;
       }
     };

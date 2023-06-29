@@ -96,10 +96,12 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe,
                   operator_box{std::move(op)}, input_type,
                   static_cast<receiver_actor<diagnostic>>(self))
         .then(
-          [this, index](exec_node_actor exec_node) {
+          [this, index](exec_node_actor& exec_node) {
             // TODO: We should call `quit()` whenever `start()` fails to
             // ensure that this will not be called afterwards (or we check for
             // this case).
+            self->monitor(exec_node);
+            self->link_to(exec_node);
             exec_nodes[index] = std::move(exec_node);
             start_nodes_if_all_spawned();
           },
@@ -125,6 +127,8 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe,
         return;
       }
       std::tie(previous, input_type) = std::move(*spawn_result);
+      self->monitor(previous);
+      self->link_to(previous);
       exec_nodes.push_back(previous);
     }
   }
