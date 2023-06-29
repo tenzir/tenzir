@@ -166,9 +166,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
                                std::move(content));
     return result;
   }
-  return exec_impl(std::move(content),
-                   make_diagnostic_printer(filename, content, true, std::cerr),
-                   dump_ast, sys);
+  auto printer = make_diagnostic_printer(filename, content, true, std::cerr);
+  return exec_impl(std::move(content), std::move(printer), dump_ast, sys);
 }
 
 class plugin final : public virtual command_plugin {
