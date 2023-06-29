@@ -289,9 +289,6 @@ tests:
         input: data/suricata/rrdata-eve.json
       - command: -N export ascii
       - command: -N export json
-        # TODO: We should test this with the `flatten` operator, but that is
-        # currently defunct for lists in records in lists.
-        # - command: -N export json 'flatten'
 
   Node argus csv:
     tags: [node, import-export, argus, csv]
@@ -997,3 +994,5 @@ tests:
     #   input: data/json/record-in-list.json
       - command: exec 'read suricata | flatten | to stdout'
         input: data/suricata/eve.json
+      - command: exec 'read suricata | flatten | to stdout'
+        input: data/suricata/rrdata-eve.json
