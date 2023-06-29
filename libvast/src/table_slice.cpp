@@ -910,17 +910,17 @@ auto combine_offsets(
 }
 
 auto make_flatten_transformation(
-  const flatten_options& opt, const std::string& name_prefix,
+  std::string_view separator, const std::string& name_prefix,
   std::vector<std::shared_ptr<arrow::Array>> list_offsets)
   -> indexed_transformation::function_type;
 
 auto flatten_record(
-  const flatten_options& opt, std::string_view name_prefix,
+  std::string_view separator, std::string_view name_prefix,
   const std::vector<std::shared_ptr<arrow::Array>>& list_offsets,
   struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
   -> indexed_transformation::result_type;
 
-auto flatten_list(const flatten_options& opt, std::string_view name_prefix,
+auto flatten_list(std::string_view separator, std::string_view name_prefix,
                   std::vector<std::shared_ptr<arrow::Array>> list_offsets,
                   struct record_type::field field,
                   const std::shared_ptr<arrow::Array>& array)
@@ -955,19 +955,19 @@ auto flatten_list(const flatten_options& opt, std::string_view name_prefix,
       return result;
     },
     [&](const list_type& lt) -> indexed_transformation::result_type {
-      return flatten_list(opt, name_prefix, std::move(list_offsets),
+      return flatten_list(separator, name_prefix, std::move(list_offsets),
                           {field.name, lt}, list_array->values());
     },
     [&](const record_type& rt) -> indexed_transformation::result_type {
-      return flatten_record(opt, name_prefix, list_offsets, {field.name, rt},
-                            list_array->values());
+      return flatten_record(separator, name_prefix, list_offsets,
+                            {field.name, rt}, list_array->values());
     },
   };
   return caf::visit(f, lt.value_type());
 }
 
 auto flatten_record(
-  const flatten_options& opt, std::string_view name_prefix,
+  std::string_view separator, std::string_view name_prefix,
   const std::vector<std::shared_ptr<arrow::Array>>& list_offsets,
   struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
   -> indexed_transformation::result_type {
@@ -975,12 +975,12 @@ auto flatten_record(
   auto struct_array
     = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
   const auto next_name_prefix
-    = fmt::format("{}{}{}", name_prefix, field.name, opt.separator);
+    = fmt::format("{}{}{}", name_prefix, field.name, separator);
   auto transformations = std::vector<indexed_transformation>{};
   for (size_t i = 0; i < rt.num_fields(); ++i) {
     transformations.push_back(
       {offset{i},
-       make_flatten_transformation(opt, next_name_prefix, list_offsets)});
+       make_flatten_transformation(separator, next_name_prefix, list_offsets)});
   }
   auto [output_type, output_struct_array]
     = transform_columns(field.type, struct_array, transformations);
@@ -1000,7 +1000,7 @@ auto flatten_record(
 }
 
 auto make_flatten_transformation(
-  const flatten_options& opt, const std::string& name_prefix,
+  std::string_view separator, const std::string& name_prefix,
   std::vector<std::shared_ptr<arrow::Array>> list_offsets)
   -> indexed_transformation::function_type {
   return [=](struct record_type::field field,
@@ -1033,15 +1033,12 @@ auto make_flatten_transformation(
         };
       },
       [&](const list_type&) -> indexed_transformation::result_type {
-        if (opt.ignore_lists) {
-          return {{{field.name, field.type}, array}};
-        }
-        return flatten_list(opt, name_prefix, list_offsets, std::move(field),
-                            array);
+        return flatten_list(separator, name_prefix, list_offsets,
+                            std::move(field), array);
       },
       [&](const record_type&) -> indexed_transformation::result_type {
-        return flatten_record(opt, name_prefix, list_offsets, std::move(field),
-                              array);
+        return flatten_record(separator, name_prefix, list_offsets,
+                              std::move(field), array);
       },
     };
     auto result = caf::visit(f, field.type);
@@ -1069,7 +1066,7 @@ auto make_rename_transformation(std::string new_name)
 
 } // namespace
 
-auto flatten(table_slice slice, flatten_options opt) -> flatten_result {
+auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   if (slice.rows() == 0)
     return {std::move(slice), {}};
   // We cannot use arrow::StructArray::Flatten here because that does not
@@ -1081,7 +1078,7 @@ auto flatten(table_slice slice, flatten_options opt) -> flatten_result {
   transformations.reserve(num_fields);
   for (size_t i = 0; i < num_fields; ++i) {
     transformations.push_back(
-      {offset{i}, make_flatten_transformation(opt, "", {})});
+      {offset{i}, make_flatten_transformation(separator, "", {})});
   }
   slice = transform_columns(slice, transformations);
   // Flattening cannot fail.

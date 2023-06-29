@@ -409,13 +409,6 @@ struct flatten_result {
   std::vector<std::string> renamed_fields = {};
 };
 
-/// @related flatten
-struct flatten_options {
-  static constexpr auto default_flatten_separator = ".";
-  std::string separator = default_flatten_separator;
-  bool ignore_lists = false;
-};
-
 /// Flattens a table slice such that it no longer contains nested data
 /// structures by joining nested records over the provided separator and merging
 /// nested lists. Flattening removes all null elements in lists.
@@ -425,9 +418,9 @@ struct flatten_options {
 /// alongside the flattened slice.
 ///
 /// @param slice The unflattened table slice.
-/// @param options The options to consider during flattening, such as the
-/// separator or data structures to ignore.
-auto flatten(table_slice slice, flatten_options opt = {}) -> flatten_result;
+/// @param separator The separator to join record field names with.
+auto flatten(table_slice slice, std::string_view separator = ".")
+  -> flatten_result;
 
 } // namespace vast
 

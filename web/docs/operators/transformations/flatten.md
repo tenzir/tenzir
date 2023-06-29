@@ -5,7 +5,7 @@ Flattens nested data structures.
 ## Synopsis
 
 ```
-flatten [<separator>] [-l|--ignore-lists]
+flatten [<separator>]
 ```
 
 ## Description
@@ -23,12 +23,6 @@ data model.
 The separator string to join nested records with.
 
 Defaults to `.`.
-
-### `[-l|--ignore-lists]`
-
-Ignore all lists during flattening, leaving the values unflattened.
-
-Defaults to `false`.
 
 ## Examples
 
