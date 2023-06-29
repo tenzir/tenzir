@@ -206,11 +206,12 @@ storage.
 </Tabs>
 
 :::caution Unsafe Pipelines
-Some operators are inherently unsafe because of their side effects, e.g.,
-reading a file, acquiring packets from the network, or using a third-party
-library. We do not allow these operators by default in managed pipelines. You
-can lift this restriction by setting `tenzir.allow-unsafe-pipelines: true` in
-the `tenzir.yaml` of your node.
+Some pipeline operators are inherently unsafe due to their side effects, e.g.,
+reading from a file. When such operators run inside a node, you may
+involuntarily expose the file system to users that have access to the node. We
+therefore forbid pipelines with such side effects by default. You can remove
+this restriction by setting `tenzir.allow-unsafe-pipelines: true` in the
+`tenzir.yaml` of the respective node.
 :::
 
 ### Import data into a node
