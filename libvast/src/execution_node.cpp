@@ -299,6 +299,11 @@ struct exec_node_state : inbound_state_mixin<Input>,
         VAST_DEBUG("{} got down from previous execution node: {}", op->name(),
                    msg.reason);
         this->previous = nullptr;
+        // We empirically noticed that sometimes, we get a down message from a
+        // previous execution node in a different actor system, but do not get
+        // an error response to our demand request. To be able to shutdown
+        // correctly, we must set `signaled_demand` to false as a workaround.
+        this->signaled_demand = false;
         schedule_run();
         if (msg.reason) {
           ctrl->abort(caf::make_error(
@@ -461,6 +466,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     self->clock().schedule(self->clock().now(),
                            caf::make_action(
                              [this] {
+                               VAST_ASSERT(run_scheduled);
                                run_scheduled = false;
                                run();
                              },
@@ -589,11 +595,15 @@ struct exec_node_state : inbound_state_mixin<Input>,
         schedule_run();
       }
     } else {
-      if (not this->previous
-          or (not stalled
-              and (this->current_demand
-                   or (this->outbound_buffer_size < defaults::max_buffered
-                       and instance->it != instance->gen.end())))) {
+      auto can_generate = this->outbound_buffer_size < defaults::max_buffered
+                          and instance->it != instance->gen.end();
+      auto should_produce = this->current_demand.has_value();
+      auto is_previous_dead = not this->previous;
+      // VAST_DEBUG("{} {} {} {}", VAST_ARG(can_generate),
+      //            VAST_ARG(should_produce), VAST_ARG(is_previous_dead),
+      //            VAST_ARG(stalled));
+      if (is_previous_dead
+          or (not stalled and (should_produce or can_generate))) {
         schedule_run();
       }
     }
