@@ -49,11 +49,10 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
               std::move(untyped_exec_nodes))
     .then(
       [this]() mutable {
-        start_rp.deliver();
+        finish_start();
       },
       [this](caf::error& err) mutable {
-        self->quit(err);
-        start_rp.deliver(std::move(err));
+        abort_start(std::move(err));
       });
 }
 
@@ -73,23 +72,18 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     auto description = op->to_string();
     if (spawn_remote) {
       if (not node) {
-        auto error
-          = caf::make_error(ec::invalid_argument,
-                            "encountered remote operator, but remote node "
-                            "is nullptr");
-        start_rp.deliver(error);
-        self->quit(error);
+        abort_start(caf::make_error(
+          ec::invalid_argument, "encountered remote operator, but remote node "
+                                "is nullptr"));
         return;
       }
       // The node will instantiate the operator for us, but we already need its
       // output type to spawn the following operator.
       auto output_type = op->infer_type(input_type);
       if (not output_type) {
-        auto error
-          = caf::make_error(ec::invalid_argument, "could not spawn '{}' for {}",
-                            description, input_type);
-        start_rp.deliver(error);
-        self->quit(error);
+        abort_start(caf::make_error(ec::invalid_argument,
+                                    "could not spawn '{}' for {}", description,
+                                    input_type));
         return;
       }
       // Allocate an empty handle in the list of exec nodes. When the node actor
@@ -111,8 +105,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
             start_nodes_if_all_spawned();
           },
           [this](caf::error& err) {
-            self->quit(err);
-            start_rp.deliver(err);
+            abort_start(std::move(err));
           });
       input_type = *output_type;
     } else {
@@ -124,8 +117,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
           fmt::format("{} failed to spawn execution node "
                       "for operator '{}': {}",
                       *self, description, spawn_result.error()));
-        self->quit(error);
-        start_rp.deliver(error);
+        abort_start(std::move(error));
         return;
       }
       std::tie(previous, input_type) = std::move(*spawn_result);
@@ -135,11 +127,22 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     }
   }
   if (exec_nodes.empty()) {
+    finish_start();
     self->quit();
-    start_rp.deliver();
     return;
   }
   start_nodes_if_all_spawned();
+}
+
+void pipeline_executor_state::abort_start(caf::error reason) {
+  VAST_DEBUG("{} aborts start: {}", *self, reason);
+  start_rp.deliver(reason);
+  self->quit(std::move(reason));
+}
+
+void pipeline_executor_state::finish_start() {
+  VAST_DEBUG("{} signals start", *self);
+  start_rp.deliver();
 }
 
 auto pipeline_executor_state::start() -> caf::result<void> {
@@ -156,8 +159,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
                         [this, pipe = std::move(pipe)](
                           caf::expected<node_actor> result) mutable {
                           if (not result) {
-                            start_rp.deliver(result.error());
-                            self->quit(result.error());
+                            abort_start(std::move(result.error()));
                             return;
                           }
                           node = *result;

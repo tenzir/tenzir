@@ -35,6 +35,10 @@ struct pipeline_executor_state {
 
   void start_nodes_if_all_spawned();
 
+  void abort_start(caf::error reason);
+
+  void finish_start();
+
   void spawn_execution_nodes(pipeline pipe);
 };
 

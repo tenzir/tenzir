@@ -160,14 +160,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
         MESSAGE("startup successful");
         CHECK(not start_result);
         start_result.emplace();
-        run();
       },
       [&, executor](caf::error& error) {
         (void)executor;
         MESSAGE("startup failed: " << error);
         CHECK(not start_result);
         start_result.emplace(std::move(error));
-        run();
       },
       [&](caf::down_msg& msg) {
         MESSAGE("executor down: " << msg);
@@ -178,19 +176,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
         } else {
           down_result.emplace(std::move(msg.reason));
         }
-        run();
       },
       [&](diagnostic& d) {
         MESSAGE("received diagnostic: " << d);
-        run();
       });
     MESSAGE("waiting for executor");
     self->wait_for(executor);
     REQUIRE(down_result);
-    if (start_result and not *start_result) {
+    if (start_result and *start_result) {
       return std::move(*start_result);
     }
-    if (not *down_result) {
+    if (*down_result) {
       return std::move(*down_result);
     }
     if (start_result) {

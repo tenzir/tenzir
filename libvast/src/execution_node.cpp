@@ -318,9 +318,23 @@ struct exec_node_state : inbound_state_mixin<Input>,
     instance.emplace();
     instance->gen = std::get<generator<Output>>(std::move(*output_generator));
     instance->it = instance->gen.begin();
-    schedule_run();
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       return self->delegate(this->previous, atom::start_v, std::move(previous));
+    }
+    if constexpr (std::is_same_v<Output, std::monostate>) {
+      auto rp = self->make_response_promise<void>();
+      self
+        ->request(this->previous, caf::infinite, atom::start_v,
+                  std::move(previous))
+        .await(
+          [this, rp]() mutable {
+            schedule_run();
+            rp.deliver();
+          },
+          [rp](caf::error& error) mutable {
+            rp.deliver(std::move(error));
+          });
+      return rp;
     }
     return {};
   }
