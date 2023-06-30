@@ -240,7 +240,9 @@ struct managed_serve_operator {
   /// not enough results are buffered.
   /// @returns Whether the results were delivered.
   auto try_deliver_results(bool force_underful) -> bool {
-    VAST_ASSERT(get_rp.pending());
+    if (not get_rp.pending()) {
+      return false;
+    }
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
     if (put_rp.pending() and rows(buffer) < std::max(buffer_size, requested)) {
@@ -734,13 +736,13 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    // Step 1: Get a handle to the SERVE MANAGER actor.
     // This has to be blocking as the the code up to the first yield is run
     // synchronously, and we should guarantee that the serve manager knows about
     // a started pipeline containing a serve operator once it the pipeline
     // executor indicated that the pipeline started.
     auto serve_manager = serve_manager_actor{};
     {
+      // Step 1: Get a handle to the SERVE MANAGER actor.
       auto blocking = caf::scoped_actor{ctrl.self().system()};
       blocking
         ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
@@ -756,23 +758,22 @@ public:
               ec::logic_error,
               fmt::format("failed to find serve-manager: {}", err)));
           });
+      // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
+      blocking
+        ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
+                  buffer_size_)
+        .receive(
+          [&]() {
+            VAST_DEBUG("serve for id {} is now available",
+                       escape_operator_arg(serve_id_));
+          },
+          [&](const caf::error& err) { //
+            ctrl.abort(caf::make_error(
+              ec::logic_error,
+              fmt::format("failed to register at serve-manager: {}", err)));
+          });
       co_yield {};
     }
-    // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
-    ctrl.self()
-      .request(serve_manager, caf::infinite, atom::start_v, serve_id_,
-               buffer_size_)
-      .await(
-        [&]() {
-          VAST_VERBOSE("serve for id {} is now available",
-                       escape_operator_arg(serve_id_));
-        },
-        [&](const caf::error& err) { //
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to register at serve-manager: {}", err)));
-        });
-    co_yield {};
     // Step 3: Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
       // Send slice to SERVE MANAGER.
