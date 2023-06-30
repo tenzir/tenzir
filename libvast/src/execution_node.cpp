@@ -582,7 +582,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
         VAST_ASSERT(this->signaled_demand);
       }
     } else if constexpr (std::is_same_v<Input, std::monostate>) {
-      VAST_ASSERT(stalled or this->current_demand);
       if (not stalled
           and (this->current_demand
                or (this->outbound_buffer_size < defaults::max_buffered
@@ -590,7 +589,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
         schedule_run();
       }
     } else {
-      VAST_ASSERT(stalled or this->current_demand);
       if (not this->previous
           or (not stalled
               and (this->current_demand
