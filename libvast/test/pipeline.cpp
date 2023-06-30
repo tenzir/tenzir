@@ -152,46 +152,58 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     run();
     auto start_result = std::optional<caf::error>{};
     auto down_result = std::optional<caf::error>{};
-    self->receive_while(not down_result.has_value())(
+    self->receive_while([&] {
+      return not down_result.has_value();
+    })(
       [&, executor] {
         (void)executor;
         MESSAGE("startup successful");
         CHECK(not start_result);
         start_result.emplace();
+        run();
       },
       [&, executor](caf::error& error) {
         (void)executor;
         MESSAGE("startup failed: " << error);
         CHECK(not start_result);
         start_result.emplace(std::move(error));
+        run();
       },
       [&](caf::down_msg& msg) {
         MESSAGE("executor down: " << msg);
-        CHECK(start_result);
         CHECK(not down_result);
-        down_result.emplace(std::move(msg.reason));
+        if (not msg.reason or msg.reason == caf::exit_reason::unreachable
+            or msg.reason == caf::sec::broken_promise) {
+          down_result.emplace();
+        } else {
+          down_result.emplace(std::move(msg.reason));
+        }
+        run();
       },
-      [](diagnostic& d) {
+      [&](diagnostic& d) {
         MESSAGE("received diagnostic: " << d);
+        run();
       });
-    REQUIRE(start_result.has_value());
-    REQUIRE(down_result.has_value());
-    if (start_result != caf::error{}) {
-      return *start_result;
+    MESSAGE("waiting for executor");
+    self->wait_for(executor);
+    REQUIRE(down_result);
+    if (start_result and not *start_result) {
+      return std::move(*start_result);
     }
-    return *down_result;
+    if (not *down_result) {
+      return std::move(*down_result);
+    }
+    if (start_result) {
+      return caf::make_error(ec::logic_error, "start was not responded to");
+    }
+    return {};
   }
 };
 
 FIXTURE_SCOPE(pipeline_fixture, fixture)
 
 TEST(actor executor success) {
-  // FIXME: We used to also test with `head 5` here, but that stalls
-  // indefinitely since the changes from tenzir/tenzir#3264. For whatever reason
-  // the execution node wrapping the `head` operator never receives a down
-  // message from the previous operator even though it actually quits, and this
-  // only happens when using the deterministic actor system.
-  for (auto num : {0, 1, 4}) {
+  for (auto num : {0, 1, 4, 5}) {
     auto v
       = unbox(pipeline::internal_parse(fmt::format("head {}", num))).unwrap();
     v.insert(v.begin(),
@@ -230,7 +242,9 @@ TEST(actor executor execution error) {
     CHECK(input.rows() == 0);
   }));
   auto pipe = pipeline{std::move(ops)};
-  REQUIRE_ERROR(execute(pipe));
+  auto result = execute(pipe);
+  REQUIRE(not result);
+  CHECK_EQUAL(result.error(), ec::unspecified);
 }
 
 TEST(actor executor instantiation error) {
@@ -254,7 +268,9 @@ TEST(actor executor instantiation error) {
     CHECK(false);
   }));
   auto pipe = pipeline{std::move(ops)};
-  REQUIRE_ERROR(execute(pipe));
+  auto result = execute(pipe);
+  REQUIRE(not result);
+  CHECK_EQUAL(result.error(), ec::unspecified);
 }
 
 TEST(taste 42) {
