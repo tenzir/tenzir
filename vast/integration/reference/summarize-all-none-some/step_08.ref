@@ -30,7 +30,7 @@
 }
 {
   "id.orig_h": null,
-  "x": []
+  "x": null
 }
 {
   "id.orig_h": "223.149.205.1",
@@ -134,6 +134,18 @@
     "106.75.22.216"
   ]
 }
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
 warning: group-by column `id.orig_h` does not exist for schema `zeek.dhcp`
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.dhcp`
 warning: group-by column `id.orig_h` does not exist for schema `zeek.files`

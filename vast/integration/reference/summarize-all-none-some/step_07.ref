@@ -36,7 +36,7 @@
 }
 {
   "_path": "corelight_metrics_cpu",
-  "x": []
+  "x": null
 }
 {
   "_path": "smtp",
@@ -71,7 +71,7 @@
 }
 {
   "_path": "corelight_metrics_memory",
-  "x": []
+  "x": null
 }
 {
   "_path": "files",
@@ -119,7 +119,7 @@
 }
 {
   "_path": "corelight_metrics_system",
-  "x": []
+  "x": null
 }
 {
   "_path": "reporter",
@@ -151,7 +151,7 @@
 }
 {
   "_path": "corelight_metrics_bro",
-  "x": []
+  "x": null
 }
 {
   "_path": "dns",
@@ -173,12 +173,19 @@
 }
 {
   "_path": "corelight_metrics_iface",
-  "x": []
+  "x": null
 }
 {
   "_path": "corelight_metrics_disk",
-  "x": []
+  "x": null
 }
+warning: group-by column `_path` does not exist for schema `9940eae275d3b1fa`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.dhcp`
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.files`
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.pe`

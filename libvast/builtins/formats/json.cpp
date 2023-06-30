@@ -383,8 +383,18 @@ protected:
                                      "JSON object '{}'",
                                      schema_name, parsed_doc));
     }
-    auto maybe_slice_to_yield
-      = handle_builder_change(state.unknown_schema_builder, state);
+    if (state.last_used_schema_name == schema_name) {
+      return {std::nullopt};
+    }
+    std::optional<table_slice> maybe_slice_to_yield;
+    if (state.last_used_builder) {
+      if (auto slice
+          = state.last_used_builder->finish(state.last_used_schema_name);
+          slice.rows() > 0) {
+        maybe_slice_to_yield.emplace(std::move(slice));
+      }
+    }
+    state.unknown_schema_builder = {};
     state.last_used_builder = std::addressof(state.unknown_schema_builder);
     state.last_used_schema_name = std::string{schema_name};
     return {std::move(maybe_slice_to_yield)};
@@ -594,8 +604,7 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
                  std::string separator, bool try_find_schema, auto parser_impl)
   -> generator<table_slice> {
   auto state = parser_state{};
-  if (not try_find_schema)
-    state.last_used_builder = std::addressof(state.unknown_schema_builder);
+  state.last_used_builder = std::addressof(state.unknown_schema_builder);
   for (auto chnk : json_chunk_generator) {
     if (not chnk or chnk->size() == 0u) {
       co_yield unflatten_if_needed(separator,
