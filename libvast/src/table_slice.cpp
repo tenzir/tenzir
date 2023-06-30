@@ -1169,11 +1169,9 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   };
 }
 
-auto unflatten(const table_slice& slice,
-               std::string_view nested_field_separator) -> table_slice {
-  if (slice.rows() == 0u)
-    return slice;
-  auto slice_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
+                            std::string_view nested_field_separator)
+  -> std::shared_ptr<arrow::StructArray> {
   // Used to map parent fields to it's children for unflattening purposes.
   // Given foo.bar and foo.baz as fields of input slice the algorithm will first
   // create an instance of unflattened_field for 'foo' key. The created instance
@@ -1181,6 +1179,7 @@ auto unflatten(const table_slice& slice,
   // that should be combined under the 'foo' key will use this map to find the
   // approperiate object which should aggregate it.
   std::unordered_map<std::string_view, unflatten_field> unflattened_field_map;
+  std::unordered_map<std::string_view, unflatten_field> unflattened_children;
   std::unordered_map<std::string_view, unflatten_field*>
     original_field_name_to_new_field_map;
   // Aggregates all flattened field names under the key that represents the
@@ -1199,12 +1198,23 @@ auto unflatten(const table_slice& slice,
     const auto& field_name = k->name();
     auto separator_count
       = count_substring_occurrences(field_name, nested_field_separator);
-    if (separator_count > 0u) {
-      fields_to_resolve[separator_count].push_back(field_name);
-      continue;
-    }
+
+    fields_to_resolve[separator_count].push_back(field_name);
     unflattened_field_map[field_name]
       = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
+  }
+
+  for (auto& [field_name, field] : unflattened_field_map) {
+    auto field_array = field.to_arrow();
+    auto field_type = type::from_arrow(*field_array->type());
+    if (caf::holds_alternative<record_type>(field_type)) {
+      auto field_struct
+        = std::static_pointer_cast<arrow::StructArray>(field_array);
+      unflattened_children[field_name]
+        = unflatten_field{field_name, unflatten_struct_array(
+                                        field_struct, nested_field_separator)};
+    } else if (caf::holds_alternative<list_type>(field_type)) {
+    }
     original_field_name_to_new_field_map[field_name]
       = std::addressof(unflattened_field_map[field_name]);
   }
@@ -1241,9 +1251,13 @@ auto unflatten(const table_slice& slice,
               parent_field_name)) {
           auto& struct_field = unflattened_field_map[parent_field_name];
           struct_field.field_name_ = parent_field_name;
+          auto child_field_array
+            = slice_array->GetFieldByName(std::string{field});
+          if (unflattened_children.contains(field)) {
+            child_field_array = unflattened_children[field].to_arrow();
+          }
           struct_field.add(field.substr(current_pos + 1),
-                           nested_field_separator,
-                           slice_array->GetFieldByName(std::string{field}));
+                           nested_field_separator, child_field_array);
           original_field_name_to_new_field_map[field]
             = std::addressof(unflattened_field_map[parent_field_name]);
           break;
@@ -1258,8 +1272,16 @@ auto unflatten(const table_slice& slice,
       }
     }
   }
-  auto new_arr = make_unflattened_struct_array(
-    slice_array->struct_type()->fields(), original_field_name_to_new_field_map);
+  return make_unflattened_struct_array(slice_array->struct_type()->fields(),
+                                       original_field_name_to_new_field_map);
+}
+
+auto unflatten(const table_slice& slice,
+               std::string_view nested_field_separator) -> table_slice {
+  if (slice.rows() == 0u)
+    return slice;
+  auto slice_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+  auto new_arr = unflatten_struct_array(slice_array, nested_field_separator);
   auto schema
     = vast::type{slice.schema().name(), type::from_arrow(*new_arr->type())};
   const auto new_batch = arrow::RecordBatch::Make(
