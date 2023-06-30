@@ -266,6 +266,9 @@ struct managed_serve_operator {
     // rather end here.
     if (stop_rp.pending() and buffer.empty()) {
       VAST_ASSERT(not put_rp.pending());
+      continuation_token = fmt::to_string(uuid::random());
+      VAST_DEBUG("serve for id {} is now available with continuation token {}",
+                 escape_operator_arg(serve_id), continuation_token);
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
       return true;
@@ -276,8 +279,8 @@ struct managed_serve_operator {
       put_rp.deliver();
     }
     continuation_token = fmt::to_string(uuid::random());
-    VAST_VERBOSE("serve for id {} is now available with continuation token {}",
-                 escape_operator_arg(serve_id), continuation_token);
+    VAST_DEBUG("serve for id {} is now available with continuation token {}",
+               escape_operator_arg(serve_id), continuation_token);
     get_rp.deliver(std::make_tuple(continuation_token, std::move(results)));
     return true;
   }
@@ -414,7 +417,7 @@ struct serve_manager_state {
                                          "unknown for serve id {}",
                                          *self, request.serve_id));
     }
-    if ((found->done or not found->continuation_token.empty())
+    if (not found->continuation_token.empty()
         and found->last_continuation_token == request.continuation_token) {
       return std::make_tuple(found->continuation_token,
                              split(found->last_results, request.limit).first);
