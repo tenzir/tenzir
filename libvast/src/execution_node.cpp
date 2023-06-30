@@ -49,11 +49,6 @@ constexpr uint64_t min_batch_size = 8_Ki;
 /// execution node.
 constexpr uint64_t max_buffered = 254_Ki;
 
-/// Defines the timeout before an execution node is invoked again that has no
-/// input and was not able to produce any output.
-/// TODO: Consider using an exponential back-off mechanism.
-constexpr duration wakeup_delay = 20ms;
-
 } // namespace defaults
 
 template <class Input, class Output>
@@ -203,6 +198,7 @@ struct inbound_state_mixin {
 
   std::vector<Input> inbound_buffer = {};
   uint64_t inbound_buffer_size = {};
+  bool inbound_stalled = {};
 };
 
 template <>
@@ -402,6 +398,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
            or this->signaled_demand) {
       if (this->inbound_buffer_size == 0) {
         VAST_ASSERT(this->inbound_buffer.empty());
+        this->inbound_stalled = true;
         co_yield {};
         continue;
       }
@@ -410,12 +407,14 @@ struct exec_node_state : inbound_state_mixin<Input>,
         VAST_ASSERT(size(next) != 0);
         this->inbound_buffer_size -= size(next);
         this->inbound_buffer.erase(this->inbound_buffer.begin());
+        this->inbound_stalled = false;
         co_yield std::move(next);
       }
     }
+    this->inbound_stalled = false;
   }
 
-  auto schedule_run(duration delay = duration::zero()) -> void {
+  auto schedule_run() -> void {
     if (not instance or run_scheduled) {
       return;
     }
@@ -426,7 +425,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     //   not prohibit shutdown.
     // - It does not get run immediately, which would conflict with operators
     //   using `ctrl.self().request(...).await(...)`.
-    self->clock().schedule(self->clock().now() + delay,
+    self->clock().schedule(self->clock().now(),
                            caf::make_action(
                              [this] {
                                run_scheduled = false;
@@ -537,9 +536,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // everything else, it needs to happen only when there's enough space in the
     // outbound buffer.
     if constexpr (std::is_same_v<Output, std::monostate>) {
-      const auto has_inbound = this->inbound_buffer_size > 0;
       advance_generator();
-      schedule_run(has_inbound ? duration::zero() : defaults::wakeup_delay);
+      if (not this->inbound_stalled) {
+        schedule_run();
+      } else {
+        VAST_ASSERT(this->signaled_demand);
+      }
     } else {
       advance_generator();
       if (this->current_demand
