@@ -261,7 +261,7 @@ add_feature_info("VAST_ENABLE_BUNDLED_SIMDJSON" VAST_ENABLE_BUNDLED_SIMDJSON
 
 unset(_vast_bundled_simdjson)
 if (NOT VAST_ENABLE_BUNDLED_SIMDJSON)
-  find_package(simdjson 3.1)
+  find_package(simdjson 3.2)
   dependency_summary("simdjson" simdjson::simdjson "Dependencies")
 endif ()
 if (NOT simdjson_FOUND)
