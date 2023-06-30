@@ -105,7 +105,9 @@ public:
     diagnostic::error("{}", error)
       .note("from `{}`", state_.op->to_string())
       .emit(diagnostics());
-    self().quit(std::move(error));
+    if (not state_.abort) {
+      state_.abort = std::move(error);
+    }
   }
 
   auto warn(caf::error error) noexcept -> void override {
@@ -262,6 +264,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
   /// The next run of this actor's internal run loop.
   bool run_scheduled = {};
 
+  /// Set by `ctrl.abort(...)`, to be checked by `start()` and `run()`.
+  caf::error abort;
+
   auto start(std::vector<caf::actor> previous) -> caf::result<void> {
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
@@ -318,16 +323,17 @@ struct exec_node_state : inbound_state_mixin<Input>,
     instance.emplace();
     instance->gen = std::get<generator<Output>>(std::move(*output_generator));
     instance->it = instance->gen.begin();
-    if constexpr (not std::is_same_v<Input, std::monostate>) {
-      return self->delegate(this->previous, atom::start_v, std::move(previous));
+    if (abort) {
+      return abort;
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
       auto rp = self->make_response_promise<void>();
       self
         ->request(this->previous, caf::infinite, atom::start_v,
                   std::move(previous))
-        .await(
+        .then(
           [this, rp]() mutable {
+            VAST_DEBUG("scheduling sink after successful startup");
             schedule_run();
             rp.deliver();
           },
@@ -335,6 +341,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
             rp.deliver(std::move(error));
           });
       return rp;
+    }
+    if constexpr (not std::is_same_v<Input, std::monostate>) {
+      return self->delegate(this->previous, atom::start_v, std::move(previous));
     }
     return {};
   }
@@ -401,6 +410,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
       }
     } else {
       ++instance->it;
+    }
+    if (abort) {
+      self->quit(abort);
     }
   }
 
