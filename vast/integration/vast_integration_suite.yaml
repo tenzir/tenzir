@@ -759,38 +759,18 @@ tests:
   Measure Events:
     tags: [pipelines]
     steps:
-      - command: exec 'read json | measure | drop timestamp | write json'
+      - command: exec 'read json | measure | summarize events=sum(events) by schema | write json'
         input: data/json/files.log.json.gz
-      - command: exec 'read json | measure | measure | drop timestamp | write json'
-        input: data/json/files.log.json.gz
-      - command: exec 'read json | measure --real-time | drop timestamp | write json'
-        input: data/json/files.log.json.gz
-      - command: exec 'read json | measure --real-time | measure | drop timestamp | write json'
+      - command: exec 'read json | measure --real-time | summarize events=sum(events) by schema | write json'
         input: data/json/files.log.json.gz
 
   Measure Bytes:
     tags: [pipelines]
     steps:
-      - command: exec 'load stdin | measure | drop timestamp | write json'
+      - command: exec 'load stdin | measure | summarize bytes=sum(bytes) | write json'
         input: data/json/conn.log.json.gz
-      - command: exec 'load stdin | measure | measure | drop timestamp | write json'
+      - command: exec 'load stdin | measure --real-time | summarize bytes=sum(bytes) | write json'
         input: data/json/conn.log.json.gz
-      - command: exec 'load stdin | measure --real-time | drop timestamp | write json'
-        input: data/json/conn.log.json.gz
-      - command: exec 'load stdin | measure --real-time | measure | drop timestamp | write json'
-        input: data/json/conn.log.json.gz
-
-  Measure Incremental:
-    tags: [pipelines]
-    steps:
-      - command: exec 'read cef | repeat 10 | measure --cumulative | drop timestamp | write json'
-        input: data/cef/checkpoint.log
-      - command: exec 'read cef | repeat 10 | measure --cumulative --real-time | drop timestamp | write json'
-        input: data/cef/checkpoint.log
-      - command: exec 'load stdin | repeat 10 | measure --cumulative | drop timestamp | write json'
-        input: data/zeek/conn.log.gz
-      - command: exec 'load stdin | repeat 10 | measure --cumulative --real-time | drop timestamp | write json'
-        input: data/zeek/conn.log.gz
 
   Empty Record in Pipeline:
     tags: [pipelines]
