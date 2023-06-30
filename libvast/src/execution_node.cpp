@@ -198,7 +198,6 @@ struct inbound_state_mixin {
 
   std::vector<Input> inbound_buffer = {};
   uint64_t inbound_buffer_size = {};
-  bool inbound_stalled = {};
 };
 
 template <>
@@ -249,6 +248,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
   uint64_t inbound_total = {};
   uint64_t outbound_total = {};
 
+  // Indicates whether the operator has stalled, i.e., the generator should not
+  // be advanced.
+  bool stalled = {};
+
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.
   std::unique_ptr<exec_node_control_plane<Input, Output>> ctrl = {};
@@ -288,6 +291,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
           VAST_DEBUG("ignores down msg from unknown source: {}", msg.reason);
           return;
         }
+        VAST_DEBUG("{} got down from previous execution node: {}", op->name(),
+                   msg.reason);
         this->previous = nullptr;
         schedule_run();
         if (msg.reason) {
@@ -394,11 +399,14 @@ struct exec_node_state : inbound_state_mixin<Input>,
   auto make_input_adapter() -> generator<Input>
     requires(not std::is_same_v<Input, std::monostate>)
   {
+    auto stall_guard = caf::detail::make_scope_guard([this] {
+      stalled = false;
+    });
     while (this->previous or this->inbound_buffer_size > 0
            or this->signaled_demand) {
       if (this->inbound_buffer_size == 0) {
         VAST_ASSERT(this->inbound_buffer.empty());
-        this->inbound_stalled = true;
+        stalled = true;
         co_yield {};
         continue;
       }
@@ -407,11 +415,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
         VAST_ASSERT(size(next) != 0);
         this->inbound_buffer_size -= size(next);
         this->inbound_buffer.erase(this->inbound_buffer.begin());
-        this->inbound_stalled = false;
+        stalled = false;
         co_yield std::move(next);
       }
     }
-    this->inbound_stalled = false;
   }
 
   auto schedule_run() -> void {
@@ -496,6 +503,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     const auto now = std::chrono::steady_clock::now();
     // Check if we're done.
     if (instance->it == instance->gen.end()) {
+      VAST_DEBUG("{} is at the end of its generator", op->name());
       // Shut down the previous execution node immediately if we're done.
       // We send an unreachable error here slightly before this execution
       // node shuts down. This is merely an optimization; we call self->quit
@@ -513,11 +521,16 @@ struct exec_node_state : inbound_state_mixin<Input>,
       // - There must not be any outstanding demand.
       // - There must not be anything remaining in the buffer.
       if constexpr (not std::is_same_v<Output, std::monostate>) {
-        if (this->current_demand or this->outbound_buffer_size > 0) {
+        if (this->current_demand and this->outbound_buffer_size == 0) {
           this->reject_demand = true;
+        }
+        if (this->current_demand or this->outbound_buffer_size > 0) {
           deliver_batches(now, true);
+          schedule_run();
           return;
         }
+        VAST_ASSERT(not this->current_demand);
+        VAST_ASSERT(this->outbound_buffer_size == 0);
       }
       VAST_DEBUG("{} is done; in={} out={}", op, inbound_total, outbound_total);
       self->quit();
@@ -535,18 +548,28 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // next run. For sinks, this happens delayed when there is no input. For
     // everything else, it needs to happen only when there's enough space in the
     // outbound buffer.
+    advance_generator();
     if constexpr (std::is_same_v<Output, std::monostate>) {
-      advance_generator();
-      if (not this->inbound_stalled) {
+      if (not stalled) {
         schedule_run();
       } else {
         VAST_ASSERT(this->signaled_demand);
       }
+    } else if constexpr (std::is_same_v<Input, std::monostate>) {
+      VAST_ASSERT(stalled or this->current_demand);
+      if (not stalled
+          and (this->current_demand
+               or (this->outbound_buffer_size < defaults::max_buffered
+                   and instance->it != instance->gen.end()))) {
+        schedule_run();
+      }
     } else {
-      advance_generator();
-      if (this->current_demand
-          or (this->outbound_buffer_size < defaults::max_buffered
-              and instance->it != instance->gen.end())) {
+      VAST_ASSERT(stalled or this->current_demand);
+      if (not this->previous
+          or (not stalled
+              and (this->current_demand
+                   or (this->outbound_buffer_size < defaults::max_buffered
+                       and instance->it != instance->gen.end())))) {
         schedule_run();
       }
     }
@@ -557,9 +580,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
     -> caf::result<void>
     requires(not std::is_same_v<Output, std::monostate>)
   {
-    if (this->current_demand) {
-      return caf::make_error(ec::logic_error, "concurrent pull");
-    }
     if (this->reject_demand) {
       auto rp = self->make_response_promise<void>();
       detail::weak_run_delayed(self, batch_timeout, [rp]() mutable {
@@ -568,6 +588,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
       return {};
     }
     schedule_run();
+    if (this->current_demand) {
+      return caf::make_error(ec::logic_error, "concurrent pull");
+    }
     auto& pr = this->current_demand.emplace(
       self->make_response_promise<void>(), std::move(sink), batch_size,
       std::chrono::steady_clock::now() + batch_timeout);
