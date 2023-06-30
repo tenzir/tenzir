@@ -26,6 +26,7 @@
 #include <vast/test/utils.hpp>
 
 #include <caf/detail/scope_guard.hpp>
+#include <caf/system_messages.hpp>
 #include <caf/test/dsl.hpp>
 
 namespace vast {
@@ -144,38 +145,41 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   auto execute(pipeline p) -> caf::expected<void> {
     MESSAGE("executing pipeline: " << p.to_string());
     auto self = caf::scoped_actor{sys};
-    auto executor
-      = self->spawn(pipeline_executor, std::move(p),
-                    std::make_unique<null_diagnostic_handler>(), node_actor{});
-    auto result = std::optional<caf::expected<void>>{};
-    auto handle = self->request(executor, caf::infinite, atom::start_v);
+    auto executor = self->spawn<caf::monitored>(
+      pipeline_executor, std::move(p),
+      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
+    self->send(executor, atom::start_v);
     run();
-    std::move(handle).receive(
+    auto start_result = std::optional<caf::error>{};
+    auto down_result = std::optional<caf::error>{};
+    self->receive_while(not down_result.has_value())(
       [&, executor] {
         (void)executor;
-        result.emplace();
+        MESSAGE("startup successful");
+        CHECK(not start_result);
+        start_result.emplace();
       },
       [&, executor](caf::error& error) {
         (void)executor;
-        result.emplace(std::move(error));
+        MESSAGE("startup failed: " << error);
+        CHECK(not start_result);
+        start_result.emplace(std::move(error));
+      },
+      [&](caf::down_msg& msg) {
+        MESSAGE("executor down: " << msg);
+        CHECK(start_result);
+        CHECK(not down_result);
+        down_result.emplace(std::move(msg.reason));
+      },
+      [](diagnostic& d) {
+        MESSAGE("received diagnostic: " << d);
       });
-    REQUIRE(result.has_value());
-    if (not *result) {
-      return result->error();
+    REQUIRE(start_result.has_value());
+    REQUIRE(down_result.has_value());
+    if (start_result != caf::error{}) {
+      return *start_result;
     }
-    result.reset();
-    executor->attach_functor([&](const caf::error& error) {
-      if (error and error != caf::exit_reason::unreachable
-          and error != caf::exit_reason::user_shutdown) {
-        result.emplace(error);
-      } else {
-        result.emplace();
-      }
-    });
-    run();
-    self->wait_for(executor);
-    REQUIRE(result);
-    return *result;
+    return *down_result;
   }
 };
 

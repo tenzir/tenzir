@@ -99,8 +99,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       exec_nodes.emplace_back();
       self
         ->request(node, caf::infinite, atom::spawn_v,
-                  operator_box{std::move(op)}, input_type,
-                  static_cast<receiver_actor<diagnostic>>(self))
+                  operator_box{std::move(op)}, input_type, diagnostics)
         .then(
           [this, index](exec_node_actor& exec_node) {
             // TODO: We should call `quit()` whenever `start()` fails to
@@ -118,8 +117,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       input_type = *output_type;
     } else {
       auto spawn_result
-        = spawn_exec_node(self, std::move(op), input_type, node,
-                          static_cast<receiver_actor<diagnostic>>(self));
+        = spawn_exec_node(self, std::move(op), input_type, node, diagnostics);
       if (not spawn_result) {
         auto error = caf::make_error(
           ec::logic_error,
@@ -175,8 +173,8 @@ auto pipeline_executor_state::start() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, std::unique_ptr<diagnostic_handler> diagnostics,
-  node_actor node) -> pipeline_executor_actor::behavior_type {
+  pipeline pipe, receiver_actor<diagnostic> diagnostics, node_actor node)
+  -> pipeline_executor_actor::behavior_type {
   self->state.self = self;
   self->state.node = std::move(node);
   self->set_down_handler([self](caf::down_msg& msg) {
@@ -215,11 +213,6 @@ auto pipeline_executor(
   return {
     [self](atom::start) -> caf::result<void> {
       return self->state.start();
-    },
-    [self](diagnostic& d) -> caf::result<void> {
-      VAST_DEBUG("{} received diagnostic: {}", *self, d);
-      self->state.diagnostics->emit(std::move(d));
-      return {};
     },
   };
 }

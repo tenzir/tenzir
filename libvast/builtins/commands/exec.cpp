@@ -50,7 +50,8 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   }
   auto self = caf::scoped_actor{sys};
   auto executor = self->spawn<caf::monitored>(
-    pipeline_executor, std::move(pipe), std::move(diag), node_actor{});
+    pipeline_executor, std::move(pipe),
+    caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
   auto result = caf::expected<void>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This
@@ -61,6 +62,9 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   self->receive_while(running)(
     []() {
       VAST_DEBUG("pipeline was succcesfully started");
+    },
+    [&](diagnostic& d) {
+      diag->emit(std::move(d));
     },
     [&](caf::error& err) {
       VAST_DEBUG("failed to start pipeline: {}", err);
