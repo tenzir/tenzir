@@ -1,0 +1,2 @@
+error: !! syntax_error: zeek-tsv parser detected header types mismatch: expected 20 fields but got 19
+ = note: from `parse "zeek-tsv"`

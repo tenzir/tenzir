@@ -1,0 +1,2 @@
+error: !! syntax_error: zeek-tsv parser encountered invalid header line: separator '\x09' not found
+ = note: from `parse "zeek-tsv"`

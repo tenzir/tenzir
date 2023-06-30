@@ -1,0 +1,2 @@
+error: !! syntax_error: zeek-tsv parser encountered invalid header line: prefix '#set_separator' not found at beginning of line
+ = note: from `parse "zeek-tsv"`
