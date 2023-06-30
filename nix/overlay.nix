@@ -94,6 +94,16 @@ in {
       prev.libbacktrace.overrideAttrs (old: {
         doCheck = false;
       });
+  rdkafka = prev.rdkafka.overrideAttrs (orig: {
+    nativeBuildInputs = orig.nativeBuildInputs ++ [prev.buildPackages.cmake];
+    # The cmake config file doesn't find them if they are not propagated.
+    propagatedBuildInputs = orig.buildInputs;
+    cmakeFlags = lib.optionals isStatic [
+      "-DRDKAFKA_BUILD_STATIC=ON"
+      # The interceptor tests library is hard-coded to SHARED.
+      "-DRDKAFKA_BUILD_TESTS=OFF"
+    ];
+  });
   restinio = final.callPackage ./restinio {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);

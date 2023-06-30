@@ -24,6 +24,12 @@
     "223.149.205.1"
   ]
 }
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.dhcp`
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.files`
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.pe`

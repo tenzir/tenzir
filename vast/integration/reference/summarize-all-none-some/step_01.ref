@@ -2,10 +2,24 @@
   "z": null,
   "x": null
 }
+warning: group-by column `z` does not exist for schema `9940eae275d3b1fa`
+warning: aggregation column `y` does not exist for schema `9940eae275d3b1fa`
 warning: group-by column `z` does not exist for schema `zeek._0_0_2`
 warning: aggregation column `y` does not exist for schema `zeek._0_0_2`
 warning: group-by column `z` does not exist for schema `zeek.conn`
 warning: aggregation column `y` does not exist for schema `zeek.conn`
+warning: group-by column `z` does not exist for schema `zeek.conn_long`
+warning: aggregation column `y` does not exist for schema `zeek.conn_long`
+warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_bro`
+warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_bro`
+warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_cpu`
+warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_cpu`
+warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_disk`
+warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_disk`
+warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_iface`
+warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_iface`
+warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_memory`
+warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_memory`
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_system`
 warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_system`
 warning: group-by column `z` does not exist for schema `zeek.dhcp`
@@ -24,6 +38,8 @@ warning: group-by column `z` does not exist for schema `zeek.http`
 warning: aggregation column `y` does not exist for schema `zeek.http`
 warning: group-by column `z` does not exist for schema `zeek.irc`
 warning: aggregation column `y` does not exist for schema `zeek.irc`
+warning: group-by column `z` does not exist for schema `zeek.kerberos`
+warning: aggregation column `y` does not exist for schema `zeek.kerberos`
 warning: group-by column `z` does not exist for schema `zeek.modbus`
 warning: aggregation column `y` does not exist for schema `zeek.modbus`
 warning: group-by column `z` does not exist for schema `zeek.notice`
