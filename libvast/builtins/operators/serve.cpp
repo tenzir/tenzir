@@ -735,22 +735,29 @@ public:
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
     // Step 1: Get a handle to the SERVE MANAGER actor.
+    // This has to be blocking as the the code up to the first yield is run
+    // synchronously, and we should guarantee that the serve manager knows about
+    // a started pipeline containing a serve operator once it the pipeline
+    // executor indicated that the pipeline started.
     auto serve_manager = serve_manager_actor{};
-    ctrl.self()
-      .request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-               "serve-manager")
-      .await(
-        [&](std::vector<caf::actor>& actors) {
-          VAST_ASSERT(actors.size() == 1);
-          serve_manager
-            = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
-        },
-        [&](const caf::error& err) { //
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to find serve-manager: {}", err)));
-        });
-    co_yield {};
+    {
+      auto blocking = caf::scoped_actor{ctrl.self().system()};
+      blocking
+        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
+                  "serve-manager")
+        .receive(
+          [&](std::vector<caf::actor>& actors) {
+            VAST_ASSERT(actors.size() == 1);
+            serve_manager
+              = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
+          },
+          [&](const caf::error& err) { //
+            ctrl.abort(caf::make_error(
+              ec::logic_error,
+              fmt::format("failed to find serve-manager: {}", err)));
+          });
+      co_yield {};
+    }
     // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
     ctrl.self()
       .request(serve_manager, caf::infinite, atom::start_v, serve_id_,
