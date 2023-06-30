@@ -46,21 +46,27 @@ public:
     auto components
       = get_node_components<catalog_actor, accountant_actor, filesystem_actor>(
         blocking_self, ctrl.node());
+    if (!components) {
+      ctrl.abort(std::move(components.error()));
+      co_return;
+    }
+    co_yield {};
     auto [catalog, accountant, fs] = std::move(*components);
     auto current_slice = std::optional<table_slice>{};
     auto query_context
       = vast::query_context::make_extract("export", blocking_self, expr_);
     auto current_result = catalog_lookup_result{};
     auto current_error = caf::error{};
-    blocking_self
-      ->request(catalog, caf::infinite, atom::candidates_v, query_context)
-      .receive(
+    ctrl.self()
+      .request(catalog, caf::infinite, atom::candidates_v, query_context)
+      .await(
         [&current_result](catalog_lookup_result result) {
           current_result = std::move(result);
         },
         [&current_error](caf::error e) {
           current_error = std::move(e);
         });
+    co_yield {};
     if (current_error) {
       ctrl.abort(std::move(current_error));
       co_return;

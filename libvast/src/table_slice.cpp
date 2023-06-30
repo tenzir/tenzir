@@ -662,6 +662,41 @@ split(const table_slice& slice, size_t partition_point) {
   };
 }
 
+auto split(std::vector<table_slice> events, uint64_t partition_point)
+  -> std::pair<std::vector<table_slice>, std::vector<table_slice>> {
+  auto it = events.begin();
+  for (; it != events.end(); ++it) {
+    if (partition_point == it->rows()) {
+      return {
+        {events.begin(), it + 1},
+        {it + 1, events.end()},
+      };
+    }
+    if (partition_point < it->rows()) {
+      auto lhs = std::vector<table_slice>{};
+      auto rhs = std::vector<table_slice>{};
+      lhs.reserve(std::distance(events.begin(), it + 1));
+      rhs.reserve(std::distance(it, events.end()));
+      lhs.insert(lhs.end(), std::make_move_iterator(events.begin()),
+                 std::make_move_iterator(it));
+      auto [split_lhs, split_rhs] = split(*it, partition_point);
+      lhs.push_back(std::move(split_lhs));
+      rhs.push_back(std::move(split_rhs));
+      rhs.insert(rhs.end(), std::make_move_iterator(it + 1),
+                 std::make_move_iterator(events.end()));
+      return {
+        std::move(lhs),
+        std::move(rhs),
+      };
+    }
+    partition_point -= it->rows();
+  }
+  return {
+    std::move(events),
+    {},
+  };
+}
+
 auto subslice(const table_slice& slice, size_t begin, size_t end)
   -> table_slice {
   VAST_ASSERT(begin <= end);

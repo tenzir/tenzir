@@ -676,38 +676,28 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       VAST_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
-    [self](atom::spawn, pipeline& pipeline, receiver_actor<diagnostic> diag)
-      -> caf::result<std::vector<std::pair<execution_node_actor, std::string>>> {
-      auto optimized = pipeline.optimize();
-      if (not optimized) {
+    [self](atom::spawn, operator_box& box, operator_type input_type,
+           const receiver_actor<diagnostic>& diagnostic_handler)
+      -> caf::result<exec_node_actor> {
+      auto op = std::move(box).unwrap();
+      if (op->location() == operator_location::local) {
         return caf::make_error(ec::logic_error,
-                               fmt::format("failed to optimize pipeline: '{}'",
-                                           optimized.error()));
+                               fmt::format("{} cannot spawn local operator "
+                                           "'{}' in remote node",
+                                           *self, op));
       }
-      auto ops = std::move(*optimized).unwrap();
-      auto result = std::vector<std::pair<execution_node_actor, std::string>>{};
-      result.reserve(ops.size());
-      for (auto&& op : ops) {
-        if (op->location() == operator_location::local) {
-          return caf::make_error(ec::logic_error,
-                                 fmt::format("{} cannot spawn pipeline with "
-                                             "local operator '{}'",
-                                             *self, op));
-        }
-        auto description = op->to_string();
-        if (op->detached()) {
-          result.emplace_back(
-            self->spawn<caf::detached>(execution_node, std::move(op),
-                                       caf::actor_cast<node_actor>(self), diag),
-            std::move(description));
-        } else {
-          result.emplace_back(self->spawn(execution_node, std::move(op),
-                                          caf::actor_cast<node_actor>(self),
-                                          diag),
-                              std::move(description));
-        }
+      auto description = op->to_string();
+      auto spawn_result
+        = spawn_exec_node(self, std::move(op), input_type,
+                          static_cast<node_actor>(self), diagnostic_handler);
+      if (not spawn_result) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} failed to spawn execution node "
+                                           "for operator '{}': {}",
+                                           *self, op, spawn_result.error()));
       }
-      return result;
+      // TODO: Check output type.
+      return spawn_result->first;
     },
   };
 }

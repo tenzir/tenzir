@@ -25,7 +25,7 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> execution_node_actor::base& override {
+  auto self() noexcept -> exec_node_actor::base& override {
     die("not implemented");
   }
 
@@ -133,6 +133,15 @@ auto pipeline::serialize_op(const operator_base& op, inspector& f) -> bool {
   return f.apply(name) && p->serialize(f, op);
 }
 
+auto pipeline::parse(std::string source, diagnostic_handler& diag)
+  -> std::optional<pipeline> {
+  auto parsed = tql::parse(std::move(source), diag);
+  if (!parsed) {
+    return {};
+  }
+  return tql::to_pipeline(std::move(*parsed));
+}
+
 auto pipeline::internal_parse(std::string_view repr)
   -> caf::expected<pipeline> {
   return tql::parse_internal(std::string{repr});
@@ -168,6 +177,10 @@ void pipeline::prepend(operator_ptr op) {
 
 auto pipeline::unwrap() && -> std::vector<operator_ptr> {
   return std::move(operators_);
+}
+
+auto pipeline::operators() const& -> std::span<const operator_ptr> {
+  return operators_;
 }
 
 auto pipeline::optimize() const -> caf::expected<pipeline> {
@@ -364,7 +377,7 @@ auto pipeline::infer_type_impl(operator_type input) const
     auto first = &op == &operators_.front();
     if (!first && current.is<void>()) {
       return caf::make_error(ec::type_clash, fmt::format("pipeline continues "
-                                                         "with {} after sink",
+                                                         "with '{}' after sink",
                                                          op->to_string()));
     }
     auto next = op->infer_type(current);

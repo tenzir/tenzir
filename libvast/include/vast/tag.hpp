@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/die.hpp"
+
 #include <variant>
 
 namespace vast {
@@ -16,6 +18,10 @@ namespace vast {
 template <typename T>
 struct tag {
   using type = T;
+
+  friend auto inspect(auto& f, tag& x) -> bool {
+    return f.object(x).pretty_name("tag").fields();
+  }
 };
 
 /// Value of the marker type for the given type.
@@ -27,10 +33,42 @@ template <typename... Ts>
 struct tag_variant : std::variant<tag<Ts>...> {
   using std::variant<tag<Ts>...>::variant;
 
+  template <class T>
+  static auto make() -> tag_variant {
+    return tag_variant{tag_v<T>};
+  }
+
   /// Returns whether this holds `tag<T>`.
   template <typename T>
   auto is() const -> bool {
     return std::holds_alternative<tag<T>>(*this);
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, tag_variant& x) -> bool {
+    auto index = x.index();
+    if (not f.apply(index)) {
+      return false;
+    }
+    if constexpr (Inspector::is_loading) {
+      switch (index) {
+#define VAST_TAG_VARIANT_APPLY_INDEX(idx)                                      \
+  case idx:                                                                    \
+    if constexpr ((idx) < sizeof...(Ts)) {                                     \
+      x.template emplace<idx>();                                               \
+      return true;                                                             \
+    }                                                                          \
+    return false
+        VAST_TAG_VARIANT_APPLY_INDEX(0);
+        VAST_TAG_VARIANT_APPLY_INDEX(1);
+        VAST_TAG_VARIANT_APPLY_INDEX(2);
+        VAST_TAG_VARIANT_APPLY_INDEX(3);
+#undef VAST_TAG_VARIANT_APPLY_INDEX
+        default:
+          die("unimplemented");
+      }
+    }
+    return true;
   }
 };
 

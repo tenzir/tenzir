@@ -110,8 +110,17 @@ struct rest_response {
   // JSON-like structure of the responses.
   explicit rest_response(std::string body);
 
+  /// Returns an error that uses `{error: "{message}"}` as the response body.
   static auto make_error(uint16_t error_code, std::string message,
-                         caf::error detail) -> rest_response;
+                         caf::error detail = {}) -> rest_response;
+  static auto make_error(uint16_t error_code, const caf::error& message,
+                         caf::error detail = {}) -> rest_response {
+    return make_error(error_code, fmt::to_string(message), std::move(detail));
+  }
+
+  /// Returns an error that uses `body` as the response body.
+  static auto make_error_raw(uint16_t error_code, std::string body,
+                             caf::error detail = {}) -> rest_response;
 
   auto is_error() const -> bool;
   auto body() const -> const std::string&;

@@ -26,6 +26,7 @@
 #include <vast/test/utils.hpp>
 
 #include <caf/detail/scope_guard.hpp>
+#include <caf/system_messages.hpp>
 #include <caf/test/dsl.hpp>
 
 namespace vast {
@@ -37,7 +38,7 @@ public:
     return error_;
   }
 
-  auto self() noexcept -> execution_node_actor::base& override {
+  auto self() noexcept -> exec_node_actor::base& override {
     FAIL("no mock implementation available");
   }
 
@@ -144,22 +145,54 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   auto execute(pipeline p) -> caf::expected<void> {
     MESSAGE("executing pipeline: " << p.to_string());
     auto self = caf::scoped_actor{sys};
-    auto executor = self->spawn(pipeline_executor, std::move(p),
-                                std::make_unique<null_diagnostic_handler>());
-    auto handle = self->request(executor, caf::infinite, atom::run_v);
+    auto executor = self->spawn<caf::monitored>(
+      pipeline_executor, std::move(p),
+      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
+    self->send(executor, atom::start_v);
     run();
-    auto result = std::optional<caf::expected<void>>{};
-    std::move(handle).receive(
+    auto start_result = std::optional<caf::error>{};
+    auto down_result = std::optional<caf::error>{};
+    self->receive_while([&] {
+      return not down_result.has_value();
+    })(
       [&, executor] {
         (void)executor;
-        result.emplace();
+        MESSAGE("startup successful");
+        CHECK(not start_result);
+        start_result.emplace();
       },
       [&, executor](caf::error& error) {
         (void)executor;
-        result.emplace(std::move(error));
+        MESSAGE("startup failed: " << error);
+        CHECK(not start_result);
+        start_result.emplace(std::move(error));
+      },
+      [&](caf::down_msg& msg) {
+        MESSAGE("executor down: " << msg);
+        CHECK(not down_result);
+        if (not msg.reason or msg.reason == caf::exit_reason::unreachable
+            or msg.reason == caf::sec::broken_promise) {
+          down_result.emplace();
+        } else {
+          down_result.emplace(std::move(msg.reason));
+        }
+      },
+      [&](diagnostic& d) {
+        MESSAGE("received diagnostic: " << d);
       });
-    REQUIRE(result.has_value());
-    return std::move(*result);
+    MESSAGE("waiting for executor");
+    self->wait_for(executor);
+    REQUIRE(down_result);
+    if (start_result and *start_result) {
+      return std::move(*start_result);
+    }
+    if (*down_result) {
+      return std::move(*down_result);
+    }
+    if (start_result) {
+      return caf::make_error(ec::logic_error, "start was not responded to");
+    }
+    return {};
   }
 };
 
@@ -205,7 +238,9 @@ TEST(actor executor execution error) {
     CHECK(input.rows() == 0);
   }));
   auto pipe = pipeline{std::move(ops)};
-  REQUIRE_ERROR(execute(pipe));
+  auto result = execute(pipe);
+  REQUIRE(not result);
+  CHECK_EQUAL(result.error(), ec::unspecified);
 }
 
 TEST(actor executor instantiation error) {
@@ -229,7 +264,9 @@ TEST(actor executor instantiation error) {
     CHECK(false);
   }));
   auto pipe = pipeline{std::move(ops)};
-  REQUIRE_ERROR(execute(pipe));
+  auto result = execute(pipe);
+  REQUIRE(not result);
+  CHECK_EQUAL(result.error(), ec::unspecified);
 }
 
 TEST(taste 42) {

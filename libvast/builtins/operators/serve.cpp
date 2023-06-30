@@ -201,43 +201,6 @@ struct serve_request {
   duration timeout = std::chrono::milliseconds{100};
 };
 
-/// Splits a vector of table slices into two vectors of table slices without
-/// copying data.
-auto split(std::vector<table_slice> events, uint64_t partition_point)
-  -> std::pair<std::vector<table_slice>, std::vector<table_slice>> {
-  auto it = events.begin();
-  for (; it != events.end(); ++it) {
-    if (partition_point == it->rows()) {
-      return {
-        {events.begin(), it + 1},
-        {it + 1, events.end()},
-      };
-    }
-    if (partition_point < it->rows()) {
-      auto lhs = std::vector<table_slice>{};
-      auto rhs = std::vector<table_slice>{};
-      lhs.reserve(std::distance(events.begin(), it + 1));
-      rhs.reserve(std::distance(it, events.end()));
-      lhs.insert(lhs.end(), std::make_move_iterator(events.begin()),
-                 std::make_move_iterator(it));
-      auto [split_lhs, split_rhs] = split(*it, partition_point);
-      lhs.push_back(std::move(split_lhs));
-      rhs.push_back(std::move(split_rhs));
-      rhs.insert(rhs.end(), std::make_move_iterator(it + 1),
-                 std::make_move_iterator(events.end()));
-      return {
-        std::move(lhs),
-        std::move(rhs),
-      };
-    }
-    partition_point -= it->rows();
-  }
-  return {
-    std::move(events),
-    {},
-  };
-}
-
 /// A single serve operator as observed by the serve-manager.
 struct managed_serve_operator {
   /// The actor address of the execution node of the serve operator; stored for
@@ -277,7 +240,9 @@ struct managed_serve_operator {
   /// not enough results are buffered.
   /// @returns Whether the results were delivered.
   auto try_deliver_results(bool force_underful) -> bool {
-    VAST_ASSERT(get_rp.pending());
+    if (not get_rp.pending()) {
+      return false;
+    }
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
     if (put_rp.pending() and rows(buffer) < std::max(buffer_size, requested)) {
@@ -301,6 +266,9 @@ struct managed_serve_operator {
     // rather end here.
     if (stop_rp.pending() and buffer.empty()) {
       VAST_ASSERT(not put_rp.pending());
+      continuation_token = fmt::to_string(uuid::random());
+      VAST_DEBUG("serve for id {} is now available with continuation token {}",
+                 escape_operator_arg(serve_id), continuation_token);
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
       return true;
@@ -311,8 +279,8 @@ struct managed_serve_operator {
       put_rp.deliver();
     }
     continuation_token = fmt::to_string(uuid::random());
-    VAST_VERBOSE("serve for id {} is now available with continuation token {}",
-                 escape_operator_arg(serve_id), continuation_token);
+    VAST_DEBUG("serve for id {} is now available with continuation token {}",
+               escape_operator_arg(serve_id), continuation_token);
     get_rp.deliver(std::make_tuple(continuation_token, std::move(results)));
     return true;
   }
@@ -449,7 +417,7 @@ struct serve_manager_state {
                                          "unknown for serve id {}",
                                          *self, request.serve_id));
     }
-    if ((found->done or not found->continuation_token.empty())
+    if (not found->continuation_token.empty()
         and found->last_continuation_token == request.continuation_token) {
       return std::make_tuple(found->continuation_token,
                              split(found->last_results, request.limit).first);
@@ -771,50 +739,51 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    // This is not ideal, but the current CAF streaming-based execution node
-    // only throttles for sinks when sinks actually block in the execution path.
-    // So until we have a proper async execution model we instead use a blocking
-    // actor here and make the operator detached.
-    auto blocking_self = caf::scoped_actor{ctrl.self().system()};
-    // Step 1: Get a handle to the SERVE MANAGER actor.
+    // This has to be blocking as the the code up to the first yield is run
+    // synchronously, and we should guarantee that the serve manager knows about
+    // a started pipeline containing a serve operator once it the pipeline
+    // executor indicated that the pipeline started.
     auto serve_manager = serve_manager_actor{};
-    blocking_self
-      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-                "serve-manager")
-      .receive(
-        [&](std::vector<caf::actor>& actors) {
-          VAST_ASSERT(actors.size() == 1);
-          serve_manager
-            = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
-        },
-        [&](const caf::error& err) { //
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to find serve-manager: {}", err)));
-        });
-    co_yield {};
-    // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
-    blocking_self
-      ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
-                buffer_size_)
-      .receive(
-        [&]() {
-          VAST_VERBOSE("serve for id {} is now available",
+    {
+      // Step 1: Get a handle to the SERVE MANAGER actor.
+      auto blocking = caf::scoped_actor{ctrl.self().system()};
+      blocking
+        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
+                  "serve-manager")
+        .receive(
+          [&](std::vector<caf::actor>& actors) {
+            VAST_ASSERT(actors.size() == 1);
+            serve_manager
+              = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
+          },
+          [&](const caf::error& err) { //
+            ctrl.abort(caf::make_error(
+              ec::logic_error,
+              fmt::format("failed to find serve-manager: {}", err)));
+          });
+      // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
+      blocking
+        ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
+                  buffer_size_)
+        .receive(
+          [&]() {
+            VAST_DEBUG("serve for id {} is now available",
                        escape_operator_arg(serve_id_));
-        },
-        [&](const caf::error& err) { //
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to register at serve-manager: {}", err)));
-        });
-    co_yield {};
+          },
+          [&](const caf::error& err) { //
+            ctrl.abort(caf::make_error(
+              ec::logic_error,
+              fmt::format("failed to register at serve-manager: {}", err)));
+          });
+      co_yield {};
+    }
     // Step 3: Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
       // Send slice to SERVE MANAGER.
-      blocking_self
-        ->request(serve_manager, caf::infinite, atom::put_v, serve_id_,
-                  std::move(slice))
-        .receive(
+      ctrl.self()
+        .request(serve_manager, caf::infinite, atom::put_v, serve_id_,
+                 std::move(slice))
+        .await(
           []() {
             // nop
           },
@@ -827,9 +796,9 @@ public:
       co_yield {};
     }
     // Step 4: Wait until all events were fetched.
-    blocking_self
-      ->request(serve_manager, caf::infinite, atom::stop_v, serve_id_)
-      .receive(
+    ctrl.self()
+      .request(serve_manager, caf::infinite, atom::stop_v, serve_id_)
+      .await(
         []() {
           // nop
         },
@@ -838,6 +807,7 @@ public:
             ec::logic_error,
             fmt::format("failed to deregister at serve-manager: {}", err)));
         });
+    co_yield {};
   }
 
   auto to_string() const -> std::string override {

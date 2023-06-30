@@ -82,6 +82,7 @@ public:
       ctrl.abort(std::move(components.error()));
       co_return;
     }
+    co_yield {};
     auto [index] = std::move(*components);
     auto num_events = uint64_t{};
     auto source = caf::detail::make_stream_source<import_source_driver>(

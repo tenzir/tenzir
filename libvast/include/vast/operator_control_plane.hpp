@@ -28,7 +28,7 @@ struct operator_control_plane {
   virtual ~operator_control_plane() noexcept = default;
 
   /// Returns the hosting actor.
-  [[nodiscard]] virtual auto self() noexcept -> execution_node_actor::base& = 0;
+  [[nodiscard]] virtual auto self() noexcept -> exec_node_actor::base& = 0;
 
   /// Returns the node actor, if the operator location is remote.
   [[nodiscard]] virtual auto node() noexcept -> node_actor = 0;

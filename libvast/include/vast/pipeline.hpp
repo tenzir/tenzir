@@ -262,6 +262,10 @@ public:
   /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
   explicit pipeline(std::vector<operator_ptr> operators);
 
+  /// TODO
+  static auto parse(std::string source, diagnostic_handler& diag)
+    -> std::optional<pipeline>;
+
   // TODO: Remove or make it better.
   /// Replacement API for `legacy_parse`.
   static auto internal_parse(std::string_view repr) -> caf::expected<pipeline>;
@@ -276,6 +280,8 @@ public:
 
   /// Returns the sequence of operators that this pipeline was built from.
   auto unwrap() && -> std::vector<operator_ptr>;
+  auto operators() const& -> std::span<const operator_ptr>;
+  auto operators() && = delete;
 
   /// Returns an optimized pipeline with pushed-down expressions.
   auto optimize() const -> caf::expected<pipeline>;
@@ -362,6 +368,7 @@ public:
   }
 
   auto name() const -> std::string override {
+    // TODO: Not anymore?
     // Normally, there must be a `operator_serialization_plugin` with this name.
     // However, pipelines are a special exception to this rule right now.
     return "<pipeline>";
@@ -376,10 +383,11 @@ private:
 };
 
 inline auto inspect(auto& f, operator_ptr& x) -> bool {
-  VAST_ASSERT(x);
-  if (auto* pipe = dynamic_cast<pipeline*>(x.get())) {
-    return f.apply(*pipe);
-  }
+  // TODO: Is this the best way to do it?
+  // VAST_ASSERT(x);
+  // if (auto* pipe = dynamic_cast<pipeline*>(x.get())) {
+  //   return f.apply(*pipe);
+  // }
   return plugin_inspect(f, x);
 }
 
@@ -560,6 +568,36 @@ public:
         }
       }
     }
+  }
+};
+
+/// A copyable `operator_ptr`, to be used in CAF actor interfaces.
+class operator_box : public operator_ptr {
+public:
+  operator_box() = default;
+
+  operator_box(operator_ptr op) : operator_ptr{std::move(op)} {
+  }
+
+  operator_box(const operator_box& box)
+    : operator_ptr{box ? box->copy() : nullptr} {
+  }
+
+  operator_box(operator_box&& box) = default;
+
+  auto operator=(const operator_box& box) -> operator_box& {
+    *this = operator_box{box};
+    return *this;
+  }
+
+  auto operator=(operator_box&& box) -> operator_box& = default;
+
+  auto unwrap() && -> operator_ptr {
+    return std::move(*this);
+  }
+
+  friend auto inspect(auto& f, operator_box& x) -> bool {
+    return inspect(f, static_cast<operator_ptr&>(x));
   }
 };
 

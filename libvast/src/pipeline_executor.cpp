@@ -9,6 +9,7 @@
 #include "vast/pipeline_executor.hpp"
 
 #include "vast/actors.hpp"
+#include "vast/atoms.hpp"
 #include "vast/connect_to_node.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/diagnostics.hpp"
@@ -30,234 +31,190 @@
 
 namespace vast {
 
-namespace {
-
-template <typename T>
-auto flatten(std::vector<std::vector<T>> vecs) -> std::vector<T> {
-  auto result = std::vector<T>{};
-  for (auto& vec : vecs) {
-    result.insert(result.end(), std::move_iterator{vec.begin()},
-                  std::move_iterator{vec.end()});
-  }
-  return result;
-}
-
-} // namespace
-
-void pipeline_executor_state::spawn_execution_nodes(
-  node_actor remote, std::vector<operator_ptr> ops,
-  receiver_actor<diagnostic> diag) {
-  VAST_DEBUG("spawning execution nodes (remote = {})", remote);
-  hosts.reserve(ops.size());
-  for (auto it = ops.begin(); it != ops.end(); ++it) {
-    switch ((*it)->location()) {
-      case operator_location::local:
-      case operator_location::anywhere: {
-        // Spawn and collect execution nodes until the first remote operator.
-        auto& v = hosts.emplace_back();
-        while (true) {
-          auto description = (*it)->to_string();
-          if ((*it)->detached()) {
-            v.push_back(caf::actor_cast<caf::actor>(
-              self->spawn<caf::monitored + caf::detached>(
-                execution_node, std::move(*it), node_actor{}, diag)));
-          } else {
-            v.push_back(caf::actor_cast<caf::actor>(self->spawn<caf::monitored>(
-              execution_node, std::move(*it), node_actor{}, diag)));
-          }
-          node_descriptions.emplace(v.back().address(), std::move(description));
-          nodes_alive += 1;
-          ++it;
-          if (it == ops.end()
-              || (*it)->location() == operator_location::remote) {
-            break;
-          }
-        }
-        --it;
-        break;
-      }
-      case operator_location::remote: {
-        // Spawn and collect execution nodes until the first local operator.
-        auto begin = it;
-        while (++it != ops.end()) {
-          if ((*it)->location() == operator_location::local) {
-            break;
-          }
-        }
-        auto end = it;
-        --it;
-        VAST_ASSERT(remote);
-        auto subpipe
-          = pipeline{{std::move_iterator{begin}, std::move_iterator{end}}};
-        // Allocate a slot in `hosts`, saving its index.
-        auto host = hosts.size();
-        hosts.emplace_back();
-        // We keep track of the remote spawning calls in order to continue
-        // only after remoting spawning is complete.
-        remote_spawn_count += 1;
-        self
-          ->request(remote, caf::infinite, atom::spawn_v, std::move(subpipe),
-                    diag)
-          .then(
-            [=, this](std::vector<std::pair<execution_node_actor, std::string>>&
-                        execution_nodes) mutable {
-              // The number of execution nodes should match the number of
-              // operators.
-              auto expected_count = detail::narrow<size_t>(end - begin);
-              if (execution_nodes.size() != expected_count) {
-                VAST_WARN("expected {} execution nodes but got {}",
-                          expected_count, execution_nodes.size());
-              }
-              // Insert the handles into `hosts`.
-              VAST_ASSERT(hosts[host].empty());
-              hosts[host].reserve(execution_nodes.size());
-              for (auto& [node, description] : execution_nodes) {
-                self->monitor(node);
-                nodes_alive += 1;
-                node_descriptions.emplace(node.address(),
-                                          std::move(description));
-                hosts[host].push_back(caf::actor_cast<caf::actor>(node));
-              }
-              remote_spawn_count -= 1;
-              continue_if_done_spawning();
-            },
-            [](caf::error& err) {
-              VAST_WARN("failed spawn request: {}", err);
-              die("todo");
-            });
-        break;
-      }
-    }
-  }
-  continue_if_done_spawning();
-}
-
-auto pipeline_executor_state::run(node_actor remote_node) -> caf::result<void> {
-  if (!pipe) {
-    return caf::make_error(ec::logic_error,
-                           fmt::format("{} received run twice", *self));
-  }
-  auto ops = (*std::exchange(pipe, std::nullopt)).unwrap();
-  if (ops.empty())
-    return {}; // no-op; empty pipeline
-  auto has_remote = std::any_of(ops.begin(), ops.end(), [](auto& op) {
-    return op->location() == operator_location::remote;
-  });
-  auto has_local = std::any_of(ops.begin(), ops.end(), [](auto& op) {
-    return op->location() == operator_location::local;
-  });
-  if (remote_node and has_local and not allow_unsafe_pipelines) {
-    return caf::make_error(ec::logic_error, "refusing to start unsafe pipeline "
-                                            "with local operators");
-  }
-  rp_complete = self->make_response_promise<void>();
-  if (remote_node) {
-    spawn_execution_nodes(remote_node, std::move(ops), self);
-  } else if (has_remote) {
-    connect_to_node(
-      self, content(self->system().config()),
-      // We use a shared_ptr because of non-copyable operator_ptr.
-      [this, shared_ops = std::make_shared<decltype(ops)>(std::move(ops))](
-        caf::expected<node_actor> node) mutable {
-        if (!node) {
-          rp_complete.deliver(node.error());
-          self->quit(node.error());
-          return;
-        }
-        spawn_execution_nodes(*node, std::move(*shared_ops), self);
-      });
-  } else {
-    spawn_execution_nodes({}, std::move(ops), self);
-  }
-  return rp_complete;
-}
-
-void pipeline_executor_state::continue_if_done_spawning() {
-  if (remote_spawn_count == 0) {
-    // We move the actor handles out of the state and do have references to
-    // the actors after this function returns. The actors are only kept alive
-    // by the ongoing streaming.
-    auto flattened = flatten(std::move(hosts));
-    VAST_DEBUG("spawning done, starting pipeline with {} actors",
-               flattened.size());
-    if (flattened.empty()) {
-      auto err = caf::make_error(ec::logic_error,
-                                 "node returned empty set of execution nodes "
-                                 "for remote pipeline");
-      rp_complete.deliver(err);
-      self->quit(std::move(err));
+void pipeline_executor_state::start_nodes_if_all_spawned() {
+  auto untyped_exec_nodes = std::vector<caf::actor>{};
+  for (auto node : exec_nodes) {
+    if (not node) {
+      // Not all spawned yet.
       return;
     }
-    auto source = std::move(flattened.front());
-    auto next = std::move(flattened);
-    next.erase(next.begin());
-    self
-      ->request(caf::actor_cast<execution_node_actor>(source), caf::infinite,
-                atom::run_v, std::move(next))
-      .then(
-        [=]() {
-          VAST_DEBUG("finished pipeline executor initialization");
-        },
-        [=](caf::error& err) {
-          rp_complete.deliver(err);
-          self->quit(std::move(err));
-        });
+    untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
   }
+  untyped_exec_nodes.pop_back();
+  // The exec nodes delegate the `atom::start` message to the preceding exec
+  // node. Thus, when we start the last node, all nodes before are started as
+  // well, and the request is completed only afterwards.
+  self
+    ->request(exec_nodes.back(), caf::infinite, atom::start_v,
+              std::move(untyped_exec_nodes))
+    .then(
+      [this]() mutable {
+        finish_start();
+      },
+      [this](caf::error& err) mutable {
+        abort_start(std::move(err));
+      });
+}
+
+void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
+  auto input_type = operator_type::make<void>();
+  auto previous = exec_node_actor{};
+  bool spawn_remote = false;
+  // Spawn pipeline piece by piece.
+  for (auto&& op : std::move(pipe).unwrap()) {
+    // Only switch locations if necessary.
+    if (spawn_remote and op->location() == operator_location::local) {
+      spawn_remote = false;
+    } else if (not spawn_remote
+               and op->location() == operator_location::remote) {
+      spawn_remote = true;
+    }
+    auto description = op->to_string();
+    if (spawn_remote) {
+      if (not node) {
+        abort_start(caf::make_error(
+          ec::invalid_argument, "encountered remote operator, but remote node "
+                                "is nullptr"));
+        return;
+      }
+      // The node will instantiate the operator for us, but we already need its
+      // output type to spawn the following operator.
+      auto output_type = op->infer_type(input_type);
+      if (not output_type) {
+        abort_start(caf::make_error(ec::invalid_argument,
+                                    "could not spawn '{}' for {}", description,
+                                    input_type));
+        return;
+      }
+      // Allocate an empty handle in the list of exec nodes. When the node actor
+      // returns the handle, we set the handle. This is also used to detect when
+      // all exec nodes are spawned.
+      auto index = exec_nodes.size();
+      exec_nodes.emplace_back();
+      self
+        ->request(node, caf::infinite, atom::spawn_v,
+                  operator_box{std::move(op)}, input_type, diagnostics)
+        .then(
+          [this, index](exec_node_actor& exec_node) {
+            // TODO: We should call `quit()` whenever `start()` fails to
+            // ensure that this will not be called afterwards (or we check for
+            // this case).
+            self->monitor(exec_node);
+            self->link_to(exec_node);
+            exec_nodes[index] = std::move(exec_node);
+            start_nodes_if_all_spawned();
+          },
+          [this](caf::error& err) {
+            abort_start(std::move(err));
+          });
+      input_type = *output_type;
+    } else {
+      auto spawn_result
+        = spawn_exec_node(self, std::move(op), input_type, node, diagnostics);
+      if (not spawn_result) {
+        auto error = caf::make_error(
+          ec::logic_error,
+          fmt::format("{} failed to spawn execution node "
+                      "for operator '{}': {}",
+                      *self, description, spawn_result.error()));
+        abort_start(std::move(error));
+        return;
+      }
+      std::tie(previous, input_type) = std::move(*spawn_result);
+      self->monitor(previous);
+      self->link_to(previous);
+      exec_nodes.push_back(previous);
+    }
+  }
+  if (exec_nodes.empty()) {
+    finish_start();
+    self->quit();
+    return;
+  }
+  start_nodes_if_all_spawned();
+}
+
+void pipeline_executor_state::abort_start(caf::error reason) {
+  VAST_DEBUG("{} aborts start: {}", *self, reason);
+  start_rp.deliver(reason);
+  self->quit(std::move(reason));
+}
+
+void pipeline_executor_state::finish_start() {
+  VAST_DEBUG("{} signals start", *self);
+  start_rp.deliver();
+}
+
+auto pipeline_executor_state::start() -> caf::result<void> {
+  if (not this->pipe) {
+    return caf::make_error(ec::logic_error,
+                           "pipeline exeuctor can only start once");
+  }
+  auto pipe = *std::exchange(this->pipe, std::nullopt);
+  start_rp = self->make_response_promise<void>();
+  if (not node) {
+    for (const auto& op : pipe.operators()) {
+      if (op->location() == operator_location::remote) {
+        connect_to_node(self, content(self->system().config()),
+                        [this, pipe = std::move(pipe)](
+                          caf::expected<node_actor> result) mutable {
+                          if (not result) {
+                            abort_start(std::move(result.error()));
+                            return;
+                          }
+                          node = *result;
+                          spawn_execution_nodes(std::move(pipe));
+                        });
+        return start_rp;
+      }
+    }
+  }
+  spawn_execution_nodes(std::move(pipe));
+  return start_rp;
 }
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, std::unique_ptr<diagnostic_handler> diag)
+  pipeline pipe, receiver_actor<diagnostic> diagnostics, node_actor node)
   -> pipeline_executor_actor::behavior_type {
   self->state.self = self;
+  self->state.node = std::move(node);
   self->set_down_handler([self](caf::down_msg& msg) {
-    VAST_DEBUG("pipeline executor node down: {}, reason: {}", msg.source,
-               msg.reason);
-    VAST_ASSERT(self->state.nodes_alive > 0);
-    self->state.nodes_alive -= 1;
-    auto description = self->state.node_descriptions.find(msg.source);
-    VAST_ASSERT(description != self->state.node_descriptions.end(),
-                "pipeline executor received down message from unknown "
-                "execution node");
-    VAST_DEBUG("received down message from '{}': {}", description->second,
-               msg.reason);
-    if (self->state.rp_complete.pending()) {
-      if (msg.reason && msg.reason != caf::exit_reason::unreachable) {
-        VAST_DEBUG("delivering error after down: {}", msg.reason);
-        self->state.rp_complete.deliver(msg.reason);
-        self->quit(msg.reason);
-      } else if (self->state.nodes_alive == 0) {
-        VAST_DEBUG("all execution nodes are done, delivering success");
-        self->state.rp_complete.deliver();
-        self->quit();
-      } else {
-        VAST_DEBUG("not all execution nodes are done, waiting");
-      }
-    } else {
-      VAST_DEBUG("promise is not pending, discarding down message");
+    VAST_DEBUG("pipeline executor node down: {}; remaining: {}; reason: {}",
+               msg.source, self->state.exec_nodes.size() - 1, msg.reason);
+    const auto exec_node
+      = std::find_if(self->state.exec_nodes.begin(),
+                     self->state.exec_nodes.end(), [&](const auto& exec_node) {
+                       return exec_node.address() == msg.source;
+                     });
+    if (exec_node == self->state.exec_nodes.end()) {
+      return;
+    }
+    for (auto it = self->state.exec_nodes.begin(); it != exec_node; ++it) {
+      self->demonitor(*it);
+      self->send_exit(*it, msg.reason);
+    }
+    self->state.exec_nodes.erase(self->state.exec_nodes.begin(), exec_node + 1);
+    if (msg.reason and msg.reason != caf::exit_reason::unreachable
+        and msg.reason != caf::exit_reason::user_shutdown) {
+      self->quit(std::move(msg.reason));
+    } else if (self->state.exec_nodes.empty()) {
+      self->quit();
     }
   });
-  auto optimized = pipe.optimize();
-  if (not optimized) {
-    self->quit(std::move(optimized.error()));
+  auto checked = pipe.check_type<void, void>();
+  if (not checked) {
+    self->quit(checked.error());
     return pipeline_executor_actor::behavior_type::make_empty_behavior();
   }
-  self->state.pipe = std::move(*optimized);
-  self->state.diag = std::move(diag);
+  self->state.pipe = std::move(pipe);
+  self->state.diagnostics = std::move(diagnostics);
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "tenzir.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
   return {
-    [self](atom::run) -> caf::result<void> {
-      return self->state.run();
-    },
-    [self](atom::run, node_actor node) -> caf::result<void> {
-      return self->state.run(std::move(node));
-    },
-    [self](diagnostic d) -> caf::result<void> {
-      VAST_DEBUG("{} received diagnostic: {}", *self, d);
-      self->state.diag->emit(std::move(d));
-      return {};
+    [self](atom::start) -> caf::result<void> {
+      return self->state.start();
     },
   };
 }

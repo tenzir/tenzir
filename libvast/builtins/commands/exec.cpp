@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/connect_to_node.hpp>
 #include <vast/detail/load_contents.hpp>
 #include <vast/diagnostics.hpp>
 #include <vast/logger.hpp>
@@ -47,28 +48,34 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
     }
     pipe.append(std::move(*op));
   }
-  if (not pipe.is_closed()) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("cannot execute pipeline that is not "
-                                       "closed: {}",
-                                       pipe.to_string()));
-  }
-  caf::scoped_actor self{sys};
-  auto executor
-    = self->spawn(pipeline_executor, std::move(pipe), std::move(diag));
+  auto self = caf::scoped_actor{sys};
+  auto executor = self->spawn<caf::monitored>(
+    pipeline_executor, std::move(pipe),
+    caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
   auto result = caf::expected<void>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
   // asynchronous executor, so we may as well wait until then.
-  self->request(executor, caf::infinite, atom::run_v)
-    .receive(
-      [] {
-        VAST_DEBUG("exec command finished pipeline execution");
-      },
-      [&](caf::error& error) {
-        result = std::move(error);
-      });
+  self->send(executor, atom::start_v);
+  auto running = true;
+  self->receive_while(running)(
+    []() {
+      VAST_DEBUG("pipeline was succcesfully started");
+    },
+    [&](diagnostic& d) {
+      diag->emit(std::move(d));
+    },
+    [&](caf::error& err) {
+      VAST_DEBUG("failed to start pipeline: {}", err);
+      result = err;
+      running = false;
+    },
+    [&](caf::down_msg& msg) {
+      VAST_DEBUG("pipeline execution finished: {}", msg.reason);
+      running = false;
+      result = msg.reason;
+    });
   return result;
 }
 

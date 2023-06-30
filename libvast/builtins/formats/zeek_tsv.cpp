@@ -225,6 +225,10 @@ struct zeek_metadata {
     auto header = std::string{};
     for (const auto& prefix : prefix_options) {
       ++it;
+      // FIXME: If *it is nullopt, then we must yield in the outer context. This
+      // more or less requires unrolling this loop, so that's not a trivial
+      // refactoring to make. For now, the zeek-tsv integration tests are
+      // disabled for that reason.
       if (not *it or it == lines.end()) {
         return caf::make_error(ec::syntax_error,
                                fmt::format(
@@ -526,12 +530,16 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   auto it = lines.begin();
   while (it != lines.end()) {
     auto header_line = *it;
-    if (header_line and not header_line->empty())
-      // Encountered the first non-empty header line.
-      break;
-    co_yield {};
-    if (header_line and header_line->empty())
+    if (not header_line) {
+      co_yield {};
       ++it;
+      continue;
+    }
+    if (header_line->empty()) {
+      ++it;
+      continue;
+    }
+    break;
   }
   if (it == lines.end()) {
     // Empty input.

@@ -117,6 +117,9 @@ public:
       ctrl.abort(child.error());
       co_return;
     }
+    // We yield once because reading below is blocking, but we want to directly
+    // signal that our initialization is complete.
+    co_yield {};
     while (child->reading()) {
       std::vector<char> buffer(block_size);
       if (auto bytes_read = child->read(as_writeable_bytes(buffer))) {
