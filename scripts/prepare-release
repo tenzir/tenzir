@@ -48,6 +48,9 @@ if [ -d "${source_dir}/changelog/${new_version}" ]; then
   exit 1
 fi
 
+# A variable to build a nice commit message.
+things_done=""
+
 # Create a new branch that bases off of current origin/main.
 git fetch origin main
 git switch -C "topic/release-${new_version}" origin/main
@@ -58,6 +61,9 @@ rev_count="$(($(git rev-list --count HEAD) + 2))"
 version_json="$(jq --arg v "${new_version#v}" --arg cnt "${rev_count}" \
   '."tenzir-version-fallback" = $v | ."tenzir-version-rev-count" = ($cnt|tonumber)' version.json)"
 echo -E "${version_json}" > version.json
+things_done+='
+* Updated /version.json to ${new_version} and the expected rev-count of the
+  merge commit to ${rev_count}.'
 
 # If the new version is not a release candidate, change mentions of the version
 # in README.md as well, and create a new docs version.
@@ -78,6 +84,15 @@ if [[ true ]]; then
   new_version_name="Tenzir ${new_version_major_minor}"
   jq "map(select(. | startswith(\"${new_version_name%-*}\") | not))" < versions.json > versions.json.tmp
   mv -f versions.json.tmp versions.json
+  things_done+='
+  * Generated a new entry in the docs version selector list.'
+  if [ -d "versioned_docs/version-${new_version_name%-*}"* ]; then
+    things_done+='
+    * Removed the docs for the previous release candidate.'
+  else
+  fi
+  # The `|| true`s in the next two lines work around a `zsh` behavior where
+  # a globbed `rm` fails if the glob doesn't match anything.
   rm -rf "versioned_docs/version-${new_version_name%-*}"* || true
   rm -rf "versioned_sidebars/version-${new_version_name%-*}"*-sidebars.json || true
   # And this actually cuts a new docs version:
@@ -96,6 +111,8 @@ if [ -d "${source_dir}/changelog/next" ]; then
   rsync -avzh "${source_dir}/changelog/next/" \
     "${source_dir}/changelog/${new_version}"
   rm -r "${source_dir}/changelog/next"
+  things_done+='
+  * Moved all changelog entries from `/changelog/next` to `/changelog/${new_version}`.'
 fi
 
 # If the previous release was an rc as well, merge the changelog directories.
@@ -105,17 +122,30 @@ if [[ "${last_rc_version}" == *"-rc"* ]]; then
       "${source_dir}/changelog/${new_version}"
     rm -r "${source_dir}/changelog/${last_rc_version}"
   fi
+  things_done+='
+  * Moved all changelog entries from `/changelog/${last_rc_version}` to `/changelog/${new_version}`.'
 fi
 
 # Update version of Python bindings.
 pushd "${source_dir}/python"
 poetry version "${new_version#v}"
 popd
+things_done+='
+* Updated the python bindings version in `/python/pyproject.toml` to ${new_version}.'
 
 # Commit and open a PR against tenzir/tenzir.
 pushd "${source_dir}"
 git add --all
-git commit -m "Prepare repository for Tenzir ${new_version}"
+git commit -F- <<EOF
+Prepare repository for Tenzir ${new_version}
+
+This commit is was created with /scripts/prepare-release.
+
+Here is a high-level summary of the changes:
+${things_done}
+EOF
+# Assume that tenzir/tenzir is the 'origin' repo to avoid another prompt. 
+git push -u origin HEAD
 gh pr create --web
 popd
 
