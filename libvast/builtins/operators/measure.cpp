@@ -30,6 +30,8 @@ public:
 
   auto operator()(generator<table_slice> input) const
     -> generator<table_slice> {
+    auto last_finish = std::chrono::steady_clock::now();
+    const auto batch_timeout = std::chrono::seconds{1};
     static const auto schema = type{
       "tenzir.metrics.events",
       record_type{
@@ -42,12 +44,14 @@ public:
     auto builder = table_slice_builder{schema};
     auto counters = std::unordered_map<type, uint64_t>{};
     for (auto&& slice : input) {
+      const auto now = std::chrono::steady_clock::now();
       if (slice.rows() == 0) {
-        if (builder.rows() == 0) {
-          co_yield {};
+        if (builder.rows() > 0 and last_finish + batch_timeout < now) {
+          last_finish = now;
+          co_yield builder.finish();
           continue;
         }
-        co_yield builder.finish();
+        co_yield {};
         continue;
       }
       auto& events = counters[slice.schema()];
@@ -56,7 +60,9 @@ public:
         = builder.add(time{std::chrono::system_clock::now()}, events,
                       slice.schema().name(), slice.schema().make_fingerprint());
       VAST_ASSERT(ok);
-      if (real_time_ || builder.rows() == batch_size_) {
+      if (real_time_ or builder.rows() == batch_size_
+          or last_finish + batch_timeout < now) {
+        last_finish = now;
         co_yield builder.finish();
         continue;
       }
@@ -67,6 +73,8 @@ public:
   }
 
   auto operator()(generator<chunk_ptr> input) const -> generator<table_slice> {
+    auto last_finish = std::chrono::steady_clock::now();
+    const auto batch_timeout = std::chrono::seconds{1};
     static const auto schema = type{
       "tenzir.metrics.bytes",
       record_type{
@@ -77,12 +85,14 @@ public:
     auto builder = table_slice_builder{schema};
     auto counter = uint64_t{};
     for (auto&& chunk : input) {
+      const auto now = std::chrono::steady_clock::now();
       if (!chunk || chunk->size() == 0) {
-        if (builder.rows() == 0) {
-          co_yield {};
+        if (builder.rows() > 0 and last_finish + batch_timeout < now) {
+          last_finish = now;
+          co_yield builder.finish();
           continue;
         }
-        co_yield builder.finish();
+        co_yield {};
         continue;
       }
       counter = cumulative_ ? counter + chunk->size() : chunk->size();
@@ -90,7 +100,9 @@ public:
                                     std::chrono::system_clock::now()),
                                   counter);
       VAST_ASSERT(ok);
-      if (real_time_ || builder.rows() == batch_size_) {
+      if (real_time_ or builder.rows() == batch_size_
+          or last_finish + batch_timeout < now) {
+        last_finish = now;
         co_yield builder.finish();
         continue;
       }
