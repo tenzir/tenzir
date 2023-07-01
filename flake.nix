@@ -117,17 +117,17 @@
             vast-ee-static = self.packages.${system}.tenzir-ee-static;
             vast-integration-test-shell = self.packages.${system}.integration-test-shell;
           };
-        apps.tenzir-de = flake-utils.lib.mkApp {drv = self.packages.tenzir-de;};
-        apps.tenzir-de-static = flake-utils.lib.mkApp {drv = self.packages.tenzir-de-static;};
-        apps.tenzir = flake-utils.lib.mkApp {drv = self.packages.tenzir;};
+        apps.tenzir-de = flake-utils.lib.mkApp {drv = self.packages.${system}.tenzir-de;};
+        apps.tenzir-de-static = flake-utils.lib.mkApp {drv = self.packages.${system}.tenzir-de-static;};
+        apps.tenzir = flake-utils.lib.mkApp {drv = self.packages.${system}.tenzir;};
         apps.tenzir-static = flake-utils.lib.mkApp {
           drv =
-            self.packages.tenzir-static;
+            self.packages.${system}.tenzir-static;
         };
-        apps.tenzir-ee = flake-utils.lib.mkApp {drv = self.packages.tenzir-ee;};
+        apps.tenzir-ee = flake-utils.lib.mkApp {drv = self.packages.${system}.tenzir-ee;};
         apps.tenzir-ee-static = flake-utils.lib.mkApp {
           drv =
-            self.packages.tenzir-ee-static;
+            self.packages.${system}.tenzir-ee-static;
         };
         apps.stream-tenzir-de-image = stream-image {
           entrypoint = "tenzir";
@@ -195,24 +195,20 @@
           pkg = self.packages.${system}.tenzir-ee-static;
           tag = "latest-slim";
         };
-        apps.default = self.apps.tenzir-static;
+        apps.default = self.apps.${system}.tenzir-static;
         # Legacy aliases for backwards compatibility.
-        apps.vast = self.apps.tenzir-de;
-        apps.vast-static = self.apps.tenzir-de-static;
-        apps.vast-ce = self.apps.tenzir;
-        apps.vast-ce-static = self.apps.tenzir-static;
-        apps.vast-cm = self.apps.tenzir-cm;
-        apps.vast-cm-static = self.apps.tenzir-cm-static;
-        apps.vast-ee = self.apps.tenzir-ee;
-        apps.vast-ee-static = self.apps.tenzir-ee-static;
-        apps.stream-vast-image = self.apps.stream-tenzir-de-image;
-        apps.stream-vast-slim-image = self.apps.stream-tenzir-de-slim-image;
-        apps.stream-vast-ce-image = self.apps.stream-tenzir-image;
-        apps.stream-vast-ce-slim-image = self.apps.stream-tenzir-slim-image;
-        apps.stream-vast-cm-image = self.apps.stream-tenzir-cm-image;
-        apps.stream-vast-cm-slim-image = self.apps.stream-tenzir-cm-slim-image;
-        apps.stream-vast-ee-image = self.apps.stream-tenzir-ee-image;
-        apps.stream-vast-ee-slim-image = self.apps.stream-tenzir-ee-slim-image;
+        apps.vast = self.apps.${system}.tenzir-de;
+        apps.vast-static = self.apps.${system}.tenzir-de-static;
+        apps.vast-ce = self.apps.${system}.tenzir;
+        apps.vast-ce-static = self.apps.${system}.tenzir-static;
+        apps.vast-ee = self.apps.${system}.tenzir-ee;
+        apps.vast-ee-static = self.apps.${system}.tenzir-ee-static;
+        apps.stream-vast-image = self.apps.${system}.stream-tenzir-de-image;
+        apps.stream-vast-slim-image = self.apps.${system}.stream-tenzir-de-slim-image;
+        apps.stream-vast-ce-image = self.apps.${system}.stream-tenzir-image;
+        apps.stream-vast-ce-slim-image = self.apps.${system}.stream-tenzir-slim-image;
+        apps.stream-vast-ee-image = self.apps.${system}.stream-tenzir-ee-image;
+        apps.stream-vast-ee-slim-image = self.apps.${system}.stream-tenzir-ee-slim-image;
         devShell = import ./shell.nix {inherit pkgs;};
         formatter = pkgs.alejandra;
         hydraJobs =
