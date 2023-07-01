@@ -261,7 +261,10 @@ add_feature_info("VAST_ENABLE_BUNDLED_SIMDJSON" VAST_ENABLE_BUNDLED_SIMDJSON
 
 unset(_vast_bundled_simdjson)
 if (NOT VAST_ENABLE_BUNDLED_SIMDJSON)
-  find_package(simdjson 3.2)
+  find_package(simdjson QUIET)
+  if (simdjson_FOUND AND simdjson_VERSION VERSION_LESS 3.1)
+    message(FATAL_ERROR "simdjson >= 3.1 required; found ${simdjson_VERSION}")
+  endif ()
   dependency_summary("simdjson" simdjson::simdjson "Dependencies")
 endif ()
 if (NOT simdjson_FOUND)
@@ -306,7 +309,7 @@ if (NOT simdjson_FOUND)
                      "Dependencies")
 endif ()
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(simdjson 3.1 REQUIRED)")
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
