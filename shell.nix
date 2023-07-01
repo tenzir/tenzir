@@ -5,7 +5,7 @@ in
   pkgs.mkShell ({
       name = "tenzir-dev";
       hardeningDisable = ["fortify"] ++ lib.optional isStatic "pic";
-      inputsFrom = [pkgs.tenzir];
+      inputsFrom = [pkgs.tenzir-de];
       nativeBuildInputs =
         [pkgs.ccache pkgs.speeve pkgs.clang-tools]
         ++ pkgs.tenzir-integration-test-deps
