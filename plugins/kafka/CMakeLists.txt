@@ -18,10 +18,14 @@ VASTRegisterPlugin(
   SOURCES ${kafka_sources}
   INCLUDE_DIRECTORIES include)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-find_package(RdKafka REQUIRED)
+find_package(RdKafka QUIET)
+if (NOT RdKafka_FOUND)
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  find_package(RdKafka QUIET REQUIRED)
+  list(POP_BACK CMAKE_MODULE_PATH)
+endif ()
+
 dependency_summary("librdkafka" RdKafka::rdkafka++ "Dependencies")
 target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)
 target_link_libraries(kafka-shared PUBLIC RdKafka::rdkafka++)
 target_link_libraries(kafka-static PUBLIC RdKafka::rdkafka++)
-list(POP_BACK CMAKE_MODULE_PATH)
