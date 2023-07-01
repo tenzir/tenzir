@@ -19,6 +19,7 @@ namespace vast {
 /// The two-octet field in the an Ethernet frame indicating the payload type.
 /// Directly copied from https://en.wikipedia.org/wiki/EtherType on 2019/11/16.
 enum class ether_type : uint16_t {
+  invalid = 0x0000,        ///< Invalid
   ipv4 = 0x0800,           ///< Internet Protocol version 4
   arp = 0x0806,            ///< Address Resolution Protocol (ARP)
   wol = 0x0842,            ///< Wake-on-LAN
@@ -81,7 +82,7 @@ enum class ether_type : uint16_t {
 /// @param octets The two octets representing the EtherType.
 /// @returns The `ether_type` instance for *octects*.
 /// @relates ether_type
-ether_type as_ether_type(std::span<const std::byte, 2> octets);
+auto as_ether_type(std::span<const std::byte, 2> octets) -> ether_type;
 
 } // namespace vast
 
@@ -95,6 +96,8 @@ struct formatter<vast::ether_type> : formatter<string_view> {
   constexpr auto format(const vast::ether_type& x, FormatContext& ctx)
     -> decltype(ctx.out()) {
     switch (x) {
+      case vast::ether_type::invalid:
+        return super::format("invalid", ctx);
       case vast::ether_type::ipv4:
         return super::format("Internet Protocol version 4", ctx);
       case vast::ether_type::arp:
