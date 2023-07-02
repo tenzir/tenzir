@@ -492,7 +492,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     const auto capped_demand
       = std::min(this->outbound_buffer_size, this->current_demand->batch_size);
     if (capped_demand == 0) {
-      VAST_DEBUG("{} short-circuits delivery of zero batches", op);
+      VAST_DEBUG("{} short-circuits delivery of zero batches", op->name());
       this->current_demand->rp.deliver();
       this->current_demand.reset();
       schedule_run();
@@ -544,7 +544,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
       // can prevent the upstream operators from running unnecessarily.
       if constexpr (not std::is_same_v<Input, std::monostate>) {
         if (this->previous) {
-          self->send_exit(this->previous, caf::exit_reason::unreachable);
+          VAST_DEBUG("{} shuts down previous operator", op->name());
+          self->send_exit(this->previous, caf::exit_reason::normal);
         }
       }
       // When we're done, we must make sure that we have delivered all results
@@ -554,9 +555,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
       // - There must not be anything remaining in the buffer.
       if constexpr (not std::is_same_v<Output, std::monostate>) {
         if (this->current_demand and this->outbound_buffer_size == 0) {
+          VAST_DEBUG("{} rejects further demand from next operator",
+                     op->name());
           this->reject_demand = true;
         }
         if (this->current_demand or this->outbound_buffer_size > 0) {
+          VAST_DEBUG("{} forcibly delivers batches", op->name());
           deliver_batches(now, true);
           schedule_run();
           return;
