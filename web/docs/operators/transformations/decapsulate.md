@@ -2,6 +2,11 @@
 
 Decapsulates packet data at link, network, and transport layer.
 
+:::warning Deprecated
+This operator will soon be removed in favor of first-class support for functions
+that can be used in a variety of different operators and contexts.
+:::
+
 ## Synopsis
 
 ```
