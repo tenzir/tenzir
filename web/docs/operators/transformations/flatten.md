@@ -1,6 +1,6 @@
 # flatten
 
-Flattens nested data structures.
+Flattens nested data.
 
 ## Synopsis
 
@@ -10,23 +10,27 @@ flatten [<separator>]
 
 ## Description
 
-The `flatten` operator removes any nested lists or records by merging lists and
-joining nested records with a separator. Flattening removes null values.
+The `flatten` operator acts on [container
+types](../../data-model/type-system.md):
 
-:::info
-Unlike for most data models, flattening is an (almost) free operation in VAST's
-data model.
-:::
+1. **Records**: join nested records with a separator. For example, if a field
+   named `x` is a nested records with fields `a` and `b`, flattening will lift
+   the nested records into the parent scope by creating two new fields `x.a` and
+   `x.b`.
+2. **Lists**: merge nested lists into a single (flat) list. For example,
+   `GENERIC-EXAMPLE-MISSING`.
+
+Flattening removes `null` values.
 
 ### `<separator>`
 
-The separator string to join nested records with.
+The separator string to join the field names of nested records.
 
 Defaults to `.`.
 
 ## Examples
 
-Consider the following data:
+Consider the following record:
 
 ```json
 {
@@ -48,7 +52,7 @@ Consider the following data:
 }
 ```
 
-The `flatten` operator removes any nesting from the data:
+After `flatten` the record looks as follows:
 
 ```json
 {
@@ -65,3 +69,5 @@ The `flatten` operator removes any nesting from the data:
   "dns.grouped.A": ["tenzir.com"]
 }
 ```
+
+ Note that `dns.grouped.A` no longer contains a `null` value.
