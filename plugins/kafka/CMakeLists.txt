@@ -27,5 +27,3 @@ endif ()
 
 dependency_summary("librdkafka" RdKafka::rdkafka++ "Dependencies")
 target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)
-target_link_libraries(kafka-shared PUBLIC RdKafka::rdkafka++)
-target_link_libraries(kafka-static PUBLIC RdKafka::rdkafka++)
