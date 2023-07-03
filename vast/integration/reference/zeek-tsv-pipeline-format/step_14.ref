@@ -1,0 +1,2 @@
+error: !! syntax_error: zeek-tsv parser failed: previous logs in Zeek file are still open
+ = note: from `parse "zeek-tsv"`
