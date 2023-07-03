@@ -130,6 +130,18 @@ public:
     return plugin_inspect(f, x.printer_);
   }
 
+protected:
+  auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type> override {
+    if (input.is<table_slice>()) {
+      return tag_v<chunk_ptr>;
+    }
+    // TODO: Fuse this check with crtp_operator::instantiate()
+    return caf::make_error(ec::type_clash,
+                           fmt::format("'{}' does not accept {} as input",
+                                       to_string(), operator_type_name(input)));
+  }
+
 private:
   std::unique_ptr<plugin_printer> printer_;
 };
@@ -196,6 +208,18 @@ public:
 
   friend auto inspect(auto& f, save_operator& x) -> bool {
     return plugin_inspect(f, x.saver_);
+  }
+
+protected:
+  auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type> override {
+    if (input.is<chunk_ptr>()) {
+      return tag_v<void>;
+    }
+    // TODO: Fuse this check with crtp_operator::instantiate()
+    return caf::make_error(ec::type_clash,
+                           fmt::format("'{}' does not accept {} as input",
+                                       to_string(), operator_type_name(input)));
   }
 
 private:
@@ -276,6 +300,18 @@ public:
 
   friend auto inspect(auto& f, print_and_save_operator& x) -> bool {
     return plugin_inspect(f, x.printer_) && plugin_inspect(f, x.saver_);
+  }
+
+protected:
+  auto infer_type_impl(operator_type input) const
+    -> caf::expected<operator_type> override {
+    if (input.is<table_slice>()) {
+      return tag_v<void>;
+    }
+    // TODO: Fuse this check with crtp_operator::instantiate()
+    return caf::make_error(ec::type_clash,
+                           fmt::format("'{}' does not accept {} as input",
+                                       to_string(), operator_type_name(input)));
   }
 
 private:
