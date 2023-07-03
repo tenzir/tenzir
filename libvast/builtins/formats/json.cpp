@@ -689,7 +689,8 @@ public:
     auto no_validation_validator = [](const detail::field_guard&) {
       return true;
     };
-    if (cfg_.selector.has_value() and cfg_.no_infer) {
+    if ((cfg_.selector.has_value() or cfg_.schema.has_value())
+        and cfg_.no_infer) {
       return instantiate_impl(std::move(input), ctrl,
                               std::move(strict_validator));
     }
