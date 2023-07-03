@@ -12,7 +12,7 @@ if (( $# != 1 )) || [[ "$1" == "--help" ]]; then
 fi
 
 # Check if all required tools are available.
-for binary in 'cmake' 'gh' 'rsync' 'git' 'perl' 'jq'; do
+for binary in 'cmake' 'gh' 'rsync' 'git' 'perl' 'jq' 'yarn'; do
   if ! command -v "${binary}" 2>&1 >/dev/null; then
     >&2 echo "Error: ${binary} not in PATH"
     exit 1
@@ -61,9 +61,9 @@ rev_count="$(($(git rev-list --count HEAD) + 2))"
 version_json="$(jq --arg v "${new_version#v}" --arg cnt "${rev_count}" \
   '."tenzir-version-fallback" = $v | ."tenzir-version-rev-count" = ($cnt|tonumber)' version.json)"
 echo -E "${version_json}" > version.json
-things_done+='
-* Updated /version.json to ${new_version} and the expected rev-count of the
-  merge commit to ${rev_count}.'
+things_done+="
+* Updated `/version.json` to ${new_version} and the expected rev-count of the
+  merge commit to ${rev_count}."
 
 # If the new version is not a release candidate, change mentions of the version
 # in README.md as well, and create a new docs version.
@@ -84,11 +84,9 @@ if [[ true ]]; then
   new_version_name="Tenzir ${new_version_major_minor}"
   jq "map(select(. | startswith(\"${new_version_name%-*}\") | not))" < versions.json > versions.json.tmp
   mv -f versions.json.tmp versions.json
-  things_done+='
-  * Generated a new entry in the docs version selector list.'
+  things_done+="\n* Generated a new entry in the docs version selector list."
   if [ -d "versioned_docs/version-${new_version_name%-*}"* ]; then
-    things_done+='
-    * Removed the docs for the previous release candidate.'
+    things_done+="\n* Removed the docs for the previous release candidate."
   else
   fi
   # The `|| true`s in the next two lines work around a `zsh` behavior where
@@ -111,8 +109,7 @@ if [ -d "${source_dir}/changelog/next" ]; then
   rsync -avzh "${source_dir}/changelog/next/" \
     "${source_dir}/changelog/${new_version}"
   rm -r "${source_dir}/changelog/next"
-  things_done+='
-  * Moved all changelog entries from `/changelog/next` to `/changelog/${new_version}`.'
+  things_done+="\n* Moved all changelog entries from `/changelog/next` to `/changelog/${new_version}`."
 fi
 
 # If the previous release was an rc as well, merge the changelog directories.
@@ -122,16 +119,15 @@ if [[ "${last_rc_version}" == *"-rc"* ]]; then
       "${source_dir}/changelog/${new_version}"
     rm -r "${source_dir}/changelog/${last_rc_version}"
   fi
-  things_done+='
-  * Moved all changelog entries from `/changelog/${last_rc_version}` to `/changelog/${new_version}`.'
+  things_done+="\n* Moved all changelog entries from `/changelog/${last_rc_version}` to `/changelog/${new_version}`."
 fi
 
 # Update version of Python bindings.
 pushd "${source_dir}/python"
 poetry version "${new_version#v}"
 popd
-things_done+='
-* Updated the python bindings version in `/python/pyproject.toml` to ${new_version}.'
+things_done+="
+* Updated the python bindings version in `/python/pyproject.toml` to ${new_version}."
 
 # Commit and open a PR against tenzir/tenzir.
 pushd "${source_dir}"
