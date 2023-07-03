@@ -92,9 +92,6 @@ components:
         error:
           type: string
           description: The error that the pipeline may have encountered during running.
-        delete_when_stopped:
-          type: boolean
-          description: A flag specifying whether this pipeline is implicitly removed once it is terminated.
         restart_with_node:
           type: boolean
           description: A flag specifying whether this pipeline should start upon launching the parent node.
@@ -150,11 +147,6 @@ paths:
                 hidden:
                   type: boolean
                   description: A flag specifying whether this pipeline is hidden.\nHidden pipelines are not persisted and will not show up in the /pipeline/list endpoint response.
-                  default: false
-                  example: false
-                delete_when_stopped:
-                  type: boolean
-                  description: A flag specifying whether this pipeline is implicitly removed once it is terminated.\nThis parameter must be true if the 'hidden' parameter is also true.
                   default: false
                   example: false
                 ttl:
@@ -255,7 +247,6 @@ paths:
                       definition: export | where foo | publish /bar
                       state: starting
                       error: ~
-                      delete_when_stopped: true
                       restart_with_node: true
                       operators:
                         - id: 0
@@ -272,7 +263,6 @@ paths:
                       definition: export asdf
                       state: stopped
                       error: format 'asdf' not found
-                      delete_when_stopped: false
                       restart_with_node: false
                       operators:
                         - id: 0
@@ -375,9 +365,6 @@ paths:
                 restart_with_node:
                   type: boolean
                   description: Flag that specifies whether the pipeline should be restarted when the VAST Node is restarted.
-                delete_when_stopped:
-                  type: boolean
-                  description: Flag that specifies whether the pipeline should self-destruct after it stopped.
       responses:
         200:
           description: Success.
