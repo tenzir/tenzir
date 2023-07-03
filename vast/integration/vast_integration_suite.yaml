@@ -735,6 +735,7 @@ tests:
     tags: [pipelines]
     steps:
       - command: exec 'from file @./data/suricata/eve.json read suricata | write json to stdout'
+      - command: exec 'from file @./data/suricata/eve.json read json --schema=suricata.alert --no-infer | write json to stdout'
 
   Skip columns that are not in the schema for suricata input with no-infer option:
     tags: [pipelines]
