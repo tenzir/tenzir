@@ -453,7 +453,11 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   auto b = std::optional<table_slice_builder>{};
   auto xs = std::vector<data>{};
   for (; it != lines.end(); ++it) {
-    if (*it and (*it)->starts_with("#separator")) {
+    auto current_line = *it;
+    if (not current_line) {
+      co_yield {};
+    }
+    if (current_line and (current_line)->starts_with("#separator")) {
       if (not closed) {
         ctrl.abort(caf::make_error(ec::syntax_error,
                                    fmt::format("zeek-tsv parser failed: "
@@ -475,7 +479,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       // empty events during the parsing of the header.
       metadata.parsed_options.clear();
       metadata.header.clear();
-      if (not sep_parser((*it).value(), sep_option)
+      if (not sep_parser(*current_line, sep_option)
           or not sep_option.starts_with("\\x")) {
         ctrl.abort(caf::make_error(
           ec::syntax_error, fmt::format("zeek-tsv parser failed: invalid "
@@ -489,7 +493,8 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       metadata.sep.push_back(metadata.sep_char);
       for (const auto& prefix : metadata.prefix_options) {
         ++it;
-        if (not *it) {
+        current_line = *it;
+        if (not current_line) {
           co_yield {};
         }
         if (it == lines.end()) {
@@ -499,7 +504,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                                                  "early")));
           co_return;
         }
-        metadata.header = (*it).value();
+        metadata.header = *current_line;
         auto pos = metadata.header.find(prefix);
         if (pos != 0) {
           ctrl.abort(caf::make_error(
@@ -591,16 +596,16 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       closed = false;
       ++it;
     }
-    auto line = *it;
-    if (not line) {
+    current_line = *it;
+    if (not current_line) {
       co_yield {};
       continue;
     }
-    if (line->empty()) {
+    if (current_line->empty()) {
       VAST_DEBUG("zeek-tsv parser ignored empty line");
       continue;
     }
-    if (line->starts_with("#close")) {
+    if (current_line->starts_with("#close")) {
       if (closed) {
         ctrl.abort(caf::make_error(ec::syntax_error,
                                    fmt::format("zeek-tsv parser failed: "
@@ -620,7 +625,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                                              "preceded by Zeek header")));
       co_return;
     }
-    auto values = detail::split((*it).value(), metadata.sep);
+    auto values = detail::split(*current_line, metadata.sep);
     if (values.size() != metadata.fields.size()) {
       ctrl.warn(caf::make_error(
         ec::parse_error, fmt::format("zeek-tsv parser skipped line: "
