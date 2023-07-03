@@ -662,6 +662,12 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       }
     }
   }
+  if (not closed) {
+    ctrl.abort(
+      caf::make_error(ec::syntax_error, fmt::format("zeek-tsv parser failed: "
+                                                    "Missing #close")));
+    co_return;
+  }
   VAST_ASSERT_CHEAP(b);
   auto finished = b->finish();
   if (metadata.output_slice_schema)

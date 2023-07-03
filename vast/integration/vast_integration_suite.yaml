@@ -839,6 +839,9 @@ tests:
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
         input: data/zeek/broken_no_closing_tag.log
         expected_result: error
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+        input: data/zeek/broken_no_data_after_open.log
+        expected_result: error
 
   Zeek TSV with Remote Import:
     fixture: ServerTester
