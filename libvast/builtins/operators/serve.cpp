@@ -455,7 +455,9 @@ struct serve_manager_state {
           return;
         }
         const auto delivered = found->try_deliver_results(true);
-        VAST_ASSERT(delivered);
+        if (not delivered) {
+          VAST_DEBUG("failed to deliver results after timeout expired");
+        }
       });
     return found->get_rp;
   }
