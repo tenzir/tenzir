@@ -1131,8 +1131,16 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
                     }))
       continue;
     for (const auto& index : layout.resolve_key_suffix(leaf.field.name)) {
-      if (index <= leaf.index)
+      // For historical reasons, resolve_key_suffix also suffix matches for dots
+      // within a field name. That's pretty stupid, and it can lead to wrong
+      // conflicts being detected here after flattening, so we check again if
+      // the full name actually clashes.
+      if (leaf.field.name != layout.field(index).name) {
         continue;
+      }
+      if (index <= leaf.index) {
+        continue;
+      }
       while (true) {
         ++num_occurences;
         if (num_occurences > 0) {
