@@ -18,9 +18,72 @@ types](../../data-model/type-system.md):
    the nested records into the parent scope by creating two new fields `x.a` and
    `x.b`.
 2. **Lists**: merge nested lists into a single (flat) list. For example,
-   `GENERIC-EXAMPLE-MISSING`.
+   `[[[2]], [[3, 1]], [[4]]]` becomes `[2, 3, 1, 4]`.
 
-Flattening removes `null` values.
+For records inside lists, `flatten` "pushes lists down" into one list per recrod
+field. For example, the record
+
+```json
+{
+  "foo": [
+    {
+      "a": 2,
+      "b": 1
+    },
+    {
+      "a": 4
+    }
+  ]
+}
+```
+
+becomes
+
+```json
+{
+  "foo.a": [2, 4],
+  "foo.b": [1, null]
+}
+```
+
+Nested lists inside records inside nested lists will also be flattened.For
+example, the record
+
+```json
+{
+  "foo": [
+    {
+      "a": [
+        [2, 23],
+        [1,16]
+      ],
+      "b": [1]
+    },
+    {
+      "a": [[4]]
+    }
+  ]
+}
+```
+
+becomes
+
+```json
+{
+  "foo.a": [
+    2,
+    23,
+    1,
+    16,
+    4
+  ],
+  "foo.b": [
+    1
+  ]
+}
+```
+
+As you can see from the above examples, flattening also removes `null` values.
 
 ### `<separator>`
 
