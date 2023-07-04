@@ -96,9 +96,6 @@ PipelineInfo:
     error:
       type: string
       description: The error that the pipeline may have encountered during running.
-    delete_when_stopped:
-      type: boolean
-      description: A flag specifying whether this pipeline is implicitly removed once it is terminated.
     restart_with_node:
       type: boolean
       description: A flag specifying whether this pipeline should start upon launching the parent node.
