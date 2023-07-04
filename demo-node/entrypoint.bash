@@ -8,11 +8,6 @@ read -r -u "${NODE[0]}" DUMMY
 # of Tenzir processes.
 export TENZIR_CONSOLE_VERBOSITY=info
 
-replay_zeek() {
-  :
-}
-export replay_zeek
-
 curl -L https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.zst | tar -x --zstd --to-command="vast import suricata" &
 
 curl -L https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.zst | tar -x --zstd
