@@ -81,20 +81,21 @@ echo "Found ${platform}."
 # Select appropriate package.
 action "Identifying package"
 package=
+package_url=
 if [ "${platform}" = "Debian" ]
 then
-  package="tenzir-linux-static.deb"
+  package_url="https://storage.googleapis.com/tenzir-dist-public/packages/main/debian/tenzir-static-latest.deb"
 elif [ "${platform}" = "Linux" ]
 then
-  package="tenzir-linux-static.tar.gz"
+  package_url="https://storage.googleapis.com/tenzir-dist-public/packages/main/tarball/tenzir-static-latest.gz"
 elif [ "${platform}" = "NixOS" ]
 then
   echo "Try Tenzir with our ${bold}flake.nix${normal}:"
   echo
-  echo "    ${bold}nix run github:tenzir/tenzir/stable${normal}"
+  echo "    ${bold}nix run github:tenzir/tenzir/latest${normal}"
   echo
   echo "Install Tenzir by adding" \
-    "${bold}github:tenzir/tenzir/stable${normal} to your"
+    "${bold}github:tenzir/tenzir/latest${normal} to your"
   echo "flake inputs, or use your preferred method to include third-party"
   echo "modules on classic NixOS."
   exit 0
@@ -108,19 +109,18 @@ else
   echo "Visit ${bold}https://docs.tenzir.com${normal} for further instructions."
   exit 1
 fi
+package="$(basename "${package_url}")"
 echo "Using ${package}"
 
 # Download package.
-base="https://github.com/tenzir/tenzir/releases/latest/download"
-url="${base}/${package}"
 tmpdir="$(dirname "$(mktemp -u)")"
-action "Downloading ${url}"
+action "Downloading ${package_url}"
 if check wget
 then
-  wget -q --show-progress -O "${tmpdir}/${package}" "${url}"
+  wget -q --show-progress -O "${tmpdir}/${package}" "${package_url}"
 elif check curl
 then
-  curl --progress-bar -L -o "${tmpdir}/${package}" "${url}"
+  curl --progress-bar -L -o "${tmpdir}/${package}" "${package_url}"
 else
   echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
     "found in \$PATH."
