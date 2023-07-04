@@ -143,8 +143,6 @@ struct unflatten_field {
 
   std::string_view field_name_;
   detail::stable_map<std::string_view, unflatten_field> nested_fields_;
-
-private:
   std::shared_ptr<arrow::Array> array_;
 };
 
@@ -1214,6 +1212,35 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
         = unflatten_field{field_name, unflatten_struct_array(
                                         field_struct, nested_field_separator)};
     } else if (caf::holds_alternative<list_type>(field_type)) {
+      auto arrow_list_type = caf::get<list_type>(field_type);
+      auto list_value_type = arrow_list_type.value_type();
+      while (caf::holds_alternative<list_type>(list_value_type)) {
+        // TODO: go into nested lists until a record is found.
+      }
+      if (caf::holds_alternative<record_type>(list_value_type)) {
+        auto field_list
+          = std::static_pointer_cast<arrow::ListArray>(field_array);
+
+        for (auto i = 0; i < field_list->length(); ++i) {
+          if (field_list->IsValid(i)) {
+            auto struct_array = std::static_pointer_cast<arrow::StructArray>(
+              field_list->value_slice(i));
+            auto unflattened_s
+              = unflatten_struct_array(struct_array, nested_field_separator);
+            auto builder = list_type{type::from_arrow(*unflattened_s->type())}
+                             .make_arrow_builder(arrow::default_memory_pool());
+
+            for (auto unflattened_v : unflattened_s->fields()) {
+              auto status = builder->Append();
+              VAST_ASSERT(status.ok());
+              status = builder->value_builder()->AppendArraySlice(
+                *unflattened_s->data(), 0, unflattened_s->length());
+              VAST_ASSERT(status.ok());
+            }
+            field.array_ = builder->Finish().ValueOrDie();
+          }
+        }
+      }
     }
     original_field_name_to_new_field_map[field_name]
       = std::addressof(unflattened_field_map[field_name]);
