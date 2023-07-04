@@ -58,6 +58,15 @@ if [ "$1" = "configure" ]; then
 fi
 
 if [ "$1" = "configure" ] ; then
+	# Delete all lines referencing /var/lib/vast if it doesn't exist. This works
+	# around restrictive behavior in systemd, which refuses to start the unit if
+	# a ReadWritePath does not exist.
+  if ! [ -d /var/lib/vast ]; then
+    sed -i '/\/var\/lib\/vast/d' /opt/tenzir/lib/systemd/system/tenzir.service
+  fi
+	if ! [ -d /var/log/vast ]; then
+		sed -i '/\/var\/log\/vast/d' /opt/tenzir/lib/systemd/system/tenzir.service
+	fi
 	# Link the service into systemd's default service directory to make
 	# it known.
 	/usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir.service
