@@ -24,6 +24,7 @@
 #include <vast/tql/parser.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
 #include <simdjson.h>
@@ -349,10 +350,11 @@ template <class FieldValidator>
 class parser_base {
 public:
   parser_base(operator_control_plane& ctrl, std::optional<selector> selector,
-              std::vector<type> schemas, FieldValidator field_validator,
-              bool infer_types)
+              std::optional<type> schema, std::vector<type> schemas,
+              FieldValidator field_validator, bool infer_types)
     : ctrl_{ctrl},
       selector_{std::move(selector)},
+      schema_{std::move(schema)},
       schemas_{std::move(schemas)},
       field_validator_{std::move(field_validator)},
       infer_types_{infer_types} {
@@ -418,6 +420,7 @@ protected:
   handle_known_schema(simdjson::ondemand::document_reference doc_ref,
                       std::string_view json_source, parser_state& state) const
     -> std::pair<parser_action, std::optional<table_slice>> {
+    VAST_ASSERT(not schema_);
     VAST_ASSERT(selector_);
     auto maybe_schema_name = get_schema_name(doc_ref, *selector_);
     if (not maybe_schema_name) {
@@ -466,6 +469,7 @@ protected:
 
   operator_control_plane& ctrl_;
   std::optional<selector> selector_;
+  std::optional<type> schema_;
   std::vector<type> schemas_;
   FieldValidator field_validator_;
   bool infer_types_ = true;
@@ -601,10 +605,18 @@ private:
 
 template <class GeneratorValue>
 auto make_parser(generator<GeneratorValue> json_chunk_generator,
-                 std::string separator, bool try_find_schema, auto parser_impl)
+                 std::string separator, bool try_find_schema,
+                 std::optional<type> schema, bool infer_types, auto parser_impl)
   -> generator<table_slice> {
   auto state = parser_state{};
-  state.last_used_builder = std::addressof(state.unknown_schema_builder);
+  if (schema) {
+    const auto [it, inserted] = state.builders_per_schema.emplace(
+      schema->name(), adaptive_table_slice_builder{*schema, infer_types});
+    VAST_ASSERT(inserted);
+    state.last_used_builder = std::addressof(it->second);
+  } else {
+    state.last_used_builder = std::addressof(state.unknown_schema_builder);
+  }
   for (auto chnk : json_chunk_generator) {
     if (not chnk or chnk->size() == 0u) {
       co_yield unflatten_if_needed(separator,
@@ -637,6 +649,7 @@ auto parse_selector(std::string_view x, location source) -> selector {
 
 struct config {
   std::optional<struct selector> selector;
+  std::optional<located<std::string>> schema;
   std::string unnest_separator;
   bool no_infer = false;
   bool use_ndjson_mode = false;
@@ -676,7 +689,8 @@ public:
     auto no_validation_validator = [](const detail::field_guard&) {
       return true;
     };
-    if (cfg_.selector.has_value() and cfg_.no_infer) {
+    if ((cfg_.selector.has_value() or cfg_.schema.has_value())
+        and cfg_.no_infer) {
       return instantiate_impl(std::move(input), ctrl,
                               std::move(strict_validator));
     }
@@ -694,21 +708,55 @@ private:
   instantiate_impl(generator<chunk_ptr> input, operator_control_plane& ctrl,
                    FieldValidator field_validator) const
     -> std::optional<generator<table_slice>> {
-    auto schemas = get_schemas(cfg_.selector.has_value(), ctrl,
-                               not cfg_.unnest_separator.empty());
+    auto schemas
+      = get_schemas(cfg_.schema.has_value() or cfg_.selector.has_value(), ctrl,
+                    not cfg_.unnest_separator.empty());
+    auto schema = std::optional<type>{};
+    if (cfg_.schema) {
+      const auto found
+        = std::find_if(schemas.begin(), schemas.end(), [&](const type& schema) {
+            for (const auto& name : schema.names()) {
+              if (name == cfg_.schema->inner) {
+                return true;
+              }
+            }
+            return false;
+          });
+      if (found == schemas.end()) {
+        diagnostic::error("failed to find schema `{}`", cfg_.schema->inner)
+          .primary(cfg_.schema->source)
+          // TODO: Refer to the show operator once we have that.
+          .note("use `tenzir-ctl show schemas` to show all available schemas")
+          .emit(ctrl.diagnostics());
+        return {};
+      }
+      schema = *found;
+    }
     if (cfg_.use_ndjson_mode) {
       return make_parser(to_padded_lines(std::move(input)),
                          cfg_.unnest_separator, cfg_.selector.has_value(),
+                         schema, not cfg_.no_infer,
                          ndjson_parser<FieldValidator>{
-                           ctrl, cfg_.selector, std::move(schemas),
-                           std::move(field_validator), not cfg_.no_infer});
+                           ctrl,
+                           cfg_.selector,
+                           schema,
+                           std::move(schemas),
+                           std::move(field_validator),
+                           not cfg_.no_infer,
+                         });
     }
-    return make_parser(
-      std::move(input), cfg_.unnest_separator, cfg_.selector.has_value(),
-      default_parser<FieldValidator>{ctrl, cfg_.selector, std::move(schemas),
-                                     std::move(field_validator),
-                                     not cfg_.no_infer});
+    return make_parser(std::move(input), cfg_.unnest_separator,
+                       cfg_.selector.has_value(), schema, not cfg_.no_infer,
+                       default_parser<FieldValidator>{
+                         ctrl,
+                         cfg_.selector,
+                         schema,
+                         std::move(schemas),
+                         std::move(field_validator),
+                         not cfg_.no_infer,
+                       });
   }
+
   config cfg_;
 };
 
@@ -780,11 +828,17 @@ public:
     auto parser
       = argument_parser{"json", "https://docs.tenzir.com/next/formats/json"};
     parser.add("--selector", selector, "<selector>");
+    parser.add("--schema", cfg.schema, "<schema>");
     parser.add("--unnest-separator", cfg.unnest_separator, "<separator>");
     add_common_options_to_parser(parser, cfg);
     parser.add("--ndjson", cfg.use_ndjson_mode);
     parser.parse(p);
-    if (selector) {
+    if (cfg.schema and selector) {
+      diagnostic::error("cannot use both `--selector` and `--schema`")
+        .primary(cfg.schema->source)
+        .primary(selector->source)
+        .throw_();
+    } else if (selector) {
       cfg.selector = parse_selector(selector->inner, selector->source);
     }
     return std::make_unique<json_parser>(std::move(cfg));
