@@ -500,6 +500,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     }
     auto [lhs, _] = split(this->outbound_buffer, capped_demand);
     auto handle_result = [this, capped_demand]() {
+      VAST_DEBUG("{} pushed successfully", op->name());
       outbound_total += capped_demand;
       auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
       this->outbound_buffer = std::move(rhs);
@@ -514,16 +515,21 @@ struct exec_node_state : inbound_state_mixin<Input>,
       schedule_run();
     };
     auto handle_error = [this](caf::error& error) {
+      VAST_DEBUG("{} failed to push", op->name());
       this->current_demand->rp.deliver(std::move(error));
       this->current_demand.reset();
       schedule_run();
     };
     auto response_handle = self->request(
       this->current_demand->sink, caf::infinite, atom::push_v, std::move(lhs));
-    if (force) {
+    if (force or this->outbound_buffer_size >= defaults::max_buffered) {
+      VAST_DEBUG("{} pushes {}/{} buffered elements and suspends execution",
+                 op->name(), capped_demand, this->outbound_buffer_size);
       std::move(response_handle)
         .await(std::move(handle_result), std::move(handle_error));
     } else {
+      VAST_DEBUG("{} pushes {}/{} buffered elements", op->name(), capped_demand,
+                 this->outbound_buffer_size);
       std::move(response_handle)
         .then(std::move(handle_result), std::move(handle_error));
     }
