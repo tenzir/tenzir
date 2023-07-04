@@ -735,23 +735,22 @@ private:
     if (cfg_.use_ndjson_mode) {
       return make_parser(to_padded_lines(std::move(input)),
                          cfg_.unnest_separator, cfg_.selector.has_value(),
-                         std::move(schema), not cfg_.no_infer,
+                         schema, not cfg_.no_infer,
                          ndjson_parser<FieldValidator>{
                            ctrl,
                            cfg_.selector,
-                           std::move(schema),
+                           schema,
                            std::move(schemas),
                            std::move(field_validator),
                            not cfg_.no_infer,
                          });
     }
     return make_parser(std::move(input), cfg_.unnest_separator,
-                       cfg_.selector.has_value(), std::move(schema),
-                       not cfg_.no_infer,
+                       cfg_.selector.has_value(), schema, not cfg_.no_infer,
                        default_parser<FieldValidator>{
                          ctrl,
                          cfg_.selector,
-                         std::move(schema),
+                         schema,
                          std::move(schemas),
                          std::move(field_validator),
                          not cfg_.no_infer,
