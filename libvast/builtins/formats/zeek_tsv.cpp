@@ -493,17 +493,25 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       metadata.sep.clear();
       metadata.sep.push_back(metadata.sep_char);
       for (const auto& prefix : metadata.prefix_options) {
-        ++it;
-        current_line = *it;
-        if (not current_line) {
-          co_yield {};
-        }
-        if (it == lines.end()) {
-          ctrl.abort(caf::make_error(ec::syntax_error,
-                                     fmt::format("zeek-tsv parser failed: "
-                                                 "header ended too "
-                                                 "early")));
-          co_return;
+        auto current_line = std::optional<std::string_view>{};
+        while (true) {
+          ++it;
+          if (it == lines.end()) {
+            ctrl.abort(caf::make_error(ec::syntax_error,
+                                       fmt::format("zeek-tsv parser failed: "
+                                                   "header ended too "
+                                                   "early")));
+            co_return;
+          }
+          current_line = *it;
+          if (not current_line) {
+            co_yield {};
+            continue;
+          }
+          if (current_line->empty()) {
+            continue;
+          }
+          break;
         }
         metadata.header = *current_line;
         auto pos = metadata.header.find(prefix);
