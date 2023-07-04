@@ -72,9 +72,7 @@ public:
     if (printer_->allows_joining()) {
       auto p = printer_->instantiate(type{}, ctrl);
       if (!p) {
-        ctrl.abort(caf::make_error(
-          ec::print_error,
-          fmt::format("failed to initialize printer: {}", p.error())));
+        ctrl.abort(add_context(p.error(), "failed to instantiate printer"));
         co_return;
       }
       for (auto&& slice : input) {
@@ -96,9 +94,7 @@ public:
         if (!state) {
           auto p = printer_->instantiate(slice.schema(), ctrl);
           if (!p) {
-            ctrl.abort(caf::make_error(
-              ec::print_error,
-              fmt::format("failed to initialize printer: {}", p.error())));
+            ctrl.abort(add_context(p.error(), "failed to initialize printer"));
             co_return;
           }
           state = std::pair{std::move(*p), slice.schema()};

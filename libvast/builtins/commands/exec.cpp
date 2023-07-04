@@ -200,8 +200,13 @@ public:
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
          auto result = exec_command(inv, sys);
-         if (not result)
-           return caf::make_message(result.error());
+         if (not result) {
+           if (result != ec::silent) {
+             auto diag = make_diagnostic_printer("", "", true, std::cerr);
+             diag->emit(diagnostic::error("{}", result.error()).done());
+           }
+           return caf::make_message(ec::silent);
+         }
          return {};
        }},
     };
