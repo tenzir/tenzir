@@ -456,6 +456,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     auto current_line = *it;
     if (not current_line) {
       co_yield {};
+      continue;
     }
     if (current_line and (current_line)->starts_with("#separator")) {
       if (not closed) {
