@@ -448,6 +448,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   auto closed = true;
   auto b = std::optional<table_slice_builder>{};
   auto xs = std::vector<data>{};
+  auto last_finish = std::chrono::steady_clock::now();
   for (; it != lines.end(); ++it) {
     auto current_line = *it;
     if (not current_line) {
@@ -664,6 +665,12 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                                                        x)));
         co_return;
       }
+    }
+    if (b->rows() > defaults::import::table_slice_size
+        or last_finish + std::chrono::seconds{1}
+             < std::chrono::steady_clock ::now()) {
+      last_finish = std::chrono::steady_clock::now();
+      co_yield b->finish();
     }
   }
   if (not closed) {
