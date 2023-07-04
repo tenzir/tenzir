@@ -6,9 +6,13 @@ sidebar_position: 0
 
 The Tenzir "app" is the cloud-native management platform at
 [app.tenzir.com](https://app.tenzir.com) to interact with your pipelines and
-nodes. You can use the app with the free *Community Edition* and the paid
-*Enterprise Edition*. Visit [our website](https://tenzir.com/pricing) for a
-detailed comparison of editions.
+nodes.
+
+:::note Editions
+You can use the app with the free *Community Edition* and the paid *Enterprise
+Edition*. Visit [our website](https://tenzir.com/pricing) for a detailed
+comparison of available editions.
+:::
 
 ## Create an account
 
@@ -73,5 +77,5 @@ Deleting your account will remove all data about you from our cloud platform.
 You will also lose the ability to manage pipelines on your node.
 :::
 
-If you decide to come back, just re-create an account [as described
+If you decide to come back just re-create an account [as described
 above](#create-an-account).

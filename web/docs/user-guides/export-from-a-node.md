@@ -16,9 +16,10 @@ tenzir 'export | head'
 ```
 
 The `export` operator requires a node execution context. To invoke the above
-pipeline successfully, you need to have [spawned a node](spawn-a-node.md)
-previously. Think of `export` being the entire data at a node. As this can grow
-quickly, you may query only subsets of it, e.g., by filtering it using
+pipeline successfully, you need to have [spawned a
+node](../setup-guides/deploy-a-node/README.md) previously. Think of `export`
+being the entire data at a node. As this can grow quickly, you may query only
+subsets of it, e.g., by filtering it using
 [`where`](../operators/transformations/where.md):
 
 ```bash

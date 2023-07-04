@@ -20,8 +20,8 @@ tenzir '
 ```
 
 The `import` operator requires a node execution context. To invoke the above
-pipeline successfully, you need to have [spawned a node](spawn-a-node.md)
-previously. How does it work? The `tenzir` process schedules the first three
-operators in the local process and attempts to place the final `import` operator
-at a remote node, by transparently connecting to the default endpoint
-`127.0.0.1:5158`.
+pipeline successfully, you need to have [spawned a
+node](../setup-guides/deploy-a-node/README.md) previously. How does it work? The
+`tenzir` process schedules the first three operators in the local process and
+attempts to place the final `import` operator at a remote node, by transparently
+connecting to the default endpoint `127.0.0.1:5158`.

@@ -1,22 +1,363 @@
 # Get Started
 
-<!-- Keep in sync with project README at https://github.com/tenzir/tenzir -->
-
 :::info What is Tenzir?
 Tenzir is a distributed platform for processing and storing security event data
 in a pipeline dataflow model.
 :::
 
-Dive right in with an interactive tour at [tenzir.com](https://tenzir.com) and
-sign up for a free account, or continue below with the open source edition and
-command line examples.
+Dive right in at [app.tenzir.com](https://app.tenzir.com) and sign up for a free
+account. The instructions below explain how to get started in just a few
+minutes.
 
-### Install Tenzir
+## Create a free account
 
-Select your platform to download and install Tenzir.
+You need a Tenzir account to interact with your nodes in the browser.
 
-[tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.deb
-[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-x86_64-linux.tar.gz
+1. Go to [app.tenzir.com](https://app.tenzir.com)
+2. Sign in with your identity provider or create an account
+
+No strings attached: you can always delete your account via *Account* → *Delete
+Account*.
+
+## Explore the demo node
+
+Let's run a few example [pipelines](language/pipelines.md). Every account comes
+with a pre-installed demo node, but you ultimately want to [bring your
+own](setup-guides/deploy-a-node/README.md). Follow along by copying the below
+examples and pasting them into the [Explorer](https://app.tenzir.com/explorer).
+
+:::tip Explorer vs. Documentation
+On this site we display the data in JSON. In the Explorer, you can enjoy a
+richer display in an interactive table. You can also produce the outputs here by
+invoking `tenzir <pipeline>` on the [command line](command-line.md) or
+`docker run -it tenzir/tenzir <pipeline>` when using Docker.
+:::
+
+Our first first pipeline produces just a single event: the version of the
+Tenzir node:
+
+```
+version
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "version": "v4.0.0-rc2-34-g9197f7355e",
+  "plugins": [
+    {
+      "name": "compaction",
+      "version": "bundled"
+    },
+    {
+      "name": "inventory",
+      "version": "bundled"
+    },
+    {
+      "name": "kafka",
+      "version": "bundled"
+    },
+    {
+      "name": "matcher",
+      "version": "bundled"
+    },
+    {
+      "name": "netflow",
+      "version": "bundled"
+    },
+    {
+      "name": "parquet",
+      "version": "bundled"
+    },
+    {
+      "name": "pcap",
+      "version": "bundled"
+    },
+    {
+      "name": "pipeline-manager",
+      "version": "bundled"
+    },
+    {
+      "name": "platform",
+      "version": "bundled"
+    },
+    {
+      "name": "web",
+      "version": "bundled"
+    }
+  ]
+}
+```
+
+(Output may vary based on your actual version.)
+
+</details>
+
+The [`version`](operators/sources/version.md) operator is a
+[source](operators/sources/README.md), i.e., it outputs data but doesn't have
+any input.
+
+Another source is [`export`](operators/sources/export.md), which initiates a
+pipeline with all data stored data at a node. We pre-loaded the demo node with
+the M57 dataset that we also use in our [user guides](user-guides.md). Pipe
+`export` to [`head`](operators/transformations/head.md) to get the 10 first
+events in the dataflow:
+
+```
+export
+| head
+```
+
+<details>
+<summary>Output</summary>
+
+TODO
+
+</details>
+
+Let's filter some events with [expressions](language/expressions.md) with
+[`where`](operators/transformations/where.md):
+
+```
+export
+| where #schema == "suricata.alert"
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "timestamp": "2021-11-17T13:52:05.695469",
+  "flow_id": 1868285155318879,
+  "pcap_cnt": 143,
+  "vlan": null,
+  "in_iface": null,
+  "src_ip": "14.1.112.177",
+  "src_port": 38376,
+  "dest_ip": "198.71.247.91",
+  "dest_port": 123,
+  "proto": "UDP",
+  "event_type": "alert",
+  "community_id": null,
+  "alert": {
+    "app_proto": null,
+    "action": "allowed",
+    "gid": 1,
+    "signature_id": 2017919,
+    "rev": 2,
+    "signature": "ET DOS Possible NTP DDoS Inbound Frequent Un-Authed MON_LIST Requests IMPL 0x03",
+    "category": "Attempted Denial of Service",
+    "severity": 2,
+    "source": {
+      "ip": null,
+      "port": null
+    },
+    "target": {
+      "ip": null,
+      "port": null
+    },
+    "metadata": {
+      "created_at": [
+        "2014_01_03"
+      ],
+      "updated_at": [
+        "2014_01_03"
+      ]
+    }
+  },
+  "flow": {
+    "pkts_toserver": 2,
+    "pkts_toclient": 0,
+    "bytes_toserver": 468,
+    "bytes_toclient": 0,
+    "start": "2021-11-17T13:52:05.695391",
+    "end": null,
+    "age": null,
+    "state": null,
+    "reason": null,
+    "alerted": null
+  },
+  "payload": null,
+  "payload_printable": null,
+  "stream": null,
+  "packet": null,
+  "packet_info": {
+    "linktype": null
+  },
+  "app_proto": "failed"
+}
+```
+
+(Only 1 out of 19 shown.)
+
+</details>
+
+Expressions combine rich-typed predicates with AND, OR, and NOT. Here's a more
+elaborate example:
+
+```
+export
+| where 10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min)
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "ts": "2021-11-19T06:30:30.918301",
+  "uid": "C9T8pykxdsT7iSrc9",
+  "id": {
+    "orig_h": "10.10.5.101",
+    "orig_p": 50046,
+    "resp_h": "87.120.8.190",
+    "resp_p": 9090
+  },
+  "proto": "tcp",
+  "service": null,
+  "duration": "5.09m",
+  "orig_bytes": 1394538,
+  "resp_bytes": 95179,
+  "conn_state": "S1",
+  "local_orig": null,
+  "local_resp": null,
+  "missed_bytes": 0,
+  "history": "ShADad",
+  "orig_pkts": 5046,
+  "orig_ip_bytes": 1596390,
+  "resp_pkts": 5095,
+  "resp_ip_bytes": 298983,
+  "tunnel_parents": null,
+  "community_id": "1:UPodR2krvvXUGhc/NEL9kejd7FA=",
+  "_write_ts": null
+}
+{
+  "ts": "2021-11-19T07:05:44.694927",
+  "uid": "ChnTjeQncxZrb0ZWg",
+  "id": {
+    "orig_h": "10.10.5.101",
+    "orig_p": 50127,
+    "resp_h": "87.120.8.190",
+    "resp_p": 9090
+  },
+  "proto": "tcp",
+  "service": null,
+  "duration": "54.81s",
+  "orig_bytes": 1550710,
+  "resp_bytes": 97122,
+  "conn_state": "S1",
+  "local_orig": null,
+  "local_resp": null,
+  "missed_bytes": 0,
+  "history": "ShADadww",
+  "orig_pkts": 5409,
+  "orig_ip_bytes": 1767082,
+  "resp_pkts": 5477,
+  "resp_ip_bytes": 316206,
+  "tunnel_parents": null,
+  "community_id": "1:aw0CtkT7YikUZWyqdHwgLhqJXxU=",
+  "_write_ts": null
+}
+{
+  "ts": "2021-11-19T06:30:15.910850",
+  "uid": "CxuTEOgWv2Z74FCG6",
+  "id": {
+    "orig_h": "10.10.5.101",
+    "orig_p": 50041,
+    "resp_h": "87.120.8.190",
+    "resp_p": 9090
+  },
+  "proto": "tcp",
+  "service": null,
+  "duration": "36.48m",
+  "orig_bytes": 565,
+  "resp_bytes": 507,
+  "conn_state": "S1",
+  "local_orig": null,
+  "local_resp": null,
+  "missed_bytes": 0,
+  "history": "ShADad",
+  "orig_pkts": 78,
+  "orig_ip_bytes": 3697,
+  "resp_pkts": 77,
+  "resp_ip_bytes": 3591,
+  "tunnel_parents": null,
+  "community_id": "1:r337wYxbKPDv5Vkjoz3gGuld1bs=",
+  "_write_ts": null
+}
+```
+
+</details>
+
+The above example extracts connections that either have sent more than 1 MiB or
+lasted longer than 30 minutes.
+
+Aside from filtering, you can also perform aggregations with
+[`summarize`](operators/transformations/summarize.md):
+
+```
+export
+| #schema == "suricata.alert"
+| summarize count=count(src_ip) by severity
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "alert.severity": 1,
+  "count": 134644
+}
+{
+  "alert.severity": 2,
+  "count": 26780
+}
+{
+  "alert.severity": 3,
+  "count": 179713
+}
+```
+
+</details>
+
+For counting, the [`top`](operators/transformations/top.md) and
+[`rare`](operators/transformations/rare.md) come in handy:
+
+```
+export
+| where #schema == "zeek.notice"
+| top msg
+| head 5
+'
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{"msg": "SSL certificate validation failed with (certificate has expired)", "n": 2201}
+{"msg": "SSL certificate validation failed with (unable to get local issuer certificate)", "n": 1600}
+{"msg": "SSL certificate validation failed with (self signed certificate)", "n": 603}
+{"msg": "Detected SMB::FILE_WRITE to admin file share '\\\\10.5.26.4\\C$\\WINDOWS\\h48l10jxplwhq9eowyecjmwg0nxwu72zblns1l3v3c6uu6p6069r4c4c5yjwv_e7.exe'", "n": 339}
+{"msg": "SSL certificate validation failed with (certificate is not yet valid)", "n": 324}
+```
+
+</details>
+
+This was just a quick tour. The [user guides](user-guides.md) cover a lot more
+material.
+
+## Onboard your own node
+
+Adding a own node takes just few minutes:
+
+1. Visit the [configurator](https://app.tenzir.com/configurator) and downloading
+   a configuration file.
+2. Install a node using the provided instructions (also explained below).
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -41,6 +382,8 @@ Download the latest [Debian package][tenzir-debian-package] and install it via
 ```bash
 dpkg -i tenzir-static-amd64-linux.deb
 ```
+
+[tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.deb
 
 </TabItem>
 <TabItem value="nix" label="Nix">
@@ -72,6 +415,8 @@ version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
 curl -fsSL "https://storage.googleapis.com/tenzir-dist-public/packages/main/tenzir-${version}-linux-static.tar.gz"
 ```
 
+[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-x86_64-linux.tar.gz
+
 </TabItem>
 <TabItem value="macos" label="macOS">
 
@@ -88,214 +433,18 @@ Pull the image:
 docker pull tenzir/tenzir
 ```
 
-When using Docker, replace `tenzir` with `docker run -it tenzir/tenzir` in the
-examples below.
+</TabItem>
+<TabItem value="docker-compose" label="Docker Compose">
+
+After having downloaded the config file from the
+[configurator](https://app.tenzir.com/configurator), run:
+
+```bash
+docker compose up
+```
 
 </TabItem>
 </Tabs>
-
-### Download sample data
-
-The below examples use this dataset. Download to follow along or just keep
-reading.
-
-```bash
-# Suricata EVE JSON logs (123 MB)
-curl -# -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
-tar xzvf suricata.tar.gz
-# Zeek TSV logs (43 MB)
-curl -# -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
-tar xzvf zeek.tar.gz
-```
-
-### Run pipelines
-
-The `tenzir` exectuable runs a pipeline.
-
-Start with the [`version`](operators/sources/version.md) source operator and
-pipe to the [`write`](operators/sinks/write.md) sink operator:
-
-```bash
-tenzir 'version | write json' 
-```
-
-```json
-{"version": "v3.1.0-377-ga790da3049-dirty", "plugins": [{"name": "parquet", "version": "bundled"}, {"name": "pcap", "version": "bundled"}, {"name": "sigma", "version": "bundled"}, {"name": "web", "version": "bundled"}]}
-```
-
-Get the top 3 schemas of the Zeek schemas as tab-separated values
-([`tsv`](formats/tsv.md)):
-
-```bash
-cat Zeek/*.log | tenzir '
-  read zeek-tsv 
-  | measure 
-  | summarize events=sum(events) by schema 
-  | sort events desc 
-  | head 3 
-  | write tsv
-  '
-```
-
-<details>
-<summary>Output</summary>
-
-```
-schema	events
-zeek.conn	583838
-zeek.ssl	42389
-zeek.files	21922
-```
-
-</details>
-
-Get the top 5 Zeek notices from `notice.log` as JSON:
-
-```bash
-tenzir '
-  from file Zeek/notice.log
-  | read zeek-tsv 
-  | where #schema == "zeek.notice"
-  | summarize n=count(msg) by msg
-  | sort n desc 
-  | head 3 
-  | write json
-  '
-```
-
-<details>
-<summary>Output</summary>
-
-```json
-{"msg": "SSL certificate validation failed with (certificate has expired)", "n": 2201}
-{"msg": "SSL certificate validation failed with (unable to get local issuer certificate)", "n": 1600}
-{"msg": "SSL certificate validation failed with (self signed certificate)", "n": 603}
-{"msg": "Detected SMB::FILE_WRITE to admin file share '\\\\10.5.26.4\\C$\\WINDOWS\\h48l10jxplwhq9eowyecjmwg0nxwu72zblns1l3v3c6uu6p6069r4c4c5yjwv_e7.exe'", "n": 339}
-{"msg": "SSL certificate validation failed with (certificate is not yet valid)", "n": 324}
-```
-
-</details>
-
-### Spawn a node
-
-Use the `tenzir-node` executable to start a node that manages pipelines and
-storage.
-
-<Tabs>
-  <TabItem value="binary" label="Binary" default>
-
-  ```bash
-  tenzir-node
-  ```
-
-  ```
-  [12:43:22.789] node (v3.1.0-377-ga790da3049-dirty) is listening on 127.0.0.1:5158
-  ```
-
-  </TabItem>
-  <TabItem value="docker" label="Docker">
-
-  Expose the port of the listening node and provide a directory for storage:
-
-  ```bash
-  mkdir storage
-  docker run -dt -p 5158:5158 -v storage:/var/lib/tenzir tenzir/tenzir --entry-point=tenzir-node
-  ```
-
-  </TabItem>
-</Tabs>
-
-:::caution Unsafe Pipelines
-Some pipeline operators are inherently unsafe due to their side effects, e.g.,
-reading from a file. When such operators run inside a node, you may
-involuntarily expose the file system to users that have access to the node. We
-therefore forbid pipelines with such side effects by default. You can remove
-this restriction by setting `tenzir.allow-unsafe-pipelines: true` in the
-`tenzir.yaml` of the respective node.
-:::
-
-### Import data into a node
-
-End a pipeline with the [`import`](operators/sinks/import.md) operator to ingest
-data into a node:
-
-```bash
-tar xOzf zeek.tar.gz | tenzir '
-  read zeek
-  | import
-  '
-```
-
-Filter the input with [`where`](operators/transformations/where.md) to select a
-subset of events:
-
-```bash
-tar xOzf suricata.tar.gz | tenzir '
-  read suricata
-  | where #schema == "suricata.alert"
-  | import
-  '
-```
-
-### Export data from a node
-
-Start a pipeline with the [`export`](operators/sources/export.md) operator to
-initiate a datastream from stored data at a node.
-
-Get a "taste" of one event per schema:
-
-```bash
-tenzir 'export | taste 1'
-```
-
-<details>
-<summary>Output</summary>
-
-TODO
-
-</details>
-
-As above, get the top 3 schemas of the Zeek schemas, but this time start the
-pipeline over the historical data at the running node:
-
-```bash
-tenzir '
-  export
-  | measure 
-  | summarize events=sum(events) by schema 
-  | sort events desc 
-  | head 3 
-  | write tsv
-  '
-```
-
-<details>
-<summary>Output</summary>
-
-```
-schema	events
-zeek.conn	583838
-zeek.ssl	42389
-zeek.files	21922
-```
-
-</details>
-
-The above pipeline performs a full scan over the data at the node. Tenzir's
-pipeline optimizer performs predicate push-down to avoid scans when possible.
-Consider this pipeline:
-
-```bash
-tenzir '
-  export
-  | where *.id.orig_h in 10.0.0.0/8
-  | write parquet to file local.parquet
-  '
-```
-
-The optimizer coalesces the `export` and `where` operators such that
-[expression](language/expressions.md) `*.id.orig_h in 10.0.0.0/8` gets pushed
-down to the index and storage layer.
 
 ## Up Next
 

@@ -788,3 +788,19 @@ zeek.radius          1
 ```
 
 </details>
+
+The above pipeline performs a full scan over the data at the node. Tenzir's
+pipeline optimizer pushes down predicate to avoid scans when possible. Consider
+this pipeline:
+
+```bash
+tenzir '
+  export
+  | where *.id.orig_h in 10.0.0.0/8
+  | write parquet to file local.parquet
+  '
+```
+
+The optimizer coalesces the `export` and `where` operators such that
+[expression](../../language/expressions.md) `*.id.orig_h in 10.0.0.0/8` gets
+pushed down to the index and storage layer.

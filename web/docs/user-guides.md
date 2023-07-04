@@ -26,6 +26,15 @@ The dataset includes the following files:
 - [suricata.tar.gz](https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz) (123 MB)
 - [data.pcap](https://storage.googleapis.com/tenzir-datasets/M57/PCAP/data.pcap) (3.8 GB)
 
+For the examples in the next section, download and extract the archives:
+
+```bash
+curl -# -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
+curl -# -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
+tar xzvf suricata.tar.gz
+tar xzvf zeek.tar.gz
+```
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
