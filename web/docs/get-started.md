@@ -101,10 +101,10 @@ reading.
 
 ```bash
 # Suricata EVE JSON logs (123 MB)
-curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
+curl -# -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
 tar xzvf suricata.tar.gz
 # Zeek TSV logs (43 MB)
-curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
+curl -# -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
 tar xzvf zeek.tar.gz
 ```
 
