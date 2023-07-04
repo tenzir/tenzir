@@ -7,8 +7,8 @@ Reads and writes JSON.
 Parser:
 
 ```
-json [--selector=field[:prefix]] [--unnest-separator=<string>] [--no-infer]
-     [--ndjson]
+json [--schema=<schema>] [--selector=<field[:prefix]>] [--unnest-separator=<string>]
+     [--no-infer] [--ndjson]
 ```
 
 Printer:
@@ -23,7 +23,13 @@ json [--pretty] [--omit-nulls] [--omit-empty-records] [--omit-empty-lists]
 The `json` format provides a parser and printer for JSON and [line-delimited
 JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects.
 
-### `--selector=field[:prefix]` (Parser)
+### `--schema=<schema>` (Parser)
+
+Provide the name schema used by the parser.
+
+The `--schema` option is incompatible with the `--selector` option.
+
+### `--selector=<field[:prefix]>` (Parser)
 
 Designates a field value as schema name with an optional dot-separated prefix.
 
@@ -31,6 +37,8 @@ For example, the [Suricata EVE JSON](suricata.md) format includes a field
 `event_type` that contains the event type. Setting the selector to
 `event_type:suricata` causes an event with the value `flow` for the field
 `event_type` to map onto the schema `suricata.flow`.
+
+The `--selector` option is incompatible with the `--schema` option.
 
 ### `--no-infer` (Parser)
 
