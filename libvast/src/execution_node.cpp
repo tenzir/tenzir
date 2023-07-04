@@ -500,7 +500,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     }
     auto [lhs, _] = split(this->outbound_buffer, capped_demand);
     auto handle_result = [this, capped_demand]() {
-      VAST_DEBUG("{} pushed successfully", op->name());
+      VAST_TRACE("{} pushed successfully", op->name());
       outbound_total += capped_demand;
       auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
       this->outbound_buffer = std::move(rhs);
@@ -523,12 +523,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto response_handle = self->request(
       this->current_demand->sink, caf::infinite, atom::push_v, std::move(lhs));
     if (force or this->outbound_buffer_size >= defaults::max_buffered) {
-      VAST_DEBUG("{} pushes {}/{} buffered elements and suspends execution",
+      VAST_TRACE("{} pushes {}/{} buffered elements and suspends execution",
                  op->name(), capped_demand, this->outbound_buffer_size);
       std::move(response_handle)
         .await(std::move(handle_result), std::move(handle_error));
     } else {
-      VAST_DEBUG("{} pushes {}/{} buffered elements", op->name(), capped_demand,
+      VAST_TRACE("{} pushes {}/{} buffered elements", op->name(), capped_demand,
                  this->outbound_buffer_size);
       std::move(response_handle)
         .then(std::move(handle_result), std::move(handle_error));
