@@ -26,7 +26,6 @@ static auto const* SPEC_V0 = R"_(
         application/json:
           schema:
             type: object
-            required: []
             properties:
               component:
                 type: string

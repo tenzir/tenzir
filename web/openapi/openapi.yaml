@@ -10,6 +10,111 @@ security:
   - VastToken:
       []
 components:
+  schemas:
+    Diagnostics:
+      type: array
+      items:
+        $ref: "#/components/schemas/Diagnostic"
+    Diagnostic:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum:
+            - error
+            - warning
+            - note
+        message:
+          type: string
+          example: unknown option `--frobnify`
+        annotation:
+          type: array
+          items:
+            $ref: "#/components/schemas/Annotation"
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Note"
+    Annotation:
+      type: object
+      properties:
+        primary:
+          type: boolean
+        text:
+          type: string
+          example: this option does not exist
+          description: A potentially empty label.
+        source:
+          $ref: "#/components/schemas/Location"
+    Note:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - note
+            - usage
+            - hint
+            - docs
+          example: usage
+        message:
+          type: string
+          example: file <path> [-f|--follow] [-m|--mmap] [-t|--timeout <duration>]
+    Location:
+      type: object
+      description: A region in the source code, defined by byte offsets.
+      properties:
+        begin:
+          type: number
+          example: 42
+        end:
+          type: number
+          example: 48
+    PipelineInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The pipeline ID.
+        name:
+          type: string
+          description: The human-readable name of the pipeline.
+        definition:
+          type: string
+          description: The pipeline definition.
+        state:
+          type: string
+          enum:
+            - starting
+            - running
+            - stopping
+            - stopped
+        error:
+          type: string
+          description: The error that the pipeline may have encountered during running.
+        delete_when_stopped:
+          type: boolean
+          description: A flag specifying whether this pipeline is implicitly removed once it is terminated.
+        restart_with_node:
+          type: boolean
+          description: A flag specifying whether this pipeline should start upon launching the parent node.
+          default: false
+        operators:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: The pipeline operator ID.
+              definition:
+                type: string
+                description: The pipeline operator definition.
+              instrumented:
+                type: boolean
+                description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
+        diagnostics:
+          $ref: "#/components/schemas/Diagnostics"
   securitySchemes:
     VastToken:
       type: apiKey
@@ -19,9 +124,8 @@ paths:
   /pipeline/create:
     post:
       summary: Create a new pipeline
-      description: Creates a new pipeline.
+      description: Creates a new pipeline. If `start_when_created` is `true`, the response is only sent after the pipeline was successfully started. If this fails, then the pipeline is immediately discarded, and the response contains the observed diagnostics.
       requestBody:
-        description: Body for the create endpoint
         required: true
         content:
           application/json:
@@ -75,18 +179,18 @@ paths:
                     type: string
                     description: The ID of the successfully created pipeline.
         400:
-          description: Invalid arguments.
+          description: Invalid arguments or invalid pipeline.
           content:
             application/json:
               schema:
                 type: object
-                required:
-                  - error
                 properties:
                   error:
                     type: string
                     example: Invalid arguments
                     description: The error message.
+                  diagnostics:
+                    $ref: "#/components/schemas/Diagnostics"
   /pipeline/delete:
     post:
       summary: Delete an existing pipeline
@@ -143,48 +247,7 @@ paths:
                   pipelines:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          description: The pipeline ID.
-                        name:
-                          type: string
-                          description: The human-readable name of the pipeline to this value.
-                        definition:
-                          type: string
-                          description: The pipeline definition.
-                        state:
-                          type: string
-                          enum:
-                            - starting
-                            - running
-                            - stopping
-                            - stopped
-                        error:
-                          type: string
-                          description: The error that the pipeline may have encountered during running.
-                        delete_when_stopped:
-                          type: boolean
-                          description: A flag specifying whether this pipeline is implicitly removed once it is terminated.
-                        restart_with_node:
-                          type: boolean
-                          description: A flag specifying whether this pipeline should start upon launching the parent node.
-                          default: false
-                        operators:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              id:
-                                type: string
-                                description: The pipeline operator ID.
-                              definition:
-                                type: string
-                                description: The pipeline operator definition.
-                              instrumented:
-                                type: boolean
-                                description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
+                      $ref: "#/components/schemas/PipelineInfo"
                 example:
                   pipelines:
                     - id: 7
@@ -325,65 +388,7 @@ paths:
                 description: The updated pipeline.
                 properties:
                   pipeline:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        description: The pipeline ID.
-                        example: 7
-                      name:
-                        type: string
-                        description: The human-readable name of the pipeline to this value.
-                        example: user-assigned-name
-                      definition:
-                        type: string
-                        description: The pipeline definition.
-                        example: export | where foo | publish /bar
-                      state:
-                        type: string
-                        enum:
-                          - starting
-                          - running
-                          - stopping
-                          - stopped
-                        example: starting
-                      error:
-                        type: string
-                        description: The error that the pipeline may have encountered during running.
-                        example: ~
-                      delete_when_stopped:
-                        type: boolean
-                        description: A flag specifying whether this pipeline is implicitly removed once it is terminated.
-                        example: false
-                      restart_with_node:
-                        type: boolean
-                        description: A flag specifying whether this pipeline should start upon launching the parent node.
-                        default: false
-                        example: true
-                      operators:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              description: The pipeline operator ID.
-                            definition:
-                              type: string
-                              description: The pipeline operator definition.
-                            instrumented:
-                              type: boolean
-                              description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
-                        example:
-                          - id: 0
-                            definition: export
-                            instrumented: false
-                          - id: 1
-                            definition: where foo
-                            instrumented: true
-                          - id: 2
-                            definition: publish /bar
-                            instrumented: true
+                    $ref: "#/components/schemas/PipelineInfo"
         400:
           description: Invalid arguments.
           content:
@@ -509,8 +514,6 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                []
               properties:
                 component:
                   type: string
