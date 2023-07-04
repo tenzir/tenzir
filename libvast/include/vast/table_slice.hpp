@@ -397,8 +397,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
   -> std::pair<type, std::shared_ptr<arrow::Array>>;
 
 /// @brief Unflattens the table slice (e.g a "foo.bar" field will be transformed
-/// into a "foo" record field with a "bar" child field). NOTICE: Doesn't support
-/// unflattening of nested records (list of records, record of records).
+/// into a "foo" record field with a "bar" child field).
 /// @param slice Table slice to unflatten.
 /// @param nested_field_separator A string treated as a separator of a nested
 /// fields. E.g with a field "a.b" and a separator ".", the function will create

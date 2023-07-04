@@ -915,6 +915,57 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     std::move(array),
   };
 }
+auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
+                            std::string_view nested_field_separator)
+  -> std::shared_ptr<arrow::StructArray>;
+
+auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
+  -> void {
+  auto field_array = f.to_arrow();
+  auto field_type = type::from_arrow(*field_array->type());
+  auto arrow_list_type = caf::get<list_type>(field_type);
+  auto list_value_type = arrow_list_type.value_type();
+  auto field_list = std::static_pointer_cast<arrow::ListArray>(field_array);
+  auto builder = std::shared_ptr<arrow::ListBuilder>{};
+  if (caf::holds_alternative<list_type>(list_value_type)) {
+    for (auto i = 0; i < field_list->length(); ++i) {
+      if (field_list->IsValid(i)) {
+        auto new_f = unflatten_field{f.field_name_, field_list->value_slice(i)};
+        unflatten_list(new_f, nested_field_separator);
+        if (not builder) {
+          builder = list_type{type::from_arrow(*new_f.array_->type())}
+                      .make_arrow_builder(arrow::default_memory_pool());
+        }
+        auto status = builder->Append();
+        VAST_ASSERT(status.ok());
+        status = builder->value_builder()->AppendArraySlice(
+          *new_f.array_->data(), 0, new_f.array_->length());
+        VAST_ASSERT(status.ok());
+      }
+    }
+  } else if (caf::holds_alternative<record_type>(list_value_type)) {
+    for (auto i = 0; i < field_list->length(); ++i) {
+      if (field_list->IsValid(i)) {
+        auto struct_array = std::static_pointer_cast<arrow::StructArray>(
+          field_list->value_slice(i));
+        auto unflattened_s
+          = unflatten_struct_array(struct_array, nested_field_separator);
+        if (not builder) {
+          builder = list_type{type::from_arrow(*unflattened_s->type())}
+                      .make_arrow_builder(arrow::default_memory_pool());
+        }
+        auto status = builder->Append();
+        VAST_ASSERT(status.ok());
+        status = builder->value_builder()->AppendArraySlice(
+          *unflattened_s->data(), 0, unflattened_s->length());
+        VAST_ASSERT(status.ok());
+      }
+    }
+  }
+  if (builder) {
+    f.array_ = builder->Finish().ValueOrDie();
+  }
+}
 
 namespace {
 
@@ -1171,26 +1222,27 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
                             std::string_view nested_field_separator)
   -> std::shared_ptr<arrow::StructArray> {
   // Used to map parent fields to it's children for unflattening purposes.
-  // Given foo.bar and foo.baz as fields of input slice the algorithm will first
-  // create an instance of unflattened_field for 'foo' key. The created instance
-  // will combine 'bar' and 'baz' fields into a struct array. All the fields
-  // that should be combined under the 'foo' key will use this map to find the
-  // approperiate object which should aggregate it.
+  // Given foo.bar and foo.baz as fields of input slice the algorithm will
+  // first create an instance of unflattened_field for 'foo' key. The created
+  // instance will combine 'bar' and 'baz' fields into a struct array. All the
+  // fields that should be combined under the 'foo' key will use this map to
+  // find the approperiate object which should aggregate it.
   std::unordered_map<std::string_view, unflatten_field> unflattened_field_map;
   std::unordered_map<std::string_view, unflatten_field> unflattened_children;
   std::unordered_map<std::string_view, unflatten_field*>
     original_field_name_to_new_field_map;
   // Aggregates all flattened field names under the key that represents the
-  // count of nested_field_separator occurrences. The algorithm starts iterating
-  // over this map so that it can distinguish if a separator separates nested
-  // fields or if it is a part of a field_name. E.g the field cpu : 5 and
-  // cpu.logger : 10 are a valid input. We may also have other
+  // count of nested_field_separator occurrences. The algorithm starts
+  // iterating over this map so that it can distinguish if a separator
+  // separates nested fields or if it is a part of a field_name. E.g the field
+  // cpu : 5 and cpu.logger : 10 are a valid input. We may also have other
   // nested fields that are separated by a '.', but these two can't be nested
   // fields. The algorithm will start with the 'cpu' field and add it to the
-  // unflattened_field_map as it doesn't have any separator in it's field name.
-  // The cpu.logger will be split into 'cpu' and 'logger'. The presence of
-  // 'cpu' in the map indicates that this name is reserved for a field. In such
-  // cases the cpu.logger must itself be a field that cannot be unflattened.
+  // unflattened_field_map as it doesn't have any separator in it's field
+  // name. The cpu.logger will be split into 'cpu' and 'logger'. The presence
+  // of 'cpu' in the map indicates that this name is reserved for a field. In
+  // such cases the cpu.logger must itself be a field that cannot be
+  // unflattened.
   std::map<std::size_t, std::vector<std::string_view>> fields_to_resolve;
   for (const auto& k : slice_array->struct_type()->fields()) {
     const auto& field_name = k->name();
@@ -1203,6 +1255,7 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
   }
 
   for (auto& [field_name, field] : unflattened_field_map) {
+    // Unflatten children recursively.
     auto field_array = field.to_arrow();
     auto field_type = type::from_arrow(*field_array->type());
     if (caf::holds_alternative<record_type>(field_type)) {
@@ -1212,35 +1265,8 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
         = unflatten_field{field_name, unflatten_struct_array(
                                         field_struct, nested_field_separator)};
     } else if (caf::holds_alternative<list_type>(field_type)) {
-      auto arrow_list_type = caf::get<list_type>(field_type);
-      auto list_value_type = arrow_list_type.value_type();
-      while (caf::holds_alternative<list_type>(list_value_type)) {
-        // TODO: go into nested lists until a record is found.
-      }
-      if (caf::holds_alternative<record_type>(list_value_type)) {
-        auto field_list
-          = std::static_pointer_cast<arrow::ListArray>(field_array);
-
-        for (auto i = 0; i < field_list->length(); ++i) {
-          if (field_list->IsValid(i)) {
-            auto struct_array = std::static_pointer_cast<arrow::StructArray>(
-              field_list->value_slice(i));
-            auto unflattened_s
-              = unflatten_struct_array(struct_array, nested_field_separator);
-            auto builder = list_type{type::from_arrow(*unflattened_s->type())}
-                             .make_arrow_builder(arrow::default_memory_pool());
-
-            for (auto unflattened_v : unflattened_s->fields()) {
-              auto status = builder->Append();
-              VAST_ASSERT(status.ok());
-              status = builder->value_builder()->AppendArraySlice(
-                *unflattened_s->data(), 0, unflattened_s->length());
-              VAST_ASSERT(status.ok());
-            }
-            field.array_ = builder->Finish().ValueOrDie();
-          }
-        }
-      }
+      unflatten_list(field, nested_field_separator);
+      unflattened_children[field_name] = field;
     }
     original_field_name_to_new_field_map[field_name]
       = std::addressof(unflattened_field_map[field_name]);
@@ -1292,7 +1318,9 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
       }
       // No parent found
       if (current_pos == std::string_view::npos) {
-        auto& struct_field = unflattened_field_map[field];
+        auto& struct_field = unflattened_children.contains(field)
+                               ? unflattened_children[field]
+                               : unflattened_field_map[field];
         struct_field.field_name_ = field;
         original_field_name_to_new_field_map[field]
           = std::addressof(struct_field);
