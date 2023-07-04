@@ -107,11 +107,11 @@ one file per type. Use the regular [`json`](/next/formats/json) parser to
 mobilize these log files with Tenzir:
 
 ```bash
-cat conn.log | tenzir 'read json -t "zeek.conn" | taste 1'
+cat conn.log | tenzir 'read json --schema "zeek.conn" | taste 1'
 ```
 
-Note how we pass the type `zeek.conn` to the JSON format. This sets the name of
-the schema.
+Note how we pass the type `zeek.conn` to the JSON parser. This sets the name of
+the schema explicitly.
 
 ### Multiplexed NDJSON
 
