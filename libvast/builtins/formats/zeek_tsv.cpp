@@ -440,10 +440,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     }
     break;
   }
-  if (it == lines.end()) {
-    // Empty input.
-    co_return;
-  }
   auto metadata = zeek_metadata{};
   auto sep_parser
     = "#separator" >> ignore(+(parsers::space)) >> +(parsers::any);
@@ -455,6 +451,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   for (; it != lines.end(); ++it) {
     auto current_line = *it;
     if (not current_line) {
+      ++it;
       co_yield {};
       continue;
     }
@@ -485,7 +482,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         ctrl.abort(caf::make_error(
           ec::syntax_error, fmt::format("zeek-tsv parser failed: invalid "
                                         "#separator option encountered")));
-
         co_return;
       }
       metadata.sep_char = std::stoi(sep_option.substr(2, 2), nullptr, 16);
@@ -559,7 +555,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                       metadata.fields.size(), metadata.types.size())));
         co_return;
       }
-
       metadata.record_fields.clear();
       for (auto i = size_t{0}; i < metadata.fields.size(); ++i) {
         auto t = parse_type(metadata.types[i]);
