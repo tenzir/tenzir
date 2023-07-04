@@ -200,119 +200,12 @@ struct zeek_metadata {
                       field.end());
   }
 
-  auto parse_header(generator<std::optional<std::string_view>>::iterator it,
-                    const generator<std::optional<std::string_view>>& lines,
-                    operator_control_plane& ctrl) -> caf::expected<void> {
-    auto sep_parser
-      = "#separator" >> ignore(+(parsers::space)) >> +(parsers::any);
-    auto sep_option = std::string{};
-    if (not sep_parser((*it).value(), sep_option)
-        or not sep_option.starts_with("\\x")) {
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("zeek-tsv parser failed: invalid "
-                                         "#separator option encountered"));
-    }
-    auto sep_char = std::stoi(sep_option.substr(2, 2), nullptr, 16);
-    VAST_ASSERT(sep_char >= 0 && sep_char <= 255);
-    if (not sep.empty())
-      sep.clear();
-    sep.push_back(sep_char);
-    auto prefix_options = std::array<std::string_view, 7>{
-      "#set_separator", "#empty_field", "#unset_field", "#path",
-      "#open",          "#fields",      "#types",
-    };
-    auto parsed_options = std::vector<std::string>{};
-    auto header = std::string{};
-    for (const auto& prefix : prefix_options) {
-      ++it;
-      // FIXME: If *it is nullopt, then we must yield in the outer context. This
-      // more or less requires unrolling this loop, so that's not a trivial
-      // refactoring to make. For now, the zeek-tsv integration tests are
-      // disabled for that reason.
-      if (not *it or it == lines.end()) {
-        return caf::make_error(ec::syntax_error,
-                               fmt::format(
-                                 "zeek-tsv parser failed: header ended too "
-                                 "early"));
-      }
-      header = (*it).value();
-      auto pos = header.find(prefix);
-      if (pos != 0)
-        return caf::make_error(ec::syntax_error,
-                               fmt::format("zeek-tsv parser encountered "
-                                           "invalid header line: prefix '{}' "
-                                           "not found at beginning of line",
-                                           prefix));
-      pos = header.find(sep);
-      if (pos == std::string::npos)
-        return caf::make_error(ec::syntax_error,
-                               fmt::format("zeek-tsv parser encountered "
-                                           "invalid header line: separator "
-                                           "'{}' not found",
-                                           sep_option));
-      if (pos + 1 >= header.size())
-        return caf::make_error(
-          ec::syntax_error, fmt::format("zeek-tsv detected missing header line "
-                                        "content: {}",
-                                        header));
-      parsed_options.emplace_back(header.substr(pos + 1));
-    }
-    set_sep = std::string{parsed_options[0][0]};
-    empty_field = parsed_options[1];
-    unset_field = parsed_options[2];
-    path = parsed_options[3];
-    fields_str = parsed_options[5];
-    types_str = parsed_options[6];
-    fields = detail::split(fields_str, sep);
-    types = detail::split(types_str, sep);
-    if (fields.size() != types.size())
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("zeek-tsv parser detected header "
-                                         "types mismatch: "
-                                         "expected {} fields but got {}",
-                                         fields.size(), types.size()));
-
-    std::vector<struct record_type::field> record_fields;
-    for (auto i = size_t{0}; i < fields.size(); ++i) {
-      auto t = parse_type(types[i]);
-      if (!t)
-        return std::move(t.error());
-      record_fields.push_back({
-        std::string{fields[i]},
-        *t,
-      });
-    }
-    name = std::string{type_name_prefix} + path;
-    // If a congruent type exists in the module, we give the type in the
-    // module precedence.
-    auto record_schema = record_type{record_fields};
-    record_schema = detail::zeekify(record_schema);
-    output_slice_schema = {};
-    for (const auto& ctrl_schema : ctrl.schemas()) {
-      if (ctrl_schema.name() == name) {
-        auto is_castable = can_cast(record_schema, ctrl_schema);
-        if (!is_castable) {
-          VAST_WARN("zeek-tsv parser ignores incompatible schema '{}' from "
-                    "schema files: {}",
-                    ctrl_schema, is_castable.error());
-        } else {
-          output_slice_schema = ctrl_schema;
-          break;
-        }
-      }
-    }
-    temp_slice_schema = type{name, record_schema};
-    // Create Zeek parsers.
-    auto make_parser = [](const auto& type, const auto& set_sep) {
-      return make_zeek_parser<iterator_type>(type, set_sep);
-    };
-    parsers.resize(record_schema.num_fields());
-    for (size_t i = 0; i < record_schema.num_fields(); i++)
-      parsers[i] = make_parser(record_schema.field(i).type, set_sep);
-    return {};
-  }
+  auto make_parser(const auto& type, const auto& set_sep) {
+    return make_zeek_parser<iterator_type>(type, set_sep);
+  };
 
   std::string sep{};
+  int sep_char{};
   std::string set_sep{};
   std::string empty_field{};
   std::string unset_field{};
@@ -322,9 +215,16 @@ struct zeek_metadata {
   std::vector<std::string_view> fields{};
   std::vector<std::string_view> types{};
   std::string name{};
+  std::vector<struct record_type::field> record_fields{};
   type output_slice_schema{};
   type temp_slice_schema{};
   std::vector<rule<iterator_type, data>> parsers{};
+  std::vector<std::string> parsed_options{};
+  std::string header{};
+  std::array<std::string_view, 7> prefix_options{
+    "#set_separator", "#empty_field", "#unset_field", "#path",
+    "#open",          "#fields",      "#types",
+  };
 };
 
 struct zeek_printer {
@@ -526,7 +426,6 @@ struct zeek_printer {
 
 auto parser_impl(generator<std::optional<std::string_view>> lines,
                  operator_control_plane& ctrl) -> generator<table_slice> {
-  // Parse header.
   auto it = lines.begin();
   while (it != lines.end()) {
     auto header_line = *it;
@@ -546,27 +445,176 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     co_return;
   }
   auto metadata = zeek_metadata{};
-  auto parsed = metadata.parse_header(it, lines, ctrl);
-  if (not parsed) {
-    ctrl.abort(parsed.error());
-    VAST_ERROR("aborting Zeek metadata parsing");
-    co_return;
-  }
-  ++it;
-  auto closed = false;
-  auto b = table_slice_builder{metadata.temp_slice_schema};
-  std::vector<data> xs(metadata.fields.size());
+  auto sep_parser
+    = "#separator" >> ignore(+(parsers::space)) >> +(parsers::any);
+  auto sep_option = std::string{};
+  auto header_parsed = false;
+  auto closed = true;
+  auto b = std::optional<table_slice_builder>{};
+  auto xs = std::vector<data>{};
   for (; it != lines.end(); ++it) {
-    auto line = *it;
-    if (not line) {
+    auto current_line = *it;
+    if (not current_line) {
       co_yield {};
       continue;
     }
-    if (line->empty()) {
+    if (current_line and (current_line)->starts_with("#separator")) {
+      if (not closed) {
+        ctrl.abort(caf::make_error(ec::syntax_error,
+                                   fmt::format("zeek-tsv parser failed: "
+                                               "previous logs in Zeek file are "
+                                               "still open")));
+        co_return;
+      }
+      if (b) {
+        auto finished = b->finish();
+        if (metadata.output_slice_schema)
+          finished = cast(std::move(finished), metadata.output_slice_schema);
+        co_yield std::move(finished);
+      }
+      header_parsed = false;
+    }
+    if (not header_parsed) {
+      // Parse header.
+      // Parsing has been unrolled from a helper method to ensure yielding of
+      // empty events during the parsing of the header.
+      metadata.parsed_options.clear();
+      metadata.header.clear();
+      if (not sep_parser(*current_line, sep_option)
+          or not sep_option.starts_with("\\x")) {
+        ctrl.abort(caf::make_error(
+          ec::syntax_error, fmt::format("zeek-tsv parser failed: invalid "
+                                        "#separator option encountered")));
+
+        co_return;
+      }
+      metadata.sep_char = std::stoi(sep_option.substr(2, 2), nullptr, 16);
+      VAST_ASSERT(metadata.sep_char >= 0 && metadata.sep_char <= 255);
+      metadata.sep.clear();
+      metadata.sep.push_back(metadata.sep_char);
+      for (const auto& prefix : metadata.prefix_options) {
+        auto current_line = std::optional<std::string_view>{};
+        while (true) {
+          ++it;
+          if (it == lines.end()) {
+            ctrl.abort(caf::make_error(ec::syntax_error,
+                                       fmt::format("zeek-tsv parser failed: "
+                                                   "header ended too "
+                                                   "early")));
+            co_return;
+          }
+          current_line = *it;
+          if (not current_line) {
+            co_yield {};
+            continue;
+          }
+          if (current_line->empty()) {
+            continue;
+          }
+          break;
+        }
+        metadata.header = *current_line;
+        auto pos = metadata.header.find(prefix);
+        if (pos != 0) {
+          ctrl.abort(caf::make_error(
+            ec::syntax_error, fmt::format("zeek-tsv parser encountered "
+                                          "invalid header line: prefix '{}' "
+                                          "not found at beginning of line",
+                                          prefix)));
+          co_return;
+        }
+        pos = metadata.header.find(metadata.sep);
+        if (pos == std::string::npos) {
+          ctrl.abort(caf::make_error(
+            ec::syntax_error, fmt::format("zeek-tsv parser encountered "
+                                          "invalid header line: separator "
+                                          "'{}' not found",
+                                          sep_option)));
+          co_return;
+        }
+        if (pos + 1 >= metadata.header.size()) {
+          ctrl.abort(
+            caf::make_error(ec::syntax_error,
+                            fmt::format("zeek-tsv detected missing header line "
+                                        "content: {}",
+                                        metadata.header)));
+          co_return;
+        }
+        metadata.parsed_options.emplace_back(metadata.header.substr(pos + 1));
+      }
+      metadata.set_sep = std::string{metadata.parsed_options[0][0]};
+      metadata.empty_field = metadata.parsed_options[1];
+      metadata.unset_field = metadata.parsed_options[2];
+      metadata.path = metadata.parsed_options[3];
+      metadata.fields_str = metadata.parsed_options[5];
+      metadata.types_str = metadata.parsed_options[6];
+      metadata.fields = detail::split(metadata.fields_str, metadata.sep);
+      metadata.types = detail::split(metadata.types_str, metadata.sep);
+      if (metadata.fields.size() != metadata.types.size()) {
+        ctrl.abort(caf::make_error(
+          ec::syntax_error,
+          fmt::format("zeek-tsv parser detected header "
+                      "types mismatch: "
+                      "expected {} fields but got {}",
+                      metadata.fields.size(), metadata.types.size())));
+        co_return;
+      }
+
+      metadata.record_fields.clear();
+      for (auto i = size_t{0}; i < metadata.fields.size(); ++i) {
+        auto t = parse_type(metadata.types[i]);
+        if (!t) {
+          ctrl.abort(std::move(t.error()));
+          VAST_ERROR("aborting Zeek metadata parsing");
+          co_return;
+        }
+        metadata.record_fields.push_back({
+          std::string{metadata.fields[i]},
+          *t,
+        });
+      }
+      metadata.name = std::string{type_name_prefix} + metadata.path;
+      // If a congruent type exists in the module, we give the type in the
+      // module precedence.
+      auto record_schema = detail::zeekify(record_type{metadata.record_fields});
+      metadata.output_slice_schema = {};
+      for (const auto& ctrl_schema : ctrl.schemas()) {
+        if (ctrl_schema.name() == metadata.name) {
+          auto is_castable = can_cast(record_schema, ctrl_schema);
+          if (!is_castable) {
+            VAST_WARN("zeek-tsv parser ignores incompatible schema '{}' from "
+                      "schema files: {}",
+                      ctrl_schema, is_castable.error());
+          } else {
+            metadata.output_slice_schema = ctrl_schema;
+            break;
+          }
+        }
+      }
+      metadata.temp_slice_schema = type{metadata.name, record_schema};
+      // Create Zeek parsers.
+      metadata.parsers.clear();
+      metadata.parsers.resize(record_schema.num_fields());
+      for (size_t i = 0; i < record_schema.num_fields(); i++)
+        metadata.parsers[i]
+          = metadata.make_parser(record_schema.field(i).type, metadata.set_sep);
+      b = table_slice_builder{metadata.temp_slice_schema};
+      xs.clear();
+      xs.resize(metadata.fields.size());
+      header_parsed = true;
+      closed = false;
+      ++it;
+    }
+    current_line = *it;
+    if (not current_line) {
+      co_yield {};
+      continue;
+    }
+    if (current_line->empty()) {
       VAST_DEBUG("zeek-tsv parser ignored empty line");
       continue;
     }
-    if (line->starts_with("#close")) {
+    if (current_line->starts_with("#close")) {
       if (closed) {
         ctrl.abort(caf::make_error(ec::syntax_error,
                                    fmt::format("zeek-tsv parser failed: "
@@ -578,27 +626,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       co_yield {};
       continue;
     }
-    if (line->starts_with("#separator")) {
-      if (not closed) {
-        ctrl.abort(caf::make_error(
-          ec::syntax_error, fmt::format("zeek-tsv parser failed: "
-                                        "previous logs are still open")));
-        co_return;
-      }
-      closed = false;
-      auto finished = b.finish();
-      if (metadata.output_slice_schema)
-        finished = cast(std::move(finished), metadata.output_slice_schema);
-      co_yield std::move(finished);
-      auto parsed = metadata.parse_header(it, lines, ctrl);
-      if (not parsed) {
-        ctrl.abort(parsed.error());
-        co_return;
-      }
-      xs.resize(metadata.fields.size());
-      b = table_slice_builder{metadata.temp_slice_schema};
-      continue;
-    }
     if (closed) {
       ctrl.abort(caf::make_error(ec::syntax_error,
                                  fmt::format("zeek-tsv parser failed: "
@@ -607,7 +634,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                                              "preceded by Zeek header")));
       co_return;
     }
-    auto values = detail::split((*it).value(), metadata.sep);
+    auto values = detail::split(*current_line, metadata.sep);
     if (values.size() != metadata.fields.size()) {
       ctrl.warn(caf::make_error(
         ec::parse_error, fmt::format("zeek-tsv parser skipped line: "
@@ -635,7 +662,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     }
     for (auto i = size_t{0}; i < xs.size(); ++i) {
       auto&& x = xs[i];
-      if (not b.add(make_data_view(x))) {
+      if (not b->add(make_data_view(x))) {
         ctrl.abort(
           caf::make_error(ec::parse_error, fmt::format("zeek-tsv parser failed "
                                                        "to finalize value '{}'",
@@ -644,7 +671,14 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       }
     }
   }
-  auto finished = b.finish();
+  if (not closed) {
+    ctrl.abort(
+      caf::make_error(ec::syntax_error, fmt::format("zeek-tsv parser failed: "
+                                                    "Missing #close")));
+    co_return;
+  }
+  VAST_ASSERT_CHEAP(b);
+  auto finished = b->finish();
   if (metadata.output_slice_schema)
     finished = cast(std::move(finished), metadata.output_slice_schema);
   co_yield std::move(finished);
