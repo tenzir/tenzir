@@ -28,28 +28,55 @@ namespace vast {
 
 namespace {
 
-namespace defaults {
-
 using namespace std::chrono_literals;
 using namespace si_literals;
 
-/// Defines the upper bound for the batch timeout used when requesting a batch
-/// from the the previous execution node in the pipeline.
-constexpr duration max_batch_timeout = 250ms;
+template <class Element = void>
+struct defaults {
+  /// Defines the upper bound for the batch timeout used when requesting a batch
+  /// from the the previous execution node in the pipeline.
+  inline static constexpr duration max_batch_timeout = 250ms;
 
-/// Defines the upper bound for the batch size used when requesting a batch
-/// from the the previous execution node in the pipeline.
-constexpr uint64_t max_batch_size = 64_Ki;
+  /// Defines the upper bound for how often an operator's generator may be
+  /// advanced within one run before yielding to the scheduler.
+  // TODO: Setting this to a higher value than 1 breaks request/await for
+  // operators.
+  inline static constexpr int max_advances_per_run = 1;
+};
 
-/// Defines how much free capacity must be in the inbound buffer of the
-/// execution node before it requests further data.
-constexpr uint64_t min_batch_size = 8_Ki;
+template <>
+struct defaults<table_slice> : defaults<> {
+  /// Defines the upper bound for the batch size used when requesting a batch
+  /// from the the previous execution node in the pipeline.
+  inline static constexpr uint64_t max_batch_size = 64_Ki;
 
-/// Defines the upper bound for the inbound and outbound buffer of the
-/// execution node.
-constexpr uint64_t max_buffered = 254_Ki;
+  /// Defines how much free capacity must be in the inbound buffer of the
+  /// execution node before it requests further data.
+  inline static constexpr uint64_t min_batch_size = 8_Ki;
 
-} // namespace defaults
+  /// Defines the upper bound for the inbound and outbound buffer of the
+  /// execution node.
+  inline static constexpr uint64_t max_buffered = 254_Ki;
+};
+
+template <>
+struct defaults<chunk_ptr> : defaults<> {
+  /// Defines the upper bound for the batch size used when requesting a batch
+  /// from the the previous execution node in the pipeline.
+  inline static constexpr uint64_t max_batch_size = 1_Mi;
+
+  /// Defines how much free capacity must be in the inbound buffer of the
+  /// execution node before it requests further data.
+  inline static constexpr uint64_t min_batch_size = 128_Ki;
+
+  /// Defines the upper bound for the inbound and outbound buffer of the
+  /// execution node.
+  inline static constexpr uint64_t max_buffered = 4_Mi;
+};
+
+} // namespace
+
+namespace {
 
 template <class Input, class Output>
 struct exec_node_state;
@@ -251,8 +278,13 @@ struct exec_node_state : inbound_state_mixin<Input>,
 
   // Metrics that track the total number of inbound and outbound elements that
   // passed through this operator.
+  std::chrono::steady_clock::time_point start_time
+    = std::chrono::steady_clock::now();
+  duration time_spent_in_advance = {};
   uint64_t inbound_total = {};
+  uint64_t num_inbound_batches = {};
   uint64_t outbound_total = {};
+  uint64_t num_outbound_batches = {};
 
   // Indicates whether the operator has stalled, i.e., the generator should not
   // be advanced.
@@ -375,12 +407,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // 1. The space in our inbound buffer is below the minimum batch size.
     // 2. The previous execution node is down.
     // 3. We already have an open request for more input.
-    VAST_ASSERT(this->inbound_buffer_size <= defaults::max_buffered);
+    VAST_ASSERT(this->inbound_buffer_size <= defaults<Input>::max_buffered);
     const auto batch_size
-      = std::min(defaults::max_buffered - this->inbound_buffer_size,
-                 defaults::max_batch_size);
+      = std::min(defaults<Input>::max_buffered - this->inbound_buffer_size,
+                 defaults<Input>::max_batch_size);
     if (not this->previous or this->signaled_demand
-        or batch_size < defaults::min_batch_size) {
+        or batch_size < defaults<Input>::min_batch_size) {
       return;
     }
     /// Issue the actual request. If the inbound buffer is empty, we await the
@@ -410,21 +442,27 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto response_handle
       = self->request(this->previous, caf::infinite, atom::pull_v,
                       static_cast<exec_node_sink_actor>(self), batch_size,
-                      defaults::max_batch_timeout);
+                      defaults<Input>::max_batch_timeout);
     std::move(response_handle)
       .then(std::move(handle_result), std::move(handle_error));
   }
 
-  auto advance_generator() -> void {
+  auto advance_generator() -> bool {
+    const auto now = std::chrono::steady_clock::now();
+    auto delta = caf::detail::make_scope_guard([&] {
+      time_spent_in_advance += std::chrono::steady_clock::now() - now;
+    });
     VAST_ASSERT(instance);
     VAST_ASSERT(instance->it != instance->gen.end());
+    bool empty = false;
     if constexpr (not std::is_same_v<Output, std::monostate>) {
-      if (this->outbound_buffer_size >= defaults::max_buffered) {
-        return;
+      if (this->outbound_buffer_size >= defaults<Output>::max_buffered) {
+        return false;
       }
       auto next = std::move(*instance->it);
       ++instance->it;
       if (size(next) > 0) {
+        empty = true;
         this->outbound_buffer_size += size(next);
         this->outbound_buffer.push_back(std::move(next));
       }
@@ -433,7 +471,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
     }
     if (abort) {
       self->quit(abort);
+      return false;
     }
+    return not empty and instance->it != instance->gen.end();
   }
 
   auto make_input_adapter() -> std::monostate
@@ -515,8 +555,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
     }
     auto [lhs, _] = split(this->outbound_buffer, capped_demand);
     auto handle_result = [this, capped_demand]() {
+      VAST_TRACE("{} pushed successfully", op->name());
       outbound_total += capped_demand;
       auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
+      num_outbound_batches += lhs.size();
       this->outbound_buffer = std::move(rhs);
       this->outbound_buffer_size
         = std::transform_reduce(this->outbound_buffer.begin(),
@@ -529,20 +571,75 @@ struct exec_node_state : inbound_state_mixin<Input>,
       schedule_run();
     };
     auto handle_error = [this](caf::error& error) {
+      VAST_DEBUG("{} failed to push", op->name());
       this->current_demand->rp.deliver(std::move(error));
       this->current_demand.reset();
       schedule_run();
     };
     auto response_handle = self->request(
       this->current_demand->sink, caf::infinite, atom::push_v, std::move(lhs));
-    if (force) {
+    if (force or this->outbound_buffer_size >= defaults<Output>::max_buffered) {
+      VAST_TRACE("{} pushes {}/{} buffered elements and suspends execution",
+                 op->name(), capped_demand, this->outbound_buffer_size);
       std::move(response_handle)
         .await(std::move(handle_result), std::move(handle_error));
     } else {
+      VAST_TRACE("{} pushes {}/{} buffered elements", op->name(), capped_demand,
+                 this->outbound_buffer_size);
       std::move(response_handle)
         .then(std::move(handle_result), std::move(handle_error));
     }
   };
+
+  auto print_metrics() -> void {
+    const auto elapsed = std::chrono::duration_cast<duration>(
+      std::chrono::steady_clock::now() - start_time);
+    VAST_VERBOSE(
+      "{} spent {:.2f}% of time advancing", op->name(),
+      std::chrono::duration<double, std::chrono::seconds::period>(
+        time_spent_in_advance)
+          .count()
+        / std::chrono::duration<double, std::chrono::seconds::period>(elapsed)
+            .count()
+        * 100.0);
+    if constexpr (not std::is_same_v<Input, std::monostate>) {
+      constexpr auto inbound_unit
+        = std::is_same_v<Input, chunk_ptr> ? "MiB" : "events";
+      constexpr auto ratio
+        = std::is_same_v<Output, chunk_ptr> ? 1'048'576.0 : 1.0;
+      const auto total = static_cast<double>(inbound_total) / ratio;
+      VAST_VERBOSE(
+        "{} inbound {:.2f} {} in {} rate = {:.2f} {}/s avg batch size = {:.2f} "
+        "{}",
+        op->name(), total, inbound_unit, data{elapsed},
+        total
+          / std::chrono::duration_cast<
+              std::chrono::duration<double, std::chrono::seconds::period>>(
+              elapsed)
+              .count(),
+        inbound_unit, static_cast<double>(inbound_total) / num_inbound_batches,
+        inbound_unit);
+    }
+    if constexpr (not std::is_same_v<Output, std::monostate>) {
+      constexpr auto outbound_unit
+        = std::is_same_v<Output, chunk_ptr> ? "MiB" : "events";
+      constexpr auto ratio
+        = std::is_same_v<Output, chunk_ptr> ? 1'048'576.0 : 1.0;
+      const auto total = static_cast<double>(outbound_total) / ratio;
+      VAST_VERBOSE(
+        "{} outbound {:.2f} {} in {} rate = {:.2f} {}/s avg batch size = "
+        "{:.2f} {}",
+        op->name(), total, outbound_unit, data{elapsed},
+        total
+          / std::chrono::duration_cast<
+              std::chrono::duration<double, std::chrono::seconds::period>>(
+              elapsed)
+              .count(),
+        outbound_unit,
+        static_cast<double>(outbound_total) / num_outbound_batches,
+        outbound_unit);
+    }
+  }
 
   auto run() -> void {
     VAST_TRACE("{} enters run loop", op->name());
@@ -583,7 +680,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
         VAST_ASSERT(not this->current_demand);
         VAST_ASSERT(this->outbound_buffer_size == 0);
       }
-      VAST_DEBUG("{} is done; in={} out={}", op, inbound_total, outbound_total);
+      VAST_DEBUG("{} is done", op);
+      print_metrics();
       self->quit();
       return;
     }
@@ -599,7 +697,11 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // next run. For sinks, this happens delayed when there is no input. For
     // everything else, it needs to happen only when there's enough space in the
     // outbound buffer.
-    advance_generator();
+    for (auto i = 0; i < defaults<Output>::max_advances_per_run; ++i) {
+      if (not advance_generator()) {
+        break;
+      }
+    }
     if constexpr (std::is_same_v<Output, std::monostate>) {
       if (not stalled) {
         schedule_run();
@@ -609,13 +711,14 @@ struct exec_node_state : inbound_state_mixin<Input>,
     } else if constexpr (std::is_same_v<Input, std::monostate>) {
       if (not stalled
           and (this->current_demand
-               or (this->outbound_buffer_size < defaults::max_buffered
+               or (this->outbound_buffer_size < defaults<Output>::max_buffered
                    and instance->it != instance->gen.end()))) {
         schedule_run();
       }
     } else {
-      auto can_generate = this->outbound_buffer_size < defaults::max_buffered
-                          and instance->it != instance->gen.end();
+      auto can_generate
+        = this->outbound_buffer_size < defaults<Output>::max_buffered
+          and instance->it != instance->gen.end();
       auto should_produce = this->current_demand.has_value();
       auto is_previous_dead = not this->previous;
       // VAST_DEBUG("{} {} {} {}", VAST_ARG(can_generate),
@@ -657,10 +760,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
       input.begin(), input.end(), uint64_t{}, std::plus{}, [](const Input& x) {
         return size(x);
       });
+    num_inbound_batches += input.size();
     if (input_size == 0) {
       return caf::make_error(ec::logic_error, "received empty batch");
     }
-    if (this->inbound_buffer_size + input_size > defaults::max_buffered) {
+    if (this->inbound_buffer_size + input_size
+        > defaults<Input>::max_buffered) {
       return caf::make_error(ec::logic_error, "inbound buffer full");
     }
     this->inbound_buffer.insert(this->inbound_buffer.end(),
