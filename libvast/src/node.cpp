@@ -581,10 +581,9 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       for (const auto& component : plugins::get<component_plugin>()) {
         auto handle = component->make_component(self);
         if (!handle)
-          return caf::make_error( //
-            ec::unspecified,
-            fmt::format("{} failed to spawn component {} from plugin {}", *self,
-                        component->component_name(), component->name()));
+          // The spawn function can provide a better log message so we don't
+          // print one here.
+          continue;
         if (auto err
             = register_component(self, caf::actor_cast<caf::actor>(handle),
                                  component->component_name()))
