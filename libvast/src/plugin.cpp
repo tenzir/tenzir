@@ -319,13 +319,6 @@ caf::error initialize(caf::actor_system_config& cfg) {
         return std::move(opts.error());
       }
     }
-    // Allow the plugin to control whether it should be loaded based on
-    // its configuration.
-    if (!plugin->enabled(merged_config, global_config)) {
-      VAST_VERBOSE("disabling plugin {}", plugin->name());
-      disabled_plugins.insert(plugin->name());
-      continue;
-    }
     // Third, initialize the plugin with the merged configuration.
     if (plugin.type() != plugin_ptr::type::builtin)
       VAST_VERBOSE("initializing the {} plugin with options: {}",
@@ -336,10 +329,6 @@ caf::error initialize(caf::actor_system_config& cfg) {
                                          "the {} plugin: {} ",
                                          plugin->name(), err));
   }
-  if (!disabled_plugins.empty())
-    std::erase_if(get_mutable(), [&](const plugin_ptr& p) {
-      return disabled_plugins.contains(p->name());
-    });
   return caf::none;
 }
 
@@ -348,19 +337,6 @@ const std::vector<std::filesystem::path>& loaded_config_files() {
 }
 
 } // namespace plugins
-
-// -- plugin base class -------------------------------------------------------
-
-bool plugin::enabled(const record&, const record& plugin_config) const {
-  auto default_value = true;
-  auto result = try_get_or(plugin_config, "enabled", default_value);
-  if (!result) {
-    VAST_WARN("config option {}.enabled is ignored: expected a boolean",
-              this->name());
-    return default_value;
-  }
-  return *result;
-}
 
 // -- component plugin --------------------------------------------------------
 
