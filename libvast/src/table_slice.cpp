@@ -1247,10 +1247,12 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
   std::map<std::size_t, std::vector<std::string_view>> fields_to_resolve;
   for (const auto& k : slice_array->struct_type()->fields()) {
     const auto& field_name = k->name();
+    unflattened_field_map[field_name]
+      = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
     if (field_name.starts_with(nested_field_separator)
         or field_name.ends_with(nested_field_separator)) {
-      VAST_WARN("ignoring field {} during unflattening: encountered name with "
-                "separator at beginning/end",
+      VAST_WARN("retaining original field {} during unflattening: encountered "
+                "name with separator at beginning/end",
                 field_name);
       continue;
     }
@@ -1258,11 +1260,6 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
       = count_substring_occurrences(field_name, nested_field_separator);
 
     fields_to_resolve[separator_count].push_back(field_name);
-    unflattened_field_map[field_name]
-      = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
-  }
-  if (unflattened_field_map.empty()) {
-    return slice_array;
   }
   for (auto& [field_name, field] : unflattened_field_map) {
     // Unflatten children recursively.
