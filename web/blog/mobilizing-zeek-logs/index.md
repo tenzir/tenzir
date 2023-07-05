@@ -9,24 +9,35 @@ tags: [tenzir, zeek, logs, json, kafka]
 
 [Zeek](https://zeek.org) offers many ways to produce and consume logs. In this
 blog, we explain the various Zeek logging formats and show how you can get the
-most out of Zeek with Tenzir. We concludes with recommendations for when to use
+most out of Zeek with Tenzir. We conclude with recommendations for when to use
 what Zeek format based on your use case.
 
 <!--truncate-->
 
 ## Zeek Logging 101
 
-Zeek can produce output in many ways. TSV, NDSJON, and more. Let's dive right
-in.
+Zeek's main function is turning live network traffic or trace files into
+structured logs.[^1] Zeek logs span the entire network stack, including
+link-layer analytics with MAC address to application-layer fingerprinting of
+applications. These rich logs are invaluable for any network-based detection and
+response activities. Many users also simply appreciate the myriad of protocol
+analyzers, each of which generates a dedicated log file, like `smb.log`,
+`http.log`, `x509.log`, and others.
+
+[^1]: Zeek also comes with a Touring-complete scripting language for executing
+arbiatrary logic. The event-based language resembles Javascript and is
+especially useful for building real-time detections and protocol analytics.
+
+In the default configuration, Zeek writes logs into the current directory, one
+file per log type. There are options on how to render them. TSV, JSON, and
+more. Let's take a look.
 
 ### Tab-Separated Values (TSV)
 
-When you install a stock Zeek and run `zeek` on the command line, Zeek writes
-its logs into the current directory, one per log type. Every log has its own
-schema. You could consider Zeek's tab-separated value (TSV) format as table-like
-"data frame" since its a variant of CSV with metadata.
+Zeek's custom tab-separated value (TSV) format is variant of CSV with additional
+metadata, similar to a data frame.
 
-Here's how you get TSV logs from a trace:
+Here's how you create TSV logs from a trace:
 
 ```bash
 zeek -C -r trace.pcap [scripts]
@@ -76,7 +87,7 @@ cat *.log | tenzir 'read zeek-tsv | select id.orig_h, id.resp_h'
 ```
 
 Tenzir takes care of parsing the type information properly and keeps IP
-addresses and timestamps as nativedata types. You can also see in the examples
+addresses and timestamps as native data types. You can also see in the examples
 that Tenzir handles multiple concatenated TSV logs of different schemas as you'd
 expect.
 
