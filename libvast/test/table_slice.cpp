@@ -22,6 +22,7 @@
 #include "vast/table_slice_row.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
+#include "vast/type.hpp"
 
 #include <arrow/record_batch.h>
 #include <caf/make_copy_on_write.hpp>
@@ -563,6 +564,62 @@ TEST(unflatten - unflattened field names are part of nested field names) {
   CHECK_EQUAL(materialize(input.at(0, 2)), materialize(output.at(0, 3)));
   CHECK_EQUAL(materialize(input.at(0, 3)), materialize(output.at(0, 2)));
   CHECK_EQUAL(materialize(input.at(0, 4)), materialize(output.at(0, 4)));
+}
+
+TEST(unflatten - unflatten nested records by name) {
+  auto flat_sub_schema
+    = type{"test.unflatten2",
+           record_type{
+             {"a", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+             {"b.c", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+           }};
+  auto flat_schema = type{"test.unflatten", record_type{
+                                              {"foo.bar.baz", flat_sub_schema},
+                                            }};
+  auto input = make_random_table_slices(1, 1, flat_schema)->front();
+  auto output = unflatten(input, ".");
+  REQUIRE_EQUAL(
+    output.schema(),
+    (type{flat_schema.name(),
+          record_type{
+            {"foo",
+             record_type{
+               {"bar",
+                record_type{
+                  {"baz", record_type{{"a", int64_type{}},
+                                      {"b", record_type{{"c", int64_type{}}}}}},
+                }},
+             }},
+          }}));
+  REQUIRE_EQUAL(output.rows(), input.rows());
+  REQUIRE_EQUAL(output.columns(), input.columns());
+  CHECK_EQUAL(materialize(input.at(0, 0)), materialize(output.at(0, 0)));
+  CHECK_EQUAL(materialize(input.at(0, 1)), materialize(output.at(0, 1)));
+}
+
+TEST(unflatten - invalid field names) {
+  auto flat_schema
+    = type{"test.unflatten",
+           record_type{
+             {"a.g", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+             {".a.v", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+             {"a.gh", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+             {"a.p.", type{int64_type{}, {{"default", "uniform(100,200)"}}}},
+           }};
+  auto input = make_random_table_slices(1, 1, flat_schema)->front();
+  auto output = unflatten(input, ".");
+  REQUIRE_EQUAL(output.schema(),
+                (type{flat_schema.name(), record_type{
+                                            {"a",
+                                             record_type{
+                                               {"g", int64_type{}},
+                                               {"gh", int64_type{}},
+                                             }},
+                                          }}));
+  REQUIRE_EQUAL(output.rows(), input.rows());
+  REQUIRE_EQUAL(output.columns(), 2);
+  CHECK_EQUAL(materialize(input.at(0, 0)), materialize(output.at(0, 0)));
+  CHECK_EQUAL(materialize(input.at(0, 2)), materialize(output.at(0, 1)));
 }
 
 FIXTURE_SCOPE_END()
