@@ -78,6 +78,16 @@ struct defaults<chunk_ptr> : defaults<> {
 
 namespace {
 
+template <class... Duration>
+  requires(std::is_same_v<Duration, duration> && ...)
+auto make_timer_guard(Duration&... elapsed) {
+  return caf::detail::make_scope_guard(
+    [&, start_time = std::chrono::steady_clock::now()] {
+      const auto delta = std::chrono::steady_clock::now() - start_time;
+      ((void)(elapsed += delta, true), ...);
+    });
+}
+
 template <class Input, class Output>
 struct exec_node_state;
 
@@ -276,7 +286,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
   // passed through this operator.
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
-  duration time_spent_in_advance = {};
+  duration time_starting = {};
+  duration time_running = {};
+  duration time_scheduled = {};
   uint64_t inbound_total = {};
   uint64_t num_inbound_batches = {};
   uint64_t outbound_total = {};
@@ -300,6 +312,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
   caf::error abort;
 
   auto start(std::vector<caf::actor> previous) -> caf::result<void> {
+    auto time_starting_guard = make_timer_guard(time_scheduled, time_starting);
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} was already started", *self));
@@ -324,6 +337,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       previous.pop_back();
       self->monitor(this->previous);
       self->set_down_handler([this](const caf::down_msg& msg) {
+        auto time_scheduled_guard = make_timer_guard(time_scheduled);
         if (msg.source != this->previous.address()) {
           VAST_DEBUG("ignores down msg from unknown source: {}", msg.reason);
           return;
@@ -346,22 +360,25 @@ struct exec_node_state : inbound_state_mixin<Input>,
       });
     }
     // Instantiate the operator with its input type.
-    auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
-    if (not output_generator) {
-      return caf::make_error(
-        ec::unspecified, fmt::format("{} failed to instantiate operator: {}",
-                                     *self, output_generator.error()));
-    }
-    if (not std::holds_alternative<generator<Output>>(*output_generator)) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("{} failed to instantiate operator",
-                                         *self));
-    }
-    instance.emplace();
-    instance->gen = std::get<generator<Output>>(std::move(*output_generator));
-    instance->it = instance->gen.begin();
-    if (abort) {
-      return abort;
+    {
+      auto time_scheduled_guard = make_timer_guard(time_running);
+      auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
+      if (not output_generator) {
+        return caf::make_error(
+          ec::unspecified, fmt::format("{} failed to instantiate operator: {}",
+                                       *self, output_generator.error()));
+      }
+      if (not std::holds_alternative<generator<Output>>(*output_generator)) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} failed to instantiate operator",
+                                           *self));
+      }
+      instance.emplace();
+      instance->gen = std::get<generator<Output>>(std::move(*output_generator));
+      instance->it = instance->gen.begin();
+      if (abort) {
+        return abort;
+      }
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
       auto rp = self->make_response_promise<void>();
@@ -370,11 +387,15 @@ struct exec_node_state : inbound_state_mixin<Input>,
                   std::move(previous))
         .then(
           [this, rp]() mutable {
+            auto time_starting_guard
+              = make_timer_guard(time_scheduled, time_starting);
             VAST_DEBUG("scheduling sink after successful startup");
             schedule_run();
             rp.deliver();
           },
-          [rp](caf::error& error) mutable {
+          [this, rp](caf::error& error) mutable {
+            auto time_starting_guard
+              = make_timer_guard(time_scheduled, time_starting);
             rp.deliver(std::move(error));
           });
       return rp;
@@ -404,10 +425,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
     /// response, causing this actor to be suspended until the events have
     /// arrived.
     auto handle_result = [this]() mutable {
+      auto time_scheduled_guard = make_timer_guard(time_scheduled);
       this->signaled_demand = false;
       schedule_run();
     };
     auto handle_error = [this](caf::error& error) {
+      auto time_scheduled_guard = make_timer_guard(time_scheduled);
       this->signaled_demand = false;
       schedule_run();
       if (error == caf::sec::request_receiver_down
@@ -433,10 +456,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
   }
 
   auto advance_generator() -> bool {
-    const auto now = std::chrono::steady_clock::now();
-    auto delta = caf::detail::make_scope_guard([&] {
-      time_spent_in_advance += std::chrono::steady_clock::now() - now;
-    });
+    auto time_running_guard = make_timer_guard(time_running);
     VAST_ASSERT(instance);
     VAST_ASSERT(instance->it != instance->gen.end());
     bool empty = false;
@@ -503,14 +523,15 @@ struct exec_node_state : inbound_state_mixin<Input>,
     //   not prohibit shutdown.
     // - It does not get run immediately, which would conflict with operators
     //   using `ctrl.self().request(...).await(...)`.
+    auto action = [this] {
+      auto time_scheduled_guard = make_timer_guard(time_scheduled);
+      VAST_ASSERT(run_scheduled);
+      run_scheduled = false;
+      run();
+    };
     self->clock().schedule(self->clock().now(),
-                           caf::make_action(
-                             [this] {
-                               VAST_ASSERT(run_scheduled);
-                               run_scheduled = false;
-                               run();
-                             },
-                             caf::action::state::waiting),
+                           caf::make_action(std::move(action),
+                                            caf::action::state::waiting),
                            caf::weak_actor_ptr{self->ctrl()});
   }
 
@@ -540,6 +561,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     }
     auto [lhs, _] = split(this->outbound_buffer, capped_demand);
     auto handle_result = [this, capped_demand]() {
+      auto time_scheduled_guard = make_timer_guard(time_scheduled);
       VAST_TRACE("{} pushed successfully", op->name());
       outbound_total += capped_demand;
       auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
@@ -556,6 +578,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       schedule_run();
     };
     auto handle_error = [this](caf::error& error) {
+      auto time_scheduled_guard = make_timer_guard(time_scheduled);
       VAST_DEBUG("{} failed to push", op->name());
       this->current_demand->rp.deliver(std::move(error));
       this->current_demand.reset();
@@ -579,19 +602,24 @@ struct exec_node_state : inbound_state_mixin<Input>,
   auto print_metrics() -> void {
     const auto elapsed = std::chrono::duration_cast<duration>(
       std::chrono::steady_clock::now() - start_time);
-    VAST_VERBOSE(
-      "{} spent {:.2f}% of time advancing", op->name(),
-      std::chrono::duration<double, std::chrono::seconds::period>(
-        time_spent_in_advance)
-          .count()
-        / std::chrono::duration<double, std::chrono::seconds::period>(elapsed)
-            .count()
-        * 100.0);
+    auto percentage = [](auto num, auto den) {
+      return std::chrono::duration<double, std::chrono::seconds::period>(num)
+               .count()
+             / std::chrono::duration<double, std::chrono::seconds::period>(den)
+                 .count()
+             * 100.0;
+    };
+    VAST_VERBOSE("{} was scheduled for {:.2f}% of total runtime", op->name(),
+                 percentage(time_scheduled, elapsed));
+    VAST_VERBOSE("{} spent {:.2f}% of scheduled time starting", op->name(),
+                 percentage(time_starting, time_scheduled));
+    VAST_VERBOSE("{} spent {:.2f}% of scheduled time running", op->name(),
+                 percentage(time_running, time_scheduled));
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       constexpr auto inbound_unit
         = std::is_same_v<Input, chunk_ptr> ? "MiB" : "events";
       constexpr auto ratio
-        = std::is_same_v<Output, chunk_ptr> ? 1'048'576.0 : 1.0;
+        = std::is_same_v<Input, chunk_ptr> ? 1'048'576.0 : 1.0;
       const auto total = static_cast<double>(inbound_total) / ratio;
       VAST_VERBOSE(
         "{} inbound {:.2f} {} in {} rate = {:.2f} {}/s avg batch size = {:.2f} "
@@ -706,9 +734,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
           and instance->it != instance->gen.end();
       auto should_produce = this->current_demand.has_value();
       auto is_previous_dead = not this->previous;
-      // VAST_DEBUG("{} {} {} {}", VAST_ARG(can_generate),
-      //            VAST_ARG(should_produce), VAST_ARG(is_previous_dead),
-      //            VAST_ARG(stalled));
       if (is_previous_dead
           or (not stalled and (should_produce or can_generate))) {
         schedule_run();
@@ -721,6 +746,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     -> caf::result<void>
     requires(not std::is_same_v<Output, std::monostate>)
   {
+    auto time_scheduled_guard = make_timer_guard(time_scheduled);
     if (this->reject_demand) {
       auto rp = self->make_response_promise<void>();
       detail::weak_run_delayed(self, batch_timeout, [rp]() mutable {
@@ -741,6 +767,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
   auto push(std::vector<Input> input) -> caf::result<void>
     requires(not std::is_same_v<Input, std::monostate>)
   {
+    auto time_scheduled_guard = make_timer_guard(time_scheduled);
     const auto input_size = std::transform_reduce(
       input.begin(), input.end(), uint64_t{}, std::plus{}, [](const Input& x) {
         return size(x);
