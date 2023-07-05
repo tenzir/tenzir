@@ -133,7 +133,9 @@ paths:
         Creates a new pipeline. If `start_when_created` is `true`, the response
         is only sent after the pipeline was successfully started. If this fails,
         then the pipeline is immediately discarded, and the response contains
-        the observed diagnostics.
+        the observed diagnostics. The error field then contains a rendered
+        representation of the diagnostics. Otherwise, the diagnostics field is
+        not present.
       requestBody:
         required: true
         content:
@@ -200,6 +202,8 @@ paths:
             application/json:
               schema:
                 type: object
+                required:
+                  - error
                 properties:
                   error:
                     type: string
