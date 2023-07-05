@@ -104,14 +104,14 @@ Here are the same three entries from above in NDJSON:
 
 We call this format "demultiplexed" because the stream of logs is now spread
 over one file per type. Use the regular [`json`](/next/formats/json) parser to
-mobilize these log files with Tenzir:
+get the data flowing:
 
 ```bash
 cat conn.log | tenzir 'read json --schema "zeek.conn" | taste 1'
 ```
 
-Note how we pass the type `zeek.conn` to the JSON parser. This sets the name of
-the schema explicitly.
+The option `--schema` of the `json` reader passes a name of a known schema to
+validate the input against.
 
 ### Multiplexed NDJSON
 
@@ -172,9 +172,9 @@ If the stock options of Zeek's logging framework do not work for you, you can
 still write a C++ *Writer Plugins* to produce any output of your choice.
 
 For example, the [zeek-kafka](https://github.com/SeisoLLC/zeek-kafka) plugin
-connects to a Kafka instance and writes JSON logs to specific topics. That would
-require a custom Zeek build, though. For this specific example, you could as
-leverage Tenzir's [`kafka`](/next/connectors/kafka) loader and just write:
+connects to a Kafka instance and writes JSON logs to specific topics. For this
+specific example, you could as well leverage Tenzir's
+[`kafka`](/next/connectors/kafka) loader and write:
 
 ```bash
 cat *.log | tenzir '
