@@ -462,12 +462,14 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   for (auto&& line : lines) {
     const auto now = std::chrono::steady_clock::now();
     // Yield at chunk boundaries.
+    if (document.builder
+        and (document.builder->rows() >= defaults::import::table_slice_size
+             or last_finish + std::chrono::seconds{1} < now)) {
+      last_finish = now;
+      co_yield cast(document.builder->finish(), document.target_schema);
+    }
     if (not line) {
-      if (document.builder
-          and (document.builder->rows() >= defaults::import::table_slice_size
-               or last_finish + std::chrono::seconds{1} < now)) {
-        co_yield cast(document.builder->finish(), document.target_schema);
-      } else {
+      if (last_finish != now) {
         co_yield {};
       }
       continue;
@@ -496,6 +498,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
           });
       if (close_parser(header, unused)) {
         if (document.builder) {
+          last_finish = now;
           co_yield cast(document.builder->finish(), document.target_schema);
           document = {};
         }
@@ -506,6 +509,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       // but we can just handle that gracefully and tell the user that they
       // were missing a closing tag.
       if (document.builder) {
+        last_finish = now;
         co_yield document.builder->finish();
         document = {};
       }
@@ -696,11 +700,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                           std::string_view{f, l})
         .note("line {}", line_nr)
         .emit(ctrl.diagnostics());
-    }
-    // If we've parsed enough to finish and yield, we do so.
-    if (document.builder->rows() >= defaults::import::table_slice_size
-        or last_finish + std::chrono::seconds{1} < now) {
-      co_yield cast(document.builder->finish(), document.target_schema);
     }
   }
   if (document.builder->rows() > 0) {
