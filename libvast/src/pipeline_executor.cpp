@@ -40,6 +40,8 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
     }
     untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
   }
+  VAST_DEBUG("{} successfully spawned {} execution nodes", *self,
+             untyped_exec_nodes.size());
   untyped_exec_nodes.pop_back();
   // The exec nodes delegate the `atom::start` message to the preceding exec
   // node. Thus, when we start the last node, all nodes before are started as
@@ -52,11 +54,15 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
         finish_start();
       },
       [this](caf::error& err) mutable {
+        VAST_VERBOSE("{} aborts start because execution node could not be "
+                     "started: {}",
+                     *self, err);
         abort_start(std::move(err));
       });
 }
 
 void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
+  VAST_DEBUG("{} spawns execution nodes", *self);
   auto input_type = operator_type::make<void>();
   auto previous = exec_node_actor{};
   bool spawn_remote = false;
@@ -71,6 +77,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     }
     auto description = op->to_string();
     if (spawn_remote) {
+      VAST_DEBUG("{} spawns {} remotely", *self, description);
       if (not node) {
         abort_start(caf::make_error(
           ec::invalid_argument, "encountered remote operator, but remote node "
@@ -95,7 +102,8 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
         ->request(node, caf::infinite, atom::spawn_v,
                   operator_box{std::move(op)}, input_type, diagnostics)
         .then(
-          [this, index](exec_node_actor& exec_node) {
+          [=, this](exec_node_actor& exec_node) {
+            VAST_VERBOSE("{} spawned {} remotely", *self, description);
             // TODO: We should call `quit()` whenever `start()` fails to
             // ensure that this will not be called afterwards (or we check for
             // this case).
@@ -104,22 +112,22 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
             exec_nodes[index] = std::move(exec_node);
             start_nodes_if_all_spawned();
           },
-          [this](caf::error& err) {
+          [=, this](caf::error& err) {
+            VAST_DEBUG("{} failed to spawn {} remotely: {}", *self, description,
+                       err);
             abort_start(std::move(err));
           });
       input_type = *output_type;
     } else {
+      VAST_DEBUG("{} spawns {} locally", *self, description);
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type, node, diagnostics);
       if (not spawn_result) {
-        auto error = caf::make_error(
-          ec::logic_error,
-          fmt::format("{} failed to spawn execution node "
-                      "for operator '{}': {}",
-                      *self, description, spawn_result.error()));
-        abort_start(std::move(error));
+        abort_start(add_context(spawn_result.error(),
+                                "{} failed to spawn execution node", *self));
         return;
       }
+      VAST_DEBUG("{} spawned {} locally", *self, description);
       std::tie(previous, input_type) = std::move(*spawn_result);
       self->monitor(previous);
       self->link_to(previous);
@@ -127,6 +135,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     }
   }
   if (exec_nodes.empty()) {
+    VAST_DEBUG("{} quits because of empty pipeline", *self);
     finish_start();
     self->quit();
     return;
@@ -135,26 +144,53 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
 }
 
 void pipeline_executor_state::abort_start(caf::error reason) {
-  VAST_DEBUG("{} aborts start: {}", *self, reason);
-  start_rp.deliver(reason);
-  self->quit(std::move(reason));
+  if (reason == ec::silent) {
+    VAST_DEBUG("{} delivers silent start abort", *self);
+    start_rp.deliver(ec::silent);
+    self->quit(ec::silent);
+    return;
+  }
+  auto diagnostic = diagnostic::error("{}", reason).done();
+  VAST_DEBUG("{} sends diagnostic due to start abort: {}", *self, diagnostic);
+  self->request(diagnostics, caf::infinite, std::move(diagnostic))
+    .then(
+      [this]() {
+        // We already delivered the error as a diagnostic.
+        VAST_DEBUG("{} delivered diagnostic and shuts down silently", *self);
+        start_rp.deliver(ec::silent);
+        self->quit(ec::silent);
+      },
+      [this](caf::error& error) {
+        VAST_WARN("{} could not send start diagnostic: {}", *self, error);
+        start_rp.deliver(
+          add_context(error, "{} could not deliver diagnostic", *self));
+        self->quit(ec::silent);
+      });
 }
 
 void pipeline_executor_state::finish_start() {
-  VAST_DEBUG("{} signals start", *self);
+  VAST_DEBUG("{} signals successful start", *self);
   start_rp.deliver();
 }
 
 auto pipeline_executor_state::start() -> caf::result<void> {
+  VAST_DEBUG("{} got start request", *self);
   if (not this->pipe) {
     return caf::make_error(ec::logic_error,
                            "pipeline exeuctor can only start once");
   }
   auto pipe = *std::exchange(this->pipe, std::nullopt);
   start_rp = self->make_response_promise<void>();
+  auto checked = pipe.check_type<void, void>();
+  if (not checked) {
+    VAST_DEBUG("{} failed type check", *self);
+    abort_start(checked.error());
+    return start_rp;
+  }
   if (not node) {
     for (const auto& op : pipe.operators()) {
       if (op->location() == operator_location::remote) {
+        VAST_DEBUG("{} connects to node because of remote operators", *self);
         connect_to_node(self, content(self->system().config()),
                         [this, pipe = std::move(pipe)](
                           caf::expected<node_actor> result) mutable {
@@ -177,6 +213,7 @@ auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics, node_actor node)
   -> pipeline_executor_actor::behavior_type {
+  VAST_DEBUG("{} was created", *self);
   self->state.self = self;
   self->state.node = std::move(node);
   self->set_down_handler([self](caf::down_msg& msg) {
@@ -202,11 +239,6 @@ auto pipeline_executor(
       self->quit();
     }
   });
-  auto checked = pipe.check_type<void, void>();
-  if (not checked) {
-    self->quit(checked.error());
-    return pipeline_executor_actor::behavior_type::make_empty_behavior();
-  }
   self->state.pipe = std::move(pipe);
   self->state.diagnostics = std::move(diagnostics);
   self->state.allow_unsafe_pipelines
