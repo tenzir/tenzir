@@ -156,6 +156,7 @@ void pipeline_executor_state::abort_start(caf::error reason) {
     .then(
       [this]() {
         // We already delivered the error as a diagnostic.
+        VAST_DEBUG("{} delivered diagnostic and shuts down silently", *self);
         start_rp.deliver(ec::silent);
         self->quit(ec::silent);
       },
