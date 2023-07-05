@@ -169,12 +169,13 @@ auto make_unflattened_struct_array(
   // foo struct array with bar and baz as children
   std::unordered_set<unflatten_field*> handled_fields;
   for (const auto& field : fields) {
-    VAST_ASSERT(original_field_name_to_new_field_map.contains(field->name()));
-    auto* f = original_field_name_to_new_field_map.at(field->name());
-    if (not handled_fields.contains(f)) {
-      new_columns.push_back(f->to_arrow());
-      new_field_names.push_back(std::string{f->field_name_});
-      handled_fields.insert(f);
+    if (original_field_name_to_new_field_map.contains(field->name())) {
+      auto* f = original_field_name_to_new_field_map.at(field->name());
+      if (not handled_fields.contains(f)) {
+        new_columns.push_back(f->to_arrow());
+        new_field_names.push_back(std::string{f->field_name_});
+        handled_fields.insert(f);
+      }
     }
   }
   return arrow::StructArray::Make(new_columns, new_field_names).ValueOrDie();
@@ -1246,6 +1247,13 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
   std::map<std::size_t, std::vector<std::string_view>> fields_to_resolve;
   for (const auto& k : slice_array->struct_type()->fields()) {
     const auto& field_name = k->name();
+    if (field_name.starts_with(nested_field_separator)
+        or field_name.ends_with(nested_field_separator)) {
+      VAST_WARN("ignoring field {} during unflattening: encountered name with "
+                "separator at beginning/end",
+                field_name);
+      continue;
+    }
     auto separator_count
       = count_substring_occurrences(field_name, nested_field_separator);
 
@@ -1253,7 +1261,9 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
     unflattened_field_map[field_name]
       = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
   }
-
+  if (unflattened_field_map.empty()) {
+    return slice_array;
+  }
   for (auto& [field_name, field] : unflattened_field_map) {
     // Unflatten children recursively.
     auto field_array = field.to_arrow();
