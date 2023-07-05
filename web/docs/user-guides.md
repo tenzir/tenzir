@@ -29,8 +29,8 @@ The dataset includes the following files:
 For the examples in the next section, download and extract the archives:
 
 ```bash
-curl -# -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
-curl -# -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
+curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
+curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
 tar xzvf suricata.tar.gz
 tar xzvf zeek.tar.gz
 ```

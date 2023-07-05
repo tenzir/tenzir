@@ -6,16 +6,20 @@ A *node* is a managed service for pipelines and storage.
 
 Choose between binary package and a Docker-based setup to install a node.
 
-### Binary
+### Binary (Automatic)
 
-Use our installer to perform a platform-specific installation:
+Use our installer to install a binary package on any Linux distribution:
 
 ```bash
 curl https://get.tenzir.app | sh
 ```
 
-The shell script asks for confirmation before performing the installation. To
-perform the installation manually, read below.
+The shell script asks for confirmation before performing the installation.
+
+### Binary (Manual)
+
+If you prefer a manual installation you can also perform the installer steps
+yourself.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -76,11 +80,9 @@ until we offer a native package.
 
 ### Docker
 
-You can use our Docker image or Docker Compose config file to get started with
-containers. When running a node in a container, you need to ensure access to:
-
-1. **Network**: Tenzir exposes a listening socket to accept client commands.
-2. **Disk**: Tenzir stores its database content on mounted volume.
+To run a node in a container environment, we offer a Docker image and Docker
+Compose config file. Make sure your container has access to network (to expose a
+listening socket) and disk (to read and write data).
 
 <Tabs>
 <TabItem value="docker" label="Docker">

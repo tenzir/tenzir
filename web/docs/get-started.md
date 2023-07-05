@@ -97,28 +97,92 @@ version
 
 The [`version`](operators/sources/version.md) operator is a
 [source](operators/sources/README.md), i.e., it outputs data but doesn't have
-any input.
-
-Another source is [`export`](operators/sources/export.md), which initiates a
-pipeline with all data stored data at a node. We pre-loaded the demo node with
-the M57 dataset that we also use in our [user guides](user-guides.md). Pipe
-`export` to [`head`](operators/transformations/head.md) to get the 10 first
-events in the dataflow:
+any input. Another source is [`export`](operators/sources/export.md), which
+begins a pipeline with all stored data at a node. Pipe `export` to
+[`head`](operators/transformations/head.md) to retrieve 10 events:
 
 ```
-export
-| head
+export | head
 ```
 
 <details>
 <summary>Output</summary>
 
-TODO
+```json
+{
+  "timestamp": "2021-11-18T08:23:45.304758",
+  "flow_id": 1851826916903734,
+  "pcap_cnt": 54742,
+  "vlan": null,
+  "in_iface": null,
+  "src_ip": "8.249.125.254",
+  "src_port": 80,
+  "dest_ip": "10.6.2.101",
+  "dest_port": 49789,
+  "proto": "TCP",
+  "event_type": "fileinfo",
+  "community_id": null,
+  "fileinfo": {
+    "filename": "/d/msdownload/update/software/defu/2021/06/am_delta_patch_1.339.1962.0_5e6a00734b4809bcfd493118754d0ea1cd64798e.exe",
+    "magic": null,
+    "gaps": false,
+    "state": "CLOSED",
+    "md5": null,
+    "sha1": null,
+    "sha256": null,
+    "stored": false,
+    "file_id": null,
+    "size": 2,
+    "tx_id": 0,
+    "start": 0,
+    "end": 1
+  },
+  "http": {
+    "hostname": "au.download.windowsupdate.com",
+    "url": "/d/msdownload/update/software/defu/2021/06/am_delta_patch_1.339.1962.0_5e6a00734b4809bcfd493118754d0ea1cd64798e.exe",
+    "http_port": null,
+    "http_user_agent": "Microsoft-Delivery-Optimization/10.0",
+    "http_content_type": "application/octet-stream",
+    "http_method": "GET",
+    "http_refer": null,
+    "protocol": "HTTP/1.1",
+    "status": 206,
+    "redirect": null,
+    "length": 2,
+    "xff": null,
+    "content_range": {
+      "raw": "bytes 0-1/360888",
+      "start": 0,
+      "end": 1,
+      "size": 360888
+    }
+  },
+  "app_proto": "http",
+  "metadata": {
+    "flowints": {
+      "http.anomaly.count": null,
+      "tcp.retransmission.count": null
+    },
+    "flowbits": [
+      "ET.INFO.WindowsUpdate",
+      "exe.no.referer"
+    ]
+  }
+}
+```
+
+(Only 1 out of 10 shown.)
 
 </details>
 
-Let's filter some events with [expressions](language/expressions.md) with
-[`where`](operators/transformations/where.md):
+:::note Demo Dataset
+We pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
+[Suricata](https://suricata.io) logs derived from the M57 dataset. We also use
+that dataset in our [user guides](user-guides.md).
+:::
+
+Let's filter out some Suricata alerts with the
+[`where`](operators/transformations/where.md) operator:
 
 ```
 export
@@ -195,7 +259,8 @@ export
 
 </details>
 
-Expressions combine rich-typed predicates with AND, OR, and NOT. Here's a more
+The `where` operator takes an [expression](language/expressions.md) as argument,
+which combines rich-typed predicates with AND, OR, and NOT. Here's a more
 elaborate example:
 
 ```
@@ -324,7 +389,7 @@ export
 
 </details>
 
-For counting, the [`top`](operators/transformations/top.md) and
+For counting of field values, the [`top`](operators/transformations/top.md) and
 [`rare`](operators/transformations/rare.md) come in handy:
 
 ```
@@ -332,7 +397,6 @@ export
 | where #schema == "zeek.notice"
 | top msg
 | head 5
-'
 ```
 
 <details>
@@ -349,106 +413,22 @@ export
 </details>
 
 This was just a quick tour. The [user guides](user-guides.md) cover a lot more
-material.
+material. Next, we'll explain how to deploy a node so that you can work with
+your own data.
 
 ## Onboard your own node
 
-Adding a own node takes just few minutes:
+Adding a node takes just few minutes:
 
-1. Visit the [configurator](https://app.tenzir.com/configurator) and downloading
-   a configuration file.
-2. Install a node using the provided instructions (also explained below).
-
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
-<Tabs>
-<TabItem value="universal" label="All Platforms" default>
-
-Use our installer to perform a platform-specific installation:
-
-```bash
-curl https://get.tenzir.app | sh
-```
-
-The shell script asks you once to confirm the installation.
-
-</TabItem>
-<TabItem value="debian" label="Debian">
-
-Download the latest [Debian package][tenzir-debian-package] and install it via
-`dpkg`:
-
-```bash
-dpkg -i tenzir-static-amd64-linux.deb
-```
-
-[tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.deb
-
-</TabItem>
-<TabItem value="nix" label="Nix">
-
-Try Tenzir with our `flake.nix`:
-
-```bash
-nix run github:tenzir/tenzir/stable
-```
-
-Install Tenzir by adding `github:tenzir/tenzir/stable` to your flake inputs, or
-use your preferred method to include third-party modules on classic NixOS.
-
-</TabItem>
-<TabItem value="linux" label="Linux">
-
-Download a tarball with our [static binary][tenzir-tarball] for all Linux
-distributions and unpack it into `/opt/tenzir`:
-
-```bash
-tar xzf tenzir-static-x86_64-linux.tar.gz -C /
-```
-
-We also offer prebuilt statically linked binaries for every Git commit to the
-`main` branch.
-
-```bash
-version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-curl -fsSL "https://storage.googleapis.com/tenzir-dist-public/packages/main/tenzir-${version}-linux-static.tar.gz"
-```
-
-[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-x86_64-linux.tar.gz
-
-</TabItem>
-<TabItem value="macos" label="macOS">
-
-Please use Docker [with
-Rosetta](https://levelup.gitconnected.com/docker-on-apple-silicon-mac-how-to-run-x86-containers-with-rosetta-2-4a679913a0d5)
-until we offer a native package.
-
-</TabItem>
-<TabItem value="docker" label="Docker">
-
-Pull the image:
-
-```bash
-docker pull tenzir/tenzir
-```
-
-</TabItem>
-<TabItem value="docker-compose" label="Docker Compose">
-
-After having downloaded the config file from the
-[configurator](https://app.tenzir.com/configurator), run:
-
-```bash
-docker compose up
-```
-
-</TabItem>
-</Tabs>
+1. Visit the [configurator](https://app.tenzir.com/configurator) 
+2. Download a configuration file for your node.
+3. Install your node by follow the [deployment
+   instructions](setup-guides/deploy-a-node/README.md).
 
 ## Up Next
 
-Now that you got a first impression of Tenzir pipelines, dive deeper by
+Now that you got a first impression of Tenzir pipelines, and perhaps already
+a node of your own, dive deeper by
 
 - following the [user guides](user-guides.md) with step-by-step tutorials of
   common use cases
@@ -458,6 +438,6 @@ Now that you got a first impression of Tenzir pipelines, dive deeper by
 - understanding [why](why-tenzir.md) we built Tenzir and how it compares to
   other systems
 
-We're here to help! If you have any questions, swing by our friendly [community
-Discord](/discord) or open a [GitHub
+Don't forget that we're here to help! If you have any questions, swing by our
+friendly [community Discord](/discord) or open a [GitHub
 discussion](https://github.com/tenzir/tenzir/discussions).

@@ -24,8 +24,8 @@ input with an [expression](../../language/expressions.md).
 
 Filter by metadata using the `#schema` selector:
 
-```bash
-tenzir 'export | where #schema == "suricata.alert"'
+```
+export | where #schema == "suricata.alert
 ```
 
 <details>
@@ -100,8 +100,9 @@ tenzir 'export | where #schema == "suricata.alert"'
 
 Or by using type and field extractors:
 
-```bash
-tenzir 'export | where 10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min)'
+```
+export
+| where 10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min)
 ```
 
 <details>
@@ -225,12 +226,10 @@ last N records of the input.
 
 The first 3 Zeek logs with IPs in 10.10.5.0/25:
 
-```bash
-tenzir '
-  export
-  | where #schema == /zeek.*/ && 10.10.5.0/25
-  | head 3
-  '
+```
+export
+| where #schema == /zeek.*/ && 10.10.5.0/25
+| head 3
 ```
 
 <details>
@@ -300,13 +299,11 @@ the majority of use cases and `tail` only when you have to.
 Use the [`select`](../../operators/transformations/select.md) operator to
 restrict the output to a list of fields.
 
-```bash
-tenzir '
-  export
-  | where #schema == "suricata.alert"
-  | select src_ip, dest_ip, severity, signature
-  | head 3
-  '
+```
+export
+| where #schema == "suricata.alert"
+| select src_ip, dest_ip, severity, signature
+| head 3
 ```
 
 <details>
@@ -350,12 +347,10 @@ The [`taste`](../../operators/transformations/taste.md) operator provides a
 sample of the first N events of every unique schemas in the dataflow. For
 example, to get 5 unique samples:
 
-```bash
-tenzir '
-  export
-  | taste 1
-  | head 5
-  '
+```
+export
+| taste 1
+| head 5
 ```
 
 <details>
@@ -467,31 +462,67 @@ Here is an example that generates host pairs plus service for Zeek connection
 records. Think of the output is a the edges in graph, with the last column being
 the edge type.
 
-```bash
-tenzir '
-  export 
-  | where #schema == "zeek.conn" && 10.10.5.0/25
-  | put id.orig_h, id.resp_h, service
-  | head
-  | write tsv to stdout
-  ' | column -t
+```
+export 
+| where #schema == "zeek.conn" && 10.10.5.0/25
+| put id.orig_h, id.resp_h, service
+| head
 ```
 
 <details>
 <summary>Output</summary>
 
-```
-id.orig_h    id.resp_h     service
-10.10.5.101  77.75.230.91  http
-10.10.5.101  10.10.5.5     dns
-10.10.5.101  10.10.5.5     dns
-10.10.5.101  20.189.173.1  -
-10.10.5.101  20.189.173.1  ssl
-10.10.5.101  52.109.8.21   ssl
-10.10.5.101  10.10.5.5     dns
-10.10.5.101  10.10.5.5     dns
-10.10.5.101  20.54.88.152  ssl
-10.10.5.101  13.107.42.16  ssl
+```json
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "77.75.230.91",
+  "service": "http"
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "10.10.5.5",
+  "service": "dns"
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "10.10.5.5",
+  "service": "dns"
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "20.189.173.1",
+  "service": null
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "20.189.173.1",
+  "service": "ssl"
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "52.109.8.21",
+  "service": "ssl"
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "10.10.5.5",
+  "service": "dns"
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "10.10.5.5",
+  "service": "dns"
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "20.54.88.152",
+  "service": "ssl"
+}
+{
+  "id.orig_h": "10.10.5.101",
+  "id.resp_h": "13.107.42.16",
+  "service": "ssl"
+}
 ```
 
 </details>
@@ -503,14 +534,12 @@ or schema names.
 
 For example, rename the schema name and only print that afterwards:
 
-```bash
-tenzir '
-  export
-  | where #schema == "zeek.conn"
-  | rename flow=:zeek.conn
-  | put schema=#schema
-  | head 1
-  '
+```
+export
+| where #schema == "zeek.conn"
+| rename flow=:zeek.conn
+| put schema=#schema
+| head 1
 ```
 
 <details>
@@ -526,14 +555,12 @@ tenzir '
 
 Rename a field:
 
-```bash
-tenzir '
-  export
-  | where #schema == "zeek.conn"
-  | rename src=id.orig_h, dst=id.resp_h
-  | put src, dst
-  | head
-  '
+```
+export
+| where #schema == "zeek.conn"
+| rename src=id.orig_h, dst=id.resp_h
+| put src, dst
+| head
 ```
 
 <details>
@@ -559,12 +586,10 @@ tenzir '
 Use [`summarize`](../../operators/transformations/summarize.md) to group and
 aggregate data.
 
-```bash
-tenzir '
-  export
-  | #schema == "suricata.alert"
-  | summarize count=count(src_ip) by severity
-  '
+```
+export
+| #schema == "suricata.alert"
+| summarize count=count(src_ip) by severity
 ```
 
 <details>
@@ -590,13 +615,11 @@ tenzir '
 Suricata alerts with lower severity are more critical, with severity 1 being the
 highest. Let's group by alert signature containing the substring `SHELLCODE`:
 
-```bash
-tenzir '
-  export
-  | where severity == 1
-  | summarize count=count(src_ip) by signature
-  | where /.*SHELLCODE.*/
-  '
+```
+export
+| where severity == 1
+| summarize count=count(src_ip) by signature
+| where /.*SHELLCODE.*/
 ```
 
 <details>
@@ -620,13 +643,11 @@ tenzir '
 Use [`sort`](../../operators/transformations/sort.md) to arrange the output
 records according to the order of a specific field.
 
-```bash
-tenzir '
-  export
-  | #schema == "suricata.alert"
-  | summarize count=count(src_ip) by severity
-  | sort count desc
-  '
+```
+export
+| #schema == "suricata.alert"
+| summarize count=count(src_ip) by severity
+| sort count desc
 ```
 
 <details>
@@ -656,33 +677,49 @@ duplicates. This operator comes in handy after a
 [`sort`](../../operators/transformations/sort.md) that arranges the input so
 that duplicates lay next to each other:
 
-```bash
-tenzir '
-  export
-  | where #schema == "zeek.kerberos"
-  | put client
-  | sort client
-  | unique
-  | head
-  | write ssv to stdout
-  '
+```
+export
+| where #schema == "zeek.kerberos"
+| put client
+| sort client
+| unique
+| head
 ```
 
 <details>
 <summary>Output</summary>
 
-```
-client
-/NM
-Administrator/EAGLEFREAKS
-DEKSTOP-D9UMVWL$/SIMONSAYSGO.NET
-DEKSTOP-VVCWQF5$/POLICYBARONS.COM
-DESKTOP-1-PC$/MAXSUGER.COM
-DESKTOP-1O7QAEA$/VICTORYPUNK.COM
-DESKTOP-2P2S7WR$/VICTORYPUNK.COM
-DESKTOP-30CQ14B$/FIRGREENTECH.COM
-DESKTOP-3KI6Y6G$/JIGGEDYJACK.COM
-DESKTOP-41SH6EJ$/DUCKKISSMIXER.COM
+```json
+{
+  "client": "/NM"
+}
+{
+  "client": "Administrator/EAGLEFREAKS"
+}
+{
+  "client": "DEKSTOP-D9UMVWL$/SIMONSAYSGO.NET"
+}
+{
+  "client": "DEKSTOP-VVCWQF5$/POLICYBARONS.COM"
+}
+{
+  "client": "DESKTOP-1-PC$/MAXSUGER.COM"
+}
+{
+  "client": "DESKTOP-1O7QAEA$/VICTORYPUNK.COM"
+}
+{
+  "client": "DESKTOP-2P2S7WR$/VICTORYPUNK.COM"
+}
+{
+  "client": "DESKTOP-30CQ14B$/FIRGREENTECH.COM"
+}
+{
+  "client": "DESKTOP-3KI6Y6G$/JIGGEDYJACK.COM"
+}
+{
+  "client": "DESKTOP-41SH6EJ$/DUCKKISSMIXER.COM"
+}
 ```
 
 </details>
@@ -690,14 +727,12 @@ DESKTOP-41SH6EJ$/DUCKKISSMIXER.COM
 To compute a unique list of values per group, use the `distinct` aggregation
 function in [`summarize`](../../operators/transformations/summarize.md):
 
-```bash
-tenzir '
-  export
-  | where #schema == "zeek.conn"
-  | summarize sources=distinct(id.orig_h) by id.resp_h
-  | rename destination=id.resp_h
-  | head 3
-  '
+```
+export
+| where #schema == "zeek.conn"
+| summarize sources=distinct(id.orig_h) by id.resp_h
+| rename destination=id.resp_h
+| head 3
 ```
 
 <details>
@@ -737,54 +772,221 @@ For example, one way to compute a histogram over the entire persisted dataset is
 to perform a full scan, replace the input with statistics, and then aggregate
 them by schema:
 
-```bash
-tenzir '
-  export
-  | measure
-  | summarize events=sum(events) by schema
-  | sort events desc
-  | write tsv to stdout
-  ' | column -t
+```
+export
+| measure
+| summarize events=sum(events) by schema
+| sort events desc
 ```
 
 <details>
 <summary>Output</summary>
 
 ```
-schema               events
-zeek.conn            583838
-zeek.dns             90013
-zeek.http            75290
-zeek.telemetry       72853
-zeek.ssl             42389
-zeek.files           21922
-suricata.alert       21749
-zeek.dce_rpc         19585
-zeek.analyzer        14755
-zeek.notice          5871
-zeek.weird           4617
-zeek.reporter        3528
-zeek.ocsp            2874
-zeek.kerberos        2708
-zeek.x509            2379
-zeek.smtp            1967
-zeek.smb_mapping     1584
-zeek.stats           1409
-zeek.ntp             1224
-zeek.smb_files       1140
-zeek.dpd             926
-zeek.tunnel          606
-zeek.sip             565
-zeek.loaded_scripts  512
-zeek.capture_loss    476
-zeek.ntlm            429
-zeek.pe              315
-zeek.dhcp            267
-zeek.snmp            132
-zeek.traceroute      9
-zeek.ftp             4
-zeek.packet_filter   1
-zeek.radius          1
+{
+  "schema": "suricata.flow",
+  "events": 1129992
+}
+{
+  "schema": "zeek.conn",
+  "events": 583838
+}
+{
+  "schema": "suricata.alert",
+  "events": 341137
+}
+{
+  "schema": "suricata.dns",
+  "events": 289117
+}
+{
+  "schema": "suricata.http",
+  "events": 150736
+}
+{
+  "schema": "zeek.dns",
+  "events": 90013
+}
+{
+  "schema": "suricata.tls",
+  "events": 84608
+}
+{
+  "schema": "zeek.http",
+  "events": 75290
+}
+{
+  "schema": "zeek.telemetry",
+  "events": 72853
+}
+{
+  "schema": "suricata.smb",
+  "events": 67943
+}
+{
+  "schema": "zeek.ssl",
+  "events": 42389
+}
+{
+  "schema": "suricata.fileinfo",
+  "events": 35968
+}
+{
+  "schema": "suricata.dcerpc",
+  "events": 33055
+}
+{
+  "schema": "zeek.files",
+  "events": 21922
+}
+{
+  "schema": "zeek.dce_rpc",
+  "events": 19585
+}
+{
+  "schema": "zeek.analyzer",
+  "events": 14755
+}
+{
+  "schema": "suricata.anomaly",
+  "events": 8535
+}
+{
+  "schema": "zeek.notice",
+  "events": 5871
+}
+{
+  "schema": "suricata.smtp",
+  "events": 5208
+}
+{
+  "schema": "zeek.weird",
+  "events": 4617
+}
+{
+  "schema": "zeek.reporter",
+  "events": 3528
+}
+{
+  "schema": "suricata.krb5",
+  "events": 3378
+}
+{
+  "schema": "zeek.ocsp",
+  "events": 2874
+}
+{
+  "schema": "zeek.kerberos",
+  "events": 2708
+}
+{
+  "schema": "zeek.x509",
+  "events": 2379
+}
+{
+  "schema": "zeek.smtp",
+  "events": 1967
+}
+{
+  "schema": "zeek.smb_mapping",
+  "events": 1584
+}
+{
+  "schema": "zeek.stats",
+  "events": 1409
+}
+{
+  "schema": "zeek.ntp",
+  "events": 1224
+}
+{
+  "schema": "zeek.smb_files",
+  "events": 1140
+}
+{
+  "schema": "suricata.ftp",
+  "events": 954
+}
+{
+  "schema": "suricata.sip",
+  "events": 936
+}
+{
+  "schema": "zeek.dpd",
+  "events": 926
+}
+{
+  "schema": "suricata.dhcp",
+  "events": 648
+}
+{
+  "schema": "zeek.tunnel",
+  "events": 606
+}
+{
+  "schema": "zeek.sip",
+  "events": 565
+}
+{
+  "schema": "zeek.loaded_scripts",
+  "events": 512
+}
+{
+  "schema": "zeek.capture_loss",
+  "events": 476
+}
+{
+  "schema": "zeek.ntlm",
+  "events": 429
+}
+{
+  "schema": "zeek.pe",
+  "events": 315
+}
+{
+  "schema": "suricata.snmp",
+  "events": 288
+}
+{
+  "schema": "zeek.dhcp",
+  "events": 267
+}
+{
+  "schema": "zeek.snmp",
+  "events": 132
+}
+{
+  "schema": "suricata.tftp",
+  "events": 62
+}
+{
+  "schema": "suricata.stats",
+  "events": 12
+}
+{
+  "schema": "zeek.traceroute",
+  "events": 9
+}
+{
+  "schema": "zeek.ftp",
+  "events": 4
+}
+{
+  "schema": "suricata.ikev2",
+  "events": 2
+}
+{
+  "schema": "suricata.ftp_data",
+  "events": 1
+}
+{
+  "schema": "zeek.packet_filter",
+  "events": 1
+}
+{
+  "schema": "zeek.radius",
+  "events": 1
+}
 ```
 
 </details>
@@ -793,12 +995,9 @@ The above pipeline performs a full scan over the data at the node. Tenzir's
 pipeline optimizer pushes down predicate to avoid scans when possible. Consider
 this pipeline:
 
-```bash
-tenzir '
-  export
-  | where *.id.orig_h in 10.0.0.0/8
-  | write parquet to file local.parquet
-  '
+```
+export
+| where *.id.orig_h in 10.0.0.0/8
 ```
 
 The optimizer coalesces the `export` and `where` operators such that

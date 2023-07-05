@@ -39,7 +39,7 @@ PIPELINES.
 ### Explorer
 
 The explorer allows you to interact with your data by [running
-pipelines](../../user-guides/run-a-pipeline.md).
+pipelines](../../user-guides/run-a-pipeline/README.md).
 
 ![Explorer](app-explorer.excalidraw.svg)
 

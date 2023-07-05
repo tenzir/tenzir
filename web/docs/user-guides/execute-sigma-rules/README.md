@@ -32,7 +32,7 @@ future, we would like to write a native Tenzir backend for
 You can run a Sigma rule on any pipeline input. For example, to apply a Sigma
 rule to an EVTX file, we can use the utility
 [`evtx_dump`](https://github.com/omerbenamram/evtx) to convert the binary EVTX
-format into JSON and then pipe it to `sigma`:
+format into JSON and then pipe it to `sigma` on the command line:
 
 ```bash
 evtx_dump -o jsonl file.evtx | tenzir 'read json | sigma.yaml'
