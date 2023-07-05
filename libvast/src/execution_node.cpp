@@ -716,8 +716,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
     }
   }
 
-  auto pull(exec_node_sink_actor sink, uint64_t batch_size,
-            duration batch_timeout) -> caf::result<void>
+  auto
+  pull(exec_node_sink_actor sink, uint64_t batch_size, duration batch_timeout)
+    -> caf::result<void>
     requires(not std::is_same_v<Output, std::monostate>)
   {
     if (this->reject_demand) {
