@@ -1,9 +1,7 @@
 # Why Tenzir
 
-:::info Product launching soon 🚀
-We're gearing up for the launch of our free Community Edition. Head over to
-<https://tenzir.com> and sign up for the waitlist to be notified at launch day.
-:::
+On this page we explain what Tenzir is, what you can do with it, and how it
+compares to other systems out there.
 
 ## What is Tenzir?
 
