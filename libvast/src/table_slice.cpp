@@ -1222,12 +1222,12 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
 auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
                             std::string_view nested_field_separator)
   -> std::shared_ptr<arrow::StructArray> {
-  // Used to map parent fields to it's children for unflattening purposes.
+  // Used to map parent fields to its children for unflattening purposes.
   // Given foo.bar and foo.baz as fields of input slice the algorithm will
   // first create an instance of unflattened_field for 'foo' key. The created
   // instance will combine 'bar' and 'baz' fields into a struct array. All the
   // fields that should be combined under the 'foo' key will use this map to
-  // find the approperiate object which should aggregate it.
+  // find the appropriate object which should aggregate it.
   std::unordered_map<std::string_view, unflatten_field> unflattened_field_map;
   std::unordered_map<std::string_view, unflatten_field> unflattened_children;
   std::unordered_map<std::string_view, unflatten_field*>
@@ -1281,15 +1281,21 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
   for (const auto& [_, fields] : fields_to_resolve) {
     for (const auto& field : fields) {
       auto prefix_separator = field.find_last_of(nested_field_separator);
-      auto prefix = std::string_view{field.data(), prefix_separator};
-      // Presence of a prefix means that we cannot unflatten the current
-      // field so it is an unflattend field itself.
-      if (original_field_name_to_new_field_map.contains(prefix)) {
-        unflattened_field_map[field] = unflatten_field{
-          field, slice_array->GetFieldByName(std::string{field})};
-        original_field_name_to_new_field_map[field]
-          = std::addressof(unflattened_field_map[field]);
-        continue;
+      if (prefix_separator != std::string::npos) {
+        auto prefix = std::string_view{field.data(), prefix_separator};
+        // Presence of a prefix means that we cannot unflatten the current
+        // field so it is an unflattend field itself.
+        if (original_field_name_to_new_field_map.contains(prefix)) {
+          unflattened_field_map[field] = unflatten_field{
+            field, slice_array->GetFieldByName(std::string{field})};
+          original_field_name_to_new_field_map[field]
+            = std::addressof(unflattened_field_map[field]);
+          VAST_WARN("retaining original field {} during unflattening: "
+                    "encountered potential value collision with already "
+                    "unflattened field {}",
+                    field, prefix);
+          continue;
+        }
       }
       // Try to find the parent field name. E.g with input fields "foo.bar.x",
       // "foo.bar.z", "foo", "foo.bar.z.b" The fields with least separators are
