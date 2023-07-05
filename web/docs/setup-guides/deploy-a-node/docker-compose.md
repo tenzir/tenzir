@@ -4,21 +4,17 @@ sidebar_position: 1
 
 # Docker Compose
 
+:::caution Outdated
+These instructions are unfortunately outdated. We plan to update them in the
+future. For now, please swing by our [Discord](/discord) for questions on the
+Docker Compose integrations.
+:::
+
 We offer a range of Docker Compose files for quickly getting up and running with
 Tenzir. All mentioned files are in the [`docker`][tenzir-repo-docker] directory of
 the Tenzir repository, and require having the repository checked out locally.
 
 [tenzir-repo-docker]: https://github.com/tenzir/tenzir/tree/main/docker
-
-:::info Docker Compose V2 CLI
-All examples shown use the [Docker Compose V2 CLI][docker-compose-v2-cli]. If
-using `docker compose` (with a space) does not work for you, try using
-`docker-compose` instead. We don't test our scripts explicitly with this older
-version, so although most commands should work, we recommand upgrading to a
-recent version of Docker and Compose.
-:::
-
-[docker-compose-v2-cli]: https://docs.docker.com/compose/#compose-v2-and-the-new-docker-compose-command
 
 ## Quick Start with Docker Compose
 
