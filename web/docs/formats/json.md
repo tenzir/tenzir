@@ -25,7 +25,7 @@ JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects.
 
 ### `--schema=<schema>` (Parser)
 
-Provide the name schema used by the parser.
+Provide the name of a [schema](../data-model/schemas.md) used by the parser.
 
 The `--schema` option is incompatible with the `--selector` option.
 
