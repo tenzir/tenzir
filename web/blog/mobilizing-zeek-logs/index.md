@@ -102,8 +102,8 @@ Here are the same three entries from above in NDJSON:
 {"ts":1258531693.816224,"uid":"CtTLWk44k1eOCdSjBf","id.orig_h":"192.168.1.102","id.orig_p":137,"id.resp_h":"192.168.1.255","id.resp_p":137,"proto":"udp","service":"dns","duration":3.7486469745635986,"orig_bytes":350,"resp_bytes":0,"conn_state":"S0","missed_bytes":0,"history":"D","orig_pkts":7,"orig_ip_bytes":546,"resp_pkts":0,"resp_ip_bytes":0}
 ```
 
-We call this format "multiplexed" because the stream of logs is now spread over
-one file per type. Use the regular [`json`](/next/formats/json) parser to
+We call this format "demultiplexed" because the stream of logs is now spread
+over one file per type. Use the regular [`json`](/next/formats/json) parser to
 mobilize these log files with Tenzir:
 
 ```bash
