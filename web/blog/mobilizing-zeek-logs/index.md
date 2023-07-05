@@ -84,7 +84,7 @@ Now that Zeek logs are flowing, you can do a lot more than selecting specific
 columns. Check out the [reshaping guide](/next/user-guides/reshape-data) for
 filtering rows, performing aggregations, or routing them elsewhere.
 
-### Demultiplexed NDJSON
+### JSON
 
 Zeek can also render logs as JSON by setting
 [`LogAscii::use_json=T`](https://docs.zeek.org/en/master/frameworks/logging.html):
@@ -102,9 +102,7 @@ Here are the same three entries from above in NDJSON:
 {"ts":1258531693.816224,"uid":"CtTLWk44k1eOCdSjBf","id.orig_h":"192.168.1.102","id.orig_p":137,"id.resp_h":"192.168.1.255","id.resp_p":137,"proto":"udp","service":"dns","duration":3.7486469745635986,"orig_bytes":350,"resp_bytes":0,"conn_state":"S0","missed_bytes":0,"history":"D","orig_pkts":7,"orig_ip_bytes":546,"resp_pkts":0,"resp_ip_bytes":0}
 ```
 
-We call this format "demultiplexed" because the stream of logs is now spread
-over one file per type. Use the regular [`json`](/next/formats/json) parser to
-get the data flowing:
+Use the regular [`json`](/next/formats/json) parser to get the data flowing:
 
 ```bash
 cat conn.log | tenzir 'read json --schema "zeek.conn" | taste 1'
@@ -113,15 +111,26 @@ cat conn.log | tenzir 'read json --schema "zeek.conn" | taste 1'
 The option `--schema` of the `json` reader passes a name of a known schema to
 validate the input against.
 
-### Multiplexed NDJSON
+:::note Zeek Schemas
+Tenzir comes with schemas for a stock Zeek. We have planned an operator that
+makes it also possible to simple rename the schema, akin to
+[`rename`](/next/operators/transformations/rename) for fields.
+:::
 
-The above one-file-per-log format is not conducive to stream processing. Most
-analytics tools treat ingestion as a continuous process. Enter [JSON streaming
-logs](https://github.com/corelight/json-streaming-logs). Instead of writing one
-log per file and a custom format, this package makes Zeek produce a single
-stream of NDJSON.
+### Streaming JSON
 
-This feature doesn't come with stock Zeek. Use Zeek's package manager `zkg` to
+The above one-file-per-log format is not conducive to stream processing because
+a critical piece of information is missing: the type of the log (or *schema*),
+which is only contained in the file name. So you can't just ship the data away
+and infer the type later at ease. And carrying the filename around in a side
+channel is cumbersome. Enter [JSON streaming
+logs](https://github.com/corelight/json-streaming-logs). This package adds two
+new fields: `_path` with the log type and `_write_ts` with the timestamp when
+the log was written. For example, the old `http.log` is now has an additional
+field `{"_path": "http" , ...}`. This makes it a lot easier to consume, because
+you can now concatenate the entire output and multiplex it over a single stream.
+
+This format doesn't come with stock Zeek. Use Zeek's package manager `zkg` to
 install it:
 
 ```bash
@@ -134,12 +143,8 @@ Then pass the package name to the list of scripts on the command line:
 zeek -r trace.pcap json-streaming-logs
 ```
 
-And now you get JSON logs in the current directory.
-
-Because all log types are squashed into a single output stream, the package adds
-a new field `_path` to identify the log type. For example, the old `http.log` is
-now a JSON object with an additional field `{"_path": "http" , ...}`. Here's the
-same `conn.log` example from above, this time as NDJSON:
+And now you get JSON logs in the current directory. Here's the same `conn.log`
+example from above, this time as NDJSON:
 
 ```json
 {"_path":"conn","_write_ts":"2009-11-18T16:45:06.678526Z","ts":"2009-11-18T16:43:56.223671Z","uid":"CzFMRp2difzeGYponk","id.orig_h":"192.168.1.104","id.orig_p":1387,"id.resp_h":"74.125.164.85","id.resp_p":80,"proto":"tcp","service":"http","duration":65.45066595077515,"orig_bytes":694,"resp_bytes":11708,"conn_state":"SF","missed_bytes":0,"history":"ShADadfF","orig_pkts":9,"orig_ip_bytes":1062,"resp_pkts":14,"resp_ip_bytes":12276}
@@ -148,10 +153,10 @@ same `conn.log` example from above, this time as NDJSON:
 ```
 
 A lot of tools have much less trouble with consuming such a single stream. That
-said, the JSON format is "dumbed down" compared to TSV, which contains
-additional type information, such as timestamps, durations, IP addresses, etc.
-This type information is lost in the JSON output and up to the downstream
-tooling to bring back.
+said, JSON is always "dumbed down" compared to TSV, which contains additional
+type information, such as timestamps, durations, IP addresses, etc. This type
+information is lost in the JSON output and up to the downstream tooling to bring
+back.
 
 To read JSON Streaming Logs, use the [`zeek-json`](/next/formats/zeek-json)
 parser:
@@ -197,9 +202,9 @@ recommendations:
 - **Use TSV when you can.** If your downstream tooling can parse TSV, it is the
   best choice because it retains Zeek's rich type annotation as metadata—without
   the need for downstream schema wrangling.
-- **Use JSON streaming logs for the easy button**. The single stream of NDJSON
-  logs is most versatile, since this format is downstream tooling . Use it when
-  you need to get in business quickly.
+- **Use Streaming JSON for the easy button**. The single stream of NDJSON
+  logs is most versatile, since most downstream tooling supports it well. Use it
+  when you need to get in business quickly.
 - **Use stock JSON when you must**. There's marginal utility in the
   one-JSON-file-per-log format. It requires extra effort in keeping track of
   filenames and mapping them to their corresponding types.
