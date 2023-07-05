@@ -54,9 +54,9 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
         finish_start();
       },
       [this](caf::error& err) mutable {
-        VAST_DEBUG("{} aborts start because execution node could not be "
-                   "started: {}",
-                   *self, err);
+        VAST_VERBOSE("{} aborts start because execution node could not be "
+                     "started: {}",
+                     *self, err);
         abort_start(std::move(err));
       });
 }
@@ -103,7 +103,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
                   operator_box{std::move(op)}, input_type, diagnostics)
         .then(
           [=, this](exec_node_actor& exec_node) {
-            VAST_DEBUG("{} spawned {} remotely", *self, description);
+            VAST_VERBOSE("{} spawned {} remotely", *self, description);
             // TODO: We should call `quit()` whenever `start()` fails to
             // ensure that this will not be called afterwards (or we check for
             // this case).

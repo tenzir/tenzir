@@ -321,8 +321,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // Instantiate the operator with its input type.
     auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
     if (not output_generator) {
-      VAST_DEBUG("{} could not instantiate operator: {}", *self,
-                 output_generator.error());
+      VAST_VERBOSE("{} could not instantiate operator: {}", *self,
+                   output_generator.error());
       return add_context(output_generator.error(),
                          "{} failed to instantiate operator", *self);
     }
@@ -334,7 +334,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     }
     instance.emplace();
     instance->gen = std::get<generator<Output>>(std::move(*output_generator));
-    VAST_DEBUG("{} calls begin on instantiated operator", *self);
+    VAST_TRACE("{} calls begin on instantiated operator", *self);
     instance->it = instance->gen.begin();
     if (abort) {
       VAST_DEBUG("{} was aborted during begin: {}", *self, op->to_string(),
@@ -342,7 +342,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       return abort;
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
-      VAST_DEBUG("{} is the sink and requests start from {}", *self,
+      VAST_TRACE("{} is the sink and requests start from {}", *self,
                  this->previous);
       auto rp = self->make_response_promise<void>();
       self
@@ -350,7 +350,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
                   std::move(previous))
         .then(
           [this, rp]() mutable {
-            VAST_DEBUG("{} schedules run of sink after successful startup",
+            VAST_TRACE("{} schedules run of sink after successful startup",
                        *self);
             schedule_run();
             rp.deliver();
