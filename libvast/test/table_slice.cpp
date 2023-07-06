@@ -22,7 +22,6 @@
 #include "vast/table_slice_row.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
-#include "vast/type.hpp"
 
 #include <arrow/record_batch.h>
 #include <caf/make_copy_on_write.hpp>

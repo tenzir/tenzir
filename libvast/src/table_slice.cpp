@@ -169,16 +169,97 @@ auto make_unflattened_struct_array(
   // foo struct array with bar and baz as children
   std::unordered_set<unflatten_field*> handled_fields;
   for (const auto& field : fields) {
-    if (original_field_name_to_new_field_map.contains(field->name())) {
-      auto* f = original_field_name_to_new_field_map.at(field->name());
-      if (not handled_fields.contains(f)) {
-        new_columns.push_back(f->to_arrow());
-        new_field_names.push_back(std::string{f->field_name_});
-        handled_fields.insert(f);
-      }
+    VAST_ASSERT(original_field_name_to_new_field_map.contains(field->name()));
+    auto* f = original_field_name_to_new_field_map.at(field->name());
+    if (not handled_fields.contains(f)) {
+      new_columns.push_back(f->to_arrow());
+      new_field_names.push_back(std::string{f->field_name_});
+      handled_fields.insert(f);
     }
   }
   return arrow::StructArray::Make(new_columns, new_field_names).ValueOrDie();
+}
+
+auto append_columns(const record_type& schema,
+                    const type_to_arrow_array_t<record_type>& array,
+                    type_to_arrow_builder_t<record_type>& builder) -> void {
+  // NOTE: Passing nullptr for the valid_bytes parameter has the undocumented
+  // special meaning of all appended entries being valid. The Arrow unit
+  // tests do the same thing in a few places; if this ever starts to cause
+  // issues, we can create a vector<uint8_t> with desired_batch_size entries
+  // of the value 1, call .data() on that and pass it in here instead.
+  const auto append_status
+    = builder.AppendValues(array.length(), /*valid_bytes*/ nullptr);
+  VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
+  for (auto field_index = 0; field_index < array.num_fields(); ++field_index) {
+    const auto field_type = schema.field(field_index).type;
+    const auto& field_array = *array.field(field_index);
+    auto& field_builder = *builder.field_builder(field_index);
+    const auto append_column = detail::overload{
+      [&](const record_type& concrete_field_type) noexcept {
+        const auto& concrete_field_array
+          = caf::get<type_to_arrow_array_t<record_type>>(field_array);
+        auto& concrete_field_builder
+          = caf::get<type_to_arrow_builder_t<record_type>>(field_builder);
+        append_columns(concrete_field_type, concrete_field_array,
+                       concrete_field_builder);
+      },
+      [&]<concrete_type Type>(
+        [[maybe_unused]] const Type& concrete_field_type) noexcept {
+        const auto& concrete_field_array
+          = caf::get<type_to_arrow_array_t<Type>>(field_array);
+        auto& concrete_field_builder
+          = caf::get<type_to_arrow_builder_t<Type>>(field_builder);
+        constexpr auto can_use_array_slice_api
+          = basic_type<Type> && //
+            !arrow::is_extension_type<type_to_arrow_type_t<Type>>::value;
+        if constexpr (can_use_array_slice_api) {
+          const auto append_array_slice_result
+            = concrete_field_builder.AppendArraySlice(
+              *concrete_field_array.data(), 0, array.length());
+          VAST_ASSERT_CHEAP(append_array_slice_result.ok(),
+                            append_array_slice_result.ToString().c_str());
+        } else {
+          // For complex types and extension types we cannot use the
+          // AppendArraySlice API, so we need to take a slight detour by
+          // manually appending column by column. This is almost exactly
+          // what AppendArraySlice does under the hood, but since it's just
+          // not implemented for extension types we need to do some extra
+          // work here.
+          const auto& concrete_field_array_storage
+            = [&]() noexcept -> const type_to_arrow_array_storage_t<Type>& {
+            // For extension types we need to additionally unwrap
+            // the inner storage array.
+            if constexpr (arrow::is_extension_type<
+                            type_to_arrow_type_t<Type>>::value)
+              return static_cast<const type_to_arrow_array_storage_t<Type>&>(
+                *concrete_field_array.storage());
+            else
+              return concrete_field_array;
+          }();
+          const auto reserve_result
+            = concrete_field_builder.Reserve(array.length());
+          VAST_ASSERT_CHEAP(reserve_result.ok(),
+                            reserve_result.ToString().c_str());
+          for (auto row = 0; row < array.length(); ++row) {
+            if (concrete_field_array_storage.IsNull(row)) {
+              const auto append_null_result
+                = concrete_field_builder.AppendNull();
+              VAST_ASSERT(append_null_result.ok(),
+                          append_null_result.ToString().c_str());
+              continue;
+            }
+            const auto append_builder_result = append_builder(
+              concrete_field_type, concrete_field_builder,
+              value_at(concrete_field_type, concrete_field_array_storage, row));
+            VAST_ASSERT(append_builder_result.ok(),
+                        append_builder_result.ToString().c_str());
+          }
+        }
+      },
+    };
+    caf::visit(append_column, field_type);
+  }
 }
 
 } // namespace
@@ -494,93 +575,10 @@ table_slice concatenate(std::vector<table_slice> slices) {
   const auto resize_result
     = builder->Resize(detail::narrow_cast<int64_t>(rows(slices)));
   VAST_ASSERT(resize_result.ok(), resize_result.ToString().c_str());
-  const auto append_columns
-    = [&](const auto& self, const record_type& schema,
-          const type_to_arrow_array_t<record_type>& array,
-          type_to_arrow_builder_t<record_type>& builder) noexcept -> void {
-    // NTOE: Passing nullptr for the valid_bytes parameter has the undocumented
-    // special meaning of all appenbded entries being valid. The Arrow unit
-    // tests do the same thing in a few places; if this ever starts to cause
-    // issues, we can create a vector<uint8_t> with desired_batch_size entries
-    // of the value 1, call .data() on that and pass it in here instead.
-    const auto append_status
-      = builder.AppendValues(array.length(), /*valid_bytes*/ nullptr);
-    VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
-    for (auto field_index = 0; field_index < array.num_fields();
-         ++field_index) {
-      const auto field_type = schema.field(field_index).type;
-      const auto& field_array = *array.field(field_index);
-      auto& field_builder = *builder.field_builder(field_index);
-      const auto append_column = detail::overload{
-        [&](const record_type& concrete_field_type) noexcept {
-          const auto& concrete_field_array
-            = caf::get<type_to_arrow_array_t<record_type>>(field_array);
-          auto& concrete_field_builder
-            = caf::get<type_to_arrow_builder_t<record_type>>(field_builder);
-          self(self, concrete_field_type, concrete_field_array,
-               concrete_field_builder);
-        },
-        [&]<concrete_type Type>(
-          [[maybe_unused]] const Type& concrete_field_type) noexcept {
-          const auto& concrete_field_array
-            = caf::get<type_to_arrow_array_t<Type>>(field_array);
-          auto& concrete_field_builder
-            = caf::get<type_to_arrow_builder_t<Type>>(field_builder);
-          constexpr auto can_use_array_slice_api
-            = basic_type<Type> && //
-              !arrow::is_extension_type<type_to_arrow_type_t<Type>>::value;
-          if constexpr (can_use_array_slice_api) {
-            const auto append_array_slice_result
-              = concrete_field_builder.AppendArraySlice(
-                *concrete_field_array.data(), 0, array.length());
-            VAST_ASSERT_CHEAP(append_array_slice_result.ok(),
-                              append_array_slice_result.ToString().c_str());
-          } else {
-            // For complex types and extension types we cannot use the
-            // AppendArraySlice API, so we need to take a slight detour by
-            // manually appending column by column. This is almost exactly
-            // what AppendArraySlice does under the hood, but since it's just
-            // not implemented for extension types we need to do some extra
-            // work here.
-            const auto& concrete_field_array_storage
-              = [&]() noexcept -> const type_to_arrow_array_storage_t<Type>& {
-              // For extension types we need to additionally unwrap
-              // the inner storage array.
-              if constexpr (arrow::is_extension_type<
-                              type_to_arrow_type_t<Type>>::value)
-                return static_cast<const type_to_arrow_array_storage_t<Type>&>(
-                  *concrete_field_array.storage());
-              else
-                return concrete_field_array;
-            }();
-            const auto reserve_result
-              = concrete_field_builder.Reserve(array.length());
-            VAST_ASSERT_CHEAP(reserve_result.ok(),
-                              reserve_result.ToString().c_str());
-            for (auto row = 0; row < array.length(); ++row) {
-              if (concrete_field_array_storage.IsNull(row)) {
-                const auto append_null_result
-                  = concrete_field_builder.AppendNull();
-                VAST_ASSERT(append_null_result.ok(),
-                            append_null_result.ToString().c_str());
-                continue;
-              }
-              const auto append_builder_result
-                = append_builder(concrete_field_type, concrete_field_builder,
-                                 value_at(concrete_field_type,
-                                          concrete_field_array_storage, row));
-              VAST_ASSERT(append_builder_result.ok(),
-                          append_builder_result.ToString().c_str());
-            }
-          }
-        },
-      };
-      caf::visit(append_column, field_type);
-    }
-  };
+
   for (const auto& slice : slices) {
     auto batch = to_record_batch(slice);
-    append_columns(append_columns, caf::get<record_type>(schema),
+    append_columns(caf::get<record_type>(schema),
                    *batch->ToStructArray().ValueOrDie(), *builder);
   }
   const auto rows = builder->length();
@@ -916,57 +914,6 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     std::move(array),
   };
 }
-auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
-                            std::string_view nested_field_separator)
-  -> std::shared_ptr<arrow::StructArray>;
-
-auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
-  -> void {
-  auto field_array = f.to_arrow();
-  auto field_type = type::from_arrow(*field_array->type());
-  auto arrow_list_type = caf::get<list_type>(field_type);
-  auto list_value_type = arrow_list_type.value_type();
-  auto field_list = std::static_pointer_cast<arrow::ListArray>(field_array);
-  auto builder = std::shared_ptr<arrow::ListBuilder>{};
-  if (caf::holds_alternative<list_type>(list_value_type)) {
-    for (auto i = 0; i < field_list->length(); ++i) {
-      if (field_list->IsValid(i)) {
-        auto new_f = unflatten_field{f.field_name_, field_list->value_slice(i)};
-        unflatten_list(new_f, nested_field_separator);
-        if (not builder) {
-          builder = list_type{type::from_arrow(*new_f.array_->type())}
-                      .make_arrow_builder(arrow::default_memory_pool());
-        }
-        auto status = builder->Append();
-        VAST_ASSERT(status.ok());
-        status = builder->value_builder()->AppendArraySlice(
-          *new_f.array_->data(), 0, new_f.array_->length());
-        VAST_ASSERT(status.ok());
-      }
-    }
-  } else if (caf::holds_alternative<record_type>(list_value_type)) {
-    for (auto i = 0; i < field_list->length(); ++i) {
-      if (field_list->IsValid(i)) {
-        auto struct_array = std::static_pointer_cast<arrow::StructArray>(
-          field_list->value_slice(i));
-        auto unflattened_s
-          = unflatten_struct_array(struct_array, nested_field_separator);
-        if (not builder) {
-          builder = list_type{type::from_arrow(*unflattened_s->type())}
-                      .make_arrow_builder(arrow::default_memory_pool());
-        }
-        auto status = builder->Append();
-        VAST_ASSERT(status.ok());
-        status = builder->value_builder()->AppendArraySlice(
-          *unflattened_s->data(), 0, unflattened_s->length());
-        VAST_ASSERT(status.ok());
-      }
-    }
-  }
-  if (builder) {
-    f.array_ = builder->Finish().ValueOrDie();
-  }
-}
 
 namespace {
 
@@ -1217,6 +1164,66 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
     std::move(slice),
     std::move(renamed_fields),
   };
+}
+
+auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
+                            std::string_view nested_field_separator)
+  -> std::shared_ptr<arrow::StructArray>;
+
+auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
+  -> void {
+  auto field_array = f.to_arrow();
+  auto field_type = type::from_arrow(*field_array->type());
+  auto arrow_list_type = caf::get<list_type>(field_type);
+  auto list_value_type = arrow_list_type.value_type();
+  auto field_list = std::static_pointer_cast<arrow::ListArray>(field_array);
+  auto builder = std::shared_ptr<arrow::ListBuilder>{};
+  if (caf::holds_alternative<list_type>(list_value_type)) {
+    for (auto i = 0; i < field_list->length(); ++i) {
+      if (field_list->IsValid(i)) {
+        auto new_f = unflatten_field{f.field_name_, field_list->value_slice(i)};
+        unflatten_list(new_f, nested_field_separator);
+        if (not builder) {
+          builder = list_type{type::from_arrow(*new_f.array_->type())}
+                      .make_arrow_builder(arrow::default_memory_pool());
+        }
+        auto status = builder->Append();
+        VAST_ASSERT(status.ok());
+        status = builder->value_builder()->AppendArraySlice(
+          *new_f.array_->data(), 0, new_f.array_->length());
+        VAST_ASSERT(status.ok());
+      }
+    }
+  } else if (caf::holds_alternative<record_type>(list_value_type)) {
+    for (auto i = 0; i < field_list->length(); ++i) {
+      if (field_list->IsValid(i)) {
+        auto struct_array = std::static_pointer_cast<arrow::StructArray>(
+          field_list->value_slice(i));
+        auto unflattened
+          = unflatten_struct_array(struct_array, nested_field_separator);
+        auto record_builder
+          = caf::get<record_type>(type::from_arrow(*unflattened->type()))
+              .make_arrow_builder(arrow::default_memory_pool());
+        auto unflattened_type = type::from_arrow(*unflattened->type());
+        append_columns(
+          caf::get<record_type>(type::from_arrow(*unflattened->type())),
+          *unflattened, *record_builder);
+        const auto array = record_builder->Finish().ValueOrDie();
+        if (not builder) {
+          builder = list_type{unflattened_type}.make_arrow_builder(
+            arrow::default_memory_pool());
+        }
+        auto status = builder->Append();
+        VAST_ASSERT(status.ok());
+        status = builder->value_builder()->AppendArraySlice(*array->data(), 0,
+                                                            array->length());
+        VAST_ASSERT(status.ok());
+      }
+    }
+  }
+  if (builder) {
+    f.array_ = builder->Finish().ValueOrDie();
+  }
 }
 
 auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
