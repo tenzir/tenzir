@@ -49,33 +49,44 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
     pipe.append(std::move(*op));
   }
   auto self = caf::scoped_actor{sys};
-  auto executor = self->spawn<caf::monitored>(
-    pipeline_executor, std::move(pipe),
-    caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
   auto result = caf::expected<void>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
   // asynchronous executor, so we may as well wait until then.
-  self->send(executor, atom::start_v);
-  auto running = true;
-  self->receive_while(running)(
-    []() {
-      VAST_DEBUG("pipeline was succcesfully started");
-    },
-    [&](diagnostic& d) {
-      diag->emit(std::move(d));
-    },
-    [&](caf::error& err) {
-      VAST_DEBUG("failed to start pipeline: {}", err);
-      result = err;
-      running = false;
-    },
-    [&](caf::down_msg& msg) {
-      VAST_DEBUG("pipeline execution finished: {}", msg.reason);
-      running = false;
-      result = msg.reason;
+  struct handler_state {
+    pipeline_executor_actor executor = {};
+  };
+  auto handler = self->spawn(
+    [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
+      self->set_down_handler([&, self](const caf::down_msg& msg) {
+        VAST_DEBUG("command received down: {}", msg.reason);
+        if (msg.reason) {
+          result = msg.reason;
+        }
+        self->quit();
+      });
+      self->state.executor = self->spawn<caf::monitored>(
+        pipeline_executor, std::move(pipe),
+        caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
+      self->request(self->state.executor, caf::infinite, atom::start_v)
+        .then(
+          []() {
+            VAST_DEBUG("started pipeline successfully");
+          },
+          [&, self](caf::error& err) {
+            VAST_WARN("failed to start pipeline: {}", err);
+            result = std::move(err);
+            self->quit();
+          });
+      return {
+        [&](diagnostic& d) {
+          diag->emit(std::move(d));
+        },
+      };
     });
+  self->wait_for(handler);
+  VAST_DEBUG("command is done");
   return result;
 }
 
