@@ -288,8 +288,9 @@ TEST(active feather store fetchall query) {
   run();
   auto results = query(builder, vast::ids{});
   run();
-  CHECK_EQUAL(results.size(), 3ull);
-  compare_table_slices(slice, results[2]);
+  REQUIRE_EQUAL(results.size(), 1ull);
+  CHECK_EQUAL(results[0].rows(), rows(slices));
+  compare_table_slices(results[0], concatenate(slices));
 }
 
 TEST(passive feather store fetchall query) {
