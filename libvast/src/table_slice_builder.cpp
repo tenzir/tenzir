@@ -270,7 +270,11 @@ bool table_slice_builder::add(data_view x) {
   for (size_t i = 0; i < index.size() - 1; ++i) {
     nested_builder = &caf::get<type_to_arrow_builder_t<record_type>>(
       *nested_builder->field_builder(detail::narrow_cast<int>(index[i])));
-    if (index.back() == 0) {
+    const auto following_indices_are_zero
+      = std::all_of(index.begin() + i + 1, index.end(), [](size_t j) {
+          return j == 0;
+        });
+    if (following_indices_are_zero) {
       if (auto status = nested_builder->Append(); !status.ok()) {
         VAST_ERROR("failed to add nested record to builder with schema {}: "
                    "{}",
