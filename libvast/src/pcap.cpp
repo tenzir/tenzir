@@ -38,13 +38,13 @@ auto file_header_type() -> type {
   return type{
     "pcap.file_header",
     record_type{
-      {"magic_number", uint64_type{}}, // uint32
+      {"magic_number", uint64_type{}},  // uint32
       {"major_version", uint64_type{}}, // uint32
       {"minor_version", uint64_type{}}, // uint32
-      {"reserved1", uint64_type{}}, // uint32
-      {"reserved2", uint64_type{}}, // uint32
-      {"snaplen", uint64_type{}}, // uint32
-      {"linktype", uint64_type{}}, // uint16
+      {"reserved1", uint64_type{}},     // uint32
+      {"reserved2", uint64_type{}},     // uint32
+      {"snaplen", uint64_type{}},       // uint32
+      {"linktype", uint64_type{}},      // uint16
     },
   };
 }

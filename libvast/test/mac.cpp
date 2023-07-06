@@ -8,8 +8,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/mac.hpp"
-#include "vast/as_bytes.hpp"
 
+#include "vast/as_bytes.hpp"
 #include "vast/test/test.hpp"
 
 using namespace vast;

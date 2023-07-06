@@ -90,8 +90,7 @@ struct frame {
     return std::nullopt;
   }
 
-  frame(mac dst, mac src)
-    : dst{dst}, src{src} {
+  frame(mac dst, mac src) : dst{dst}, src{src} {
   }
 
   mac dst;                             ///< Destination MAC address
