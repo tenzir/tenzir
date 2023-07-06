@@ -190,7 +190,7 @@ fi
 
 # Test the installation.
 action "Checking version"
-PATH="${prefix}:$PATH"
+PATH="${prefix}/bin:$PATH"
 tenzir -q 'version | select version | write json'
 
 # Inform about next steps.
