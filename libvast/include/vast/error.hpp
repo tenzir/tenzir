@@ -14,6 +14,8 @@
 
 #include <caf/error.hpp>
 #include <caf/make_message.hpp>
+#include <caf/message.hpp>
+#include <fmt/format.h>
 
 namespace vast {
 
@@ -105,6 +107,16 @@ std::string render(caf::error err);
 template <class Inspector>
 auto inspect(Inspector& f, ec& x) {
   return detail::inspect_enum(f, x);
+}
+
+template <class... Ts>
+auto add_context(const caf::error& error, fmt::format_string<Ts...> str,
+                 Ts&&... xs) -> caf::error {
+  return caf::error{
+    error.code(), error.category(),
+    caf::message::concat(
+      error.context(),
+      caf::make_message(fmt::format(std::move(str), std::forward<Ts>(xs)...)))};
 }
 
 } // namespace vast

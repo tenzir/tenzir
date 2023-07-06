@@ -149,10 +149,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       pipeline_executor, std::move(p),
       caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
     self->send(executor, atom::start_v);
-    run();
     auto start_result = std::optional<caf::error>{};
     auto down_result = std::optional<caf::error>{};
+    auto diag_error = std::optional<caf::error>{};
     self->receive_while([&] {
+      run();
       return not down_result.has_value();
     })(
       [&, executor] {
@@ -179,10 +180,18 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       },
       [&](diagnostic& d) {
         MESSAGE("received diagnostic: " << d);
+        if (not diag_error and d.severity == severity::error) {
+          diag_error = caf::make_error(ec::unspecified, fmt::to_string(d));
+        }
       });
     MESSAGE("waiting for executor");
     self->wait_for(executor);
     REQUIRE(down_result);
+    if (diag_error) {
+      REQUIRE(not start_result or start_result == ec::silent);
+      REQUIRE(down_result == ec::silent);
+      return std::move(*diag_error);
+    }
     if (start_result and *start_result) {
       return std::move(*start_result);
     }
@@ -265,6 +274,7 @@ TEST(actor executor instantiation error) {
   }));
   auto pipe = pipeline{std::move(ops)};
   auto result = execute(pipe);
+  MESSAGE("execute result: " << result);
   REQUIRE(not result);
   CHECK_EQUAL(result.error(), ec::unspecified);
 }

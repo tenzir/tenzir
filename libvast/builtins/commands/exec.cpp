@@ -54,34 +54,37 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
   // asynchronous executor, so we may as well wait until then.
-  auto handler
-    = self->spawn([&](caf::event_based_actor* self) -> caf::behavior {
-        self->set_down_handler([&, self](const caf::down_msg& msg) {
-          VAST_DEBUG("command received down: {}", msg.reason);
-          if (msg.reason) {
-            result = msg.reason;
-          }
-          self->quit();
-        });
-        auto executor = self->spawn<caf::monitored>(
-          pipeline_executor, std::move(pipe),
-          caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
-        self->request(executor, caf::infinite, atom::start_v)
-          .then(
-            []() {
-              VAST_DEBUG("started pipeline successfully");
-            },
-            [&, self](caf::error& err) {
-              VAST_WARN("failed to start pipeline: {}", err);
-              result = std::move(err);
-              self->quit();
-            });
-        return {
-          [&](diagnostic& d) {
-            diag->emit(std::move(d));
-          },
-        };
+  struct handler_state {
+    pipeline_executor_actor executor = {};
+  };
+  auto handler = self->spawn(
+    [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
+      self->set_down_handler([&, self](const caf::down_msg& msg) {
+        VAST_DEBUG("command received down: {}", msg.reason);
+        if (msg.reason) {
+          result = msg.reason;
+        }
+        self->quit();
       });
+      self->state.executor = self->spawn<caf::monitored>(
+        pipeline_executor, std::move(pipe),
+        caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
+      self->request(self->state.executor, caf::infinite, atom::start_v)
+        .then(
+          []() {
+            VAST_DEBUG("started pipeline successfully");
+          },
+          [&, self](caf::error& err) {
+            VAST_WARN("failed to start pipeline: {}", err);
+            result = std::move(err);
+            self->quit();
+          });
+      return {
+        [&](diagnostic& d) {
+          diag->emit(std::move(d));
+        },
+      };
+    });
   self->wait_for(handler);
   VAST_DEBUG("command is done");
   return result;
@@ -208,8 +211,13 @@ public:
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
          auto result = exec_command(inv, sys);
-         if (not result)
-           return caf::make_message(result.error());
+         if (not result) {
+           if (result != ec::silent) {
+             auto diag = make_diagnostic_printer("", "", true, std::cerr);
+             diag->emit(diagnostic::error("{}", result.error()).done());
+           }
+           return caf::make_message(ec::silent);
+         }
          return {};
        }},
     };

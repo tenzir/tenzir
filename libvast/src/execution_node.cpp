@@ -139,18 +139,22 @@ public:
 
   auto abort(caf::error error) noexcept -> void override {
     VAST_ASSERT(error != caf::none);
-    diagnostic::error("{}", error)
-      .note("from `{}`", state_.op->to_string())
-      .emit(diagnostics());
+    if (error != ec::silent) {
+      diagnostic::error("{}", error)
+        .note("from `{}`", state_.op->to_string())
+        .emit(diagnostics());
+    }
     if (not state_.abort) {
-      state_.abort = std::move(error);
+      state_.abort = caf::make_error(ec::silent, fmt::to_string(error));
     }
   }
 
   auto warn(caf::error error) noexcept -> void override {
-    diagnostic::warning("{}", error)
-      .note("from `{}`", state_.op->to_string())
-      .emit(diagnostics());
+    if (error != ec::silent) {
+      diagnostic::warning("{}", error)
+        .note("from `{}`", state_.op->to_string())
+        .emit(diagnostics());
+    }
   }
 
   auto emit(table_slice) noexcept -> void override {
@@ -313,6 +317,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
 
   auto start(std::vector<caf::actor> previous) -> caf::result<void> {
     auto time_starting_guard = make_timer_guard(time_scheduled, time_starting);
+    VAST_DEBUG("{} received start request for `{}`", *self, op->to_string());
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} was already started", *self));
@@ -364,23 +369,30 @@ struct exec_node_state : inbound_state_mixin<Input>,
       auto time_scheduled_guard = make_timer_guard(time_running);
       auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
       if (not output_generator) {
-        return caf::make_error(
-          ec::unspecified, fmt::format("{} failed to instantiate operator: {}",
-                                       *self, output_generator.error()));
+        VAST_VERBOSE("{} could not instantiate operator: {}", *self,
+                     output_generator.error());
+        return add_context(output_generator.error(),
+                           "{} failed to instantiate operator", *self);
       }
       if (not std::holds_alternative<generator<Output>>(*output_generator)) {
-        return caf::make_error(ec::logic_error,
-                               fmt::format("{} failed to instantiate operator",
-                                           *self));
+        return caf::make_error(
+          ec::logic_error, fmt::format("{} expected {}, but got {}", *self,
+                                       operator_type_name<Output>(),
+                                       operator_type_name(*output_generator)));
       }
       instance.emplace();
       instance->gen = std::get<generator<Output>>(std::move(*output_generator));
+      VAST_TRACE("{} calls begin on instantiated operator", *self);
       instance->it = instance->gen.begin();
       if (abort) {
+        VAST_DEBUG("{} was aborted during begin: {}", *self, op->to_string(),
+                   abort);
         return abort;
       }
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
+      VAST_TRACE("{} is the sink and requests start from {}", *self,
+                 this->previous);
       auto rp = self->make_response_promise<void>();
       self
         ->request(this->previous, caf::infinite, atom::start_v,
@@ -389,18 +401,21 @@ struct exec_node_state : inbound_state_mixin<Input>,
           [this, rp]() mutable {
             auto time_starting_guard
               = make_timer_guard(time_scheduled, time_starting);
-            VAST_DEBUG("scheduling sink after successful startup");
+            VAST_DEBUG("{} schedules run of sink after successful startup",
+                       *self);
             schedule_run();
             rp.deliver();
           },
           [this, rp](caf::error& error) mutable {
             auto time_starting_guard
               = make_timer_guard(time_scheduled, time_starting);
+            VAST_DEBUG("{} forwards error during startup: {}", *self, error);
             rp.deliver(std::move(error));
           });
       return rp;
     }
     if constexpr (not std::is_same_v<Input, std::monostate>) {
+      VAST_DEBUG("{} delegates start to {}", *self, this->previous);
       return self->delegate(this->previous, atom::start_v, std::move(previous));
     }
     return {};

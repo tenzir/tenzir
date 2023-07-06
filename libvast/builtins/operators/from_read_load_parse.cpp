@@ -29,7 +29,7 @@ public:
     if (auto result = loader_->instantiate(ctrl)) {
       return std::move(*result);
     }
-    return caf::make_error(ec::unspecified, "could not instantiate loader");
+    return caf::make_error(ec::silent, "could not instantiate loader");
   }
 
   auto detached() const -> bool override {
@@ -85,7 +85,7 @@ public:
     -> caf::expected<generator<table_slice>> {
     auto parser = parser_->instantiate(std::move(input), ctrl);
     if (not parser) {
-      return caf::make_error(ec::unspecified, "could not instantiate parser");
+      return caf::make_error(ec::silent, "could not instantiate parser");
     }
     return std::move(*parser);
   }

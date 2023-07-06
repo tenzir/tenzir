@@ -382,6 +382,8 @@ using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace vast
 
+namespace tenzir = vast;
+
 // -- type announcements -------------------------------------------------------
 
 constexpr inline caf::type_id_t first_vast_type_id = 800;

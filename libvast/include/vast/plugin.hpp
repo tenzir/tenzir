@@ -114,13 +114,6 @@ public:
   plugin(plugin&&) noexcept = default;
   plugin& operator=(plugin&&) noexcept = default;
 
-  /// Allow the plugin to have its own logic for when it should be loaded.
-  /// The plugin will no be initialized if `enabled()` returns false.
-  /// The default implementation looks for a key named 'enabled' in the
-  /// plugin config, and defaults to `true` if that does not exist.
-  [[nodiscard]] virtual bool
-  enabled(const record& plugin_config, const record& global_config) const;
-
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param plugin_config The relevant subsection of the configuration.
