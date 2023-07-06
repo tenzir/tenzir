@@ -199,7 +199,8 @@ specific example, you could as well leverage Tenzir's
 cat *.log | tenzir '
   read zeek-tsv
   | extend _path=#schema
-  | write json to kafka -t zeek'
+  | write json to kafka -t zeek
+  '
 ```
 
 This pipeline starts with Zeek TSV, appends the `_path` field to emulate
