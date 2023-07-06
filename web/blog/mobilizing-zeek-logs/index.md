@@ -28,7 +28,8 @@ analyzers, each of which generates a dedicated log file, like `smb.log`,
 
 [^1]: Zeek also comes with a Touring-complete scripting language for executing
 arbiatrary logic. The event-based language resembles Javascript and is
-especially useful for building real-time detections and protocol analytics.
+especially useful for performing in-depth protocol analysis and engineering
+detections.
 
 In the default configuration, Zeek writes logs into the current directory, one
 file per log type. There are options on how to render them. TSV, JSON, and
