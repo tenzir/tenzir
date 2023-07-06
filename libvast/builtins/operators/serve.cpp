@@ -260,15 +260,14 @@ struct managed_serve_operator {
     // Clear the delayed attempt and the continuation token.
     delayed_attempt.dispose();
     requested = 0;
+    VAST_DEBUG("clearing continuation token");
     last_continuation_token = std::exchange(continuation_token, {});
     last_results = results;
     // If the pipeline is at its end then we must not assign a new token, but
     // rather end here.
     if (stop_rp.pending() and buffer.empty()) {
       VAST_ASSERT(not put_rp.pending());
-      continuation_token = fmt::to_string(uuid::random());
-      VAST_DEBUG("serve for id {} is now available with continuation token {}",
-                 escape_operator_arg(serve_id), continuation_token);
+      VAST_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
       return true;
@@ -364,10 +363,6 @@ struct serve_manager_state {
                              fmt::format("{} received duplicate request to "
                                          "despawn for serve id {}",
                                          *self, escape_operator_arg(serve_id)));
-    }
-    const auto buffered = rows(found->buffer);
-    if (buffered == 0) {
-      return {};
     }
     found->stop_rp = self->make_response_promise<void>();
     return found->stop_rp;
