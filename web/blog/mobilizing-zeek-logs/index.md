@@ -32,8 +32,8 @@ especially useful for performing in-depth protocol analysis and engineering
 detections.
 
 In the default configuration, Zeek writes logs into the current directory, one
-file per log type. There are options on how to render them. TSV, JSON, and
-more. Let's take a look.
+file per log type. There are various file formats to choose from, such as TSV,
+JSON, and others. Let's take a look.
 
 ### Tab-Separated Values (TSV)
 
@@ -96,8 +96,9 @@ folks used `awk` to extract fields by their position, e.g., with `$4`, `$7`,
 schemas can change based on configuration. With `zeek-cut`, it's at least a bit
 more robust.
 
-With Tenzir, it's as easy to process Zeek TSV logs using the native
-[`zeek-tsv`](/next/formats/zeek-tsv) parser:
+Tenzir's data pipelines make it easy to process Zeek logs. The native
+[`zeek-tsv`](/next/formats/zeek-tsv) parser converts them into data frames, so
+that you can process them with a wide range of [operators](/next/operators):
 
 ```bash
 cat *.log | tenzir 'read zeek-tsv | select id.orig_h, id.resp_h'
@@ -110,7 +111,9 @@ expect.
 
 Now that Zeek logs are flowing, you can do a lot more than selecting specific
 columns. Check out the [reshaping guide](/next/user-guides/reshape-data) for
-filtering rows, performing aggregations, or routing them elsewhere.
+filtering rows, performing aggregations, and routing them elsewhere. Or [store
+the logs](/next/user-guides/import-into-a-node) locally at a Tenzir node in
+[Parquet](https://parquet.apache.org) to process them with other data tools.
 
 ### JSON
 
@@ -143,14 +146,10 @@ cat conn.log | tenzir 'read json --schema "zeek.conn" | head'
 cat http.log | tenzir 'read json --schema "zeek.http" | head'
 ```
 
-The option `--schema` of the `json` reader passes a name of a known schema to
-validate the input against.
-
-:::note Zeek Schemas
-Tenzir comes with schemas for a stock Zeek. We have planned an operator that
-makes it also possible to simple rename the schema, akin to
-[`rename`](/next/operators/transformations/rename) for fields.
-:::
+The option `--schema` of the `json` reader passes a name of a known schema that
+brings back the lost typing, e.g., the schema knows that the `duration` field in
+`conn.log` is not a floating-point number, but a duration type, so that you can
+filter connections with `where duration < 4 mins`.
 
 ### Streaming JSON
 
@@ -161,9 +160,9 @@ and infer the type later at ease. And passing the filename around through a side
 channel is cumbersome. Enter [JSON streaming
 logs](https://github.com/corelight/json-streaming-logs). This package adds two
 new fields: `_path` with the log type and `_write_ts` with the timestamp when
-the log was written. For example, the old `http.log` now has an additional
-field `{"_path": "http" , ...}`. This makes it a lot easier to consume, because
-you can now concatenate the entire output and multiplex it over a single stream.
+the log was written. For example, `http.log` now gets an additional field
+`{"_path": "http" , ...}`. This makes it a lot easier to consume, because you
+can now concatenate the entire output and multiplex it over a single stream.
 
 This format doesn't come with stock Zeek. Use Zeek's package manager `zkg` to
 install it:
@@ -206,19 +205,16 @@ cat *.log | tenzir 'read zeek-json | taste 1'
 
 In fact, the `zeek-json` parser just an alias for `json --selector=zeek:_path`,
 which extracts the schema name from the `_path` field to demultiplex the JSON
-stream. Tenzir's parser also infers the richer types from strings, such as IP
-addresses and timestamps. Some information is lost, though, e.g., the fact that
-durations are simply floating point numbers.
+stream and assign the corresponding schema.
 
 ### Writer Plugin
 
 If the stock options of Zeek's logging framework do not work for you, you can
-still write a C++ *Writer Plugins* to produce any output of your choice.
+still write a C++ *writer plugin* to produce any output of your choice.
 
 For example, the [zeek-kafka](https://github.com/SeisoLLC/zeek-kafka) plugin
-connects to a Kafka instance and writes JSON logs to specific topics. For this
-specific example, you could as well leverage Tenzir's
-[`kafka`](/next/connectors/kafka) loader and write:
+writes incoming Zeek data to Kafka topics. For this use case, you can also
+leverage Tenzir's [`kafka`](/next/connectors/kafka) connector and write:
 
 ```bash
 cat *.log | tenzir '
@@ -228,8 +224,11 @@ cat *.log | tenzir '
   '
 ```
 
-This pipeline starts with Zeek TSV, appends the `_path` field to emulate
-Streaming JSON, and then writes the events to the Kafka topic `zeek`.
+This pipeline starts by reading Zeek TSV, appends the `_path` field to emulate
+Streaming JSON, and then writes the events to the Kafka topic `zeek`. The
+example is not equivalent to the Zeek Kafka plugin, because concatenate existing
+fields and apply a (one-shot) pipeline, as opposed to continuously streaming to
+a Kafka topic. We'll elaborate on this in the next blog post, stay tuned.
 
 ## Conclusion
 
@@ -240,18 +239,19 @@ recommendations:
 
 :::tip Recommendation
 - **Use TSV when you can.** If your downstream tooling can parse TSV, it is the
-  best choice because it retains Zeek's rich type annotation as metadata—without
-  the need for downstream schema wrangling.
+  best choice because it retains Zeek's rich type annotations as
+  metadata—without the need for downstream schema wrangling.
 - **Use Streaming JSON for the easy button**. The single stream of NDJSON
   logs is most versatile, since most downstream tooling supports it well. Use it
   when you need to get in business quickly.
 - **Use stock JSON when you must**. There's marginal utility in the
   one-JSON-file-per-log format. It requires extra effort in keeping track of
-  filenames and mapping them to their corresponding types.
-- **Use plugins for everything else**. If none of these suit the bill or you
-  need a tighter integration, leverage Zeek's Writer Plugins to create a custom
+  filenames and mapping fields to their corresponding types.
+- **Use plugins for everything else**. If none of these fit the bill or you
+  need a tighter integration, leverage Zeek's writer plugins to create a custom
   logger.
 :::
 
-If you're a Zeek power user and need heavy-duty machinery to process them, take
-a closer look at what we do at Tenzir.
+If you're a Zeek power user and need power tools for data processing, take a
+closer look at what we do at [Tenzir](https://tenzir.com). There's a lot more
+you can do!
