@@ -388,9 +388,10 @@ public:
       relational_operator::equal,
       data{"pcap.packet"},
     };
-    auto con = conjunction{pred, expr};
-    return std::pair{std::move(con),
-                     std::make_unique<decapsulate_operator>(*this)};
+    auto op = pipeline::internal_parse_as_operator(
+      fmt::format("decapsulate | where {}", expr));
+    VAST_ASSERT_CHEAP(op);
+    return std::pair{expression{std::move(pred)}, std::move(*op)};
   }
 
   auto name() const -> std::string override {
