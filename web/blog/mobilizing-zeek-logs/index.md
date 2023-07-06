@@ -12,6 +12,8 @@ blog, we explain the various Zeek logging formats and show how you can get the
 most out of Zeek with Tenzir. We conclude with recommendations for when to use
 what Zeek format based on your use case.
 
+![Packet to Logs](zeek-packets-to-logs.excalidraw.svg)
+
 <!--truncate-->
 
 ## Zeek Logging 101
