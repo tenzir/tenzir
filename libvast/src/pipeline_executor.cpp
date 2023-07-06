@@ -234,6 +234,11 @@ auto pipeline_executor(
     }
     for (auto it = self->state.exec_nodes.begin(); it != exec_node; ++it) {
       self->demonitor(*it);
+      // The exit reason `kill` is the only exit reason that takes effect
+      // immediately, and has even higher priority than other high priority
+      // messages. We must use it here to avoid the exit being delayed by an
+      // await, which we may never receive a reply for because of this bug in
+      // CAF: https://github.com/actor-framework/actor-framework/issues/1466
       self->send_exit(*it, caf::exit_reason::kill);
     }
     self->state.exec_nodes.erase(self->state.exec_nodes.begin(), exec_node + 1);
