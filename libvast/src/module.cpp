@@ -146,12 +146,17 @@ get_module_dirs(const caf::actor_system_config& cfg) {
   }
   if (!bare_mode) {
     result.insert(detail::install_configdir() / "schema");
-    if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME"))
+    if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME")) {
+      result.insert(std::filesystem::path{*xdg_config_home} / "tenzir"
+                    / "schema");
       result.insert(std::filesystem::path{*xdg_config_home} / "vast"
                     / "schema");
-    else if (auto home = detail::getenv("HOME"))
+    } else if (auto home = detail::getenv("HOME")) {
+      result.insert(std::filesystem::path{*home} / ".config" / "tenzir"
+                    / "schema");
       result.insert(std::filesystem::path{*home} / ".config" / "vast"
                     / "schema");
+    }
   }
   if (auto dirs = detail::unpack_config_list_to_vector<std::string>( //
         cfg, "tenzir.schema-dirs"))
