@@ -4,6 +4,12 @@ sidebar_position: 6
 
 # Transform data at rest
 
+:::caution Currently CLI only
+This feature is currently only available on the command line using the
+`tenzir-ctl` binary. We're working on bringing it back as an operator so that
+you can also use it from the app.
+:::
+
 Tenzir provdides several features to transform historical data at a node.
 
 ## Delete old data when reaching storage quota

@@ -26,7 +26,7 @@ Easy Data Pipelines for Security Teams
 Dive right in and install Tenzir:
 
 ```bash
-curl -L get.tenzir.app | sh
+curl https://get.tenzir.app | sh
 ```
 
 Check out our [documentation](https://docs.tenzir.com) for detailed setup

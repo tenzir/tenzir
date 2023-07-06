@@ -1,166 +1,398 @@
 # Get Started
 
-<!-- Keep in sync with project README at https://github.com/tenzir/tenzir -->
-
 :::info What is Tenzir?
 Tenzir is a distributed platform for processing and storing security event data
 in a pipeline dataflow model.
 :::
 
-Dive right in with an interactive tour at [tenzir.com](https://tenzir.com) and
-sign up for a free account, or continue below with the open source edition and
-command line examples.
+## Create a free account
 
-### Install Tenzir
+Create an account for the best user experience. Everyone can freely use
+the [Community Edition](https://tenzir.com/pricing).
 
-Select your platform to download and install Tenzir.
+1. Go to [app.tenzir.com](https://app.tenzir.com)
+2. Sign in with your identity provider or create an account
 
-[tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.deb
-[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-x86_64-linux.tar.gz
+There are no strings attached: you can always delete your account via *Account*
+→ *Delete Account*. You do not have to create an account if you just want to use
+the command line interface and do not need pipeline management features.
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+## Explore the demo environment
 
-<Tabs>
-<TabItem value="universal" label="All Platforms" default>
+Let's run a few example [pipelines](language/pipelines.md). Follow along by
+copying the below examples and pasting them into the
+[Explorer](https://app.tenzir.com/explorer). Our first first pipeline produces
+just a single event: the version of the Tenzir node:
 
-Use our installer to perform a platform-specific installation:
-
-```bash
-curl -L get.tenzir.app | sh
 ```
-
-The shell script asks you once to confirm the installation.
-
-</TabItem>
-<TabItem value="debian" label="Debian">
-
-Download the latest [Debian package][tenzir-debian-package] and install it via
-`dpkg`:
-
-```bash
-dpkg -i tenzir-static-amd64-linux.deb
-```
-
-</TabItem>
-<TabItem value="nix" label="Nix">
-
-Try Tenzir with our `flake.nix`:
-
-```bash
-nix run github:tenzir/tenzir/stable
-```
-
-Install Tenzir by adding `github:tenzir/tenzir/stable` to your flake inputs, or
-use your preferred method to include third-party modules on classic NixOS.
-
-</TabItem>
-<TabItem value="linux" label="Linux">
-
-Download a tarball with our [static binary][tenzir-tarball] for all Linux
-distributions and unpack it into `/opt/tenzir`:
-
-```bash
-tar xzf tenzir-static-x86_64-linux.tar.gz -C /
-```
-
-We also offer prebuilt statically linked binaries for every Git commit to the
-`main` branch.
-
-```bash
-version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-curl -fsSL "https://storage.googleapis.com/tenzir-dist-public/packages/main/tenzir-${version}-linux-static.tar.gz"
-```
-
-</TabItem>
-<TabItem value="macos" label="macOS">
-
-Please use Docker [with
-Rosetta](https://levelup.gitconnected.com/docker-on-apple-silicon-mac-how-to-run-x86-containers-with-rosetta-2-4a679913a0d5)
-until we offer a native package.
-
-</TabItem>
-<TabItem value="docker" label="Docker">
-
-Pull the image:
-
-```bash
-docker pull tenzir/tenzir
-```
-
-When using Docker, replace `tenzir` with `docker run -it tenzir/tenzir` in the
-examples below.
-
-</TabItem>
-</Tabs>
-
-### Download sample data
-
-The below examples use this dataset. Download to follow along or just keep
-reading.
-
-```bash
-# Suricata EVE JSON logs (123 MB)
-curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
-tar xzvf suricata.tar.gz
-# Zeek TSV logs (43 MB)
-curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
-tar xzvf zeek.tar.gz
-```
-
-### Run pipelines
-
-The `tenzir` exectuable runs a pipeline.
-
-Start with the [`version`](operators/sources/version.md) source operator and
-pipe to the [`write`](operators/sinks/write.md) sink operator:
-
-```bash
-tenzir 'version | write json' 
-```
-
-```json
-{"version": "v3.1.0-377-ga790da3049-dirty", "plugins": [{"name": "parquet", "version": "bundled"}, {"name": "pcap", "version": "bundled"}, {"name": "sigma", "version": "bundled"}, {"name": "web", "version": "bundled"}]}
-```
-
-Get the top 3 schemas of the Zeek schemas as tab-separated values
-([`tsv`](formats/tsv.md)):
-
-```bash
-cat Zeek/*.log | tenzir '
-  read zeek-tsv 
-  | measure 
-  | summarize events=sum(events) by schema 
-  | sort events desc 
-  | head 3 
-  | write tsv
-  '
+version
 ```
 
 <details>
 <summary>Output</summary>
 
+```json
+{
+  "version": "v4.0.0-rc2-34-g9197f7355e",
+  "plugins": [
+    {
+      "name": "compaction",
+      "version": "bundled"
+    },
+    {
+      "name": "inventory",
+      "version": "bundled"
+    },
+    {
+      "name": "kafka",
+      "version": "bundled"
+    },
+    {
+      "name": "matcher",
+      "version": "bundled"
+    },
+    {
+      "name": "netflow",
+      "version": "bundled"
+    },
+    {
+      "name": "parquet",
+      "version": "bundled"
+    },
+    {
+      "name": "pcap",
+      "version": "bundled"
+    },
+    {
+      "name": "pipeline-manager",
+      "version": "bundled"
+    },
+    {
+      "name": "platform",
+      "version": "bundled"
+    },
+    {
+      "name": "web",
+      "version": "bundled"
+    }
+  ]
+}
 ```
-schema	events
-zeek.conn	583838
-zeek.ssl	42389
-zeek.files	21922
+
+(Output may vary based on your actual version.)
+
+</details>
+
+:::note Explorer vs. Documentation
+On this site we display the data in JSON. In the Explorer, you can enjoy a
+richer display in an interactive table. You can also produce the outputs here by
+invoking `tenzir <pipeline>` on the [command line](command-line.md) or
+`docker run -it tenzir/tenzir <pipeline>` when using Docker.
+:::
+
+The [`version`](operators/sources/version.md) operator is a
+[source](operators/sources/README.md), i.e., it outputs data but doesn't have
+any input. Tenzir also comes with a storage engine. The
+[`export`](operators/sources/export.md) operator emits all stored data at a
+node. Pipe `export` to [`head`](operators/transformations/head.md) to retrieve
+10 events:
+
+```
+export | head
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "timestamp": "2021-11-18T08:23:45.304758",
+  "flow_id": 1851826916903734,
+  "pcap_cnt": 54742,
+  "vlan": null,
+  "in_iface": null,
+  "src_ip": "8.249.125.254",
+  "src_port": 80,
+  "dest_ip": "10.6.2.101",
+  "dest_port": 49789,
+  "proto": "TCP",
+  "event_type": "fileinfo",
+  "community_id": null,
+  "fileinfo": {
+    "filename": "/d/msdownload/update/software/defu/2021/06/am_delta_patch_1.339.1962.0_5e6a00734b4809bcfd493118754d0ea1cd64798e.exe",
+    "magic": null,
+    "gaps": false,
+    "state": "CLOSED",
+    "md5": null,
+    "sha1": null,
+    "sha256": null,
+    "stored": false,
+    "file_id": null,
+    "size": 2,
+    "tx_id": 0,
+    "start": 0,
+    "end": 1
+  },
+  "http": {
+    "hostname": "au.download.windowsupdate.com",
+    "url": "/d/msdownload/update/software/defu/2021/06/am_delta_patch_1.339.1962.0_5e6a00734b4809bcfd493118754d0ea1cd64798e.exe",
+    "http_port": null,
+    "http_user_agent": "Microsoft-Delivery-Optimization/10.0",
+    "http_content_type": "application/octet-stream",
+    "http_method": "GET",
+    "http_refer": null,
+    "protocol": "HTTP/1.1",
+    "status": 206,
+    "redirect": null,
+    "length": 2,
+    "xff": null,
+    "content_range": {
+      "raw": "bytes 0-1/360888",
+      "start": 0,
+      "end": 1,
+      "size": 360888
+    }
+  },
+  "app_proto": "http",
+  "metadata": {
+    "flowints": {
+      "http.anomaly.count": null,
+      "tcp.retransmission.count": null
+    },
+    "flowbits": [
+      "ET.INFO.WindowsUpdate",
+      "exe.no.referer"
+    ]
+  }
+}
+```
+
+(Only 1 out of 10 shown.)
+
+</details>
+
+:::note Demo Dataset
+We pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
+[Suricata](https://suricata.io) logs derived from the M57 dataset. We also use
+that dataset in our [user guides](user-guides.md).
+:::
+
+Let's filter the dataflow and keep only Suricata alerts using the
+[`where`](operators/transformations/where.md) operator:
+
+```
+export
+| where #schema == "suricata.alert"
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "timestamp": "2021-11-17T13:52:05.695469",
+  "flow_id": 1868285155318879,
+  "pcap_cnt": 143,
+  "vlan": null,
+  "in_iface": null,
+  "src_ip": "14.1.112.177",
+  "src_port": 38376,
+  "dest_ip": "198.71.247.91",
+  "dest_port": 123,
+  "proto": "UDP",
+  "event_type": "alert",
+  "community_id": null,
+  "alert": {
+    "app_proto": null,
+    "action": "allowed",
+    "gid": 1,
+    "signature_id": 2017919,
+    "rev": 2,
+    "signature": "ET DOS Possible NTP DDoS Inbound Frequent Un-Authed MON_LIST Requests IMPL 0x03",
+    "category": "Attempted Denial of Service",
+    "severity": 2,
+    "source": {
+      "ip": null,
+      "port": null
+    },
+    "target": {
+      "ip": null,
+      "port": null
+    },
+    "metadata": {
+      "created_at": [
+        "2014_01_03"
+      ],
+      "updated_at": [
+        "2014_01_03"
+      ]
+    }
+  },
+  "flow": {
+    "pkts_toserver": 2,
+    "pkts_toclient": 0,
+    "bytes_toserver": 468,
+    "bytes_toclient": 0,
+    "start": "2021-11-17T13:52:05.695391",
+    "end": null,
+    "age": null,
+    "state": null,
+    "reason": null,
+    "alerted": null
+  },
+  "payload": null,
+  "payload_printable": null,
+  "stream": null,
+  "packet": null,
+  "packet_info": {
+    "linktype": null
+  },
+  "app_proto": "failed"
+}
+```
+
+(Only 1 out of 19 shown.)
+
+</details>
+
+The `where` operator takes an [expression](language/expressions.md) as argument,
+which combines rich-typed predicates with AND, OR, and NOT. Here's a more
+elaborate example:
+
+```
+export
+| where 10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min)
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "ts": "2021-11-19T06:30:30.918301",
+  "uid": "C9T8pykxdsT7iSrc9",
+  "id": {
+    "orig_h": "10.10.5.101",
+    "orig_p": 50046,
+    "resp_h": "87.120.8.190",
+    "resp_p": 9090
+  },
+  "proto": "tcp",
+  "service": null,
+  "duration": "5.09m",
+  "orig_bytes": 1394538,
+  "resp_bytes": 95179,
+  "conn_state": "S1",
+  "local_orig": null,
+  "local_resp": null,
+  "missed_bytes": 0,
+  "history": "ShADad",
+  "orig_pkts": 5046,
+  "orig_ip_bytes": 1596390,
+  "resp_pkts": 5095,
+  "resp_ip_bytes": 298983,
+  "tunnel_parents": null,
+  "community_id": "1:UPodR2krvvXUGhc/NEL9kejd7FA=",
+  "_write_ts": null
+}
+{
+  "ts": "2021-11-19T07:05:44.694927",
+  "uid": "ChnTjeQncxZrb0ZWg",
+  "id": {
+    "orig_h": "10.10.5.101",
+    "orig_p": 50127,
+    "resp_h": "87.120.8.190",
+    "resp_p": 9090
+  },
+  "proto": "tcp",
+  "service": null,
+  "duration": "54.81s",
+  "orig_bytes": 1550710,
+  "resp_bytes": 97122,
+  "conn_state": "S1",
+  "local_orig": null,
+  "local_resp": null,
+  "missed_bytes": 0,
+  "history": "ShADadww",
+  "orig_pkts": 5409,
+  "orig_ip_bytes": 1767082,
+  "resp_pkts": 5477,
+  "resp_ip_bytes": 316206,
+  "tunnel_parents": null,
+  "community_id": "1:aw0CtkT7YikUZWyqdHwgLhqJXxU=",
+  "_write_ts": null
+}
+{
+  "ts": "2021-11-19T06:30:15.910850",
+  "uid": "CxuTEOgWv2Z74FCG6",
+  "id": {
+    "orig_h": "10.10.5.101",
+    "orig_p": 50041,
+    "resp_h": "87.120.8.190",
+    "resp_p": 9090
+  },
+  "proto": "tcp",
+  "service": null,
+  "duration": "36.48m",
+  "orig_bytes": 565,
+  "resp_bytes": 507,
+  "conn_state": "S1",
+  "local_orig": null,
+  "local_resp": null,
+  "missed_bytes": 0,
+  "history": "ShADad",
+  "orig_pkts": 78,
+  "orig_ip_bytes": 3697,
+  "resp_pkts": 77,
+  "resp_ip_bytes": 3591,
+  "tunnel_parents": null,
+  "community_id": "1:r337wYxbKPDv5Vkjoz3gGuld1bs=",
+  "_write_ts": null
+}
 ```
 
 </details>
 
-Get the top 5 Zeek notices from `notice.log` as JSON:
+The above example extracts connections from the subnet 10.10.5.0/25 that either
+have sent more than 1 MiB or lasted longer than 30 minutes.
 
-```bash
-tenzir '
-  from file Zeek/notice.log
-  | read zeek-tsv 
-  | where #schema == "zeek.notice"
-  | summarize n=count(msg) by msg
-  | sort n desc 
-  | head 3 
-  | write json
-  '
+Aside from filtering, you can also perform aggregations with
+[`summarize`](operators/transformations/summarize.md):
+
+```
+export
+| #schema == "suricata.alert"
+| summarize count=count(src_ip) by severity
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "alert.severity": 1,
+  "count": 134644
+}
+{
+  "alert.severity": 2,
+  "count": 26780
+}
+{
+  "alert.severity": 3,
+  "count": 179713
+}
+```
+
+</details>
+
+For counting field values, [`top`](operators/transformations/top.md) and
+[`rare`](operators/transformations/rare.md) come in handy:
+
+```
+export
+| where #schema == "zeek.notice"
+| top msg
+| head 5
 ```
 
 <details>
@@ -176,121 +408,23 @@ tenzir '
 
 </details>
 
-### Spawn a node
+This was just a quick tour. The [user guides](user-guides.md) cover a lot more
+material. Next, we'll explain how to deploy a node so that you can work with
+your own data.
 
-Use the `tenzir-node` executable to start a node that manages pipelines and
-storage.
+## Onboard your own node
 
-<Tabs>
-  <TabItem value="binary" label="Binary" default>
+Adding a node takes just few minutes:
 
-  ```bash
-  tenzir-node
-  ```
-
-  ```
-  [12:43:22.789] node (v3.1.0-377-ga790da3049-dirty) is listening on 127.0.0.1:5158
-  ```
-
-  </TabItem>
-  <TabItem value="docker" label="Docker">
-
-  Expose the port of the listening node and provide a directory for storage:
-
-  ```bash
-  mkdir storage
-  docker run -dt -p 5158:5158 -v storage:/var/lib/tenzir tenzir/tenzir --entry-point=tenzir-node
-  ```
-
-  </TabItem>
-</Tabs>
-
-### Import data into a node
-
-End a pipeline with the [`import`](operators/sinks/import.md) operator to ingest
-data into a node:
-
-```bash
-tar xOzf zeek.tar.gz | tenzir '
-  read zeek
-  | import
-  '
-```
-
-Filter the input with [`where`](operators/transformations/where.md) to select a
-subset of events:
-
-```bash
-tar xOzf suricata.tar.gz | tenzir '
-  read suricata
-  | where #schema == "suricata.alert"
-  | import
-  '
-```
-
-### Export data from a node
-
-Start a pipeline with the [`export`](operators/sources/export.md) operator to
-initiate a datastream from stored data at a node.
-
-Get a "taste" of one event per schema:
-
-```bash
-tenzir 'export | taste 1'
-```
-
-<details>
-<summary>Output</summary>
-
-TODO
-
-</details>
-
-As above, get the top 3 schemas of the Zeek schemas, but this time start the
-pipeline over the historical data at the running node:
-
-```bash
-tenzir '
-  export
-  | measure 
-  | summarize events=sum(events) by schema 
-  | sort events desc 
-  | head 3 
-  | write tsv
-  '
-```
-
-<details>
-<summary>Output</summary>
-
-```
-schema	events
-zeek.conn	583838
-zeek.ssl	42389
-zeek.files	21922
-```
-
-</details>
-
-The above pipeline performs a full scan over the data at the node. Tenzir's
-pipeline optimizer performs predicate push-down to avoid scans when possible.
-Consider this pipeline:
-
-```bash
-tenzir '
-  export
-  | where *.id.orig_h in 10.0.0.0/8
-  | write parquet to file local.parquet
-  '
-```
-
-The optimizer coalesces the `export` and `where` operators such that
-[expression](language/expressions.md) `*.id.orig_h in 10.0.0.0/8` gets pushed
-down to the index and storage layer.
+1. Visit the [configurator](https://app.tenzir.com/configurator).
+2. Download a configuration file for your node.
+3. Install your node by follow the [deployment
+   instructions](setup-guides/deploy-a-node/README.md).
 
 ## Up Next
 
-Now that you got a first impression of Tenzir pipelines, dive deeper by
+Now that you got a first impression of Tenzir pipelines, and perhaps already
+a node of your own, dive deeper by
 
 - following the [user guides](user-guides.md) with step-by-step tutorials of
   common use cases
@@ -300,6 +434,6 @@ Now that you got a first impression of Tenzir pipelines, dive deeper by
 - understanding [why](why-tenzir.md) we built Tenzir and how it compares to
   other systems
 
-We're here to help! If you have any questions, swing by our friendly [community
-Discord](/discord) or open a [GitHub
+Don't forget that we're here to help! If you have any questions, swing by our
+friendly [community Discord](/discord) or open a [GitHub
 discussion](https://github.com/tenzir/tenzir/discussions).

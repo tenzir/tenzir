@@ -4,25 +4,23 @@ sidebar_position: 4
 
 # Export from a node
 
-Exporting (or *querying*) data is equivalent to [running a
-pipeline](run-a-pipeline.md) that begins with the
+Exporting (or *querying*) data can be done by [running a
+pipeline](run-a-pipeline/README.md) that begins with the
 [`export`](../operators/sources/export.md) source.
 
 Let's bring back the historical data we [imported in the previous
 section](import-into-a-node.md):
 
-```bash
-tenzir 'export | head'
+```
+export | head
 ```
 
-The `export` operator requires a node execution context. To invoke the above
-pipeline successfully, you need to have [spawned a node](spawn-a-node.md)
-previously. Think of `export` being the entire data at a node. As this can grow
-quickly, you may query only subsets of it, e.g., by filtering it using
+Think of `export` being the entire data at a node. As this can grow quickly, you
+may query only subsets of it, e.g., by filtering it using
 [`where`](../operators/transformations/where.md):
 
-```bash
-tenzir 'export | where orig_bytes < 1 KiB'
+```
+export | where orig_bytes < 1 KiB
 ```
 
 Logically, this query would *first* export the entire historical data, and

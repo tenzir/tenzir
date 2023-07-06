@@ -1,6 +1,6 @@
 # save
 
-The `save` operator acquires raw bytes from a [connector][connectors].
+The `save` operator acquires raw bytes from a [connector](../../connectors.md).
 
 :::warning Expert Operator
 The `save` operator is a lower-level building block of the [`to`](to.md) and

@@ -22,7 +22,7 @@ follows:
 Unlike the legacy `sigmac` compiler that tailors a rule to specific backend,
 like Elastic or Splunk, the `sigma` operator only transpiles the structural YAML
 rules to produce an expression that is then used to filter a dataflow. In the
-future, we would like to write a native Tenzir for
+future, we would like to write a native Tenzir backend for
 [pySigma](https://github.com/SigmaHQ/pySigma). Please reach out on our
 [Discord](/discord) if you would like to help us with that!
 :::
@@ -32,7 +32,7 @@ future, we would like to write a native Tenzir for
 You can run a Sigma rule on any pipeline input. For example, to apply a Sigma
 rule to an EVTX file, we can use the utility
 [`evtx_dump`](https://github.com/omerbenamram/evtx) to convert the binary EVTX
-format into JSON and then pipe it to `sigma`:
+format into JSON and then pipe it to `sigma` on the command line:
 
 ```bash
 evtx_dump -o jsonl file.evtx | tenzir 'read json | sigma.yaml'

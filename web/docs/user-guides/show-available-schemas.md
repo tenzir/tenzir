@@ -4,14 +4,20 @@ sidebar_position: 5
 
 # Show available schemas
 
+:::caution Currently CLI only
+This feature is currently only available on the command line using the
+`tenzir-ctl` binary. We're working on bringing it back as an operator so that
+you can write `show schemas` from anywhere.
+:::
+
 When you write a pipeline, you inevitably reference field names from records. If
 you do not know the shape of your data or if the data is highly dynamic, you can
 introspect the available [schemas](../data-model/schemas.md).
 
-The equivalent of the `SHOW TABLES` of many databases is `show schemas`:
+The equivalent of `SHOW TABLES` in SQL databases is `show schemas`:
 
 ```bash
-tenzir 'show schemas | write yaml'
+tenzir-ctl 'show schemas --yaml'
 ```
 
 ```yaml
@@ -43,5 +49,5 @@ tenzir 'show schemas | write yaml'
 ```
 
 This example shows the schema for a Zeek conn.log. You can see the various
-fields as list of key-value pairs under the `record` key. The nested record
-`id` that is a type alias with the type name `zeek.conn_id`.
+fields as list of key-value pairs under the `record` key. The nested record `id`
+that is a type alias with the type name `zeek.conn_id`.
