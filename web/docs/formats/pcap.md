@@ -26,8 +26,8 @@ events, and the `pcap` printer generates a PCAP file from events.
 [pcapng-rfc]: https://www.ietf.org/archive/id/draft-tuexen-opsawg-pcapng-05.html
 
 :::note PCAPNG
-The current implementation does *not* support [PCAPNG](). Please [reach
-out](/discord) if you would like to see support.
+The current implementation does *not* support [PCAPNG][pcapng-rfc]. Please
+[reach out](/discord) if you would like to see support.
 :::
 
 The structured representation of packets has the `pcap.packet` schema:
