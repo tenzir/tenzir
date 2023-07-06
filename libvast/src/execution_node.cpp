@@ -433,8 +433,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
       auto time_scheduled_guard = make_timer_guard(time_scheduled);
       this->signaled_demand = false;
       schedule_run();
-      if (error == caf::sec::request_receiver_down
-          or error == caf::sec::broken_promise) {
+      if (error == caf::sec::request_receiver_down) {
+        this->previous = nullptr;
         return;
       }
       // We failed to get results from the previous; let's emit a diagnostic
@@ -693,7 +693,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
         VAST_ASSERT(not this->current_demand);
         VAST_ASSERT(this->outbound_buffer_size == 0);
       }
-      VAST_DEBUG("{} is done", op);
+      VAST_VERBOSE("{} is done", op);
       print_metrics();
       self->quit();
       return;

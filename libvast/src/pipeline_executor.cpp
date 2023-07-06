@@ -180,8 +180,9 @@ auto pipeline_executor(
   self->state.self = self;
   self->state.node = std::move(node);
   self->set_down_handler([self](caf::down_msg& msg) {
-    VAST_DEBUG("pipeline executor node down: {}; remaining: {}; reason: {}",
-               msg.source, self->state.exec_nodes.size() - 1, msg.reason);
+    VAST_DEBUG(
+      "{} received down from execution node {} and has {} remaining: {}", *self,
+      msg.source, self->state.exec_nodes.size() - 1, msg.reason);
     const auto exec_node
       = std::find_if(self->state.exec_nodes.begin(),
                      self->state.exec_nodes.end(), [&](const auto& exec_node) {
@@ -190,9 +191,13 @@ auto pipeline_executor(
     if (exec_node == self->state.exec_nodes.end()) {
       return;
     }
+    if (auto count = exec_node - self->state.exec_nodes.begin(); count > 0) {
+      VAST_VERBOSE("{} kills {} execution nodes without downstream", *self,
+                   count);
+    }
     for (auto it = self->state.exec_nodes.begin(); it != exec_node; ++it) {
       self->demonitor(*it);
-      self->send_exit(*it, msg.reason);
+      self->send_exit(*it, caf::exit_reason::kill);
     }
     self->state.exec_nodes.erase(self->state.exec_nodes.begin(), exec_node + 1);
     if (msg.reason and msg.reason != caf::exit_reason::unreachable
