@@ -255,8 +255,7 @@ async function createConfig() {
         },
         announcementBar: {
           content:
-//            'Leave us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/tenzir/stargazers">a GitHub star</a> ⭐️',
-            'VAST is now Tenzir! <a target="_blank" rel="noopener noreferrer" href="/blog/vast-to-tenzir">Read why</a> and learn <a target="_blank" rel="noopener noreferrer" href="/blog/migrating-from-vast-to-tenzir">how to migrate</a>.',
+            'Zeek user? <a href="/blog/mobilizing-zeek-logs">Learn all about Zeek logs</a> and how to get instant value with Tenzir pipelines.',
           backgroundColor: '#f1f2f2',
           isCloseable: true,
         },
