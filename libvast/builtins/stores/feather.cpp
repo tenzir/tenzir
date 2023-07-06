@@ -205,7 +205,7 @@ public:
   }
 
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
-    slices_.reserve(new_slices.size() + slices_.size());
+    new_slices_.reserve(new_slices.size() + new_slices_.size());
     for (auto& slice : new_slices) {
       // The index already sets the correct offset for this slice, but in some
       // unit tests we test this component separately, causing incoming table
@@ -216,15 +216,26 @@ public:
         slice.offset(num_events_);
       VAST_ASSERT(slice.offset() == num_events_);
       num_events_ += slice.rows();
-      slices_.push_back(std::move(slice));
+      num_new_events_ += slice.rows();
+      new_slices_.push_back(std::move(slice));
     }
+    while (num_new_events_ >= defaults::import::table_slice_size) {
+      auto [lhs, rhs] = split(new_slices_, defaults::import::table_slice_size);
+      rebatched_slices_.push_back(concatenate(std::move(lhs)));
+      new_slices_ = std::move(rhs);
+      num_new_events_ -= defaults::import::table_slice_size;
+    }
+    VAST_ASSERT(num_new_events_ == rows(new_slices_));
     return {};
   }
 
   [[nodiscard]] caf::expected<chunk_ptr> finish() override {
+    if (num_new_events_ > 0) {
+      rebatched_slices_.push_back(concatenate(std::exchange(new_slices_, {})));
+    }
     auto record_batches = arrow::RecordBatchVector{};
-    record_batches.reserve(slices_.size());
-    for (const auto& slice : slices_)
+    record_batches.reserve(rebatched_slices_.size());
+    for (const auto& slice : rebatched_slices_)
       record_batches.push_back(wrap_record_batch(slice));
     const auto table = ::arrow::Table::FromRecordBatches(record_batches);
     if (!table.ok())
@@ -248,8 +259,11 @@ public:
   [[nodiscard]] generator<table_slice> slices() const override {
     // We need to make a copy of the slices here because the slices_ vector
     // may get invalidated while we iterate over it.
-    auto slices = slices_;
-    for (auto& slice : slices)
+    auto rebatched_slices = rebatched_slices_;
+    auto new_slices = new_slices_;
+    for (auto& slice : rebatched_slices)
+      co_yield std::move(slice);
+    for (auto& slice : new_slices)
       co_yield std::move(slice);
   }
 
@@ -258,8 +272,10 @@ public:
   }
 
 private:
-  std::vector<table_slice> slices_ = {};
+  std::vector<table_slice> rebatched_slices_ = {};
+  std::vector<table_slice> new_slices_ = {};
   configuration feather_config_ = {};
+  size_t num_new_events_ = {};
   size_t num_events_ = {};
 };
 
