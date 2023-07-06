@@ -624,11 +624,11 @@ struct exec_node_state : inbound_state_mixin<Input>,
                  .count()
              * 100.0;
     };
-    VAST_VERBOSE("{} was scheduled for {:.2f}% of total runtime", op->name(),
+    VAST_VERBOSE("{} was scheduled for {:.2g}% of total runtime", op->name(),
                  percentage(time_scheduled, elapsed));
-    VAST_VERBOSE("{} spent {:.2f}% of scheduled time starting", op->name(),
+    VAST_VERBOSE("{} spent {:.2g}% of scheduled time starting", op->name(),
                  percentage(time_starting, time_scheduled));
-    VAST_VERBOSE("{} spent {:.2f}% of scheduled time running", op->name(),
+    VAST_VERBOSE("{} spent {:.2g}% of scheduled time running", op->name(),
                  percentage(time_running, time_scheduled));
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       constexpr auto inbound_unit
@@ -637,7 +637,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
         = std::is_same_v<Input, chunk_ptr> ? 1'048'576.0 : 1.0;
       const auto total = static_cast<double>(inbound_total) / ratio;
       VAST_VERBOSE(
-        "{} inbound {:.2f} {} in {} rate = {:.2f} {}/s avg batch size = {:.2f} "
+        "{} inbound {:.0f} {} in {} rate = {:.2g} {}/s avg batch size = {:.2f} "
         "{}",
         op->name(), total, inbound_unit, data{elapsed},
         total
@@ -655,7 +655,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
         = std::is_same_v<Output, chunk_ptr> ? 1'048'576.0 : 1.0;
       const auto total = static_cast<double>(outbound_total) / ratio;
       VAST_VERBOSE(
-        "{} outbound {:.2f} {} in {} rate = {:.2f} {}/s avg batch size = "
+        "{} outbound {:.0f} {} in {} rate = {:.2g} {}/s avg batch size = "
         "{:.2f} {}",
         op->name(), total, outbound_unit, data{elapsed},
         total
