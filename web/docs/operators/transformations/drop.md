@@ -18,7 +18,7 @@ provided arguments.
 
 ### `<extractor>...`
 
-The comma-separator list of extractors that identifies the fields to remove.
+A comma-separated list of extractors that identify the fields to remove.
 
 ## Examples
 

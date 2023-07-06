@@ -18,7 +18,7 @@ arguments.
 
 ### `<extractor>...`
 
-The comma-separator list of extractors that identifies the fields to keep.
+A comma-separated list of extractors that identify the fields to keep.
 
 ## Examples
 

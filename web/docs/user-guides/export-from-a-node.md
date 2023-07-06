@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # Export from a node
 
-Exporting (or *querying*) data is equivalent to [running a
+Exporting (or *querying*) data can be done by [running a
 pipeline](run-a-pipeline/README.md) that begins with the
 [`export`](../operators/sources/export.md) source.
 

@@ -63,7 +63,7 @@ download it.
 ![Configurator](app-configurator.excalidraw.svg)
 
 Follow INSTRUCTIONS for a concrete sequence of steps to deploy your node. Once
-your node connects, you get a notificatio nand see it in [overview](#overview).
+your node connects, you get a notification and see it in [overview](#overview).
 
 ## Delete your account
 

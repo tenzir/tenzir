@@ -5,9 +5,9 @@ sidebar_position: 5
 # Show available schemas
 
 :::caution Currently CLI only
-This feature is currently only available on the command line using the `tenzir`
-binary. We're working on bringing it back as an operator so that you can write
-`show schemas` from anywhere.
+This feature is currently only available on the command line using the
+`tenzir-ctl` binary. We're working on bringing it back as an operator so that
+you can write `show schemas` from anywhere.
 :::
 
 When you write a pipeline, you inevitably reference field names from records. If

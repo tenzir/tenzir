@@ -4,7 +4,7 @@ A *node* is a managed service for pipelines and storage.
 
 ## Install a node
 
-Choose between binary package and a Docker-based setup to install a node.
+Choose between a binary package and a Docker-based setup to install a node.
 
 ### Binary (Automatic)
 

@@ -43,7 +43,6 @@ the individual formats for more information.
 Read bytes from stdin and parse them as JSON.
 
 ```
-read json
 from stdin read json
 from file stdin read json
 from file - read json

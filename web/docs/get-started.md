@@ -5,36 +5,24 @@ Tenzir is a distributed platform for processing and storing security event data
 in a pipeline dataflow model.
 :::
 
-Dive right in at [app.tenzir.com](https://app.tenzir.com) and sign up for a free
-account. The instructions below explain how to get started in just a few
-minutes.
-
 ## Create a free account
 
-You need a Tenzir account to interact with your nodes in the browser.
+Create an account for the best user experience. Everyone can freely use
+the [Community Edition](https://tenzir.com/pricing).
 
 1. Go to [app.tenzir.com](https://app.tenzir.com)
 2. Sign in with your identity provider or create an account
 
-No strings attached: you can always delete your account via *Account* → *Delete
-Account*.
+There are no strings attached: you can always delete your account via *Account*
+→ *Delete Account*. You do not have to create an account if you just want to use
+the command line interface and do not need pipeline management features.
 
-## Explore the demo node
+## Explore the demo environment
 
-Let's run a few example [pipelines](language/pipelines.md). Every account comes
-with a pre-installed demo node, but you ultimately want to [bring your
-own](setup-guides/deploy-a-node/README.md). Follow along by copying the below
-examples and pasting them into the [Explorer](https://app.tenzir.com/explorer).
-
-:::tip Explorer vs. Documentation
-On this site we display the data in JSON. In the Explorer, you can enjoy a
-richer display in an interactive table. You can also produce the outputs here by
-invoking `tenzir <pipeline>` on the [command line](command-line.md) or
-`docker run -it tenzir/tenzir <pipeline>` when using Docker.
-:::
-
-Our first first pipeline produces just a single event: the version of the
-Tenzir node:
+Let's run a few example [pipelines](language/pipelines.md). Follow along by
+copying the below examples and pasting them into the
+[Explorer](https://app.tenzir.com/explorer). Our first first pipeline produces
+just a single event: the version of the Tenzir node:
 
 ```
 version
@@ -95,11 +83,19 @@ version
 
 </details>
 
+:::note Explorer vs. Documentation
+On this site we display the data in JSON. In the Explorer, you can enjoy a
+richer display in an interactive table. You can also produce the outputs here by
+invoking `tenzir <pipeline>` on the [command line](command-line.md) or
+`docker run -it tenzir/tenzir <pipeline>` when using Docker.
+:::
+
 The [`version`](operators/sources/version.md) operator is a
 [source](operators/sources/README.md), i.e., it outputs data but doesn't have
-any input. Another source is [`export`](operators/sources/export.md), which
-begins a pipeline with all stored data at a node. Pipe `export` to
-[`head`](operators/transformations/head.md) to retrieve 10 events:
+any input. Tenzir also comes with a storage engine. The
+[`export`](operators/sources/export.md) operator emits all stored data at a
+node. Pipe `export` to [`head`](operators/transformations/head.md) to retrieve
+10 events:
 
 ```
 export | head
@@ -181,7 +177,7 @@ We pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
 that dataset in our [user guides](user-guides.md).
 :::
 
-Let's filter out some Suricata alerts with the
+Let's filter the dataflow and keep only Suricata alerts using the
 [`where`](operators/transformations/where.md) operator:
 
 ```
@@ -357,8 +353,8 @@ export
 
 </details>
 
-The above example extracts connections that either have sent more than 1 MiB or
-lasted longer than 30 minutes.
+The above example extracts connections from the subnet 10.10.5.0/25 that either
+have sent more than 1 MiB or lasted longer than 30 minutes.
 
 Aside from filtering, you can also perform aggregations with
 [`summarize`](operators/transformations/summarize.md):
@@ -389,7 +385,7 @@ export
 
 </details>
 
-For counting of field values, the [`top`](operators/transformations/top.md) and
+For counting field values, [`top`](operators/transformations/top.md) and
 [`rare`](operators/transformations/rare.md) come in handy:
 
 ```
@@ -420,7 +416,7 @@ your own data.
 
 Adding a node takes just few minutes:
 
-1. Visit the [configurator](https://app.tenzir.com/configurator) 
+1. Visit the [configurator](https://app.tenzir.com/configurator).
 2. Download a configuration file for your node.
 3. Install your node by follow the [deployment
    instructions](setup-guides/deploy-a-node/README.md).

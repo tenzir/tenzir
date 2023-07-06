@@ -13,7 +13,7 @@ transformations that you can perform over a data frame:
 
 We'll walk through examples for each depicted operator, using the
 [M57](../../user-guides.md) dataset. All examples assume that you have imported
-the M57 sample data into a node, as explaiend in the
+the M57 sample data into a node, as explained in the
 [quickstart](../../get-started.md#quickstart). We therefore start every pipeline
 with [`export`](../../operators/sources/export.md).
 
@@ -25,7 +25,7 @@ input with an [expression](../../language/expressions.md).
 Filter by metadata using the `#schema` selector:
 
 ```
-export | where #schema == "suricata.alert
+export | where #schema == "suricata.alert"
 ```
 
 <details>
@@ -194,8 +194,8 @@ export
 
 </details>
 
-The above example extracts connections that either have sent more than 1 MiB or
-lasted longer than 30 minutes.
+The above example extracts connections from the subnet 10.10.5.0/25 that either
+have sent more than 1 MiB or lasted longer than 30 minutes.
 
 :::info Extractors
 Tenzir's expression language uses
@@ -992,7 +992,7 @@ export
 </details>
 
 The above pipeline performs a full scan over the data at the node. Tenzir's
-pipeline optimizer pushes down predicate to avoid scans when possible. Consider
+pipeline optimizer pushes down predicates to avoid scans when possible. Consider
 this pipeline:
 
 ```
