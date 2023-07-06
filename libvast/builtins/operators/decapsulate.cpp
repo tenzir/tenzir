@@ -15,6 +15,7 @@
 #include <vast/frame_type.hpp>
 #include <vast/location.hpp>
 #include <vast/logger.hpp>
+#include <vast/mac.hpp>
 #include <vast/plugin.hpp>
 
 #include <netinet/in.h>
@@ -41,8 +42,8 @@ struct frame {
         constexpr size_t ethernet_header_size = 6 + 6 + 2;
         if (bytes.size() < ethernet_header_size)
           return std::nullopt;
-        auto dst = bytes.subspan<0, 6>();
-        auto src = bytes.subspan<6, 6>();
+        auto dst = mac{bytes.subspan<0, 6>()};
+        auto src = mac{bytes.subspan<6, 6>()};
         auto result = frame{dst, src};
         auto type = as_ether_type(bytes.subspan<12, 2>());
         switch (type) {
@@ -89,12 +90,12 @@ struct frame {
     return std::nullopt;
   }
 
-  frame(std::span<const std::byte, 6> dst, std::span<const std::byte, 6> src)
+  frame(mac dst, mac src)
     : dst{dst}, src{src} {
   }
 
-  std::span<const std::byte, 6> dst;   ///< Destination MAC address
-  std::span<const std::byte, 6> src;   ///< Source MAC address
+  mac dst;                             ///< Destination MAC address
+  mac src;                             ///< Source MAC address
   std::optional<uint16_t> outer_vid{}; ///< Outer 802.1Q tag control information
   std::optional<uint16_t> inner_vid{}; ///< Outer 802.1Q tag control information
   ether_type type{ether_type::invalid}; ///< EtherType
@@ -212,11 +213,11 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
       .note("frame type: {}", frame_type::ethernet)
       .done();
   auto ether = builder.push_field("ether").push_record();
-  if (auto err = ether.push_field("src").add(std::string_view{
-        reinterpret_cast<const char*>(frame->src.data()), frame->src.size()}))
+  auto src_str = fmt::to_string(frame->src);
+  auto dst_str = fmt::to_string(frame->dst);
+  if (auto err = ether.push_field("src").add(std::string_view{src_str}))
     return fail(err);
-  if (auto err = ether.push_field("dst").add(std::string_view{
-        reinterpret_cast<const char*>(frame->dst.data()), frame->dst.size()}))
+  if (auto err = ether.push_field("dst").add(std::string_view{dst_str}))
     return fail(err);
   if (frame->outer_vid) {
     auto vlan = builder.push_field("vlan").push_record();
