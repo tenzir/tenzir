@@ -123,12 +123,10 @@ int main(int argc, char** argv) {
   // and allow the unit tests to specify a list of required
   // plugins and their config.
   for (auto& plugin : vast::plugins::get_mutable()) {
-    if (plugin->enabled({}, {})) {
-      if (auto err = plugin->initialize({}, {})) {
-        fmt::print(stderr, "failed to initialize plugin {}: {}", plugin->name(),
-                   err);
-        return EXIT_FAILURE;
-      }
+    if (auto err = plugin->initialize({}, {})) {
+      fmt::print(stderr, "failed to initialize plugin {}: {}", plugin->name(),
+                 err);
+      return EXIT_FAILURE;
     }
   }
   caf::settings log_settings;
