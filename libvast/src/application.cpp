@@ -327,11 +327,11 @@ make_application(std::string_view path) {
   const auto name
     = last_slash == std::string_view::npos ? path : path.substr(last_slash + 1);
   if (name == "tenzir-node") {
-    static constexpr auto banner1 = R"_( _____ _____ _   _ ________ ____ )_";
-    static constexpr auto banner2 = R"_(|_   _| ____| \ | |__  /_ _|  _ \)_";
-    static constexpr auto banner3 = R"_( | | |  _| |  \| | / / | || |_) |)_";
-    static constexpr auto banner4 = R"_( | | | |___| |\  |/ /_ | ||  _ < )_";
-    static constexpr auto banner5 = R"_( |_| |_____|_| \_/____|___|_| \_\)_";
+    static constexpr auto banner1 = R"_( _____ _____ _   _ ________ ____  )_";
+    static constexpr auto banner2 = R"_(|_   _| ____| \ | |__  /_ _|  _ \ )_";
+    static constexpr auto banner3 = R"_(  | | |  _| |  \| | / / | || |_) |)_";
+    static constexpr auto banner4 = R"_(  | | | |___| |\  |/ /_ | ||  _ < )_";
+    static constexpr auto banner5 = R"_(  |_| |_____|_| \_/____|___|_| \_\)_";
     auto notice = fmt::format("Visit ");
     fmt::format_to(std::back_inserter(notice), fmt::emphasis::underline,
                    "https://app.tenzir.com");
