@@ -101,7 +101,7 @@ tenzir:
 
   # Timeout after which an active partition is forcibly flushed, regardless of
   # its size.
-  active-partition-timeout: 5 min
+  active-partition-timeout: 30 seconds
 
   # Automatically rebuild undersized and outdated partitions in the background.
   # The given number controls how much resources to spend on it. Set to 0 to
@@ -301,7 +301,7 @@ tenzir:
     #max-events: <infinity>
 
     # Timeout after which buffered table slices are forwarded to the node.
-    batch-timeout: 10s
+    batch-timeout: 1s
 
     # Upper bound for the size of a table slice. A value of 0 causes the
     # batch-size to be unbounded, leaving control of batching to the

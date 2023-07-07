@@ -102,7 +102,7 @@ void add_root_opts(command& cmd) {
                            "partition");
   cmd.options.add<duration>("?tenzir", "active-partition-timeout",
                             "timespan after which an active partition is "
-                            "forcibly flushed");
+                            "forcibly flushed (default: 30s)");
   cmd.options.add<int64_t>("?tenzir", "max-resident-partitions",
                            "maximum number of in-memory "
                            "partitions");
@@ -271,8 +271,8 @@ std::unique_ptr<command> make_import_command() {
     opts("?tenzir.import")
       .add<std::string>("batch-encoding", "encoding type of table slices")
       .add<int64_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timeout after which batched "
-                                         "table slices are forwarded")
+      .add<std::string>("batch-timeout", "timeout after which batched table "
+                                         "slices are forwarded (default: 1s)")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<std::string>("listen,l", "the endpoint to listen on "
                                     "([host]:port/type)")
@@ -327,11 +327,11 @@ make_application(std::string_view path) {
   const auto name
     = last_slash == std::string_view::npos ? path : path.substr(last_slash + 1);
   if (name == "tenzir-node") {
-    static constexpr auto banner1 = R"_( _____ _____ _   _ ________ ____ )_";
-    static constexpr auto banner2 = R"_(|_   _| ____| \ | |__  /_ _|  _ \)_";
-    static constexpr auto banner3 = R"_( | | |  _| |  \| | / / | || |_) |)_";
-    static constexpr auto banner4 = R"_( | | | |___| |\  |/ /_ | ||  _ < )_";
-    static constexpr auto banner5 = R"_( |_| |_____|_| \_/____|___|_| \_\)_";
+    static constexpr auto banner1 = R"_( _____ _____ _   _ ________ ____  )_";
+    static constexpr auto banner2 = R"_(|_   _| ____| \ | |__  /_ _|  _ \ )_";
+    static constexpr auto banner3 = R"_(  | | |  _| |  \| | / / | || |_) |)_";
+    static constexpr auto banner4 = R"_(  | | | |___| |\  |/ /_ | ||  _ < )_";
+    static constexpr auto banner5 = R"_(  |_| |_____|_| \_/____|___|_| \_\)_";
     auto notice = fmt::format("Visit ");
     fmt::format_to(std::back_inserter(notice), fmt::emphasis::underline,
                    "https://app.tenzir.com");

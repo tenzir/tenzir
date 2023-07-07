@@ -42,7 +42,7 @@ inline constexpr size_t max_events = 0;
 /// Timeout after which data is forwarded to the importer regardless of
 /// batching and table slices being unfinished.
 inline constexpr std::chrono::milliseconds batch_timeout
-  = std::chrono::seconds{10};
+  = std::chrono::seconds{1};
 
 /// Timeout for how long readers should block while waiting for their input.
 inline constexpr std::chrono::milliseconds read_timeout
@@ -219,7 +219,7 @@ inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 
 /// Timeout after which an active partition is forcibly flushed.
 inline constexpr caf::timespan active_partition_timeout
-  = std::chrono::minutes{5};
+  = std::chrono::seconds{30};
 
 /// Maximum number of in-memory INDEX partitions.
 inline constexpr size_t max_in_mem_partitions = 10;
