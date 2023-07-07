@@ -129,6 +129,7 @@ fi
 echo "Successfully downloaded ${package}"
 
 # Get platform config.
+open_source=
 prefix=/opt/tenzir
 config="${prefix}/etc/tenzir/plugin/platform.yaml"
 echo
