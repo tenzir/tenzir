@@ -16,11 +16,11 @@ zeek_pipe="shell \'bash -c \"curl -s -L https://storage.googleapis.com/tenzir-da
 curl -X POST \
   -H "Content-Type: application/json" \
   -d "{\"definition\": \"${suricata_pipe}\", \"start_when_created\": true}" \
-  http://127.0.0.1:5160/api/v0/pipeline/create
+  http://localhost:5160/api/v0/pipeline/create
 
 curl -X POST \
   -H "Content-Type: application/json" \
   -d "{\"definition\": \"${zeek_pipe}\", \"start_when_created\": true}" \
-  http://127.0.0.1:5160/api/v0/pipeline/create
+  http://localhost:5160/api/v0/pipeline/create
 
 wait "$NODE_PID"
