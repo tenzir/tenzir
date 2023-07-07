@@ -18,7 +18,6 @@ names include a separator, thus unflattening
 schema of a record that has been flattened using the [`flatten`](flatten.md) operator and
 unflattened afterwards may not be identical to the schema of the unmodified
 record.
-
 :::
 
 ### `<separator>`
@@ -70,5 +69,4 @@ separator:
     }
   }
 }
-
 ```

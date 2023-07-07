@@ -60,10 +60,10 @@ class plugin final : public virtual operator_plugin<unflatten_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser
-      = argument_parser{"head", "https://vast.io/next/"
-                                "operators/transformations/unflatten"};
+      = argument_parser{"unflatten", "https://vast.io/next/"
+                                     "operators/transformations/unflatten"};
     auto sep = std::optional<located<std::string>>{};
-    parser.add(sep, "<sep>");
+    parser.add(sep, "<separator>");
     parser.parse(p);
     auto separator = (sep) ? sep->inner : default_unflatten_separator;
     return std::make_unique<unflatten_operator>(separator);
