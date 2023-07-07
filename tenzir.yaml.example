@@ -177,7 +177,7 @@ tenzir:
     #             targets
     #
     #   partition-index - Tenzir will not create dense index when set to false
-    #   - targets: [:string, :ip]
+    #   - targets: [:ip]
     #     fp-rate: 0.01
     #     partition-index: false
 

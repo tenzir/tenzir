@@ -184,8 +184,15 @@ void serialize(
 bool should_skip_index_creation(const type& type,
                                 const qualified_record_field& qf,
                                 const std::vector<index_config::rule>& rules) {
-  if (type.attribute("skip").has_value())
+  // String indexes are currently disabled as they are very inefficient and use
+  // too much memory. We may bring them back in the future.
+  if (caf::holds_alternative<string_type>(type)) {
+    VAST_DEBUG("skipping string index creation for {}", qf.name());
     return true;
+  }
+  if (type.attribute("skip").has_value()) {
+    return true;
+  }
   return !should_create_partition_index(qf, rules);
 }
 
