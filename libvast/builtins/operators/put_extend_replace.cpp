@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice.hpp>
+#include <vast/cast.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
@@ -211,7 +212,13 @@ public:
       }
     }
     // Lastly, apply our transformation.
-    return transform_columns(slice, transformations);
+    auto result = transform_columns(slice, transformations);
+    if (Mode == mode::put) {
+      auto renamed_schema
+        = type{"tenzir.put", caf::get<record_type>(result.schema())};
+      result = cast(std::move(result), renamed_schema);
+    }
+    return result;
   }
 
   [[nodiscard]] auto to_string() const noexcept -> std::string override {
