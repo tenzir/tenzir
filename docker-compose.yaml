@@ -14,6 +14,25 @@ services:
       - tenzir-node:/var/lib/tenzir/
       - tenzir-node:/var/log/tenzir/
 
+  tenzir-api:
+    image: tenzir/tenzir:main
+    pull_policy: always
+    build:
+      target: tenzir
+    depends_on:
+      - tenzir-node
+    environment:
+      - TENZIR_ENDPOINT=tenzir-node:5158
+    ports:
+      - 5160:5160
+    entrypoint:
+      - tenzir-ctl
+    command:
+      - web
+      - server
+      - --mode=dev
+      - --bind=0.0.0.0
+
   tenzir:
     image: tenzir/tenzir:main
     pull_policy: always
