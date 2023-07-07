@@ -209,7 +209,10 @@ public:
         }
       }
     }
-    co_yield builder.finish();
+    auto result = builder.finish();
+    auto renamed_schema
+      = type{"tenzir.version", caf::get<record_type>(result.schema())};
+    co_yield cast(std::move(result), renamed_schema);
   }
 
   auto to_string() const -> std::string override {
