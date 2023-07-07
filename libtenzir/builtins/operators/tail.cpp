@@ -57,6 +57,12 @@ public:
     return "tail";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::ordered, copy()};
+  }
+
   friend auto inspect(auto& f, tail_operator& x) -> bool {
     return f.apply(x.limit_);
   }

@@ -79,6 +79,12 @@ public:
     return "select";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result{std::nullopt, order, copy()};
+  }
+
   friend auto inspect(auto& f, select_operator& x) -> bool {
     return f.apply(x.config_);
   }

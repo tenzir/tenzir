@@ -193,6 +193,13 @@ public:
     return "sort";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // Note: The `unordered` implies that sorting is unstable.
+    (void)order;
+    return optimize_result{filter, event_order::unordered, copy()};
+  }
+
   friend auto inspect(auto& f, sort_operator& x) -> bool {
     return f.object(x).fields(f.field("key", x.key_),
                               f.field("descending", x.descending_),

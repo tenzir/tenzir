@@ -28,13 +28,13 @@ public:
     return x;
   }
 
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override {
-    return std::pair{expr, std::make_unique<pass_operator>(*this)};
-  }
-
   auto name() const -> std::string override {
     return "pass";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    return optimize_result{filter, order, nullptr};
   }
 
   friend auto inspect(auto& f, pass_operator& x) -> bool {

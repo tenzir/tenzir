@@ -125,6 +125,12 @@ public:
     return "enumerate";
   }
 
+  auto optimize(expression const& filter, event_order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result{std::nullopt, event_order::ordered, copy()};
+  }
+
 private:
   friend auto inspect(auto& f, enumerate_operator& x) -> bool {
     return f.apply(x.field_);
