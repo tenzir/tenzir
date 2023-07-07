@@ -40,12 +40,12 @@ services:
     image: tenzir/tenzir:main
     build:
       target: tenzir
+    profiles:
+      - donotstart
     depends_on:
       - tenzir-node
     environment:
       - TENZIR_ENDPOINT=tenzir-node:5158
-    command:
-      - version | put version | write json
 
 volumes:
   tenzir-node:
