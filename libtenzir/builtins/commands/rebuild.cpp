@@ -103,6 +103,12 @@ public:
     return "<rebatch>";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
 private:
   type schema_ = {};
   size_t desired_batch_size_ = {};

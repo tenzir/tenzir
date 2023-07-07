@@ -85,6 +85,16 @@ private:
   caf::error error_{};
 };
 
+auto do_not_optimize(const operator_base& op) -> optimize_result {
+  // This default implementation is always correct because it effectively
+  // promises `op | where filter | sink <=> op | where filter | sink`, which is
+  // trivial. Note that forwarding `order` is not always valid. To see this,
+  // assume `op == head` and `order == unordered`. We would have to show that
+  // `head | where filter | sink <=> shuffle | head | where filter | sink`, but
+  // this is clearly not the case.
+  return optimize_result{std::nullopt, event_order::ordered, op.copy()};
+}
+
 pipeline::pipeline(std::vector<operator_ptr> operators) {
   operators_.reserve(operators.size());
   for (auto&& op : operators) {
@@ -191,28 +201,78 @@ auto pipeline::operators() const& -> std::span<const operator_ptr> {
   return operators_;
 }
 
-auto pipeline::optimize() const -> caf::expected<pipeline> {
-  auto optimized = predicate_pushdown_pipeline(trivially_true_expression());
-  if (not optimized) {
-    return caf::make_error(ec::logic_error, "failed to optimize pipeline '{}'",
-                           *this);
+auto pipeline::optimize_if_closed() const -> pipeline {
+  if (not is_closed()) {
+    return *this;
   }
+  auto [filter, pipe] = optimize_into_filter();
+  if (filter != trivially_true_expression()) {
+    // This could also be an assertion as it always points to an error in the
+    // operator implementation, but we try to continue with the original
+    // pipeline here.
+    TENZIR_ERROR("optimize on closed pipeline `{}` returned expression `{}`",
+                 *this, filter);
+    return *this;
+  }
+  return std::move(pipe);
+  // TODO: Do we want this?
+  // if (optimized->first != trivially_true_expression()) {
+  //   // Prepend where operator as a hacky way to handle pipelines without
+  //   source. auto where = pipeline::internal_parse_as_operator(
+  //     fmt::format("where {}", optimized->first));
+  //   VAST_ASSERT(where);
+  //   optimized->second.prepend(std::move(*where));
+  // }
+}
 
-  if (optimized->first != trivially_true_expression()) {
-    if (this->infer_type<void>()) {
-      return caf::make_error(ec::logic_error,
-                             "failed to optimize pipeline '{}': source pushed "
-                             "expression {}",
-                             *this, optimized->first);
+auto pipeline::optimize_into_filter() const -> std::pair<expression, pipeline> {
+  return optimize_into_filter(trivially_true_expression());
+}
+
+auto pipeline::optimize_into_filter(const expression& filter) const
+  -> std::pair<expression, pipeline> {
+  auto opt = optimize(filter, event_order::ordered);
+  auto* pipe = dynamic_cast<pipeline*>(opt.replacement.get());
+  // We know that `pipeline::optimize` yields a pipeline and a filter.
+  TENZIR_ASSERT_CHEAP(pipe);
+  TENZIR_ASSERT_CHEAP(opt.filter);
+  return {std::move(*opt.filter), std::move(*pipe)};
+}
+
+auto pipeline::optimize(expression const& filter, event_order order) const
+  -> optimize_result {
+  auto current_filter = filter;
+  auto current_order = order;
+  // Collect the optimized pipeline in reversed order.
+  auto result = std::vector<operator_ptr>{};
+  for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
+    auto opt = (*it)->optimize(current_filter, current_order);
+    if (opt.filter) {
+      current_filter = std::move(*opt.filter);
+    } else {
+      if (current_filter != trivially_true_expression()) {
+        // TODO: We just want to create a `where {current}` operator. However,
+        // we currently only have the interface for parsing this from a string.
+        auto pipe
+          = tql::parse_internal(fmt::format("where {}", current_filter));
+        TENZIR_ASSERT(pipe);
+        auto ops = std::move(*pipe).unwrap();
+        TENZIR_ASSERT(ops.size() == 1);
+        result.push_back(std::move(ops[0]));
+        current_filter = trivially_true_expression();
+      }
+      auto copy = (*it)->copy();
+      TENZIR_ASSERT(copy);
+      result.push_back(std::move(copy));
     }
-    // Prepend where operator as a hacky way to handle pipelines without source.
-    auto where = pipeline::internal_parse_as_operator(
-      fmt::format("where {}", optimized->first));
-    TENZIR_ASSERT(where);
-    optimized->second.prepend(std::move(*where));
+    if (opt.replacement) {
+      result.push_back(std::move(opt.replacement));
+    }
+    current_order = opt.order;
   }
-
-  return std::move(optimized->second);
+  std::reverse(result.begin(), result.end());
+  return optimize_result{current_filter, current_order,
+                         std::make_unique<pipeline>(std::move(result))};
 }
 
 auto pipeline::copy() const -> operator_ptr {
@@ -271,49 +331,6 @@ auto pipeline::instantiate(operator_input input,
                                              "operators were used");
     }
   }
-}
-
-auto pipeline::predicate_pushdown(const expression& expr) const
-  -> std::optional<std::pair<expression, operator_ptr>> {
-  auto result = predicate_pushdown_pipeline(expr);
-  if (!result) {
-    return {};
-  }
-  return std::pair{std::move(result->first),
-                   std::make_unique<pipeline>(std::move(result->second))};
-}
-
-auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
-  -> std::optional<std::pair<expression, pipeline>> {
-  auto new_rev = std::vector<operator_ptr>{};
-
-  auto current = expr;
-  for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
-    if (auto result = (*it)->predicate_pushdown(current)) {
-      auto& [new_expr, replacement] = *result;
-      if (replacement) {
-        new_rev.push_back(std::move(replacement));
-      }
-      current = new_expr;
-    } else {
-      if (current != trivially_true_expression()) {
-        // TODO: We just want to create a `where {current}` operator. However,
-        // we currently only have the interface for parsing this from a string.
-        auto pipe = tql::parse_internal(fmt::format("where {}", current));
-        TENZIR_ASSERT(pipe);
-        auto ops = std::move(*pipe).unwrap();
-        TENZIR_ASSERT(ops.size() == 1);
-        new_rev.push_back(std::move(ops[0]));
-        current = trivially_true_expression();
-      }
-      auto copy = (*it)->copy();
-      TENZIR_ASSERT(copy);
-      new_rev.push_back(std::move(copy));
-    }
-  }
-
-  std::reverse(new_rev.begin(), new_rev.end());
-  return std::pair{std::move(current), pipeline{std::move(new_rev)}};
 }
 
 auto operator_base::copy() const -> operator_ptr {

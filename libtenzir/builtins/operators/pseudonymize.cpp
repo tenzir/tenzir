@@ -113,6 +113,12 @@ public:
     return "pseudonymize";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result{std::nullopt, order, nullptr};
+  }
+
   friend auto inspect(auto& f, pseudonymize_operator& x) -> bool {
     return f.apply(x.config_);
   }

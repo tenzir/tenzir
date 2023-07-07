@@ -237,6 +237,12 @@ public:
     TENZIR_DEBUG("{} source is done", *exporter_);
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
 private:
   exporter_ptr exporter_;
 };
@@ -262,6 +268,12 @@ public:
     }
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
 private:
   exporter_ptr exporter_;
 };
@@ -273,10 +285,8 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
   -> exporter_actor::behavior_type {
   TENZIR_DEBUG("spawned {} with pipeline {}", *self, pipe);
   self->state.pipeline_str = pipe.to_string();
-  auto expr = trivially_true_expression();
-  if (auto pushdown = pipe.predicate_pushdown_pipeline(expr)) {
-    std::tie(expr, pipe) = std::move(*pushdown);
-  }
+  auto expr = expression{};
+  std::tie(expr, pipe) = pipe.optimize_into_filter();
   auto normalized = normalize_and_validate(std::move(expr));
   if (!normalized) {
     self->quit(caf::make_error(ec::format_error,

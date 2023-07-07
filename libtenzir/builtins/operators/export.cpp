@@ -119,11 +119,20 @@ public:
     return operator_location::remote;
   }
 
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override {
-    return std::pair{
-      trivially_true_expression(),
-      std::make_unique<export_operator>(conjunction{expr_, expr})};
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)order;
+    auto clauses = std::vector<expression>{};
+    if (expr_ != caf::none) {
+      clauses.push_back(expr_);
+    }
+    if (filter != trivially_true_expression()) {
+      clauses.push_back(filter);
+    }
+    auto expr = clauses.empty() ? expression{}
+                                : expression{conjunction{std::move(clauses)}};
+    return optimize_result{trivially_true_expression(), event_order::ordered,
+                           std::make_unique<export_operator>(std::move(expr))};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {

@@ -120,6 +120,12 @@ public:
     return "write";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, write_operator& x) -> bool {
     return plugin_inspect(f, x.printer_);
   }
@@ -198,6 +204,12 @@ public:
 
   auto name() const -> std::string override {
     return "save";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
   }
 
   friend auto inspect(auto& f, save_operator& x) -> bool {
@@ -290,6 +302,12 @@ public:
 
   auto name() const -> std::string override {
     return "<write_and_save>";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::schema, copy()};
   }
 
   friend auto inspect(auto& f, write_and_save_operator& x) -> bool {

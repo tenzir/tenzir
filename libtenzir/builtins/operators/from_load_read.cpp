@@ -40,6 +40,12 @@ public:
     return "load";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, load_operator& x) -> bool {
     return plugin_inspect(f, x.loader_);
   }
@@ -74,6 +80,12 @@ public:
 
   auto name() const -> std::string override {
     return "read";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {

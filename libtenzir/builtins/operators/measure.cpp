@@ -122,6 +122,13 @@ public:
     return "measure";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // Note: This can change the output of `measure`.
+    (void)filter;
+    return optimize_result{std::nullopt, order, copy()};
+  }
+
   friend auto inspect(auto& f, measure_operator& x) -> bool {
     return detail::apply_all(f, x.batch_size_, x.real_time_, x.cumulative_);
   }
