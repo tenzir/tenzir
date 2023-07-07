@@ -68,10 +68,11 @@ private:
 class plugin final : public virtual operator_plugin<flatten_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"head", "https://vast.io/next/"
-                                          "operators/transformations/flatten"};
+    auto parser
+      = argument_parser{"flatten", "https://vast.io/next/"
+                                   "operators/transformations/flatten"};
     auto sep = std::optional<located<std::string>>{};
-    parser.add(sep, "<sep>");
+    parser.add(sep, "<separator>");
     parser.parse(p);
     auto separator = (sep) ? sep->inner : default_flatten_separator;
     return std::make_unique<flatten_operator>(separator);
