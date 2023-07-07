@@ -702,7 +702,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         .emit(ctrl.diagnostics());
     }
   }
-  if (document.builder->rows() > 0) {
+  if (document.builder and document.builder->rows() > 0) {
     co_yield cast(document.builder->finish(), document.target_schema);
   }
 }
