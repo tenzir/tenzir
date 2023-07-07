@@ -4,7 +4,7 @@ services:
   tenzir-node:
     image: tenzir/tenzir:main
     build:
-      target: tenzir-node
+      target: tenzir
     environment:
       - TENZIR_PLUGINS__PLATFORM__CONTROL_ENDPOINT=${TENZIR_PLUGINS__PLATFORM__CONTROL_ENDPOINT:-}
       - TENZIR_PLUGINS__PLATFORM__API_KEY=${TENZIR_PLUGINS__PLATFORM__API_KEY:-}
