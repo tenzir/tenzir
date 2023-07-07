@@ -23,30 +23,38 @@ namespace vast::plugins::exec {
 
 namespace {
 
+struct exec_config {
+  bool no_implicit = false;
+  bool dump_ast = false;
+  bool dump_diagnostics = false;
+};
+
 auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
-                   std::unique_ptr<diagnostic_handler> diag)
-  -> caf::expected<void> {
+                   std::unique_ptr<diagnostic_handler> diag,
+                   const exec_config& cfg) -> caf::expected<void> {
   // If the pipeline ends with events, we implicitly write the output as JSON
   // to stdout, and if it ends with bytes, we implicitly write those bytes to
   // stdout.
-  if (pipe.check_type<void, table_slice>()) {
-    auto op = pipeline::internal_parse_as_operator("write json --pretty");
-    if (not op) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to append implicit 'write "
-                                         "json --pretty': {}",
-                                         op.error()));
+  if (not cfg.no_implicit) {
+    if (pipe.check_type<void, table_slice>()) {
+      auto op = pipeline::internal_parse_as_operator("write json --pretty");
+      if (not op) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("failed to append implicit 'write "
+                                           "json --pretty': {}",
+                                           op.error()));
+      }
+      pipe.append(std::move(*op));
+    } else if (pipe.check_type<void, chunk_ptr>()) {
+      auto op = pipeline::internal_parse_as_operator("save file -");
+      if (not op) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("failed to append implicit 'save "
+                                           "file -': {}",
+                                           op.error()));
+      }
+      pipe.append(std::move(*op));
     }
-    pipe.append(std::move(*op));
-  } else if (pipe.check_type<void, chunk_ptr>()) {
-    auto op = pipeline::internal_parse_as_operator("save file -");
-    if (not op) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("failed to append implicit 'save "
-                                         "file -': {}",
-                                         op.error()));
-    }
-    pipe.append(std::move(*op));
   }
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
@@ -75,7 +83,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
             VAST_DEBUG("started pipeline successfully");
           },
           [&, self](caf::error& err) {
-            VAST_WARN("failed to start pipeline: {}", err);
+            VAST_DEBUG("failed to start pipeline: {}", err);
             result = std::move(err);
             self->quit();
           });
@@ -101,7 +109,8 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
 }
 
 auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
-               bool dump_ast, caf::actor_system& sys) -> caf::expected<void> {
+               const exec_config& cfg, caf::actor_system& sys)
+  -> caf::expected<void> {
   auto parsed = tql::parse(std::move(content), *diag);
   if (not parsed) {
     if (not diag->has_seen_error()) {
@@ -114,7 +123,7 @@ auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
     return caf::make_error(ec::unspecified,
                            "internal error: parsing successful with error");
   }
-  if (dump_ast) {
+  if (cfg.dump_ast) {
     for (auto& op : *parsed) {
       fmt::print("{}\n", op.inner);
     }
@@ -131,7 +140,7 @@ auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
     return {};
   }
   return exec_pipeline(tql::to_pipeline(std::move(*parsed)), sys,
-                       std::move(diag));
+                       std::move(diag), cfg);
 }
 
 class diagnostic_handler_ref final : public diagnostic_handler {
@@ -158,10 +167,12 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
-  auto dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
-  auto dump_diagnostics
+  auto cfg = exec_config{};
+  cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
+  cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
   auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
+  cfg.no_implicit = caf::get_or(inv.options, "tenzir.exec.no-implicit", false);
   auto filename = std::string{};
   auto content = std::string{};
   if (as_file) {
@@ -176,16 +187,16 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
     filename = "<input>";
     content = args[0];
   }
-  if (dump_diagnostics) {
+  if (cfg.dump_diagnostics) {
     auto diag = collecting_diagnostic_handler{};
     auto result = exec_impl(
-      content, std::make_unique<diagnostic_handler_ref>(diag), dump_ast, sys);
+      content, std::make_unique<diagnostic_handler_ref>(diag), cfg, sys);
     dump_diagnostics_to_stdout(std::move(diag).collect(), filename,
                                std::move(content));
     return result;
   }
   auto printer = make_diagnostic_printer(filename, content, true, std::cerr);
-  return exec_impl(std::move(content), std::move(printer), dump_ast, sys);
+  return exec_impl(std::move(content), std::move(printer), cfg, sys);
 }
 
 class plugin final : public virtual command_plugin {
@@ -206,7 +217,8 @@ public:
         .add<bool>("dump-ast",
                    "print a textual description of the AST and then exit")
         .add<bool>("dump-diagnostics",
-                   "print all diagnostics to stdout before exiting"));
+                   "print all diagnostics to stdout before exiting")
+        .add<bool>("no-implicit", "disable implicit source and sink"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
