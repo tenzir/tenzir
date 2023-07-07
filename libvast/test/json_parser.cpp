@@ -63,6 +63,10 @@ public:
     return diag;
   }
 
+  auto allow_unsafe_pipelines() const noexcept -> bool override {
+    return false;
+  }
+
 private:
   OnWarnCallable on_warn_;
   std::vector<type> schemas_;

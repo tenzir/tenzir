@@ -72,6 +72,10 @@ public:
     return diag;
   }
 
+  auto allow_unsafe_pipelines() const noexcept -> bool override {
+    return false;
+  }
+
 private:
   caf::error error_{};
 };
