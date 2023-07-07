@@ -168,7 +168,7 @@ connector_actor::behavior_type make_no_retry_behavior(
       const auto remaining_time = calculate_remaining_time(deadline);
       if (!remaining_time)
         return caf::make_error(ec::timeout,
-                               fmt::format("{} couldn't connect to VAST node"
+                               fmt::format("{} couldn't connect to node"
                                            "within a given deadline",
                                            *self));
       auto rp = self->make_response_promise<node_actor>();
@@ -178,14 +178,14 @@ connector_actor::behavior_type make_no_retry_behavior(
         .then(
           [rp, request](const caf::node_id&, caf::strong_actor_ptr& node,
                         const std::set<std::string>&) mutable {
-            VAST_INFO("client connected to VAST node at {}:{}", request.host,
+            VAST_INFO("client connected to node at {}:{}", request.host,
                       request.port);
             rp.deliver(caf::actor_cast<node_actor>(std::move(node)));
           },
           [rp, request](caf::error& err) mutable {
             rp.deliver(caf::make_error(
               ec::system_error,
-              fmt::format("failed to connect to VAST node at {}:{}: {}",
+              fmt::format("failed to connect to node at {}:{}: {}",
                           request.host, request.port, std::move(err))));
           });
       return rp;
@@ -210,7 +210,7 @@ connector(connector_actor::stateful_pointer<connector_state> self,
       const auto remaining_time = calculate_remaining_time(deadline);
       if (!remaining_time)
         return caf::make_error(ec::timeout,
-                               fmt::format("{} couldn't connect to VAST node "
+                               fmt::format("{} couldn't connect to node "
                                            "within a given deadline",
                                            *self));
       VAST_INFO("client connects to {}:{}{}", request.host, request.port,
@@ -222,8 +222,7 @@ connector(connector_actor::stateful_pointer<connector_state> self,
         .then(
           [rp, req = request](const caf::node_id&, caf::strong_actor_ptr& node,
                               const std::set<std::string>&) mutable {
-            VAST_INFO("client connected to VAST node at {}:{}", req.host,
-                      req.port);
+            VAST_INFO("client connected to node at {}:{}", req.host, req.port);
             rp.deliver(caf::actor_cast<node_actor>(std::move(node)));
           },
           [self, rp, request, delay, deadline](caf::error& err) mutable {
@@ -238,7 +237,7 @@ connector(connector_actor::stateful_pointer<connector_state> self,
             } else
               rp.deliver(caf::make_error(
                 ec::system_error,
-                fmt::format("failed to connect to VAST node at {}:{}: {}",
+                fmt::format("failed to connect to node at {}:{}: {}",
                             request.host, request.port, std::move(err))));
           });
       return rp;

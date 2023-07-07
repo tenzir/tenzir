@@ -24,13 +24,13 @@ struct connector_state {
   caf::io::middleman_actor middleman;
 };
 
-/// @brief Creates an actor that establishes the connection to a remote VAST
+/// @brief Creates an actor that establishes the connection to a remote Tenzir
 /// node.
 /// @param retry_delay Delay between two connection attempts. Don't retry if not
 /// set.
 /// @param deadline Time point after which the connector can no longer connect
-/// to a remote VAST node. Try connecting until success if not set.
-/// @return actor handle that can be used to connect with a remote VAST node.
+/// to a remote Tenzir node. Try connecting until success if not set.
+/// @return actor handle that can be used to connect with a remote Tenzir node.
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
