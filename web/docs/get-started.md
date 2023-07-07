@@ -19,13 +19,19 @@ the command line interface and do not need pipeline management features.
 
 ## Explore the demo environment
 
-Let's run a few example [pipelines](language/pipelines.md). Follow along by
-copying the below examples and pasting them into the
-[Explorer](https://app.tenzir.com/explorer). Our first first pipeline produces
-just a single event: the version of the Tenzir node:
+Let's run a few example [pipelines](language/pipelines.md) by copying the below
+examples and pasting them into the [Explorer](https://app.tenzir.com/explorer).
+We pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
+[Suricata](https://suricata.io) logs derived from the M57 dataset that we also
+use in our [user guides](user-guides.md).
+
+Our first pipeline uses [`export`](operators/sources/export.md) to emit all data
+stored at the demo node. We pipe the output to
+[`taste`](operators/transformations/taste.md) to get a sample of 10 events per
+unique schema:
 
 ```
-version
+export | taste
 ```
 
 <details>
@@ -33,156 +39,112 @@ version
 
 ```json
 {
-  "version": "v4.0.0-rc2-34-g9197f7355e",
-  "plugins": [
-    {
-      "name": "compaction",
-      "version": "bundled"
+  "timestamp": "2021-11-18T09:48:16.122571",
+  "flow_id": 1722746302079096,
+  "pcap_cnt": 349263,
+  "vlan": null,
+  "in_iface": null,
+  "src_ip": "172.17.2.163",
+  "src_port": 63342,
+  "dest_ip": "45.46.53.140",
+  "dest_port": 2222,
+  "proto": "TCP",
+  "event_type": "tls",
+  "community_id": null,
+  "tls": {
+    "sni": null,
+    "session_resumed": null,
+    "subject": "C=FR, OU=Seefzjitxo Aolexzn, CN=albfyae.mobi",
+    "issuerdn": "C=FR, ST=XF, L=Fke, O=Jvohtaneo Znpfkecey Eotel Aorod, CN=albfyae.mobi",
+    "serial": "0A:F1",
+    "fingerprint": "6b:0d:bc:a3:ec:fc:4b:56:8a:51:aa:dc:96:b3:e7:35:e6:99:3f:60",
+    "ja3": {
+      "hash": "51c64c77e60f3980eea90869b68c58a8",
+      "string": "771,49196-49195-49200-49199-49188-49187-49192-49191-49162-49161-49172-49171-157-156-61-60-53-47-10,10-11-13-35-23-65281,29-23-24,0"
     },
-    {
-      "name": "inventory",
-      "version": "bundled"
+    "ja3s": {
+      "hash": "7c02dbae662670040c7af9bd15fb7e2f",
+      "string": "771,157,65281-35"
     },
-    {
-      "name": "kafka",
-      "version": "bundled"
+    "notbefore": "2021-09-23T09:50:44.000000",
+    "notafter": "2023-09-23T14:57:14.000000",
+    "version": "TLS 1.2"
+  },
+  "metadata": {
+    "flowints": {
+      "applayer.anomaly.count": null
     },
-    {
-      "name": "matcher",
-      "version": "bundled"
+    "flowbits": [
+      "ET.Evil",
+      "ET.BotccIP"
+    ]
+  }
+}
+{
+  "timestamp": "2021-11-18T09:32:13.566661",
+  "flow_id": 1030296579147908,
+  "pcap_cnt": 342987,
+  "vlan": null,
+  "in_iface": null,
+  "src_ip": "172.17.2.163",
+  "src_port": 63226,
+  "dest_ip": "81.214.126.173",
+  "dest_port": 2222,
+  "proto": "TCP",
+  "event_type": "tls",
+  "community_id": null,
+  "tls": {
+    "sni": null,
+    "session_resumed": null,
+    "subject": "C=PT, OU=Pejmpse Idtyoor Geiw, CN=myzdef.biz",
+    "issuerdn": "C=PT, ST=NP, L=Dejxhypqn Tyswmkejf, O=Enfdxjtlz Gucuat LLC., CN=myzdef.biz",
+    "serial": "25:9F",
+    "fingerprint": "89:98:69:69:01:8e:e9:a3:e6:ba:17:7a:f5:c6:e1:b8:1b:70:e8:cc",
+    "ja3": {
+      "hash": "51c64c77e60f3980eea90869b68c58a8",
+      "string": "771,49196-49195-49200-49199-49188-49187-49192-49191-49162-49161-49172-49171-157-156-61-60-53-47-10,10-11-13-35-23-65281,29-23-24,0"
     },
-    {
-      "name": "netflow",
-      "version": "bundled"
+    "ja3s": {
+      "hash": "7c02dbae662670040c7af9bd15fb7e2f",
+      "string": "771,157,65281-35"
     },
-    {
-      "name": "parquet",
-      "version": "bundled"
+    "notbefore": "2021-09-22T17:14:19.000000",
+    "notafter": "2023-09-23T01:14:49.000000",
+    "version": "TLS 1.2"
+  },
+  "metadata": {
+    "flowints": {
+      "applayer.anomaly.count": null
     },
-    {
-      "name": "pcap",
-      "version": "bundled"
-    },
-    {
-      "name": "pipeline-manager",
-      "version": "bundled"
-    },
-    {
-      "name": "platform",
-      "version": "bundled"
-    },
-    {
-      "name": "web",
-      "version": "bundled"
-    }
-  ]
+    "flowbits": null
+  }
 }
 ```
 
-(Output may vary based on your actual version.)
+(Only first 2 results shown. Output may vary.)
 
-</details>
-
-:::note Explorer vs. Documentation
+:::note Demo Dataset
 On this site we display the data in JSON. In the Explorer, you can enjoy a
 richer display in an interactive table. You can also produce the outputs here by
 invoking `tenzir <pipeline>` on the [command line](command-line.md) or
 `docker run -it tenzir/tenzir <pipeline>` when using Docker.
 :::
 
-The [`version`](operators/sources/version.md) operator is a
-[source](operators/sources/README.md), i.e., it outputs data but doesn't have
-any input. Tenzir also comes with a storage engine. The
-[`export`](operators/sources/export.md) operator emits all stored data at a
-node. Pipe `export` to [`head`](operators/transformations/head.md) to retrieve
-10 events:
-
-```
-export | head
-```
-
-<details>
-<summary>Output</summary>
-
-```json
-{
-  "timestamp": "2021-11-18T08:23:45.304758",
-  "flow_id": 1851826916903734,
-  "pcap_cnt": 54742,
-  "vlan": null,
-  "in_iface": null,
-  "src_ip": "8.249.125.254",
-  "src_port": 80,
-  "dest_ip": "10.6.2.101",
-  "dest_port": 49789,
-  "proto": "TCP",
-  "event_type": "fileinfo",
-  "community_id": null,
-  "fileinfo": {
-    "filename": "/d/msdownload/update/software/defu/2021/06/am_delta_patch_1.339.1962.0_5e6a00734b4809bcfd493118754d0ea1cd64798e.exe",
-    "magic": null,
-    "gaps": false,
-    "state": "CLOSED",
-    "md5": null,
-    "sha1": null,
-    "sha256": null,
-    "stored": false,
-    "file_id": null,
-    "size": 2,
-    "tx_id": 0,
-    "start": 0,
-    "end": 1
-  },
-  "http": {
-    "hostname": "au.download.windowsupdate.com",
-    "url": "/d/msdownload/update/software/defu/2021/06/am_delta_patch_1.339.1962.0_5e6a00734b4809bcfd493118754d0ea1cd64798e.exe",
-    "http_port": null,
-    "http_user_agent": "Microsoft-Delivery-Optimization/10.0",
-    "http_content_type": "application/octet-stream",
-    "http_method": "GET",
-    "http_refer": null,
-    "protocol": "HTTP/1.1",
-    "status": 206,
-    "redirect": null,
-    "length": 2,
-    "xff": null,
-    "content_range": {
-      "raw": "bytes 0-1/360888",
-      "start": 0,
-      "end": 1,
-      "size": 360888
-    }
-  },
-  "app_proto": "http",
-  "metadata": {
-    "flowints": {
-      "http.anomaly.count": null,
-      "tcp.retransmission.count": null
-    },
-    "flowbits": [
-      "ET.INFO.WindowsUpdate",
-      "exe.no.referer"
-    ]
-  }
-}
-```
-
-(Only 1 out of 10 shown.)
-
 </details>
 
-:::note Demo Dataset
-We pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
-[Suricata](https://suricata.io) logs derived from the M57 dataset. We also use
-that dataset in our [user guides](user-guides.md).
-:::
+The `export` operator is a [source](operators/sources/README.md) that only
+produces data, `taste` is a
+[transformation](operators/transformations/README.md) that consumes and produces
+data, and there are [sinks](operators/sinks/README.md) that only consume data.
+Either you do not provide a sink (like above) and can click the *Run* button to
+see the results in the app, or you provide a sink and click the *Deploy* button
+to make it run continuously.
 
-Let's filter the dataflow and keep only Suricata alerts using the
-[`where`](operators/transformations/where.md) operator:
+Now filter the data with [`where`](operators/transformations/where.md) to only
+look at Suricata alerts:
 
 ```
-export
-| where #schema == "suricata.alert"
+export | where #schema == "suricata.alert"
 ```
 
 <details>
@@ -409,8 +371,10 @@ export
 </details>
 
 This was just a quick tour. The [user guides](user-guides.md) cover a lot more
-material. Next, we'll explain how to deploy a node so that you can work with
-your own data.
+material.
+
+Ready to bring your data to the table? Then continue reading to learn how to
+deploy your own node.
 
 ## Onboard your own node
 
