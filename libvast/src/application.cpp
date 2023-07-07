@@ -327,6 +327,20 @@ make_application(std::string_view path) {
   const auto name
     = last_slash == std::string_view::npos ? path : path.substr(last_slash + 1);
   if (name == "tenzir-node") {
+    // clang-format off
+    static constexpr auto banner = 
+R"_(
+     _____ _____ _   _ ________ ____  
+    |_   _| ____| \ | |__  /_ _|  _ \ 
+      | | |  _| |  \| | / / | || |_) |
+      | | | |___| |\  |/ /_ | ||  _ < 
+      |_| |_____|_| \_/____|___|_| \_\
+)_";
+    // clang-format on
+    fmt::print(stderr, fmt::fg(fmt::terminal_color::blue), banner);
+    fmt::print(stderr, "\nVisit ");
+    fmt::print(stderr, fmt::emphasis::underline, "https://app.tenzir.com");
+    fmt::print(stderr, " to get started.\n\n");
     auto cmd = make_start_command();
     cmd->name = "";
     add_root_opts(*cmd);
