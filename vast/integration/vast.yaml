@@ -11,3 +11,4 @@ tenzir:
       disable-timestamp-tags: true
   exec:
     dump-diagnostics: true
+  automatic-rebuild: 0
