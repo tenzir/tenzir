@@ -301,7 +301,7 @@ tenzir:
     #max-events: <infinity>
 
     # Timeout after which buffered table slices are forwarded to the node.
-    batch-timeout: 10s
+    batch-timeout: 1s
 
     # Upper bound for the size of a table slice. A value of 0 causes the
     # batch-size to be unbounded, leaving control of batching to the

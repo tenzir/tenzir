@@ -42,7 +42,7 @@ inline constexpr size_t max_events = 0;
 /// Timeout after which data is forwarded to the importer regardless of
 /// batching and table slices being unfinished.
 inline constexpr std::chrono::milliseconds batch_timeout
-  = std::chrono::seconds{10};
+  = std::chrono::seconds{1};
 
 /// Timeout for how long readers should block while waiting for their input.
 inline constexpr std::chrono::milliseconds read_timeout

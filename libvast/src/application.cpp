@@ -271,8 +271,8 @@ std::unique_ptr<command> make_import_command() {
     opts("?tenzir.import")
       .add<std::string>("batch-encoding", "encoding type of table slices")
       .add<int64_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timeout after which batched "
-                                         "table slices are forwarded")
+      .add<std::string>("batch-timeout", "timeout after which batched table "
+                                         "slices are forwarded (default: 1s)")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<std::string>("listen,l", "the endpoint to listen on "
                                     "([host]:port/type)")
