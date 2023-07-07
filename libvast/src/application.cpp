@@ -102,7 +102,7 @@ void add_root_opts(command& cmd) {
                            "partition");
   cmd.options.add<duration>("?tenzir", "active-partition-timeout",
                             "timespan after which an active partition is "
-                            "forcibly flushed");
+                            "forcibly flushed (default: 30s)");
   cmd.options.add<int64_t>("?tenzir", "max-resident-partitions",
                            "maximum number of in-memory "
                            "partitions");

@@ -101,7 +101,7 @@ tenzir:
 
   # Timeout after which an active partition is forcibly flushed, regardless of
   # its size.
-  active-partition-timeout: 5 min
+  active-partition-timeout: 30 seconds
 
   # Automatically rebuild undersized and outdated partitions in the background.
   # The given number controls how much resources to spend on it. Set to 0 to
