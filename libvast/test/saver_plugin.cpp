@@ -60,6 +60,10 @@ struct fixture {
       static auto diag = null_diagnostic_handler{};
       return diag;
     }
+
+    auto allow_unsafe_pipelines() const noexcept -> bool override {
+      return false;
+    }
   };
 
   fixture() {

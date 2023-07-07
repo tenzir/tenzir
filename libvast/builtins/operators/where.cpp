@@ -65,9 +65,17 @@ public:
 #endif // VAST_ENABLE_ASSERTIONS
   }
 
-  auto initialize(const type& schema, operator_control_plane&) const
+  auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    auto tailored_expr = tailor(expr_.inner, schema);
+    auto ts = taxonomies{.concepts = ctrl.concepts(), .models = {}};
+    auto resolved_expr = resolve(ts, expr_.inner, schema);
+    if (not resolved_expr) {
+      diagnostic::warning("{}", resolved_expr.error())
+        .primary(expr_.source)
+        .emit(ctrl.diagnostics());
+      return std::nullopt;
+    }
+    auto tailored_expr = tailor(std::move(*resolved_expr), schema);
     // We ideally want to warn when extractors can not be resolved. However,
     // this is tricky for e.g. `where #schema == "foo" && bar == 42` and
     // changing the behavior for this is tricky with the current expressions.

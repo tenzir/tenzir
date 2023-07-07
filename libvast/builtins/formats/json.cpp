@@ -657,7 +657,7 @@ struct config {
   template <class Inspector>
   friend auto inspect(Inspector& f, config& x) -> bool {
     return f.object(x).pretty_name("config").fields(
-      f.field("selector", x.selector),
+      f.field("selector", x.selector), f.field("schema", x.schema),
       f.field("unnest_separator", x.unnest_separator),
       f.field("no_infer", x.no_infer),
       f.field("use_ndjson_mode", x.use_ndjson_mode));

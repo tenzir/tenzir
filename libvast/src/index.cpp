@@ -625,8 +625,8 @@ caf::error index_state::load_from_disk() {
               std::exchange(synopses, {}))
     .then(
       [this](atom::ok) {
-        VAST_INFO("{} finished initializing and is ready to accept queries",
-                  *self);
+        VAST_VERBOSE("{} finished initializing and is ready to accept queries",
+                     *self);
         this->accept_queries = true;
         for (auto&& [rp, query_context] : std::exchange(delayed_queries, {}))
           rp.delegate(static_cast<index_actor>(self), atom::evaluate_v,

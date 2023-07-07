@@ -173,6 +173,11 @@ public:
     return *diagnostic_handler_;
   }
 
+  auto allow_unsafe_pipelines() const noexcept -> bool override {
+    return caf::get_or(content(state_.self->config()),
+                       "tenzir.allow-unsafe-pipelines", false);
+  }
+
 private:
   exec_node_state<Input, Output>& state_;
   std::unique_ptr<exec_node_diagnostic_handler> diagnostic_handler_ = {};

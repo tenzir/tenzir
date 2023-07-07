@@ -131,7 +131,7 @@ struct formatter<T> {
       { value.name() } -> std::convertible_to<std::string_view>;
     };
     static_assert(has_name_member_function || vast::detail::always_false_v<T>);
-    return format_to(ctx.out(), "{}-{}", value.name(), value.id());
+    return format_to(ctx.out(), "{}", value.name());
   }
 };
 

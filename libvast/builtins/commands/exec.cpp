@@ -56,6 +56,11 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
       pipe.append(std::move(*op));
     }
   }
+  auto optimized = pipe.optimize();
+  if (not optimized) {
+    return std::move(optimized.error());
+  }
+  pipe = std::move(*optimized);
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
   // TODO: This command should probably implement signal handling, and check

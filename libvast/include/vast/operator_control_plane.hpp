@@ -53,7 +53,11 @@ struct operator_control_plane {
   [[nodiscard]] virtual auto concepts() const noexcept
     -> const concepts_map& = 0;
 
+  /// Returns the pipeline's diagnostic handler.
   virtual auto diagnostics() noexcept -> diagnostic_handler& = 0;
+
+  /// Returns whether the pipeline may do potentially unsafe things.
+  virtual auto allow_unsafe_pipelines() const noexcept -> bool = 0;
 };
 
 } // namespace vast

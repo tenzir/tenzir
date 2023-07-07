@@ -73,6 +73,10 @@ public:
     return diag;
   }
 
+  auto allow_unsafe_pipelines() const noexcept -> bool override {
+    return false;
+  }
+
 private:
   caf::error error_{};
 };
@@ -193,7 +197,7 @@ auto pipeline::optimize() const -> caf::expected<pipeline> {
   if (optimized->first != trivially_true_expression()) {
     if (this->infer_type<void>()) {
       return caf::make_error(ec::logic_error,
-                             "failed to optimizie pipeline '{}': source pushed "
+                             "failed to optimize pipeline '{}': source pushed "
                              "expression {}",
                              *this, optimized->first);
     }
