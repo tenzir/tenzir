@@ -208,9 +208,9 @@ tests:
       - command: status --detailed
         transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
       - command: status --detailed
-        transformation: jq -ec 'del(.version) | del(.system."swap-space-usage") | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
+        transformation: jq -ec 'del(.version) | del(.system."swap-space-usage") | del(.index.patitions.cached) | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
       - command: status --detailed index importer
-        transformation: jq -ec 'paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
+        transformation: jq -ec 'del(.index.patitions.cached) | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
 
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
@@ -993,3 +993,27 @@ tests:
         input: data/suricata/eve.json
       - command: exec 'read suricata | flatten | to stdout'
         input: data/suricata/rrdata-eve.json
+
+  Unflatten Operator:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read json | unflatten | to stdout'
+        input: data/json/record-in-list-in-record.json
+      - command: exec 'read json | unflatten | to stdout'
+        input: data/json/records-in-nested-lists.json
+      - command: exec 'read json | unflatten | to stdout'
+        input: data/json/records-in-nested-record-lists.json
+      - command: exec 'read json | flatten | unflatten | write json to stdout'
+        input: data/json/record-in-list.json
+      - command: exec 'read json | flatten | unflatten | write json to stdout'
+        input: data/json/nested-object.json
+      - command: exec 'read json | flatten | unflatten | write json to stdout'
+        input: data/json/nested-structure.json
+      - command: exec 'read zeek-tsv | tail 10 | flatten | unflatten | to stdout'
+        input: data/zeek/dns.log.gz
+      - command: exec 'read json | unflatten | to stdout'
+        input: data/json/record-in-list2.json
+      - command: exec 'read json | unflatten | to stdout'
+        input: data/json/record-with-multiple-unflattened-values.json
+      - command: exec 'read json | unflatten | to stdout'
+        input: data/json/record-with-multi-nested-field-names.json
