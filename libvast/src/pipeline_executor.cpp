@@ -143,16 +143,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
   start_nodes_if_all_spawned();
 }
 
-void pipeline_executor_state::abort_start(caf::error reason) {
-  if (reason == ec::silent) {
-    VAST_DEBUG("{} delivers silent start abort", *self);
-    start_rp.deliver(ec::silent);
-    self->quit(ec::silent);
-    return;
-  }
-  auto diagnostic = diagnostic::error("{}", reason).done();
-  VAST_DEBUG("{} sends diagnostic due to start abort: {}", *self, diagnostic);
-  self->request(diagnostics, caf::infinite, std::move(diagnostic))
+void pipeline_executor_state::abort_start(diagnostic reason) {
+  VAST_DEBUG("{} sends diagnostic due to start abort: {}", *self, reason);
+  self->request(diagnostics, caf::infinite, std::move(reason))
     .then(
       [this]() {
         // We already delivered the error as a diagnostic.
@@ -168,6 +161,16 @@ void pipeline_executor_state::abort_start(caf::error reason) {
       });
 }
 
+void pipeline_executor_state::abort_start(caf::error reason) {
+  if (reason == ec::silent) {
+    VAST_DEBUG("{} delivers silent start abort", *self);
+    start_rp.deliver(ec::silent);
+    self->quit(ec::silent);
+    return;
+  }
+  abort_start(diagnostic::error("{}", reason).done());
+}
+
 void pipeline_executor_state::finish_start() {
   VAST_DEBUG("{} signals successful start", *self);
   start_rp.deliver();
@@ -181,11 +184,24 @@ auto pipeline_executor_state::start() -> caf::result<void> {
   }
   auto pipe = *std::exchange(this->pipe, std::nullopt);
   start_rp = self->make_response_promise<void>();
-  auto checked = pipe.check_type<void, void>();
-  if (not checked) {
-    VAST_DEBUG("{} failed type check", *self);
-    abort_start(checked.error());
+  auto output = pipe.infer_type<void>();
+  if (not output) {
+    VAST_DEBUG("{} failed type inference", *self);
+    abort_start(output.error());
     return start_rp;
+  }
+  if (not output->is<void>()) {
+    VAST_DEBUG("{} fails because pipeline ends with {}", *self,
+               operator_type_name(*output));
+    auto ops = pipe.operators();
+    auto suffix = std::string{};
+    if (not ops.empty()) {
+      suffix = fmt::format(" instead of `{}`", ops.back()->name());
+    }
+    abort_start(
+      diagnostic::error("expected pipeline to end with a sink{}", suffix)
+        .docs("https://docs.tenzir.com/next/operators/sinks")
+        .done());
   }
   if (not node) {
     for (const auto& op : pipe.operators()) {
