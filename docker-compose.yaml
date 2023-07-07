@@ -1,0 +1,31 @@
+# This Docker Compose file is aimed at developers. See the bundled env.example
+# file for setup instructions.
+services:
+  tenzir-node:
+    image: tenzir/tenzir-node:main
+    pull_policy: always
+    build:
+      target: tenzir-node
+    environment:
+      - TENZIR_ENDPOINT=tenzir-node:5158
+    ports:
+      - 5158:5158
+    volumes:
+      - tenzir-node:/var/lib/tenzir/
+      - tenzir-node:/var/log/tenzir/
+
+  tenzir:
+    image: tenzir/tenzir:main
+    pull_policy: always
+    build:
+      target: tenzir
+    depends_on:
+      - tenzir-node
+    environment:
+      - TENZIR_ENDPOINT=tenzir-node:5158
+    command:
+      - version | put version | write json
+
+volumes:
+  tenzir-node:
+    driver: local
