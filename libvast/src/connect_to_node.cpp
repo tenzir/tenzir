@@ -30,10 +30,10 @@ namespace {
 
 void assert_data_completness(const record& remote_version,
                              const record& local_version) {
-  if (!local_version.contains("VAST"))
-    die("no VAST key found in a local version");
-  if (!remote_version.contains("VAST"))
-    die("no VAST key found in a remote version");
+  if (!local_version.contains("Tenzir"))
+    die("no Tenzir key found in a local version");
+  if (!remote_version.contains("Tenzir"))
+    die("no Tenzir key found in a remote version");
   if (!local_version.contains("plugins"))
     die("no plugins key found in a local version");
   if (!remote_version.contains("plugins"))
@@ -86,23 +86,22 @@ auto get_deadline(caf::timespan timeout)
 [[nodiscard]] auto check_version(const record& remote_version) -> bool {
   const auto local_version = retrieve_versions();
   assert_data_completness(remote_version, local_version);
-  if (local_version.at("VAST") != remote_version.at("VAST")) {
-    VAST_WARN("client version {} does not match remote version {}; "
+  if (local_version.at("Tenzir") != remote_version.at("Tenzir")) {
+    VAST_WARN("client version {} does not match node version {}; "
               "this may cause unexpected behavior",
-              local_version.at("VAST"), remote_version.at("VAST"));
+              local_version.at("Tenzir"), remote_version.at("Tenzir"));
     return false;
   }
-  VAST_DEBUG("client verified that local VAST version matches remote "
-             "VAST version {}",
-             local_version.at("VAST"));
+  VAST_DEBUG("client verified that client version matches node "
+             "version {}",
+             local_version.at("Tenzir"));
   if (local_version.at("plugins") != remote_version.at("plugins")) {
-    VAST_WARN("client plugins {} do not match remote plugins {}; "
+    VAST_WARN("client plugins {} do not match node plugins {}; "
               "this may cause unexpected behavior",
               local_version.at("plugins"), remote_version.at("plugins"));
     return false;
   }
-  VAST_DEBUG("client verified that local VAST plugins match remote "
-             "VAST plugins {}",
+  VAST_DEBUG("client verified that local plugins match node plugins {}",
              local_version.at("plugins"));
   return true;
 }

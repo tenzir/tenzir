@@ -28,7 +28,7 @@ namespace vast {
 
 record retrieve_versions() {
   record result;
-  result["VAST"] = version::version;
+  result["Tenzir"] = version::version;
   result["Build Configuration"] = record{
     {"Type", version::build::type},
     {"Tree Hash", version::build::tree_hash},
