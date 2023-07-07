@@ -104,7 +104,6 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(bound_port.error()));
   auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
   VAST_INFO("node is listening on {}", listen_addr);
-  VAST_VERBOSE("node version {}", version::version);
   // Notify the service manager if it expects an update.
   if (auto error = systemd::notify_ready())
     return caf::make_message(std::move(error));

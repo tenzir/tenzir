@@ -327,20 +327,36 @@ make_application(std::string_view path) {
   const auto name
     = last_slash == std::string_view::npos ? path : path.substr(last_slash + 1);
   if (name == "tenzir-node") {
-    // clang-format off
-    static constexpr auto banner = 
-R"_(
-     _____ _____ _   _ ________ ____  
-    |_   _| ____| \ | |__  /_ _|  _ \ 
-      | | |  _| |  \| | / / | || |_) |
-      | | | |___| |\  |/ /_ | ||  _ < 
-      |_| |_____|_| \_/____|___|_| \_\
-)_";
-    // clang-format on
-    fmt::print(stderr, fmt::fg(fmt::terminal_color::blue), banner);
-    fmt::print(stderr, "\nVisit ");
-    fmt::print(stderr, fmt::emphasis::underline, "https://app.tenzir.com");
-    fmt::print(stderr, " to get started.\n\n");
+    static constexpr auto banner1 = R"_( _____ _____ _   _ ________ ____ )_";
+    static constexpr auto banner2 = R"_(|_   _| ____| \ | |__  /_ _|  _ \)_";
+    static constexpr auto banner3 = R"_( | | |  _| |  \| | / / | || |_) |)_";
+    static constexpr auto banner4 = R"_( | | | |___| |\  |/ /_ | ||  _ < )_";
+    static constexpr auto banner5 = R"_( |_| |_____|_| \_/____|___|_| \_\)_";
+    auto notice = fmt::format("Visit ");
+    fmt::format_to(std::back_inserter(notice), fmt::emphasis::underline,
+                   "https://app.tenzir.com");
+    fmt::format_to(std::back_inserter(notice), " to get started.");
+    const auto width
+      = fmt::formatted_size("Visit https://app.tenzir.com to get started.");
+    fmt::print(stderr, fmt::fg(fmt::terminal_color::blue), "{1:^{0}}", width,
+               banner1);
+    fmt::print(stderr, "\n");
+    fmt::print(stderr, fmt::fg(fmt::terminal_color::blue), "{1:^{0}}", width,
+               banner2);
+    fmt::print(stderr, "\n");
+    fmt::print(stderr, fmt::fg(fmt::terminal_color::blue), "{1:^{0}}", width,
+               banner3);
+    fmt::print(stderr, "\n");
+    fmt::print(stderr, fmt::fg(fmt::terminal_color::blue), "{1:^{0}}", width,
+               banner4);
+    fmt::print(stderr, "\n");
+    fmt::print(stderr, fmt::fg(fmt::terminal_color::blue), "{1:^{0}}", width,
+               banner5);
+    fmt::print(stderr, "\n\n");
+    fmt::print(stderr, "{1:^{0}}", width, version::version);
+    fmt::print(stderr, "\n");
+    fmt::print(stderr, "{1:^{0}}", width, notice);
+    fmt::print(stderr, "\n\n");
     auto cmd = make_start_command();
     cmd->name = "";
     add_root_opts(*cmd);
