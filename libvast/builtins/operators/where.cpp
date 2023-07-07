@@ -65,15 +65,16 @@ public:
 #endif // VAST_ENABLE_ASSERTIONS
   }
 
-  auto initialize(const type& schema, operator_control_plane& ctrl) const
+  auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     auto tailored_expr = tailor(expr_.inner, schema);
-    // Failing to tailor in this context is not an error, it just means that we
-    // cannot do anything with the result.
+    // We ideally want to warn when extractors can not be resolved. However,
+    // this is tricky for e.g. `where #schema == "foo" && bar == 42` and
+    // changing the behavior for this is tricky with the current expressions.
     if (not tailored_expr) {
-      diagnostic::warning("{}", tailored_expr.error())
-        .primary(expr_.source)
-        .emit(ctrl.diagnostics());
+      // diagnostic::warning("{}", tailored_expr.error())
+      //   .primary(expr_.source)
+      //   .emit(ctrl.diagnostics());
       return std::nullopt;
     }
     return std::move(*tailored_expr);
