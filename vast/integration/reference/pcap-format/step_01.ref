@@ -1,0 +1,7 @@
+{"vlan": {"outer": 32}}
+{"vlan": {"outer": 32}}
+{"vlan": {"outer": 104}}
+{"vlan": {"outer": 32}}
+{"vlan": {"outer": 32}}
+warning: failed to parse layer-3 packet
+ = note: EtherType: IPX
