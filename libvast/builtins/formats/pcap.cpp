@@ -148,21 +148,18 @@ public:
         std::memcpy(&file, bytes->data(), bytes->size());
         break;
       }
-      auto need_byte_swap = false;
-      auto magic = file.magic_number;
-      auto swapped = detail::byteswap(magic);
-      if (magic == magic_number_1 || magic == magic_number_2) {
-        VAST_DEBUG("detected identical byte order in file and host");
-      } else if (swapped == magic_number_1 || swapped == magic_number_2) {
-        VAST_DEBUG("detected different byte order in file and host");
-        need_byte_swap = true;
-      } else {
-        diagnostic::error("invalid PCAP magic number: {0:x}", magic)
+      auto need_swap = need_byte_swap(file.magic_number);
+      if (!need_swap) {
+        diagnostic::error("invalid PCAP magic number: {0:x}", file.magic_number)
           .note("from `pcap`")
           .emit(ctrl.diagnostics());
         co_return;
       }
-      if (need_byte_swap)
+      if (*need_swap)
+        VAST_DEBUG("detected different byte order in file and host");
+      else
+        VAST_DEBUG("detected identical byte order in file and host");
+      if (*need_swap)
         file = byteswap(file);
       VAST_DEBUG("parsed PCAP file header");
       if (emit_file_header) {
@@ -203,7 +200,7 @@ public:
             co_return;
           }
           std::memcpy(&packet.header, bytes->data(), sizeof(packet_header));
-          if (need_byte_swap)
+          if (*need_swap)
             packet.header = byteswap(packet.header);
           break;
         }
@@ -282,46 +279,89 @@ public:
     return "pcap";
   }
 
-  static auto
-  make_file_header(uint16_t linktype, uint32_t snaplen = maximum_snaplen)
-    -> chunk_ptr {
-    auto header = file_header{
-      .magic_number = magic_number_2,
-      .major_version = 2,
-      .minor_version = 4,
-      .reserved1 = 0,
-      .reserved2 = 0,
-      .snaplen = snaplen,
-      .linktype = linktype,
-    };
+  static auto pack(const file_header& header) -> chunk_ptr {
     const auto* ptr = reinterpret_cast<const std::byte*>(&header);
     auto bytes = std::span<const std::byte>{ptr, sizeof(file_header)};
     return chunk::copy(bytes);
   }
 
+  static auto make_file_header(const table_slice& slice)
+    -> std::optional<file_header> {
+    if (slice.schema().name() != "pcap.file_header" || slice.rows() == 0)
+      return std::nullopt;
+    auto result = file_header{};
+    const auto& input_record = caf::get<record_type>(slice.schema());
+    auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+    auto xs = values(input_record, *array);
+    auto begin = xs.begin();
+    if (begin == xs.end() || *begin == std::nullopt)
+      return std::nullopt;
+    for (const auto& [key, value] : **begin) {
+      if (key == "magic_number")
+        result.magic_number
+          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      if (key == "major_version")
+        result.major_version
+          = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
+      if (key == "minor_version")
+        result.minor_version
+          = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
+      if (key == "reserved1")
+        result.reserved1
+          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      if (key == "reserved2")
+        result.reserved2
+          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      if (key == "snaplen")
+        result.snaplen
+          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      if (key == "linktype")
+        result.linktype
+          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+    }
+    return result;
+  }
+
   auto instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    if (input_schema.name() != "pcap.packet")
-      return caf::make_error(ec::print_error,
-                             fmt::format("cannot process schema '{}'",
-                                         input_schema.name()));
     return printer_instance::make(
-      [&ctrl, input_schema = std::move(input_schema), linktype = uint16_t{0},
+      [&ctrl, input_schema = std::move(input_schema),
+       output_file_header = std::optional<file_header>{}, need_swap = false,
        file_header_printed = false, buffer = std::vector<std::byte>{}](
         table_slice slice) mutable -> generator<chunk_ptr> {
-        if (slice.rows() == 0)
+        if (slice.rows() == 0) {
+          co_yield {};
           co_return;
-        // TODO: once write/to support predicate pushdown, we want to push down
-        // the predicate `#schema == "pcap.packet"`. Until then, it's the user's
-        // responsibility to do this.
-        if (input_schema.name() != "pcap.packet") {
-          diagnostic::warning("cannot process schema {}", input_schema.name())
+        }
+        // We may receive a PCAP file header as first event. The header magic
+        // tells us how we should write timestamps and if we need to byte-swap
+        // packet headers.
+        if (slice.schema().name() == "pcap.file_header") {
+          VAST_DEBUG("got external PCAP file header");
+          if (output_file_header) {
+            diagnostic::warning("ignoring external PCAP file header")
+              .note("cannot re-emit file header after having emitted packets")
+              .note("from `pcap`")
+              .emit(ctrl.diagnostics());
+          } else if (auto header = make_file_header(slice)) {
+            output_file_header = *header;
+          } else {
+            diagnostic::error("failed to parse external PCAP file header")
+              .note("from `pcap`")
+              .emit(ctrl.diagnostics());
+          }
+          co_yield {};
+          co_return;
+        } else if (slice.schema().name() != "pcap.packet") {
+          diagnostic::warning("received invalid schema")
+            .note("got '{}' but expected pcap.packet", slice.schema().name())
             .note("from `pcap`")
             .emit(ctrl.diagnostics());
+          co_yield {};
           co_return;
         }
         // Iterate row-wise.
-        const auto& input_record = caf::get<record_type>(input_schema);
+        const auto& input_record = caf::get<record_type>(slice.schema());
         auto resolved_slice = resolve_enumerations(slice);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
@@ -333,45 +373,80 @@ public:
           auto captured_packet_length = uint64_t{0};
           auto original_packet_length = uint64_t{0};
           auto data = std::string_view{};
-          auto packet_linktype = uint16_t{0};
+          auto linktype = uint32_t{0};
           for (const auto& [key, value] : *row) {
             if (key == "linktype")
-              packet_linktype
-                = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
-            if (key == "timestamp")
+              linktype
+                = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+            else if (key == "timestamp")
               timestamp = caf::get<time>(value);
-            if (key == "captured_packet_length")
+            else if (key == "captured_packet_length")
               captured_packet_length = caf::get<uint64_t>(value);
-            if (key == "original_packet_length")
+            else if (key == "original_packet_length")
               original_packet_length = caf::get<uint64_t>(value);
-            if (key == "data")
+            else if (key == "data")
               data = caf::get<std::string_view>(value);
+            else
+              diagnostic::error("got invalid PCAP header field ''", key)
+                .note("from `pcap`")
+                .emit(ctrl.diagnostics());
           }
           // Print the file header once.
           if (!file_header_printed) {
-            linktype = packet_linktype;
-            co_yield make_file_header(linktype);
+            if (output_file_header) {
+              VAST_DEBUG("using provided PCAP file header");
+              auto swap = need_byte_swap(output_file_header->magic_number);
+              if (!swap) {
+                diagnostic::error("got invalid PCAP magic number: {0:x}",
+                                  output_file_header->magic_number)
+                  .note("from `pcap`")
+                  .emit(ctrl.diagnostics());
+                co_return;
+              }
+              need_swap = *swap;
+              if (need_swap)
+                co_yield pack(byteswap(*output_file_header));
+              else
+                co_yield pack(*output_file_header);
+            } else {
+              VAST_DEBUG("generating a PCAP file header");
+              auto header = file_header{
+                .magic_number = magic_number_2,
+                .major_version = 2,
+                .minor_version = 4,
+                .reserved1 = 0,
+                .reserved2 = 0,
+                .snaplen = maximum_snaplen,
+                .linktype = linktype,
+              };
+              co_yield pack(header);
+            }
             file_header_printed = true;
-          } else if (packet_linktype != linktype) {
+          } else if (linktype != output_file_header->linktype) {
             diagnostic::error("packet with new linktype {}, first was {}",
-                              packet_linktype, linktype)
+                              linktype, output_file_header->linktype)
               .note("from `pcap`")
               .emit(ctrl.diagnostics());
             co_return;
           }
-          // Split timestamp in seconds and nanoseconds.
+          // Split timestamp in two pieces.
           auto ns = timestamp.time_since_epoch();
           auto secs = std::chrono::duration_cast<std::chrono::seconds>(ns);
           auto fraction = ns - secs;
+          auto timestamp_fraction
+            = detail::narrow_cast<uint32_t>(fraction.count());
+          if (output_file_header->magic_number == magic_number_1)
+            timestamp_fraction /= 1'000;
           auto header = packet_header{
             .timestamp = detail::narrow_cast<uint32_t>(secs.count()),
-            .timestamp_fraction
-            = detail::narrow_cast<uint32_t>(fraction.count()),
+            .timestamp_fraction = timestamp_fraction,
             .captured_packet_length
             = detail::narrow_cast<uint32_t>(captured_packet_length),
             .original_packet_length
             = detail::narrow_cast<uint32_t>(original_packet_length),
           };
+          if (need_swap)
+            header = byteswap(header);
           // Copy over header.
           buffer.resize(sizeof(packet_header) + data.size());
           std::memcpy(buffer.data(), &header, sizeof(header));
@@ -383,7 +458,7 @@ public:
   }
 
   auto allows_joining() const -> bool override {
-    return false;
+    return true;
   }
 
   friend auto inspect(auto& f, pcap_printer& x) -> bool {

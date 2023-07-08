@@ -33,6 +33,15 @@ auto byteswap(packet_header hdr) -> packet_header {
   return result;
 }
 
+auto need_byte_swap(uint32_t magic) -> std::optional<bool> {
+  auto swapped = detail::byteswap(magic);
+  if (magic == magic_number_1 || magic == magic_number_2)
+    return false;
+  if (swapped == magic_number_1 || swapped == magic_number_2)
+    return true;
+  return std::nullopt;
+}
+
 auto file_header_type() -> type {
   const auto timestamp_type = type{"timestamp", time_type{}};
   return type{
