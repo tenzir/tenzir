@@ -2,6 +2,8 @@
 
 export TENZIR_AUTOMATIC_REBUILD="${TENZIR_AUTOMATIC_REBUILD:-0}"
 
+trap 'trap " " SIGTERM; kill 0; wait' SIGINT SIGTERM
+
 coproc NODE { exec tenzir-node --print-endpoint --commands="web server --mode=dev"; }
 # shellcheck disable=SC2034
 read -r -u "${NODE[0]}" DUMMY
