@@ -12,8 +12,10 @@ read -r -u "${NODE[0]}" DUMMY
 # of Tenzir processes.
 export TENZIR_CONSOLE_VERBOSITY="${TENZIR_CLIENT_CONSOLE_VERBOSITY:-"info"}"
 
-suricata_pipe="shell \'bash -c \"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.zst | tar -x --zstd --to-stdout\"\' | parse suricata | import"
-zeek_pipe="shell \'bash -c \"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.zst | tar -x --zstd; cat Zeek/*.log\"\' | parse zeek | import"
+tenzir 'remote version | put version | write json'
+
+suricata_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.zst | tar -x --zstd --to-stdout\\\"' | parse suricata | import"
+zeek_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.zst | tar -x --zstd; cat Zeek/*.log\\\"' | parse zeek-tsv | import"
 
 curl -X POST \
   -H "Content-Type: application/json" \
