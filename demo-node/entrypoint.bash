@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 export TENZIR_AUTOMATIC_REBUILD="${TENZIR_AUTOMATIC_REBUILD:-0}"
+export TENZIR_ALLOW_UNSAFE_PIPELINES=true
 
 trap 'trap " " SIGTERM; kill 0; wait' SIGINT SIGTERM
 
