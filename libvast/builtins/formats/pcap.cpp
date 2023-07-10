@@ -19,7 +19,6 @@
 #include <vast/view.hpp>
 
 #include <arrow/record_batch.h>
-#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::plugins::pcap {
 
@@ -145,7 +144,6 @@ public:
             .note("from `pcap`")
             .note("expected {} bytes, but got {}", length, bytes->size())
             .emit(ctrl.diagnostics());
-          ctrl.self().quit(ec::parse_error);
           co_return;
         }
         std::memcpy(&input_file_header, bytes->data(), bytes->size());
@@ -157,7 +155,6 @@ public:
                           uint32_t{input_file_header.magic_number})
           .note("from `pcap`")
           .emit(ctrl.diagnostics());
-        ctrl.self().quit(ec::parse_error);
         co_return;
       }
       if (*need_swap)
@@ -179,7 +176,6 @@ public:
           diagnostic::error("failed to emit PCAP file header")
             .note("from `pcap`")
             .emit(ctrl.diagnostics());
-          ctrl.self().quit(ec::parse_error);
           co_return;
         }
         co_yield builder.finish();
@@ -219,7 +215,6 @@ public:
               .note("from `pcap`")
               .note("expected {} bytes, but got {}", length, bytes->size())
               .emit(ctrl.diagnostics());
-            ctrl.self().quit(ec::parse_error);
             co_return;
           }
           std::memcpy(&packet.header, bytes->data(), sizeof(packet_header));
@@ -243,7 +238,6 @@ public:
                               length, bytes->size())
               .note("from `pcap`")
               .emit(ctrl.diagnostics());
-            ctrl.self().quit(ec::parse_error);
             co_return;
           }
           packet.data = *bytes;
@@ -273,7 +267,6 @@ public:
           diagnostic::error("failed to add packet #{}", num_packets)
             .note("from `pcap`")
             .emit(ctrl.diagnostics());
-          ctrl.self().quit(ec::parse_error);
           co_return;
         }
       }

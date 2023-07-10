@@ -15,7 +15,6 @@
 #include <vast/pcap.hpp>
 #include <vast/plugin.hpp>
 
-#include <caf/typed_event_based_actor.hpp>
 #include <pcap/pcap.h>
 
 #include <chrono>
@@ -71,7 +70,6 @@ public:
                           std::string_view{error.data()})
           .note("from `nic`")
           .emit(ctrl.diagnostics());
-        ctrl.self().quit(ec::system_error);
         co_return;
       }
       auto pcap = std::shared_ptr<pcap_t>{ptr, [](pcap_t* p) {
@@ -118,7 +116,6 @@ public:
           diagnostic::error("failed to get next packet: {}", error)
             .note("from `nic`")
             .emit(ctrl.diagnostics());
-          ctrl.self().quit(ec::system_error);
           break;
         }
         // Emit a PCAP file header before the first packet. This results in a
