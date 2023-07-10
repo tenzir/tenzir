@@ -71,6 +71,7 @@ public:
                           std::string_view{error.data()})
           .note("from `nic`")
           .emit(ctrl.diagnostics());
+        ctrl.self().quit(ec::system_error);
         co_return;
       }
       auto pcap = std::shared_ptr<pcap_t>{ptr, [](pcap_t* p) {
