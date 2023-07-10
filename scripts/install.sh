@@ -169,7 +169,7 @@ fi
 if [ "${platform}" = "Debian" ]
 then
   cmd1="sudo dpkg -i \"${tmpdir}/${package}\""
-  cmd2="sudo systemctl status tenzir"
+  cmd2="sudo systemctl status tenzir-node"
   echo "Press ${green}ENTER${normal} to continue with the following commands:"
   echo
   echo "  - ${cmd1}"

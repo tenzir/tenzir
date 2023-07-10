@@ -98,10 +98,10 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   # potentially be solved with a more involved CPack setup. See also the
   # comment at the beginning of cmake/Package.cmake.
   configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/tenzir.service.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/tenzir.service" @ONLY)
+    "${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/tenzir-node.service.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/tenzir-node.service" @ONLY)
   install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir.service"
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir-node.service"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system/"
     COMPONENT Runtime)
 endif ()

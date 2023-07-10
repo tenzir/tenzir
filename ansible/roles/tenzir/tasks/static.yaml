@@ -18,7 +18,7 @@
 
 - name: Copy service definition file
   ansible.builtin.copy:
-    src: tenzir.service
+    src: tenzir-node.service
     dest: /etc/systemd/system
     mode: preserve
     owner: root

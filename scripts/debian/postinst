@@ -62,30 +62,30 @@ if [ "$1" = "configure" ] ; then
 	# around restrictive behavior in systemd, which refuses to start the unit if
 	# a ReadWritePath does not exist.
   if ! [ -d /var/lib/vast ]; then
-    sed -i '/\/var\/lib\/vast/d' /opt/tenzir/lib/systemd/system/tenzir.service
+    sed -i '/\/var\/lib\/vast/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
   fi
 	if ! [ -d /var/log/vast ]; then
-		sed -i '/\/var\/log\/vast/d' /opt/tenzir/lib/systemd/system/tenzir.service
+		sed -i '/\/var\/log\/vast/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
 	fi
 	# Link the service into systemd's default service directory to make
 	# it known.
-	/usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir.service
+	/usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
 fi
 
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask 'tenzir.service' >/dev/null || true
+	deb-systemd-helper unmask 'tenzir-node.service' >/dev/null || true
 
 	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled 'tenzir.service'; then
+	if deb-systemd-helper --quiet was-enabled 'tenzir-node.service'; then
 		# Enables the unit on first installation, creates new
 		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable 'tenzir.service' >/dev/null || true
+		deb-systemd-helper enable 'tenzir-node.service' >/dev/null || true
 	else
 		# Update the statefile to add new symlinks (if any), which need to be
 		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state 'tenzir.service' >/dev/null || true
+		deb-systemd-helper update-state 'tenzir-node.service' >/dev/null || true
 	fi
 fi
 # End automatically added section
@@ -98,7 +98,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			_dh_action=start
 		fi
-		deb-systemd-invoke $_dh_action 'tenzir.service' >/dev/null || true
+		deb-systemd-invoke $_dh_action 'tenzir-node.service' >/dev/null || true
 	fi
 fi
 # End automatically added section
