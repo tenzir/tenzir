@@ -37,9 +37,9 @@ tenzir-node [opts]
 tenzir-ctl [opts] cmd1 [opts1] cmd2 [opts2] ...
 ```
 
-Both long `--long=X` and short `-s X` exist. Boolean options do not require
-explicit specification of a value, and it suffices to write `--long` and `-s`
-to set an option to true.
+We have both long `--long=X` and short `-s X` options. Boolean options do not
+require explicit specification of a value, and it suffices to write `--long` and
+`-s` to set an option to true.
 
 Each `tenzir-ctl` command has its own dedicated set of options. Options are not
 global and only valid for their respective command. Consider this example:
@@ -103,12 +103,12 @@ the following rules:
    include a literal underscore.
 
 From the perspective of the command line, the environment variable key
-`TENZIR_X__Y__Z` maps to `tenzir x y --z`. Here are two examples with identical
-semantics:
+`TENZIR_X__Y__Z` maps to `tenzir-ctl x y --z`. Here are two examples with
+identical semantics:
 
 ```bash
-TENZIR_IMPORT__BATCH_SIZE=42 tenzir import json < data
-tenzir import --batch-size=42 json < data
+TENZIR_IMPORT__BATCH_SIZE=42 tenzir-ctl import json < data
+tenzir-ctl import --batch-size=42 json < data
 ```
 
 :::caution CAF and plugin Settings
@@ -238,14 +238,21 @@ You can get a list of all plugins and their respective version by running
 
 ```json
 {
-  "Tenzir": "v1.4.1-97-gced115d91-dirty",
-  "CAF": "0.17.6",
-  "Apache Arrow": "2.0.0",
-  "PCAP": "libpcap version 1.9.1",
-  "jemalloc": null,
-  "plugins": {
-    "example": "v0.4.1-g14cee3e48-dirty"
-  }
+  "version": "v4.0.0-rc6-0-gf193b51f1f",
+  "plugins": [
+    {
+      "name": "kafka",
+      "version": "bundled"
+    },
+    {
+      "name": "platform",
+      "version": "bundled"
+    },
+    {
+      "name": "web",
+      "version": "bundled"
+    }
+  ]
 }
 ```
 
