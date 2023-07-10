@@ -19,6 +19,7 @@
 #include <vast/view.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::plugins::pcap {
 
@@ -131,6 +132,7 @@ public:
       // A PCAP file starts with a 24-byte header.
       auto input_file_header = file_header{};
       auto read_n = make_byte_reader(std::move(input));
+      co_yield {};
       while (true) {
         auto length = sizeof(file_header);
         auto bytes = read_n(length);
@@ -143,6 +145,7 @@ public:
             .note("from `pcap`")
             .note("expected {} bytes, but got {}", length, bytes->size())
             .emit(ctrl.diagnostics());
+          ctrl.self().quit(ec::parse_error);
           co_return;
         }
         std::memcpy(&input_file_header, bytes->data(), bytes->size());
@@ -154,6 +157,7 @@ public:
                           uint32_t{input_file_header.magic_number})
           .note("from `pcap`")
           .emit(ctrl.diagnostics());
+        ctrl.self().quit(ec::parse_error);
         co_return;
       }
       if (*need_swap)
@@ -175,6 +179,7 @@ public:
           diagnostic::error("failed to emit PCAP file header")
             .note("from `pcap`")
             .emit(ctrl.diagnostics());
+          ctrl.self().quit(ec::parse_error);
           co_return;
         }
         co_yield builder.finish();
@@ -183,17 +188,30 @@ public:
       // consisting of a 16-byte header and variable-length payload.
       auto builder = table_slice_builder{packet_record_type()};
       auto num_packets = size_t{0};
+      auto last_finish = std::chrono::steady_clock::now();
       while (true) {
+        const auto now = std::chrono::steady_clock::now();
+        if (builder.rows() >= defaults::import::table_slice_size
+            or last_finish + defaults::import::batch_timeout < now) {
+          last_finish = now;
+          co_yield builder.finish();
+        }
         packet_record packet;
+        // Read the header.
         while (true) {
           auto length = sizeof(packet_header);
           auto bytes = read_n(length);
           if (!bytes) {
-            co_yield {};
+            if (last_finish != now) {
+              co_yield {};
+            }
             continue;
           }
           if (bytes->empty()) {
-            VAST_INFO("completed trace of {} packets", num_packets);
+            VAST_DEBUG("completed trace of {} packets", num_packets);
+            if (builder.rows() > 0) {
+              co_yield builder.finish();
+            }
             co_return;
           }
           if (bytes->size() != length) {
@@ -201,6 +219,7 @@ public:
               .note("from `pcap`")
               .note("expected {} bytes, but got {}", length, bytes->size())
               .emit(ctrl.diagnostics());
+            ctrl.self().quit(ec::parse_error);
             co_return;
           }
           std::memcpy(&packet.header, bytes->data(), sizeof(packet_header));
@@ -208,18 +227,23 @@ public:
             packet.header = byteswap(packet.header);
           break;
         }
+        // Read the packet.
         while (true) {
           auto length = packet.header.captured_packet_length;
           auto bytes = read_n(length);
           if (!bytes) {
-            co_yield {};
+            if (last_finish != now) {
+              co_yield {};
+            }
             continue;
           }
           if (bytes->size() != length) {
+            co_yield builder.finish();
             diagnostic::error("truncated last packet; expected {} but got {}",
                               length, bytes->size())
               .note("from `pcap`")
               .emit(ctrl.diagnostics());
+            ctrl.self().quit(ec::parse_error);
             co_return;
           }
           packet.data = *bytes;
@@ -230,14 +254,15 @@ public:
         /// Build record.
         auto seconds = std::chrono::seconds(packet.header.timestamp);
         auto timestamp = time{std::chrono::duration_cast<duration>(seconds)};
-        if (input_file_header.magic_number == magic_number_1)
+        if (input_file_header.magic_number == magic_number_1) {
           timestamp
             += std::chrono::microseconds(packet.header.timestamp_fraction);
-        else if (input_file_header.magic_number == magic_number_2)
+        } else if (input_file_header.magic_number == magic_number_2) {
           timestamp
             += std::chrono::nanoseconds(packet.header.timestamp_fraction);
-        else
+        } else {
           die("invalid magic number"); // validated earlier
+        }
         const auto* ptr = reinterpret_cast<const char*>(packet.data.data());
         auto data = std::string_view{ptr, packet.data.size()};
         if (!(builder.add(input_file_header.linktype & 0x0000FFFF)
@@ -248,8 +273,11 @@ public:
           diagnostic::error("failed to add packet #{}", num_packets)
             .note("from `pcap`")
             .emit(ctrl.diagnostics());
+          ctrl.self().quit(ec::parse_error);
           co_return;
         }
+      }
+      if (builder.rows() > 0) {
         co_yield builder.finish();
       }
     };
