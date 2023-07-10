@@ -46,6 +46,7 @@
 // multiple times. We should revisit this in the future.
 
 #include <vast/actors.hpp>
+#include <vast/argument_parser.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/numeric.hpp>
@@ -880,49 +881,26 @@ public:
     return system.spawn(serve_handler, node);
   }
 
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::operator_arg, parsers::count;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = -(required_ws_or_comment >> "--buffer-size"
-                     >> required_ws_or_comment >> count)
-                   >> required_ws_or_comment >> operator_arg
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    auto buffer_size = std::optional<uint64_t>{};
-    auto serve_id = std::string{};
-    if (not p(f, l, buffer_size, serve_id)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse {} operator: '{}'", name(),
-                                    pipeline)),
-      };
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto buffer_size = located<uint64_t>{1 << 16, location::unknown};
+    auto id = located<std::string>{};
+    auto parser = argument_parser{"serve", "https://docs.tenzir.com/next/"
+                                           "operators/sinks/serve"};
+    parser.add("--buffer-size", buffer_size, "<size>");
+    parser.add(id, "<id>");
+    parser.parse(p);
+    if (id.inner.empty()) {
+      diagnostic::error("serve id must not be empty")
+        .primary(id.source)
+        .throw_();
     }
-    if (serve_id.empty()) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse {} operator: serve-id "
-                                    "must not be empty",
-                                    pipeline)),
-      };
+    if (buffer_size.inner == 0) {
+      diagnostic::error("buffer size must not be zero")
+        .primary(buffer_size.source)
+        .throw_();
     }
-    if (buffer_size && *buffer_size == 0) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse {} operator: buffer-size "
-                                    "must not be zero",
-                                    pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<serve_operator>(std::move(serve_id),
-                                       buffer_size.value_or(1 << 16)),
-    };
+    return std::make_unique<serve_operator>(std::move(id.inner),
+                                            buffer_size.inner);
   }
 };
 
