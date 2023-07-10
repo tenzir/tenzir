@@ -129,7 +129,7 @@ public:
     auto make = [](auto& ctrl, generator<chunk_ptr> input,
                    bool emit_file_header) -> generator<table_slice> {
       // A PCAP file starts with a 24-byte header.
-      file_header file{};
+      auto input_file_header = file_header{};
       auto read_n = make_byte_reader(std::move(input));
       while (true) {
         auto length = sizeof(file_header);
@@ -145,12 +145,13 @@ public:
             .emit(ctrl.diagnostics());
           co_return;
         }
-        std::memcpy(&file, bytes->data(), bytes->size());
+        std::memcpy(&input_file_header, bytes->data(), bytes->size());
         break;
       }
-      auto need_swap = need_byte_swap(file.magic_number);
+      auto need_swap = need_byte_swap(input_file_header.magic_number);
       if (!need_swap) {
-        diagnostic::error("invalid PCAP magic number: {0:x}", file.magic_number)
+        diagnostic::error("invalid PCAP magic number: {0:x}",
+                          input_file_header.magic_number)
           .note("from `pcap`")
           .emit(ctrl.diagnostics());
         co_return;
@@ -160,14 +161,17 @@ public:
       else
         VAST_DEBUG("detected identical byte order in file and host");
       if (*need_swap)
-        file = byteswap(file);
+        input_file_header = byteswap(input_file_header);
       VAST_DEBUG("parsed PCAP file header");
       if (emit_file_header) {
         auto builder = table_slice_builder{file_header_type()};
-        if (!(builder.add(file.magic_number) && builder.add(file.major_version)
-              && builder.add(file.minor_version) && builder.add(file.reserved1)
-              && builder.add(file.reserved2) && builder.add(file.snaplen)
-              && builder.add(file.linktype))) {
+        if (!(builder.add(input_file_header.magic_number)
+              && builder.add(input_file_header.major_version)
+              && builder.add(input_file_header.minor_version)
+              && builder.add(input_file_header.reserved1)
+              && builder.add(input_file_header.reserved2)
+              && builder.add(input_file_header.snaplen)
+              && builder.add(input_file_header.linktype))) {
           diagnostic::error("failed to emit PCAP file header")
             .note("from `pcap`")
             .emit(ctrl.diagnostics());
@@ -226,17 +230,18 @@ public:
         /// Build record.
         auto seconds = std::chrono::seconds(packet.header.timestamp);
         auto timestamp = time{std::chrono::duration_cast<duration>(seconds)};
-        if (file.magic_number == magic_number_1)
+        if (input_file_header.magic_number == magic_number_1)
           timestamp
             += std::chrono::microseconds(packet.header.timestamp_fraction);
-        else if (file.magic_number == magic_number_2)
+        else if (input_file_header.magic_number == magic_number_2)
           timestamp
             += std::chrono::nanoseconds(packet.header.timestamp_fraction);
         else
           die("invalid magic number"); // validated earlier
         const auto* ptr = reinterpret_cast<const char*>(packet.data.data());
         auto data = std::string_view{ptr, packet.data.size()};
-        if (!(builder.add(file.linktype & 0x0000FFFF) && builder.add(timestamp)
+        if (!(builder.add(input_file_header.linktype & 0x0000FFFF)
+              && builder.add(timestamp)
               && builder.add(packet.header.captured_packet_length)
               && builder.add(packet.header.original_packet_length)
               && builder.add(data))) {
