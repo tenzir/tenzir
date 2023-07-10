@@ -22,17 +22,17 @@ while ! timeout 100 bash -c "echo > /dev/tcp/127.0.0.1/5160"; do
   sleep 1
 done
 
-suricata_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.zst | tar -x --zstd --to-stdout\\\"' | parse suricata | import"
+suricata_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.zst | tar -x --zstd --to-stdout\\\"' | parse suricata | where #type != \\\"suricata.stats\\\" | import"
 zeek_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.zst | tar -x --zstd; cat Zeek/*.log\\\"' | parse zeek-tsv | import"
 
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d "{\"definition\": \"${suricata_pipe}\", \"start_when_created\": true}" \
+  -d "{\"name\": \"M57 Suricata Import\", \"definition\": \"${suricata_pipe}\", \"start_when_created\": true}" \
   http://127.0.0.1:5160/api/v0/pipeline/create
 
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d "{\"definition\": \"${zeek_pipe}\", \"start_when_created\": true}" \
+  -d "{\"name\": \"M57 Zeek Import\", \"definition\": \"${zeek_pipe}\", \"start_when_created\": true}" \
   http://127.0.0.1:5160/api/v0/pipeline/create
 
 wait "$NODE_PID"
