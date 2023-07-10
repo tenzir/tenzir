@@ -15,6 +15,7 @@
 #include <vast/pcap.hpp>
 #include <vast/plugin.hpp>
 
+#include <caf/typed_event_based_actor.hpp>
 #include <pcap/pcap.h>
 
 #include <chrono>
@@ -28,16 +29,12 @@ namespace {
 struct loader_args {
   located<std::string> iface;
   std::optional<located<uint32_t>> snaplen;
-  std::optional<located<size_t>> max_buffer_packets;
-  std::optional<located<duration>> max_buffer_delay;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("loader_args")
-      .fields(f.field("iface", x.iface), f.field("snaplen", x.snaplen),
-              f.field("max_buffer_packets", x.max_buffer_packets),
-              f.field("max_buffer_delay", x.max_buffer_delay));
+      .fields(f.field("iface", x.iface), f.field("snaplen", x.snaplen));
   }
 };
 
@@ -52,19 +49,18 @@ public:
     -> std::optional<generator<chunk_ptr>> override {
     VAST_ASSERT(!args_.iface.inner.empty());
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
-    auto max_buffer_packets
-      = args_.max_buffer_packets ? args_.max_buffer_packets->inner : (2 << 15);
-    auto max_buffer_delay
-      = args_.max_buffer_delay ? args_.max_buffer_delay->inner : 1s;
-    VAST_INFO("capturing from {} with snaplen of {}", args_.iface.inner,
-              snaplen);
-    VAST_INFO("buffering up to {} packets with an inter-packet delay of {}",
-              max_buffer_packets, vast::to_string(data{max_buffer_delay}));
-    auto make
-      = [](auto& ctrl, auto iface, auto snaplen, auto max_buffer_packets,
-           auto max_buffer_delay) mutable -> generator<chunk_ptr> {
+    VAST_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
+               snaplen);
+    auto make = [](auto& ctrl, auto iface,
+                   auto snaplen) mutable -> generator<chunk_ptr> {
       auto put_iface_in_promiscuous_mode = 1;
-      auto packet_buffer_timeout_ms = 1'000;
+      // The packet buffer timeout functions much like a read timeout: It
+      // describes the number of milliseconds to wait at most until returning
+      // from pcap_next_ex.
+      auto packet_buffer_timeout_ms
+        = std::chrono::duration_cast<std::chrono::duration<int, std::milli>>(
+            defaults::import::read_timeout)
+            .count();
       auto error = std::array<char, PCAP_ERRBUF_SIZE>{};
       auto* ptr
         = pcap_open_live(iface.c_str(), detail::narrow_cast<int>(snaplen),
@@ -80,21 +76,40 @@ public:
       auto pcap = std::shared_ptr<pcap_t>{ptr, [](pcap_t* p) {
                                             pcap_close(p);
                                           }};
+      // We yield once initially to signal that the operator successfully
+      // started.
+      co_yield {};
       auto num_packets = size_t{0};
       auto num_buffered_packets = size_t{0};
-      auto last_yield = time{};
       auto buffer = std::vector<std::byte>{};
+      auto last_finish = std::chrono::steady_clock::now();
       while (true) {
+        const auto now = std::chrono::steady_clock::now();
+        if (num_buffered_packets >= defaults::import::table_slice_size
+            or last_finish + defaults::import::batch_timeout < now) {
+          VAST_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
+                     vast::data{now - last_finish}, num_buffered_packets,
+                     buffer.size());
+          last_finish = now;
+          co_yield chunk::make(std::exchange(buffer, {}));
+          // Reduce number of small allocations based on what we've seen
+          // previously.
+          auto avg_packet_size = buffer.size() / num_buffered_packets;
+          buffer.reserve(avg_packet_size * defaults::import::table_slice_size);
+          num_buffered_packets = 0;
+        }
         const u_char* pkt_data = nullptr;
         pcap_pkthdr* pkt_hdr = nullptr;
         auto r = ::pcap_next_ex(pcap.get(), &pkt_hdr, &pkt_data);
         if (r == 0) {
           // Timeout
-          co_yield {};
+          if (last_finish != now) {
+            co_yield {};
+          }
           continue;
         }
         if (r == -2) {
-          VAST_INFO("reached end of trace with {} packets", num_packets);
+          VAST_DEBUG("reached end of trace with {} packets", num_packets);
           break;
         }
         if (r == PCAP_ERROR) {
@@ -102,6 +117,7 @@ public:
           diagnostic::error("failed to get next packet: {}", error)
             .note("from `nic`")
             .emit(ctrl.diagnostics());
+          ctrl.self().quit(ec::system_error);
           break;
         }
         // Emit a PCAP file header before the first packet. This results in a
@@ -133,7 +149,6 @@ public:
           = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_usec),
           .captured_packet_length = pkt_hdr->caplen,
           .original_packet_length = pkt_hdr->len,
-
         };
         auto data = std::span<const std::byte>{
           reinterpret_cast<const std::byte*>(pkt_data),
@@ -145,34 +160,9 @@ public:
                     data.data(), data.size());
         ++num_buffered_packets;
         ++num_packets;
-        auto secs = std::chrono::seconds(pkt_hdr->ts.tv_sec);
-        auto timestamp = time{std::chrono::duration_cast<duration>(secs)};
-#ifdef PCAP_TSTAMP_PRECISION_NANO
-        timestamp += std::chrono::nanoseconds(pkt_hdr->ts.tv_usec);
-#else
-        timestamp += std::chrono::microseconds(pkt_hdr->ts.tv_usec);
-#endif
-        // Packet timestamps are typically monotonic. In case they aren't we
-        // can't use them to in our delay computation.
-        auto delay = timestamp - last_yield;
-        if (num_buffered_packets == max_buffer_packets
-            || (timestamp > last_yield && delay >= max_buffer_delay)) {
-          VAST_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
-                     vast::to_string(vast::data{delay}), num_buffered_packets,
-                     buffer.size());
-          co_yield chunk::copy(buffer);
-          std::exchange(buffer, {});
-          // Reduce number of small allocations based on what we've seen
-          // previously.
-          auto avg_packet_size = buffer.size() / num_buffered_packets;
-          buffer.reserve(avg_packet_size * max_buffer_packets);
-          num_buffered_packets = 0;
-          last_yield = timestamp;
-        }
       }
     };
-    return make(ctrl, args_.iface.inner, snaplen, max_buffer_packets,
-                max_buffer_delay);
+    return make(ctrl, args_.iface.inner, snaplen);
   }
 
   auto to_string() const -> std::string override {
@@ -180,12 +170,6 @@ public:
     result += fmt::format(" {}", args_.iface);
     if (args_.snaplen)
       result += fmt::format(" --snaplen {}", args_.snaplen->inner);
-    if (args_.max_buffer_packets)
-      result += fmt::format(" --max-buffer-size {}",
-                            args_.max_buffer_packets->inner);
-    if (args_.max_buffer_delay)
-      result += fmt::format(" --max-buffer-timeout {}",
-                            args_.max_buffer_delay->inner);
     return result;
   }
 
@@ -224,8 +208,6 @@ public:
     auto args = loader_args{};
     parser.add(args.iface, "<iface>");
     parser.add("-s,--snaplen", args.snaplen, "<count>");
-    parser.add("-p,--max-buffer-packets", args.max_buffer_packets, "<count>");
-    parser.add("-d,--max-buffer-delay", args.max_buffer_delay, "<duration>");
     parser.parse(p);
     return std::make_unique<nic_loader>(std::move(args));
   }
