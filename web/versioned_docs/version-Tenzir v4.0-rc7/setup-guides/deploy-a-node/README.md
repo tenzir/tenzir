@@ -4,9 +4,23 @@ A *node* is a managed service for pipelines and storage.
 
 ## Install a node
 
-Choose between a binary package and a Docker-based setup to install a node.
+Choose between [Docker](#docker), [Linux](#linux), and [macOS](#macos)
+installation instructions.
 
-### Binary (Automatic)
+### Docker
+
+Visit the [configurator](https://app.tenzir.com/configurator) to download a
+`docker-compose.NODE.yaml` configuration file where `NODE` is the name you
+entered for your node. Then run:
+
+```bash
+docker compose -f docker-compose.NODE.yaml up --detach
+```
+
+Set [environment variables](../../command-line.md#environment-variables) to
+adjust the configuration.
+
+### Linux
 
 Use our installer to install a binary package on any Linux distribution:
 
@@ -14,11 +28,8 @@ Use our installer to install a binary package on any Linux distribution:
 curl https://get.tenzir.app | sh
 ```
 
-The shell script asks for confirmation before performing the installation.
-
-### Binary (Manual)
-
-If you prefer a manual installation you can also perform the installer steps
+The shell script asks for confirmation before performing the installation. If
+you prefer a manual installation you can also perform the installer steps
 yourself.
 
 import Tabs from '@theme/Tabs';
@@ -49,7 +60,7 @@ Install Tenzir by adding `github:tenzir/tenzir/stable` to your flake inputs, or
 use your preferred method to include third-party modules on classic NixOS.
 
 </TabItem>
-<TabItem value="linux" label="Linux">
+<TabItem value="any" label="Any">
 
 Download a tarball with our [static binary][tenzir-tarball] for all Linux
 distributions and unpack it into `/opt/tenzir`:
@@ -69,115 +80,45 @@ curl -fsSL "https://storage.googleapis.com/tenzir-dist-public/packages/main/tenz
 [tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-x86_64-linux.tar.gz
 
 </TabItem>
-<TabItem value="macos" label="macOS">
+</Tabs>
+
+### macOS
 
 Please use Docker [with
 Rosetta](https://levelup.gitconnected.com/docker-on-apple-silicon-mac-how-to-run-x86-containers-with-rosetta-2-4a679913a0d5)
 until we offer a native package.
 
-</TabItem>
-</Tabs>
-
-### Docker
-
-To run a node in a container environment, we offer a Docker image and Docker
-Compose config file. Make sure your container has access to network (to expose a
-listening socket) and disk (to read and write data).
-
-<Tabs>
-<TabItem value="docker" label="Docker">
-
-Pull the image:
-
-```bash
-docker pull tenzir/tenzir
-```
-
-Alternatively, you can use our size-optimized "slim" with minimal
-dependencies:
-
-```bash
-docker pull tenzir/tenzir:latest-slim
-```
-
-Now start the node:
-
-```bash
-mkdir -p /path/to/db
-docker run -dt --name=tenzir --rm -p 5158:5158 -v /path/to/db:/var/lib/tenzir \
-  tenzir/tenzir start
-```
-
-The `docker` arguments have the following meaning:
-
-- `-d` for detaching, i.e., running in background
-- `-t` for terminal output
-- `--name` to name the image
-- `--rm` to remove the container after exiting
-- `-p` to expose the port to the outer world
-- `-v from:to` to mount the local path `from` into the container at `to`
-
-</TabItem>
-<TabItem value="docker-compose" label="Docker Compose">
-
-Visit the [configurator](https://app.tenzir.com/configurator) to download a
-`docker-compose.yaml` configuration file. In the same directory of the
-downloaded file, run:
-
-```bash
-docker compose up
-```
-
-</TabItem>
-</Tabs>
-
-We map command line option to [environment
-variables](../../command-line.md#environment-variables) for more idiomatic use
-in containers.
-
-### Automation
-
-Read our guides on automating the deployment of a node:
-
-- [Systemd](systemd.md)
-- [Ansible](ansible.md)
-
 ## Start a node
 
-After completing the installation, run the `tenzir-node` executable to start a
-node.
+:::info Implicit start with Docker
+You can skip this step if you use [Docker](#docker) because `docker compose up`
+already starts a node for you.
+:::
 
-<Tabs>
-<TabItem value="binary" label="Binary" default>
+Run the `tenzir-node` executable to start a node:
 
 ```bash
 tenzir-node
 ```
 
 ```
-[12:43:22.789] node (v3.1.0-377-ga790da3049-dirty) is listening on 127.0.0.1:5158
+      _____ _____ _   _ ________ ____
+     |_   _| ____| \ | |__  /_ _|  _ \
+       | | |  _| |  \| | / / | || |_) |
+       | | | |___| |\  |/ /_ | ||  _ <
+       |_| |_____|_| \_/____|___|_| \_\
+
+          v4.0.0-rc6-0-gf193b51f1f
+Visit https://app.tenzir.com to get started.
 ```
 
 This will spawn a blocking process that listens by default on the TCP endpoint
-127.0.0.1:5158. Select a different endpoint via `--endpoint`, e.g., bind to an
+`127.0.0.1:5158`. Select a different endpoint via `--endpoint`, e.g., bind to an
 IPv6 address:
 
 ```bash
 tenzir-node --endpoint=[::1]:42000
 ```
-
-</TabItem>
-<TabItem value="docker" label="Docker">
-
-Expose the port of the listening node and provide a directory for storage:
-
-```bash
-mkdir storage
-docker run -dt -p 5158:5158 -v storage:/var/lib/tenzir tenzir/tenzir --entry-point=tenzir-node
-```
-
-</TabItem>
-</Tabs>
 
 :::caution Unsafe Pipelines
 Some pipeline operators are inherently unsafe due to their side effects, e.g.,
@@ -201,3 +142,10 @@ There exist two ways stop a server:
    `pkill -2 tenzir-node`.
 
 Sending the process a SIGTERM is the same as hitting CTRL+C.
+
+## Automate the deployment
+
+Read our guides on automating the deployment of a node:
+
+- [Systemd](systemd.md)
+- [Ansible](ansible.md)
