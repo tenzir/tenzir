@@ -58,8 +58,8 @@
     bundledPlugins =
       [
         "plugins/kafka"
+        "plugins/nic"
         "plugins/parquet"
-        "plugins/pcap"
         "plugins/web"
       ]
       ++ extraPlugins';
