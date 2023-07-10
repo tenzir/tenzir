@@ -641,6 +641,16 @@ jobs:
           apt-get -y install git
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Publish Tenzir.spdx to GitHub Release
+        if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: "Tenzir.spdx"
+          asset_name: "Tenzir.spdx"
+          asset_content_type: text/plain
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
@@ -781,16 +791,6 @@ jobs:
           # for builds of the latest release.
           asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
           asset_content_type: application/gzip
-      - name: Publish Tenzir.spdx to GitHub Release
-        if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "Tenzir.spdx"
-          asset_name: "Tenzir.spdx"
-          asset_content_type: text/plain
 
   tenzir-plugins:
     needs:
