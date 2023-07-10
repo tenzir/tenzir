@@ -788,6 +788,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     requires(not std::is_same_v<Input, std::monostate>)
   {
     auto time_scheduled_guard = make_timer_guard(time_scheduled);
+    schedule_run();
     const auto input_size = std::transform_reduce(
       input.begin(), input.end(), uint64_t{}, std::plus{}, [](const Input& x) {
         return size(x);
