@@ -151,7 +151,7 @@ public:
       auto need_swap = need_byte_swap(input_file_header.magic_number);
       if (!need_swap) {
         diagnostic::error("invalid PCAP magic number: {0:x}",
-                          input_file_header.magic_number)
+                          uint32_t{input_file_header.magic_number})
           .note("from `pcap`")
           .emit(ctrl.diagnostics());
         co_return;
@@ -403,7 +403,7 @@ public:
               auto swap = need_byte_swap(output_file_header->magic_number);
               if (!swap) {
                 diagnostic::error("got invalid PCAP magic number: {0:x}",
-                                  output_file_header->magic_number)
+                                  uint32_t{output_file_header->magic_number})
                   .note("from `pcap`")
                   .emit(ctrl.diagnostics());
                 co_return;
@@ -429,7 +429,7 @@ public:
             file_header_printed = true;
           } else if (linktype != output_file_header->linktype) {
             diagnostic::error("packet with new linktype {}, first was {}",
-                              linktype, output_file_header->linktype)
+                              linktype, uint32_t{output_file_header->linktype})
               .note("from `pcap`")
               .emit(ctrl.diagnostics());
             co_return;
