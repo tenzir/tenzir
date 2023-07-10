@@ -1017,3 +1017,22 @@ tests:
         input: data/json/record-with-multiple-unflattened-values.json
       - command: exec 'read json | unflatten | to stdout'
         input: data/json/record-with-multi-nested-field-names.json
+
+  PCAP Format:
+    tags: [pipelines, parser, printer, pcap]
+    steps:
+      # Make sure basic decapsulation logic works.
+      - command: exec 'read pcap | decapsulate | write json'
+        input: data/pcap/example.pcap.gz
+      # Decapsulate VLAN information. Manually verified with:
+      # tshark -r vlan-single-tagging.pcap -T fields -e vlan.id
+      - command: exec 'read pcap | decapsulate | select vlan.outer, vlan.inner | write json'
+        input: data/pcap/vlan-single-tagging.pcap
+      - command: exec 'read pcap | decapsulate | select vlan.outer, vlan.inner | write json'
+        input: data/pcap/vlan-double-tagging.pcap
+      # Re-produce an identical copy of the input by taking the input PCAP file
+      # header as blueprint for the output trace. The MD5 of the original input
+      # is 2696858410a08f5edb405b8630a9858c.
+      - command: exec 'read pcap -e | write pcap'
+        input: data/pcap/example.pcap.gz
+        transformation: md5sum | cut -f 1 -d ' '

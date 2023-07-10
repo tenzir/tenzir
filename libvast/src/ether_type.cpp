@@ -16,7 +16,7 @@
 
 namespace vast {
 
-ether_type as_ether_type(std::span<const std::byte, 2> octets) {
+auto as_ether_type(std::span<const std::byte, 2> octets) -> ether_type {
   auto ptr = reinterpret_cast<const uint16_t*>(std::launder(octets.data()));
   return static_cast<ether_type>(detail::to_host_order(*ptr));
 }

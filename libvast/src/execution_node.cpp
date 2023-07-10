@@ -91,22 +91,25 @@ auto make_timer_guard(Duration&... elapsed) {
 template <class Input, class Output>
 struct exec_node_state;
 
+template <class Input, class Output>
 class exec_node_diagnostic_handler final : public diagnostic_handler {
 public:
-  exec_node_diagnostic_handler(exec_node_actor::pointer self,
-                               receiver_actor<diagnostic> diagnostic_handler)
+  exec_node_diagnostic_handler(
+    exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
+    receiver_actor<diagnostic> diagnostic_handler)
     : self_{self}, diagnostic_handler_{std::move(diagnostic_handler)} {
   }
 
   void emit(diagnostic d) override {
-    if (d.severity == severity::error) {
-      has_seen_error_ = true;
-    }
     self_->request(diagnostic_handler_, caf::infinite, std::move(d))
       .then([]() {},
             [](caf::error& e) {
               VAST_WARN("failed to send diagnostic: {}", e);
             });
+    if (d.severity == severity::error and not has_seen_error_) {
+      has_seen_error_ = true;
+      self_->state.ctrl->abort(ec::silent);
+    }
   }
 
   auto has_seen_error() const -> bool override {
@@ -114,7 +117,7 @@ public:
   }
 
 private:
-  exec_node_actor::pointer self_ = {};
+  exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self_ = {};
   receiver_actor<diagnostic> diagnostic_handler_ = {};
   bool has_seen_error_ = {};
 };
@@ -122,11 +125,13 @@ private:
 template <class Input, class Output>
 class exec_node_control_plane final : public operator_control_plane {
 public:
-  exec_node_control_plane(exec_node_state<Input, Output>& state,
-                          receiver_actor<diagnostic> diagnostic_handler)
-    : state_{state},
-      diagnostic_handler_{std::make_unique<exec_node_diagnostic_handler>(
-        state_.self, std::move(diagnostic_handler))} {
+  exec_node_control_plane(
+    exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
+    receiver_actor<diagnostic> diagnostic_handler)
+    : state_{self->state},
+      diagnostic_handler_{
+        std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
+          self, std::move(diagnostic_handler))} {
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
@@ -180,7 +185,8 @@ public:
 
 private:
   exec_node_state<Input, Output>& state_;
-  std::unique_ptr<exec_node_diagnostic_handler> diagnostic_handler_ = {};
+  std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler_
+    = {};
 };
 
 auto size(const table_slice& slice) -> uint64_t {
@@ -788,6 +794,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     requires(not std::is_same_v<Input, std::monostate>)
   {
     auto time_scheduled_guard = make_timer_guard(time_scheduled);
+    schedule_run();
     const auto input_size = std::transform_reduce(
       input.begin(), input.end(), uint64_t{}, std::plus{}, [](const Input& x) {
         return size(x);
@@ -818,7 +825,7 @@ auto exec_node(
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self->state, std::move(diagnostic_handler));
+    self, std::move(diagnostic_handler));
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->quit(caf::make_error(

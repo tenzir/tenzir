@@ -31,7 +31,6 @@
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/none.hpp>
-#include <caf/typed_event_based_actor.hpp>
 #include <fmt/core.h>
 #include <fmt/format.h>
 
@@ -570,14 +569,12 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         diagnostic::error("failed to parse Zeek document: missing #path")
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
-        ctrl.self().quit(ec::parse_error);
         co_return;
       }
       if (document.fields.empty()) {
         diagnostic::error("failed to parse Zeek document: missing #fields")
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
-        ctrl.self().quit(ec::parse_error);
         co_return;
       }
       if (document.fields.size() != document.types.size()) {
@@ -587,7 +584,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
           .note("found {} #types", document.types.size())
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
-        ctrl.self().quit(ec::parse_error);
         co_return;
       }
       // Now we create the schema and the parser rule.
@@ -671,7 +667,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                           *line)
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
-        ctrl.self().quit(ec::parse_error);
         co_return;
       }
       VAST_ASSERT_EXPENSIVE(add_ok);
@@ -681,7 +676,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                           i, *line)
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
-        ctrl.self().quit(ec::parse_error);
         co_return;
       }
     }
@@ -691,7 +685,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                         document.parsers.size() - 1, *line)
         .note("line {}", line_nr)
         .emit(ctrl.diagnostics());
-      ctrl.self().quit(ec::parse_error);
       co_return;
     }
     const auto eoi_ok = parsers::eoi(f, l, unused);

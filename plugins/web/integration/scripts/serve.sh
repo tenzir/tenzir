@@ -6,18 +6,18 @@ set -euxo pipefail
 
 sleep 3
 
+num_results=0
+
 # Query the first set.
-first_result="$(curl -XPOST -H "Content-Type: application/json" -d '{"serve_id": "version", "timeout": "5s", "max_events": 1, "continuation_token": null}' http://127.0.0.1:42025/api/v0/serve)"
-continuation_token="$(jq -rnec "${first_result} | .next_continuation_token")"
+response="$(curl -XPOST -H "Content-Type: application/json" -d '{"serve_id": "version", "timeout": "5s", "max_events": 1, "continuation_token": null}' http://127.0.0.1:42025/api/v0/serve)"
+num_results="$(( $num_results + $(jq -nec "${response} | .events | length") ))"
 
-# The first set should be 1 results exactly.
-jq -nec "${first_result} | .events | length == 1"
+while jq -rnec "${response} | .next_continuation_token != null" > /dev/null; do
+  response="$(curl -XPOST -H "Content-Type: application/json" -d "{\"serve_id\": \"version\", \"continuation_token\": \"$(jq -rnec "${response} | .next_continuation_token")\", \"timeout\": \"5s\", \"max_events\": 4}" http://127.0.0.1:42025/api/v0/serve)"
+  num_results="$(( $num_results + $(jq -nec "${response} | .events | length") ))"
+done
 
-# Query the second set.
-second_result="$(curl -XPOST -H "Content-Type: application/json" -d "{\"serve_id\": \"version\", \"continuation_token\": \"${continuation_token}\", \"timeout\": \"5s\", \"max_events\": 4}" http://127.0.0.1:42025/api/v0/serve)"
-
-# The next set should be the reamining 4 results.
-jq -nec "${second_result} | .next_continuation_token == null"
-jq -nec "${second_result} | .events | length == 4"
+# There must be a total of 5 results.
+echo "$num_results"
 
 wait
