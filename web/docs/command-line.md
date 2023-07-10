@@ -39,7 +39,8 @@ tenzir-ctl [opts] cmd1 [opts1] cmd2 [opts2] ...
 
 We have both long `--long=X` and short `-s X` options. Boolean options do not
 require explicit specification of a value, and it suffices to write `--long` and
-`-s` to set an option to true.
+`-s` to set an option to true. For `tenzir-ctl`, `=` is mandatory for long
+options. This differs from pipeline operator options where `=` is optional.
 
 ### Get help
 
