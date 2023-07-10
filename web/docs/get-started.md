@@ -323,7 +323,7 @@ Aside from filtering, you can also perform aggregations with
 
 ```
 export
-| #schema == "suricata.alert"
+| where #schema == "suricata.alert"
 | summarize count=count(src_ip) by severity
 ```
 
