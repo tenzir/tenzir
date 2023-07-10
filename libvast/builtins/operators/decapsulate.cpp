@@ -207,10 +207,10 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
   };
   // Parse layer 2.
   auto frame = frame::make(bytes, type);
-  if (!frame)
-    return diagnostic::warning("failed to parse layer-2 frame")
-      .note("frame type: {}", frame_type::ethernet)
-      .done();
+  if (!frame) {
+    VAST_TRACE("failed to parse layer-2 frame");
+    return std::nullopt;
+  }
   auto ether = builder.push_field("ether").push_record();
   auto src_str = fmt::to_string(frame->src);
   auto dst_str = fmt::to_string(frame->dst);
@@ -233,10 +233,10 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
     return fail(err);
   // Parse layer 3.
   auto packet = packet::make(frame->payload, frame->type);
-  if (!packet)
-    return diagnostic::warning("failed to parse layer-3 packet")
-      .note("EtherType: {}", frame->type)
-      .done();
+  if (!packet) {
+    VAST_TRACE("failed to parse layer-3 packet");
+    return std::nullopt;
+  }
   auto ip = builder.push_field("ip").push_record();
   if (auto err = ip.push_field("src").add(packet->src))
     return fail(err);
@@ -246,10 +246,10 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
     return fail(err);
   // Parse layer 4.
   auto segment = segment::make(packet->payload, packet->type);
-  if (!segment)
-    return diagnostic::warning("failed to parse layer-4 segment")
-      .note("segment type: {}", packet->type)
-      .done();
+  if (!segment) {
+    VAST_TRACE("failed to parse layer-4 segment");
+    return std::nullopt;
+  }
   switch (segment->type) {
     case port_type::icmp: {
       auto icmp = builder.push_field("icmp").push_record();
@@ -367,10 +367,8 @@ public:
         auto raw_frame = std::span<const std::byte>{
           reinterpret_cast<const std::byte*>(data->data()), data->size()};
         auto inferred_type = static_cast<frame_type>(linktype ? *linktype : 0);
-        if (auto diag = parse(row, raw_frame, inferred_type)) {
+        if (auto diag = parse(row, raw_frame, inferred_type))
           ctrl.diagnostics().emit(std::move(*diag));
-          continue;
-        }
       }
       co_yield builder.finish();
     }
