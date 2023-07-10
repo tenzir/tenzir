@@ -49,6 +49,13 @@ Emit a `pcap.file_header` event that represents the the PCAP file header. If pre
 the parser injects this additional event before the subsequent stream of
 packets.
 
+Emitting this extra event makes it possible to seed the `pcap` printer with a
+file header from the input. This allows for controlling the timestamp formatting
+(microseconds vs. nanosecond granularity) and byte order in the packet headers.
+
+Use this option when you would like to reproduce the identical trace file layout
+of the PCAP input.
+
 ## Examples
 
 Read packets from a PCAP file:
