@@ -35,7 +35,12 @@ public:
 
   auto predicate_pushdown(expression const& expr) const
     -> std::optional<std::pair<expression, operator_ptr>> override {
-    return op_->predicate_pushdown(expr);
+    auto result = op_->predicate_pushdown(expr);
+    if (result and result->second) {
+      result->second = std::make_unique<local_remote_operator>(
+        std::move(result->second), location_);
+    }
+    return result;
   }
 
   auto instantiate(operator_input input, operator_control_plane& ctrl) const

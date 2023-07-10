@@ -29,6 +29,63 @@ struct exec_config {
   bool dump_diagnostics = false;
 };
 
+auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
+  while (true) {
+    if (auto out = pipe.infer_type<void>()) {
+      if (out->is<void>()) {
+        break;
+      }
+      if (out->is<chunk_ptr>()) {
+        auto op = pipeline::internal_parse_as_operator("save file -");
+        if (not op) {
+          return caf::make_error(ec::logic_error,
+                                 fmt::format("failed to append implicit "
+                                             "'save file -': {}",
+                                             op.error()));
+        }
+        pipe.append(std::move(*op));
+        continue;
+      }
+      if (out->is<table_slice>()) {
+        auto op = pipeline::internal_parse_as_operator("write json --pretty");
+        if (not op) {
+          return caf::make_error(ec::logic_error,
+                                 fmt::format("failed to append implicit 'write "
+                                             "json --pretty': {}",
+                                             op.error()));
+        }
+        pipe.append(std::move(*op));
+        continue;
+      }
+      return caf::make_error(ec::logic_error,
+                             fmt::format("unhandled output element type"));
+    }
+    if (auto out = pipe.infer_type<chunk_ptr>()) {
+      auto op = pipeline::internal_parse_as_operator("load file -");
+      if (not op) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("failed to prepend implicit "
+                                           "'load file -': {}",
+                                           op.error()));
+      }
+      pipe.prepend(std::move(*op));
+      continue;
+    }
+    if (auto out = pipe.infer_type<table_slice>()) {
+      auto op = pipeline::internal_parse_as_operator("read json");
+      if (not op) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("failed to prepend implicit "
+                                           "'read json': {}",
+                                           op.error()));
+      }
+      pipe.prepend(std::move(*op));
+      continue;
+    }
+  }
+  return pipe;
+}
+
 auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
                    std::unique_ptr<diagnostic_handler> diag,
                    const exec_config& cfg) -> caf::expected<void> {
@@ -36,25 +93,11 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   // to stdout, and if it ends with bytes, we implicitly write those bytes to
   // stdout.
   if (not cfg.no_implicit) {
-    if (pipe.check_type<void, table_slice>()) {
-      auto op = pipeline::internal_parse_as_operator("write json --pretty");
-      if (not op) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("failed to append implicit 'write "
-                                           "json --pretty': {}",
-                                           op.error()));
-      }
-      pipe.append(std::move(*op));
-    } else if (pipe.check_type<void, chunk_ptr>()) {
-      auto op = pipeline::internal_parse_as_operator("save file -");
-      if (not op) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("failed to append implicit 'save "
-                                           "file -': {}",
-                                           op.error()));
-      }
-      pipe.append(std::move(*op));
+    auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe));
+    if (not implicit_pipe) {
+      return std::move(implicit_pipe.error());
     }
+    pipe = std::move(*implicit_pipe);
   }
   auto optimized = pipe.optimize();
   if (not optimized) {
