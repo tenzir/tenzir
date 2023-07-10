@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/argument_parser.hpp>
 #include <vast/as_bytes.hpp>
 #include <vast/chunk.hpp>
 #include <vast/concept/parseable/string/quoted_string.hpp>
@@ -237,27 +238,13 @@ private:
 
 class plugin final : public virtual operator_plugin<shell_operator> {
 public:
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::operator_arg;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = required_ws_or_comment >> operator_arg
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    std::string command;
-    if (not p(f, l, command)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse {} operator: '{}'", name(),
-                                    pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<shell_operator>(std::move(command)),
-    };
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto command = std::string{};
+    auto parser = argument_parser{"shell", "https://docs.tenzir.com/next/"
+                                           "operators/transformations/shell"};
+    parser.add(command, "<command>");
+    parser.parse(p);
+    return std::make_unique<shell_operator>(std::move(command));
   }
 };
 

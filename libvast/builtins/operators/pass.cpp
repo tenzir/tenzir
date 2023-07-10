@@ -46,7 +46,9 @@ public:
 class plugin final : public virtual operator_plugin<pass_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    argument_parser{"pass"}.parse(p);
+    argument_parser{"pass", "https://docs.tenzir.com/next/operators/"
+                            "transformations/pass"}
+      .parse(p);
     return std::make_unique<pass_operator>();
   }
 };

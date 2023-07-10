@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/argument_parser.hpp>
 #include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
@@ -133,35 +134,17 @@ private:
 
 class plugin final : public virtual operator_plugin<measure_operator> {
 public:
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::str, parsers::end_of_pipeline_operator;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
     bool real_time = false;
     bool cumulative = false;
-    const auto p = *ignore((required_ws_or_comment
-                            >> str{"--real-time"}.then([&](std::string) {
-                                real_time = true;
-                              }))
-                           | (required_ws_or_comment
-                              >> str{"--cumulative"}.then([&](std::string) {
-                                  cumulative = true;
-                                })))
-                   >> optional_ws_or_comment >> end_of_pipeline_operator;
-    if (!p(f, l, unused)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "measure operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<measure_operator>(batch_size_, real_time, cumulative),
-    };
+    auto parser
+      = argument_parser{"measure", "https://docs.tenzir.com/next/operators/"
+                                   "transformations/measure"};
+    parser.add("--real-time", real_time);
+    parser.add("--cumulative", cumulative);
+    parser.parse(p);
+    return std::make_unique<measure_operator>(batch_size_, real_time,
+                                              cumulative);
   }
 
 private:

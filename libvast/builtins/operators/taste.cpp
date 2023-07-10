@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/argument_parser.hpp>
 #include <vast/concept/parseable/numeric/integral.hpp>
 #include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
@@ -58,27 +59,13 @@ private:
 
 class plugin final : public virtual operator_plugin<taste_operator> {
 public:
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::u64;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = -(required_ws_or_comment >> u64) >> optional_ws_or_comment
-                   >> end_of_pipeline_operator;
-    auto limit = std::optional<uint64_t>{};
-    if (!p(f, l, limit)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "taste operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<taste_operator>(limit.value_or(10)),
-    };
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"taste", "https://docs.tenzir.com/next/"
+                                           "operators/transformations/taste"};
+    auto count = std::optional<uint64_t>{};
+    parser.add(count, "<limit>");
+    parser.parse(p);
+    return std::make_unique<taste_operator>(count.value_or(10));
   }
 };
 

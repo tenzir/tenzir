@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/actors.hpp>
+#include <vast/argument_parser.hpp>
 #include <vast/atoms.hpp>
 #include <vast/catalog.hpp>
 #include <vast/concept/parseable/string/char_class.hpp>
@@ -135,24 +136,11 @@ private:
 
 class plugin final : public virtual operator_plugin<export_operator> {
 public:
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::end_of_pipeline_operator;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    const auto p = optional_ws_or_comment >> end_of_pipeline_operator;
-    if (!p(f, l, unused)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                      "export operator: '{}'",
-                                                      pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<export_operator>(trivially_true_expression()),
-    };
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"export", "https://docs.tenzir.com/next/"
+                                            "operators/sources/export"};
+    parser.parse(p);
+    return std::make_unique<export_operator>(trivially_true_expression());
   }
 };
 
