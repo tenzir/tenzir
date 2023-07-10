@@ -41,14 +41,6 @@ We have both long `--long=X` and short `-s X` options. Boolean options do not
 require explicit specification of a value, and it suffices to write `--long` and
 `-s` to set an option to true.
 
-Each `tenzir-ctl` command has its own dedicated set of options. Options are not
-global and only valid for their respective command. Consider this example:
-
-```bash
-tenzir-ctl --option foo # option applies to command 'tenzir'
-tenzir-ctl foo --option # option applies to command 'foo'
-```
-
 ### Get help
 
 You get short usage instructions for every command by adding the `help`
