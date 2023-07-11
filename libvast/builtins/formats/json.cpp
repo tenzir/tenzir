@@ -14,6 +14,7 @@
 #include <vast/config_options.hpp>
 #include <vast/defaults.hpp>
 #include <vast/detail/assert.hpp>
+#include <vast/detail/env.hpp>
 #include <vast/detail/padded_buffer.hpp>
 #include <vast/detail/string_literal.hpp>
 #include <vast/diagnostics.hpp>
@@ -791,10 +792,10 @@ public:
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto compact = !!args_.compact_output;
     auto style = default_style();
-    if (args_.color_output)
-      style = jq_style();
-    else if (args_.monochrome_output)
+    if (detail::getenv("NO_COLOR") || args_.monochrome_output)
       style = no_style();
+    else if (args_.color_output)
+      style = jq_style();
     return printer_instance::make(
       [compact, style](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {

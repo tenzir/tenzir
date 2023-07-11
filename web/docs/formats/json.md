@@ -112,6 +112,9 @@ escape sequences that represent colors.
 Unlike `jq`, coloring is currently opt-in. In the future, we will perform TTY
 detection and colorize the output when write to stdout.
 
+Tenzir honors the [`NO_COLOR`](https://no-color.org/) environment variable and
+won't colorize the output when the variable is present.
+
 ### `--M|--monochrome-output` (Printer)
 
 Disables colored output.
