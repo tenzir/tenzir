@@ -50,4 +50,5 @@ WorkingDirectory=/var/lib/tenzir
 ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/tenzir-node
 
 [Install]
+Alias=tenzir.service
 WantedBy=multi-user.target

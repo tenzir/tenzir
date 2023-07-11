@@ -641,6 +641,16 @@ jobs:
           apt-get -y install git
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Publish Tenzir.spdx to GitHub Release
+        if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: "Tenzir.spdx"
+          asset_name: "Tenzir.spdx"
+          asset_content_type: text/plain
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
@@ -754,43 +764,6 @@ jobs:
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
           gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ vars.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
-      # This step ensures that assets from previous runs are cleaned up to avoid
-      # failure of the next step (asset upload)
-      - name: Delete existing Release Assets
-        if: github.event_name == 'release'
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          # don't fail if no previous assets exist.
-          fail-if-no-assets: false
-          # only delete assets when `tag` refers to a release
-          fail-if-no-release: tru
-          assets: "${{ env.PUBLISH_NAME }}.tar.gz"
-      - name: Publish to GitHub Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
-          # The asset names are constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-gcc.tar.gz
-          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-clang.tar.gz
-          # for builds of the latest release.
-          asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
-          asset_content_type: application/gzip
-      - name: Publish Tenzir.spdx to GitHub Release
-        if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "Tenzir.spdx"
-          asset_name: "Tenzir.spdx"
-          asset_content_type: text/plain
 
   tenzir-plugins:
     needs:
