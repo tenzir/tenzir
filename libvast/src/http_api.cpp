@@ -252,6 +252,7 @@ auto rest_response::make_error(uint16_t error_code, std::string_view message,
 auto rest_response::make_error_raw(uint16_t error_code, std::string body,
                                    caf::error detail) -> rest_response {
   auto result = rest_response{};
+  VAST_ASSERT_EXPENSIVE(validate_json(body));
   result.body_ = std::move(body);
   result.code_ = error_code;
   result.is_error_ = true;
