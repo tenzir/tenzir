@@ -57,7 +57,7 @@ void restinio_response::abort(uint16_t error_code, std::string message,
   std::string body;
   if (enable_detailed_errors_)
     message = fmt::format("{}{}", message, detail);
-  body = fmt::format(R"_({{"error": {:?} }})_", message);
+  body = fmt::format(R"_({{"error": {}}})_", detail::json_escape(message));
   body_size_ = body.size();
   response_.set_body(std::move(body));
   // TODO: Proactively call `done()` here, and add some flag to prevent

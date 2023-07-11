@@ -111,7 +111,7 @@ struct rest_response {
   explicit rest_response(std::string body);
 
   /// Returns an error that uses `{error: "{message}"}` as the response body.
-  static auto make_error(uint16_t error_code, std::string message,
+  static auto make_error(uint16_t error_code, std::string_view message,
                          caf::error detail = {}) -> rest_response;
   static auto make_error(uint16_t error_code, const caf::error& message,
                          caf::error detail = {}) -> rest_response {

@@ -54,29 +54,29 @@ auto parse_skeleton(simdjson::ondemand::value value, size_t depth = 0)
 
 auto http_parameter_map::from_json(std::string_view json)
   -> caf::expected<http_parameter_map> {
-  http_parameter_map result;
-  if (json.empty())
+  try {
+    http_parameter_map result;
+    if (json.empty())
+      return result;
+    auto padded_string = simdjson::padded_string{json};
+    auto parser = simdjson::ondemand::parser{};
+    auto body = simdjson::ondemand::object{};
+    auto doc = parser.iterate(padded_string).value();
+    if ([[maybe_unused]] auto error = doc.get_object().get(body))
+      return caf::make_error(ec::invalid_argument,
+                             "expected a top-level object");
+    for (auto obj : body) {
+      auto value = parse_skeleton(obj.value());
+      // Discard null values
+      if (caf::holds_alternative<caf::none_t>(value))
+        continue;
+      result.params_.emplace(std::string{obj.unescaped_key().value()}, value);
+    }
     return result;
-  auto padded_string = simdjson::padded_string{json};
-  auto parser = simdjson::ondemand::parser{};
-  auto doc = simdjson::ondemand::document{};
-  auto body = simdjson::ondemand::object{};
-  if ([[maybe_unused]] auto error = parser.iterate(padded_string).get(doc)) {
-    std::stringstream ss;
-    ss << error;
-    auto error_msg = fmt::format("failed to parse json: {}", ss.str());
-    return caf::make_error(ec::invalid_argument, error_msg);
+  } catch (const simdjson::simdjson_error& exc) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("failed to parse json: {}", exc));
   }
-  if ([[maybe_unused]] auto error = doc.get_object().get(body))
-    return caf::make_error(ec::invalid_argument, "expected a top-level object");
-  for (auto obj : body) {
-    auto value = parse_skeleton(obj.value());
-    // Discard null values
-    if (caf::holds_alternative<caf::none_t>(value))
-      continue;
-    result.params_.emplace(std::string{obj.unescaped_key().value()}, value);
-  }
-  return result;
 }
 
 auto http_parameter_map::params() const
@@ -214,10 +214,11 @@ auto rest_response::release() && -> std::string {
   return std::move(body_);
 }
 
-auto rest_response::make_error(uint16_t error_code, std::string message,
+auto rest_response::make_error(uint16_t error_code, std::string_view message,
                                caf::error detail) -> rest_response {
   return make_error_raw(error_code,
-                        fmt::format("{{\"error\": {:?}}}\n", message),
+                        fmt::format("{{\"error\": {}}}\n",
+                                    detail::json_escape(message)),
                         std::move(detail));
 }
 
