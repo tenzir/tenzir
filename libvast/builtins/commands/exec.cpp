@@ -47,11 +47,11 @@ auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
         continue;
       }
       if (out->is<table_slice>()) {
-        auto op = pipeline::internal_parse_as_operator("write json --pretty");
+        auto op = pipeline::internal_parse_as_operator("write json");
         if (not op) {
           return caf::make_error(ec::logic_error,
                                  fmt::format("failed to append implicit 'write "
-                                             "json --pretty': {}",
+                                             "json': {}",
                                              op.error()));
         }
         pipe.append(std::move(*op));

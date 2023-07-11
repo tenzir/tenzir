@@ -10,20 +10,62 @@
 
 #include "vast/concept/printable/core/operators.hpp"
 #include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/printable/core/sequence.hpp"
-#include "vast/concept/printable/std/chrono.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/escapers.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/view.hpp"
 
+#include <fmt/color.h>
 #include <fmt/format.h>
 
+#include <optional>
+
 namespace vast {
+
+struct json_style {
+  fmt::text_style null_;
+  fmt::text_style false_;
+  fmt::text_style true_;
+  fmt::text_style number;
+  fmt::text_style string;
+  fmt::text_style array;
+  fmt::text_style object;
+  fmt::text_style field;
+  fmt::text_style comma;
+};
+
+// Defined in
+// https://github.com/jqlang/jq/blob/c99981c5b2e7e7d4d6d1463cf564bb99e9f18ed9/src/jv_print.c#L27
+inline auto jq_style() -> json_style {
+  return {
+    .null_ = fmt::emphasis::bold | fg(fmt::terminal_color::black),
+    .false_ = fg(fmt::terminal_color::white),
+    .true_ = fg(fmt::terminal_color::white),
+    .number = fg(fmt::terminal_color::white),
+    .string = fg(fmt::terminal_color::green),
+    .array = fmt::emphasis::bold | fg(fmt::terminal_color::white),
+    .object = fmt::emphasis::bold | fg(fmt::terminal_color::white),
+    .field = fmt::emphasis::bold | fg(fmt::terminal_color::blue),
+    .comma = fmt::emphasis::bold | fg(fmt::terminal_color::white),
+  };
+}
+
+inline auto no_style() -> json_style {
+  return {};
+}
+
+inline auto default_style() -> json_style {
+  // TODO: perform TTY detection here.
+  return no_style();
+}
 
 struct json_printer : printer_base<json_printer> {
   struct options {
     /// The number of spaces used for indentation.
     uint8_t indentation = 2;
+
+    /// Colorize the output like `jq`.
+    json_style style = no_style();
 
     /// Print NDJSON rather than JSON.
     bool oneline = false;
@@ -59,79 +101,81 @@ struct json_printer : printer_base<json_printer> {
       // nop
     }
 
-    bool operator()(caf::none_t) noexcept {
-      out_ = fmt::format_to(out_, "null");
+    auto operator()(caf::none_t) noexcept -> bool {
+      out_ = fmt::format_to(out_, options_.style.null_, "null");
       return true;
     }
 
-    bool operator()(view<bool> x) noexcept {
-      out_ = x ? fmt::format_to(out_, "true") : fmt::format_to(out_, "false");
+    auto operator()(view<bool> x) noexcept -> bool {
+      out_ = x ? fmt::format_to(out_, options_.style.true_, "true")
+               : fmt::format_to(out_, options_.style.false_, "false");
       return true;
     }
 
-    bool operator()(view<int64_t> x) noexcept {
-      out_ = fmt::format_to(out_, "{}", x);
+    auto operator()(view<int64_t> x) noexcept -> bool {
+      out_ = fmt::format_to(out_, options_.style.number, "{}", x);
       return true;
     }
 
-    bool operator()(view<uint64_t> x) noexcept {
-      out_ = fmt::format_to(out_, "{}", x);
+    auto operator()(view<uint64_t> x) noexcept -> bool {
+      out_ = fmt::format_to(out_, options_.style.number, "{}", x);
       return true;
     }
 
-    bool operator()(view<double> x) noexcept {
+    auto operator()(view<double> x) noexcept -> bool {
       if (double i; std::modf(x, &i) == 0.0) // NOLINT
-        out_ = fmt::format_to(out_, "{}.0", i);
+        out_ = fmt::format_to(out_, options_.style.number, "{}.0", i);
       else
-        out_ = fmt::format_to(out_, "{}", x);
+        out_ = fmt::format_to(out_, options_.style.number, "{}", x);
       return true;
     }
 
-    bool operator()(view<duration> x) noexcept {
+    auto operator()(view<duration> x) noexcept -> bool {
       if (options_.numeric_durations) {
         const auto seconds
           = std::chrono::duration_cast<std::chrono::duration<double>>(x).count();
         return (*this)(seconds);
       }
-      static auto p = '"' << make_printer<duration>{} << '"';
-      return p.print(out_, x);
-    }
-
-    bool operator()(view<time> x) noexcept {
-      static auto p = '"' << make_printer<time>{} << '"';
-      return p.print(out_, x);
-    }
-
-    bool operator()(view<std::string> x) noexcept {
-      static auto p = '"' << printers::escape(detail::json_escaper) << '"';
-      return p.print(out_, x);
-    }
-
-    bool operator()(view<pattern> x) noexcept {
-      return (*this)(x.string());
-    }
-
-    bool operator()(view<ip> x) noexcept {
-      static auto p = '"' << make_printer<ip>{} << '"';
-      return p.print(out_, x);
-    }
-
-    bool operator()(view<subnet> x) noexcept {
-      static auto p = '"' << make_printer<subnet>{} << '"';
-      return p.print(out_, x);
-    }
-
-    bool operator()(view<enumeration> x) noexcept {
-      // We shouldn't ever arrive here as users should transform the enumeration
-      // to its textual representation first, but you never really know, so
-      // let's just print the number.
-      out_ = fmt::format_to(out_, "{}", x);
+      out_ = fmt::format_to(out_, options_.style.string, "{}", to_string(x));
       return true;
     }
 
-    bool operator()(const view<list>& x) noexcept {
+    auto operator()(view<time> x) noexcept -> bool {
+      out_ = fmt::format_to(out_, options_.style.string, "{}", to_string(x));
+      return true;
+    }
+
+    auto operator()(view<std::string> x) noexcept -> bool {
+      out_ = fmt::format_to(out_, options_.style.string, "{}",
+                            detail::json_escape(x));
+      return true;
+    }
+
+    auto operator()(view<pattern> x) noexcept -> bool {
+      return (*this)(x.string());
+    }
+
+    auto operator()(view<ip> x) noexcept -> bool {
+      out_ = fmt::format_to(out_, options_.style.string, "{}", to_string(x));
+      return true;
+    }
+
+    auto operator()(view<subnet> x) noexcept -> bool {
+      out_ = fmt::format_to(out_, options_.style.string, "{}", to_string(x));
+      return true;
+    }
+
+    auto operator()(view<enumeration> x) noexcept -> bool {
+      // We shouldn't ever arrive here as users should transform the enumeration
+      // to its textual representation first, but you never really know, so
+      // let's just print the number.
+      out_ = fmt::format_to(out_, options_.style.number, "{}", x);
+      return true;
+    }
+
+    auto operator()(const view<list>& x) noexcept -> bool {
       bool printed_once = false;
-      out_ = fmt::format_to(out_, "[");
+      out_ = fmt::format_to(out_, options_.style.array, "[");
       for (const auto& element : x) {
         if (should_skip(element))
           continue;
@@ -150,13 +194,13 @@ struct json_printer : printer_base<json_printer> {
         dedent();
         newline();
       }
-      out_ = fmt::format_to(out_, "]");
+      out_ = fmt::format_to(out_, options_.style.array, "]");
       return true;
     }
 
-    bool operator()(const view<map>& x) noexcept {
+    auto operator()(const view<map>& x) noexcept -> bool {
       bool printed_once = false;
-      out_ = fmt::format_to(out_, "[");
+      out_ = fmt::format_to(out_, options_.style.array, "[");
       for (const auto& element : x) {
         if (should_skip(element.second))
           continue;
@@ -168,34 +212,34 @@ struct json_printer : printer_base<json_printer> {
           separator();
           newline();
         }
-        out_ = fmt::format_to(out_, "{{");
+        out_ = fmt::format_to(out_, options_.style.object, "{{");
         indent();
         newline();
-        out_ = fmt::format_to(out_, "\"key\": ");
+        out_ = fmt::format_to(out_, options_.style.field, "\"key\": ");
         if (!caf::visit(*this, element.first))
           return false;
         separator();
         newline();
-        out_ = fmt::format_to(out_, "\"value\": ");
+        out_ = fmt::format_to(out_, options_.style.field, "\"value\": ");
         if (!caf::visit(*this, element.second))
           return false;
         dedent();
         newline();
-        out_ = fmt::format_to(out_, "}}");
+        out_ = fmt::format_to(out_, options_.style.object, "}}");
       }
       if (printed_once) {
         dedent();
         newline();
       }
-      out_ = fmt::format_to(out_, "]");
+      out_ = fmt::format_to(out_, options_.style.array, "]");
       return true;
     }
 
-    bool
-    operator()(const view<record>& x, std::string_view prefix = {}) noexcept {
+    auto operator()(const view<record>& x, std::string_view prefix
+                                           = {}) noexcept -> bool {
       bool printed_once = false;
       if (!options_.flattened || prefix.empty())
-        out_ = fmt::format_to(out_, "{{");
+        out_ = fmt::format_to(out_, options_.style.object, "{{");
       for (const auto& element : x) {
         if (should_skip(element.second))
           continue;
@@ -211,23 +255,25 @@ struct json_printer : printer_base<json_printer> {
         }
         if (options_.flattened) {
           const auto name = prefix.empty()
-                              ? std::string{element.first}
-                              : fmt::format("{}.{}", prefix, element.first);
+                              ? fmt::format(options_.style.field, "{}",
+                                            std::string{element.first})
+                              : fmt::format(options_.style.field, "{}.{}",
+                                            prefix, element.first);
           if (const auto* r = caf::get_if<view<record>>(&element.second)) {
             if (!(*this)(*r, name))
               return false;
           } else {
             if (!(*this)(name))
               return false;
-            out_ = fmt::format_to(out_, ": ");
+            out_ = fmt::format_to(out_, options_.style.object, ": ");
             if (!caf::visit(*this, element.second)) {
               return false;
             }
           }
         } else {
-          if (!(*this)(element.first))
-            return false;
-          out_ = fmt::format_to(out_, ": ");
+          out_ = fmt::format_to(out_, options_.style.field, "{}",
+                                detail::json_escape(element.first));
+          out_ = fmt::format_to(out_, options_.style.object, ": ");
           if (!caf::visit(*this, element.second))
             return false;
         }
@@ -237,12 +283,12 @@ struct json_printer : printer_base<json_printer> {
         newline();
       }
       if (!options_.flattened || prefix.empty())
-        out_ = fmt::format_to(out_, "}}");
+        out_ = fmt::format_to(out_, options_.style.object, "}}");
       return true;
     }
 
   private:
-    bool should_skip(view<data> x) noexcept {
+    auto should_skip(view<data> x) noexcept -> bool {
       if (options_.omit_nulls && caf::holds_alternative<caf::none_t>(x)) {
         return true;
       }
@@ -285,9 +331,9 @@ struct json_printer : printer_base<json_printer> {
 
     void separator() noexcept {
       if (options_.oneline)
-        out_ = fmt::format_to(out_, ", ");
+        out_ = fmt::format_to(out_, options_.style.comma, ", ");
       else
-        out_ = fmt::format_to(out_, ",");
+        out_ = fmt::format_to(out_, options_.style.comma, ",");
     }
 
     void newline() noexcept {
@@ -301,25 +347,25 @@ struct json_printer : printer_base<json_printer> {
   };
 
   template <class Iterator>
-  bool print(Iterator& out, const view<data>& d) const noexcept {
+  auto print(Iterator& out, const view<data>& d) const noexcept -> bool {
     return caf::visit(print_visitor{out, options_}, d);
   }
 
   template <class Iterator, class T>
-    requires caf::detail::tl_contains<view<data>::types, T>::value bool
-  print(Iterator& out, const T& d) const noexcept {
+    requires caf::detail::tl_contains<view<data>::types, T>::value
+  auto print(Iterator& out, const T& d) const noexcept -> bool {
     return print_visitor{out, options_}(d);
   }
 
   template <class Iterator>
-  bool print(Iterator& out, const data& d) const noexcept {
+  auto print(Iterator& out, const data& d) const noexcept -> bool {
     return print(out, make_view(d));
   }
 
   template <class Iterator, class T>
     requires(!caf::detail::tl_contains<view<data>::types, T>::value
-             && caf::detail::tl_contains<data::types, T>::value) bool
-  print(Iterator& out, const T& d) const noexcept {
+             && caf::detail::tl_contains<data::types, T>::value)
+  auto print(Iterator& out, const T& d) const noexcept -> bool {
     return print(out, make_view(d));
   }
 

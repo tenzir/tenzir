@@ -761,11 +761,26 @@ private:
   parser_args args_;
 };
 
+struct printer_args {
+  std::optional<location> compact_output;
+  std::optional<location> color_output;
+  std::optional<location> monochrome_output;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, printer_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("printer_args")
+      .fields(f.field("compact_output", x.compact_output),
+              f.field("color_output", x.color_output),
+              f.field("monochrome_output", x.monochrome_output));
+  }
+};
+
 class json_printer final : public plugin_printer {
 public:
   json_printer() = default;
 
-  explicit json_printer(bool pretty) : pretty_{pretty} {
+  explicit json_printer(printer_args args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -774,15 +789,22 @@ public:
 
   auto instantiate(type, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
+    auto compact = !!args_.compact_output;
+    auto style = default_style();
+    if (args_.color_output)
+      style = jq_style();
+    else if (args_.monochrome_output)
+      style = no_style();
     return printer_instance::make(
-      [pretty = pretty_](table_slice slice) -> generator<chunk_ptr> {
+      [compact, style](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
         }
-        // JSON printer should output NDJSON, see:
-        // https://github.com/ndjson/ndjson-spec
-        auto printer = vast::json_printer{{.oneline = not pretty}};
+        auto printer = vast::json_printer{{
+          .style = style,
+          .oneline = compact,
+        }};
         // TODO: Since this printer is per-schema we can write an optimized
         // version of it that gets the schema ahead of time and only expects
         // data corresponding to exactly that schema.
@@ -808,11 +830,11 @@ public:
   };
 
   friend auto inspect(auto& f, json_printer& x) -> bool {
-    return f.apply(x.pretty_);
+    return f.apply(x.args_);
   }
 
 private:
-  bool pretty_;
+  printer_args args_;
 };
 
 class plugin final : public virtual parser_plugin<json_parser>,
@@ -847,12 +869,15 @@ public:
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    auto pretty = false;
+    auto args = printer_args{};
     auto parser
       = argument_parser{"json", "https://docs.tenzir.com/next/formats/json"};
-    parser.add("--pretty", pretty);
+    // We try to follow 'jq' option naming.
+    parser.add("-c,--compact-output", args.compact_output);
+    parser.add("-C,--color-output", args.color_output);
+    parser.add("-M,--monochrome-output", args.color_output);
     parser.parse(p);
-    return std::make_unique<json_printer>(pretty);
+    return std::make_unique<json_printer>(std::move(args));
   }
 };
 
