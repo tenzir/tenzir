@@ -119,7 +119,7 @@ auto status_handler(
                 result = std::move(str);
               }}(msg);
             }}(ctx);
-            rp.deliver(rest_response{result});
+            rp.deliver(rest_response::from_json_string(result));
           });
       return rp;
     },

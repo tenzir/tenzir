@@ -105,10 +105,11 @@ struct rest_endpoint {
 struct rest_response {
   rest_response() = default;
 
-  // TODO: Have the constructor accept a `vast::record` instead and
-  // provide an explicit `from_json_string()` method, to enforce a
-  // JSON-like structure of the responses.
-  explicit rest_response(std::string body);
+  /// Create a response from a `vast::record`.
+  explicit rest_response(const vast::record& data);
+
+  /// Create a response from a JSON string.
+  static auto from_json_string(std::string json) -> rest_response;
 
   /// Returns an error that uses `{error: "{message}"}` as the response body.
   static auto make_error(uint16_t error_code, std::string_view message,
@@ -137,6 +138,7 @@ struct rest_response {
   }
 
 private:
+  // The HTTP status code.
   size_t code_ = 200;
 
   // The response body
@@ -148,7 +150,7 @@ private:
   // error.
   bool is_error_ = false;
 
-  // For log messages, debugging, etc. Not returned
+  // For log messages, debugging, etc. Not returned to the client.
   caf::error detail_ = {};
 };
 
