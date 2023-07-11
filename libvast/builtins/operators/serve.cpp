@@ -687,8 +687,8 @@ struct serve_handler_state {
       .then(
         [rp](const std::tuple<std::string, std::vector<table_slice>>&
                result) mutable {
-          rp.deliver(rest_response{
-            create_response(std::get<0>(result), std::get<1>(result))});
+          rp.deliver(rest_response::from_json_string(
+            create_response(std::get<0>(result), std::get<1>(result))));
         },
         [rp](caf::error& err) mutable {
           // TODO: Use a struct with distinct fields for user-facing

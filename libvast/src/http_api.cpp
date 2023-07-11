@@ -8,11 +8,33 @@
 
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/concept/printable/vast/json.hpp>
 #include <vast/http_api.hpp>
 
 #include <fmt/format.h>
 
 #include <simdjson.h>
+
+namespace {
+
+// Validates that the argument is a valid JSON object.
+auto validate_json(const std::string& json) -> bool {
+  auto parser = simdjson::dom::parser{};
+  auto padded = simdjson::padded_string{json};
+  auto obj = simdjson::dom::object{};
+  return parser.parse(json).get(obj) == simdjson::SUCCESS;
+}
+
+template <typename T>
+auto to_json_oneline(const T& obj) -> std::string {
+  auto printer = vast::json_printer{{.oneline = true}};
+  auto result = std::string{};
+  auto out = std::back_inserter(result);
+  printer.print(out, obj);
+  return result;
+}
+
+} // namespace
 
 namespace vast {
 
@@ -187,7 +209,16 @@ auto parse_endpoint_parameters(const vast::rest_endpoint& endpoint,
   return result;
 }
 
-rest_response::rest_response(std::string body) : body_(std::move(body)) {
+rest_response::rest_response(const vast::record& data)
+  : body_(to_json_oneline(data)) {
+}
+
+auto rest_response::from_json_string(std::string json) -> rest_response {
+  VAST_ASSERT_EXPENSIVE(validate_json(json));
+  auto result = rest_response{};
+  result.code_ = 200;
+  result.body_ = std::move(json);
+  return result;
 }
 
 auto rest_response::is_error() const -> bool {
@@ -220,7 +251,8 @@ auto rest_response::make_error(uint16_t error_code, std::string_view message,
 
 auto rest_response::make_error_raw(uint16_t error_code, std::string body,
                                    caf::error detail) -> rest_response {
-  auto result = rest_response{std::move(body)};
+  auto result = rest_response{};
+  result.body_ = std::move(body);
   result.code_ = error_code;
   result.is_error_ = true;
   result.detail_ = std::move(detail);
