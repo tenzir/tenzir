@@ -71,7 +71,7 @@ auto http_parameter_map::from_json(std::string_view json)
     return result;
   } catch (const simdjson::simdjson_error& exc) {
     return caf::make_error(ec::invalid_argument,
-                           fmt::format("failed to parse json: {}", exc));
+                           fmt::format("failed to parse json: {}", exc.what()));
   }
 }
 
