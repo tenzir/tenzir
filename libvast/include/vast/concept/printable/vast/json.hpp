@@ -136,12 +136,14 @@ struct json_printer : printer_base<json_printer> {
           = std::chrono::duration_cast<std::chrono::duration<double>>(x).count();
         return (*this)(seconds);
       }
-      out_ = fmt::format_to(out_, options_.style.string, "{}", to_string(x));
+      out_
+        = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
       return true;
     }
 
     auto operator()(view<time> x) noexcept -> bool {
-      out_ = fmt::format_to(out_, options_.style.string, "{}", to_string(x));
+      out_
+        = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
       return true;
     }
 
@@ -156,12 +158,14 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view<ip> x) noexcept -> bool {
-      out_ = fmt::format_to(out_, options_.style.string, "{}", to_string(x));
+      out_
+        = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
       return true;
     }
 
     auto operator()(view<subnet> x) noexcept -> bool {
-      out_ = fmt::format_to(out_, options_.style.string, "{}", to_string(x));
+      out_
+        = fmt::format_to(out_, options_.style.string, "\"{}\"", to_string(x));
       return true;
     }
 
