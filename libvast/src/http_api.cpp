@@ -60,12 +60,8 @@ auto http_parameter_map::from_json(std::string_view json)
       return result;
     auto padded_string = simdjson::padded_string{json};
     auto parser = simdjson::ondemand::parser{};
-    auto body = simdjson::ondemand::object{};
-    auto doc = parser.iterate(padded_string).value();
-    if ([[maybe_unused]] auto error = doc.get_object().get(body))
-      return caf::make_error(ec::invalid_argument,
-                             "expected a top-level object");
-    for (auto obj : body) {
+    auto doc = parser.iterate(padded_string);
+    for (auto obj : doc.get_object()) {
       auto value = parse_skeleton(obj.value());
       // Discard null values
       if (caf::holds_alternative<caf::none_t>(value))
