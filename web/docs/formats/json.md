@@ -14,8 +14,8 @@ json [--schema=<schema>] [--selector=<field[:prefix]>] [--unnest-separator=<stri
 Printer:
 
 ```
-json [--pretty] [--omit-nulls] [--omit-empty-records] [--omit-empty-lists]
-     [--omit-empty]
+json [-c|--compact-output] [-C|--color-output] [-M|--monochrome-output] 
+     [--omit-nulls] [--omit-empty-records] [--omit-empty-lists] [--omit-empty]
 ```
 
 ## Description
@@ -98,10 +98,27 @@ Popular examples of NDJSON include the Suricat Eve JSON and the Zeek Streaming
 JSON formats. Tenzir supports [`suricata`][suricata.md] and
 [`zeek-json`][zeek-json.md] parsers out of the box that utilize this mechanism.
 
-### `--pretty` (Printer)
+### `--c|--compact-output` (Printer)
 
-Tenzir defaults to line-delimited JSON output (JSONL or NDJSON). The `--pretty`
-flag switches to a tree-structured representation.
+Switch to line-delimited JSON output (JSONL/NDJSON).
+
+### `--C|--color-output` (Printer)
+
+Colorize the output.
+
+The option enables colorizing the output similar to `jq` by emitting terminal
+escape sequences that represent colors.
+
+Unlike `jq`, coloring is currently opt-in. In the future, we will perform TTY
+detection and colorize the output when write to stdout.
+
+### `--M|--monochrome-output` (Printer)
+
+Disables colored output.
+
+This is currently the default. In the future, we will perform TTY detection and
+colorize the output when write to stdout. Use this option today if you want to
+avoid an implicit upgrade to colors in the future.
 
 ### `--omit-nulls` (Printer)
 
@@ -192,14 +209,14 @@ Read JSON from stdin, either NDJSON or tree-structured:
 read json
 ```
 
-Write compact JSON without empty fields to a file:
+Write JSON without empty fields to a file:
 
 ```
 write json --omit-empty to file /tmp/result.json
 ```
 
-Pretty-print JSON in tree-structured form to stdout:
+Print NDJSON to stdout:
 
 ```
-write json --pretty
+write json -c
 ```
