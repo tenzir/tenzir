@@ -9,12 +9,17 @@ platform-specific instructiosn below.
 
 ## Docker
 
-Run the following two commands to update a Docker deployment:
+Run the following commands to update a Docker Compose deployment with a
+configuration file `docker-compose.NODE.yaml`:
 
 ```bash
-docker compose down
-docker compose up --pull
+docker compose -f docker-compose.NODE.yaml pull
+docker compose -f docker-compose.NODE.yaml down
+docker compose -f docker-compose.NODE.yaml up --detach
 ```
+
+Note that we `pull` first so that the subsequent downtime between `down` and
+`up` is minimal.
 
 ## Linux
 
