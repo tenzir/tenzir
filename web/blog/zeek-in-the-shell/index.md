@@ -12,6 +12,8 @@ bedrock for many security teams. But operationalizing these tools can take a
 good chunk of time. So we asked ourselves: **how can we make it super easy
 to work with Zeek and Suricata logs**?
 
+![Shell Operator](shell-operator.excalidraw.svg)
+
 <!--truncate-->
 
 ## Purring like a Suricat
