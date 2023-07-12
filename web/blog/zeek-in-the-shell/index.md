@@ -174,6 +174,6 @@ node.
 
 ## Conclusion
 
-In this blog post we showed you the `shell` operator and how you can use it to
-integrate third-party tooling into a Tenzir pipeline. Coupled with [user-defined
-operators](/operators/user-defined), you have an easy method to integrate
+In this blog post we showed you the [`shell`](/operators/sources/shell) operator
+and how you can use it to integrate third-party tooling into a Tenzir pipeline
+when coupled with [user-defined operators](/operators/user-defined).
