@@ -1,1 +1,4 @@
-{"schema": "cef.event", "sum(events)": 10}
+{
+  "schema": "cef.event",
+  "sum(events)": 10
+}
