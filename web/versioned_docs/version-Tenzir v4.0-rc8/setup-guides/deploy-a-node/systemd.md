@@ -1,8 +1,8 @@
 # systemd
 
 The Tenzir package bundles a systemd service unit under
-`<extraction_path>/lib/systemd/system/tenzir.service`. The service is sandboxed
-and runs with limited privileges.
+`<extraction_path>/lib/systemd/system/tenzir-node.service`. The service is
+sandboxed and runs with limited privileges.
 
 ## Prepare the host system
 
@@ -42,13 +42,13 @@ AmbientCapabilities=CAP_NET_RAW
 Then link the unit file to your systemd search path:
 
 ```bash
-systemctl link tenzir.service
+systemctl link tenzir-node.service
 ```
 
 To have the service start up automatically on system boot, `enable` it via
 `systemd`. Otherwise, just `start` it to run it immediately.
 
 ```bash
-systemctl enable tenzir
-systemctl start tenzir
+systemctl enable tenzir-node
+systemctl start tenzir-node
 ```
