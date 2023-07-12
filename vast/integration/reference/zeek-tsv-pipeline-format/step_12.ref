@@ -1,2 +1,2 @@
-error: !! syntax_error: zeek-tsv parser failed: additional data after #close should be preceded by Zeek header
- = note: from `parse "zeek-tsv"`
+error: failed to parse Zeek document: missing #path
+ = note: line 12
