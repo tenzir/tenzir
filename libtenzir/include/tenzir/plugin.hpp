@@ -443,6 +443,12 @@ public:
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>>
     = 0;
+
+  /// TODO
+  virtual auto optimize(event_order order) -> std::unique_ptr<plugin_parser> {
+    (void)order;
+    return nullptr;
+  }
 };
 
 /// @see operator_parser_plugin

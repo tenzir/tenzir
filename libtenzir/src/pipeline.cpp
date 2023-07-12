@@ -214,6 +214,17 @@ auto pipeline::optimize_if_closed() const -> pipeline {
                  *this, filter);
     return *this;
   }
+  auto out = pipe.infer_type<void>();
+  if (not out) {
+    TENZIR_ERROR("closed pipeline was optimized into invalid pipeline: {}",
+                 out.error());
+    return *this;
+  }
+  if (not out->is<void>()) {
+    TENZIR_ERROR("closed pipeline was optimized into one ending with {}",
+                 operator_type_name(*out));
+    return *this;
+  }
   return std::move(pipe);
   // TODO: Do we want this?
   // if (optimized->first != trivially_true_expression()) {
@@ -246,7 +257,9 @@ auto pipeline::optimize(expression const& filter, event_order order) const
   // Collect the optimized pipeline in reversed order.
   auto result = std::vector<operator_ptr>{};
   for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
-    auto opt = (*it)->optimize(current_filter, current_order);
+    TENZIR_ASSERT(*it);
+    auto const& op = **it;
+    auto opt = op.optimize(current_filter, current_order);
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else {
@@ -261,12 +274,11 @@ auto pipeline::optimize(expression const& filter, event_order order) const
         result.push_back(std::move(ops[0]));
         current_filter = trivially_true_expression();
       }
-      auto copy = (*it)->copy();
-      TENZIR_ASSERT(copy);
-      result.push_back(std::move(copy));
     }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));
+    } else {
+      result.push_back(op.copy());
     }
     current_order = opt.order;
   }

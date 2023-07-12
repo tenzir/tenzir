@@ -110,7 +110,7 @@ struct parser_state {
     builders_per_schema{};
   // Used to check if the parser must yield in case the parser was seeded with a
   // known schema. The parses must yield the table_slice of previously parsed
-  // schema when it parses an event of a different one.
+  // schema when it parses an event of a different one. TODO: Not true anymore.
   adaptive_table_slice_builder* last_used_builder = nullptr;
   std::string last_used_schema_name{};
   // Table slice builder used when the schema is not known.
@@ -410,13 +410,15 @@ class parser_base {
 public:
   parser_base(operator_control_plane& ctrl, std::optional<selector> selector,
               std::optional<type> schema, std::vector<type> schemas,
-              FieldValidator field_validator, bool infer_types)
+              FieldValidator field_validator, bool infer_types,
+              bool preserve_order)
     : ctrl_{ctrl},
       selector_{std::move(selector)},
       schema_{std::move(schema)},
       schemas_{std::move(schemas)},
       field_validator_{std::move(field_validator)},
-      infer_types_{infer_types} {
+      infer_types_{infer_types},
+      preserve_order{preserve_order} {
   }
 
 protected:
@@ -541,6 +543,7 @@ protected:
   std::vector<type> schemas_;
   FieldValidator field_validator_;
   bool infer_types_ = true;
+  bool preserve_order = true;
   simdjson::ondemand::parser parser_;
   // TODO: change max table slice size to be fetched from options.
   tenzir::detail::arrow_length_type max_table_slice_rows_
@@ -748,6 +751,7 @@ struct parser_args {
   std::string unnest_separator;
   bool no_infer = false;
   bool use_ndjson_mode = false;
+  bool preserve_order = true;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
@@ -756,7 +760,8 @@ struct parser_args {
       .fields(f.field("selector", x.selector), f.field("schema", x.schema),
               f.field("unnest_separator", x.unnest_separator),
               f.field("no_infer", x.no_infer),
-              f.field("use_ndjson_mode", x.use_ndjson_mode));
+              f.field("use_ndjson_mode", x.use_ndjson_mode),
+              f.field("preserve_order", x.preserve_order));
   }
 };
 
@@ -774,6 +779,12 @@ public:
 
   auto name() const -> std::string override {
     return "json";
+  }
+
+  auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
+    auto args = args_;
+    args.preserve_order = order == event_order::ordered;
+    return std::make_unique<json_parser>(std::move(args));
   }
 
   auto
@@ -839,6 +850,7 @@ private:
                            std::move(schemas),
                            std::move(field_validator),
                            not args_.no_infer,
+                           args_.preserve_order,
                          });
     }
     return make_parser(std::move(input), args_.unnest_separator,
@@ -850,6 +862,7 @@ private:
                          std::move(schemas),
                          std::move(field_validator),
                          not args_.no_infer,
+                         args_.preserve_order,
                        });
   }
 
