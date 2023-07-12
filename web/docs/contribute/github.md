@@ -7,7 +7,7 @@ This page documents workflows concerning developer-facing GitHub infrastructure.
 To ensure that [issue and pull request
 labels](https://github.com/tenzir/tenzir/labels) are consistent within and
 across several of our repositories, we use [GitHub Label
-Sync](https://github.com/Financial-Times/github-label-sync). 
+Sync](https://github.com/Financial-Times/github-label-sync).
 
 To synchronize the labels, run:
 
