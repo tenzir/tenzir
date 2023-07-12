@@ -93,27 +93,27 @@ async function createConfig() {
         {
           redirects: [
             {
-              to: '/next/why-tenzir',
+              to: '/why-tenzir',
               from: '/docs/about-vast',
             },
             {
-              to: '/next/get-started',
+              to: '/get-started',
               from: '/docs/try-vast',
             },
             {
-              to: '/next/setup-guides',
+              to: '/setup-guides',
               from: '/docs/setup-vast',
             },
             {
-              to: '/next/user-guides',
+              to: '/user-guides',
               from: '/docs/use-vast',
             },
             {
-              to: '/next/developer-guides',
+              to: '/developer-guides',
               from: '/docs/develop-vast',
             },
             {
-              to: '/next/contribute',
+              to: '/contribute',
               from: '/docs/develop-vast/contributing',
             },
             {
@@ -200,20 +200,11 @@ async function createConfig() {
             width: 120,
           },
           items: [
-            // TODO: after we've rotated out old versions that do not contain
-            // the 'get-started' docId, we can make this again the entry point,
-            // as opposed to using a link to /docs/next/get-started that doesn't
-            // preserve the version selection.
-            //{
-            //  type: 'doc',
-            //  docId: 'get-started',
-            //  position: 'left',
-            //  label: 'Docs',
-            //},
             {
-              to: '/next/get-started',
-              label: 'Docs',
+              type: 'doc',
+              docId: 'get-started',
               position: 'left',
+              label: 'Docs',
             },
             {
               to: 'blog',
