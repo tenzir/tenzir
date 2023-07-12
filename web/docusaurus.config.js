@@ -246,7 +246,7 @@ async function createConfig() {
         },
         announcementBar: {
           content:
-            'Zeek user? <a href="/blog/mobilizing-zeek-logs">Learn all about Zeek logs</a> and how to get instant value with Tenzir pipelines.',
+            'Zeekers & Suricats! Learn <a href="/blog/zeek-and-ye-shall-pipe">how to use the <code>shell</code> operator</a> to lift Zeek & Suricata into a Tenzir pipeline.',
           backgroundColor: '#f1f2f2',
           isCloseable: true,
         },
