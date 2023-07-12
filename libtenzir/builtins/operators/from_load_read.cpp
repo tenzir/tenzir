@@ -84,8 +84,20 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
-    (void)filter, (void)order;
-    return do_not_optimize(*this);
+    (void)filter;
+    if (order == event_order::ordered) {
+      return do_not_optimize(*this);
+    }
+    // TODO: We could also propagate `where #schema == "..."` to the parser.
+    auto parser_opt = parser_->optimize(order);
+    if (not parser_opt) {
+      return do_not_optimize(*this);
+    }
+    return optimize_result{
+      std::nullopt,
+      event_order::ordered,
+      std::make_unique<parse_operator>(std::move(parser_opt)),
+    };
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {

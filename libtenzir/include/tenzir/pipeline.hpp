@@ -164,6 +164,10 @@ enum class event_order {
   unordered
 };
 
+auto inspect(auto& f, event_order& x) -> bool {
+  return detail::inspect_enum_str(f, x, {"ordered", "schema", "unordered"});
+}
+
 /// The result of calling `operator_base::optimize(...)`.
 ///
 /// @see operator_base::optimize

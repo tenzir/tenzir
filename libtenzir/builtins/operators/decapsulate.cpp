@@ -379,17 +379,20 @@ public:
     return "decapsulate";
   }
 
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override {
-    auto pred = predicate{
-      meta_extractor{meta_extractor::kind::schema},
-      relational_operator::equal,
-      data{"pcap.packet"},
-    };
-    auto op = pipeline::internal_parse_as_operator(
-      fmt::format("decapsulate | where {}", expr));
-    TENZIR_ASSERT_CHEAP(op);
-    return std::pair{expression{std::move(pred)}, std::move(*op)};
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+    // TODO: This is the previous implementation. But we might not want this.
+    // auto pred = predicate{
+    //   meta_extractor{meta_extractor::kind::schema},
+    //   relational_operator::equal,
+    //   data{"pcap.packet"},
+    // };
+    // auto op = pipeline::internal_parse_as_operator(
+    //   fmt::format("decapsulate | where {}", expr));
+    // TENZIR_ASSERT_CHEAP(op);
+    // return std::pair{expression{std::move(pred)}, std::move(*op)};
   }
 
   auto name() const -> std::string override {
@@ -399,7 +402,7 @@ public:
   friend auto inspect(auto& f, decapsulate_operator& x) -> bool {
     return f.object(x)
       .pretty_name("decapsulate_operator")
-      .fields(f.field("operator_args", x.args_));
+      .fields(f.field("args", x.args_));
   }
 
 private:
