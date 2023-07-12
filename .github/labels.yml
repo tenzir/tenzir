@@ -37,13 +37,19 @@
 - name: docs
   color: 0366d6
   description: Documentation and blog
-- name: infra
+- name: ci
   color: 0366d6
   description: Continuous integration and delivery
 - name: rfc
   color: 0366d6
   description: A Request For Comments (RFC)
 # Functionality
+- name: app
+  color: d93f0b
+  description: Our app at app.tenzir.com
+- name: platform
+  color: d93f0b
+  description: The infra behind app.tenzir.com
 - name: engine
   color: d93f0b
   description: Core pipeline and storage engine
@@ -59,3 +65,6 @@
 - name: language
   color: d93f0b
   description: Tenzir Query Language (TQL)
+- name: integration
+  color: d93f0b
+  description: Integration with third-party tools
