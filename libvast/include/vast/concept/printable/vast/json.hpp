@@ -55,7 +55,8 @@ inline auto no_style() -> json_style {
 }
 
 inline auto default_style() -> json_style {
-  // TODO: perform TTY detection here.
+  // TODO: Let the saver detect a default style, depending on
+  // whether we're outputting data in a TTY or not.
   return no_style();
 }
 
