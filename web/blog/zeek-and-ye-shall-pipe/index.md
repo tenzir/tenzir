@@ -73,7 +73,7 @@ This requires a bit explanation:
 
 - `LogAscii::output_to_stdout=T` redirects the log output to stdout.
 - `JSONStreaming::disable_default_logs=T` disables the default TSV logs.
-  Withouth this option, Zeek will print *both* TSV and NDJSON to stdout.
+  Without this option, Zeek will print *both* TSV and NDJSON to stdout.
 - `JSONStreaming::enable_log_rotation=F` disables log rotation. This is needed
   because the option `output_to_stdout=T` sets the internal filenames to
   `/dev/stdout`, which Zeek then tries to rotate away. Better not.
@@ -99,7 +99,7 @@ zeek -r - \
   JSONStreaming::disable_default_logs=T \
   JSONStreaming::enable_log_rotation=F \
   json-streaming-logs \
-  $*
+  "$@"
 ```
 
 Now we're in pipeline land:
@@ -121,8 +121,8 @@ ntp
 conn
 ```
 
-Okay, we got Zeek as Unix pipe. But now you have to wrangle the JSON with `jq`.
-Unless you're a die-hard fan, even simple analytics, like filtering or
+Okay, we got Zeek as a Unix pipe. But now you have to wrangle the JSON with
+`jq`. Unless you're a die-hard fan, even simple analytics, like filtering or
 aggregating, have a steep learning curve. In the next blog post, we'll double
 down on the elegant principle of pipelines and show how you can take do easy
 in-situ analytics with Tenzir.
