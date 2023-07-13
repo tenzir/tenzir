@@ -679,14 +679,14 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
     vast-schema
     COMMAND
       ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/vast/schema/"
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
     COMMENT "Copying schema directory")
 endif ()
 
 if (VAST_ENABLE_BUNDLED_SCHEMAS)
   install(
     DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
     COMPONENT Runtime)
 endif ()
 
@@ -949,22 +949,22 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
   install(
     CODE "
     cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
-    file(REMOVE_RECURSE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
-    file(MAKE_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+    file(REMOVE_RECURSE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\")
+    file(MAKE_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\")
     file(
       COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
-      DESTINATION \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+      DESTINATION \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\")
     # Poetry evaluates the top-level gitignore, which leads it to ignore
     # everything in case the install prefix is in an ignored path. Setting the
     # git directory explicitly works around the issue.
     set(ENV{GIT_DIR} \"/dev/null\")
     execute_process(
       COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel -vvv
-      WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
+      WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\"
       COMMAND_ERROR_IS_FATAL ANY)
     file(
       GLOB VAST_PYTHON_WHL
-      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python/dist/*.whl\")
+      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python/dist/*.whl\")
     file(
       GLOB VAST_OLD_INSTALLED_BINS
       \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
@@ -973,7 +973,7 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
         ${VAST_POETRY_EXTRA_INSTALL_ARGS}
         --prefix \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\"
         \"\${VAST_PYTHON_WHL}\"
-      WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
+      WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\"
       COMMAND_ERROR_IS_FATAL ANY)
     file(
       GLOB VAST_NEW_INSTALLED_BINS

@@ -45,7 +45,7 @@ install_prefix_and_suffix() {
 
 std::filesystem::path install_datadir() {
   const auto [prefix, _] = install_prefix_and_suffix();
-  return prefix / "@CMAKE_INSTALL_DATADIR@/vast";
+  return prefix / "@CMAKE_INSTALL_DATADIR@/tenzir";
 }
 
 std::filesystem::path install_configdir() {
