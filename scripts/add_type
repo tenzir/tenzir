@@ -6,8 +6,8 @@
 # -o   Header-only (do not add .cpp file)
 
 # Usage example:
-# - Header, class, and test: add_type libvast vast::foo
-# - Header and test: add_type -o libvast vast::foo
+# - Header, class, and test: add_type libtenzir tenzir::foo
+# - Header and test: add_type -o libtenzir tenzir::foo
 
 import argparse
 
@@ -149,9 +149,9 @@ def main():
     fields = {
         "class": class_name,
         "namespace": namespace,
-        "hpp": "vast/" + path + ".hpp",
+        "hpp": "tenzir/" + path + ".hpp",
     }
-    make_file(args.component, "vast/" + path + ".hpp", header_tpl, fields)
+    make_file(args.component, "tenzir/" + path + ".hpp", header_tpl, fields)
     if not args.headeronly:
         make_file(args.component, "src/" + path + ".cpp", source_tpl, fields)
     make_file(args.component, "test/" + path + ".cpp", test_tpl, fields)

@@ -8,7 +8,7 @@
 
 #include "web/authenticator.hpp"
 
-#include <vast/detail/base64.hpp>
+#include <tenzir/detail/base64.hpp>
 
 #include <caf/scoped_actor.hpp>
 #include <openssl/err.h>
@@ -16,7 +16,7 @@
 
 #include <array>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 caf::error authenticator_state::initialize_from(chunk_ptr chunk) {
   // We always verify here since most fields are required, so we
@@ -156,7 +156,7 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
         }
       },
       [self](const caf::error& e) {
-        if (vast::ec{e.code()} == vast::ec::no_such_file) {
+        if (tenzir::ec{e.code()} == tenzir::ec::no_such_file) {
           TENZIR_VERBOSE("{} starts from a fresh state", *self);
           return;
         }
@@ -195,10 +195,10 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
     [self](atom::validate, const token_t& token) -> bool {
       return self->state.authenticate(token);
     },
-    [](atom::status, status_verbosity, duration) -> vast::record {
+    [](atom::status, status_verbosity, duration) -> tenzir::record {
       return record{};
     },
   };
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

@@ -1,3 +1,3 @@
-from .vast import *
-import pyvast.utils.config
-import pyvast.utils.logging
+from .tenzir import *
+import pytenzir.utils.config
+import pytenzir.utils.logging

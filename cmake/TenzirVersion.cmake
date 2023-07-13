@@ -2,7 +2,7 @@ file(READ "${CMAKE_CURRENT_LIST_DIR}/../version.json" TENZIR_VERSION_JSON)
 string(JSON TENZIR_VERSION_FALLBACK GET "${TENZIR_VERSION_JSON}"
        tenzir-version-fallback)
 string(JSON TENZIR_PARTITION_VERSION GET "${TENZIR_VERSION_JSON}"
-       vast-partition-version)
+       tenzir-partition-version)
 
 find_package(Git QUIET)
 
@@ -115,19 +115,19 @@ get_filename_component(parent_dir "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
 file(
   GLOB_RECURSE
   hash_files
-  "${parent_dir}/libvast/*.cpp"
-  "${parent_dir}/libvast/*.cpp.in"
-  "${parent_dir}/libvast/*.fbs"
-  "${parent_dir}/libvast/*.hpp"
-  "${parent_dir}/libvast/*.hpp.in"
+  "${parent_dir}/libtenzir/*.cpp"
+  "${parent_dir}/libtenzir/*.cpp.in"
+  "${parent_dir}/libtenzir/*.fbs"
+  "${parent_dir}/libtenzir/*.hpp"
+  "${parent_dir}/libtenzir/*.hpp.in"
   "${parent_dir}/cmake/*"
   "${parent_dir}/CMakeLists.txt")
 list(SORT hash_files)
 
 cmake_policy(POP)
 
-list(FILTER hash_files EXCLUDE REGEX "^${parent_dir}/libvast/aux/")
-list(FILTER hash_files EXCLUDE REGEX "^${parent_dir}/libvast/test/")
+list(FILTER hash_files EXCLUDE REGEX "^${parent_dir}/libtenzir/aux/")
+list(FILTER hash_files EXCLUDE REGEX "^${parent_dir}/libtenzir/test/")
 
 list(
   SORT hash_files

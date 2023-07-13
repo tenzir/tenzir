@@ -7,19 +7,19 @@ For detailed usage instructions of the REST API, please consult the
 [documentation][rest-api]. The frontend has its own README in the [ui](ui)
 subdirectory.
 
-[rest-api]: https://vast.io/docs/use/integrate/rest-api
+[rest-api]: https://tenzir.io/docs/use/integrate/rest-api
 
 ## Usage
 
 To run the REST API as dedicated process, use the `web server` command:
 
 ```bash
-vast web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
+tenzir web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
 ```
 To run the server within the main Tenzir process, use a `start` command:
 
 ```bash
-vast start --commands="web server [...]"
+tenzir start --commands="web server [...]"
 ```
 
 All requests must be authenticated by a valid authentication token, which is a
@@ -28,11 +28,11 @@ short string that must be sent in the `X-Tenzir-Token` request header.
 You can generate a valid token on the command line as follows:
 
 ```bash
-vast web generate-token
+tenzir web generate-token
 ```
 
 Use the "developer mode" to bypass encryption and token validation:
 
 ```bash
-vast web server --mode=dev
+tenzir web server --mode=dev
 ```

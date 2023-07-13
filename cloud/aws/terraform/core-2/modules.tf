@@ -2,7 +2,7 @@ module "network" {
   source = "./network"
 
   peered_vpc_id = var.peered_vpc_id
-  new_vpc_cidr  = var.vast_cidr
+  new_vpc_cidr  = var.tenzir_cidr
 
   providers = {
     aws               = aws
@@ -12,22 +12,22 @@ module "network" {
 
 module "efs" {
   source            = "./efs"
-  count             = var.vast_storage_type == "EFS" ? 1 : 0
-  name              = "vast-server"
+  count             = var.tenzir_storage_type == "EFS" ? 1 : 0
+  name              = "tenzir-server"
   vpc_id            = module.network.new_vpc_id
   subnet_id         = module.network.private_subnet_id
   security_group_id = aws_security_group.server_efs.id
 }
 
-module "vast_server" {
+module "tenzir_server" {
   source = "./fargate"
 
-  name        = local.vast_server_name
+  name        = local.tenzir_server_name
   region_name = var.region_name
 
   vpc_id                      = module.network.new_vpc_id
   subnet_id                   = module.network.private_subnet_id
-  security_group_ids          = [aws_security_group.vast_server.id, aws_security_group.client_efs.id]
+  security_group_ids          = [aws_security_group.tenzir_server.id, aws_security_group.client_efs.id]
   ecs_cluster_id              = aws_ecs_cluster.fargate_cluster.id
   ecs_cluster_name            = aws_ecs_cluster.fargate_cluster.name
   ecs_task_execution_role_arn = aws_iam_role.fargate_task_execution_role.arn
@@ -36,15 +36,15 @@ module "vast_server" {
   task_cpu    = 2048
   task_memory = 8192
 
-  docker_image = var.vast_server_image
+  docker_image = var.tenzir_server_image
   efs = {
-    access_point_id = var.vast_storage_type == "EFS" ? module.efs[0].access_point_id : ""
-    file_system_id  = var.vast_storage_type == "EFS" ? module.efs[0].file_system_id : ""
+    access_point_id = var.tenzir_storage_type == "EFS" ? module.efs[0].access_point_id : ""
+    file_system_id  = var.tenzir_storage_type == "EFS" ? module.efs[0].file_system_id : ""
   }
-  storage_mount_point = "/var/lib/vast"
+  storage_mount_point = "/var/lib/tenzir"
 
-  entrypoint = "exec vast start"
-  port       = local.vast_port
+  entrypoint = "exec tenzir start"
+  port       = local.tenzir_port
 
   environment = [{
     name  = "AWS_REGION"
@@ -52,7 +52,7 @@ module "vast_server" {
   }]
 }
 
-module "vast_client" {
+module "tenzir_client" {
   source = "../common/lambda"
 
   function_base_name = "client"
@@ -63,11 +63,11 @@ module "vast_client" {
 
   vpc_id            = module.network.new_vpc_id
   subnets           = [module.network.private_subnet_id]
-  security_group_id = aws_security_group.vast_client.id
+  security_group_id = aws_security_group.tenzir_client.id
 
   additional_policies = []
   environment = {
-    TENZIR_ENDPOINT = local.vast_server_hostname
+    TENZIR_ENDPOINT = local.tenzir_server_hostname
   }
 
 }

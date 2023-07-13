@@ -12,20 +12,20 @@
 #include "web/server_command.hpp"
 #include "web/specification_command.hpp"
 
-#include <vast/concept/convertible/data.hpp>
-#include <vast/concept/convertible/to.hpp>
-#include <vast/concept/printable/to_string.hpp>
-#include <vast/data.hpp>
-#include <vast/node.hpp>
-#include <vast/node_control.hpp>
-#include <vast/plugin.hpp>
-#include <vast/spawn_or_connect_to_node.hpp>
-#include <vast/type.hpp>
+#include <tenzir/concept/convertible/data.hpp>
+#include <tenzir/concept/convertible/to.hpp>
+#include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/node.hpp>
+#include <tenzir/node_control.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/spawn_or_connect_to_node.hpp>
+#include <tenzir/type.hpp>
 
 #include <caf/scoped_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 /// The API plugin.
 class plugin final : public virtual command_plugin,
@@ -78,8 +78,8 @@ class plugin final : public virtual command_plugin,
   }
 };
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web
 
-TENZIR_REGISTER_PLUGIN(vast::plugins::web::plugin)
-TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_web_plugin_types,
-                                     vast_web_plugin_actors)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::web::plugin)
+TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(tenzir_web_plugin_types,
+                                     tenzir_web_plugin_actors)

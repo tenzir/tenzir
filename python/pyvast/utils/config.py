@@ -22,7 +22,7 @@ def create() -> Config:
     settings.validators.register(
         Validator(PREFIX + "console-verbosity", default="debug"),
         Validator(PREFIX + "file-verbosity", default="quiet"),
-        Validator(PREFIX + "log-file", default="vast.log"),
+        Validator(PREFIX + "log-file", default="tenzir.log"),
     )
     settings.validators.validate_all()
     return Config(settings)

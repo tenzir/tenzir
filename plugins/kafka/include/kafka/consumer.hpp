@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 /// Wraps a `RdKafka::Consumer` in a friendly interface.
 class consumer {
@@ -41,4 +41,4 @@ private:
   std::shared_ptr<RdKafka::KafkaConsumer> consumer_{};
 };
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

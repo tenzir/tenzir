@@ -1,0 +1,40 @@
+include "synopsis.fbs";
+include "type.fbs";
+
+namespace tenzir.fbs.partition_synopsis;
+
+table LegacyPartitionSynopsis {
+  /// Synopses for individual fields.
+  // TODO: Split this into separate vectors for field synopses
+  // and type synopses.
+  synopses: [synopsis.LegacySynopsis];
+
+  /// The id range of this partition.
+  id_range: tenzir.fbs.uinterval;
+
+  /// The import time range of this partition.
+  import_time_range: tenzir.fbs.interval;
+
+  /// The version number of this partition. This number is used internally by
+  /// the `rebuild` command to determine whether a partitions needs to be
+  /// upgraded to a more recent version.
+  version: ulong;
+
+  /// The schema of this partition. Note that this field was not present for
+  /// partition synopses with a version number of 0.
+  schema: [ubyte] (nested_flatbuffer: "tenzir.fbs.Type");
+}
+
+union PartitionSynopsis {
+  legacy: partition_synopsis.LegacyPartitionSynopsis,
+}
+
+namespace tenzir.fbs;
+
+table PartitionSynopsis {
+  partition_synopsis: partition_synopsis.PartitionSynopsis;
+}
+
+root_type PartitionSynopsis;
+
+file_identifier "vPSN";

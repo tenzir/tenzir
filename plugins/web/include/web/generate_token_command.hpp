@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include <vast/command.hpp>
+#include <tenzir/command.hpp>
 
 #include <caf/actor_system.hpp>
 #include <web/fwd.hpp>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
-auto generate_token_command(const vast::invocation&, caf::actor_system&)
+auto generate_token_command(const tenzir::invocation&, caf::actor_system&)
   -> caf::message;
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

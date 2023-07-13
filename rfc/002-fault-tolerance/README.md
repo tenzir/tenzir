@@ -11,7 +11,7 @@
   - [Dominik Lohmann](https://github.com/dominiklohmann)
   - [Rémi Dettai](https://github.com/rdettai)
   - [Anthony Verez](https://github.com/netantho)
-- **Discussion**: [PR #2562](https://github.com/tenzir/vast/pull/2562)
+- **Discussion**: [PR #2562](https://github.com/tenzir/tenzir/pull/2562)
 
 ## Overview
 
@@ -463,7 +463,7 @@ share a single metastore. We would need at least 3 Raft instances to obtain a
 quorum majority when 1 node fails, 5 Raft nodes to tolerate 2 node failures.
 
 Tenzir already had a
-[working-albeit-minimal](https://github.com/tenzir/vast/pull/926) implementation
+[working-albeit-minimal](https://github.com/tenzir/tenzir/pull/926) implementation
 in the past that we removed, given that we didn't need the functionality at the
 time. There are some [open questions on composability of log and state
 machine](https://groups.google.com/g/raft-dev/c/O80OSWrQieo) that we may

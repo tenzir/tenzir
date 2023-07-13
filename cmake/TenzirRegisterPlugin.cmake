@@ -99,9 +99,9 @@ macro (TenzirTargetEnableTooling _target)
       "${_target}"
       ${ARGV}
       EXCLUDE
-      "${PROJECT_SOURCE_DIR}/libvast/aux/*"
-      "${PROJECT_SOURCE_DIR}/libvast/test/*"
-      "${PROJECT_SOURCE_DIR}/libvast_test/*"
+      "${PROJECT_SOURCE_DIR}/libtenzir/aux/*"
+      "${PROJECT_SOURCE_DIR}/libtenzir/test/*"
+      "${PROJECT_SOURCE_DIR}/libtenzir_test/*"
       "${PROJECT_BINARY_DIR}/*"
       ${_absolute_plugin_test_sources})
   endif ()
@@ -428,7 +428,7 @@ function (TenzirRegisterPlugin)
   # Enable compile commands for external plugins.
   # Must be done before the targets are created for CMake >= 3.20.
   # TODO: Replace this with the corresponding interface target property on
-  # libvast_internal when bumping the minimum CMake version to 3.20.
+  # libtenzir_internal when bumping the minimum CMake version to 3.20.
   if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
   endif ()
@@ -468,8 +468,8 @@ function (TenzirRegisterPlugin)
   tenzirtargetenabletooling(${PLUGIN_TARGET})
   target_link_libraries(
     ${PLUGIN_TARGET}
-    PUBLIC vast::libvast
-    PRIVATE vast::internal)
+    PUBLIC tenzir::libtenzir
+    PRIVATE tenzir::internal)
 
   # Set up the target's include directories.
   if (PLUGIN_INCLUDE_DIRECTORIES)
@@ -481,7 +481,7 @@ function (TenzirRegisterPlugin)
                                PUBLIC $<BUILD_INTERFACE:${include_directories}>)
   endif ()
 
-  string(MAKE_C_IDENTIFIER "vast_plugin_${PLUGIN_TARGET}_version"
+  string(MAKE_C_IDENTIFIER "tenzir_plugin_${PLUGIN_TARGET}_version"
                            PLUGIN_TARGET_IDENTIFIER)
   if (NOT PROJECT_VERSION)
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp"
@@ -556,12 +556,12 @@ function (TenzirRegisterPlugin)
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
   tenzirtargetenabletooling(${PLUGIN_TARGET}-static)
   tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
-  target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
+  target_link_libraries(${PLUGIN_TARGET}-static PRIVATE tenzir::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
                              PRIVATE TENZIR_ENABLE_STATIC_PLUGINS)
 
   if (TENZIR_ENABLE_STATIC_PLUGINS)
-    # Link our static library against the vast binary directly.
+    # Link our static library against the tenzir binary directly.
     tenzirtargetlinkwholearchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
   else ()
     # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
@@ -581,18 +581,18 @@ function (TenzirRegisterPlugin)
     tenzirtargetenabletooling(${PLUGIN_TARGET}-shared)
     tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-shared PUBLIC
                                  ${PLUGIN_TARGET})
-    target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE vast::internal)
+    target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE tenzir::internal)
 
-    # Install the plugin library to <libdir>/vast/plugins, and also configure
+    # Install the plugin library to <libdir>/tenzir/plugins, and also configure
     # the library output directory accordingly.
     set_target_properties(
       ${PLUGIN_TARGET}-shared
       PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-                 "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
-                 OUTPUT_NAME "vast-plugin-${PLUGIN_TARGET}")
+                 "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/tenzir/plugins"
+                 OUTPUT_NAME "tenzir-plugin-${PLUGIN_TARGET}")
     install(
       TARGETS ${PLUGIN_TARGET}-shared
-      DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins"
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/tenzir/plugins"
       COMPONENT Runtime)
 
     # Ensure that Tenzir only runs after all dynamic plugin libraries are built.
@@ -645,7 +645,7 @@ function (TenzirRegisterPlugin)
             "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/plugin/${PLUGIN_TARGET}/schema"
         )
         add_custom_target(
-          vast-schema-${plugin_schema_file_hash}
+          tenzir-schema-${plugin_schema_file_hash}
           BYPRODUCTS "${plugin_schema_dir}/${relative_plugin_schema_file}"
           COMMAND "${CMAKE_COMMAND}" -E copy "${plugin_schema_file}"
                   "${plugin_schema_dir}/${relative_plugin_schema_file}"
@@ -653,7 +653,7 @@ function (TenzirRegisterPlugin)
             "Copying schema file ${relative_plugin_schema_file} for plugin ${PLUGIN_TARGET}"
         )
         add_dependencies(${PLUGIN_TARGET}
-                         vast-schema-${plugin_schema_file_hash})
+                         tenzir-schema-${plugin_schema_file_hash})
       endforeach ()
     endif ()
   endif ()
@@ -672,19 +672,19 @@ function (TenzirRegisterPlugin)
     endforeach ()
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
     tenzirtargetenabletooling(${PLUGIN_TARGET}-test)
-    target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
-                                                        vast::internal)
+    target_link_libraries(${PLUGIN_TARGET}-test PRIVATE tenzir::test
+                                                        tenzir::internal)
     tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-test PRIVATE
                                  ${PLUGIN_TARGET}-static)
     tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-test PRIVATE
-                                 vast::libvast_builtins)
+                                 tenzir::libtenzir_builtins)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
     set_tests_properties(
       build-${PLUGIN_TARGET}-test
-      PROPERTIES FIXTURES_SETUP vast_${PLUGIN_TARGET}_unit_test_fixture
-                 FIXTURES_REQUIRED vast_unit_test_fixture)
+      PROPERTIES FIXTURES_SETUP tenzir_${PLUGIN_TARGET}_unit_test_fixture
+                 FIXTURES_REQUIRED tenzir_unit_test_fixture)
     foreach (suite IN LISTS suites)
       string(REPLACE " " "_" test_name ${suite})
       add_test(NAME "plugin/${PLUGIN_TARGET}/${test_name}"
@@ -692,7 +692,7 @@ function (TenzirRegisterPlugin)
                        "${TENZIR_UNIT_TEST_TIMEOUT}" -s "${suite}")
       set_tests_properties(
         "plugin/${PLUGIN_TARGET}/${test_name}"
-        PROPERTIES FIXTURES_REQUIRED vast_${PLUGIN_TARGET}_unit_test_fixture)
+        PROPERTIES FIXTURES_REQUIRED tenzir_${PLUGIN_TARGET}_unit_test_fixture)
     endforeach ()
   endif ()
 
@@ -703,7 +703,7 @@ function (TenzirRegisterPlugin)
   endif ()
 
   # Setup integration tests.
-  if (TARGET vast::tenzir
+  if (TARGET tenzir::tenzir
       AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
     if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
       set(integration_test_path "${CMAKE_SOURCE_DIR}/tenzir/integration")
@@ -711,7 +711,7 @@ function (TenzirRegisterPlugin)
       if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
         set(integration_test_path "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
       else ()
-        get_target_property(integration_test_path vast::tenzir LOCATION)
+        get_target_property(integration_test_path tenzir::tenzir LOCATION)
         get_filename_component(integration_test_path "${integration_test_path}"
                                DIRECTORY)
         get_filename_component(integration_test_path "${integration_test_path}"
@@ -733,7 +733,7 @@ function (TenzirRegisterPlugin)
         fi
         base_dir=\"${integration_test_path}\"
         env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-        export app=\"$<IF:$<BOOL:${TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>-ctl\"
+        export app=\"$<IF:$<BOOL:${TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:tenzir::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:tenzir::tenzir>>-ctl\"
         update=\"$<IF:$<BOOL:${TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
         set -e
         if [ ! -f \"$env_dir/bin/activate\" ]; then
@@ -747,7 +747,7 @@ function (TenzirRegisterPlugin)
         python \"$base_dir/integration.py\" \
           --app \"$app\" \
           --set \"${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml\" \
-          --directory vast-${PLUGIN_TARGET}-integration-test \
+          --directory tenzir-${PLUGIN_TARGET}-integration-test \
           \$update \
           \"$@\"")
     add_custom_target(

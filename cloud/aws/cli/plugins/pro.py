@@ -1,6 +1,6 @@
 """[Tenzir Pro] Download the Tenzir pro image"""
 
-from vast_invoke import pty_task, task
+from tenzir_invoke import pty_task, task
 import dynaconf
 from common import conf
 
@@ -17,8 +17,8 @@ def login(c):
 @task
 def pull_image(c):
     """Pull a Tenzir Pro image. You need to login first."""
-    source_tag = "eu.gcr.io/crucial-kayak-261816/vast-pinned"
-    output_tag = "tenzir/vast-pro"
+    source_tag = "eu.gcr.io/crucial-kayak-261816/tenzir-pinned"
+    output_tag = "tenzir/tenzir-pro"
     version = conf(VALIDATORS)["TENZIR_VERSION"]
     c.run(f"docker pull {source_tag}:{version}")
     c.run(f"docker image tag {source_tag}:{version} {output_tag}:{version}")
@@ -26,4 +26,4 @@ def pull_image(c):
     print("============")
     print("Tenzir Pro image successfully pulled")
     print(f"Set the variable TENZIR_IMAGE={output_tag}")
-    print("Then run `./vast-cloud deploy` to deploy Tenzir with the pulled Pro version")
+    print("Then run `./tenzir-cloud deploy` to deploy Tenzir with the pulled Pro version")

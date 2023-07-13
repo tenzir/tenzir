@@ -1,0 +1,40 @@
+include "interval.fbs";
+include "table_slice.fbs";
+include "uuid.fbs";
+
+namespace tenzir.fbs.segment;
+
+/// A bundled sequence of table slices.
+table v0 {
+  /// The contained table slices.
+  slices: [FlatTableSlice];
+
+  /// A unique identifier.
+  uuid: LegacyUUID;
+
+  /// The ID intervals this segment covers.
+  ids: [uinterval];
+
+  /// The number of events in the store.
+  events: ulong;
+
+  /// How many additional slices are belonging
+  /// to this segment that are not stored inline in `slices`.
+  /// If this is >0, implies that this segment must
+  /// be embedded into a flatbuffer container.
+  overflow_slices: ulong;
+}
+
+union Segment {
+  v0,
+}
+
+namespace tenzir.fbs;
+
+table Segment {
+  segment: segment.Segment;
+}
+
+root_type Segment;
+
+file_identifier "vSEG";

@@ -7,13 +7,13 @@ from typing import AsyncIterable
 import secrets
 
 import pyarrow as pa
-import pyvast.utils.arrow
-import pyvast.utils.config
-import pyvast.utils.logging
+import pytenzir.utils.arrow
+import pytenzir.utils.config
+import pytenzir.utils.logging
 
 from .cli import CLI
 
-logger = pyvast.utils.logging.get(__name__)
+logger = pytenzir.utils.logging.get(__name__)
 
 
 class ExportMode(Enum):
@@ -146,9 +146,9 @@ class Tenzir:
                 raise e
 
     async def status(self, timeout=0, retry_delay=0.5, **kwargs) -> dict:
-        """Executes the `vast status` command and return the response string.
+        """Executes the `tenzir status` command and return the response string.
 
-        If `timeout` is greater than 0, the invocation of `vast status` will be
+        If `timeout` is greater than 0, the invocation of `tenzir status` will be
         retried every `retry_delay` seconds for at most `timeout` seconds.
 
         Examples: `status()`, `status(timeout=30, detailed=True)`.

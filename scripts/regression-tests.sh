@@ -9,32 +9,32 @@ set -euxo pipefail
 
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)"
 
-TENZIR_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e TENZIR_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/vast/"
+TENZIR_RUN_FLAGS="-d --pull=always --rm --name tenzir-regression -e TENZIR_CONSOLE_VERBOSITY=verbose -v tenzir-regression:/var/lib/tenzir/"
 
 # Pull the old version to create a database.
 docker run \
   $TENZIR_RUN_FLAGS \
-  docker.io/tenzir/vast:$OLD_VERSION \
+  docker.io/tenzir/tenzir:$OLD_VERSION \
   start
 
 sleep 3
 
-docker exec -i vast-regression \
-  vast import --blocking suricata \
-  < vast/integration/data/suricata/eve.json
+docker exec -i tenzir-regression \
+  tenzir import --blocking suricata \
+  < tenzir/integration/data/suricata/eve.json
 
-docker exec vast-regression \
-  vast flush
+docker exec tenzir-regression \
+  tenzir flush
 
-docker exec vast-regression \
-  vast export json 'where #schema == "suricata.alert"' \
+docker exec tenzir-regression \
+  tenzir export json 'where #schema == "suricata.alert"' \
   > old.json
 
-docker rm -f vast-regression
+docker rm -f tenzir-regression
 
 # Change the volume mount point since the default database location changed from
-# /var/lib/vast to /var/lib/tenzir.
-TENZIR_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e TENZIR_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/tenzir/"
+# /var/lib/tenzir to /var/lib/tenzir.
+TENZIR_RUN_FLAGS="-d --pull=always --rm --name tenzir-regression -e TENZIR_CONSOLE_VERBOSITY=verbose -v tenzir-regression:/var/lib/tenzir/"
 
 # Pull the new version to verify database compatibility.
 docker run \
@@ -43,12 +43,12 @@ docker run \
 
 sleep 3
 
-docker exec vast-regression \
-  vast export json 'where #schema == "suricata.alert"' \
+docker exec tenzir-regression \
+  tenzir export json 'where #schema == "suricata.alert"' \
   > new.json
 
-docker rm -f vast-regression
-docker volume rm vast-regression
+docker rm -f tenzir-regression
+docker volume rm tenzir-regression
 
 # Compare old and new
 diff old.json new.json

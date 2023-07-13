@@ -39,7 +39,7 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
-          git submodule update --init --recursive libvast
+          git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
       - name: Install Dependencies
         run: |
@@ -58,7 +58,7 @@ jobs:
           # jobs and not suitable for general use.
           cmake -B "$BUILD_DIR" \
             -DCMAKE_BUILD_TYPE:STRING=Debug \
-            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
+            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON \
             -DTENZIR_ENABLE_CODE_COVERAGE:BOOL=ON \

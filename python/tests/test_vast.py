@@ -1,18 +1,18 @@
-from pyvast import Tenzir, ExportMode, collect_pyarrow, to_json_rows, VastRow
-import pyvast.utils.logging
-import pyvast.utils.asyncio
+from pytenzir import Tenzir, ExportMode, collect_pyarrow, to_json_rows, VastRow
+import pytenzir.utils.logging
+import pytenzir.utils.asyncio
 import asyncio
 from asyncio.subprocess import PIPE
 import os
 import pytest
 import shutil
 
-logger = pyvast.utils.logging.get("vast.test")
+logger = pytenzir.utils.logging.get("tenzir.test")
 
 if "TENZIR_PYTHON_INTEGRATION" not in os.environ:
     # Tests in this module require access to integration test files and the Tenzir binary
     pytest.skip(
-        "TENZIR_PYTHON_INTEGRATION not defined, skipping vast tests",
+        "TENZIR_PYTHON_INTEGRATION not defined, skipping tenzir tests",
         allow_module_level=True,
     )
 
@@ -20,11 +20,11 @@ if "TENZIR_PYTHON_INTEGRATION" not in os.environ:
 @pytest.fixture()
 async def endpoint():
     test = os.environ.get("PYTEST_CURRENT_TEST").split(":")[-1].split(" ")[0]
-    test_db_dir = "/tmp/pyvast-test/" + test
+    test_db_dir = "/tmp/pytenzir-test/" + test
     if os.path.isdir(test_db_dir):
         shutil.rmtree(test_db_dir)
     proc = await asyncio.create_subprocess_exec(
-        "vast",
+        "tenzir",
         "-e",
         ":0",
         "-d",
@@ -44,56 +44,56 @@ async def endpoint():
     await asyncio.wait_for(proc.wait(), 5)
 
 
-async def vast_import(endpoint, expression: list[str]):
+async def tenzir_import(endpoint, expression: list[str]):
     # import
-    logger.debug(f"> vast -e {endpoint} import --blocking {' '.join(expression)}")
+    logger.debug(f"> tenzir -e {endpoint} import --blocking {' '.join(expression)}")
     import_proc = await asyncio.create_subprocess_exec(
-        "vast", "-e", endpoint, "import", "--blocking", *expression, stderr=PIPE
+        "tenzir", "-e", endpoint, "import", "--blocking", *expression, stderr=PIPE
     )
     (_, import_err) = await asyncio.wait_for(import_proc.communicate(), 3)
     assert import_proc.returncode == 0
-    logger.debug(f"vast import stderr:\n{import_err.decode()}")
+    logger.debug(f"tenzir import stderr:\n{import_err.decode()}")
     # flush
-    logger.debug(f"> vast -e {endpoint} flush")
+    logger.debug(f"> tenzir -e {endpoint} flush")
     flush_proc = await asyncio.create_subprocess_exec(
-        "vast", "-e", endpoint, "flush", stderr=PIPE
+        "tenzir", "-e", endpoint, "flush", stderr=PIPE
     )
     (_, flush_err) = await asyncio.wait_for(flush_proc.communicate(), 3)
     assert flush_proc.returncode == 0
-    logger.debug(f"vast flush stderr:\n{flush_err.decode()}")
+    logger.debug(f"tenzir flush stderr:\n{flush_err.decode()}")
 
 
 def integration_data(path):
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    return os.path.normpath(f"{dir_path}/../../vast/integration/data/{path}")
+    return os.path.normpath(f"{dir_path}/../../tenzir/integration/data/{path}")
 
 
 @pytest.mark.asyncio
 async def test_count(endpoint):
-    vast = Tenzir(endpoint)
-    result = await vast.count()
+    tenzir = Tenzir(endpoint)
+    result = await tenzir.count()
     assert result == 0
-    await vast_import(
+    await tenzir_import(
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
-    result = await vast.count()
+    result = await tenzir.count()
     assert result == 8
 
 
 @pytest.mark.asyncio
 async def test_export_collect_pyarrow(endpoint):
-    await vast_import(
+    await tenzir_import(
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
-    vast = Tenzir(endpoint)
-    result = vast.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
+    tenzir = Tenzir(endpoint)
+    result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
     tables = await collect_pyarrow(result)
     assert set(tables.keys()) == {"suricata.alert"}
     alerts = tables["suricata.alert"]
     assert len(alerts) == 1
     assert alerts[0].num_rows == 1
 
-    result = vast.export("", ExportMode.HISTORICAL)
+    result = tenzir.export("", ExportMode.HISTORICAL)
     tables = await collect_pyarrow(result)
     assert set(tables.keys()) == {
         "suricata.alert",
@@ -109,11 +109,11 @@ async def test_export_collect_pyarrow(endpoint):
 
 @pytest.mark.asyncio
 async def test_export_historical_rows(endpoint):
-    await vast_import(
+    await tenzir_import(
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
-    vast = Tenzir(endpoint)
-    result = vast.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
+    tenzir = Tenzir(endpoint)
+    result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
     rows: list[VastRow] = []
     async for row in to_json_rows(result):
         rows.append(row)
@@ -127,16 +127,16 @@ async def test_export_historical_rows(endpoint):
 
 @pytest.mark.asyncio
 async def test_export_continuous_rows(endpoint):
-    vast = Tenzir(endpoint)
+    tenzir = Tenzir(endpoint)
 
     async def run_export():
-        result = vast.export('#schema == "suricata.alert"', ExportMode.CONTINUOUS)
+        result = tenzir.export('#schema == "suricata.alert"', ExportMode.CONTINUOUS)
         return await anext(to_json_rows(result))
 
     task = asyncio.create_task(run_export())
     # Wait for the export task to be ready before triggering import
     await asyncio.sleep(3)
-    await vast_import(
+    await tenzir_import(
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
     logger.info("await task")

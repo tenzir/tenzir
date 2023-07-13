@@ -10,13 +10,13 @@
 
 #include "web/fwd.hpp"
 
-#include <vast/command.hpp>
+#include <tenzir/command.hpp>
 
 #include <caf/actor_system.hpp>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
-auto server_command(const vast::invocation&, caf::actor_system&)
+auto server_command(const tenzir::invocation&, caf::actor_system&)
   -> caf::message;
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

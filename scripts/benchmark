@@ -21,7 +21,7 @@ usage() {
   printf "usage: %s [options] <input...>\n" $(basename $0)
   echo
   echo 'common options:'
-  echo "    -d <dir>        Tenzir directory [$(pwd)/tag/vast]"
+  echo "    -d <dir>        Tenzir directory [$(pwd)/tag/tenzir]"
   echo "    -f              SOURCE/SINK format"
   echo "    -h|-?           display this help"
   echo "    -m              mode (either 'import' or 'export') [$mode]"
@@ -99,8 +99,8 @@ while getopts "B:C:d:f:lm:opP:q:R:tT:h?" opt; do
   esac
 done
 
-if ! which vast > /dev/null 2>&1; then
-  log "could not find vast executable"
+if ! which tenzir > /dev/null 2>&1; then
+  log "could not find tenzir executable"
   exit 1
 fi
 
@@ -162,7 +162,7 @@ for core in $(printf $cores | strsplit , 3 ); do
       for part in $(printf $parts | strsplit , 2); do
         for run in $(seq 1 $runs); do
           tag="$format-C-$core-T-$throughput-B-$batch-P-$part-R-$run"
-          workdir="vast-$tag"
+          workdir="tenzir-$tag"
           existing=
           if [ -d $workdir ]; then
             existing=$workdir
@@ -179,11 +179,11 @@ for core in $(printf $cores | strsplit , 3 ); do
             trap "$terminate" SIGINT SIGTERM
             # Build common command line arguments.
             if [ -z "$dir" ]; then
-              vastdir=$workdir/vast
+              tenzirdir=$workdir/tenzir
             else
-              vastdir="$dir"
+              tenzirdir="$dir"
             fi
-            args="-d \"$vastdir\" -C -l 5 -t $core"
+            args="-d \"$tenzirdir\" -C -l 5 -t $core"
             if [ "$throughput" != "000000" ]; then
               args="$args -m $throughput"
             fi
@@ -225,17 +225,17 @@ for core in $(printf $cores | strsplit , 3 ); do
               log "mode must be either 'import' or 'export'"
               exit 1
             fi
-            vast="vast $args > /dev/null 2> $workdir/stderr"
+            tenzir="tenzir $args > /dev/null 2> $workdir/stderr"
             if [ -n "$time" ]; then
-              vast="/usr/bin/time -l -p -o $workdir/time $vast"
+              tenzir="/usr/bin/time -l -p -o $workdir/time $tenzir"
             fi
             # Run it!
-            eval $vast
+            eval $tenzir
             # Post-process logs.
-            logdir="$vastdir/log/current"
+            logdir="$tenzirdir/log/current"
             if [ -n "$profiler" ]; then
               mv $workdir/caf.log $logdir
-              awk "$process_labels" $logdir/vast.log > $logdir/labels.log
+              awk "$process_labels" $logdir/tenzir.log > $logdir/labels.log
             fi
             if [ "$mode" = "export" ]; then
               echo $query_label >> $logdir/query.log

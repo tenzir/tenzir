@@ -6,13 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/arrow_compat.hpp>
-#include <vast/arrow_table_slice.hpp>
-#include <vast/concept/convertible/data.hpp>
-#include <vast/detail/base64.hpp>
-#include <vast/detail/inspection_common.hpp>
-#include <vast/plugin.hpp>
-#include <vast/store.hpp>
+#include <tenzir/arrow_compat.hpp>
+#include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/concept/convertible/data.hpp>
+#include <tenzir/detail/base64.hpp>
+#include <tenzir/detail/inspection_common.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/store.hpp>
 
 #include <arrow/array.h>
 #include <arrow/compute/cast.h>
@@ -24,7 +24,7 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 
-namespace vast::plugins::parquet {
+namespace tenzir::plugins::parquet {
 
 /// Configuration for the Parquet plugin.
 struct configuration {
@@ -50,7 +50,7 @@ struct configuration {
 namespace {
 
 /// Handles an array containing enum data, transforming the data into
-/// vast.enumeration extension type backed by a dictionary.
+/// tenzir.enumeration extension type backed by a dictionary.
 std::shared_ptr<arrow::Array>
 fix_enum_array(const enumeration_type& et,
                const std::shared_ptr<arrow::Array>& arr) {
@@ -105,12 +105,13 @@ map_chunked_array(const VastType& t,
   return result.ValueOrDie();
 }
 
-/// Transform an array into its canonical form for the provided vast type.
+/// Transform an array into its canonical form for the provided tenzir type.
 /// the Arrow parquet reader does not fully restore the schema used during
 /// write. In particular, it doesn't handle extension types in map keys and
-/// values, as well as dictionary indices, which are used in vast enumerations.
+/// values, as well as dictionary indices, which are used in tenzir enumerations.
 std::shared_ptr<arrow::Array>
-align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
+align_array_to_type(const tenzir::type& t,
+                    std::shared_ptr<arrow::Array> array) {
   auto f = detail::overload{
     [&](const enumeration_type& et) -> std::shared_ptr<arrow::Array> {
       return fix_enum_array(et, array);
@@ -195,7 +196,7 @@ align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
 /// `ChunkedArray`s only occur at the outermost level, and the Tenzir type
 /// that is not properly represented at this level is `enumeration_type`.
 std::shared_ptr<arrow::ChunkedArray>
-restore_enum_chunk_array(const vast::type& t,
+restore_enum_chunk_array(const tenzir::type& t,
                          std::shared_ptr<arrow::ChunkedArray> array) {
   auto f = detail::overload{
     [&](const enumeration_type& et) -> std::shared_ptr<arrow::ChunkedArray> {
@@ -513,7 +514,7 @@ private:
 
 } // namespace
 
-} // namespace vast::plugins::parquet
+} // namespace tenzir::plugins::parquet
 
 // Finally, register our plugin.
-TENZIR_REGISTER_PLUGIN(vast::plugins::parquet::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::parquet::plugin)

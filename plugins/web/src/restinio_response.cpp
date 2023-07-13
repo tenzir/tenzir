@@ -8,9 +8,9 @@
 
 #include "web/restinio_response.hpp"
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
-static std::string content_type_to_string(vast::http_content_type type) {
+static std::string content_type_to_string(tenzir::http_content_type type) {
   switch (type) {
     case http_content_type::json:
       return "application/json; charset=utf-8";
@@ -76,4 +76,4 @@ const route_params_t& restinio_response::route_params() const {
   return route_params_;
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

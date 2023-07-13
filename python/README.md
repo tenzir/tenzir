@@ -13,8 +13,8 @@ To get started, clone the Tenzir repository and install the Python package via
 [Poetry](https://python-poetry.org/docs/):
 
 ```bash
-git clone https://github.com/tenzir/vast.git
-cd vast/python
+git clone https://github.com/tenzir/tenzir.git
+cd tenzir/python
 poetry install
 ```
 

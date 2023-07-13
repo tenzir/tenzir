@@ -6,14 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/argument_parser.hpp>
-#include <vast/chunk.hpp>
-#include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/data.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
-#include <vast/pcap.hpp>
-#include <vast/plugin.hpp>
+#include <tenzir/argument_parser.hpp>
+#include <tenzir/chunk.hpp>
+#include <tenzir/concept/printable/tenzir/data.hpp>
+#include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/pcap.hpp>
+#include <tenzir/plugin.hpp>
 
 #include <pcap/pcap.h>
 
@@ -21,7 +21,7 @@
 
 using namespace std::chrono_literals;
 
-namespace vast::plugins::nic {
+namespace tenzir::plugins::nic {
 
 namespace {
 
@@ -87,7 +87,7 @@ public:
         if (num_buffered_packets >= defaults::import::table_slice_size
             or last_finish + defaults::import::batch_timeout < now) {
           TENZIR_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
-                       vast::data{now - last_finish}, num_buffered_packets,
+                       tenzir::data{now - last_finish}, num_buffered_packets,
                        buffer.size());
           last_finish = now;
           co_yield chunk::make(std::exchange(buffer, {}));
@@ -220,6 +220,6 @@ private:
 
 } // namespace
 
-} // namespace vast::plugins::nic
+} // namespace tenzir::plugins::nic
 
-TENZIR_REGISTER_PLUGIN(vast::plugins::nic::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::nic::plugin)

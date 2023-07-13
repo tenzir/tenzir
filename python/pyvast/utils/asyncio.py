@@ -20,9 +20,9 @@ Example:
 import asyncio
 from signal import SIGINT, SIGTERM, SIGHUP
 
-import pyvast.utils.logging
+import pytenzir.utils.logging
 
-logger = pyvast.utils.logging.get(__name__)
+logger = pytenzir.utils.logging.get(__name__)
 
 
 async def shutdown(loop, signal=None):

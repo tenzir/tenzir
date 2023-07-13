@@ -19,7 +19,7 @@
 #include <memory>
 #include <span>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 class message;
 
@@ -53,4 +53,4 @@ private:
   std::shared_ptr<RdKafka::Producer> producer_{};
 };
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

@@ -34,8 +34,8 @@ bash:
 define TENZIR_COMPOSE_OVERLAYS
 -f ../../docker/compose/quarto.yaml
 -f ../../docker/compose/quarto.bind.yaml
--f ../../docker/compose/quarto.vast.yaml
--f ../../docker/compose/vast.yaml
+-f ../../docker/compose/quarto.tenzir.yaml
+-f ../../docker/compose/tenzir.yaml
 endef
 
 export TENZIR_COMPOSE_OVERLAYS
@@ -46,7 +46,7 @@ export TENZIR_COMPOSE_OVERLAYS
 docker: 
 	docker compose \
 		$$TENZIR_COMPOSE_OVERLAYS \
-		up -d vast && \
+		up -d tenzir && \
 	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \
 		$$TENZIR_COMPOSE_OVERLAYS \
 		run quarto \

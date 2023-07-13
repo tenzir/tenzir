@@ -3,5 +3,5 @@ ARG TENZIR_IMAGE
 
 FROM $TENZIR_IMAGE:$TENZIR_VERSION AS production
 
-COPY schema/ /opt/tenzir/vast/etc/vast/schema/
-COPY configs/vast/fargate.yaml /opt/tenzir/vast/etc/vast/vast.yaml
+COPY schema/ /opt/tenzir/tenzir/etc/tenzir/schema/
+COPY configs/tenzir/fargate.yaml /opt/tenzir/tenzir/etc/tenzir/tenzir.yaml

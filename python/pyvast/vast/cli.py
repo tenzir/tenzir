@@ -2,9 +2,9 @@ import asyncio
 import copy
 import subprocess
 
-import pyvast.utils.logging
+import pytenzir.utils.logging
 
-logger = pyvast.utils.logging.get(__name__)
+logger = pytenzir.utils.logging.get(__name__)
 
 
 class CLI:
@@ -26,14 +26,14 @@ class CLI:
     async def exec(self, stdin=False) -> asyncio.subprocess.Process:
         async def run(*args, stdin) -> asyncio.subprocess.Process:
             return await asyncio.create_subprocess_exec(
-                "vast",
+                "tenzir",
                 *args,
                 stdin=asyncio.subprocess.PIPE if stdin else None,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-        logger.debug(f"> {['vast', *self.args]}")
+        logger.debug(f"> {['tenzir', *self.args]}")
         if not stdin:
             return await run(*self.args, stdin=False)
         proc = await run(*self.args, stdin=True)
@@ -47,13 +47,13 @@ class CLI:
     def sync_exec(self, stdin=False) -> subprocess.Popen:
         def run(*args, stdin) -> subprocess.Popen:
             return subprocess.Popen(
-                ["vast", *args],
+                ["tenzir", *args],
                 stdin=subprocess.PIPE if stdin else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
 
-        logger.debug(f"> {['vast', *self.args]}")
+        logger.debug(f"> {['tenzir', *self.args]}")
         if not stdin:
             return run(*self.args, stdin=False)
         proc = run(*self.args, stdin=True)

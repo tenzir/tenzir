@@ -39,11 +39,11 @@ RUN ln -s $PWD/aws-cli/v2/current/dist/aws /usr/local/bin/aws && \
     apt-get -y --no-install-recommends install jq && \
     rm -rf /var/lib/apt/lists/*
 
-USER vast:vast
+USER tenzir:tenzir
 
 COPY scripts/lambda-handler.py .
-COPY schema/ /opt/tenzir/vast/etc/vast/schema/
-COPY configs/vast/lambda.yaml /opt/tenzir/vast/etc/vast/vast.yaml
+COPY schema/ /opt/tenzir/tenzir/etc/tenzir/schema/
+COPY configs/tenzir/lambda.yaml /opt/tenzir/tenzir/etc/tenzir/tenzir.yaml
 
 ENTRYPOINT [ "/usr/bin/python3.9", "-m", "awslambdaric" ]
 CMD [ "lambda-handler.handler" ]

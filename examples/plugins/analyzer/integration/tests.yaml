@@ -1,4 +1,4 @@
-config-file: vast.yaml
+config-file: tenzir.yaml
 
 fixtures:
   ServerTester:

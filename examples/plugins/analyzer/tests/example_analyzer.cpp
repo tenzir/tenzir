@@ -10,7 +10,7 @@
 // does not contain any meaningful tests for the example plugin. It merely
 // exists to show how to setup unit tests.
 
-#include <vast/test/test.hpp>
+#include <tenzir/test/test.hpp>
 
 TEST(multiply) {
   CAF_REQUIRE(0 * 1 == 0);

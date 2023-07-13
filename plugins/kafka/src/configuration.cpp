@@ -8,16 +8,16 @@
 
 #include "kafka/configuration.hpp"
 
-#include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/data.hpp>
-#include <vast/data.hpp>
-#include <vast/detail/overload.hpp>
-#include <vast/die.hpp>
-#include <vast/error.hpp>
+#include <tenzir/concept/printable/tenzir/data.hpp>
+#include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/detail/overload.hpp>
+#include <tenzir/die.hpp>
+#include <tenzir/error.hpp>
 
 #include <fmt/format.h>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 auto configuration::make(const record& options)
   -> caf::expected<configuration> {
@@ -133,4 +133,4 @@ configuration::configuration() {
     die("RdKafka::Conf::create");
 }
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

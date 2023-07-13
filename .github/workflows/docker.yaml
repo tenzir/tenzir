@@ -35,7 +35,7 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
-          git submodule update --init --recursive libvast
+          git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
       - name: Configure
         id: cfg

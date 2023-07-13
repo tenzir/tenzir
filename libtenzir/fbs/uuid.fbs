@@ -1,0 +1,11 @@
+namespace tenzir.fbs;
+
+table LegacyUUID {
+  /// The 16-byte UUID data.
+  data: [ubyte];
+}
+
+struct UUID {
+  /// The 16-byte UUID data.
+  data: [ubyte:16];
+}

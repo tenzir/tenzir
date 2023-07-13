@@ -21,7 +21,7 @@
 set -e
 
 # Defaults.
-program="vast"
+program="tenzir"
 out="-"
 title=
 secs=60

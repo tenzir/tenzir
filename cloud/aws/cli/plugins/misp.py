@@ -2,7 +2,7 @@ import os
 import pathlib
 import stat
 from typing import Tuple
-from vast_invoke import Context, pty_task, task
+from tenzir_invoke import Context, pty_task, task
 import dynaconf
 from common import (
     FargateService,

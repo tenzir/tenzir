@@ -16,12 +16,12 @@ RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 COPY changelog ./changelog
 COPY cmake ./cmake
 COPY examples ./examples
-COPY libvast ./libvast
-COPY libvast_test ./libvast_test
+COPY libtenzir ./libtenzir
+COPY libtenzir_test ./libtenzir_test
 COPY plugins ./plugins
 COPY python ./python
 COPY schema ./schema
-COPY vast ./vast
+COPY tenzir ./tenzir
 COPY CMakeLists.txt LICENSE README.md Tenzir.spdx VERSIONING.md \
      tenzir.yaml.example version.json ./
 

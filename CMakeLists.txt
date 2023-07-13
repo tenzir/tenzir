@@ -13,7 +13,7 @@ project(
   VERSION
     ${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}.${TENZIR_VERSION_TWEAK}
   DESCRIPTION "Visibility Across Space and Time"
-  HOMEPAGE_URL "https://vast.io"
+  HOMEPAGE_URL "https://tenzir.io"
   LANGUAGES C CXX)
 
 set(TENZIR_EDITION_NAME
@@ -131,7 +131,7 @@ endif ()
 cmake_dependent_option(TENZIR_ENABLE_UNIT_TESTS "Build unit tests for libtenzir"
                        ON "NOT CMAKE_CROSS_COMPILING" OFF)
 add_feature_info("TENZIR_ENABLE_UNIT_TESTS" TENZIR_ENABLE_UNIT_TESTS
-                 "build unit tests for libvast.")
+                 "build unit tests for libtenzir.")
 set(TENZIR_UNIT_TEST_TIMEOUT
     "60"
     CACHE STRING "The per-test timeout in unit tests" FORCE)
@@ -194,21 +194,21 @@ endif ()
 # -- internal target -----------------------------------------------------------
 
 # Create the internal target that is used for option/property propagation.
-add_library(libvast_internal INTERFACE)
-set_target_properties(libvast_internal PROPERTIES EXPORT_NAME internal)
-add_library(vast::internal ALIAS libvast_internal)
+add_library(libtenzir_internal INTERFACE)
+set_target_properties(libtenzir_internal PROPERTIES EXPORT_NAME internal)
+add_library(tenzir::internal ALIAS libtenzir_internal)
 install(
-  TARGETS libvast_internal
+  TARGETS libtenzir_internal
   EXPORT TenzirTargets
   COMPONENT Development)
 
 # Require standard C++20.
-target_compile_features(libvast_internal INTERFACE cxx_std_20)
+target_compile_features(libtenzir_internal INTERFACE cxx_std_20)
 
 # Enable coroutines for GCC < 11.
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
                                              VERSION_LESS 11)
-  target_compile_options(libvast_internal INTERFACE -fcoroutines)
+  target_compile_options(libtenzir_internal INTERFACE -fcoroutines)
 endif ()
 
 # Increase maximum number of template instantiations.
@@ -272,7 +272,7 @@ if (TENZIR_ENABLE_AUTO_VECTORIZATION)
 endif ()
 
 target_compile_options(
-  libvast_internal
+  libtenzir_internal
   INTERFACE $<$<CONFIG:Release>:
             -fno-omit-frame-pointer>
             $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>
@@ -293,15 +293,16 @@ target_compile_options(
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_compile_options(libtenzir_internal
                          INTERFACE -Wno-unknown-warning-option)
+  target_compile_options(libtenzir_internal INTERFACE -Wno-unknown-warning-option)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-  target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning)
+  target_compile_options(libtenzir_internal INTERFACE -Wno-unknown-warning)
 endif ()
 
 set(gcc12plus
     "$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,12>>"
 )
 target_compile_options(
-  libvast_internal
+  libtenzir_internal
   INTERFACE -Wall
             -Wextra
             -pedantic
@@ -326,7 +327,7 @@ cmake_dependent_option(
 add_feature_info("TENZIR_ENABLE_BUILDID" TENZIR_ENABLE_BUILDID
                  "a unique identifier in the ELF notes section.")
 if (TENZIR_ENABLE_BUILDID)
-  target_link_options(libvast_internal INTERFACE "-Wl,--build-id")
+  target_link_options(libtenzir_internal INTERFACE "-Wl,--build-id")
 endif ()
 
 # -- USDT tracepoints ----------------------------------------------------------
@@ -342,7 +343,7 @@ option(TENZIR_ENABLE_TIME_REPORT
 add_feature_info("TENZIR_ENABLE_TIME_REPORT" TENZIR_ENABLE_TIME_REPORT
                  "print information where time was spent during compilation.")
 if (TENZIR_ENABLE_TIME_REPORT)
-  target_compile_options(libvast_internal INTERFACE "-ftime-report")
+  target_compile_options(libtenzir_internal INTERFACE "-ftime-report")
 endif ()
 
 option(TENZIR_ENABLE_TIME_TRACE
@@ -358,7 +359,7 @@ if (TENZIR_ENABLE_TIME_TRACE)
         "-ftime-trace option not supported by compiler ${CMAKE_CXX_COMPILER}")
   endif ()
   unset(_time_trace_supported)
-  target_compile_options(libvast_internal INTERFACE "-ftime-trace")
+  target_compile_options(libtenzir_internal INTERFACE "-ftime-trace")
 endif ()
 
 # -- assertions ----------------------------------------------------------------
@@ -399,8 +400,8 @@ endif ()
 
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   # Note that we cannot use the target property INSTALL_RPATH on
-  # libvast_internal, because it is an interface library. We should probably fix
-  # this by making the config header part of libvast_internal so it is not just
+  # libtenzir_internal, because it is an interface library. We should probably fix
+  # this by making the config header part of libtenzir_internal so it is not just
   # an interface library.
   if (NOT TENZIR_ENABLE_STATIC_EXECUTABLE)
     if (APPLE)
@@ -427,9 +428,9 @@ endif ()
 # -- sanitizers ----------------------------------------------------------------
 
 # Address Sanitizer
-set(_vast_build_types_with_default_asan "Debug;CI")
+set(_tenzir_build_types_with_default_asan "Debug;CI")
 if (NOT TENZIR_ENABLE_STATIC_EXECUTABLE AND CMAKE_BUILD_TYPE IN_LIST
-                                            _vast_build_types_with_default_asan)
+                                            _tenzir_build_types_with_default_asan)
   set(_TENZIR_ENABLE_ASAN_DEFAULT ON)
 else ()
   set(_TENZIR_ENABLE_ASAN_DEFAULT OFF)
@@ -446,7 +447,7 @@ unset(_TENZIR_ENABLE_ASAN_DEFAULT)
 
 if (TENZIR_ENABLE_ASAN)
   # We need to enable the address sanitizer both globally and for the
-  # libvast_internal targets in order to build (1) the bundled CAF with it and
+  # libtenzir_internal targets in order to build (1) the bundled CAF with it and
   # (2) build external plugins with it.
   add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
   add_link_options(-fsanitize=address)
@@ -465,8 +466,8 @@ add_feature_info(
 if (TENZIR_ENABLE_UBSAN)
   add_compile_options(-fsanitize=undefined)
   add_link_options(-fsanitize=undefined)
-  target_compile_options(libvast_internal INTERFACE -fsanitize=undefined)
-  target_link_libraries(libvast_internal INTERFACE -fsanitize=undefined)
+  target_compile_options(libtenzir_internal INTERFACE -fsanitize=undefined)
+  target_link_libraries(libtenzir_internal INTERFACE -fsanitize=undefined)
 endif ()
 
 # -- jemalloc ------------------------------------------------------------------
@@ -479,7 +480,7 @@ if (TENZIR_ENABLE_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
   string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
-  target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
+  target_link_libraries(libtenzir_internal INTERFACE jemalloc::jemalloc_)
   dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
 endif ()
 
@@ -536,10 +537,10 @@ if (TENZIR_ENABLE_DEVELOPER_MODE)
   # Force colored output for the Ninja generator
   if ("${CMAKE_GENERATOR}" MATCHES "Ninja")
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-      target_compile_options(libvast_internal
+      target_compile_options(libtenzir_internal
                              INTERFACE -fdiagnostics-color=always)
     elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-      target_compile_options(libvast_internal INTERFACE -fcolor-diagnostics)
+      target_compile_options(libtenzir_internal INTERFACE -fcolor-diagnostics)
     endif ()
   endif ()
 
@@ -549,7 +550,7 @@ if (TENZIR_ENABLE_DEVELOPER_MODE)
       CACHE STRING "Show all outputs including compiler lines." FORCE)
 
   # Enable CAF's compile-time type ID checks.
-  target_compile_definitions(libvast_internal
+  target_compile_definitions(libtenzir_internal
                              INTERFACE CAF_ENABLE_TYPE_ID_CHECKS)
 endif ()
 
@@ -559,7 +560,7 @@ if (TENZIR_ENABLE_DEVELOPER_MODE OR TENZIR_ENABLE_BUILDID)
   # The debug paths affect the build-id, we rewrite them to get a more
   # reproducible build.
   target_compile_options(
-    libvast_internal
+    libtenzir_internal
     INTERFACE "-fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 endif ()
 
@@ -578,7 +579,7 @@ add_feature_info("TENZIR_ENABLE_MORE_WARNINGS" TENZIR_ENABLE_MORE_WARNINGS
 if (TENZIR_ENABLE_MORE_WARNINGS)
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(
-      libvast_internal
+      libtenzir_internal
       INTERFACE -Weverything
                 -Wno-c++98-compat
                 -Wno-padded
@@ -595,7 +596,7 @@ if (TENZIR_ENABLE_MORE_WARNINGS)
                 -Wno-covered-switch-default)
   elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     target_compile_options(
-      libvast_internal
+      libtenzir_internal
       INTERFACE -Waddress
                 -Wall
                 -Warray-bounds
@@ -683,7 +684,7 @@ add_feature_info("TENZIR_ENABLE_BUNDLED_SCHEMAS" TENZIR_ENABLE_BUNDLED_SCHEMAS
                  "install bundled schemas with Tenzir.")
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   add_custom_target(
-    vast-schema
+    tenzir-schema
     COMMAND
       ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
       "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/schema/"
@@ -708,8 +709,8 @@ endif ()
 
 # -- caf -----------------------------------------------------------------------
 
-# The CAF dependency is loaded project-wide because both libvast and
-# libvast_test need it.
+# The CAF dependency is loaded project-wide because both libtenzir and
+# libtenzir_test need it.
 
 # CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
 find_package(OpenSSL REQUIRED)
@@ -717,7 +718,7 @@ find_package(OpenSSL REQUIRED)
 # TODO: Require CAF to be installed.
 
 if (TENZIR_ENABLE_DEVELOPER_MODE
-    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt"
+    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf/CMakeLists.txt"
     AND NOT CAF_ROOT_DIR)
   set(TENZIR_ENABLE_BUNDLED_CAF_DEFAULT ON)
 else ()
@@ -745,7 +746,7 @@ if (NOT TENZIR_ENABLE_BUNDLED_CAF)
   dependency_summary("CAF" CAF::core "Dependencies")
 else ()
   # Use bundled CAF.
-  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt")
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf/CMakeLists.txt")
     message(
       FATAL_ERROR
         "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the
@@ -757,11 +758,11 @@ else ()
     set(CAF_ENABLE_TESTING OFF)
     set(CAF_ENABLE_TOOLS OFF)
     set(CAF_ENABLE_OPENSSL ON)
-    # add_subdirectory libvast/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
+    # add_subdirectory libtenzir/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
     # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
     set(ORIGINAL_CXX_STANDARD ${CMAKE_CXX_STANDARD})
     set(CMAKE_CXX_STANDARD 17)
-    add_subdirectory(libvast/aux/caf)
+    add_subdirectory(libtenzir/aux/caf)
     set(CMAKE_CXX_STANDARD ${ORIGINAL_CXX_STANDARD})
     TenzirSystemizeTarget(libcaf_core)
     set_target_properties(libcaf_core PROPERTIES EXPORT_NAME core)
@@ -789,7 +790,7 @@ else ()
     target_include_directories(
       libcaf_openssl
       PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/libcaf_openssl>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf/libcaf_openssl>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     TenzirSystemizeTarget(libcaf_openssl)
     set_target_properties(libcaf_openssl PROPERTIES EXPORT_NAME openssl)
@@ -805,7 +806,7 @@ else ()
   install(TARGETS libcaf_core libcaf_openssl libcaf_io COMPONENT Runtime)
   install(TARGETS libcaf_test COMPONENT Development)
   # Figure out whether we point to a build directory or a prefix.
-  dependency_summary("CAF" "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf"
+  dependency_summary("CAF" "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf"
                      "Dependencies")
 endif ()
 
@@ -823,21 +824,21 @@ endif ()
 
 # -- add subdirectories --------------------------------------------------------
 
-add_subdirectory(libvast)
-add_subdirectory(libvast_test)
-add_subdirectory(vast)
+add_subdirectory(libtenzir)
+add_subdirectory(libtenzir_test)
+add_subdirectory(tenzir)
 
 # -- cmake export/config installations -----------------------------------------
 
 export(
   EXPORT TenzirTargets
   FILE TenzirTargets.cmake
-  NAMESPACE vast::)
+  NAMESPACE tenzir::)
 
 install(
   EXPORT TenzirTargets
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-  NAMESPACE vast::
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/tenzir"
+  NAMESPACE tenzir::
   COMPONENT Development)
 
 write_basic_package_version_file(
@@ -849,7 +850,7 @@ write_basic_package_version_file(
 configure_package_config_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirConfig.cmake.in"
   "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfig.cmake"
-  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/tenzir")
 
 configure_file("${PROJECT_SOURCE_DIR}/cmake/TenzirMacDependencyPaths.cmake"
                ${CMAKE_BINARY_DIR} COPYONLY)
@@ -861,7 +862,7 @@ install(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirMacDependencyPaths.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfig.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfigVersion.cmake"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/tenzir"
   COMPONENT Development)
 
 # -- scripts -------------------------------------------------------------------

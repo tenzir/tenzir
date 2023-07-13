@@ -8,7 +8,7 @@
 
 #include "web/restinio_server.hpp"
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 server_t make_server(server_config config, std::unique_ptr<router_t> router,
                      restinio::io_context_holder_t io_context) {
@@ -51,4 +51,4 @@ server_t make_server(server_config config, std::unique_ptr<router_t> router,
   }
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

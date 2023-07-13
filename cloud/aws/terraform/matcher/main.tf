@@ -37,8 +37,8 @@ resource "aws_ecs_service" "fargate_service" {
   launch_type                        = "FARGATE"
 
   network_configuration {
-    subnets          = [var.vast_subnet_id]
-    security_groups  = [var.vast_client_security_group_id]
+    subnets          = [var.tenzir_subnet_id]
+    security_groups  = [var.tenzir_client_security_group_id]
     assign_public_ip = false
   }
 

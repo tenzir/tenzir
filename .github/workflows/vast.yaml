@@ -66,18 +66,18 @@ jobs:
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
-      vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
+      tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-docs: ${{ steps.configure.outputs.run-docs }}
-      run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
+      run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
-      run-vast-thehive-app: ${{ steps.configure.outputs.run-vast-thehive-app }}
+      run-tenzir-thehive-app: ${{ steps.configure.outputs.run-tenzir-thehive-app }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
-      run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
+      run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
       nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
-      run-vast: ${{ steps.configure.outputs.run-vast }}
+      run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
       run-tenzir-plugins: ${{ steps.configure.outputs.run-tenzir-plugins }}
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
@@ -140,14 +140,14 @@ jobs:
           # Since the Docker build does not have the Git context, we set
           # version fallbacks manually here.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            vast_tag="${before_version}"
-            vast_container_ref="${GITHUB_HEAD_REF_SLUG}"
+            tenzir_tag="${before_version}"
+            tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
           else
-            vast_tag="${build_version}"
-            vast_container_ref="${{ github.sha }}"
+            tenzir_tag="${build_version}"
+            tenzir_container_ref="${{ github.sha }}"
           fi
-          echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
-          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${vast_tag}"
+          echo "tenzir-container-ref=${tenzir_container_ref}" >> $GITHUB_OUTPUT
+          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${tenzir_tag}"
           echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
           #################################
           ######## Decide what jobs to run.
@@ -162,11 +162,11 @@ jobs:
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
           echo "run-docs=false" >> $GITHUB_OUTPUT
-          echo "run-docker-vast=false" >> $GITHUB_OUTPUT
+          echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
           echo "run-docker-compose=false" >> $GITHUB_OUTPUT
-          echo "run-vast-thehive-app=false" >> $GITHUB_OUTPUT
-          echo "run-vast-nix=false" >> $GITHUB_OUTPUT
-          echo "run-vast=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir-thehive-app=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir=false" >> $GITHUB_OUTPUT
           echo "run-tenzir-plugins=false" >> $GITHUB_OUTPUT
           # A little helper to enable all checks.
           shopt -s expand_aliases
@@ -176,17 +176,17 @@ jobs:
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-docs=true" >> $GITHUB_OUTPUT; \
-            echo "run-docker-vast=true" >> $GITHUB_OUTPUT; \
+            echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-compose=true" >> $GITHUB_OUTPUT; \
-            echo "run-vast-thehive-app=true" >> $GITHUB_OUTPUT
-            echo "run-vast-nix=true" >> $GITHUB_OUTPUT; \
-            echo "run-vast=true" >> $GITHUB_OUTPUT; \
+            echo "run-tenzir-thehive-app=true" >> $GITHUB_OUTPUT
+            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
+            echo "run-tenzir=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir-plugins=true" >> $GITHUB_OUTPUT;'
           # Run all if this is a release.
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
             run_all_checks
-            # Publish pyvast to Pypi.
+            # Publish pytenzir to Pypi.
             echo "run-python-package=true" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -200,7 +200,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "::notice Enabling workflow dispatch jobs"
             if [[ "${{ inputs.upload-static-binary-to-github }}" == "true" ]]; then
-              echo "run-vast-nix=true" >> $GITHUB_OUTPUT
+              echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
             fi
             exit 0
           fi
@@ -213,44 +213,44 @@ jobs:
           echo "::notice sourcing configure helpers"
           source ./.github/workflows/configure_helpers.bash
           # Run all checks if this file changed.
-          if is_changed .github/workflows/vast.yaml; then
+          if is_changed .github/workflows/tenzir.yaml; then
             run_all_checks
             exit 0
           fi
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
-          TENZIR_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ schema/ tools/ vast/ tenzir.yaml.example version.json)
-          run_if_changed vast "${TENZIR_SOURCES[@]}"
-          run_if_changed_default tenzir-plugins $run_vast "plugins/" "contrib/tenzir-plugins/"
+          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ tools/ tenzir/ tenzir.yaml.example version.json)
+          run_if_changed tenzir "${TENZIR_SOURCES[@]}"
+          run_if_changed_default tenzir-plugins $run_tenzir "plugins/" "contrib/tenzir-plugins/"
           # The tenzir-plugins job downloads the Tenzir artifact from GCS, so we
-          # need to run the vast job in case it is missing.
-          if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
-            deb_package="$(echo "vast-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
-            mac_package="$(echo "vast-${before_version}-darwin-Release-Clang" | awk '{ print tolower($0) }')"
+          # need to run the tenzir job in case it is missing.
+          if [[ ${run_tenzir_plugins} == "true" && ${run_tenzir} == "false" ]]; then
+            deb_package="$(echo "tenzir-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
+            mac_package="$(echo "tenzir-${before_version}-darwin-Release-Clang" | awk '{ print tolower($0) }')"
             if ! gsutil -q stat gs://${{ vars.GCS_BUCKET }}/${deb_package}.tar.gz || \
                ! gsutil -q stat gs://${{ vars.GCS_BUCKET }}/${mac_package}.tar.gz; then
-              echo "run-vast=true" >> $GITHUB_OUTPUT
-              run_vast=true
+              echo "run-tenzir=true" >> $GITHUB_OUTPUT
+              run_tenzir=true
             fi
           fi
-          run_docker_compose="$(any ${run_vast} ${run_vast_plugins} ${run_python})"
+          run_docker_compose="$(any ${run_tenzir} ${run_tenzir_plugins} ${run_python})"
           run_if_changed_default docker-compose $run_docker_compose \
             "docker/" "Dockerfile" ".dockerignore" \
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
-          run_if_changed_default vast-thehive-app $run_docker_compose
-          run_docker_vast="$(any ${run_docker_compose} ${run_docs} ${run_python})"
-          run_if_changed_default docker-vast $run_docker_vast
-          run_if_changed_default regression-tests $run_docker_vast
-          run_if_changed vast-nix \
+          run_if_changed_default tenzir-thehive-app $run_docker_compose
+          run_docker_tenzir="$(any ${run_docker_compose} ${run_docs} ${run_python})"
+          run_if_changed_default docker-tenzir $run_docker_tenzir
+          run_if_changed_default regression-tests $run_docker_tenzir
+          run_if_changed tenzir-nix \
             "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
             ".github/workflows/nix.nu" \
             ".github/workflows/nix.yaml" \
             ".github/workflows/nix-config-base.json"
       - name: Configure Docker
         id: docker
-        if: steps.configure.outputs.run-docker-vast == 'true'
+        if: steps.configure.outputs.run-docker-tenzir == 'true'
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             tags=("${{ steps.configure.outputs.head-ref-slug }}")
@@ -279,7 +279,7 @@ jobs:
           echo "::notice docker-config = ${docker_config}"
       - name: Configure Nix
         id: nix
-        if: steps.configure.outputs.run-vast-nix == 'true'
+        if: steps.configure.outputs.run-tenzir-nix == 'true'
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             container_tags=("${{ steps.configure.outputs.head-ref-slug }}")
@@ -403,7 +403,7 @@ jobs:
     needs:
       - configure
       - changelog
-      - docker-vast
+      - docker-tenzir
     if: ${{ needs.configure.outputs.run-docs == 'true' }}
     name: Documentation
     runs-on: ubuntu-20.04
@@ -437,7 +437,7 @@ jobs:
       - name: Build website
         working-directory: web
         run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
           export TENZIR_CONTAINER_REGISTRY=ghcr.io
           yarn build
       - name: Deploy to GitHub Pages
@@ -450,11 +450,11 @@ jobs:
           user_name: tenzir-bot
           user_email: engineering@tenzir.com
 
-  docker-vast:
+  docker-tenzir:
     name: Docker
     needs:
       - configure
-    if: needs.configure.outputs.run-docker-vast == 'true'
+    if: needs.configure.outputs.run-docker-tenzir == 'true'
     uses: ./.github/workflows/docker.yaml
     with:
       config: ${{ needs.configure.outputs.docker-config }}
@@ -462,7 +462,7 @@ jobs:
 
   regression-tests:
     needs:
-      - docker-vast
+      - docker-tenzir
       - configure
     if: needs.configure.outputs.run-regression-tests == 'true'
     strategy:
@@ -488,11 +488,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run Regression Tests
         run: |
-          scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.vast-container-ref }}
+          scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
 
   docker-compose:
     needs:
-      - docker-vast
+      - docker-tenzir
       - configure
     if: ${{ needs.configure.outputs.run-docker-compose == 'true' }}
     name: Docker Compose
@@ -500,7 +500,7 @@ jobs:
     env:
       DOCKER_BUILDKIT: 1
       TENZIR_CONTAINER_REGISTRY: ghcr.io
-      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.vast-container-ref }}
+      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.tenzir-container-ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -518,17 +518,17 @@ jobs:
         run: |
           docker/test
 
-  vast-thehive-app:
+  tenzir-thehive-app:
     needs:
-      - docker-vast
+      - docker-tenzir
       - configure
-    if: ${{ needs.configure.outputs.run-vast-thehive-app == 'true' }}
+    if: ${{ needs.configure.outputs.run-tenzir-thehive-app == 'true' }}
     name: Tenzir TheHive App
     runs-on: ubuntu-20.04
     env:
       DOCKER_BUILDKIT: 1
       TENZIR_CONTAINER_REGISTRY: ghcr.io
-      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.vast-container-ref }}
+      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.tenzir-container-ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -546,12 +546,12 @@ jobs:
         run: |
           # TheHive likes to fail to start up, so for now the test is intentionally
           # disabled.
-          docker/thehive/vast-cortex-neuron/tests/run service && docker/thehive/test ||
+          docker/thehive/tenzir-cortex-neuron/tests/run service && docker/thehive/test ||
             echo "::warning title=Tenzir TheHive App test failure::Test failed, check logs for details"
 
   example-notebooks:
     needs:
-      - docker-vast
+      - docker-tenzir
       - configure
     if: ${{ needs.configure.outputs.run-example-notebooks == 'true' }}
     name: Build Example Notebooks
@@ -568,17 +568,17 @@ jobs:
       - name: Build Notebooks
         working-directory: examples/notebooks
         run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
           export TENZIR_CONTAINER_REGISTRY=ghcr.io
           make docker
           # TODO: An assertion of the actual content of the output would be welcome
           make docker TARGET=clean
 
-  vast-nix:
+  tenzir-nix:
     name: Nix (${{ matrix.config.name }})
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-vast-nix == 'true' }}
+    if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}
     uses: ./.github/workflows/nix.yaml
     strategy:
       matrix:
@@ -587,16 +587,16 @@ jobs:
       config: ${{ toJSON(matrix.config.config) }}
     secrets: inherit
 
-  vast:
+  tenzir:
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-vast == 'true' }}
-    name: Tenzir (${{ matrix.vast.name }})
-    runs-on: ${{ matrix.vast.os }}
-    container: ${{ matrix.vast.container }}
+    if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
+    name: Tenzir (${{ matrix.tenzir.name }})
+    runs-on: ${{ matrix.tenzir.os }}
+    container: ${{ matrix.tenzir.container }}
     strategy:
       matrix:
-        vast:
+        tenzir:
           - os: ubuntu-20.04
             container: debian:bookworm-slim
             name: Debian
@@ -615,8 +615,8 @@ jobs:
         #   cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
     env:
       BUILD_DIR: build
-      CC: ${{ matrix.vast.cc }}
-      CXX: ${{ matrix.vast.cxx }}
+      CC: ${{ matrix.tenzir.cc }}
+      CXX: ${{ matrix.tenzir.cxx }}
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
@@ -634,7 +634,7 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
-      - if: ${{ matrix.vast.name == 'Debian' }}
+      - if: ${{ matrix.tenzir.name == 'Debian' }}
         name: Install git
         run: |
           apt-get update
@@ -642,7 +642,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Publish Tenzir.spdx to GitHub Release
-        if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
+        if: ${{ github.event_name == 'release' && matrix.tenzir.name == 'Debian' }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -654,22 +654,22 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
-          git submodule update --init --recursive libvast
+          git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
       - name: Install Dependencies
-        run: ./${{ matrix.vast.dependencies-script-path }}
+        run: ./${{ matrix.tenzir.dependencies-script-path }}
       - name: Setup Python
-        if: ${{ matrix.vast.name == 'macOS' }}
+        if: ${{ matrix.tenzir.name == 'macOS' }}
         uses: actions/setup-python@v4
         with:
           python-version: "3.9"
       - name: Configure Environment
         run: |
-          PACKAGE_NAME="$(echo "vast-${{ needs.configure.outputs.build-version }}-$(uname -s)-Release-${{ matrix.vast.compiler }}" | awk '{ print tolower($0) }')"
-          PUBLISH_NAME="$(echo "vast-$(uname -s)-Release-${{ matrix.vast.compiler }}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "tenzir-${{ needs.configure.outputs.build-version }}-$(uname -s)-Release-${{ matrix.tenzir.compiler }}" | awk '{ print tolower($0) }')"
+          PUBLISH_NAME="$(echo "tenzir-$(uname -s)-Release-${{ matrix.tenzir.compiler }}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-      - if: ${{ matrix.vast.name == 'macOS' }}
+      - if: ${{ matrix.tenzir.name == 'macOS' }}
         name: Setup Homebrew Clang
         run: |
           llvm_root="$(brew --prefix llvm)"
@@ -681,12 +681,12 @@ jobs:
         uses: pat-s/always-upload-cache@v3.0.11
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
+          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
           restore-keys: |
-            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.head-ref-slug }}
-            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
-            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-main
-            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-main
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}
       - name: Configure
         run: |
           python3 --version
@@ -704,13 +704,13 @@ jobs:
           # suitable for general use.
           cmake -B "$BUILD_DIR" \
             -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
-            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
+            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DTENZIR_PLUGINS:STRING="plugins/web" \
             ${{ needs.configure.outputs.cmake-version-args }} \
-            ${{ matrix.vast.cmake-extra-flags }}
+            ${{ matrix.tenzir.cmake-extra-flags }}
       - name: Compile All Targets
         run: |
           cmake --build "$BUILD_DIR" --target all --parallel --verbose
@@ -737,8 +737,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: "vast-integration-test-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}"
-          path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
+          name: "tenzir-integration-test-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}"
+          path: "${{ env.BUILD_DIR }}/tenzir/tenzir-integration-test"
           if-no-files-found: error
       - name: Package
         env:
@@ -767,7 +767,7 @@ jobs:
 
   tenzir-plugins:
     needs:
-      - vast
+      - tenzir
       - configure
     if: >-
       always() &&
@@ -901,27 +901,27 @@ jobs:
         id: configure
         run: |
           build_version=${{ needs.configure.outputs.build-version }}
-          if ${{ needs.configure.outputs.run-vast == 'false' }}; then
+          if ${{ needs.configure.outputs.run-tenzir == 'false' }}; then
             build_version=${{ needs.configure.outputs.before-version }}
           fi
-          PACKAGE_NAME="$(echo "vast-${build_version}-$(uname -s)-${PACKAGE_SUFFIX}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "tenzir-${build_version}-$(uname -s)-${PACKAGE_SUFFIX}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
       - name: Download Tenzir artifact
-        if: ${{ needs.configure.outputs.run-vast == 'true' }}
+        if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
         uses: actions/download-artifact@v3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Authenticate to Google Cloud
-        if: ${{ needs.configure.outputs.run-vast == 'false' }}
+        if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
         uses: google-github-actions/auth@v1
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
       - name: Configure GCloud Credentials
-        if: ${{ needs.configure.outputs.run-vast == 'false' }}
+        if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
         uses: google-github-actions/setup-gcloud@v1
       - name: Download Tenzir
-        if: ${{ needs.configure.outputs.run-vast == 'false' }}
+        if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
         run: |
           gsutil cp "gs://${{ vars.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz" .
       - name: Install Tenzir
@@ -966,8 +966,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: "vast-${{ matrix.plugin.target }}-integration-test"
-          path: "${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test"
+          name: "tenzir-${{ matrix.plugin.target }}-integration-test"
+          path: "${{ env.BUILD_DIR }}/tenzir-${{ matrix.plugin.target }}-integration-test"
           if-no-files-found: error
       - name: Install
         run: |
@@ -977,7 +977,7 @@ jobs:
   python:
     needs:
       - configure
-      - docker-vast
+      - docker-tenzir
     if: ${{ needs.configure.outputs.run-python == 'true' }}
     name: Python
     runs-on: ${{ matrix.os }}
@@ -1009,7 +1009,7 @@ jobs:
         working-directory: python
         if: matrix.os == 'ubuntu-latest'
         run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
           export TENZIR_CONTAINER_REGISTRY=ghcr.io
           ./docker-poetry-run.sh pytest
       - name: Build package
@@ -1050,16 +1050,16 @@ jobs:
       - policy-enforcement
       - configure
       - changelog
-      - docker-vast
+      - docker-tenzir
       - docker-compose
       - docs
-      - vast-thehive-app
+      - tenzir-thehive-app
       - example-notebooks
       - python
       - python-package
       - regression-tests
-      - vast
-      - vast-nix
+      - tenzir
+      - tenzir-nix
       - tenzir-plugins
     if: always() && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest

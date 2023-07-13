@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# This script runs ClangBuildAanlyzer on a clean build of vast
+# This script runs ClangBuildAanlyzer on a clean build of tenzir
 #   Usage: ./scripts/clang-build-analyzer [<additional-build-flags>]
 
 set -e
@@ -50,7 +50,7 @@ if [ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then
     | xargs touch
 fi
 
-# Build vast, capture the time traces, then analyze them
+# Build tenzir, capture the time traces, then analyze them
 ${CBA} --start "${WORKING_DIR}/build"
 CCACHE_DISABLE=1 cmake --build "${WORKING_DIR}/build" -j \
   | grep -v "Time trace\|tracing"

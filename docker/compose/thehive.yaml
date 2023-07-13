@@ -49,7 +49,7 @@ services:
     pull_policy: build
     network_mode: host  # used for tests only
     build:
-      context: ../thehive/vast-cortex-neuron/
+      context: ../thehive/tenzir-cortex-neuron/
       args:
         - TENZIR_VERSION=${TENZIR_CONTAINER_REF:-latest}
         - TENZIR_CONTAINER_REGISTRY=${TENZIR_CONTAINER_REGISTRY:-docker.io}

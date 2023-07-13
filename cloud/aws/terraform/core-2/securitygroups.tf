@@ -1,5 +1,5 @@
-resource "aws_security_group" "vast_client" {
-  name        = "${module.env.module_name}-vast_client-${module.env.stage}"
+resource "aws_security_group" "tenzir_client" {
+  name        = "${module.env.module_name}-tenzir_client-${module.env.stage}"
   description = "Allow outbound access only"
   vpc_id      = module.network.new_vpc_id
 
@@ -12,16 +12,16 @@ resource "aws_security_group" "vast_client" {
 }
 
 
-resource "aws_security_group" "vast_server" {
-  name        = "${module.env.module_name}-vast_server-${module.env.stage}"
+resource "aws_security_group" "tenzir_server" {
+  name        = "${module.env.module_name}-tenzir_server-${module.env.stage}"
   description = "Allow access from Tenzir Lambda and allow all outbound traffic"
   vpc_id      = module.network.new_vpc_id
 
   ingress {
     protocol        = "tcp"
-    from_port       = local.vast_port
-    to_port         = local.vast_port
-    security_groups = [aws_security_group.vast_client.id]
+    from_port       = local.tenzir_port
+    to_port         = local.tenzir_port
+    security_groups = [aws_security_group.tenzir_client.id]
   }
 
   egress {

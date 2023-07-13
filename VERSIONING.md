@@ -3,13 +3,13 @@
 This document provides an overview of versioning in Tenzir, covers the semantics
 of version bumps, and describes the individual components subject to versioning.
 
-Tenzir has multiple components: The `vast` binary, the `libvast` C++ library, and
-optional plugin C++ libraries. The `vast` binary and the `libvast` C++ library
+Tenzir has multiple components: The `tenzir` binary, the `libtenzir` C++ library, and
+optional plugin C++ libraries. The `tenzir` binary and the `libtenzir` C++ library
 are versioned together, and the plugin C++ libraries are versioned individually.
 
 ## Version Identification
 
-Run `vast exec 'version'` operator to get Tenzir's current version, and the
+Run `tenzir exec 'version'` operator to get Tenzir's current version, and the
 versions of its major dependencies that it currently uses:
 
 ```json
@@ -42,7 +42,7 @@ This versioning scheme looks similar to [SemVer][semver], but differs from it in
 that [Tenzir's API and ABI is explicitly unversioned][api-and-abi-versioning].
 
 [semver]: https://semver.org
-[api-and-abi-versioning]: #libvast-api-and-abi-versioning
+[api-and-abi-versioning]: #libtenzir-api-and-abi-versioning
 
 ### Major
 
@@ -100,13 +100,13 @@ versions. Upgrading from `v1.*` to `v3.*` may require running `v2.*` first.
 
 Tenzir processes can connect to one another if the major and minor version match.
 
-## `libvast` API and ABI Versioning
+## `libtenzir` API and ABI Versioning
 
-The API and ABI of the C++ library `libvast` are considered unstable, i.e., the
-`vast` binary `v1.3.4` will function with `libvast` C++ library `v1.3.4` only,
+The API and ABI of the C++ library `libtenzir` are considered unstable, i.e., the
+`tenzir` binary `v1.3.4` will function with `libtenzir` C++ library `v1.3.4` only,
 and not with `v1.3.5`.
 
-The shared object version number of `libvast` increases with every release to
+The shared object version number of `libtenzir` increases with every release to
 indicate that every release is considered a breaking change to the ABI. It is
 calculated as follows from the Tenzir version:
 
@@ -114,8 +114,8 @@ calculated as follows from the Tenzir version:
 SO version = <256 * (major + 7) + minor>.<patch>
 ```
 
-E.g., the `libvast` C++ library shared object name for Tenzir
-`v1.23.45-67-g89abcdef12` is `libvast.so.1023045`.
+E.g., the `libtenzir` C++ library shared object name for Tenzir
+`v1.23.45-67-g89abcdef12` is `libtenzir.so.1023045`.
 
 ## Plugin Versioning
 
@@ -126,8 +126,8 @@ tree.
 We encourage plugin authors to version their plugins separately, and to follow
 the guidelines laid out in this document.
 
-Due to `libvast`'s unstable ABI, Tenzir plugins distributed as dynamic libraries
-must link against the exact same version of `libvast` as the `vast` binary
+Due to `libtenzir`'s unstable ABI, Tenzir plugins distributed as dynamic libraries
+must link against the exact same version of `libtenzir` as the `tenzir` binary
 itself.
 
 ## Previous Versioning Schemes

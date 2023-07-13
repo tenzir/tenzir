@@ -22,11 +22,11 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-export COMPOSE_FILE="compose/vast.yaml"
+export COMPOSE_FILE="compose/tenzir.yaml"
 if (( "${build}" == 1 )); then
   export TENZIR_CONTAINER_REGISTRY='docker.io'
   export TENZIR_CONTAINER_REF='latest'
-  export COMPOSE_FILE="${COMPOSE_FILE}:compose/vast.build.yaml"
+  export COMPOSE_FILE="${COMPOSE_FILE}:compose/tenzir.build.yaml"
   build_policy='--pull=never'
 else
   export TENZIR_CONTAINER_REGISTRY="${TENZIR_CONTAINER_REGISTRY:-ghcr.io}"
@@ -45,16 +45,16 @@ docker compose up ${build_policy} --detach
 
 # Run a basic status check; we don't particularly care about the output itself,
 # so essentially we're just checking for the exit code.
-docker compose run vast status > /dev/null
+docker compose run tenzir status > /dev/null
 
 # Ingest some test data.
-gunzip -c ../vast/integration/data/zeek/*.log.gz |
-  docker compose run --no-TTY vast import --blocking zeek
-docker compose run --no-TTY vast import --blocking suricata \
-  < ../vast/integration/data/suricata/eve.json
+gunzip -c ../tenzir/integration/data/zeek/*.log.gz |
+  docker compose run --no-TTY tenzir import --blocking zeek
+docker compose run --no-TTY tenzir import --blocking suricata \
+  < ../tenzir/integration/data/suricata/eve.json
 
 # Check whether we imported the right amount of data.
-num_imported="$(docker compose run --interactive=false vast count)"
+num_imported="$(docker compose run --interactive=false tenzir count)"
 num_imported_expected="18494"
 [[ "${num_imported}" == "${num_imported_expected}" ]]
 

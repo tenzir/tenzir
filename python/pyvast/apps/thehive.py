@@ -7,11 +7,11 @@ import time
 from typing import Optional
 
 import aiohttp
-import pyvast.utils.logging as logging
+import pytenzir.utils.logging as logging
 
-from pyvast import Tenzir, ExportMode, to_json_rows
+from pytenzir import Tenzir, ExportMode, to_json_rows
 
-logger = logging.get("vast.thehive.app")
+logger = logging.get("tenzir.thehive.app")
 
 THEHIVE_ORGADMIN_EMAIL = os.environ["DEFAULT_ORGADMIN_EMAIL"]
 THEHIVE_ORGADMIN_PWD = os.environ["DEFAULT_ORGADMIN_PWD"]
@@ -126,17 +126,17 @@ async def on_suricata_alert(alert: dict):
 
 
 async def run_async():
-    vast_cli = Tenzir()
-    await vast_cli.status(60, retry_delay=1)
+    tenzir_cli = Tenzir()
+    await tenzir_cli.status(60, retry_delay=1)
     await wait_for_thehive("/api/v1/user/current", 180)
     expr = '#schema == "suricata.alert"'
     # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
-    hist_iter = vast_cli.export(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)
+    hist_iter = tenzir_cli.export(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)
     async for row in to_json_rows(hist_iter):
         await on_suricata_alert(row.data)
     logger.info("Starting live forwarding...")
-    cont_iter = vast_cli.export(expr, ExportMode.CONTINUOUS)
+    cont_iter = tenzir_cli.export(expr, ExportMode.CONTINUOUS)
     async for row in to_json_rows(cont_iter):
         await on_suricata_alert(row.data)
 

@@ -11,7 +11,7 @@ locals {
       volumesFrom  = []
       environment = [{
         name  = "TENZIR_ENDPOINT"
-        value = var.vast_server_hostname
+        value = var.tenzir_server_hostname
         }, {
         name  = "QUEUE_URL"
         value = aws_sqs_queue.matched_events.url

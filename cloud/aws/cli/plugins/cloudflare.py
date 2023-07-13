@@ -4,7 +4,7 @@ import time
 from trace import Trace
 import requests
 import dynaconf
-from vast_invoke import Context, Exit, task
+from tenzir_invoke import Context, Exit, task
 from typing import Tuple
 from common import (
     FargateService,

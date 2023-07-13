@@ -6,28 +6,28 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/chunk.hpp>
-#include <vast/collect.hpp>
-#include <vast/concept/parseable/to.hpp>
-#include <vast/concept/parseable/vast/expression.hpp>
-#include <vast/concept/parseable/vast/subnet.hpp>
-#include <vast/detail/narrow.hpp>
-#include <vast/detail/spawn_container_source.hpp>
-#include <vast/expression.hpp>
-#include <vast/ids.hpp>
-#include <vast/logger.hpp>
-#include <vast/plugin.hpp>
-#include <vast/posix_filesystem.hpp>
-#include <vast/query_context.hpp>
-#include <vast/status.hpp>
-#include <vast/table_slice_builder.hpp>
-#include <vast/test/fixtures/actor_system_and_events.hpp>
-#include <vast/test/memory_filesystem.hpp>
-#include <vast/test/test.hpp>
+#include <tenzir/chunk.hpp>
+#include <tenzir/collect.hpp>
+#include <tenzir/concept/parseable/tenzir/expression.hpp>
+#include <tenzir/concept/parseable/tenzir/subnet.hpp>
+#include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/spawn_container_source.hpp>
+#include <tenzir/expression.hpp>
+#include <tenzir/ids.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/posix_filesystem.hpp>
+#include <tenzir/query_context.hpp>
+#include <tenzir/status.hpp>
+#include <tenzir/table_slice_builder.hpp>
+#include <tenzir/test/fixtures/actor_system_and_events.hpp>
+#include <tenzir/test/memory_filesystem.hpp>
+#include <tenzir/test/test.hpp>
 
 #include <chrono>
 
-namespace vast::plugins::parquet {
+namespace tenzir::plugins::parquet {
 
 namespace {
 
@@ -95,7 +95,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
           tally = x;
           done = true;
         },
-        [&](vast::table_slice slice) {
+        [&](tenzir::table_slice slice) {
           rows += slice.rows();
           result.push_back(std::move(slice));
         })
@@ -135,8 +135,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     REQUIRE_EQUAL(rows, tally);
     return tally;
   }
-  vast::accountant_actor accountant = {};
-  vast::filesystem_actor filesystem;
+  tenzir::accountant_actor accountant = {};
+  tenzir::filesystem_actor filesystem;
 };
 
 } // namespace
@@ -144,22 +144,23 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 FIXTURE_SCOPE(filesystem_tests, fixture)
 
 TEST(parquet store roundtrip) {
-  auto xs = std::vector<vast::table_slice>{suricata_dns_log[0]};
-  auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  auto xs = std::vector<tenzir::table_slice>{suricata_dns_log[0]};
+  auto uuid = tenzir::uuid::random();
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);
   auto& [builder, header] = *builder_and_header;
-  vast::detail::spawn_container_source(sys, xs, builder);
+  tenzir::detail::spawn_container_source(sys, xs, builder);
   run();
   // The parquet store expects a single stream source, so the data should be
   // flushed to disk after the source disconnected.
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = ::vast::make_ids({0});
+  auto ids = ::tenzir::make_ids({0});
   auto results = query(*store, ids);
   run();
   CHECK_EQUAL(results.size(), 1ull);
@@ -280,15 +281,16 @@ struct table_slice_fixture {
 TEST(active parquet store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  auto uuid = tenzir::uuid::random();
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, uuid)->store_builder;
   auto slices = std::vector<table_slice>{slice};
-  vast::detail::spawn_container_source(sys, slices, builder);
+  tenzir::detail::spawn_container_source(sys, slices, builder);
   run();
-  auto results = query(builder, vast::ids{});
+  auto results = query(builder, tenzir::ids{});
   run();
   CHECK_EQUAL(results.size(), 1ull);
   compare_table_slices(slice, results[0]);
@@ -297,8 +299,9 @@ TEST(active parquet store fetchall query) {
 TEST(passive parquet store fetchall small row group size) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  auto uuid = tenzir::uuid::random();
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
   // We know that initialize may be called multiple times for this plugin.
   auto _
@@ -310,12 +313,12 @@ TEST(passive parquet store fetchall small row group size) {
   REQUIRE_NOERROR(builder_and_header);
   auto& [builder, header] = *builder_and_header;
   auto slices = std::vector<table_slice>{1024, slice}; // 4096 elements
-  vast::detail::spawn_container_source(sys, slices, builder);
+  tenzir::detail::spawn_container_source(sys, slices, builder);
   run();
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto results = query(*store, vast::ids{});
+  auto results = query(*store, tenzir::ids{});
   run();
   // 4096 elements with row group size of 512 is 8 table slices
   CHECK_EQUAL(results.size(), 8ull);
@@ -326,22 +329,23 @@ TEST(passive parquet store selective count query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
-  auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  auto uuid = tenzir::uuid::random();
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);
   auto& [builder, header] = *builder_and_header;
   auto slices = std::vector<table_slice>{slice};
-  vast::detail::spawn_container_source(sys, slices, builder);
+  tenzir::detail::spawn_container_source(sys, slices, builder);
   run();
   // The local store expects a single stream source, so the data should be
   // flushed to disk after the source disconnected.
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = ::vast::make_ids({0});
+  auto ids = ::tenzir::make_ids({0});
   auto results = count(*store, ids, *expr);
   run();
   REQUIRE_EQUAL(results, 1ull);
@@ -350,22 +354,23 @@ TEST(passive parquet store selective count query) {
 TEST(passive parquet store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  auto uuid = tenzir::uuid::random();
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);
   auto& [builder, header] = *builder_and_header;
   auto slices = std::vector<table_slice>{slice};
-  vast::detail::spawn_container_source(sys, slices, builder);
+  tenzir::detail::spawn_container_source(sys, slices, builder);
   run();
   // The local store expects a single stream source, so the data should be
   // flushed to disk after the source disconnected.
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto results = query(*store, vast::ids{});
+  auto results = query(*store, tenzir::ids{});
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
   compare_table_slices(slice, results[0]);
@@ -375,40 +380,42 @@ TEST(passive parquet store selective query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
-  auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  auto uuid = tenzir::uuid::random();
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);
   auto& [builder, header] = *builder_and_header;
   auto slices = std::vector<table_slice>{slice};
-  vast::detail::spawn_container_source(sys, slices, builder);
+  tenzir::detail::spawn_container_source(sys, slices, builder);
   run();
   // The local store expects a single stream source, so the data should be
   // flushed to disk after the source disconnected.
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = ::vast::make_ids({0});
+  auto ids = ::tenzir::make_ids({0});
   auto results = query(*store, ids, *expr);
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
-  const auto& expected_slice = filter(slice, *expr, vast::ids{});
+  const auto& expected_slice = filter(slice, *expr, tenzir::ids{});
   compare_table_slices(*expected_slice, results[0]);
 }
 
 TEST(passive parquet store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
-  auto builder_and_header
-    = plugin->make_store_builder(accountant, filesystem, vast::uuid::random());
+  auto builder_and_header = plugin->make_store_builder(accountant, filesystem,
+                                                       tenzir::uuid::random());
   REQUIRE_NOERROR(builder_and_header);
   auto& [builder, header] = *builder_and_header;
   auto slices = std::vector<table_slice>{slice};
-  vast::detail::spawn_container_source(sys, slices, builder);
+  tenzir::detail::spawn_container_source(sys, slices, builder);
   run();
   // The local store expects a single stream source, so the data should be
   // flushed to disk after the source disconnected.
@@ -422,13 +429,14 @@ TEST(passive parquet store erase) {
 TEST(active parquet store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
   auto builder
-    = plugin->make_store_builder(accountant, filesystem, vast::uuid::random())
+    = plugin->make_store_builder(accountant, filesystem, tenzir::uuid::random())
         ->store_builder;
   auto slices = std::vector<table_slice>{slice};
-  vast::detail::spawn_container_source(sys, slices, builder);
+  tenzir::detail::spawn_container_source(sys, slices, builder);
   run();
   auto r = self->request(builder, std::chrono::milliseconds(100), atom::erase_v,
                          make_ids({id_range(0, 4)}));
@@ -446,18 +454,19 @@ TEST(active parquet store erase) {
 TEST(active parquet store status) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin
+    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
   REQUIRE(plugin);
-  auto uuid = vast::uuid::random();
+  auto uuid = tenzir::uuid::random();
   auto builder
     = plugin->make_store_builder(accountant, filesystem, uuid)->store_builder;
   auto slices = std::vector<table_slice>{slice};
-  vast::detail::spawn_container_source(sys, slices, builder);
+  tenzir::detail::spawn_container_source(sys, slices, builder);
   run();
   auto timeout = std::chrono::milliseconds(100);
   auto r = self->request(builder, timeout, atom::status_v,
-                         vast::status_verbosity::info,
-                         std::chrono::duration_cast<vast::duration>(timeout));
+                         tenzir::status_verbosity::info,
+                         std::chrono::duration_cast<tenzir::duration>(timeout));
   run();
   r.receive(
     [uuid](record& status) {
@@ -477,4 +486,4 @@ TEST(active parquet store status) {
 
 FIXTURE_SCOPE_END()
 
-} // namespace vast::plugins::parquet
+} // namespace tenzir::plugins::parquet

@@ -43,7 +43,7 @@ foreach (release IN LISTS releases)
     string(APPEND changelog "## [${release}][${release}]\n\n")
     string(
       APPEND changelog_links
-      "[${release}]: https://github.com/tenzir/vast/releases/tag/${release}\n")
+      "[${release}]: https://github.com/tenzir/tenzir/releases/tag/${release}\n")
   endif ()
 
   # Iterate over changelog entries for every release in a fixed order of
@@ -83,7 +83,7 @@ foreach (release IN LISTS releases)
               if (reference)
                 if (reference MATCHES "^[1-9][0-9]+\$")
                   set(reference_link
-                      "https://github.com/tenzir/vast/pull/${reference}")
+                      "https://github.com/tenzir/tenzir/pull/${reference}")
                   string(PREPEND reference "#")
                 else ()
                   set(reference_link "https://github.com/${reference}")

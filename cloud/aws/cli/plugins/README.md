@@ -13,5 +13,5 @@ validators in a top level `VALIDATORS` variable. These validations will be
 loaded for all activated plugins.
 
 When creating tasks in a plugin, the decorators and objects defined in the
-module `vast_invoke` should be used instead of the plain `invoke` constructs.
+module `tenzir_invoke` should be used instead of the plain `invoke` constructs.
 This enables proper handling of the PTY by the entrypoint script and Docker.

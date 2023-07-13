@@ -25,22 +25,22 @@ docker compose \
     make -C web
 ```
 
-The `quarto.vast.yaml` overlay adds the settings to enable communication
-between the Tenzir binary in the Quarto image and the `vast` service (configured
-using the `vast` Compose configurations). To perform the Quarto build of the
-examples notebooks with a pristine `vast` service running in the background, in
+The `quarto.tenzir.yaml` overlay adds the settings to enable communication
+between the Tenzir binary in the Quarto image and the `tenzir` service (configured
+using the `tenzir` Compose configurations). To perform the Quarto build of the
+examples notebooks with a pristine `tenzir` service running in the background, in
 the `docker/compose` directory run:
 
 ```bash
 export HOST_UID=$(id -u) 
 export HOST_GID=$(id -g) 
 
-export COMPOSE_FILE="vast.yaml"
+export COMPOSE_FILE="tenzir.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:quarto.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:quarto.bind.yaml"
-COMPOSE_FILE="$COMPOSE_FILE:quarto.vast.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:quarto.tenzir.yaml"
 
-docker compose up -d vast
+docker compose up -d tenzir
 
 docker compose \
     run quarto \

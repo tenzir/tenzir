@@ -8,24 +8,24 @@
 
 #pragma once
 
-#include <vast/type.hpp>
+#include <tenzir/type.hpp>
 
 #include <string>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 // The configuration that can be set by the user via
 // YAML or command-line options.
 struct configuration {
   static const record_type& schema() noexcept {
-    static auto result = vast::record_type{
-      {"bind", vast::string_type{}},
-      {"port", vast::int64_type{}},
-      {"mode", vast::string_type{}},
-      {"certfile", vast::string_type{}},
-      {"keyfile", vast::string_type{}},
-      {"web-root", vast::string_type{}},
-      {"cors-allowed-origin", vast::string_type{}},
+    static auto result = tenzir::record_type{
+      {"bind", tenzir::string_type{}},
+      {"port", tenzir::int64_type{}},
+      {"mode", tenzir::string_type{}},
+      {"certfile", tenzir::string_type{}},
+      {"keyfile", tenzir::string_type{}},
+      {"web-root", tenzir::string_type{}},
+      {"cors-allowed-origin", tenzir::string_type{}},
     };
     return result;
   }
@@ -33,7 +33,7 @@ struct configuration {
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
     return f.object(x)
-      .pretty_name("vast.plugins.rest.configuration")
+      .pretty_name("tenzir.plugins.rest.configuration")
       .fields(f.field("bind-address", x.bind_address), f.field("port", x.port),
               f.field("mode", x.mode), f.field("certfile", x.certfile),
               f.field("keyfile", x.keyfile), f.field("web-root", x.web_root));
@@ -103,4 +103,4 @@ public:
 /// Validate that the user-provided configuration makes sense.
 caf::expected<server_config> convert_and_validate(configuration);
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

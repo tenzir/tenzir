@@ -8,7 +8,7 @@
 
 #include "web/server_command.hpp"
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 auto openapi_record() -> record {
   auto paths = record{};
@@ -130,10 +130,10 @@ This API can be used to interact with a Tenzir Node in a RESTful manner.
 
 All API requests must be authenticated with a valid token, which must be
 supplied in the `X-Tenzir-Token` request header. The token can be generated
-on the command-line using the `vast rest generate-token` command.)_"},
+on the command-line using the `tenzir rest generate-token` command.)_"},
      }},
     {"servers", list{{
-      record{{"url", "https://vast.example.com/api/v0"}},
+      record{{"url", "https://tenzir.example.com/api/v0"}},
     }}},
     {"security", list {{
       record {{"VastToken", list{}}},
@@ -167,11 +167,11 @@ std::string generate_openapi_yaml() noexcept {
   return *yaml;
 }
 
-auto specification_command(const vast::invocation&, caf::actor_system&)
+auto specification_command(const tenzir::invocation&, caf::actor_system&)
   -> caf::message {
   auto yaml = generate_openapi_yaml();
   fmt::print("---\n{}\n", yaml);
   return {};
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

@@ -8,12 +8,12 @@
 
 #include "kafka/consumer.hpp"
 
-#include <vast/detail/narrow.hpp>
-#include <vast/error.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/error.hpp>
 
 #include <fmt/format.h>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 auto consumer::make(configuration config) -> caf::expected<consumer> {
   consumer result;
@@ -56,4 +56,4 @@ auto consumer::consume(std::chrono::milliseconds timeout)
   return result;
 }
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

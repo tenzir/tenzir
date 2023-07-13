@@ -3,7 +3,7 @@ import sys
 
 import coloredlogs
 
-from pyvast.utils.config import create as create_config, Config
+from pytenzir.utils.config import create as create_config, Config
 
 
 def configure(config: Config, logger: logging.Logger):
@@ -40,13 +40,13 @@ def configure(config: Config, logger: logging.Logger):
 
 def get(name=None):
     """Get a logger instance while ensuring that the Tenzir logger namespace
-    (loggers with name "vast or "vast.*") is properly configured"""
-    # The logger "vast" is the root of the namespace. All loggers names vast.*
+    (loggers with name "tenzir or "tenzir.*") is properly configured"""
+    # The logger "tenzir" is the root of the namespace. All loggers names tenzir.*
     # will inherit its settings
-    vast_logger = logging.getLogger("vast")
+    tenzir_logger = logging.getLogger("tenzir")
     # Setting "propagate" to false disables inheritance from the root logger
-    vast_logger.propagate = False
+    tenzir_logger.propagate = False
     # If the logger has no handlers, it means it hasn't been configured yet.
-    if not vast_logger.hasHandlers():
-        configure(create_config(), vast_logger)
+    if not tenzir_logger.hasHandlers():
+        configure(create_config(), tenzir_logger)
     return logging.getLogger(name)

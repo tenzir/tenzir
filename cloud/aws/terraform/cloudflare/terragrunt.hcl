@@ -8,8 +8,8 @@ dependency "core_2" {
   mock_outputs = {
     fargate_task_execution_role_arn   = "arn:aws:iam:::role/temporary-dummy-arn"
     fargate_cluster_name              = "dummy_name"
-    vast_vpc_id                       = "dummy_id"
-    vast_subnet_id                    = "dummy_id"
+    tenzir_vpc_id                       = "dummy_id"
+    tenzir_subnet_id                    = "dummy_id"
     http_app_client_security_group_id = "dummy_id"
   }
 }
@@ -33,6 +33,6 @@ inputs = {
   http_app_client_security_group_id = dependency.core_2.outputs.http_app_client_security_group_id
   fargate_task_execution_role_arn   = dependency.core_2.outputs.fargate_task_execution_role_arn
   fargate_cluster_name              = dependency.core_2.outputs.fargate_cluster_name
-  vast_vpc_id                       = dependency.core_2.outputs.vast_vpc_id
-  subnet_id                         = dependency.core_2.outputs.vast_subnet_id
+  tenzir_vpc_id                       = dependency.core_2.outputs.tenzir_vpc_id
+  subnet_id                         = dependency.core_2.outputs.tenzir_subnet_id
 }

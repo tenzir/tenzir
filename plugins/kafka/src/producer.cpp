@@ -8,13 +8,13 @@
 
 #include "kafka/producer.hpp"
 
-#include <vast/detail/narrow.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
 
 #include <fmt/format.h>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 auto producer::make(configuration config) -> caf::expected<producer> {
   producer result;
@@ -115,4 +115,4 @@ auto producer::queue_size() const -> size_t {
   return static_cast<size_t>(producer_->outq_len());
 }
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

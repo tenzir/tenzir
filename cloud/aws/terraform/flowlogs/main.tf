@@ -15,8 +15,8 @@ module "processor" {
   source_name           = "flowlogs"
   source_bucket_name    = var.source_bucket_name
   source_bucket_region  = var.source_bucket_region
-  vast_lambda_name      = var.vast_lambda_name
-  vast_lambda_arn       = var.vast_lambda_arn
-  vast_lambda_role_name = var.vast_lambda_role_name
+  tenzir_lambda_name      = var.tenzir_lambda_name
+  tenzir_lambda_arn       = var.tenzir_lambda_arn
+  tenzir_lambda_role_name = var.tenzir_lambda_role_name
   import_cmd            = local.import_cmd
 }

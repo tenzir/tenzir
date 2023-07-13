@@ -4,36 +4,36 @@ set -e
 
 if [ "$1" = "configure" ]; then
   # Provide an opt-out mechanism for the automatic migration.
-  if ! [ -f /var/lib/vast/disable-migration ]; then
-    if getent passwd vast >/dev/null; then
+  if ! [ -f /var/lib/tenzir/disable-migration ]; then
+    if getent passwd tenzir >/dev/null; then
       echo "Detected previous Tenzir installation and enabling trace mode for the migration"
       set -x
     fi
     # Migrate user and group.
     if ! getent passwd tenzir >/dev/null; then
-      if getent passwd vast >/dev/null; then
-        usermod -l tenzir vast
+      if getent passwd tenzir >/dev/null; then
+        usermod -l tenzir tenzir
         usermod -d /var/lib/tenzir tenzir || true
-        groupmod -n tenzir vast
+        groupmod -n tenzir tenzir
       fi
     fi
-    # Copy vast.yaml to tenzir.yaml.
-    if [ -f /opt/vast/etc/vast/vast.yaml ] && ! [ -f /opt/tenzir/etc/tenzir/tenzir.yaml ]; then
+    # Copy tenzir.yaml to tenzir.yaml.
+    if [ -f /opt/tenzir/etc/tenzir/tenzir.yaml ] && ! [ -f /opt/tenzir/etc/tenzir/tenzir.yaml ]; then
       mkdir -p /opt/tenzir/etc/tenzir
-      cp /opt/vast/etc/vast/vast.yaml /opt/tenzir/etc/tenzir/tenzir.yaml
+      cp /opt/tenzir/etc/tenzir/tenzir.yaml /opt/tenzir/etc/tenzir/tenzir.yaml
     fi
     explicit_db_dir=0
-    if grep -q '^\s\+db-directory:' /opt/vast/etc/vast/vast.yaml > /dev/null 2>&1; then
+    if grep -q '^\s\+db-directory:' /opt/tenzir/etc/tenzir/tenzir.yaml > /dev/null 2>&1; then
       explicit_db_dir=1
     fi
     # Move db-directory if is not set explicitly.
-    if [ "$explicit_db_dir" = 0 ] && [ -d /var/lib/vast ] && ! [ -f /var/lib/vast/MOVED-TO-VAR-LIB-TENZIR ] && ! [ -d /var/lib/tenzir ]; then
-      mv /var/lib/vast /var/lib/tenzir
-      mkdir /var/lib/vast
-      touch /var/lib/vast/MOVED-TO-VAR-LIB-TENZIR
-      # Also adjust the inner /var/lib/tenzir/vast.db directory in case it exists.
-      if [ -d /var/lib/tenzir/vast.db ]; then
-        mv /var/lib/tenzir/vast.db /var/lib/tenzir/tenzir.db
+    if [ "$explicit_db_dir" = 0 ] && [ -d /var/lib/tenzir ] && ! [ -f /var/lib/tenzir/MOVED-TO-VAR-LIB-TENZIR ] && ! [ -d /var/lib/tenzir ]; then
+      mv /var/lib/tenzir /var/lib/tenzir
+      mkdir /var/lib/tenzir
+      touch /var/lib/tenzir/MOVED-TO-VAR-LIB-TENZIR
+      # Also adjust the inner /var/lib/tenzir/tenzir.db directory in case it exists.
+      if [ -d /var/lib/tenzir/tenzir.db ]; then
+        mv /var/lib/tenzir/tenzir.db /var/lib/tenzir/tenzir.db
       fi
     fi
     set +x
@@ -58,14 +58,14 @@ if [ "$1" = "configure" ]; then
 fi
 
 if [ "$1" = "configure" ] ; then
-	# Delete all lines referencing /var/lib/vast if it doesn't exist. This works
+	# Delete all lines referencing /var/lib/tenzir if it doesn't exist. This works
 	# around restrictive behavior in systemd, which refuses to start the unit if
 	# a ReadWritePath does not exist.
-  if ! [ -d /var/lib/vast ]; then
-    sed -i '/\/var\/lib\/vast/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
+  if ! [ -d /var/lib/tenzir ]; then
+    sed -i '/\/var\/lib\/tenzir/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
   fi
-	if ! [ -d /var/log/vast ]; then
-		sed -i '/\/var\/log\/vast/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
+	if ! [ -d /var/log/tenzir ]; then
+		sed -i '/\/var\/log\/tenzir/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
 	fi
 	# Link the service into systemd's default service directory to make
 	# it known.

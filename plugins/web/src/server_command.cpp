@@ -15,20 +15,20 @@
 #include "web/restinio_server.hpp"
 #include "web/specification_command.hpp"
 
-#include <vast/concept/convertible/data.hpp>
-#include <vast/concept/parseable/to.hpp>
-#include <vast/concept/parseable/vast/data.hpp>
-#include <vast/concept/parseable/vast/expression.hpp>
-#include <vast/detail/flat_map.hpp>
-#include <vast/format/json.hpp>
-#include <vast/logger.hpp>
-#include <vast/node.hpp>
-#include <vast/node_control.hpp>
-#include <vast/plugin.hpp>
-#include <vast/query_context.hpp>
-#include <vast/query_cursor.hpp>
-#include <vast/spawn_or_connect_to_node.hpp>
-#include <vast/validate.hpp>
+#include <tenzir/concept/convertible/data.hpp>
+#include <tenzir/concept/parseable/tenzir/data.hpp>
+#include <tenzir/concept/parseable/tenzir/expression.hpp>
+#include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/detail/flat_map.hpp>
+#include <tenzir/format/json.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/node.hpp>
+#include <tenzir/node_control.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/query_context.hpp>
+#include <tenzir/query_cursor.hpp>
+#include <tenzir/spawn_or_connect_to_node.hpp>
+#include <tenzir/validate.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -41,7 +41,7 @@
 
 // Needed to forward incoming requests to the request_dispatcher
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 using request_dispatcher_actor = typed_actor_fwd<
   // Handle a request.
@@ -54,11 +54,11 @@ using request_dispatcher_actor = typed_actor_fwd<
 
 namespace {
 
-restinio::http_method_id_t to_restinio_method(vast::http_method method) {
+restinio::http_method_id_t to_restinio_method(tenzir::http_method method) {
   switch (method) {
-    case vast::http_method::get:
+    case tenzir::http_method::get:
       return restinio::http_method_get();
-    case vast::http_method::post:
+    case tenzir::http_method::post:
       return restinio::http_method_post();
   }
   // Unreachable.
@@ -132,7 +132,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       if (!query_params)
         return response->abort(400, "failed to parse query\n",
                                query_params.error());
-      auto body_params = vast::http_parameter_map{};
+      auto body_params = tenzir::http_parameter_map{};
       // POST requests can contain request parameters in their body in any
       // format supported by the server. The client indicates the data format
       // they used in the `Content-Type` header. See also
@@ -175,7 +175,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           // is passed using multiple methods.
           // TODO: Attempt to parse lists in query parameters, as in
           // `?x=1,2,3&y=[a,b]`
-          auto maybe_param = std::optional<vast::data>{};
+          auto maybe_param = std::optional<tenzir::data>{};
           if (auto query_param = query_params->get_param(name))
             maybe_param = std::string{*query_param};
           if (auto route_param = route_params.get_param(name))
@@ -210,7 +210,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
 
 void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                  request_dispatcher_actor dispatcher,
-                 const server_config& config, vast::rest_endpoint endpoint,
+                 const server_config& config, tenzir::rest_endpoint endpoint,
                  rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
   auto path = format_api_route(endpoint);
@@ -268,11 +268,11 @@ void setup_cors_preflight_handlers(std::unique_ptr<router_t>& router,
 
 } // namespace
 
-auto server_command(const vast::invocation& inv, caf::actor_system& system)
+auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   -> caf::message {
   auto self = caf::scoped_actor{system};
   auto web_options = caf::get_or(inv.options, "plugins.web", caf::settings{});
-  auto data = vast::data{};
+  auto data = tenzir::data{};
   // TODO: Implement a single `convert_and_validate()` function for going
   // from caf::settings -> record_type
   if (!inv.arguments.empty())
@@ -284,8 +284,8 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt parse options"));
   auto invalid
-    = vast::validate(data, vast::plugins::web::configuration::schema(),
-                     vast::validate::permissive);
+    = tenzir::validate(data, tenzir::plugins::web::configuration::schema(),
+                       tenzir::validate::permissive);
   if (invalid)
     return caf::make_message(caf::make_error(
       ec::invalid_argument, fmt::format("invalid options: {}", invalid)));
@@ -302,8 +302,8 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       fmt::format("invalid server configuration: {}", server_config.error())));
   }
   // Create necessary actors.
-  auto node_opt = vast::spawn_or_connect_to_node(self, inv.options,
-                                                 content(system.config()));
+  auto node_opt = tenzir::spawn_or_connect_to_node(self, inv.options,
+                                                   content(system.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt)) {
     TENZIR_ERROR("failed to get node: {}", *err);
     return caf::make_message(std::move(*err));
@@ -444,7 +444,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         if (msg.reason != caf::exit_reason::user_shutdown)
           err = std::move(msg.reason);
       },
-      // Only called when running this command with `vast -N`.
+      // Only called when running this command with `tenzir -N`.
       [&](atom::signal, int signal) {
         TENZIR_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
                      ::strsignal(signal));
@@ -469,4 +469,4 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   return caf::make_message(std::move(err));
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

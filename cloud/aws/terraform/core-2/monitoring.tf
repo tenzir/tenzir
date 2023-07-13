@@ -2,10 +2,10 @@ locals {
   metric_namespace = "${module.env.module_name}-${module.env.stage}"
 }
 
-resource "aws_cloudwatch_log_metric_filter" "vast_server_rates" {
+resource "aws_cloudwatch_log_metric_filter" "tenzir_server_rates" {
   name           = "${module.env.module_name}_server_rates_${module.env.stage}"
   pattern        = "{ $.key= \"*.rate\" }"
-  log_group_name = module.vast_server.log_group_name
+  log_group_name = module.tenzir_server.log_group_name
 
   metric_transformation {
     name      = "rates"
@@ -52,7 +52,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             "height": 6,
             "properties": {
                 "metrics": [
-                    [ "ECS/ContainerInsights", "NetworkTxBytes", "TaskDefinitionFamily", "vast-cloud-vast-server-${module.env.stage}", "ClusterName", "vast-cloud-cluster-${module.env.stage}" ],
+                    [ "ECS/ContainerInsights", "NetworkTxBytes", "TaskDefinitionFamily", "tenzir-cloud-tenzir-server-${module.env.stage}", "ClusterName", "tenzir-cloud-cluster-${module.env.stage}" ],
                     [ ".", "NetworkRxBytes", ".", ".", ".", "." ]
                 ],
                 "view": "timeSeries",
@@ -71,7 +71,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             "height": 6,
             "properties": {
                 "metrics": [
-                    [ "ECS/ContainerInsights", "CpuUtilized", "TaskDefinitionFamily", "vast-cloud-vast-server-${module.env.stage}", "ClusterName", "vast-cloud-cluster-${module.env.stage}" ],
+                    [ "ECS/ContainerInsights", "CpuUtilized", "TaskDefinitionFamily", "tenzir-cloud-tenzir-server-${module.env.stage}", "ClusterName", "tenzir-cloud-cluster-${module.env.stage}" ],
                     [ ".", "CpuReserved", ".", ".", ".", "." ]
                 ],
                 "view": "timeSeries",
@@ -90,8 +90,8 @@ resource "aws_cloudwatch_dashboard" "main" {
             "height": 6,
             "properties": {
                 "metrics": [
-                    [ "ECS/ContainerInsights", "MemoryUtilized", "TaskDefinitionFamily", "vast-cloud-vast-server-${module.env.stage}", "ClusterName", "vast-cloud-cluster-${module.env.stage}", { "region": "${var.region_name}" } ],
-                    [ "ECS/ContainerInsights", "MemoryReserved", "TaskDefinitionFamily", "vast-cloud-vast-server-${module.env.stage}", "ClusterName", "vast-cloud-cluster-${module.env.stage}", { "region": "${var.region_name}" } ]
+                    [ "ECS/ContainerInsights", "MemoryUtilized", "TaskDefinitionFamily", "tenzir-cloud-tenzir-server-${module.env.stage}", "ClusterName", "tenzir-cloud-cluster-${module.env.stage}", { "region": "${var.region_name}" } ],
+                    [ "ECS/ContainerInsights", "MemoryReserved", "TaskDefinitionFamily", "tenzir-cloud-tenzir-server-${module.env.stage}", "ClusterName", "tenzir-cloud-cluster-${module.env.stage}", { "region": "${var.region_name}" } ]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
@@ -108,7 +108,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             "width": 12,
             "height": 6,
             "properties": {
-                "query": "SOURCE '${module.vast_server.log_group_name}' | fields ts, level, message\n| filter key = \"vast_log\"\n| sort @timestamp desc\n| limit 20",
+                "query": "SOURCE '${module.tenzir_server.log_group_name}' | fields ts, level, message\n| filter key = \"tenzir_log\"\n| sort @timestamp desc\n| limit 20",
                 "region": "${var.region_name}",
                 "stacked": false,
                 "view": "table",
@@ -122,7 +122,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             "width": 12,
             "height": 6,
             "properties": {
-                "query": "SOURCE '${module.vast_client.log_group_name}' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 20",
+                "query": "SOURCE '${module.tenzir_client.log_group_name}' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 20",
                 "region": "${var.region_name}",
                 "stacked": false,
                 "view": "table",

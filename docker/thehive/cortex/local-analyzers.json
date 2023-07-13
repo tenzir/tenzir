@@ -3,7 +3,7 @@
         "name": "Tenzir-Search",
         "version": "1.0",
         "author": "Tenzir ",
-        "url": "https://github.com/tenzir/vast",
+        "url": "https://github.com/tenzir/tenzir",
         "license": "BSD-3-Clause",
         "description": "Search hash, IP and domain in Tenzir.",
         "dataTypeList": [
@@ -36,7 +36,7 @@
         "registration_required": false,
         "subscription_required": false,
         "free_subscription": true,
-        "service_homepage": "https://www.vast.io",
+        "service_homepage": "https://www.tenzir.io",
         "service_logo": {
             "path": "",
             "caption": ""

@@ -1,0 +1,112 @@
+include "coder.fbs";
+include "data.fbs";
+include "type.fbs";
+
+namespace tenzir.fbs.value_index.detail;
+
+table LegacyValueIndex {
+  /// A value index serialized using CAF 0.17's binary serializer.
+  /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
+  caf_0_17_data: [ubyte];
+
+  /// The size of the value index before compression. A value of zero indicates
+  /// that no compression was used.
+  decompressed_size: ulong;
+
+  /// The index into the external flatbuffer container that holds the `data` for
+  /// this indexer. Implies that `data` is null. Note that indices need to be >= 1
+  /// because we can't distinguish `0` from "Field doesn't exist", but that's fine
+  /// here because the partition itself will always occupy index 0 of the external
+  /// container.
+  /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
+  caf_0_17_external_container_idx: ulong;
+
+  caf_0_18_data: [ubyte];
+
+  caf_0_18_external_container_idx: ulong;
+}
+
+table ValueIndexBase {
+  mask: bitmap.EWAHBitmap (required);
+  none: bitmap.EWAHBitmap (required);
+  type: TypeBuffer (required);
+  options: Data (required);
+}
+
+table HashIndexSeed {
+  key: Data (required);
+  value: ulong;
+}
+
+namespace tenzir.fbs.value_index;
+
+table LegacyQualifiedValueIndex {
+  /// The full-qualified field name, e.g., "zeek.conn.id.orig_h".
+  field_name: string;
+
+  /// The value index for the given field.
+  index: detail.LegacyValueIndex;
+}
+
+table ArithmeticIndex {
+  base: detail.ValueIndexBase (required);
+  bitmap_index: BitmapIndex (required);
+}
+
+table ListIndex {
+  base: detail.ValueIndexBase (required);
+  elements: [tenzir.fbs.ValueIndex] (required);
+  max_size: ulong;
+  size_bitmap_index: BitmapIndex (required);
+}
+
+table StringIndex {
+  base: detail.ValueIndexBase (required);
+  max_length: ulong;
+  length_index: BitmapIndex (required);
+  char_indexes: [BitmapIndex] (required);
+}
+
+table HashIndex {
+  base: detail.ValueIndexBase (required);
+  digests: [ubyte] (required);
+  unique_digests: [ubyte] (required);
+  seeds: [detail.HashIndexSeed] (required);
+}
+
+table IPIndex {
+  base: detail.ValueIndexBase (required);
+  byte_indexes: [BitmapIndex] (required);
+  v4_index: BitmapIndex (required);
+}
+
+table SubnetIndex {
+  base: detail.ValueIndexBase (required);
+  ip_index: tenzir.fbs.ValueIndex (required);
+  prefix_index: BitmapIndex (required);
+}
+
+table EnumerationIndex {
+  base: detail.ValueIndexBase (required);
+  index: BitmapIndex (required);
+}
+
+union ValueIndex {
+  arithmetic: ArithmeticIndex,
+  ip: IPIndex,
+  enumeration: EnumerationIndex,
+  hash: HashIndex,
+  list: ListIndex,
+  subnet: SubnetIndex,
+  string: StringIndex,
+}
+
+namespace tenzir.fbs;
+
+// TODO: Before actually using the `ValueIndex` in Tenzir we need to
+// implement a way to store the bulk of the data separately, to avoid
+// running into the 2GiB limit for flatbuffers when individual indexes
+// get too big.
+table ValueIndex {
+  value_index: value_index.ValueIndex (required);
+}

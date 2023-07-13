@@ -20,7 +20,7 @@
 
 #include <string_view>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 inline const char* content_type_by_file_extension(const std::string_view& ext) {
   // Function from Incomplete list of mime types from here:
@@ -155,4 +155,4 @@ inline const char* content_type_by_file_extension(const std::string_view& ext) {
   return "application/text";
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

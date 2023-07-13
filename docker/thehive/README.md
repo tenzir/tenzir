@@ -45,8 +45,8 @@ The app performs both a historical and a continuous query on Suricata alerts.
 > away concepts such as alerts. This will be enabled in particular by our
 > current work on [pipelines][pipeline-page].
 
-[vision-page]: https://vast.io/docs/about/vision
-[pipeline-page]: https://github.com/tenzir/vast/pull/2577
+[vision-page]: https://tenzir.io/docs/about/vision
+[pipeline-page]: https://github.com/tenzir/tenzir/pull/2577
 
 ## Configurations
 
@@ -56,10 +56,10 @@ run with multiple levels of integration with the Tenzir service:
 
 - `thehive.yaml`: no dependency on the Tenzir Compose service.
 
-- `thehive.yaml` + `thehive.vast.yaml`: the analyzer can access the Tenzir Compose
+- `thehive.yaml` + `thehive.tenzir.yaml`: the analyzer can access the Tenzir Compose
   service.
 
-- `thehive.yaml` + `thehive.vast.yaml` + `thehive.app.yaml`: the app is relaying
+- `thehive.yaml` + `thehive.tenzir.yaml` + `thehive.app.yaml`: the app is relaying
   events between Tenzir and TheHive.
 
 By default, TheHive is exposed on `http://localhost:9000`. We create default
@@ -89,13 +89,13 @@ Tenzir server.
 
 If you want to connect to a Tenzir server running as a Docker Compose service,
 some extra networking settings required. Those are specified in
-`thehive.vast.yaml`. For instance, from the `docker/compose` directory run:
+`thehive.tenzir.yaml`. For instance, from the `docker/compose` directory run:
 
 ```bash
 docker compose \
     -f thehive.yaml \
-    -f thehive.vast.yaml \
-    -f vast.yaml \
+    -f thehive.tenzir.yaml \
+    -f tenzir.yaml \
     up --build
 ```
 
@@ -106,9 +106,9 @@ and forwards them to TheHive. You can start it along the stack by running:
 
 ```bash
 # from the docker/compose directory
-export COMPOSE_FILE="vast.yaml"
+export COMPOSE_FILE="tenzir.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:thehive.yaml"
-COMPOSE_FILE="$COMPOSE_FILE:thehive.vast.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:thehive.tenzir.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:thehive.app.yaml"
 
 docker compose up --build --detach
@@ -117,8 +117,8 @@ docker compose up --build --detach
 To test the alert forwarding with some mock data, run:
 ```bash
 # from the docker/compose directory with the COMPOSE_FILE variable above
-docker compose run --no-TTY vast import --blocking suricata \
-    < ../../vast/integration/data/suricata/eve.json
+docker compose run --no-TTY tenzir import --blocking suricata \
+    < ../../tenzir/integration/data/suricata/eve.json
 ```
 
 You can also test it out on a real-world dataset:
@@ -126,7 +126,7 @@ You can also test it out on a real-world dataset:
 wget -O - -o /dev/null https://storage.googleapis.com/tenzir-public-data/malware-traffic-analysis.net/2020-eve.json.gz | \
   gzip -d | \
   head -n 1000 | \
-  docker compose run --no-TTY vast import --blocking suricata
+  docker compose run --no-TTY tenzir import --blocking suricata
 ```
 
 > **Note** To avoid forwarding the same alert multiple times, we use the hash of

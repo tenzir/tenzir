@@ -6,6 +6,6 @@ macro (provide_find_module name)
                  ${CMAKE_BINARY_DIR} COPYONLY)
   install(
     FILES "${CMAKE_BINARY_DIR}/Find${name}.cmake"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/tenzir"
     COMPONENT Development)
 endmacro ()

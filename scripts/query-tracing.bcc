@@ -10,13 +10,13 @@ from ctypes import c_int, c_ulonglong, c_byte, c_ushort
 from sys import argv
 
 if len(argv) != 2:
-    print("USAGE: %s /path/to/libvast.so" % argv[0])
+    print("USAGE: %s /path/to/libtenzir.so" % argv[0])
     exit()
 
-vast_path = argv[1]
+tenzir_path = argv[1]
 
-u = USDT(path=vast_path)
-# TODO: Later versions of bcc allow writing 'vast:query_new' to explicitly specify
+u = USDT(path=tenzir_path)
+# TODO: Later versions of bcc allow writing 'tenzir:query_new' to explicitly specify
 #       the provider, but the one from ubuntu doesn't have that feature yet.
 u.enable_probe("query_new", "query_new_handler")
 u.enable_probe("query_catalog", "query_catalog_handler")

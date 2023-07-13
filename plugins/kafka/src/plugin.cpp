@@ -10,19 +10,19 @@
 #include "kafka/consumer.hpp"
 #include "kafka/producer.hpp"
 
-#include <vast/argument_parser.hpp>
-#include <vast/chunk.hpp>
-#include <vast/concept/parseable/numeric.hpp>
-#include <vast/concept/parseable/string.hpp>
-#include <vast/concept/parseable/vast/option_set.hpp>
-#include <vast/concept/parseable/vast/pipeline.hpp>
-#include <vast/data.hpp>
-#include <vast/detail/narrow.hpp>
-#include <vast/die.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
-#include <vast/plugin.hpp>
-#include <vast/table_slice.hpp>
+#include <tenzir/argument_parser.hpp>
+#include <tenzir/chunk.hpp>
+#include <tenzir/concept/parseable/numeric.hpp>
+#include <tenzir/concept/parseable/string.hpp>
+#include <tenzir/concept/parseable/tenzir/option_set.hpp>
+#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/die.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/table_slice.hpp>
 
 #include <charconv>
 #include <chrono>
@@ -30,7 +30,7 @@
 
 using namespace std::chrono_literals;
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 namespace {
 
@@ -394,6 +394,6 @@ private:
 
 } // namespace
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka
 
-TENZIR_REGISTER_PLUGIN(vast::plugins::kafka::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::kafka::plugin)

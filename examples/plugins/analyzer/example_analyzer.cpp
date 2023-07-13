@@ -6,13 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/data.hpp>
-#include <vast/detail/inspection_common.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
-#include <vast/node.hpp>
-#include <vast/plugin.hpp>
-#include <vast/table_slice.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/detail/inspection_common.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/node.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/table_slice.hpp>
 
 #include <caf/actor_cast.hpp>
 #include <caf/actor_system_config.hpp>
@@ -23,7 +23,7 @@
 
 #include <iostream>
 
-namespace vast::plugins {
+namespace tenzir::plugins {
 
 /// The EXAMPLE actor interface.
 using example_actor = caf::typed_actor<
@@ -35,7 +35,7 @@ using example_actor = caf::typed_actor<
 /// The state of the EXAMPLE actor.
 struct example_actor_state;
 
-} // namespace vast::plugins
+} // namespace tenzir::plugins
 
 // Assign type IDs to types that we intend to use with CAF's messaging system.
 // Every type that is either implicitly or explicitly wrapped in a caf::message,
@@ -46,12 +46,12 @@ struct example_actor_state;
 // NOTE: For plugins to be used at the same time, their type ID ranges must not
 // have overlap. The selected value of 1000 is just one possible starting value.
 // Please use a unique range for your plugins.
-CAF_BEGIN_TYPE_ID_BLOCK(vast_example_plugin, 1000)
-  CAF_ADD_TYPE_ID(vast_example_plugin, (vast::plugins::example_actor))
-  CAF_ADD_TYPE_ID(vast_example_plugin, (vast::plugins::example_actor_state))
-CAF_END_TYPE_ID_BLOCK(vast_example_plugin)
+CAF_BEGIN_TYPE_ID_BLOCK(tenzir_example_plugin, 1000)
+  CAF_ADD_TYPE_ID(tenzir_example_plugin, (tenzir::plugins::example_actor))
+  CAF_ADD_TYPE_ID(tenzir_example_plugin, (tenzir::plugins::example_actor_state))
+CAF_END_TYPE_ID_BLOCK(tenzir_example_plugin)
 
-namespace vast::plugins {
+namespace tenzir::plugins {
 
 struct example_actor_state {
   uint64_t max_events = std::numeric_limits<uint64_t>::max();
@@ -189,12 +189,12 @@ private:
   record config_ = {};
 };
 
-} // namespace vast::plugins
+} // namespace tenzir::plugins
 
 // Register the example_plugin with version 0.1.0-0.
-TENZIR_REGISTER_PLUGIN(vast::plugins::example_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::example_plugin)
 
 // Register the type IDs in our type ID block with Tenzir. This can be omitted
 // when not adding additional type IDs. The macro supports up to two type ID
 // blocks.
-TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_example_plugin)
+TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(tenzir_example_plugin)
