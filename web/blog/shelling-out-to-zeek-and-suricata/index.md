@@ -84,14 +84,14 @@ and ditch the shell script:
 tenzir:
   operators:
     zeek: >
-     shell "zeek -r - LogAscii::output_to_stdout=T \
-            JSONStreaming::disable_default_logs=T \
-            JSONStreaming::enable_log_rotation=F \
+     shell "zeek -r - LogAscii::output_to_stdout=T
+            JSONStreaming::disable_default_logs=T
+            JSONStreaming::enable_log_rotation=F
             json-streaming-logs"
      | parse zeek-json
     suricata: >
-     shell "suricata -r /dev/stdin \
-            --set outputs.1.eve-log.filename=/dev/stdout \
+     shell "suricata -r /dev/stdin
+            --set outputs.1.eve-log.filename=/dev/stdout
             --set logging.outputs.0.console.enabled=no"
      | parse suricata
 ```
