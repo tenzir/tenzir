@@ -144,7 +144,7 @@ def current_image(c, service):
 
 @task
 def build_images(c, step):
-    """Build the provided VAST based Dockerfile using the configured base image
+    """Build the provided Tenzir based Dockerfile using the configured base image
     and version"""
     if conf(VALIDATORS)["TENZIR_VERSION"] == "build":
         c.run(f"docker build -t $TENZIR_IMAGE:build {REPOROOT}")

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -32,7 +32,7 @@ struct accountant_state
 };
 
 /// Accumulates various performance metrics in a key-value format and writes
-/// them to VAST table slices.
+/// them to Tenzir table slices.
 /// @param self The actor handle.
 /// @param cfg The accountant-specific configuration.
 /// @param self The root path for relative metric files.

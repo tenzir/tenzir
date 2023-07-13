@@ -15,7 +15,7 @@
 
 ## Overview
 
-This proposal ideates a new UX around VAST's pipelines. The fundamental idea is
+This proposal ideates a new UX around Tenzir's pipelines. The fundamental idea is
 that *everything is a pipeline* and build a composable UX around this concept.
 
 ## Problem Statement
@@ -218,9 +218,9 @@ follows:
 5. Write data as JSON to stdout (`store`)
 
 Local pipeline execution opens the door for a lot of new modes of operations,
-because a VAST server node is no longer required.
+because a Tenzir server node is no longer required.
 
-**This makes VAST a swiss army knife for security data.**
+**This makes Tenzir a swiss army knife for security data.**
 
 ### Case Study: Matcher
 
@@ -265,7 +265,7 @@ The following aspects require attention during the implementation:
 - **Asynchronous Execution**: pipelines fundamentally support asynchronous
   execution by sequentializing dataflow within an operator, and parallelizing it
   across operators. Conceptually, this is very similar to the actor model
-  architecture VAST exhibits, with operators mapping to actors.
+  architecture Tenzir exhibits, with operators mapping to actors.
 
   In the implementation, we may want to consider actors part of the solution,
   but will at first propose an independent architecture that consists of logical
@@ -347,12 +347,12 @@ We considered the following ideas that we do not want to pursue further.
 We may consider pipelines only in the context of executing queries at the
 server. After all, this is where we are going to implement them first. However,
 this limits us unnecessarily, given that pipeline can already be deployed at
-various points in VAST today. We must consider them as general building block
+various points in Tenzir today. We must consider them as general building block
 that is easy to instantiate in various contexts.
 
 ### Commands are pipeline operators
 
-To illustrate the composability of pipelines, we could make every VAST command
+To illustrate the composability of pipelines, we could make every Tenzir command
 an operator:
 
 ```bash

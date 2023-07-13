@@ -80,7 +80,7 @@ class EnumType(pa.ExtensionType):
     `EnumType` stores as name-to-value mapping called `fields` that maps to the
     underlying integer type of represented the enum."""
 
-    # VAST's flatbuffer type representation uses a 32-bit unsigned integer. We
+    # Tenzir's flatbuffer type representation uses a 32-bit unsigned integer. We
     # use an 8-bit type here only for backwards compatibility to the legacy
     # type. Eventually this will be a 32-bit type as well.
     DICTIONARY_INDEX_TYPE = pa.uint8()

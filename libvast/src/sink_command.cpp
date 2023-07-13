@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/sink_command.hpp"
@@ -50,7 +50,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   auto query = read_query(inv, "tenzir.export.read", must_provide_query::no);
   if (!query)
     return caf::make_message(std::move(query.error()));
-  // Get VAST node.
+  // Get Tenzir node.
   auto node_opt
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = std::get_if<caf::error>(&node_opt))

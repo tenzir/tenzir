@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2019 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/arrow_table_slice.hpp"
@@ -445,7 +445,7 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                const std::vector<offset>& indices) noexcept {
   TENZIR_ASSERT(batch->schema()->Equals(schema.to_arrow_schema()),
-                "VAST schema and Arrow schema must match");
+                "Tenzir schema and Arrow schema must match");
   TENZIR_ASSERT(std::is_sorted(indices.begin(), indices.end()),
                 "indices must be "
                 "sorted");

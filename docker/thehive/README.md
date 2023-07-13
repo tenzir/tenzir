@@ -3,18 +3,18 @@
 > **Warning** The TheHive and Cortex integrations are considered experimental
 > and subject to change without notice.
 
-This integration brings together VAST and TheHive, supporting the following use
+This integration brings together Tenzir and TheHive, supporting the following use
 cases:
 
 1. Trigger a historical query to contextualize an observable through a [Cortex
   Analyzer][cortex-analyzers-docs]. This integration spawns an historical query
   directly from the TheHive UI.
 
-2. Forward alerts from VAST to TheHive. We provide a small "app" that loads is
+2. Forward alerts from Tenzir to TheHive. We provide a small "app" that loads is
   capable of loading both stored and continuously incoming alerts from a running
-  VAST instance.
+  Tenzir instance.
 
-### The VAST Cortex Analyzer
+### The Tenzir Cortex Analyzer
 
 The analyzer can issue queries for observables with the following types:
 
@@ -26,7 +26,7 @@ The analyzer can issue queries for observables with the following types:
 
 - **hash/domain**: match all events that contain the associated strings.
 
-> **Note** Queries issued to VAST have limit of 30 results. They are displayed
+> **Note** Queries issued to Tenzir have limit of 30 results. They are displayed
 > in plain JSON.
 
 ### TheHive app
@@ -51,16 +51,16 @@ The app performs both a historical and a continuous query on Suricata alerts.
 ## Configurations
 
 This directory contains the Docker Compose setup to run a preconfigured instance
-of TheHive with a VAST [Cortex Analyzer][cortex-analyzers-docs]. This stack can
-run with multiple levels of integration with the VAST service:
+of TheHive with a Tenzir [Cortex Analyzer][cortex-analyzers-docs]. This stack can
+run with multiple levels of integration with the Tenzir service:
 
-- `thehive.yaml`: no dependency on the VAST Compose service.
+- `thehive.yaml`: no dependency on the Tenzir Compose service.
 
-- `thehive.yaml` + `thehive.vast.yaml`: the analyzer can access the VAST Compose
+- `thehive.yaml` + `thehive.vast.yaml`: the analyzer can access the Tenzir Compose
   service.
 
 - `thehive.yaml` + `thehive.vast.yaml` + `thehive.app.yaml`: the app is relaying
-  events between VAST and TheHive.
+  events between Tenzir and TheHive.
 
 By default, TheHive is exposed on `http://localhost:9000`. We create default
 users for both TheHive and Cortex:
@@ -73,21 +73,21 @@ users for both TheHive and Cortex:
 These settings can be configured using [environment
 variables](../compose/thehive-env.example).
 
-## Standalone (or with VAST running locally)
+## Standalone (or with Tenzir running locally)
 
-If you have VAST instance running locally already or you don't plan on using the
-Cortex VAST Analyzer, run the default configuration:
+If you have Tenzir instance running locally already or you don't plan on using the
+Cortex Tenzir Analyzer, run the default configuration:
 
 ```bash
 docker compose -f thehive.yaml up --build
 ```
 
 You can also use the `TENZIR_ENDPOINT` environment variable to target a remote
-VAST server.
+Tenzir server.
 
-## With VAST running as a Compose service
+## With Tenzir running as a Compose service
 
-If you want to connect to a VAST server running as a Docker Compose service,
+If you want to connect to a Tenzir server running as a Docker Compose service,
 some extra networking settings required. Those are specified in
 `thehive.vast.yaml`. For instance, from the `docker/compose` directory run:
 
@@ -99,7 +99,7 @@ docker compose \
     up --build
 ```
 
-## With the VAST app
+## With the Tenzir app
 
 We provide a basic integration script that listens on `suricata.alert` events
 and forwards them to TheHive. You can start it along the stack by running:

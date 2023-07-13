@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2019 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/format/arrow.hpp"
@@ -162,13 +162,13 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     // Skip record batches with incompatible metadata. This check is not
     // complete because it doesn't visit every (potentially nested) array in the
     // batch, but it's a good enough heuristic to prevent users from running
-    // into crashes. A proper fix for this requires casting to VAST-compatible
+    // into crashes. A proper fix for this requires casting to Tenzir-compatible
     // record batch.
     const auto& metadata = *read_result->batch->schema()->metadata();
     if (metadata.FindKey("TENZIR:name:0") == -1
-        && metadata.FindKey("VAST:name:0") == -1) {
+        && metadata.FindKey("Tenzir:name:0") == -1) {
       TENZIR_WARN("{} skips record batch with {} rows: metadata is "
-                  "incomaptible with VAST",
+                  "incomaptible with Tenzir",
                   detail::pretty_type_name(*this),
                   read_result->batch->num_rows());
       continue;
@@ -187,7 +187,7 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 }
 
 caf::error reader::module([[maybe_unused]] vast::module m) {
-  // The VAST types are automatically generated and cannot be changed.
+  // The Tenzir types are automatically generated and cannot be changed.
   return caf::make_error(ec::no_error, "schema is derived from the Arrow "
                                        "input and can't be changed");
 }

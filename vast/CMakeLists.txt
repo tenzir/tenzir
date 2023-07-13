@@ -1,13 +1,13 @@
 add_executable(tenzir tenzir.cpp)
-VASTTargetEnableTooling(tenzir)
+TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE vast::internal vast::libvast)
-VASTTargetLinkWholeArchive(tenzir PRIVATE vast::libvast_builtins)
+TenzirTargetLinkWholeArchive(tenzir PRIVATE vast::libvast_builtins)
 add_executable(vast::tenzir ALIAS tenzir)
 
 # Install vast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
   TARGETS tenzir
-  EXPORT VASTTargets
+  EXPORT TenzirTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
@@ -57,7 +57,7 @@ create_tenzir_symlink(vast)
 
 # -- example configuration file -----------------------------------------------
 
-VASTInstallExampleConfiguration(
+TenzirInstallExampleConfiguration(
   tenzir "${PROJECT_SOURCE_DIR}/tenzir.yaml.example" "" "tenzir.yaml")
 
 # -- init system integration ---------------------------------------------------
@@ -172,7 +172,7 @@ endif ()
 
 set(TENZIR_PLUGINS
     ${plugins_default}
-    CACHE STRING "Specify a list of plugins to build with VAST (supports
+    CACHE STRING "Specify a list of plugins to build with Tenzir (supports
     globbing)")
 cmake_dependent_option(
   TENZIR_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF

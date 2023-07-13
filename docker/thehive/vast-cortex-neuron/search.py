@@ -4,7 +4,7 @@
 import asyncio
 import json
 from cortexutils.analyzer import Analyzer
-from pyvast import VAST
+from pyvast import Tenzir
 
 
 class VastAnalyzer(Analyzer):
@@ -16,12 +16,12 @@ class VastAnalyzer(Analyzer):
         self.max_events = self.get_param(
             "config.max_events", 30, "Max result value is missing"
         )
-        self.vastClient = VAST(endpoint=self.host)
+        self.vastClient = Tenzir(endpoint=self.host)
 
     async def run(self):
         try:
             if not await self.vastClient.test_connection():
-                self.error("Could not connect to VAST Server Endpoint")
+                self.error("Could not connect to Tenzir Server Endpoint")
 
             query = ""
             if self.data_type == "ip":
@@ -52,7 +52,7 @@ class VastAnalyzer(Analyzer):
 
     def summary(self, raw):
         taxonomies = []
-        namespace = "VAST"
+        namespace = "Tenzir"
         predicate = "Hits"
 
         valuesCount = len(raw["values"])

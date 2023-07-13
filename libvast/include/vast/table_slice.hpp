@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -82,7 +82,7 @@ public:
 
   /// Construct an Arrow-encoded table slice from an existing record batch.
   /// @param record_batch The record batch containing the table slice data.
-  /// @param VAST type for the provided record batch.
+  /// @param Tenzir type for the provided record batch.
   /// @param serialize Whether to store IPC format as a backing.
   explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
                        type schema = {},
@@ -225,7 +225,7 @@ public:
     if constexpr (Inspector::is_loading) {
       auto offset = vast::id{};
       auto callback = [&]() noexcept {
-        // When VAST allows for external tools to hook directly into the
+        // When Tenzir allows for external tools to hook directly into the
         // table slice streams, this should be switched to verify if the
         // chunk is unique.
         x = table_slice{std::move(chunk), table_slice::verify::no};

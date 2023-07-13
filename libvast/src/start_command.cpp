@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/start_command.hpp"
@@ -37,7 +37,7 @@ namespace vast {
 namespace {
 
 /// Actor to run one of the additional commands given as
-/// parameters to the VAST node.
+/// parameters to the Tenzir node.
 using command_runner_actor = typed_actor_fwd<
   // Handle a request.
   auto(atom::run, invocation)->caf::result<void>>::unwrap;

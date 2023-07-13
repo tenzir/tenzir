@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -677,7 +677,7 @@ struct ip_type::arrow_type : arrow::ExtensionType {
   /// Register this extension type.
   static void register_extension() noexcept;
 
-  /// Create an arrow type representation of a VAST address type.
+  /// Create an arrow type representation of a Tenzir address type.
   arrow_type() noexcept;
 
   /// Unique name to identify the extension type.
@@ -769,7 +769,7 @@ struct subnet_type::arrow_type : arrow::ExtensionType {
   /// Register this extension type.
   static void register_extension() noexcept;
 
-  /// Create an arrow type representation of a VAST pattern type.
+  /// Create an arrow type representation of a Tenzir pattern type.
   arrow_type() noexcept;
 
   /// Unique name to identify the extension type.
@@ -936,8 +936,8 @@ struct enumeration_type::arrow_type : arrow::ExtensionType {
   /// Register this extension type.
   static void register_extension() noexcept;
 
-  /// Create an arrow type representation of a VAST pattern type.
-  /// @param type The underlying VAST enumeration type.
+  /// Create an arrow type representation of a Tenzir pattern type.
+  /// @param type The underlying Tenzir enumeration type.
   explicit arrow_type(const enumeration_type& type) noexcept;
 
   /// Unique name to identify the extension type.
@@ -965,7 +965,7 @@ struct enumeration_type::arrow_type : arrow::ExtensionType {
   std::string Serialize() const override;
 
 private:
-  /// The underlying VAST enumeration type.
+  /// The underlying Tenzir enumeration type.
   enumeration_type vast_type_;
 };
 

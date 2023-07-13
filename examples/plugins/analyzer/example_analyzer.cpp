@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/data.hpp>
@@ -142,8 +142,8 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param plugin_config The relevant subsection of the configuration.
-  /// @param global_config The entire VAST configuration for potential access to
-  /// global options.
+  /// @param global_config The entire Tenzir configuration for potential access
+  /// to global options.
   caf::error initialize(const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
     config_ = plugin_config;
@@ -194,7 +194,7 @@ private:
 // Register the example_plugin with version 0.1.0-0.
 TENZIR_REGISTER_PLUGIN(vast::plugins::example_plugin)
 
-// Register the type IDs in our type ID block with VAST. This can be omitted
+// Register the type IDs in our type ID block with Tenzir. This can be omitted
 // when not adding additional type IDs. The macro supports up to two type ID
 // blocks.
 TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_example_plugin)

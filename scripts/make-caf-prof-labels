@@ -1,6 +1,6 @@
 #!/usr/bin/env awk -f
 #
-# Takes a VAST log file in debug level on standard input and prints to standard
+# Takes a Tenzir log file in debug level on standard input and prints to standard
 # output labels for caf-prof, CAF's R script for visualizing actor profiles.
 
 /spawned/ { 

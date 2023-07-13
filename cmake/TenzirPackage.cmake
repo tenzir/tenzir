@@ -12,7 +12,7 @@ else ()
   endif ()
 endif ()
 
-# Tenzir replaces VAST, and that mechanism binds stronger than the package
+# Tenzir replaces Tenzir, and that mechanism binds stronger than the package
 # version, so we currently don't need EPOCHs. We still keep this setting in a
 # commented out state here because it is ordering sensitive and having it
 # simplifies a re-addition if it becomes necessary in the future.
@@ -39,7 +39,8 @@ if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
     find_program(DPKG_CMD dpkg)
     if (NOT DPKG_CMD)
       message(
-        STATUS "VASTPackage: Can not find dpkg in your path, default to i386.")
+        STATUS "TenzirPackage: Can not find dpkg in your path, default to i386."
+      )
       set(_debian_package_architecture i386)
     endif ()
     execute_process(

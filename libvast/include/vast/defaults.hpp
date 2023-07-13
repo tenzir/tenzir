@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -270,7 +270,7 @@ inline constexpr bool create_partition_index = true;
 inline constexpr bool detach_components = true;
 
 /// Time to wait before trying to make another connection attempt to a remote
-/// VAST node.
+/// Tenzir node.
 inline constexpr auto node_connection_retry_delay = std::chrono::seconds{3u};
 
 } // namespace vast::defaults

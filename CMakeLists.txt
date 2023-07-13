@@ -5,11 +5,11 @@ cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
 # Semicolon-separated list of directories specifying a search path for CMake.
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(TENZIR_VERSION_TAG_BACKUP "${TENZIR_VERSION_TAG}")
-include(VASTVersion)
+include(TenzirVersion)
 
-# Create the VAST project.
+# Create the Tenzir project.
 project(
-  VAST
+  Tenzir
   VERSION
     ${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}.${TENZIR_VERSION_TWEAK}
   DESCRIPTION "Visibility Across Space and Time"
@@ -43,9 +43,9 @@ if (NOT IS_ABSOLUTE "${CMAKE_INSTALL_PREFIX}")
       "CMAKE_INSTALL_PREFIX must be an absolute path: ${CMAKE_INSTALL_PREFIX}")
 endif ()
 
-# Override `find_package` for subprojects to be a no-op when trying to find VAST
+# Override `find_package` for subprojects to be a no-op when trying to find Tenzir
 # itself. This simplifies the plugin CMake by not requiring plugin developers to
-# check whether their plugin is built alongside VAST.
+# check whether their plugin is built alongside Tenzir.
 if ("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
   macro (find_package)
     if (NOT "${ARGV0}" STREQUAL "${CMAKE_PROJECT_NAME}")
@@ -82,16 +82,16 @@ include(CheckCXXSourceCompiles)
 include(CheckLibraryExists)
 include(FeatureSummary)
 include(GNUInstallDirs)
-include(VASTCheckCompilerVersion)
-include(VASTMacDependencyPaths)
-include(VASTProvideFindModule)
-include(VASTRegisterPlugin)
-include(VASTUtilities)
+include(TenzirCheckCompilerVersion)
+include(TenzirMacDependencyPaths)
+include(TenzirProvideFindModule)
+include(TenzirRegisterPlugin)
+include(TenzirUtilities)
 
 # -- project configuration -----------------------------------------------------
 
-# Determine whether we're building VAST a subproject. This is used to determine
-# good default values for many options. VAST should not modify global CMake if
+# Determine whether we're building Tenzir a subproject. This is used to determine
+# good default values for many options. Tenzir should not modify global CMake if
 # built as a subproject, unless explicitly requested to do so with options.
 get_directory_property(_TENZIR_PARENT_DIRECTORY PARENT_DIRECTORY)
 if (_TENZIR_PARENT_DIRECTORY)
@@ -105,8 +105,8 @@ unset(_TENZIR_PARENT_DIRECTORY)
 
 # -- changelog -----------------------------------------------------------------
 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTChangelog.cmake.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake" @ONLY)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirChangelog.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake" @ONLY)
 
 file(GLOB_RECURSE changelog_dependencies CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/changelog/**.md")
@@ -114,9 +114,10 @@ file(GLOB_RECURSE changelog_dependencies CONFIGURE_DEPENDS
 add_custom_target(
   changelog ALL
   BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake"
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake"
           ${changelog_dependencies}
-  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake")
+  COMMAND ${CMAKE_COMMAND} -P
+          "${CMAKE_CURRENT_BINARY_DIR}/TenzirChangelog.cmake")
 
 option(TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
        "Skip build configuration after update-changelog target" OFF)
@@ -127,7 +128,7 @@ endif ()
 
 # -- testing -------------------------------------------------------------------
 
-cmake_dependent_option(TENZIR_ENABLE_UNIT_TESTS "Build unit tests for libvast"
+cmake_dependent_option(TENZIR_ENABLE_UNIT_TESTS "Build unit tests for libtenzir"
                        ON "NOT CMAKE_CROSS_COMPILING" OFF)
 add_feature_info("TENZIR_ENABLE_UNIT_TESTS" TENZIR_ENABLE_UNIT_TESTS
                  "build unit tests for libvast.")
@@ -144,7 +145,7 @@ add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
 # -- relocatable installations -------------------------------------------------
 
 # Setting this option removes configuration dependent absolute paths from the
-# VAST installation. Concretely, it enables the dynamic binary and libraries to
+# Tenzir installation. Concretely, it enables the dynamic binary and libraries to
 # use relative paths for loading their dependencies. On macOS, always enable
 # relocatable installations as it's very uncommon not to do so.
 cmake_dependent_option(TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
@@ -157,7 +158,7 @@ if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   # For relocatable builds we need the configured install directories to be
   # relative so we can interpret them relative to the object path of the running
   # binary instead of a fixed install prefix.
-  VASTNormalizeInstallDirs()
+  TenzirNormalizeInstallDirs()
 
   # Single output directory.
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
@@ -198,7 +199,7 @@ set_target_properties(libvast_internal PROPERTIES EXPORT_NAME internal)
 add_library(vast::internal ALIAS libvast_internal)
 install(
   TARGETS libvast_internal
-  EXPORT VASTTargets
+  EXPORT TenzirTargets
   COMPONENT Development)
 
 # Require standard C++20.
@@ -211,7 +212,8 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
 endif ()
 
 # Increase maximum number of template instantiations.
-target_compile_options(libvast_internal INTERFACE -ftemplate-backtrace-limit=0)
+target_compile_options(libtenzir_internal
+                       INTERFACE -ftemplate-backtrace-limit=0)
 
 # -- FreeBSD support -----------------------------------------------------------
 
@@ -220,8 +222,8 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
   # https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=194929 -
   # https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=182657
   target_compile_definitions(
-    libvast_internal INTERFACE _GLIBCXX_USE_C99 _GLIBCXX_USE_C99_MATH
-                               _GLIBCXX_USE_C99_MATH_TR1)
+    libtenzir_internal INTERFACE _GLIBCXX_USE_C99 _GLIBCXX_USE_C99_MATH
+                                 _GLIBCXX_USE_C99_MATH_TR1)
 endif ()
 
 # -- optimizations -------------------------------------------------------------
@@ -289,7 +291,8 @@ target_compile_options(
 # -- warnings ------------------------------------------------------------------
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning-option)
+  target_compile_options(libtenzir_internal
+                         INTERFACE -Wno-unknown-warning-option)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning)
 endif ()
@@ -381,13 +384,13 @@ add_feature_info(
 # -- static build support ------------------------------------------------------
 
 cmake_dependent_option(
-  TENZIR_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
+  TENZIR_ENABLE_STATIC_EXECUTABLE "Link Tenzir statically."
   "$ENV{TENZIR_ENABLE_STATIC_EXECUTABLE}" "NOT BUILD_SHARED_LIBS" OFF)
 add_feature_info("TENZIR_ENABLE_STATIC_EXECUTABLE"
-                 TENZIR_ENABLE_STATIC_EXECUTABLE "link VAST statically.")
+                 TENZIR_ENABLE_STATIC_EXECUTABLE "link Tenzir statically.")
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
-  target_link_libraries(libvast_internal INTERFACE -static-libgcc
-                                                   -static-libstdc++ -static)
+  target_link_libraries(libtenzir_internal INTERFACE -static-libgcc
+                                                     -static-libstdc++ -static)
 endif ()
 
 if (TENZIR_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
@@ -410,7 +413,7 @@ if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
 
   # For relocatable builds we need to find the relative difference between the
   # install prefix and the library location, or the binary location for static
-  # VAST binaries.
+  # Tenzir binaries.
   if (TENZIR_ENABLE_STATIC_EXECUTABLE)
     set(_libdir "${CMAKE_INSTALL_FULL_BINDIR}")
   else ()
@@ -447,9 +450,9 @@ if (TENZIR_ENABLE_ASAN)
   # (2) build external plugins with it.
   add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
   add_link_options(-fsanitize=address)
-  target_compile_options(libvast_internal INTERFACE -fsanitize=address
-                                                    -fno-omit-frame-pointer)
-  target_link_libraries(libvast_internal INTERFACE -fsanitize=address)
+  target_compile_options(libtenzir_internal INTERFACE -fsanitize=address
+                                                      -fno-omit-frame-pointer)
+  target_link_libraries(libtenzir_internal INTERFACE -fsanitize=address)
 endif ()
 
 # Undefined Behavior Sanitizer
@@ -505,7 +508,7 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
     message(FATAL_ERROR \"Builds with code coverage must not be installed.\")")
 endif ()
 
-VASTTargetEnableTooling(libvast_internal INTERFACE)
+TenzirTargetEnableTooling(libtenzir_internal INTERFACE)
 
 # Add a custom executable that runs the CMake build targets 'test' and
 # 'integration' so we can instrument them toether for combined code coverage.
@@ -513,11 +516,11 @@ if (TENZIR_ENABLE_CODE_COVERAGE)
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/all_tests.c.in"
                  "${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c" @ONLY)
   add_executable(all-tests "${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c")
-  VASTTargetEnableTooling(all-tests AUTO)
+  TenzirTargetEnableTooling(all-tests AUTO)
 endif ()
 
-# Build VAST in developer mode. This is enabled by default when not building
-# VAST as a subproject. The developer mode contains CCache support and many
+# Build Tenzir in developer mode. This is enabled by default when not building
+# Tenzir as a subproject. The developer mode contains CCache support and many
 # other niceties.
 option(TENZIR_ENABLE_DEVELOPER_MODE
        "Enables build settings for a nicer development environment"
@@ -528,7 +531,7 @@ add_feature_info("TENZIR_ENABLE_DEVELOPER_MODE" TENZIR_ENABLE_DEVELOPER_MODE
 if (TENZIR_ENABLE_DEVELOPER_MODE)
   # Support tools like clang-tidy by creating a compilation database and
   # copying it to the project root.
-  VASTExportCompileCommands(libvast_internal)
+  TenzirExportCompileCommands(libtenzir_internal)
 
   # Force colored output for the Ninja generator
   if ("${CMAKE_GENERATOR}" MATCHES "Ninja")
@@ -675,9 +678,9 @@ endif ()
 
 # -- schemas -------------------------------------------------------------------
 
-option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with VAST" ON)
+option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with Tenzir" ON)
 add_feature_info("TENZIR_ENABLE_BUNDLED_SCHEMAS" TENZIR_ENABLE_BUNDLED_SCHEMAS
-                 "install bundled schemas with VAST.")
+                 "install bundled schemas with Tenzir.")
 if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   add_custom_target(
     vast-schema
@@ -745,8 +748,8 @@ else ()
   if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt")
     message(
       FATAL_ERROR
-        "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the libvast/aux/caf submodule"
-    )
+        "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the
+        libtenzir/aux/caf submodule")
   else ()
     set(TENZIR_ENABLE_BUNDLED_CAF ON)
     set(CAF_LOG_LEVEL ${TENZIR_CAF_LOG_LEVEL})
@@ -760,7 +763,7 @@ else ()
     set(CMAKE_CXX_STANDARD 17)
     add_subdirectory(libvast/aux/caf)
     set(CMAKE_CXX_STANDARD ${ORIGINAL_CXX_STANDARD})
-    VASTSystemizeTarget(libcaf_core)
+    TenzirSystemizeTarget(libcaf_core)
     set_target_properties(libcaf_core PROPERTIES EXPORT_NAME core)
     target_compile_features(libcaf_core INTERFACE cxx_std_17)
     target_compile_options(
@@ -771,7 +774,7 @@ else ()
         -Wno-unknown-warning-option
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
         $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
-    VASTSystemizeTarget(libcaf_io)
+    TenzirSystemizeTarget(libcaf_io)
     set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
     target_compile_options(
       libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
@@ -788,9 +791,9 @@ else ()
       PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/libcaf_openssl>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-    VASTSystemizeTarget(libcaf_openssl)
+    TenzirSystemizeTarget(libcaf_openssl)
     set_target_properties(libcaf_openssl PROPERTIES EXPORT_NAME openssl)
-    VASTSystemizeTarget(libcaf_test)
+    TenzirSystemizeTarget(libcaf_test)
     set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
     mark_as_advanced(caf_build_header_path)
     string(APPEND TENZIR_EXTRA_TARGETS_FILES
@@ -827,37 +830,37 @@ add_subdirectory(vast)
 # -- cmake export/config installations -----------------------------------------
 
 export(
-  EXPORT VASTTargets
-  FILE VASTTargets.cmake
+  EXPORT TenzirTargets
+  FILE TenzirTargets.cmake
   NAMESPACE vast::)
 
 install(
-  EXPORT VASTTargets
+  EXPORT TenzirTargets
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
   NAMESPACE vast::
   COMPONENT Development)
 
 write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfigVersion.cmake"
   VERSION
     "${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}"
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTConfig.cmake.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfig.cmake"
   INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
-configure_file("${PROJECT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
+configure_file("${PROJECT_SOURCE_DIR}/cmake/TenzirMacDependencyPaths.cmake"
                ${CMAKE_BINARY_DIR} COPYONLY)
-configure_file("${PROJECT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
+configure_file("${PROJECT_SOURCE_DIR}/cmake/TenzirRegisterPlugin.cmake"
                ${CMAKE_BINARY_DIR} COPYONLY)
 
 install(
-  FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTRegisterPlugin.cmake"
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirRegisterPlugin.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TenzirMacDependencyPaths.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfigVersion.cmake"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
   COMPONENT Development)
 
@@ -865,9 +868,9 @@ install(
 
 # TODO: Make other scripts installable as well.
 
-option(TENZIR_ENABLE_CORELIGHT_CAT "Install corelight-cat with VAST" OFF)
+option(TENZIR_ENABLE_CORELIGHT_CAT "Install corelight-cat with Tenzir" OFF)
 add_feature_info("TENZIR_ENABLE_CORELIGHT_CAT" TENZIR_ENABLE_CORELIGHT_CAT
-                 "install corelight-cat with VAST.")
+                 "install corelight-cat with Tenzir.")
 if (TENZIR_ENABLE_CORELIGHT_CAT)
   install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
@@ -885,11 +888,11 @@ if (TENZIR_ENABLE_CORELIGHT_CAT)
     COMPONENT Runtime)
 endif ()
 
-option(TENZIR_ENABLE_TENZIR_DF_PERCENT "Install tenzir-df-percent.sh with VAST"
-       ON)
+option(TENZIR_ENABLE_TENZIR_DF_PERCENT
+       "Install tenzir-df-percent.sh with Tenzir" ON)
 add_feature_info(
   "TENZIR_ENABLE_TENZIR_DF_PERCENT" TENZIR_ENABLE_TENZIR_DF_PERCENT
-  "install tenzir-df-percent.sh with VAST.")
+  "install tenzir-df-percent.sh with Tenzir.")
 if (TENZIR_ENABLE_TENZIR_DF_PERCENT)
   install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/tenzir-df-percent.sh"
@@ -942,7 +945,7 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
   if (NOT POETRY_PATH)
     message(
       FATAL_ERROR
-        "Cannot find 'poetry' in PATH, which is required for installing VAST Python bindings"
+        "Cannot find 'poetry' in PATH, which is required for installing Tenzir Python bindings"
     )
   endif ()
   # Poetry has no support for specifying a working directory for the build
@@ -995,7 +998,7 @@ endif ()
 
 # -- packaging -----------------------------------------------------------------
 
-include(VASTPackage)
+include(TenzirPackage)
 
 # -- feature summary -----------------------------------------------------------
 

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -34,7 +34,7 @@ public:
   [[nodiscard]] virtual uint64_t num_events() const = 0;
 
   /// Retrieve the schema associated with the data in the store.
-  /// @returns The VAST schema of the stored data.
+  /// @returns The Tenzir schema of the stored data.
   [[nodiscard]] virtual type schema() const;
 
   /// Execute a count query against the store.

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -19,7 +19,7 @@
 
 namespace vast {
 
-/// The configuration that defines VAST's indexing behavior.
+/// The configuration that defines Tenzir's indexing behavior.
 struct index_config {
   static constexpr bool use_deep_to_string_formatter = true;
 

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -16,7 +16,7 @@
 
 namespace vast {
 
-/// Spawns a new VAST node.
+/// Spawns a new Tenzir node.
 /// `self` should be equipped to handle (atom::signal, int)
 /// messages to orchestrate a graceful termination if it runs
 /// a receive-while/until loop after this call.

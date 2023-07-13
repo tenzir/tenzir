@@ -7,12 +7,12 @@ or not.
 
 To achieve this, this module adds the capability to run any command in a "PTY
 checking" dry run mode:
-- this dry run mode is activated by specifying the VASTCLOUD_CHECK_PTY
+- this dry run mode is activated by specifying the TenzirCLOUD_CHECK_PTY
 environment variable.
 - for each task in the command, the dry run mode prints 0 if not PTY is required
 and 1 otherwise. For a command running 3 tasks, the output might be "100" if only
 the first tasks requires a PTY.
-- the VASTCLOUD_NO_PTY force-disables the use of PTY, effectively making the dry
+- the TenzirCLOUD_NO_PTY force-disables the use of PTY, effectively making the dry
 mode return 0s only
 """
 import invoke

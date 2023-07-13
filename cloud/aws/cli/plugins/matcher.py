@@ -1,4 +1,4 @@
-"""[VAST Pro] Deploy a matcher client task and attach to the stream of matched events"""
+"""[Tenzir Pro] Deploy a matcher client task and attach to the stream of matched events"""
 
 from typing import Tuple
 from common import FargateService, aws, terraform_output

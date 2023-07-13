@@ -1,7 +1,7 @@
 include_guard(GLOBAL)
 
 # Normalize the GNUInstallDirs to be relative paths, if possible.
-macro (VASTNormalizeInstallDirs)
+macro (TenzirNormalizeInstallDirs)
   foreach (
     _install IN
     ITEMS "BIN"
@@ -55,7 +55,7 @@ endmacro ()
 # A replacement for target_link_libraries that links static libraries using
 # the platform-specific whole-archive options. Please test any changes to this
 # macro on all supported platforms and compilers.
-macro (VASTTargetLinkWholeArchive target visibility library)
+macro (TenzirTargetLinkWholeArchive target visibility library)
   get_target_property(target_type ${library} TYPE)
   if (target_type STREQUAL "STATIC_LIBRARY")
     # Prevent elision of self-registration code in statically linked libraries,
@@ -79,7 +79,7 @@ macro (VASTTargetLinkWholeArchive target visibility library)
 endmacro ()
 
 # A utility macro for enabling tooling on a target.
-macro (VASTTargetEnableTooling _target)
+macro (TenzirTargetEnableTooling _target)
   if (TENZIR_ENABLE_CLANG_TIDY)
     set_target_properties(
       "${_target}" PROPERTIES CXX_CLANG_TIDY "${TENZIR_CLANG_TIDY_ARGS}"
@@ -117,7 +117,7 @@ macro (make_absolute vars)
   unset(vars_abs)
 endmacro ()
 
-function (VASTCompileFlatBuffers)
+function (TenzirCompileFlatBuffers)
   cmake_parse_arguments(
     # <prefix>
     FBS
@@ -132,27 +132,30 @@ function (VASTCompileFlatBuffers)
 
   if (NOT FBS_TARGET)
     message(
-      FATAL_ERROR "TARGET must be specified in call to VASTCompileFlatBuffers")
+      FATAL_ERROR "TARGET must be specified in call to TenzirCompileFlatBuffers"
+    )
   elseif (TARGET ${FBS_TARGET})
     message(
       FATAL_ERROR
-        "TARGET provided in call to VASTCompileFlatBuffers already exists")
+        "TARGET provided in call to TenzirCompileFlatBuffers already exists")
   endif ()
 
   if (NOT FBS_INCLUDE_DIRECTORY)
     message(
       FATAL_ERROR
-        "INCLUDE_DIRECTORY must be specified in call to VASTCompileFlatBuffers")
+        "INCLUDE_DIRECTORY must be specified in call to TenzirCompileFlatBuffers"
+    )
   elseif (IS_ABSOLUTE FBS_INCLUDE_DIRECTORY)
     message(
       FATAL_ERROR
-        "INCLUDE_DIRECTORY provided in a call to VASTCompileFlatBuffers must be relative"
+        "INCLUDE_DIRECTORY provided in a call to TenzirCompileFlatBuffers must be relative"
     )
   endif ()
 
   if (NOT FBS_SCHEMAS)
     message(
-      FATAL_ERROR "SCHEMAS must be specified in call to VASTCompileFlatBuffers")
+      FATAL_ERROR
+        "SCHEMAS must be specified in call to TenzirCompileFlatBuffers")
   endif ()
   make_absolute(FBS_SCHEMAS)
 
@@ -171,8 +174,8 @@ function (VASTCompileFlatBuffers)
   endif ()
   if (TARGET flatbuffers::flatbuffers)
     set(flatbuffers_target flatbuffers::flatbuffers)
-  elseif (NOT TENZIR_ENABLE_STATIC_EXECUTABLE AND TARGET
-                                                flatbuffers::flatbuffers_shared)
+  elseif (NOT TENZIR_ENABLE_STATIC_EXECUTABLE
+          AND TARGET flatbuffers::flatbuffers_shared)
     set(flatbuffers_target flatbuffers::flatbuffers_shared)
   else ()
     message(
@@ -181,7 +184,7 @@ function (VASTCompileFlatBuffers)
     )
   endif ()
 
-  if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+  if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
     dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
   endif ()
 
@@ -253,14 +256,14 @@ function (VASTCompileFlatBuffers)
 
   install(
     TARGETS ${FBS_TARGET}
-    EXPORT VASTTargets
+    EXPORT TenzirTargets
     PUBLIC_HEADER
       DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FBS_INCLUDE_DIRECTORY}"
       COMPONENT Development)
 endfunction ()
 
 # Install a commented-out version of an example configuration file.
-macro (VASTInstallExampleConfiguration target source prefix destination)
+macro (TenzirInstallExampleConfiguration target source prefix destination)
   # Sanity checks macro inputs.
   if (NOT TARGET "${target}")
     message(FATAL_ERROR "target '${target}' does not exist")
@@ -279,7 +282,7 @@ macro (VASTInstallExampleConfiguration target source prefix destination)
   # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
   if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
-    VASTNormalizeInstallDirs()
+    tenzirnormalizeinstalldirs()
   endif ()
 
   # Set a temporary variable for the example dir location. Because we're in a
@@ -329,17 +332,18 @@ endmacro ()
 
 # Support tools like clang-tidy by creating a compilation database and copying
 # it to the project root.
-function (VASTExportCompileCommands)
+function (TenzirExportCompileCommands)
   if (TARGET compilation-database)
-    message(FATAL_ERROR "VASTExportCompileCommands must be called only once")
+    message(FATAL_ERROR "TenzirExportCompileCommands must be called only once")
   endif ()
 
   if (NOT ${ARGC} EQUAL 1)
-    message(FATAL_ERROR "VASTExportCompileCommands takes exactly one argument")
+    message(
+      FATAL_ERROR "TenzirExportCompileCommands takes exactly one argument")
   endif ()
 
   if (NOT TARGET ${ARGV0})
-    message(FATAL_ERROR "VASTExportCompileCommands provided invalid target")
+    message(FATAL_ERROR "TenzirExportCompileCommands provided invalid target")
   endif ()
 
   # Globally enable compilation databases.
@@ -370,7 +374,7 @@ function (VASTExportCompileCommands)
   add_dependencies(${ARGV0} compilation-database)
 endfunction ()
 
-function (VASTRegisterPlugin)
+function (TenzirRegisterPlugin)
   cmake_parse_arguments(
     # <prefix>
     PLUGIN
@@ -383,21 +387,22 @@ function (VASTRegisterPlugin)
     # <args>...
     ${ARGN})
 
-  # Safeguard against repeated VASTRegisterPlugin calls from the same project.
+  # Safeguard against repeated TenzirRegisterPlugin calls from the same project.
   # While technically possible for external pluigins, doing so makes it
-  # impossible to build the plugin alongside VAST.
+  # impossible to build the plugin alongside Tenzir.
   get_property(TENZIR_PLUGIN_PROJECT_SOURCE_DIRS GLOBAL
                PROPERTY "TENZIR_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY")
   if ("${PROJECT_SOURCE_DIR}" IN_LIST TENZIR_PLUGIN_PROJECT_SOURCE_DIRS)
     message(
       FATAL_ERROR
-        "VASTRegisterPlugin called twice in CMake project ${PROJECT_NAME}")
+        "TenzirRegisterPlugin called twice in CMake project ${PROJECT_NAME}")
   endif ()
-  set_property(GLOBAL APPEND PROPERTY "TENZIR_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY"
-                                      "${PROJECT_SOURCE_DIR}")
+  set_property(
+    GLOBAL APPEND PROPERTY "TENZIR_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY"
+                           "${PROJECT_SOURCE_DIR}")
 
   # Set a default build type if none was specified.
-  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
     if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
       set(CMAKE_BUILD_TYPE
           "${TENZIR_CMAKE_BUILD_TYPE}"
@@ -417,20 +422,20 @@ function (VASTRegisterPlugin)
   # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
   if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
-    VASTNormalizeInstallDirs()
+    tenzirnormalizeinstalldirs()
   endif ()
 
   # Enable compile commands for external plugins.
   # Must be done before the targets are created for CMake >= 3.20.
   # TODO: Replace this with the corresponding interface target property on
   # libvast_internal when bumping the minimum CMake version to 3.20.
-  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
   endif ()
 
   if (NOT PLUGIN_TARGET)
     message(
-      FATAL_ERROR "TARGET must be specified in call to VASTRegisterPlugin")
+      FATAL_ERROR "TARGET must be specified in call to TenzirRegisterPlugin")
   endif ()
 
   if (NOT PLUGIN_ENTRYPOINT)
@@ -440,8 +445,8 @@ function (VASTRegisterPlugin)
       set(PLUGIN_SOURCES "")
     else ()
       message(
-        FATAL_ERROR "ENTRYPOINT must be specified in call to VASTRegisterPlugin"
-      )
+        FATAL_ERROR
+          "ENTRYPOINT must be specified in call to TenzirRegisterPlugin")
     endif ()
   endif ()
 
@@ -460,7 +465,7 @@ function (VASTRegisterPlugin)
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.h" "")
   list(APPEND PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.h")
   add_library(${PLUGIN_TARGET} OBJECT ${PLUGIN_SOURCES})
-  VASTTargetEnableTooling(${PLUGIN_TARGET})
+  tenzirtargetenabletooling(${PLUGIN_TARGET})
   target_link_libraries(
     ${PLUGIN_TARGET}
     PUBLIC vast::libvast
@@ -495,7 +500,8 @@ function (VASTRegisterPlugin)
     # essentially reconstructing git-describe except for the revision count.
     file(
       WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
-      "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@TENZIR_PLUGIN_VERSION@\";\n")
+      "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@TENZIR_PLUGIN_VERSION@\";\n"
+    )
     string(TOUPPER "TENZIR_PLUGIN_${PLUGIN_TARGET}_REVISION"
                    TENZIR_PLUGIN_REVISION_VAR)
     if (DEFINED "${TENZIR_PLUGIN_REVISION_VAR}")
@@ -548,15 +554,15 @@ function (VASTRegisterPlugin)
   # Create a static library target for our plugin with the entrypoint, and use
   # static versions of TENZIR_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
-  VASTTargetEnableTooling(${PLUGIN_TARGET}-static)
-  VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
+  tenzirtargetenabletooling(${PLUGIN_TARGET}-static)
+  tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
                              PRIVATE TENZIR_ENABLE_STATIC_PLUGINS)
 
   if (TENZIR_ENABLE_STATIC_PLUGINS)
     # Link our static library against the vast binary directly.
-    VASTTargetLinkWholeArchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
+    tenzirtargetlinkwholearchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
   else ()
     # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
     # depending on the plugin type. This must not be user-configurable for
@@ -572,8 +578,9 @@ function (VASTRegisterPlugin)
 
     # Create a shared library target for our plugin.
     add_library(${PLUGIN_TARGET}-shared SHARED ${PLUGIN_ENTRYPOINT})
-    VASTTargetEnableTooling(${PLUGIN_TARGET}-shared)
-    VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-shared PUBLIC ${PLUGIN_TARGET})
+    tenzirtargetenabletooling(${PLUGIN_TARGET}-shared)
+    tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-shared PUBLIC
+                                 ${PLUGIN_TARGET})
     target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE vast::internal)
 
     # Install the plugin library to <libdir>/vast/plugins, and also configure
@@ -588,7 +595,7 @@ function (VASTRegisterPlugin)
       DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins"
       COMPONENT Runtime)
 
-    # Ensure that VAST only runs after all dynamic plugin libraries are built.
+    # Ensure that Tenzir only runs after all dynamic plugin libraries are built.
     if (TARGET tenzir)
       add_dependencies(tenzir ${PLUGIN_TARGET}-shared)
     endif ()
@@ -596,7 +603,7 @@ function (VASTRegisterPlugin)
 
   # Install an example configuration file, if it exists at the plugin project root.
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example")
-    VASTInstallExampleConfiguration(
+    tenzirinstallexampleconfiguration(
       ${PLUGIN_TARGET}
       "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example"
       "plugin/${PLUGIN_TARGET}/" "${PLUGIN_TARGET}.yaml")
@@ -621,7 +628,7 @@ function (VASTRegisterPlugin)
       COMPONENT Runtime)
     if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
       # Copy schemas from bundled plugins to the build directory so they can be
-      # used from a VAST in a build directory (instead if just an installed VAST).
+      # used from a Tenzir in a build directory (instead if just an installed Tenzir).
       file(
         GLOB_RECURSE
         plugin_schema_files
@@ -664,13 +671,13 @@ function (VASTRegisterPlugin)
       list(APPEND suites "${suite}")
     endforeach ()
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
-    VASTTargetEnableTooling(${PLUGIN_TARGET}-test)
+    tenzirtargetenabletooling(${PLUGIN_TARGET}-test)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
                                                         vast::internal)
-    VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
-                               ${PLUGIN_TARGET}-static)
-    VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
-                               vast::libvast_builtins)
+    tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-test PRIVATE
+                                 ${PLUGIN_TARGET}-static)
+    tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-test PRIVATE
+                                 vast::libvast_builtins)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
@@ -698,7 +705,7 @@ function (VASTRegisterPlugin)
   # Setup integration tests.
   if (TARGET vast::tenzir
       AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
-    if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
       set(integration_test_path "${CMAKE_SOURCE_DIR}/tenzir/integration")
     else ()
       if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
@@ -753,13 +760,13 @@ function (VASTRegisterPlugin)
     add_dependencies(integration ${PLUGIN_TARGET}-integration)
   endif ()
 
-  if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
-    # Provide niceties for building alongside VAST.
+  if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+    # Provide niceties for building alongside Tenzir.
     dependency_summary("${PLUGIN_TARGET}" "${CMAKE_CURRENT_LIST_DIR}" "Plugins")
     set_property(GLOBAL APPEND PROPERTY "TENZIR_BUNDLED_PLUGINS_PROPERTY"
                                         "${PLUGIN_TARGET}")
   else ()
-    # Provide niceties for external plugins that are usually part of VAST.
-    VASTExportCompileCommands(${PLUGIN_TARGET})
+    # Provide niceties for external plugins that are usually part of Tenzir.
+    tenzirexportcompilecommands(${PLUGIN_TARGET})
   endif ()
 endfunction ()

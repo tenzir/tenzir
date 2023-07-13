@@ -1,5 +1,5 @@
 ---
-title: VAST
+title: Tenzir
 section: 1
 header: General Commands Manual
 author: Tenzir GmbH
@@ -7,16 +7,16 @@ author: Tenzir GmbH
 
 # NAME
 
-`vast` -- manages a VAST node
+`vast` -- manages a Tenzir node
 
 # OVERVIEW
 
-VAST is an embeddable security telemetry engine for structured event data.
-Tailor-made for security operations, VAST is the foundation for many data-driven
+Tenzir is an embeddable security telemetry engine for structured event data.
+Tailor-made for security operations, Tenzir is the foundation for many data-driven
 detection and response uses cases, such as operationalizing threat intelligence,
 threat hunting, event contextualization, and advanced detection engineering.
 
-VAST operates in a client-server architecture. You begin with spawning a server
+Tenzir operates in a client-server architecture. You begin with spawning a server
 and then interacting with that server through one or more client. The `vast`
 executable serves both as client and server.
 
@@ -34,9 +34,9 @@ vast --help
 vast -h
 ```
 
-## Start VAST
+## Start Tenzir
 
-Use the `start` command to spin up a VAST server:
+Use the `start` command to spin up a Tenzir server:
 
 ```bash
 vast start
@@ -63,7 +63,7 @@ vast export json '6.6.6.6 || (dst_port < 1024 && proto == "UDP")'
 
 ## Next steps
 
-To learn more about using VAST, continue over at https://vast.io/docs/use.
+To learn more about using Tenzir, continue over at https://vast.io/docs/use.
 
 # ISSUES
 

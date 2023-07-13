@@ -9,7 +9,7 @@ function (join values separator output)
 endfunction ()
 
 # Treats target as a system dependency.
-function (VASTSystemizeTarget tgt)
+function (TenzirSystemizeTarget tgt)
   message(STATUS "Treating ${tgt} as a system dependency")
   get_target_property(_includes ${tgt} INTERFACE_INCLUDE_DIRECTORIES)
   set_property(

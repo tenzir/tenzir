@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/logger.hpp"
@@ -212,7 +212,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
 #if !TENZIR_ENABLE_JOURNALD_LOGGING
       fmt::print(stderr,
                  "failed to start logger; tenzir.console-sink 'journald' "
-                 "required VAST built with systemd support\n");
+                 "required Tenzir built with systemd support\n");
       return nullptr;
 #else
       auto spdlog_sink = std::make_shared<spdlog::sinks::systemd_sink_mt>();

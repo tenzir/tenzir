@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Script to profile VAST and generate a Flame Graph.
+# Script to profile Tenzir and generate a Flame Graph.
 #
 # Requirements from https://github.com/brendangregg/FlameGraph:
 # 1. stackcollapse.pl

@@ -1,6 +1,6 @@
 # Integration Tests
 
-This directory contains a tailor-made integration test utility for VAST. Unlike
+This directory contains a tailor-made integration test utility for Tenzir. Unlike
 the *unit tests*, which perform isolated tests of individual components, the
 *integration tests* simulate real-world uses of the system and verify its
 expected behavior.
@@ -42,7 +42,7 @@ fixtures:
       pass
 ```
 
-The variable `work_dir` contains the working directory with the VAST logs of the
+The variable `work_dir` contains the working directory with the Tenzir logs of the
 current test.
 
 The creation of a subprocess should be done through the `spawn()` wrapper

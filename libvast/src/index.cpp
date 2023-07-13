@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/index.hpp"
@@ -410,7 +410,7 @@ caf::error index_state::load_from_disk() {
           if (std::filesystem::exists(path, err)) {
             // TODO: In combination with inhomogeneous partitions, this may
             // result in incorrect index statistics. This depends on whether the
-            // statistics where already updated on-disk before VAST crashed or
+            // statistics where already updated on-disk before Tenzir crashed or
             // not, which is hard to figure out here.
             auto partition = self->spawn(passive_partition, uuid, accountant,
                                          filesystem, path);
@@ -545,7 +545,7 @@ caf::error index_state::load_from_disk() {
   }
   // Reimport oversized partitions to rescue the data.
   // This loop is an attempt to recover from a critical issue that would
-  // lead to the creation of corrupted partition files with VAST versions
+  // lead to the creation of corrupted partition files with Tenzir versions
   // before 2.3 if too many events were inserted into a single partition.
   // (although it was unlikely to happen with default settings).
   for (const auto& id : oversized_partitions) {

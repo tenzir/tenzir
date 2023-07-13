@@ -1,2 +1,2 @@
-from .vast import VAST, ExportMode, TableSlice
+from .vast import Tenzir, ExportMode, TableSlice
 from .convert import *

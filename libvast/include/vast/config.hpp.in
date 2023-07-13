@@ -35,11 +35,11 @@ extern const char* minor;
 extern const char* patch;
 extern const char* tweak;
 
-/// The version number of the VAST partition format. Bump this whenever making
+/// The version number of the Tenzir partition format. Bump this whenever making
 /// changes that require partitions to be rebuilt.
 extern const uint64_t current_partition_version;
 
-/// Determines the supported VAST version range as [introduced, end_of_life] for
+/// Determines the supported Tenzir version range as [introduced, end_of_life] for
 /// a given partition version. The partition_version is still supported if
 /// end_of_life is not set.
 struct supported_versions {
@@ -47,16 +47,16 @@ struct supported_versions {
   std::optional<std::string_view> end_of_life;
 };
 
-/// Returns the supported VAST version range for the given partition version.
+/// Returns the supported Tenzir version range for the given partition version.
 supported_versions
 support_for_partition_version(uint64_t partition_version) noexcept;
 
 namespace build {
 
-/// The CMake build type used to build VAST.
+/// The CMake build type used to build Tenzir.
 extern const char* type;
 
-/// Contains a hash of VAST's build tree.
+/// Contains a hash of Tenzir's build tree.
 extern const char* tree_hash;
 
 /// Whether assertions, ASan, and UBSan are enabled respectively.
@@ -161,5 +161,5 @@ extern bool has_undefined_behavior_sanitizer;
 #endif
 
 #if !__SIZEOF_INT128__
-#  error VAST requires support for __int128.
+#  error Tenzir requires support for __int128.
 #endif

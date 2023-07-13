@@ -49,7 +49,7 @@ def native_types_batch() -> pa.RecordBatch:
 
 
 def extension_types_batch() -> pa.RecordBatch:
-    """Create single rowed RecordBatch with all VAST extension types"""
+    """Create single rowed RecordBatch with all Tenzir extension types"""
     arrays = []
     arrays.append(new_array(["10.1.21.165"], vua.IPType()))
     arrays.append(new_array(["10.1.20.0/25"], vua.SubnetType()))

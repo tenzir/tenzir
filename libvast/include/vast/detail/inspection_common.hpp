@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -16,8 +16,8 @@
 
 namespace vast::detail {
 
-/// A common class used by VAST inspectors as return type for the object method.
-/// The CAF inspector API requires inspectors to have an object method.
+/// A common class used by Tenzir inspectors as return type for the object
+/// method. The CAF inspector API requires inspectors to have an object method.
 /// This method should return an object which guides the inspection procedure.
 /// Example of usage:
 /// bool inspect(Inspector& f, some_type& x)

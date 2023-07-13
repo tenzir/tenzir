@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/import_command.hpp"
@@ -34,7 +34,7 @@ namespace vast {
 caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   TENZIR_TRACE_SCOPE("{}", inv);
   auto self = caf::scoped_actor{sys};
-  // Get VAST node.
+  // Get Tenzir node.
   auto node_opt
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt))

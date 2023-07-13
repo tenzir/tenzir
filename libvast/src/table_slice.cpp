@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/table_slice.hpp"
@@ -844,8 +844,8 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     inferred_type = type::infer(value);
     if (not inferred_type) {
       inferred_type = type{string_type{}};
-      // VAST has no N/A type equivalent for Arrow, so we just use a string type
-      // here.
+      // Tenzir has no N/A type equivalent for Arrow, so we just use a string
+      // type here.
       auto builder
         = string_type::make_arrow_builder(arrow::default_memory_pool());
       const auto append_result = builder->AppendNulls(batch->num_rows());

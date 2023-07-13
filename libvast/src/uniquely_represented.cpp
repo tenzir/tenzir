@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/hash/uniquely_represented.hpp"
@@ -13,7 +13,7 @@
 #include "vast/port.hpp"
 #include "vast/uuid.hpp"
 
-// We require that compilers are able to pack certain key types in VAST.
+// We require that compilers are able to pack certain key types in Tenzir.
 // Otherwise performance may suffer substantially. For our supported list of
 // compilers, our CI/CD pipeline ensures that this works as expected.
 //

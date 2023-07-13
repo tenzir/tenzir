@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/actors.hpp>
@@ -292,7 +292,7 @@ public:
                      [[maybe_unused]] filesystem_actor fs,
                      [[maybe_unused]] const vast::uuid& id) const override {
     return caf::make_error(ec::logic_error, "segment-store plugin is read-only "
-                                            "since VAST v2.4");
+                                            "since Tenzir v2.4");
   }
 
   [[nodiscard]] caf::expected<store_actor>

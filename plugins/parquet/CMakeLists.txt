@@ -2,17 +2,17 @@ cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
 
 project(
   parquet
-  DESCRIPTION "Parquet store plugin for VAST"
+  DESCRIPTION "Parquet store plugin for Tenzir"
   LANGUAGES CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the
 # top-level CMakeLists.txt file for it to create a test target, so while
-# optional for plugins built alongside VAST, it is necessary to specify this
-# line manually so plugins can be linked against an installed VAST.
+# optional for plugins built alongside Tenzir, it is necessary to specify this
+# line manually so plugins can be linked against an installed Tenzir.
 include(CTest)
 
-find_package(VAST REQUIRED)
-VASTRegisterPlugin(
+find_package(Tenzir REQUIRED)
+TenzirRegisterPlugin(
   TARGET parquet
   ENTRYPOINT parquet.cpp
   TEST_SOURCES tests/parquet.cpp)

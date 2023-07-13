@@ -22,7 +22,7 @@ event of a partial failure.
 
 ## Problem Statement
 
-To date, VAST has no application-level mechanisms for achieving fault tolerance.
+To date, Tenzir has no application-level mechanisms for achieving fault tolerance.
 Prudent engineering practices help in avoiding catastrophic state corruption in
 the face of crashes (e.g., all data is unreadable), but there exists no
 principled approach that addresses fault tolerance specifically. Operators who
@@ -36,12 +36,12 @@ the system:
 2. **Read Path**: get data out of the system
 3. **System Core**: the data "service" that sits between (1) and (2)
 
-Today, VAST's architecture lends itself already to replicating and scaling the
+Today, Tenzir's architecture lends itself already to replicating and scaling the
 write path (1). We would like to have a similar capability for the read path (2)
 and the system core (3).
 
 From a fault-tolerance perspective, the system core is the *catalog*, as it owns
-all data and metadata. VAST stores data into partitions. Mutating operations
+all data and metadata. Tenzir stores data into partitions. Mutating operations
 like compaction, roll-up, or deletion of partitions must leave the catalog in an
 internally consistent state. The catalog provides atomic functions for
 insertion, replacement, and removal of partitions to support this requirement.
@@ -105,7 +105,7 @@ individual read or write streams into their dedicated process can be done be
 spawning dedicated database nodes.
 
 We briefly touch on how the mechanism for making the write and read path
-resilient, and then focus the discussion on fault tolerance within the VAST
+resilient, and then focus the discussion on fault tolerance within the Tenzir
 server node, specifically the catalog.
 
 To avoid bloating the proposal with caveats unrelated to the core problem, we
@@ -114,16 +114,16 @@ implemented yet.
 
 ### Resilient Write Path
 
-Data sources provide a stream of events. VAST parses them and bundles them into
+Data sources provide a stream of events. Tenzir parses them and bundles them into
 units of partitions. Assuming that we can build a fault-tolerant catalog, the
 problem of making the write path fault-tolerant reduces to ensuring exactly-once
 processing semantics on the ingest stream.
 
 If the circumstances require high-fidelity data acquisition, we can resort to an
 external data plane with exactly-once processing stream semantics, such as
-Apache Kafka. VAST must not acknowledge events from the data plane until having
+Apache Kafka. Tenzir must not acknowledge events from the data plane until having
 received a confirmation from the catalog that the corresponding partition is
-durable. In the presence of a crash, VAST must restart from the last
+durable. In the presence of a crash, Tenzir must restart from the last
 acknowledged position in the stream.
 
 As mentioned above, operators are often willing to accept looser guarantees.
@@ -134,11 +134,11 @@ user supplied—unique identifier for every input stream.
 ### Resilient Read Path
 
 The desired fault isolation domain of the read path is the individual query that
-may crash or become a straggler. To date, VAST does not perform distributed
+may crash or become a straggler. To date, Tenzir does not perform distributed
 query execution, so we can consider a single query an atomic execution unit.
 When a query fails, the remainder of the system remains unaffected if the query
 ran in its own execution context. For example, a crashing cloud function will
-not affect other running queries. But when VAST executes multiple queries in the
+not affect other running queries. But when Tenzir executes multiple queries in the
 same server node, all queries exhibit fate sharing. We leave it to the operator
 to decide what model works best for the scenario at hand.
 
@@ -162,10 +162,10 @@ instances to achieve the desired level of redundancy.
 ### Case Studies
 
 We now turn to deployment case studies to validate the architectural approach of
-a fault-tolerant catalog. Furthermore, we assume that VAST has a resilient
+a fault-tolerant catalog. Furthermore, we assume that Tenzir has a resilient
 write path, e.g., by reading data from Kafka. Consequently, faulty data sources
 will not cause a global inconsistency and simply respawn upon failure. We also
-assume that VAST has a resilient read path, assuming that downstream workloads
+assume that Tenzir has a resilient read path, assuming that downstream workloads
 operate correctly when a query needs to restart. For example, when using the
 system interactively during threat hunting, the analyst would get an error
 instead of a result, causing them to resubmit the query.
@@ -175,7 +175,7 @@ following scenarios illustrate how this can work in practice.
 
 #### Scenario: Single Deployment
 
-In the scenario where VAST runs on an embedded appliance, potentially co-located
+In the scenario where Tenzir runs on an embedded appliance, potentially co-located
 with visibility and detection providers (e.g., Zeek and Suricata sensors), there
 exists a strong dependency on the hardware. We assume that operators have
 configured their hardware in terms of redundancy according to the desired
@@ -188,7 +188,7 @@ failure.
 ![Single Deployment](single-deployment-dark.png#gh-dark-mode-only)
 
 No fault tolerance mechanism can work around an entire system failure. The only
-requirement is that VAST crashes safely, without corrupting its existing state.
+requirement is that Tenzir crashes safely, without corrupting its existing state.
 The resilient read/write path and metastore achieve this goal.
 
 #### Scenario: Distributed Filesystem
@@ -212,14 +212,14 @@ when the performance requirements are met.
 
 When operators require higher degrees of reliability that goes beyond HA
 failover, or when scaling out for performance reasons becomes a necessity, we
-need to consider option (2) with a distributed operation of VAST. In this case,
+need to consider option (2) with a distributed operation of Tenzir. In this case,
 we treat the metastore of the catalog as a *shared service* between multiple
-VAST nodes.
+Tenzir nodes.
 
 ![Distributed Deployment](distributed-deployment-light.png#gh-light-mode-only)
 ![Distributed Deployment](distributed-deployment-dark.png#gh-dark-mode-only)
 
-In the above diagram, both VAST nodes serve as a valid entry point for data, as
+In the above diagram, both Tenzir nodes serve as a valid entry point for data, as
 well as queries. If one location fails, the other remains fully operational.
 This architecture scales beyond two locations, with the metastore remaining the
 bottleneck. Therefore, finding a high-performance and scalable metastore is of
@@ -227,7 +227,7 @@ essence.
 
 #### Example: Load-based Scaling
 
-When VAST is deployed on top of an auto scaling engine, like Kubernetes or
+When Tenzir is deployed on top of an auto scaling engine, like Kubernetes or
 Nomad, we naturally model the components that are concerned with read and write
 paths into separate scaling groups. In this scenario new instances come and go
 depending on demand. The elasticity of the write side is automatically handled
@@ -300,7 +300,7 @@ all stages of the data stream, possibly involving multiple transport mechanisms.
 
 The metastore stores partition metadata. From the perspective of the catalog,
 the metastore API should expose itself as an actor that encapsulates the
-implementation details. This actor can rely on VAST's plugin architecture to
+implementation details. This actor can rely on Tenzir's plugin architecture to
 implement the metastore-specific integration.
 
 #### Request-Response API
@@ -382,9 +382,9 @@ FDB primitives. We found the following:
   the (SET, CLEAR) operations OR rollback / cancel the transaction.
 
 - While this strategy allows for serializing the transactions into a
-  conflict-free state, it does not help with each VAST node "seeing the full
+  conflict-free state, it does not help with each Tenzir node "seeing the full
   picture", i.e., being aware of the transactions that are triggered from within
-  other VAST nodes.
+  other Tenzir nodes.
 
 - There doesn't seem to be a full CDC functionality, only watching single keys.
   There could be a key for a `transaction_id` (an integer increment for every
@@ -456,13 +456,13 @@ Instead of depending on an auxiliary service, we may consider our own
 actor-based Raft implementation. In this case, Raft would be a frontend for a
 key-value store that supports the desired transactional operations natively.
 
-The shape of a metastore would be dedicated CAF service that VAST can speak
-natively to. Not every VAST node should include a Raft metastore, as a typical
-number of Raft nodes remains in the single digits. That is, multiple VAST nodes
+The shape of a metastore would be dedicated CAF service that Tenzir can speak
+natively to. Not every Tenzir node should include a Raft metastore, as a typical
+number of Raft nodes remains in the single digits. That is, multiple Tenzir nodes
 share a single metastore. We would need at least 3 Raft instances to obtain a
 quorum majority when 1 node fails, 5 Raft nodes to tolerate 2 node failures.
 
-VAST already had a
+Tenzir already had a
 [working-albeit-minimal](https://github.com/tenzir/vast/pull/926) implementation
 in the past that we removed, given that we didn't need the functionality at the
 time. There are some [open questions on composability of log and state
@@ -486,7 +486,7 @@ node would receive a delta of the updates that it missed during downtime to
 synchronize with its peers.
 
 The advantage of doing this in the application layer is that it could naturally
-extend from the metadata to the data plane, freeing VAST from the dependency on
+extend from the metadata to the data plane, freeing Tenzir from the dependency on
 a distributed storage layer.
 
 This idea has two major drawbacks: It would complicate the API surface of the

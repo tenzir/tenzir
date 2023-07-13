@@ -1,4 +1,4 @@
-"""Manage and interact with the VAST server"""
+"""Manage and interact with the Tenzir server"""
 from typing import Tuple
 from vast_invoke import Context, pty_task, task, Exit
 import base64
@@ -35,25 +35,25 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
 
 @task
 def server_status(c):
-    """Get the status of the VAST server"""
+    """Get the status of the Tenzir server"""
     print(FargateService(*service_outputs(c)).service_status())
 
 
 @task
 def start_server(c):
-    """Start the VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
+    """Start the Tenzir server instance as an AWS Fargate task. Noop if a Tenzir server is already running"""
     FargateService(*service_outputs(c)).start_service()
 
 
 @task
 def stop_server(c):
-    """Stop the VAST server instance"""
+    """Stop the Tenzir server instance"""
     FargateService(*service_outputs(c)).stop_service()
 
 
 @task
 def restart_server(c):
-    """Stop the running VAST server Fargate task, the service starts a new one"""
+    """Stop the running Tenzir server Fargate task, the service starts a new one"""
     FargateService(*service_outputs(c)).restart_service()
 
 
@@ -76,7 +76,7 @@ def print_lambda_output(json_response: str, json_output: bool):
 
 @task(help=CMD_HELP, iterable=["env"])
 def lambda_client(c, cmd, env=[], json_output=False):
-    """Run ad-hoc VAST client commands from AWS Lambda
+    """Run ad-hoc Tenzir client commands from AWS Lambda
 
     Prints the inputs (command / environment) and outputs (stdout, stderr, exit
     code) of the executed function to stdout."""
@@ -106,7 +106,7 @@ def lambda_client(c, cmd, env=[], json_output=False):
 
 @pty_task(help=CMD_HELP, iterable=["env"])
 def server_execute(c, cmd="/bin/bash", env=[]):
-    """Run ad-hoc or interactive commands from the VAST server Fargate task"""
+    """Run ad-hoc or interactive commands from the Tenzir server Fargate task"""
     task_id = FargateService(*service_outputs(c)).get_task_id()
     cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues

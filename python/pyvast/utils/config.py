@@ -17,7 +17,7 @@ def create() -> Config:
     settings = Dynaconf(
         settings_files=CONFIG_FILES,
         load_dotenv=True,
-        envvar_prefix="VAST",
+        envvar_prefix="Tenzir",
     )
     settings.validators.register(
         Validator(PREFIX + "console-verbosity", default="debug"),

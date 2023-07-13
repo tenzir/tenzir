@@ -39,7 +39,7 @@ define TENZIR_COMPOSE_OVERLAYS
 endef
 
 export TENZIR_COMPOSE_OVERLAYS
-# Run this makefile from within the Quarto Docker image, with a VAST server
+# Run this makefile from within the Quarto Docker image, with a Tenzir server
 # running in another service.
 # You can specify another target using the TARGET variable:
 # make docker TARGET=clean

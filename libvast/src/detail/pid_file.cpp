@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/detail/pid_file.hpp"
@@ -53,7 +53,7 @@ bool pid_belongs_to_vast(pid_t pid) {
 caf::error acquire_pid_file(const std::filesystem::path& filename) {
   auto pid = process_id();
   std::error_code err{};
-  // Check if the db directory is owned by an existing VAST process.
+  // Check if the db directory is owned by an existing Tenzir process.
   const auto exists = std::filesystem::exists(filename, err);
   if (err)
     TENZIR_WARN("failed to check if the db directory {} exists: {}", filename,
@@ -70,11 +70,11 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
     // Safeguard in case the pid_file already belongs to this process.
     if (*other_pid == pid)
       return caf::none;
-    // Safeguard in case the pid_file contains a PID of a non-VAST process.
+    // Safeguard in case the pid_file contains a PID of a non-Tenzir process.
     if (::getpgid(*other_pid) >= 0) {
 #if TENZIR_LINUX
       // In deployments with containers it's rather likely that the PID in the
-      // PID file belongs to a different, non-VAST process after a crash,
+      // PID file belongs to a different, non-Tenzir process after a crash,
       // because after a restart of the container the PID may be assigned to
       // another process. If it does, we ignore the PID in the PID file and
       // don't stop execution.
@@ -89,7 +89,7 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
                                            filename, *contents));
       TENZIR_DEBUG(
         "ignores conflicting PID file because contained PID does not "
-        "belong to a VAST process");
+        "belong to a Tenzir process");
     }
     // The previous owner is deceased, print a warning an assume ownership.
     TENZIR_WARN("node detected an irregular shutdown of the previous "

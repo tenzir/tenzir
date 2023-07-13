@@ -89,7 +89,7 @@ union Type {
   duration_type: DurationType,
   time_type: TimeType,
   string_type: StringType,
-  // NOTE: The PatternType was removed with VAST v3.0.
+  // NOTE: The PatternType was removed with Tenzir v3.0.
   pattern_type: PatternType,
   ip_type: IPType,
   subnet_type: SubnetType,

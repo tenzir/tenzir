@@ -9,7 +9,7 @@ from typing import Optional
 import aiohttp
 import pyvast.utils.logging as logging
 
-from pyvast import VAST, ExportMode, to_json_rows
+from pyvast import Tenzir, ExportMode, to_json_rows
 
 logger = logging.get("vast.thehive.app")
 
@@ -126,7 +126,7 @@ async def on_suricata_alert(alert: dict):
 
 
 async def run_async():
-    vast_cli = VAST()
+    vast_cli = Tenzir()
     await vast_cli.status(60, retry_delay=1)
     await wait_for_thehive("/api/v1/user/current", 180)
     expr = '#schema == "suricata.alert"'

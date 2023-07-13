@@ -41,7 +41,7 @@ resource "aws_cloudwatch_dashboard" "main" {
                 "region": "${var.region_name}",
                 "stat": "Average",
                 "period": 1,
-                "title": "VAST Server - Node throughput Rate"
+                "title": "Tenzir Server - Node throughput Rate"
             }
         },
         {
@@ -60,7 +60,7 @@ resource "aws_cloudwatch_dashboard" "main" {
                 "region": "${var.region_name}",
                 "stat": "Average",
                 "period": 60,
-                "title": "VAST Server - Network"
+                "title": "Tenzir Server - Network"
             }
         },
         {
@@ -79,7 +79,7 @@ resource "aws_cloudwatch_dashboard" "main" {
                 "region": "${var.region_name}",
                 "stat": "Maximum",
                 "period": 60,
-                "title": "VAST Server - CPU"
+                "title": "Tenzir Server - CPU"
             }
         },
         {
@@ -98,7 +98,7 @@ resource "aws_cloudwatch_dashboard" "main" {
                 "region": "${var.region_name}",
                 "stat": "Maximum",
                 "period": 60,
-                "title": "VAST Server - Memory"
+                "title": "Tenzir Server - Memory"
             }
         },
         {

@@ -103,7 +103,7 @@ union ValueIndex {
 
 namespace vast.fbs;
 
-// TODO: Before actually using the `ValueIndex` in VAST we need to
+// TODO: Before actually using the `ValueIndex` in Tenzir we need to
 // implement a way to store the bulk of the data separately, to avoid
 // running into the 2GiB limit for flatbuffers when individual indexes
 // get too big.

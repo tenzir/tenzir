@@ -6,7 +6,7 @@ if [ "$1" = "configure" ]; then
   # Provide an opt-out mechanism for the automatic migration.
   if ! [ -f /var/lib/vast/disable-migration ]; then
     if getent passwd vast >/dev/null; then
-      echo "Detected previous VAST installation and enabling trace mode for the migration"
+      echo "Detected previous Tenzir installation and enabling trace mode for the migration"
       set -x
     fi
     # Migrate user and group.

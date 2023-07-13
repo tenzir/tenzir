@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/argument_parser.hpp"
@@ -147,7 +147,7 @@ struct zeek_parser<list_type> {
   }
 };
 
-// Creates a VAST type from an ASCII Zeek type in a log header.
+// Creates a Tenzir type from an ASCII Zeek type in a log header.
 auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
   type t;
   if (zeek_type == "enum" or zeek_type == "string" or zeek_type == "file"
@@ -190,7 +190,7 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
     if (!elem)
       return elem.error();
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
-    // table[string]. In VAST, they are all lists.
+    // table[string]. In Tenzir, they are all lists.
     t = type{list_type{*elem}};
   }
   if (!t)

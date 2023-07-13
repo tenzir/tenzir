@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice.hpp>
@@ -56,7 +56,7 @@ auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
 
 /// Extract event column from record batch and transform into new record batch.
 /// The record batch contains a message envelope with the actual event data
-/// alongside VAST-related meta data (currently limited to the import time).
+/// alongside Tenzir-related meta data (currently limited to the import time).
 /// Message envelope is unwrapped and the metadata, attached to the to-level
 /// schema the input record batch is copied to the newly created record batch.
 std::shared_ptr<arrow::RecordBatch>

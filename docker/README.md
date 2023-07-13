@@ -1,6 +1,6 @@
 # Docker
 
-This directory contains Docker and Docker Compose files for VAST and
+This directory contains Docker and Docker Compose files for Tenzir and
 integrations with related services.
 
 > **Note**

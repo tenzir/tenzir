@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/builtin_rest_endpoints.hpp>
@@ -47,7 +47,7 @@ static auto const* SPEC_V0 = R"_(
                 num-partitions: 7092
                 memory-usage: 52781901584
               version:
-                VAST: v2.3.0-rc3-32-g8529a6c43f
+                Tenzir: v2.3.0-rc3-32-g8529a6c43f
       401:
         description: Not authenticated.
     )_";

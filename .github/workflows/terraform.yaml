@@ -9,7 +9,7 @@ on: workflow_dispatch
 #   priviledges to run Fargate tasks and Lambda functions.
 # - You need to choose an AWS region and a VPC within that region. These should
 #   be configured in the repository secrets as AWS_REGION and PEERED_VPC_ID.
-# - The VAST deployment creates a new VPC. Its ip range should not overlap an
+# - The Tenzir deployment creates a new VPC. Its ip range should not overlap an
 #   existing one in your account. Configure its CIDR in the repository secrets
 #   as TENZIR_CIDR (for example 172.30.0.0/16).
 # - The CI run uses Terraform Cloud to store the state. In Github Action
@@ -38,8 +38,8 @@ env:
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
-  VASTCLOUD_NO_PTY: 1
-  VASTCLOUD_TRACE: 1
+  TenzirCLOUD_NO_PTY: 1
+  TenzirCLOUD_TRACE: 1
 
 concurrency: vast_aws_integration_tests
 
@@ -95,7 +95,7 @@ jobs:
   vastcloud-local-init:
     needs:
       - vastcloud-cli
-    name: VAST Terraform init with local backend
+    name: Tenzir Terraform init with local backend
     runs-on: ubuntu-20.04
     defaults:
       run:
@@ -120,7 +120,7 @@ jobs:
     needs:
       - determine-version
       - vastcloud-cli
-    name: Deploy VAST on AWS
+    name: Deploy Tenzir on AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
@@ -159,7 +159,7 @@ jobs:
     needs:
       - vastcloud-cli
       - cloudvast-deploy
-    name: Run VAST test playbook on AWS
+    name: Run Tenzir test playbook on AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
@@ -273,7 +273,7 @@ jobs:
       - cloudvast-flowlogs
       - cloudvast-cloudtrail
     if: ${{ always() }}
-    name: Destroy VAST stack from AWS
+    name: Destroy Tenzir stack from AWS
     runs-on: ubuntu-20.04
     defaults:
       run:

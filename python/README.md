@@ -1,6 +1,6 @@
-# VAST Python
+# Tenzir Python
 
-The Python package of VAST provides a flexible control plane to integrate VAST
+The Python package of Tenzir provides a flexible control plane to integrate Tenzir
 with other security tools.
 
 > **Note**
@@ -9,7 +9,7 @@ with other security tools.
 
 ## Usage
 
-To get started, clone the VAST repository and install the Python package via
+To get started, clone the Tenzir repository and install the Python package via
 [Poetry](https://python-poetry.org/docs/):
 
 ```bash

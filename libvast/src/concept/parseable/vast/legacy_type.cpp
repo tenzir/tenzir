@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/concept/parseable/vast/legacy_type.hpp"
@@ -64,7 +64,7 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     | "duration"_p  ->* type_factory<legacy_duration_type>
     | "time"_p      ->* type_factory<legacy_time_type>
     | "string"_p    ->* type_factory<legacy_string_type>
-    // We removed support for pattern types with VAST v3.0.
+    // We removed support for pattern types with Tenzir v3.0.
     // | "pattern"_p   ->* type_factory<legacy_pattern_type>
     | "ip"_p        ->* type_factory<legacy_address_type>
     | "addr"_p      ->* type_factory<legacy_address_type,

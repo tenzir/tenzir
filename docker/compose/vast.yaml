@@ -2,7 +2,7 @@ version: "3"
 services:
   vast:
     # TODO: Consider switching from latest to stable by default, which offers a
-    # better user experience. We can only do this after the release of VAST v2.4
+    # better user experience. We can only do this after the release of Tenzir v2.4
     # at the earliest, which will be the first release to offer a stable tag for
     # Docker Hub.
     image: ${TENZIR_CONTAINER_REGISTRY:-docker.io}/tenzir/tenzir:${TENZIR_CONTAINER_REF:-latest}

@@ -1,6 +1,6 @@
 # -- bundled dependencies ------------------------------------------------------
 
-# TODO: VAST bundles robin-map in its aux directory, because we need at least
+# TODO: Tenzir bundles robin-map in its aux directory, because we need at least
 # 0.6.2, which is not widely available on package managers. We should
 # investigate switching to a different map, e.g., from folly or abseil.
 
@@ -54,7 +54,7 @@ file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/fbs/legacy/*.fbs")
 list(SORT flatbuffers_schemas)
 
-VASTCompileFlatBuffers(
+TenzirCompileFlatBuffers(
   TARGET libvast-fbs
   SCHEMAS ${flatbuffers_schemas}
   INCLUDE_DIRECTORY "vast/fbs/")
@@ -65,7 +65,7 @@ find_package(Arrow REQUIRED CONFIG)
 if (Arrow_VERSION_MAJOR LESS 8)
   message(
     FATAL_ERROR
-      "VAST requires at least Arrow version 8.0, but found ${ARROW_VERSION}")
+      "Tenzir requires at least Arrow version 8.0, but found ${ARROW_VERSION}")
 endif ()
 mark_as_advanced(
   BROTLI_COMMON_LIBRARY
@@ -172,11 +172,11 @@ file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/include/vast/*.hpp")
 
 add_library(libvast ${libvast_sources})
-VASTTargetEnableTooling(libvast)
+TenzirTargetEnableTooling(libvast)
 add_library(vast::libvast ALIAS libvast)
 
 add_library(libvast_builtins STATIC ${libvast_builtins_sources})
-VASTTargetEnableTooling(libvast_builtins)
+TenzirTargetEnableTooling(libvast_builtins)
 target_compile_definitions(libvast_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_target_properties(libvast_builtins PROPERTIES OUTPUT_NAME vast_builtins)
 add_library(vast::libvast_builtins ALIAS libvast_builtins)
@@ -189,7 +189,7 @@ set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
 
 # Set the libvast SOVERSION to '<256 * (major + 7) + minor>.<patch>' to indicate
 # that libvast is considered to have an unstable API and ABI. The +7 is a
-# remnant of VAST using CalVer before 2022, with the last CalVer release having
+# remnant of Tenzir using CalVer before 2022, with the last CalVer release having
 # the SOVERSION 2022.12, and it enforces that v1.0.0 has a larger SOVERSION than
 # the last CalVer release.
 math(EXPR TENZIR_SOVERSION_MAJOR
@@ -308,7 +308,7 @@ if (NOT simdjson_FOUND)
       "${CMAKE_CURRENT_BINARY_DIR}/simdjsonTargets.cmake"
       "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake"
     COMMENT "Linking simdjson targets")
-  VASTSystemizeTarget(simdjson)
+  TenzirSystemizeTarget(simdjson)
   add_dependencies(simdjson simdjson-targets-link)
   dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
                      "Dependencies")
@@ -426,7 +426,7 @@ file(
   set(TENZIR_ENABLE_ASSERTIONS \"${TENZIR_ENABLE_ASSERTIONS}\")
   set(TENZIR_ENABLE_ASAN \"${TENZIR_ENABLE_ASAN}\")
   set(TENZIR_ENABLE_UBSAN \"${TENZIR_ENABLE_UBSAN}\")
-  include(VASTVersion)
+  include(TenzirVersion)
   configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
                  \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
 
@@ -455,7 +455,7 @@ endif ()
 # the plugin unit test binaries need to be able to link against it.
 install(
   TARGETS libvast libvast_builtins ${_vast_bundled_simdjson}
-  EXPORT VASTTargets
+  EXPORT TenzirTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)

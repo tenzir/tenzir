@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -15,7 +15,7 @@ namespace vast::test {
 
 inline void reinit_vast_language(const record& config) {
   // We know that the this plugin is safe to initialize multiple times.
-  auto language_plugin = const_cast<plugin*>(plugins::find("VAST"));
+  auto language_plugin = const_cast<plugin*>(plugins::find("Tenzir"));
   REQUIRE(language_plugin);
   REQUIRE_EQUAL(language_plugin->initialize({}, config), caf::error{});
 }

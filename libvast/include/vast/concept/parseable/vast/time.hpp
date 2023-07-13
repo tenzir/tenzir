@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -122,7 +122,7 @@ namespace parsers {
 template <class Rep, class Period>
 auto const stl_duration = compound_duration_parser<Rep, Period>{};
 
-/// A parser for VASTs duration type.
+/// A parser for Tenzirs duration type.
 auto const duration = stl_duration<vast::duration::rep, vast::duration::period>;
 
 } // namespace parsers

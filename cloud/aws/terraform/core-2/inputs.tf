@@ -3,15 +3,15 @@ variable "region_name" {
 }
 
 variable "peered_vpc_id" {
-  description = "An existing VPC from which data will be collected into VAST"
+  description = "An existing VPC from which data will be collected into Tenzir"
 }
 
 variable "vast_cidr" {
-  description = "A new subnet to host VAST and other monitoring appliances"
+  description = "A new subnet to host Tenzir and other monitoring appliances"
 }
 
 variable "vast_version" {
-  description = "A VAST release version (vX.Y.Z), or 'latest' for the most recent commit on the main branch"
+  description = "A Tenzir release version (vX.Y.Z), or 'latest' for the most recent commit on the main branch"
 }
 
 variable "vast_storage_type" {
@@ -28,11 +28,11 @@ The storage type that should be used for tasks that might need persistence:
 }
 
 variable "lambda_client_image" {
-  description = "The VAST Lambda Docker image in ECR"
+  description = "The Tenzir Lambda Docker image in ECR"
 }
 
 variable "vast_server_image" {
-  description = "The VAST server Docker image in ECR"
+  description = "The Tenzir server Docker image in ECR"
 }
 
 locals {

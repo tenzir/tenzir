@@ -3,11 +3,11 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2019 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 // Most of the actual implementation in this file comes from a 3rd party and
-// has been adapted to fit into the VAST code base. Details about the original
+// has been adapted to fit into the Tenzir code base. Details about the original
 // file:
 //
 // - Repository: https://github.com/kerukuro/digestpp

@@ -8,7 +8,7 @@ logger = pyvast.utils.logging.get(__name__)
 
 
 class CLI:
-    """A command-line wrapper for the VAST executable."""
+    """A command-line wrapper for the Tenzir executable."""
 
     @staticmethod
     def arguments(**kwargs) -> list[str]:

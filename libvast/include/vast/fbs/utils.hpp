@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -126,7 +126,7 @@ wrap(T const& x, const char* file_identifier = nullptr) {
 
 /// Unwraps a flatbuffer into an object. This function requires existence of an
 /// overload `unpack(const T&, const U&` where `T` is a generated flatbuffer
-/// type and `U` the VAST type.
+/// type and `U` the Tenzir type.
 /// @param xs The byte buffer that contains the flatbuffer.
 /// @param x The object to unpack *xs* into.
 /// @returns An error iff the operation failed.

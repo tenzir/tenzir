@@ -23,7 +23,7 @@ class ExportMode(Enum):
 
 
 class TableSlice(ABC):
-    """The VAST abstraction wrapping Arrow record batches"""
+    """The Tenzir abstraction wrapping Arrow record batches"""
 
 
 class PyArrowTableSlice(TableSlice):
@@ -74,8 +74,8 @@ class AsyncRecordBatchStreamReader:
         return value
 
 
-class VAST:
-    """An instance of a VAST node."""
+class Tenzir:
+    """An instance of a Tenzir node."""
 
     def __init__(self, endpoint=None):
         cli_kwargs = {"endpoint": endpoint} if endpoint else {}
@@ -101,10 +101,10 @@ class VAST:
         mode: ExportMode = ExportMode.HISTORICAL,
         limit: int = 100,
     ) -> AsyncIterable[TableSlice]:
-        """Executes a VAST and receives results as Arrow Tables."""
+        """Executes a Tenzir and receives results as Arrow Tables."""
         if limit == 0:
             return
-        cmd = self.cli.export(**VAST._export_args(mode, limit))
+        cmd = self.cli.export(**Tenzir._export_args(mode, limit))
         if expression == "":
             cmd = cmd.arrow()
         else:
@@ -125,7 +125,7 @@ class VAST:
         t = asyncio.create_task(asyncio.to_thread(log))
 
         try:
-            # VAST concatenates IPC streams for different types so we need to
+            # Tenzir concatenates IPC streams for different types so we need to
             # spawn multiple stream readers
             while True:
                 logger.debug("starting new record batch stream")
@@ -165,19 +165,19 @@ class VAST:
             else:
                 duration = time.time() - start
                 if duration > timeout:
-                    msg = f"VAST status failed with code {proc.returncode}"
+                    msg = f"Tenzir status failed with code {proc.returncode}"
                     raise Exception(msg)
                 await asyncio.sleep(retry_delay)
 
     async def count(self, *args, **kwargs) -> int:
         """
-        Executes the VAST count command and return the response number.
+        Executes the Tenzir count command and return the response number.
         Examples: `count()`, `count("#schema == /suricata.alert/", estimate=True)`.
         """
         proc = await self.cli.count(*args, **kwargs).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
         if proc.returncode != 0:
-            msg = f"VAST count failed with code {proc.returncode}"
+            msg = f"Tenzir count failed with code {proc.returncode}"
             raise Exception(msg)
         return int(stdout.decode("utf-8"))

@@ -1,4 +1,4 @@
-"""Stream data from AWS Cloudtrail to VAST"""
+"""Stream data from AWS Cloudtrail to Tenzir"""
 import dynaconf
 
 

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -100,7 +100,7 @@ protected:
   bloom_filter<HashFunction> bloom_filter_;
 };
 
-// Because VAST deserializes a synopsis with empty options and
+// Because Tenzir deserializes a synopsis with empty options and
 // construction of an address synopsis fails without any sizing
 // information, we augment the type with the synopsis options.
 

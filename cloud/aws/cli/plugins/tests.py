@@ -49,7 +49,7 @@ def clean(c):
 
 def start_vast(c):
     """Start the server, noop if already running"""
-    print("Start VAST Server")
+    print("Start Tenzir Server")
     c.run("./vast-cloud vast.start-server")
     # wait a sec to be sure the vast server is running
     time.sleep(1)
@@ -76,13 +76,13 @@ class VastCloudTestLoader(unittest.TestLoader):
 
 class VastStartRestart(unittest.TestCase):
     def test(self):
-        """Validate VAST server start and restart commands"""
+        """Validate Tenzir server start and restart commands"""
         print("Run vast.start-server")
         start_out = self.c.run("./vast-cloud vast.start-server", hide="out").stdout
         # We don't assert intermediate statuses, the server might be already running
         self.assertIn("-> RUNNING", start_out)
 
-        print("VAST server status")
+        print("Tenzir server status")
         status_out = self.c.run("./vast-cloud vast.server-status", hide="out").stdout
         self.assertEqual("Service running", status_out.strip())
 
@@ -103,14 +103,14 @@ class VastStartRestart(unittest.TestCase):
         self.assertIn("-> ACTIVATING", restart_out)
         self.assertIn("-> RUNNING", restart_out)
 
-        print("VAST server status")
+        print("Tenzir server status")
         status_out = self.c.run("./vast-cloud vast.server-status", hide="out").stdout
         self.assertEqual("Service running", status_out.strip())
 
 
 class LambdaOutput(unittest.TestCase):
     def test(self):
-        """Validate VAST server start and restart commands"""
+        """Validate Tenzir server start and restart commands"""
         print("Running successful command")
         success = self.c.run(
             "./vast-cloud vast.lambda-client -c 'echo hello' -e VAR1=val1", hide="out"
@@ -185,7 +185,7 @@ class VastDataImport(unittest.TestCase):
 
     def test(self):
         """Import data from a file and check count increase"""
-        print("Import data into VAST")
+        print("Import data into Tenzir")
         init_count = self.vast_count()
         vast_import_suricata(self.c)
         new_count = self.vast_count()
@@ -393,7 +393,7 @@ def run(c, case=[]):
     """Run the tests, either inidividually or in bulk
 
     Notes:
-    - VAST needs to be deployed beforehand with the workbucket plugin
+    - Tenzir needs to be deployed beforehand with the workbucket plugin
     - These tests will affect the state of the current stack"""
     mod = sys.modules[__name__]
     if len(case) == 0:

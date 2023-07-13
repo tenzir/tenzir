@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/plugin.hpp"
@@ -267,7 +267,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
   std::unordered_set<std::string> disabled_plugins;
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
-    // First, try to read the configurations from the merged VAST configuration.
+    // First, try to read the configurations from the merged Tenzir configuration.
     if (plugins_record.contains(plugin->name())) {
       if (auto* plugins_entry
           = caf::get_if<record>(&plugins_record.at(plugin->name()))) {

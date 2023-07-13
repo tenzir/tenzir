@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -16,7 +16,7 @@ namespace vast {
 /// The default hash algorithm.
 using default_hash = xxh3_64;
 
-// To avoid performance regression, the default hash algorithm in VAST must
+// To avoid performance regression, the default hash algorithm in Tenzir must
 // support both incremental and oneshot hashing.
 static_assert(oneshot_hash<default_hash> && incremental_hash<default_hash>);
 

@@ -1,4 +1,4 @@
-"""Stream data from VPC Flowlogs to VAST"""
+"""Stream data from VPC Flowlogs to Tenzir"""
 import dynaconf
 
 

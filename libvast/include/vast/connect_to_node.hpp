@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -34,7 +34,7 @@ auto get_deadline(caf::timespan timeout)
 
 } // namespace details
 
-/// Connects to a remote VAST server.
+/// Connects to a remote Tenzir server.
 auto connect_to_node(caf::scoped_actor& self, const caf::settings& opts)
   -> caf::expected<node_actor>;
 

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/active_partition.hpp"
@@ -142,7 +142,7 @@ void serialize(
   // Since the synopsis should be small compared to the actual data,
   // we store a redundant copy in the partition itself so we can
   // regenerate the synopses as needed. This also means we don't
-  // need to handle errors here, since VAST can still start
+  // need to handle errors here, since Tenzir can still start
   // correctly (if a bit slower) when the write fails.
   if (auto ps_chunk
       = serialize_partition_synopsis(*self->state.data.synopsis)) {

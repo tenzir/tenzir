@@ -8,13 +8,13 @@
   ARROW:extension:metadata: 'tenzir.ip'
   ARROW:extension:name: 'tenzir.ip'
   ARROW:extension:name: 'tenzir.ip'
-  VAST:attributes:0: '{ "index": "hash" }'
-  VAST:name:0: 'port'
-  VAST:name:0: 'port'
-  VAST:name:0: 'timestamp'
+  Tenzir:attributes:0: '{ "index": "hash" }'
+  Tenzir:name:0: 'port'
+  Tenzir:name:0: 'port'
+  Tenzir:name:0: 'timestamp'
   child 0, item: string
 -- schema metadata --
-VAST:name:0: 'zeek.conn'
+Tenzir:name:0: 'zeek.conn'
 conn_state: string
 done with all readers
 done with current reader, rows: 10

@@ -58,7 +58,7 @@ async def collect_pyarrow(
 class VastRow:
     """A row wise representation of the data and metadata
 
-    - name: the VAST type for the row
+    - name: the Tenzir type for the row
     - data: the event data contained in the row"""
 
     name: str

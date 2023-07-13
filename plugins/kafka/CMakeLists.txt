@@ -7,12 +7,12 @@ project(
 
 include(CTest)
 
-find_package(VAST REQUIRED)
+find_package(Tenzir REQUIRED)
 
 file(GLOB_RECURSE kafka_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
-VASTRegisterPlugin(
+TenzirRegisterPlugin(
   TARGET kafka
   ENTRYPOINT src/plugin.cpp
   SOURCES ${kafka_sources}

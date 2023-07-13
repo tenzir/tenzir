@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -28,7 +28,7 @@ using map = detail::stable_map<data, data>;
 /// Maps field names to data elements.
 using record = detail::stable_map<std::string, data>;
 
-/// Uniquely identifies a VAST event.
+/// Uniquely identifies a Tenzir event.
 using id = uint64_t;
 
 /// The ID for invalid events

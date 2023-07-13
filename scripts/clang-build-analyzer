@@ -16,7 +16,7 @@ trap '{
 WORKING_DIR=$(mktemp -d)
 on_exit=('rm -rf ${WORKING_DIR}' "${on_exit[@]}")
 
-# Setup VAST in a temporary worktree
+# Setup Tenzir in a temporary worktree
 git -c submodule.recurse= worktree add "${WORKING_DIR}"
 on_exit=('git worktree remove --force ${WORKING_DIR}' "${on_exit[@]}")
 
@@ -36,7 +36,7 @@ git diff | git -C "${WORKING_DIR}" apply
 : ${CC:=clang}
 : ${CXX:=clang++}
 
-# Configure VAST to build with time-traces enabled
+# Configure Tenzir to build with time-traces enabled
 pushd "${WORKING_DIR}"
 on_exit=('popd' "${on_exit[@]}")
 cmake "${@}" -B "${WORKING_DIR}/build" \

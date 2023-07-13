@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2019 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -53,7 +53,7 @@ public:
   /// @param slice The encoding-specific FlatBuffers table.
   /// @param parent The surrounding chunk.
   /// @param batch A pre-existing record batch.
-  /// @param schema VAST schema matching the record batch schema. Parameter
+  /// @param schema Tenzir schema matching the record batch schema. Parameter
   ///     is optional and derived from the record batch if set to none.
   arrow_table_slice(const FlatBuffer& slice, const chunk_ptr& parent,
                     const std::shared_ptr<arrow::RecordBatch>& batch,
@@ -131,7 +131,7 @@ private:
 
 // -- utility functions -------------------------------------------------------
 
-/// Access a VAST data view for a given row in an Arrow Array.
+/// Access a Tenzir data view for a given row in an Arrow Array.
 data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
                    int64_t row) noexcept;
 
@@ -298,7 +298,7 @@ data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
   return caf::visit(f, type);
 }
 
-/// Access VAST data views for all elements of an Arrow Array.
+/// Access Tenzir data views for all elements of an Arrow Array.
 auto values(const type& type,
             const std::same_as<arrow::Array> auto& array) noexcept
   -> generator<data_view>;
@@ -360,8 +360,8 @@ struct indexed_transformation {
   }
 };
 
-/// Applies a list of transformations to both a VAST schema and an Arrow struct
-/// array.
+/// Applies a list of transformations to both a Tenzir schema and an Arrow
+/// struct array.
 /// @pre Transformations must be sorted by index.
 /// @pre Transformation indices must not be a subset of the following
 /// transformation's index.
@@ -377,9 +377,9 @@ table_slice transform_columns(
   const table_slice& slice,
   const std::vector<indexed_transformation>& transformations) noexcept;
 
-/// Remove all unspecified columns from both a VAST schema and an Arrow record
+/// Remove all unspecified columns from both a Tenzir schema and an Arrow record
 /// batch.
-/// @pre VAST schema and Arrow schema must match.
+/// @pre Tenzir schema and Arrow schema must match.
 /// @pre Indices must be sorted.
 /// @pre Indices must not be a subset of the following index.
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>

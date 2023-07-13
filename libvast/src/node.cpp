@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/node.hpp"
@@ -394,7 +394,7 @@ node_state::spawn_command(const invocation& inv,
   }
   TENZIR_DEBUG("{} spawns a {} with the label {}", *self, comp_type, label);
   auto spawn_inv = inv;
-  // Spawn our new VAST component.
+  // Spawn our new Tenzir component.
   spawn_arguments args{spawn_inv, self->state.dir, label};
   auto component = spawn_component(self, args.inv, args);
   if (!component) {

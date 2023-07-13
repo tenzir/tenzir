@@ -1,4 +1,4 @@
-name: VAST
+name: Tenzir
 on:
   workflow_dispatch:
     inputs:
@@ -19,7 +19,7 @@ on:
     types:
       - published
 
-# This section defines how the VAST action is enqueued.
+# This section defines how the Tenzir action is enqueued.
 concurrency:
   # Wait for in-progress runs of this action for the same branch to finish
   # before starting, ensuring that a branch is only built once at a time. This
@@ -100,7 +100,7 @@ jobs:
       - name: Configure
         id: configure
         run: |
-          # Create a matrix with VAST versions greater or equal than
+          # Create a matrix with Tenzir versions greater or equal than
           # limit_version. If the version does not exist yet (e.g., because of
           # an intentional break, only check latest).
           limit_version=v4.0.0
@@ -223,7 +223,7 @@ jobs:
           TENZIR_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ schema/ tools/ vast/ tenzir.yaml.example version.json)
           run_if_changed vast "${TENZIR_SOURCES[@]}"
           run_if_changed_default tenzir-plugins $run_vast "plugins/" "contrib/tenzir-plugins/"
-          # The tenzir-plugins job downloads the VAST artifact from GCS, so we
+          # The tenzir-plugins job downloads the Tenzir artifact from GCS, so we
           # need to run the vast job in case it is missing.
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
             deb_package="$(echo "vast-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
@@ -514,7 +514,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run VAST Tests
+      - name: Run Tenzir Tests
         run: |
           docker/test
 
@@ -523,7 +523,7 @@ jobs:
       - docker-vast
       - configure
     if: ${{ needs.configure.outputs.run-vast-thehive-app == 'true' }}
-    name: VAST TheHive App
+    name: Tenzir TheHive App
     runs-on: ubuntu-20.04
     env:
       DOCKER_BUILDKIT: 1
@@ -547,7 +547,7 @@ jobs:
           # TheHive likes to fail to start up, so for now the test is intentionally
           # disabled.
           docker/thehive/vast-cortex-neuron/tests/run service && docker/thehive/test ||
-            echo "::warning title=VAST TheHive App test failure::Test failed, check logs for details"
+            echo "::warning title=Tenzir TheHive App test failure::Test failed, check logs for details"
 
   example-notebooks:
     needs:
@@ -591,7 +591,7 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-vast == 'true' }}
-    name: VAST (${{ matrix.vast.name }})
+    name: Tenzir (${{ matrix.vast.name }})
     runs-on: ${{ matrix.vast.os }}
     container: ${{ matrix.vast.container }}
     strategy:
@@ -816,7 +816,7 @@ jobs:
             path: contrib/tenzir-plugins/netflow
           # The pipeline manager integration tests require that the web
           # plugin exists, which is why we're building the web plugin
-          # already in the main VAST job.
+          # already in the main Tenzir job.
           - name: Pipeline Manager
             target: pipeline-manager
             path: contrib/tenzir-plugins/pipeline_manager
@@ -852,7 +852,7 @@ jobs:
       HOMEBREW_NO_ANALYTICS: 1
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       HOMEBREW_NO_AUTO_UPDATE: 1
-    name: VAST Plugins (${{ matrix.plugin.name }}, ${{ matrix.setup.name }})
+    name: Tenzir Plugins (${{ matrix.plugin.name }}, ${{ matrix.setup.name }})
     steps:
       - name: Install git, curl, jq (Debian)
         if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
@@ -897,7 +897,7 @@ jobs:
             apt-transport-https \
             curl
           ./scripts/debian/install-dev-dependencies.sh
-      - name: Determine VAST Package Name
+      - name: Determine Tenzir Package Name
         id: configure
         run: |
           build_version=${{ needs.configure.outputs.build-version }}
@@ -906,7 +906,7 @@ jobs:
           fi
           PACKAGE_NAME="$(echo "vast-${build_version}-$(uname -s)-${PACKAGE_SUFFIX}" | awk '{ print tolower($0) }')"
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-      - name: Download VAST artifact
+      - name: Download Tenzir artifact
         if: ${{ needs.configure.outputs.run-vast == 'true' }}
         uses: actions/download-artifact@v3
         with:
@@ -920,11 +920,11 @@ jobs:
       - name: Configure GCloud Credentials
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
         uses: google-github-actions/setup-gcloud@v1
-      - name: Download VAST
+      - name: Download Tenzir
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
         run: |
           gsutil cp "gs://${{ vars.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz" .
-      - name: Install VAST
+      - name: Install Tenzir
         run: |
           mkdir "${INSTALL_DIR}"
           tar -C "${INSTALL_DIR}" -xzvf "${PACKAGE_NAME}.tar.gz"

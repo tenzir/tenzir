@@ -33,7 +33,7 @@ table LegacyPartition {
   /// The UUID of this partition.
   uuid: LegacyUUID;
 
-  /// The first ID in the partition. Removed in VAST v3.0.
+  /// The first ID in the partition. Removed in Tenzir v3.0.
   offset: uint64 (deprecated);
 
   /// The number of contained events.
@@ -69,7 +69,7 @@ union Partition {
 
 namespace vast.fbs;
 
-// Up to VAST 2.3 the partition files on disk contained a `Partition`
+// Up to Tenzir 2.3 the partition files on disk contained a `Partition`
 // as root type, after 2.3 a `SegmentedFileHeader` is the root type
 // and the total file has the following schema:
 //

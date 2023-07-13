@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/config.hpp"
@@ -26,15 +26,15 @@ support_for_partition_version(uint64_t partition_version) noexcept {
     = std::array<supported_versions, @TENZIR_PARTITION_VERSION@ +1>{
       // Partition version 0 was introduced implicitly; it's used when no
       // partition version was specified.
-      supported_versions{"VAST v1.0", "VAST v2.4"},
+      supported_versions{"Tenzir v1.0", "Tenzir v2.4"},
       // Alongside partition version 1 we introduced homogeneous partitions and
       // the rebuilder, and required table slices to be of the arrow.v2 encoding
       // in their FlatBuffers table.
-      supported_versions{"VAST v2.2", std::nullopt},
+      supported_versions{"Tenzir v2.2", std::nullopt},
       // Partition version 2 was introduced along the removal of the ability to
       // write new segment stores, switching all stores to be Feather or
       // Parquet.
-      supported_versions{"VAST v2.4", std::nullopt},
+      supported_versions{"Tenzir v2.4", std::nullopt},
     };
   if (partition_version >= table.size())
     die("unsupported partition version");

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -80,8 +80,8 @@ get_static_type_id_blocks() noexcept;
 
 /// Load plugins specified in the configuration.
 /// @param bundled_plugins The names of the bundled plugins.
-/// @param cfg The actor system configuration of VAST for registering additional
-/// type ID blocks.
+/// @param cfg The actor system configuration of Tenzir for registering
+/// additional type ID blocks.
 /// @returns A list of paths to the loaded plugins, or an error detailing what
 /// went wrong.
 /// @note Invoke exactly once before \ref get() may be used.
@@ -117,8 +117,8 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param plugin_config The relevant subsection of the configuration.
-  /// @param global_config The entire VAST configuration for potential access to
-  /// global options.
+  /// @param global_config The entire Tenzir configuration for potential access
+  /// to global options.
   [[nodiscard]] virtual auto
   initialize(const record& plugin_config, const record& global_config)
     -> caf::error {
@@ -198,7 +198,7 @@ private:
 class command_plugin : public virtual plugin {
 public:
   /// Creates additional commands.
-  /// @note VAST calls this function before initializing the plugin, which
+  /// @note Tenzir calls this function before initializing the plugin, which
   /// means that this function cannot depend on any plugin state. The logger
   /// is unavailable when this function is called.
   [[nodiscard]] virtual std::pair<std::unique_ptr<command>, command::factory>
@@ -590,7 +590,7 @@ public:
 
 // -- language plugin ---------------------------------------------------
 
-/// A language parser to pass query in a custom language to VAST.
+/// A language parser to pass query in a custom language to Tenzir.
 /// @relates plugin
 class language_plugin : public virtual plugin {
 public:

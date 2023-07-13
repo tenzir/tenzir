@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -19,7 +19,7 @@
 
 namespace vast {
 
-/// VAST's error codes.
+/// Tenzir's error codes.
 enum class ec : uint8_t {
   /// No error.
   no_error = 0,

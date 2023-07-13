@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "web/server_command.hpp"
@@ -123,13 +123,13 @@ PipelineInfo:
     {"openapi", "3.0.0"},
     {"info",
      record{
-       {"title", "VAST Rest API"},
+       {"title", "Tenzir Rest API"},
        {"version", "\"0.1\""},
        {"description", R"_(
-This API can be used to interact with a VAST Node in a RESTful manner.
+This API can be used to interact with a Tenzir Node in a RESTful manner.
 
 All API requests must be authenticated with a valid token, which must be
-supplied in the `X-VAST-Token` request header. The token can be generated
+supplied in the `X-Tenzir-Token` request header. The token can be generated
 on the command-line using the `vast rest generate-token` command.)_"},
      }},
     {"servers", list{{
@@ -144,7 +144,7 @@ on the command-line using the `vast rest generate-token` command.)_"},
         record{{"VastToken", record {
             {"type", "apiKey"},
             {"in", "header"},
-            {"name", "X-VAST-Token"}
+            {"name", "X-Tenzir-Token"}
         }}}},
     }},
     {"paths", std::move(paths)},

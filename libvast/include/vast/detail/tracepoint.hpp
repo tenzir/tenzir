@@ -3,10 +3,10 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-// This file comes from a 3rd party and has been adapted to fit into the VAST
+// This file comes from a 3rd party and has been adapted to fit into the Tenzir
 // code base. Details about the original file:
 //
 // - Repository:       https://github.com/facebook/folly

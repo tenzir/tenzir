@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/type.hpp"
@@ -209,8 +209,8 @@ void construct_record_type(stateful_type_base& self, const T& begin,
   self = type{std::move(chunk)};
 }
 
-/// Enhances a VAST type based on the metadata extracted from Arrow.
-/// Metadata can be attached to both Arrow schema and an Arrow field, and VAST
+/// Enhances a Tenzir type based on the metadata extracted from Arrow.
+/// Metadata can be attached to both Arrow schema and an Arrow field, and Tenzir
 /// stores metadata on either of the two, using the exact same structure.
 type enrich_type_with_arrow_metadata(class type type,
                                      const arrow::KeyValueMetadata& metadata) {
@@ -236,7 +236,7 @@ type enrich_type_with_arrow_metadata(class type type,
   auto names_and_attributes = std::vector<
     std::pair<std::string, std::vector<std::pair<std::string, std::string>>>>{};
   using namespace parser_literals;
-  auto prefix_parser = "VAST:"_p | "TENZIR:";
+  auto prefix_parser = "Tenzir:"_p | "TENZIR:";
   auto name_parser = prefix_parser >> "name:" >> parsers::u32 >> parsers::eoi;
   auto attribute_parser
     = prefix_parser >> "attributes:" >> parsers::u32 >> parsers::eoi;

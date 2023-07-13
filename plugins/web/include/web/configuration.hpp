@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -93,7 +93,7 @@ public:
   std::optional<std::string> cors_allowed_origin = {};
 
   /// Additional headers to be inserted into every server response.
-  //  (eg. 'Server: VAST 2.4', ...)
+  //  (eg. 'Server: Tenzir 2.4', ...)
   std::unordered_map<std::string, std::string> response_headers;
 
   /// The path from which to serve static files.

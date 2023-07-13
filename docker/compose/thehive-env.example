@@ -1,4 +1,4 @@
-# Base image settings for the VAST Cortex Neuron
+# Base image settings for the Tenzir Cortex Neuron
 TENZIR_CONTAINER_REGISTRY=docker.io
 TENZIR_CONTAINER_REF=latest
 

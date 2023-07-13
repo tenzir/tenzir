@@ -1,4 +1,4 @@
-from pyvast import VAST, ExportMode, collect_pyarrow, to_json_rows, VastRow
+from pyvast import Tenzir, ExportMode, collect_pyarrow, to_json_rows, VastRow
 import pyvast.utils.logging
 import pyvast.utils.asyncio
 import asyncio
@@ -10,7 +10,7 @@ import shutil
 logger = pyvast.utils.logging.get("vast.test")
 
 if "TENZIR_PYTHON_INTEGRATION" not in os.environ:
-    # Tests in this module require access to integration test files and the VAST binary
+    # Tests in this module require access to integration test files and the Tenzir binary
     pytest.skip(
         "TENZIR_PYTHON_INTEGRATION not defined, skipping vast tests",
         allow_module_level=True,
@@ -70,7 +70,7 @@ def integration_data(path):
 
 @pytest.mark.asyncio
 async def test_count(endpoint):
-    vast = VAST(endpoint)
+    vast = Tenzir(endpoint)
     result = await vast.count()
     assert result == 0
     await vast_import(
@@ -85,7 +85,7 @@ async def test_export_collect_pyarrow(endpoint):
     await vast_import(
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
-    vast = VAST(endpoint)
+    vast = Tenzir(endpoint)
     result = vast.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
     tables = await collect_pyarrow(result)
     assert set(tables.keys()) == {"suricata.alert"}
@@ -112,7 +112,7 @@ async def test_export_historical_rows(endpoint):
     await vast_import(
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
-    vast = VAST(endpoint)
+    vast = Tenzir(endpoint)
     result = vast.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
     rows: list[VastRow] = []
     async for row in to_json_rows(result):
@@ -127,7 +127,7 @@ async def test_export_historical_rows(endpoint):
 
 @pytest.mark.asyncio
 async def test_export_continuous_rows(endpoint):
-    vast = VAST(endpoint)
+    vast = Tenzir(endpoint)
 
     async def run_export():
         result = vast.export('#schema == "suricata.alert"', ExportMode.CONTINUOUS)

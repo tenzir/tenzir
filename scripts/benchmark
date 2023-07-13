@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# This script facilitates benchmarking of VAST.
+# This script facilitates benchmarking of Tenzir.
 #
 
 # Static defaults.
@@ -21,7 +21,7 @@ usage() {
   printf "usage: %s [options] <input...>\n" $(basename $0)
   echo
   echo 'common options:'
-  echo "    -d <dir>        VAST directory [$(pwd)/tag/vast]"
+  echo "    -d <dir>        Tenzir directory [$(pwd)/tag/vast]"
   echo "    -f              SOURCE/SINK format"
   echo "    -h|-?           display this help"
   echo "    -m              mode (either 'import' or 'export') [$mode]"
@@ -30,7 +30,7 @@ usage() {
   echo "    -t              wrap invocation in time(1)"
   echo
   echo 'import options:'
-  echo "    -l              keep only the logs and delete the VAST directory"
+  echo "    -l              keep only the logs and delete the Tenzir directory"
   echo
   echo 'export options:'
   echo "    -q              query label (defaults to full query expression)"
@@ -143,7 +143,7 @@ process_time='{ \
     print $1 "\t" substr($0, index($0,$2)); \
 }'
 
-# Awk script to post-process log output of VAST to generate labels for caf-prof.
+# Awk script to post-process log output of Tenzir to generate labels for caf-prof.
 process_labels='/spawned/ { \
   split($4, x, /#/); \
   if (x[2] != "") \

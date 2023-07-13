@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2019 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -80,7 +80,7 @@ public:
   /// Creates a table slice from a record batch.
   /// @pre `record_batch->schema()->Equals(make_experimental_schema(schema))``
   /// @param batch A pre-existing record batch.
-  /// @param schema VAST schema matching the record batch schema. Parameter
+  /// @param schema Tenzir schema matching the record batch schema. Parameter
   ///     is optional and derived from the record batch if not provided.
   [[nodiscard]] table_slice static create(
     const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema = {},
@@ -103,7 +103,7 @@ public:
 private:
   // -- implementation details -------------------------------------------------
 
-  // The VAST schema this builder was created from.
+  // The Tenzir schema this builder was created from.
   type schema_;
 
   /// A flattened representation of the schema that is iterated over when

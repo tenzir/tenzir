@@ -3,14 +3,14 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 // This program exists so we have a single process that executes all unit and
-// integration tests (for VAST and for its bundled plugins) for use in the CMake
-// target `ccov` for generating a unified code coverage report. To build this
-// file, configure VAST with `-D TENZIR_ENABLE_CODE_COVERAGE=ON` and build the
-// CMake target `all-tests`.
+// integration tests (for Tenzir and for its bundled plugins) for use in the
+// CMake target `ccov` for generating a unified code coverage report. To build
+// this file, configure Tenzir with `-D TENZIR_ENABLE_CODE_COVERAGE=ON` and
+// build the CMake target `all-tests`.
 
 #include <stdio.h>
 #include <stdlib.h>

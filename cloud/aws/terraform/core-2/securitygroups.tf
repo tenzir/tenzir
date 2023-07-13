@@ -14,7 +14,7 @@ resource "aws_security_group" "vast_client" {
 
 resource "aws_security_group" "vast_server" {
   name        = "${module.env.module_name}-vast_server-${module.env.stage}"
-  description = "Allow access from VAST Lambda and allow all outbound traffic"
+  description = "Allow access from Tenzir Lambda and allow all outbound traffic"
   vpc_id      = module.network.new_vpc_id
 
   ingress {

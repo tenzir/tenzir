@@ -21,10 +21,10 @@ list(SORT test_headers)
 
 # Add vast-test executable.
 add_executable(vast-test ${test_sources} ${test_headers})
-VASTTargetEnableTooling(vast-test)
+TenzirTargetEnableTooling(vast-test)
 target_link_libraries(vast-test PRIVATE vast::test vast::libvast vast::internal
                                         ${CMAKE_THREAD_LIBS_INIT})
-VASTTargetLinkWholeArchive(vast-test PRIVATE vast::libvast_builtins)
+TenzirTargetLinkWholeArchive(vast-test PRIVATE vast::libvast_builtins)
 
 add_test(NAME build-vast-test
          COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config

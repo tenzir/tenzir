@@ -1,12 +1,12 @@
 ---
-title: VAST Commands
+title: Tenzir Commands
 authors: rdettai
 date: 2022-09-15
-tags: [example, VAST]
+tags: [example, Tenzir]
 error: true
 ---
 
-We run `vast status` to check if we can reach the server. It is kind of the VAST
+We run `vast status` to check if we can reach the server. It is kind of the Tenzir
 hello world!
 
 ```{bash}

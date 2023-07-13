@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/passive_partition.hpp"
@@ -277,8 +277,8 @@ partition_chunk::get_flatbuffer(vast::chunk_ptr chunk) {
 
 caf::error
 passive_partition_state::initialize_from_chunk(const vast::chunk_ptr& chunk) {
-  // For partitions written prior to VAST 2.3, the chunk contains the partition
-  // as top-level flatbuffer.
+  // For partitions written prior to Tenzir 2.3, the chunk contains the
+  // partition as top-level flatbuffer.
   if (flatbuffers::BufferHasIdentifier(chunk->data(),
                                        fbs::PartitionIdentifier())) {
     // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'

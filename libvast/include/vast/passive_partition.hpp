@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -130,8 +130,8 @@ unpack(const fbs::partition::LegacyPartition&, partition_synopsis&);
 
 /// Get various parts of a passive partition from a chunk containing a partition
 /// file. These functions hide the differences of the underlying file formats
-/// used by different VAST versions. They are also a stop-gap until we introduce
-/// a dedicated class to wrap a partition flatbuffer.
+/// used by different Tenzir versions. They are also a stop-gap until we
+/// introduce a dedicated class to wrap a partition flatbuffer.
 struct partition_chunk {
   static caf::expected<const vast::fbs::Partition*>
     get_flatbuffer(vast::chunk_ptr);

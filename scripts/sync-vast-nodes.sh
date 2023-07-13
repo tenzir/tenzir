@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# A script to synchronize two VAST instances, possibly with an assoicated query
+# A script to synchronize two Tenzir instances, possibly with an assoicated query
 # for selectively synchronizing based on specific properties or types
 #
 # Usage examples:
@@ -10,9 +10,9 @@
 # Arguments
 #   query: e.g. "#schema == \"suricata.alert\"" - mind the quotes; can be empty ""
 #   seconds - sync interval in seconds - default 5
-#   VAST endpoint of source - default :5158
-#   VAST endpoint of sink   - default :5160
-#   path to VAST binary     - default `vast` (must be in path)
+#   Tenzir endpoint of source - default :5158
+#   Tenzir endpoint of sink   - default :5160
+#   path to Tenzir binary     - default `vast` (must be in path)
 
 TS_FILE="last_queried.ts"
 

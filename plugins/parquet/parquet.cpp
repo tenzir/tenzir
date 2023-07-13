@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_compat.hpp>
@@ -191,8 +191,8 @@ align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
   return caf::visit(f, t);
 }
 
-/// Transform a given `ChunkedArray` according to the provided VAST type
-/// `ChunkedArray`s only occur at the outermost level, and the VAST type
+/// Transform a given `ChunkedArray` according to the provided Tenzir type
+/// `ChunkedArray`s only occur at the outermost level, and the Tenzir type
 /// that is not properly represented at this level is `enumeration_type`.
 std::shared_ptr<arrow::ChunkedArray>
 restore_enum_chunk_array(const vast::type& t,
@@ -247,7 +247,7 @@ auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
 
 /// Extract event column from record batch and transform into new record batch.
 /// The record batch contains a message envelope with the actual event data
-/// alongside VAST-related meta data (currently limited to the import time).
+/// alongside Tenzir-related meta data (currently limited to the import time).
 /// Message envelope is unwrapped and the metadata, attached to the to-level
 /// schema the input record batch is copied to the newly created record batch.
 std::shared_ptr<arrow::RecordBatch>

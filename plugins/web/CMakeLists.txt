@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18...3.24 FATAL_ERROR)
 
 project(
   web
-  DESCRIPTION "Web plugin for VAST"
+  DESCRIPTION "Web plugin for Tenzir"
   LANGUAGES CXX)
 
 include(FeatureSummary)
@@ -15,9 +15,9 @@ file(GLOB_RECURSE web_sources CONFIGURE_DEPENDS
 file(GLOB_RECURSE web_tests CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
 
-find_package(VAST REQUIRED)
+find_package(Tenzir REQUIRED)
 
-VASTRegisterPlugin(
+TenzirRegisterPlugin(
   TARGET web
   ENTRYPOINT src/plugin.cpp
   SOURCES ${web_sources}
@@ -50,7 +50,7 @@ target_link_libraries(web PRIVATE restinio::restinio)
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/fbs/*.fbs")
 
-VASTCompileFlatBuffers(
+TenzirCompileFlatBuffers(
   TARGET web-fbs
   SCHEMAS ${flatbuffers_schemas}
   INCLUDE_DIRECTORY "web/fbs")

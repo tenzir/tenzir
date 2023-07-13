@@ -172,9 +172,9 @@ def init_cortex():
     retry_until_timeout(call, "Cortex set orgadmin password", 30)
 
     call = lambda: call_cortex(
-        "/api/organization/analyzer/VAST-Search_1_0",
+        "/api/organization/analyzer/Tenzir-Search_1_0",
         {
-            "name": "VAST-Search_1_0",
+            "name": "Tenzir-Search_1_0",
             "configuration": {
                 "endpoint": TENZIR_ENDPOINT,
                 "max_events": 40,

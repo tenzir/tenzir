@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2018 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/application.hpp"
@@ -93,10 +93,10 @@ void add_root_opts(command& cmd) {
                                "data");
   cmd.options.add<std::string>("?tenzir", "connection-timeout",
                                "the timeout for connecting to "
-                               "a VAST server (default: 5m)");
+                               "a Tenzir server (default: 5m)");
   cmd.options.add<std::string>("?tenzir", "connection-retry-delay",
                                "the delay between vast node connection attempts"
-                               "a VAST server (default: 3s)");
+                               "a Tenzir server (default: 3s)");
   cmd.options.add<int64_t>("?tenzir", "max-partition-size",
                            "maximum number of events in a "
                            "partition");
@@ -384,7 +384,8 @@ make_application(std::string_view path) {
     };
   }
   if (name == "vast") {
-    fmt::print(stderr, fmt::emphasis::bold, "\nVAST is now called Tenzir.\n\n");
+    fmt::print(stderr, fmt::emphasis::bold,
+               "\nTenzir is now called Tenzir.\n\n");
     fmt::print(stderr, "For more information, see the announcement at ");
     fmt::print(stderr, fmt::emphasis::underline,
                "https://docs.tenzir.com/blog/vast-to-tenzir");

@@ -36,7 +36,7 @@ Example queries:
 -       | vaststats "'Evil' in :string"
 -       | vaststats "&time < now" -e 5000 -n 127.0.0.1:5158
   
-Note: Splunk "eats" double quotes when parsing input, so the VAST query
+Note: Splunk "eats" double quotes when parsing input, so the Tenzir query
 requires replacing double with single quotes and vice versa.
   
 CAVEATS:
@@ -151,7 +151,7 @@ def printHelp(parser):
 
 opt, remainder = parser.parse_args()
 if len(remainder) == 1:
-  # Splunk eats double quotes when parsing input, so the VAST query requires
+  # Splunk eats double quotes when parsing input, so the Tenzir query requires
   # preprocessing: replace double with single quotes and vice versa.
   query = remainder[0].replace("'",'"')
   if opt.node == '':

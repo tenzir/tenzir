@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2019 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/format/zeek.hpp"
@@ -37,10 +37,10 @@ namespace vast::format::zeek {
 namespace {
 
 // The type name prefix to preprend to zeek log names when transleting them
-// into VAST types.
+// into Tenzir types.
 constexpr std::string_view type_name_prefix = "zeek.";
 
-// Creates a VAST type from an ASCII Zeek type in a log header.
+// Creates a Tenzir type from an ASCII Zeek type in a log header.
 caf::expected<type> parse_type(std::string_view zeek_type) {
   type t;
   if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file"
@@ -83,7 +83,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     if (!elem)
       return elem.error();
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
-    // table[string]. In VAST, they are all lists.
+    // table[string]. In Tenzir, they are all lists.
     t = type{list_type{*elem}};
   }
   if (!t)
@@ -157,7 +157,7 @@ Stream& operator<<(Stream& out, const time_factory& t) {
 void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
   auto path = std::string_view{t.name()};
   // To ensure that the printed output conforms to standard Zeek naming
-  // practices, we strip VAST's internal "zeek." type prefix such that the
+  // practices, we strip Tenzir's internal "zeek." type prefix such that the
   // output is, e.g., "#path conn" instead of "#path zeek.conn". For all
   // non-Zeek types, we keep the prefix to avoid conflicts in tools that work
   // with Zeek TSV.

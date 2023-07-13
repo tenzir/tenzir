@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Run a poetry script in an isolated Docker environment with the VAST binary and
+# Run a poetry script in an isolated Docker environment with the Tenzir binary and
 # dependencies installed. 
 #
 # Args:

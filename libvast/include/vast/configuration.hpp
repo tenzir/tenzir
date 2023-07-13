@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -32,7 +32,7 @@ caf::expected<duration>
 get_or_duration(const caf::settings& options, std::string_view key,
                 duration fallback);
 
-/// Bundles all configuration parameters of a VAST system.
+/// Bundles all configuration parameters of a Tenzir system.
 class configuration : public caf::actor_system_config {
 public:
   // -- constructors, destructors, and assignment operators --------------------

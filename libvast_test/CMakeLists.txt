@@ -5,7 +5,7 @@ endif ()
 add_library(
   libvast_test STATIC src/actor_system.cpp src/events.cpp src/node.cpp
                       src/symbols.cpp src/table_slices.cpp)
-VASTTargetEnableTooling(libvast_test)
+TenzirTargetEnableTooling(libvast_test)
 target_compile_definitions(
   libvast_test
   PUBLIC
@@ -37,7 +37,7 @@ set_target_properties(
 add_library(vast::test ALIAS libvast_test)
 install(
   TARGETS libvast_test
-  EXPORT VASTTargets
+  EXPORT TenzirTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Development)

@@ -15,7 +15,7 @@
   "tenzir-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",
-    "layout of VAST's partitions."
+    "layout of Tenzir's partitions."
   ],
   "vast-partition-version": 2
 }

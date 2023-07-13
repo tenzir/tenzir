@@ -1,10 +1,10 @@
 {
-  "name": "VAST-Search",
+  "name": "Tenzir-Search",
   "version": "1.0",
   "author": "Tenzir ",
   "url": "https://github.com/tenzir/vast",
   "license": "BSD-3-Clause",
-  "description": "Search hash, IP or domain in VAST.",
+  "description": "Search hash, IP or domain in Tenzir.",
   "dataTypeList": [
     "hash",
     "domain",
@@ -19,7 +19,7 @@
   "configurationItems": [
     {
       "name": "endpoint",
-      "description": "VAST Server endpoint to connect to.",
+      "description": "Tenzir Server endpoint to connect to.",
       "type": "string",
       "multi": false,
       "required": true

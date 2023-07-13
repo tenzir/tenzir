@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/chunk.hpp"
@@ -250,7 +250,7 @@ caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
 }
 
 caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
-  // Creating the codec cannot fail; we test that it works in VAST's main
+  // Creating the codec cannot fail; we test that it works in Tenzir's main
   // function to catch this early.
   auto codec
     = arrow::util::Codec::Create(
@@ -275,7 +275,7 @@ caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
 
 caf::expected<chunk_ptr>
 chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
-  // Creating the codec cannot fail; we test that it works in VAST's main
+  // Creating the codec cannot fail; we test that it works in Tenzir's main
   // function to catch this early.
   auto codec
     = arrow::util::Codec::Create(

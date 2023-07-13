@@ -39,7 +39,7 @@ def configure(config: Config, logger: logging.Logger):
 
 
 def get(name=None):
-    """Get a logger instance while ensuring that the VAST logger namespace
+    """Get a logger instance while ensuring that the Tenzir logger namespace
     (loggers with name "vast or "vast.*") is properly configured"""
     # The logger "vast" is the root of the namespace. All loggers names vast.*
     # will inherit its settings

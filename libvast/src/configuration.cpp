@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/configuration.hpp"
@@ -247,7 +247,7 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
   return merged_config;
 }
 
-/// Merges VAST environment variables into a configuration.
+/// Merges Tenzir environment variables into a configuration.
 caf::error merge_environment(record& config) {
   for (const auto& [key, value] : detail::environment()) {
     if (!value.empty()) {
@@ -284,7 +284,7 @@ caf::error merge_environment(record& config) {
           else
             return caf::make_error(
               ec::parse_error, fmt::format("could not convert environment "
-                                           "variable {}={} to VAST value: {}",
+                                           "variable {}={} to Tenzir value: {}",
                                            key, value, x.error()));
         } else {
           config[*config_key] = std::string{value};
@@ -363,7 +363,7 @@ configuration::configuration() {
 caf::error configuration::parse(int argc, char** argv) {
   // The main objective of this function is to parse the command line and put
   // it into the actor_system_config instance (`content`), which components
-  // throughout VAST query to find out the application settings. This process
+  // throughout Tenzir query to find out the application settings. This process
   // has several sequencing intricacies because it also loads configuration
   // files and considers environment variables while parsing the command line.
   //

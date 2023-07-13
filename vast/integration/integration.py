@@ -30,7 +30,7 @@ import packages.wait as wait
 import schema
 import yaml
 
-LOGGER = logging.getLogger("VAST")
+LOGGER = logging.getLogger("Tenzir")
 TENZIR_PORT = 42024
 STEP_TIMEOUT = 30
 CURRENT_SUBPROCS: List[subprocess.Popen] = []

@@ -12,7 +12,7 @@ batch_count = 0
 row_count = 0
 
 # An Arrow reader consumes a stream of batches with the same schema. When
-# reading the result for a query that returns multiple schemas, VAST will use
+# reading the result for a query that returns multiple schemas, Tenzir will use
 # multiple writers. Hence, we try to open record batch readers until an
 # exception occurs.
 try:

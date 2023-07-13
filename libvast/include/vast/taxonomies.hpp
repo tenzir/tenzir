@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -97,7 +97,7 @@ using models_map = detail::stable_map<std::string, model>;
 /// a `models_map`.
 extern const type models_data_schema;
 
-/// A taxonomy is a combination of concepts and models. VAST stores all
+/// A taxonomy is a combination of concepts and models. Tenzir stores all
 /// configured taxonomies in memory together, hence the plural naming.
 struct taxonomies {
   concepts_map concepts;

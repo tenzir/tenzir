@@ -14,7 +14,7 @@ RUN apt-get update && \
 
 # The first objective here is to install the AWS Lambda Runtime Interface client that allows
 # the image to be used from within lambda. Additionally, we can install any tooling that comes
-# handy to interact with VAST (AWS CLI,...)
+# handy to interact with Tenzir (AWS CLI,...)
 FROM common_base AS build
 
 ARG AWS_CLI_VERSION

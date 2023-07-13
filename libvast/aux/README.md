@@ -1,7 +1,7 @@
 Auxiliary Third-Party Software
 ==============================
 
-This directory contains the third-party software VAST uses. We manage it via
+This directory contains the third-party software Tenzir uses. We manage it via
 `git subtree` or `git submodule`.
 
 Repositories
@@ -44,14 +44,14 @@ To update an existing repository **foo**, perform the following steps:
 
        git -C aux/foo checkout COMMIT
 
-3. Go to the top-level directory of the VAST repository
+3. Go to the top-level directory of the Tenzir repository
 4. Create a commit for the updated submodule reference
 
        git commit -a -m 'Update aux/foo'
 
 ### subtrees
 1. Locate the remote location for foo (e.g., REMOTE)
-2. Go to the top-level directory of the VAST repository
+2. Go to the top-level directory of the Tenzir repository
 3. Pull from the remote repository:
 
        git subtree pull --prefix aux/foo REMOTE main --squash
@@ -62,5 +62,5 @@ To update an existing repository **foo**, perform the following steps:
 
 ### Both
 
-5. Compile VAST, run the unit tests, and perform potentially necessary
+5. Compile Tenzir, run the unit tests, and perform potentially necessary
    adaptations resulting from the update

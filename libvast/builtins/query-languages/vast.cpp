@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/concept/parseable/vast/expression.hpp>
@@ -118,7 +118,7 @@ class plugin final : public virtual language_plugin {
   }
 
   auto name() const -> std::string override {
-    return "VAST";
+    return "Tenzir";
   }
 
   auto parse_query(std::string_view query) const

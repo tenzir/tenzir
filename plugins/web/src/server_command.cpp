@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "web/server_command.hpp"
@@ -103,9 +103,9 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       }
       // Ask the authenticator to validate the passed token.
       auto const* token
-        = response->request()->header().try_get_field("X-VAST-Token");
+        = response->request()->header().try_get_field("X-Tenzir-Token");
       if (!token) {
-        response->abort(401, "missing header X-VAST-Token\n", caf::error{});
+        response->abort(401, "missing header X-Tenzir-Token\n", caf::error{});
         return;
       }
       self
@@ -353,7 +353,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   router->http_get(
     "/", [](auto request, auto) -> restinio::request_handling_status_t {
       return request->create_response(restinio::status_temporary_redirect())
-        .append_header(restinio::http_field::server, "VAST")
+        .append_header(restinio::http_field::server, "Tenzir")
         .append_header_date_field()
         .append_header(restinio::http_field::location, "/api/v0/status")
         .done();
@@ -401,7 +401,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         auto sf = restinio::sendfile(normalized_path);
         auto const* mime_type = content_type_by_file_extension(extension);
         return req->create_response()
-          .append_header(restinio::http_field::server, "VAST")
+          .append_header(restinio::http_field::server, "Tenzir")
           .append_header_date_field()
           .append_header(restinio::http_field::content_type, mime_type)
           .set_body(std::move(sf))

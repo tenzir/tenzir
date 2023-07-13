@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2019 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -120,14 +120,14 @@ protected:
     return caf::none;
   }
 
-  /// Prints a table slice using the given VAST printer. This function assumes
+  /// Prints a table slice using the given Tenzir printer. This function assumes
   /// a human-readable output where each row in the slice gets printed to a
   /// single line.
   /// @tparam Policies... accepted tags are ::include_field_names to repeat the
   ///         field name for each value (e.g., JSON output) and
   ///         ::flatten_schema to flatten nested records into the top level
   ///         event.
-  /// @param printer The VAST printer for generating formatted output.
+  /// @param printer The Tenzir printer for generating formatted output.
   /// @param xs The table slice for printing.
   /// @param begin_of_line Prefix for each printed line. For example, a JSON
   ///        writer would start each line with a '{'.

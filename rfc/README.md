@@ -1,9 +1,9 @@
 # Request for Comments (RFC)
 
-We cultivate an open RFC process around evolutionary topics relating to VAST.
+We cultivate an open RFC process around evolutionary topics relating to Tenzir.
 The objective is to encourage participation of the community in the process.
 
-For this reason, we include RFCs in the VAST repository in the top-level
+For this reason, we include RFCs in the Tenzir repository in the top-level
 [rfc][rfc-dir] directory. Engaging with an open RFC centers around the
 discussion in pull requests, which we describe below.
 
