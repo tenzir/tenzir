@@ -54,7 +54,7 @@ Let's break this down:
 Now that we have both Zeek and Suricata at our fingertips, how can we work with
 their output more easily? This is where Tenzir comes into play—easy
 [pipelines](/language/pipelines) for security teams to acquire,
-[reshape](/user-guides/get-started), and route event data.
+[reshape](/user-guides/reshape-data), and route event data.
 
 Here are two examples that count the number of unique source IP addresses per
 destination IP address, on both Zeek and Suricata data:
@@ -76,7 +76,7 @@ zcat pcap.gz | suricatify | tenzir \
 
 It's a bit unwiedly to write such a command line that requires an external shell
 script to work. This is where [user-defined operators](/operators/user-defined)
-come into play. In combination with the [`shell`](/operators/shell)
+come into play. In combination with the [`shell`](/operators/sources/shell)
 operator in more detail, you can write a custom `zeek` and `suricata` operator
 and ditch the shell script:
 
