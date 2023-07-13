@@ -1,4 +1,4 @@
-type port = count
+type port = uint64
 type timestamp = time
 
 type zeek.conn.custom = record{

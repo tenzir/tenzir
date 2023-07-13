@@ -117,7 +117,7 @@ TEST(parseable) {
   CHECK(t == legacy_bool_type{});
   CHECK(parsers::legacy_type("string", t));
   CHECK(t == legacy_string_type{});
-  CHECK(parsers::legacy_type("addr", t));
+  CHECK(parsers::legacy_type("ip", t));
   CHECK(t == legacy_address_type{});
   MESSAGE("alias");
   CHECK(parsers::legacy_type("timestamp", t));
@@ -126,7 +126,7 @@ TEST(parseable) {
   CHECK(parsers::legacy_type("enum{foo, bar, baz}", t));
   CHECK((t == legacy_enumeration_type{{"foo", "bar", "baz"}}));
   MESSAGE("container");
-  CHECK(parsers::legacy_type("list<real>", t));
+  CHECK(parsers::legacy_type("list<double>", t));
   CHECK(t == legacy_type{legacy_list_type{legacy_real_type{}}});
   MESSAGE("record");
   auto str = R"__(record{"a b": ip, b: bool})__"sv;

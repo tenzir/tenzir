@@ -1,5 +1,5 @@
 type timestamp = time
-type port = count
+type port = uint64
 
 type zeek.conn_id = record{
   orig_h: ip,
