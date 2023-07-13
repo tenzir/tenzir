@@ -302,7 +302,7 @@ macro (VASTInstallExampleConfiguration target source prefix destination)
     file(WRITE
       \"${CMAKE_BINARY_DIR}/${_example_dir}/${prefix}${destination}\"
       \"# NOTE: For this file to take effect, move it to:\\n\"
-      \"#   <prefix>/${CMAKE_INSTALL_SYSCONFDIR}/vast/${prefix}${destination}\\n\"
+      \"#   <prefix>/${CMAKE_INSTALL_SYSCONFDIR}/tenzir/${prefix}${destination}\\n\"
       \"\\n\"
       \"\${content}\")")
 
@@ -614,10 +614,10 @@ function (VASTRegisterPlugin)
   endforeach ()
 
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
-    # Install the bundled schema files to <datadir>/vast.
+    # Install the bundled schema files to <datadir>/tenzir.
     install(
       DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-      DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}"
+      DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/plugin/${PLUGIN_TARGET}"
       COMPONENT Runtime)
     if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
       # Copy schemas from bundled plugins to the build directory so they can be
@@ -635,7 +635,7 @@ function (VASTRegisterPlugin)
                              relative_plugin_schema_file ${plugin_schema_file})
         string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
         set(plugin_schema_dir
-            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}/schema"
+            "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tenzir/plugin/${PLUGIN_TARGET}/schema"
         )
         add_custom_target(
           vast-schema-${plugin_schema_file_hash}
@@ -699,10 +699,10 @@ function (VASTRegisterPlugin)
   if (TARGET vast::tenzir
       AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
     if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
-      set(integration_test_path "${CMAKE_SOURCE_DIR}/vast/integration")
+      set(integration_test_path "${CMAKE_SOURCE_DIR}/tenzir/integration")
     else ()
       if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
-        set(integration_test_path "${CMAKE_INSTALL_DATADIR}/vast/integration")
+        set(integration_test_path "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
       else ()
         get_target_property(integration_test_path vast::tenzir LOCATION)
         get_filename_component(integration_test_path "${integration_test_path}"
@@ -710,7 +710,7 @@ function (VASTRegisterPlugin)
         get_filename_component(integration_test_path "${integration_test_path}"
                                DIRECTORY)
         set(integration_test_path
-            "${integration_test_path}/${CMAKE_INSTALL_DATADIR}/vast/integration"
+            "${integration_test_path}/${CMAKE_INSTALL_DATADIR}/tenzir/integration"
         )
       endif ()
     endif ()
