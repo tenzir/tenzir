@@ -1014,6 +1014,26 @@ tests:
       - command: exec 'read json | unflatten | to stdout'
         input: data/json/record-with-multi-nested-field-names.json
 
+  JSON Printer:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read suricata | head 1 | write json'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --compact-output'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --omit-nulls'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --omit-empty-objects'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --omit-empty-lists'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --omit-empty'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | flatten | write json'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | flatten | write json --omit-empty'
+        input: data/suricata/rrdata-eve.json
+
   PCAP Format:
     tags: [pipelines, parser, printer, pcap]
     steps:

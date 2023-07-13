@@ -72,6 +72,7 @@ struct json_printer : printer_base<json_printer> {
     bool oneline = false;
 
     /// Print nested objects as flattened.
+    /// TODO: Remove this when removing the import command.
     bool flattened = false;
 
     /// Print numeric rather than human-readable durations.
@@ -87,6 +88,7 @@ struct json_printer : printer_base<json_printer> {
     bool omit_empty_lists = false;
 
     /// Omit empty maps when printing.
+    /// TODO: Remove this when removing the import command.
     bool omit_empty_maps = false;
   };
 

@@ -766,6 +766,10 @@ struct printer_args {
   std::optional<location> compact_output;
   std::optional<location> color_output;
   std::optional<location> monochrome_output;
+  std::optional<location> omit_empty;
+  std::optional<location> omit_nulls;
+  std::optional<location> omit_empty_objects;
+  std::optional<location> omit_empty_lists;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, printer_args& x) -> bool {
@@ -773,7 +777,11 @@ struct printer_args {
       .pretty_name("printer_args")
       .fields(f.field("compact_output", x.compact_output),
               f.field("color_output", x.color_output),
-              f.field("monochrome_output", x.monochrome_output));
+              f.field("monochrome_output", x.monochrome_output),
+              f.field("omit_empty", x.omit_empty),
+              f.field("omit_nulls", x.omit_nulls),
+              f.field("omit_empty_objects", x.omit_empty_objects),
+              f.field("omit_empty_lists", x.omit_empty_lists));
   }
 };
 
@@ -790,14 +798,21 @@ public:
 
   auto instantiate(type, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    auto compact = !!args_.compact_output;
+    const auto compact = !!args_.compact_output;
     auto style = default_style();
     if (detail::getenv("NO_COLOR") || args_.monochrome_output)
       style = no_style();
     else if (args_.color_output)
       style = jq_style();
+    const auto omit_nulls
+      = args_.omit_nulls.has_value() or args_.omit_empty.has_value();
+    const auto omit_empty_objects
+      = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
+    const auto omit_empty_lists
+      = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
     return printer_instance::make(
-      [compact, style](table_slice slice) -> generator<chunk_ptr> {
+      [compact, style, omit_nulls, omit_empty_objects,
+       omit_empty_lists](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
@@ -805,6 +820,9 @@ public:
         auto printer = vast::json_printer{{
           .style = style,
           .oneline = compact,
+          .omit_nulls = omit_nulls,
+          .omit_empty_records = omit_empty_objects,
+          .omit_empty_lists = omit_empty_lists,
         }};
         // TODO: Since this printer is per-schema we can write an optimized
         // version of it that gets the schema ahead of time and only expects
@@ -877,6 +895,10 @@ public:
     parser.add("-c,--compact-output", args.compact_output);
     parser.add("-C,--color-output", args.color_output);
     parser.add("-M,--monochrome-output", args.color_output);
+    parser.add("--omit-empty", args.omit_empty);
+    parser.add("--omit-nulls", args.omit_nulls);
+    parser.add("--omit-empty-objects", args.omit_empty_objects);
+    parser.add("--omit-empty-lists", args.omit_empty_lists);
     parser.parse(p);
     return std::make_unique<json_printer>(std::move(args));
   }

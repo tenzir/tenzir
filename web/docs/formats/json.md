@@ -15,7 +15,7 @@ Printer:
 
 ```
 json [-c|--compact-output] [-C|--color-output] [-M|--monochrome-output] 
-     [--omit-nulls] [--omit-empty-records] [--omit-empty-lists] [--omit-empty]
+     [--omit-nulls] [--omit-empty-objects] [--omit-empty-lists] [--omit-empty]
 ```
 
 ## Description
@@ -125,7 +125,7 @@ avoid an implicit upgrade to colors in the future.
 
 ### `--omit-nulls` (Printer)
 
-Strips `null` fields from the input.
+Strips `null` fields from the output.
 
 Example:
 
@@ -151,9 +151,9 @@ With `--omit-nulls`, this example becomes:
 }
 ```
 
-### `--omit-empty-records` (Printer)
+### `--omit-empty-objects` (Printer)
 
-Strips empty records from the input.
+Strips empty objects from the output.
 
 Example:
 
@@ -167,7 +167,7 @@ Example:
 }
 ```
 
-With `--omit-empty-records`, this example becomes:
+With `--omit-empty-objects`, this example becomes:
 
 ```json
 {
@@ -177,7 +177,7 @@ With `--omit-empty-records`, this example becomes:
 
 ### `--omit-empty-lists` (Printer)
 
-Strips empty lists from the input.
+Strips empty lists from the output.
 
 Example:
 
