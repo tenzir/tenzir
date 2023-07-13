@@ -42,7 +42,7 @@ auto const SYNOPSIS_PATH_TEMPLATE = std::string{"/partition_synopsis-{}.fbs"};
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+      TENZIR_PP_STRINGIFY(SUITE)) {
     filesystem = self->spawn(memory_filesystem);
     auto type_system_path = std::filesystem::path{"/type-registry"};
     catalog = self->spawn(vast::catalog, accountant, type_system_path);
@@ -107,9 +107,9 @@ TEST(pass pipeline / done before persist) {
     });
   // Verify serialized data
   auto partition_path
-    = fmt::format(VAST_FMT_RUNTIME(PARTITION_PATH_TEMPLATE), uuid);
+    = fmt::format(TENZIR_FMT_RUNTIME(PARTITION_PATH_TEMPLATE), uuid);
   auto synopsis_path
-    = fmt::format(VAST_FMT_RUNTIME(SYNOPSIS_PATH_TEMPLATE), uuid);
+    = fmt::format(TENZIR_FMT_RUNTIME(SYNOPSIS_PATH_TEMPLATE), uuid);
   auto partition_rp
     = self->request(filesystem, caf::infinite, vast::atom::read_v,
                     std::filesystem::path{partition_path});
@@ -182,9 +182,9 @@ TEST(delete pipeline / persist before done) {
     });
   // Verify serialized data
   auto partition_path
-    = fmt::format(VAST_FMT_RUNTIME(PARTITION_PATH_TEMPLATE), uuid);
+    = fmt::format(TENZIR_FMT_RUNTIME(PARTITION_PATH_TEMPLATE), uuid);
   auto synopsis_path
-    = fmt::format(VAST_FMT_RUNTIME(SYNOPSIS_PATH_TEMPLATE), uuid);
+    = fmt::format(TENZIR_FMT_RUNTIME(SYNOPSIS_PATH_TEMPLATE), uuid);
   auto partition_rp
     = self->request(filesystem, caf::infinite, vast::atom::read_v,
                     std::filesystem::path{partition_path});
@@ -271,9 +271,9 @@ TEST(partition with multiple types) {
   // Verify that the partitions exist on disk.
   for (auto& uuid : uuids) {
     auto partition_path
-      = fmt::format(VAST_FMT_RUNTIME(PARTITION_PATH_TEMPLATE), uuid);
+      = fmt::format(TENZIR_FMT_RUNTIME(PARTITION_PATH_TEMPLATE), uuid);
     auto synopsis_path
-      = fmt::format(VAST_FMT_RUNTIME(SYNOPSIS_PATH_TEMPLATE), uuid);
+      = fmt::format(TENZIR_FMT_RUNTIME(SYNOPSIS_PATH_TEMPLATE), uuid);
     auto partition_rp
       = self->request(filesystem, caf::infinite, vast::atom::read_v,
                       std::filesystem::path{partition_path});
@@ -330,7 +330,7 @@ TEST(pass partition pipeline via the index) {
       REQUIRE(partition_uuids);
       REQUIRE_GREATER(partition_uuids->size(), 0ull);
       const auto* uuid_fb = *partition_uuids->begin();
-      VAST_ASSERT(uuid_fb);
+      TENZIR_ASSERT(uuid_fb);
       REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::error{});
     },
     [](const caf::error& e) {
@@ -546,7 +546,7 @@ TEST(select pipeline with an empty result set) {
       REQUIRE(partition_uuids);
       REQUIRE_GREATER(partition_uuids->size(), 0ull);
       const auto* uuid_fb = *partition_uuids->begin();
-      VAST_ASSERT(uuid_fb);
+      TENZIR_ASSERT(uuid_fb);
       REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::error{});
     },
     [](const caf::error& e) {

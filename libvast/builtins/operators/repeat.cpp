@@ -101,4 +101,4 @@ public:
 
 } // namespace vast::plugins::repeat
 
-VAST_REGISTER_PLUGIN(vast::plugins::repeat::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::repeat::plugin)

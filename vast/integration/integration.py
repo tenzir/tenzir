@@ -31,7 +31,7 @@ import schema
 import yaml
 
 LOGGER = logging.getLogger("VAST")
-VAST_PORT = 42024
+TENZIR_PORT = 42024
 STEP_TIMEOUT = 30
 CURRENT_SUBPROCS: List[subprocess.Popen] = []
 SET_DIR = Path()
@@ -263,7 +263,7 @@ def run_step(
             if step.transformation:
                 LOGGER.debug(f"transforming output with `{step.transformation}`")
                 env = os.environ.copy()
-                env["VAST_INTEGRATION_DB_DIRECTORY"] = db_dir
+                env["TENZIR_INTEGRATION_DB_DIRECTORY"] = db_dir
                 try:
                     out = subprocess.run(
                         [step.transformation],
@@ -322,7 +322,7 @@ class Server:
         args,
         work_dir,
         name="node",
-        port=VAST_PORT,
+        port=TENZIR_PORT,
         config_file=None,
         **kwargs,
     ):

@@ -67,7 +67,7 @@ module "vast_client" {
 
   additional_policies = []
   environment = {
-    VAST_ENDPOINT = local.vast_server_hostname
+    TENZIR_ENDPOINT = local.vast_server_hostname
   }
 
 }

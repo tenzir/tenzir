@@ -34,12 +34,12 @@ public:
   }
 
   auto abort(caf::error error) noexcept -> void override {
-    VAST_ASSERT(error != caf::none);
+    TENZIR_ASSERT(error != caf::none);
     error_ = error;
   }
 
   auto warn(caf::error error) noexcept -> void override {
-    VAST_WARN("{}", error);
+    TENZIR_WARN("{}", error);
   }
 
   auto emit(table_slice) noexcept -> void override {
@@ -58,7 +58,7 @@ public:
     class handler final : public diagnostic_handler {
     public:
       void emit(diagnostic d) override {
-        VAST_WARN("got diagnostic: {}", d);
+        TENZIR_WARN("got diagnostic: {}", d);
         error_ |= d.severity == severity::error;
       }
 
@@ -204,7 +204,7 @@ auto pipeline::optimize() const -> caf::expected<pipeline> {
     // Prepend where operator as a hacky way to handle pipelines without source.
     auto where = pipeline::internal_parse_as_operator(
       fmt::format("where {}", optimized->first));
-    VAST_ASSERT(where);
+    TENZIR_ASSERT(where);
     optimized->second.prepend(std::move(*where));
   }
 
@@ -230,7 +230,7 @@ auto pipeline::to_string() const -> std::string {
 auto pipeline::instantiate(operator_input input,
                            operator_control_plane& control) const
   -> caf::expected<operator_output> {
-  VAST_DEBUG("instantiating '{}' for {}", *this, operator_type_name(input));
+  TENZIR_DEBUG("instantiating '{}' for {}", *this, operator_type_name(input));
   if (operators_.empty()) {
     auto f = detail::overload{
       [](std::monostate) -> operator_output {
@@ -296,14 +296,14 @@ auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
         // TODO: We just want to create a `where {current}` operator. However,
         // we currently only have the interface for parsing this from a string.
         auto pipe = tql::parse_internal(fmt::format("where {}", current));
-        VAST_ASSERT(pipe);
+        TENZIR_ASSERT(pipe);
         auto ops = std::move(*pipe).unwrap();
-        VAST_ASSERT(ops.size() == 1);
+        TENZIR_ASSERT(ops.size() == 1);
         new_rev.push_back(std::move(ops[0]));
         current = trivially_true_expression();
       }
       auto copy = (*it)->copy();
-      VAST_ASSERT(copy);
+      TENZIR_ASSERT(copy);
       new_rev.push_back(std::move(copy));
     }
   }
@@ -315,17 +315,17 @@ auto pipeline::predicate_pushdown_pipeline(expression const& expr) const
 auto operator_base::copy() const -> operator_ptr {
   // TODO
   auto p = plugins::find<operator_serialization_plugin>(name());
-  VAST_ASSERT(p);
+  TENZIR_ASSERT(p);
   auto buffer = caf::byte_buffer{};
   auto serializer = caf::binary_serializer{nullptr, buffer};
   auto f = inspector{serializer};
   auto success = p->serialize(f, *this);
-  VAST_ASSERT(success);
+  TENZIR_ASSERT(success);
   auto deserializer = caf::binary_deserializer{nullptr, buffer};
   f = inspector{deserializer};
   auto copy = operator_ptr{};
   p->deserialize(f, copy);
-  VAST_ASSERT(copy);
+  TENZIR_ASSERT(copy);
   return copy;
 }
 

@@ -22,7 +22,7 @@ namespace vast {
 class file {
 public:
 /// The native type of a file.
-#if VAST_POSIX
+#if TENZIR_POSIX
   typedef int native_type;
 #else
   typedef void native_type;

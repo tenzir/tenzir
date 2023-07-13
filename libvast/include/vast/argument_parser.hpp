@@ -36,7 +36,7 @@ public:
   ~argument_parser() {
     // This ensure that we never forget to call `parse(...)`. Note that this
     // assertion also fails if an exception is thrown before.
-    VAST_ASSERT(called_parse_);
+    TENZIR_ASSERT(called_parse_);
   }
 
   argument_parser(const argument_parser&) = delete;
@@ -52,7 +52,7 @@ public:
 
   template <class T>
   void add(T& x, std::string meta) {
-    VAST_ASSERT(!first_optional_);
+    TENZIR_ASSERT(!first_optional_);
     positional_.push_back(positional_t{
       std::move(meta),
       [&x](located<T> y) {
@@ -63,7 +63,7 @@ public:
 
   template <class T>
   void add(located<T>& x, std::string meta) {
-    VAST_ASSERT(!first_optional_);
+    TENZIR_ASSERT(!first_optional_);
     positional_.push_back(positional_t{
       std::move(meta),
       [&x](located<T> y) {
@@ -174,7 +174,7 @@ private:
   static auto split_names(std::string_view names) -> std::vector<std::string> {
     auto result = detail::to_strings(detail::split(names, ","));
     for (auto& name : result) {
-      VAST_ASSERT(name.starts_with("-"));
+      TENZIR_ASSERT(name.starts_with("-"));
     }
     return result;
   }

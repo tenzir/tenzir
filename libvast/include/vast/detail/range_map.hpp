@@ -81,7 +81,7 @@ public:
   /// @param v The value r associated with *[l, r]*.
   /// @returns `true` on success.
   bool insert(Point l, Point r, Value v) {
-    VAST_ASSERT(l < r);
+    TENZIR_ASSERT(l < r);
     auto lb = map_.lower_bound(l);
     if (locate(l, lb) == map_.end() && (lb == map_.end() || r <= left(lb)))
       return map_.emplace(l, std::make_pair(r, std::move(v))).second;
@@ -97,7 +97,7 @@ public:
   /// @param v The value r associated with *[l,r]*.
   /// @returns `true` on success.
   bool inject(Point l, Point r, Value v) {
-    VAST_ASSERT(l < r);
+    TENZIR_ASSERT(l < r);
     if (map_.empty())
       return emplace(l, r, std::move(v));
     auto i = map_.lower_bound(l);

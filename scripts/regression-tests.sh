@@ -9,11 +9,11 @@ set -euxo pipefail
 
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)"
 
-VAST_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e VAST_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/vast/"
+TENZIR_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e TENZIR_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/vast/"
 
 # Pull the old version to create a database.
 docker run \
-  $VAST_RUN_FLAGS \
+  $TENZIR_RUN_FLAGS \
   docker.io/tenzir/vast:$OLD_VERSION \
   start
 
@@ -34,11 +34,11 @@ docker rm -f vast-regression
 
 # Change the volume mount point since the default database location changed from
 # /var/lib/vast to /var/lib/tenzir.
-VAST_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e VAST_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/tenzir/"
+TENZIR_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e TENZIR_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/tenzir/"
 
 # Pull the new version to verify database compatibility.
 docker run \
-  $VAST_RUN_FLAGS \
+  $TENZIR_RUN_FLAGS \
   ghcr.io/tenzir/tenzir-node:$NEW_VERSION
 
 sleep 3

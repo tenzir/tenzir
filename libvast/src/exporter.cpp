@@ -45,7 +45,7 @@ void shutdown_stream(
   caf::stream_source_ptr<caf::broadcast_downstream_manager<table_slice>> stream) {
   if (!stream)
     return;
-  VAST_DEBUG("exporter: shutting down stream");
+  TENZIR_DEBUG("exporter: shutting down stream");
   stream->shutdown();
   stream->out().fan_out_flush();
   stream->out().close();
@@ -88,8 +88,8 @@ void attach_result_stream(
 
 auto index_exhausted(const query_status& qs) -> bool {
   if (qs.received > qs.expected) {
-    VAST_WARN("exporter received more partitions than expected: {}/{}",
-              qs.received, qs.expected);
+    TENZIR_WARN("exporter received more partitions than expected: {}/{}",
+                qs.received, qs.expected);
     return true;
   }
   return qs.received == qs.expected;
@@ -105,7 +105,7 @@ void continue_execution(exporter_actor::stateful_pointer<exporter_state> self) {
   while (it != self->state.executor.end()) {
     ++it;
     if (it == self->state.executor.end()) {
-      VAST_DEBUG("{} has exhausted its executor", *self);
+      TENZIR_DEBUG("{} has exhausted its executor", *self);
       break;
     }
     auto result = *it;
@@ -125,17 +125,17 @@ void continue_execution(exporter_actor::stateful_pointer<exporter_state> self) {
       // Make sure that the source requests more data, if possible.
       if (!index_exhausted(self->state.query_status)
           && !query_in_flight(self->state.query_status)) {
-        VAST_DEBUG("{} waits for source to request more data", *self);
+        TENZIR_DEBUG("{} waits for source to request more data", *self);
         continue;
       }
     }
     // Do not pause if we can see that the source will become exhausted.
     if (!has_continuous_option(self->state.options)
         && index_exhausted(self->state.query_status)) {
-      VAST_DEBUG("{} will advance until executor is done", *self);
+      TENZIR_DEBUG("{} will advance until executor is done", *self);
       continue;
     }
-    VAST_DEBUG("{} paused execution", *self);
+    TENZIR_DEBUG("{} paused execution", *self);
     break;
   }
 }
@@ -143,7 +143,7 @@ void continue_execution(exporter_actor::stateful_pointer<exporter_state> self) {
 void provide_to_source(exporter_actor::stateful_pointer<exporter_state> self,
                        table_slice slice) {
   auto& st = self->state;
-  VAST_DEBUG("{} relays {} events", *self, slice.rows());
+  TENZIR_DEBUG("{} relays {} events", *self, slice.rows());
   // Ship the slice and update state.
   st.query_status.shipped += slice.rows();
   self->state.source_buffer.push_back(std::move(slice));
@@ -151,20 +151,20 @@ void provide_to_source(exporter_actor::stateful_pointer<exporter_state> self,
 
 void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
                   table_slice slice) {
-  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
+  TENZIR_ASSERT(slice.encoding() != table_slice_encoding::none);
+  TENZIR_DEBUG("{} got batch of {} events", *self, slice.rows());
   // Construct a candidate checker if we don't have one for this type.
   auto schema = slice.schema();
   auto it = self->state.checkers.find(schema);
   if (it == self->state.checkers.end()) {
     auto x = tailor(self->state.query_context.expr, schema);
     if (!x) {
-      VAST_DEBUG("{} failed to tailor expression and drops slice: {}", *self,
-                 x.error());
+      TENZIR_DEBUG("{} failed to tailor expression and drops slice: {}", *self,
+                   x.error());
       std::tie(it, std::ignore)
         = self->state.checkers.emplace(schema, std::nullopt);
     } else {
-      VAST_DEBUG("{} tailored AST to {}: {}", *self, schema, x);
+      TENZIR_DEBUG("{} tailored AST to {}: {}", *self, schema, x);
       std::tie(it, std::ignore)
         = self->state.checkers.emplace(schema, std::move(*x));
     }
@@ -184,7 +184,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   for (auto&& selected : select(slice, expression{}, selection)) {
     provide_to_source(self, std::move(selected));
   }
-  VAST_DEBUG("{} continues execution because of input stream batch", *self);
+  TENZIR_DEBUG("{} continues execution because of input stream batch", *self);
   continue_execution(self);
 }
 
@@ -207,17 +207,18 @@ public:
         // Continuous data is feed to `source_buffer` by the exporter actor.
         if (has_historical_option(state.options)) {
           if (state.id == uuid{}) {
-            VAST_DEBUG("{} source stalls to await cursor", *exporter_);
+            TENZIR_DEBUG("{} source stalls to await cursor", *exporter_);
           } else if (!index_exhausted(state.query_status)) {
             // We stall because there is more historical data to receive.
             if (!query_in_flight(state.query_status)) {
-              VAST_DEBUG("{} source sends query to index", *exporter_);
+              TENZIR_DEBUG("{} source sends query to index", *exporter_);
               exporter_->send(state.index, atom::query_v, state.id, 1u);
               state.query_status.scheduled += 1;
             }
-            VAST_DEBUG("{} source stalls to await data (got {}/{} partitions)",
-                       *exporter_, state.query_status.received,
-                       state.query_status.expected);
+            TENZIR_DEBUG("{} source stalls to await data (got {}/{} "
+                         "partitions)",
+                         *exporter_, state.query_status.received,
+                         state.query_status.expected);
           } else if (!has_continuous_option(state.options)) {
             // All historical data has been received, we processed it completely,
             // and there is no continuous data coming. Hence, we are done.
@@ -228,12 +229,12 @@ public:
       } else {
         auto slice = std::move(state.source_buffer.front());
         state.source_buffer.pop_front();
-        VAST_DEBUG("{} source popped {} events from queue", *exporter_,
-                   slice.rows());
+        TENZIR_DEBUG("{} source popped {} events from queue", *exporter_,
+                     slice.rows());
         co_yield std::move(slice);
       }
     }
-    VAST_DEBUG("{} source is done", *exporter_);
+    TENZIR_DEBUG("{} source is done", *exporter_);
   }
 
 private:
@@ -253,8 +254,8 @@ public:
     -> generator<std::monostate> {
     for (auto&& slice : input) {
       if (slice.rows() != 0) {
-        VAST_DEBUG("{} sink stores {} events in result buffer", *exporter_,
-                   slice.rows());
+        TENZIR_DEBUG("{} sink stores {} events in result buffer", *exporter_,
+                     slice.rows());
         exporter_->state.sink_buffer.push_back(std::move(slice));
       }
       co_yield {};
@@ -270,7 +271,7 @@ private:
 auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
               query_options options, pipeline pipe, index_actor index)
   -> exporter_actor::behavior_type {
-  VAST_DEBUG("spawned {} with pipeline {}", *self, pipe);
+  TENZIR_DEBUG("spawned {} with pipeline {}", *self, pipe);
   self->state.pipeline_str = pipe.to_string();
   auto expr = trivially_true_expression();
   if (auto pushdown = pipe.predicate_pushdown_pipeline(expr)) {
@@ -287,7 +288,7 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
   expr = std::move(*normalized);
   pipe.prepend(std::make_unique<exporter_source>(self));
   pipe.append(std::make_unique<exporter_sink>(self));
-  VAST_DEBUG("{} uses filter {} and pipeline {}", *self, expr, pipe);
+  TENZIR_DEBUG("{} uses filter {} and pipeline {}", *self, expr, pipe);
   self->state.options = options;
   self->state.query_context
     = vast::query_context::make_extract("export", self, std::move(expr));
@@ -298,17 +299,17 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
   self->state.executor = make_local_executor(std::move(pipe));
   self->state.index = std::move(index);
   if (has_continuous_option(options)) {
-    VAST_DEBUG("{} has continuous query option", *self);
+    TENZIR_DEBUG("{} has continuous query option", *self);
     self->monitor(self->state.index);
   }
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} received exit from {} with reason: {}", *self, msg.source,
-               msg.reason);
+    TENZIR_DEBUG("{} received exit from {} with reason: {}", *self, msg.source,
+                 msg.reason);
     shutdown_stream(self->state.result_stream);
     self->quit(msg.reason);
   });
   self->set_down_handler([=](const caf::down_msg& msg) {
-    VAST_DEBUG("{} received DOWN from {}", *self, msg.source);
+    TENZIR_DEBUG("{} received DOWN from {}", *self, msg.source);
     // Without sinks and resumable sessions, there's no reason to proceed.
     shutdown_stream(self->state.result_stream);
     self->quit(msg.reason);
@@ -325,14 +326,14 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
                                            "because it already streams to {}",
                                            *self, sink, self->state.sink));
       }
-      VAST_DEBUG("{} registers sink {}", *self, sink);
+      TENZIR_DEBUG("{} registers sink {}", *self, sink);
       self->state.sink = sink;
       self->monitor(self->state.sink);
       attach_result_stream(self);
       return {};
     },
     [self](atom::run) {
-      VAST_VERBOSE("{} executes query: {}", *self, self->state.query_context);
+      TENZIR_VERBOSE("{} executes query: {}", *self, self->state.query_context);
       self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
@@ -341,35 +342,37 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
                   self->state.query_context)
         .then(
           [=](const query_cursor& cursor) {
-            VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
-                         "partitions",
-                         *self, cursor.id, cursor.scheduled_partitions,
-                         cursor.candidate_partitions);
+            TENZIR_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
+                           "partitions",
+                           *self, cursor.id, cursor.scheduled_partitions,
+                           cursor.candidate_partitions);
             if (cursor.candidate_partitions == 0) {
               self->send_exit(self->state.sink,
                               caf::exit_reason::user_shutdown);
               self->quit();
               return;
             }
-            VAST_DEBUG("{} is setting cursor ({})", *self, cursor.id);
+            TENZIR_DEBUG("{} is setting cursor ({})", *self, cursor.id);
             self->state.id = cursor.id;
             self->state.query_status.expected = cursor.candidate_partitions;
             self->state.query_status.scheduled = cursor.scheduled_partitions;
-            VAST_DEBUG("{} continues execution due to received cursor", *self);
+            TENZIR_DEBUG("{} continues execution due to received cursor",
+                         *self);
             continue_execution(self);
           },
           [=](const caf::error& e) {
             if (self->state.result_stream) {
               self->state.result_stream->stop(e);
             } else {
-              VAST_WARN("{} shuts down before sink is attached: {}", *self, e);
+              TENZIR_WARN("{} shuts down before sink is attached: {}", *self,
+                          e);
               self->quit(e);
             }
           });
     },
     [self](atom::statistics, const caf::actor& statistics_subscriber) {
-      VAST_DEBUG("{} registers statistics subscriber {}", *self,
-                 statistics_subscriber);
+      TENZIR_DEBUG("{} registers statistics subscriber {}", *self,
+                   statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
     [self](
@@ -384,7 +387,8 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
                },
                [=](caf::unit_t&, const caf::error& err) {
                  if (err)
-                   VAST_ERROR("{} got error during streaming: {}", *self, err);
+                   TENZIR_ERROR("{} got error during streaming: {}", *self,
+                                err);
                  shutdown_stream(self->state.result_stream);
                })
         .inbound_slot();
@@ -412,8 +416,8 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
     },
     // -- receiver_actor<table_slice> ------------------------------------------
     [self](table_slice slice) { //
-      VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-      VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
+      TENZIR_ASSERT(slice.encoding() != table_slice_encoding::none);
+      TENZIR_DEBUG("{} got batch of {} events", *self, slice.rows());
       self->state.query_status.processed += slice.rows();
       // Ship slices to connected SINKs.
       provide_to_source(self, std::move(slice));
@@ -423,18 +427,19 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
       // and check whether it reaches `expected`.
       self->state.query_status.received += self->state.query_status.scheduled;
       self->state.query_status.scheduled = 0u;
-      VAST_DEBUG("{} received hits from {}/{} partitions", *self,
-                 self->state.query_status.received,
-                 self->state.query_status.expected);
+      TENZIR_DEBUG("{} received hits from {}/{} partitions", *self,
+                   self->state.query_status.received,
+                   self->state.query_status.expected);
       caf::timespan runtime
         = std::chrono::system_clock::now() - self->state.start;
       self->state.query_status.runtime = runtime;
-      VAST_DEBUG("{} continues execution due partition completion", *self);
+      TENZIR_DEBUG("{} continues execution due partition completion", *self);
       continue_execution(self);
       if (index_exhausted(self->state.query_status)) {
-        VAST_DEBUG("{} received all hits from {} partition(s) in {}", *self,
-                   self->state.query_status.expected, vast::to_string(runtime));
-        VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
+        TENZIR_DEBUG("{} received all hits from {} partition(s) in {}", *self,
+                     self->state.query_status.expected,
+                     vast::to_string(runtime));
+        TENZIR_TRACEPOINT(query_done, self->state.id.as_u64().first);
         if (self->state.accountant)
           self->send(
             self->state.accountant, atom::metrics_v, "exporter.hits.runtime",

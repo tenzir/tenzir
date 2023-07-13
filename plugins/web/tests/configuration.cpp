@@ -41,7 +41,7 @@ web:
   mode: dev
   )_");
   auto config = vast::plugins::web::configuration{};
-  VAST_INFO("{}", record);
+  TENZIR_INFO("{}", record);
   CHECK_EQUAL(validate(record, vast::plugins::web::configuration::schema(),
                        vast::validate::strict),
               caf::error{});

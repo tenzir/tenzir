@@ -42,7 +42,7 @@ struct example_actor_state;
 // e.g., because it is part of an actor's messaging interface, must have a
 // unique type ID assigned. Only the declaration of types must be available when
 // defining the type ID block. Their definition must only be available in the
-// translation unit that contains VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK.
+// translation unit that contains TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK.
 // NOTE: For plugins to be used at the same time, their type ID ranges must not
 // have overlap. The selected value of 1000 is just one possible starting value.
 // Please use a unique range for your plugins.
@@ -71,11 +71,11 @@ example_actor::behavior_type
 example(example_actor::stateful_pointer<example_actor_state> self) {
   return {
     [self](atom::config, record config) {
-      VAST_TRACE_SCOPE("{} sets configuration {}", *self, config);
+      TENZIR_TRACE_SCOPE("{} sets configuration {}", *self, config);
       for (auto& [key, value] : config) {
         if (key == "max-events") {
           if (auto max_events = caf::get_if<uint64_t>(&value)) {
-            VAST_VERBOSE("{} sets max-events to {}", *self, *max_events);
+            TENZIR_VERBOSE("{} sets max-events to {}", *self, *max_events);
             self->state.max_events = *max_events;
           }
         }
@@ -83,12 +83,12 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_TRACE_SCOPE("{} hooks into stream {}", *self, in);
+      TENZIR_TRACE_SCOPE("{} hooks into stream {}", *self, in);
       return caf::attach_stream_sink(
                self, in,
                // Initialization hook for CAF stream.
                [=](uint64_t& counter) { // reset state
-                 VAST_VERBOSE("{} initialized stream", *self);
+                 TENZIR_VERBOSE("{} initialized stream", *self);
                  counter = 0;
                },
                // Process one stream element at a time.
@@ -100,8 +100,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
                  // Accumulate the rows in our table slices.
                  counter += slice.rows();
                  if (counter >= self->state.max_events) {
-                   VAST_INFO("{} terminates stream after {} events", *self,
-                             counter);
+                   TENZIR_INFO("{} terminates stream after {} events", *self,
+                               counter);
                    self->state.done = true;
                    self->quit();
                  }
@@ -109,8 +109,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
                // Teardown hook for CAF stream.
                [=](uint64_t&, const caf::error& err) {
                  if (err && err != caf::exit_reason::user_shutdown) {
-                   VAST_ERROR("{} finished stream with error: {}", *self,
-                              render(err));
+                   TENZIR_ERROR("{} finished stream with error: {}", *self,
+                                render(err));
                    return;
                  }
                })
@@ -192,9 +192,9 @@ private:
 } // namespace vast::plugins
 
 // Register the example_plugin with version 0.1.0-0.
-VAST_REGISTER_PLUGIN(vast::plugins::example_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::example_plugin)
 
 // Register the type IDs in our type ID block with VAST. This can be omitted
 // when not adding additional type IDs. The macro supports up to two type ID
 // blocks.
-VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_example_plugin)
+TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_example_plugin)

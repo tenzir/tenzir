@@ -60,7 +60,7 @@ struct has_extension_type
 /// @pre `!prefix.empty()`
 std::optional<std::string>
 to_config_key(std::string_view key, std::string_view prefix) {
-  VAST_ASSERT(!prefix.empty());
+  TENZIR_ASSERT(!prefix.empty());
   // PREFIX_X is the shortest allowed key.
   if (prefix.size() + 2 > key.size())
     return std::nullopt;
@@ -379,8 +379,8 @@ caf::error configuration::parse(int argc, char** argv) {
   // 2. Environment variables
   // 3. Config files
   // 4. Defaults
-  VAST_ASSERT(argc > 0);
-  VAST_ASSERT(argv != nullptr);
+  TENZIR_ASSERT(argc > 0);
+  TENZIR_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
@@ -490,10 +490,10 @@ caf::error configuration::parse(int argc, char** argv) {
         .add<std::vector<std::string>>("?tenzir", "plugins", "");
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   if (ec != caf::pec::success) {
-    VAST_ASSERT(it != plugin_args.end());
+    TENZIR_ASSERT(it != plugin_args.end());
     return caf::make_error(ec, fmt::format("failed to parse option '{}'", *it));
   }
-  VAST_ASSERT(it == plugin_args.end());
+  TENZIR_ASSERT(it == plugin_args.end());
   // Now parse all CAF options from the command line. Prior to doing so, we
   // clear the config_file_path first so it does not use caf-application.ini as
   // fallback during actor_system_config::parse().
@@ -513,7 +513,8 @@ caf::error configuration::embed_config(const caf::settings& settings) {
   for (auto& [key, value] : settings) {
     // The configuration must have been fully flattened because we cannot
     // mangle dictionaries in here.
-    VAST_ASSERT(!caf::holds_alternative<caf::config_value::dictionary>(value));
+    TENZIR_ASSERT(
+      !caf::holds_alternative<caf::config_value::dictionary>(value));
     // The member custom_options_ (a config_option_set) is the only place that
     // contains the valid type information, as defined by the command
     // hierarchy. The passed in config (file and environment) must abide to it.

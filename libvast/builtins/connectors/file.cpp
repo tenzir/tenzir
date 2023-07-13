@@ -75,7 +75,7 @@ public:
 
   ~fd_writer() override {
     if (auto error = close()) {
-      VAST_WARN("closing failed in destructor: {}", error);
+      TENZIR_WARN("closing failed in destructor: {}", error);
     }
   }
 
@@ -94,7 +94,7 @@ public:
         }
         continue;
       }
-      VAST_ASSERT(written > 0);
+      TENZIR_ASSERT(written > 0);
       buffer = buffer.subspan(written);
     }
     return {};
@@ -125,7 +125,7 @@ public:
 
   ~file_writer() override {
     if (auto error = close()) {
-      VAST_WARN("closing failed in destructor: {}", error);
+      TENZIR_WARN("closing failed in destructor: {}", error);
     }
   }
 
@@ -217,8 +217,8 @@ public:
   ~fd_wrapper() {
     if (close_) {
       if (::close(fd_) != 0) {
-        VAST_WARN("failed to close file in destructor: {}",
-                  detail::describe_errno());
+        TENZIR_WARN("failed to close file in destructor: {}",
+                    detail::describe_errno());
       }
     }
   }
@@ -414,7 +414,7 @@ public:
       }
       stream = std::make_shared<file_writer>(handle);
     }
-    VAST_ASSERT(stream);
+    TENZIR_ASSERT(stream);
     auto guard = caf::detail::make_scope_guard([&ctrl, stream] {
       if (auto error = stream->close()) {
         ctrl.abort(std::move(error));
@@ -587,6 +587,6 @@ public:
 } // namespace
 } // namespace vast::plugins::stdout_
 
-VAST_REGISTER_PLUGIN(vast::plugins::file::plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::stdin_::plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::stdout_::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::file::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::stdin_::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::stdout_::plugin)

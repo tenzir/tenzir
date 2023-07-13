@@ -14,7 +14,7 @@ auto openapi_record() -> record {
   auto paths = record{};
   for (auto const* plugin : plugins::get<rest_endpoint_plugin>()) {
     auto spec = plugin->openapi_specification();
-    VAST_ASSERT_CHEAP(caf::holds_alternative<record>(spec));
+    TENZIR_ASSERT_CHEAP(caf::holds_alternative<record>(spec));
     for (auto& [key, value] : caf::get<record>(spec))
       paths.emplace(key, value);
   }
@@ -117,7 +117,7 @@ PipelineInfo:
     diagnostics:
       $ref: '#/components/schemas/Diagnostics'
   )_");
-  VAST_ASSERT_CHEAP(schemas);
+  TENZIR_ASSERT_CHEAP(schemas);
   // clang-format off
   auto openapi = record{
     {"openapi", "3.0.0"},
@@ -156,14 +156,14 @@ on the command-line using the `vast rest generate-token` command.)_"},
 std::string generate_openapi_json() noexcept {
   auto record = openapi_record();
   auto json = to_json(record);
-  VAST_ASSERT_CHEAP(json);
+  TENZIR_ASSERT_CHEAP(json);
   return *json;
 }
 
 std::string generate_openapi_yaml() noexcept {
   auto record = openapi_record();
   auto yaml = to_yaml(record);
-  VAST_ASSERT_CHEAP(yaml);
+  TENZIR_ASSERT_CHEAP(yaml);
   return *yaml;
 }
 

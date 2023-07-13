@@ -165,7 +165,7 @@ std::ostream& operator<<(std::ostream& os, const line_pair& x) {
 /// description of what went wrong.
 void render_parse_error(const command& cmd, const invocation& inv,
                         const caf::error& err, std::ostream& os) {
-  VAST_ASSERT(err != caf::none);
+  TENZIR_ASSERT(err != caf::none);
   auto first = inv.arguments.begin();
   auto last = inv.arguments.end();
   auto position = first;
@@ -285,8 +285,8 @@ caf::error parse_impl(invocation& result, const command& cmd,
                       command::argument_iterator first,
                       command::argument_iterator last, const command** target) {
   using caf::get_or;
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(std::string(cmd.name)),
-                   VAST_ARG("args", first, last));
+  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(std::string(cmd.name)),
+                     TENZIR_ARG("args", first, last));
   // Parse arguments for this command.
   *target = &cmd;
   auto [state, position] = cmd.options.parse(result.options, first, last);

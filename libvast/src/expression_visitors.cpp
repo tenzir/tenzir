@@ -480,13 +480,13 @@ bool matcher::operator()(const predicate& p) {
 
 bool matcher::operator()(const meta_extractor& e, const data& d) {
   if (e.kind == meta_extractor::schema) {
-    VAST_ASSERT(caf::holds_alternative<std::string>(d));
+    TENZIR_ASSERT(caf::holds_alternative<std::string>(d));
     // TODO: It's kind of non-sensical that evaluate operates on data rather
     // than data_view, forcing us to copy the type's name here.
     return evaluate(d, op_, std::string{type_.name()});
   }
   if (e.kind == meta_extractor::schema_id) {
-    VAST_ASSERT(caf::holds_alternative<std::string>(d));
+    TENZIR_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.make_fingerprint());
   }
   return false;

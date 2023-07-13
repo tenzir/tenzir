@@ -58,11 +58,11 @@ public:
   /// Constructs a *where* pipeline operator.
   /// @pre *expr* must be normalized and validated
   explicit where_operator(located<expression> expr) : expr_{std::move(expr)} {
-#if VAST_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
     auto result = normalize_and_validate(expr_.inner);
-    VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
-    VAST_ASSERT(*result == expr_.inner, fmt::to_string(result).c_str());
-#endif // VAST_ENABLE_ASSERTIONS
+    TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
+    TENZIR_ASSERT(*result == expr_.inner, fmt::to_string(result).c_str());
+#endif // TENZIR_ENABLE_ASSERTIONS
   }
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
@@ -105,7 +105,7 @@ public:
     }
     auto expr_conjunction = conjunction{expr_.inner, expr};
     auto result = normalize_and_validate(expr_conjunction);
-    VAST_ASSERT(result);
+    TENZIR_ASSERT(result);
     return std::pair{std::move(*result), nullptr};
   }
 
@@ -148,4 +148,4 @@ public:
 } // namespace
 } // namespace vast::plugins::where
 
-VAST_REGISTER_PLUGIN(vast::plugins::where::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::where::plugin)

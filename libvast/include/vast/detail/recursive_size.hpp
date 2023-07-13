@@ -36,7 +36,7 @@ recursive_size(const std::filesystem::path& root_dir) {
           continue;
         return caf::make_error(ec::filesystem_error, err.message());
       }
-      VAST_TRACE("{} += {}", f.path().string(), size);
+      TENZIR_TRACE("{} += {}", f.path().string(), size);
       total_size += size;
     }
   }

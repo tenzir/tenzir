@@ -71,8 +71,8 @@ make_random_table_slices(size_t num_slices, size_t slice_size, type schema,
 /// excessive memory allocations.
 std::vector<std::vector<data>>
 make_data(const table_slice& slice, size_t first_row, size_t num_rows) {
-  VAST_ASSERT(first_row < slice.rows());
-  VAST_ASSERT(num_rows <= slice.rows() - first_row);
+  TENZIR_ASSERT(first_row < slice.rows());
+  TENZIR_ASSERT(num_rows <= slice.rows() - first_row);
   if (num_rows == 0)
     num_rows = slice.rows() - first_row;
   std::vector<std::vector<data>> result;
@@ -195,8 +195,8 @@ table_slice table_slices::make_slice() {
 }
 
 vast::data_view table_slices::at(size_t row, size_t col) const {
-  VAST_ASSERT(row < test_data.size());
-  VAST_ASSERT(col < test_data[row].size());
+  TENZIR_ASSERT(row < test_data.size());
+  TENZIR_ASSERT(col < test_data[row].size());
   return make_view(test_data[row][col]);
 }
 

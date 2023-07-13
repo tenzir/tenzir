@@ -107,7 +107,7 @@ public:
       } else {
         auto str = caf::get<caf::config_value::string>(i->second);
         auto b = to<base>(str);
-        VAST_ASSERT(b); // pre-condition is that this was validated
+        TENZIR_ASSERT(b); // pre-condition is that this was validated
         bmi_ = bitmap_index_type{base{std::move(*b)}};
       }
     }
@@ -205,7 +205,7 @@ private:
 
   caf::error unpack_impl(const fbs::ValueIndex& from) override {
     const auto* from_arithmetic = from.value_index_as_arithmetic();
-    VAST_ASSERT(from_arithmetic);
+    TENZIR_ASSERT(from_arithmetic);
     return unpack(*from_arithmetic->bitmap_index(), bmi_);
   }
 

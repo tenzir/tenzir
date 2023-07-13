@@ -114,7 +114,7 @@ public:
                        });
       if (schema_mapping != config_.schemas.end()) {
         auto rename_schema = [&](const concrete_type auto& pruned_schema) {
-          VAST_ASSERT(!schema.has_attributes());
+          TENZIR_ASSERT(!schema.has_attributes());
           return type{schema_mapping->to, pruned_schema};
         };
         renamed_schema = caf::visit(rename_schema, schema);
@@ -218,4 +218,4 @@ public:
 
 } // namespace vast::plugins::rename
 
-VAST_REGISTER_PLUGIN(vast::plugins::rename::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::rename::plugin)

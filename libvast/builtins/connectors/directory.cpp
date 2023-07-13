@@ -115,4 +115,4 @@ public:
 
 } // namespace vast::plugins::directory
 
-VAST_REGISTER_PLUGIN(vast::plugins::directory::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::directory::plugin)

@@ -44,7 +44,7 @@ record_type zeekify(record_type schema) {
       // The first field is almost exclusively the event timestamp for standard
       // Zeek logs. Its has the field name `ts`. For streaming JSON, some other
       // fields, e.g., `_path`, precede it.
-      VAST_DEBUG("using timestamp type for field {}", field.name);
+      TENZIR_DEBUG("using timestamp type for field {}", field.name);
       transformations.push_back({
         offset,
         record_type::assign({
@@ -56,7 +56,7 @@ record_type zeekify(record_type schema) {
       });
       found_event_timestamp = true;
     } else if (is_opaque_id(field)) {
-      VAST_DEBUG("using hash index for field {}", field.name);
+      TENZIR_DEBUG("using hash index for field {}", field.name);
       transformations.push_back({
         offset,
         record_type::assign({

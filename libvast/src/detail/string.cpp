@@ -107,7 +107,7 @@ std::string replace_all(std::string str, std::string_view search,
 std::vector<std::string_view> split(std::string_view str, std::string_view sep,
                                     std::string_view esc, size_t max_splits,
                                     bool include_sep) {
-  VAST_ASSERT(!sep.empty());
+  TENZIR_ASSERT(!sep.empty());
   std::vector<std::string_view> pos;
   size_t splits = 0;
   auto end = str.end();

@@ -171,7 +171,7 @@ ip& ip::operator^=(const ip& other) {
 }
 
 bool ip::compare(const ip& other, size_t k) const {
-  VAST_ASSERT(k <= 128);
+  TENZIR_ASSERT(k <= 128);
   if (k == 0) // trivially true
     return true;
   auto x = bytes_.data();

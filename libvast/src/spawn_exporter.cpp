@@ -34,7 +34,7 @@ namespace vast {
 
 auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
                     spawn_arguments& args) -> caf::expected<caf::actor> {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(args));
+  TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(args));
   auto parse_result = std::invoke([&]() -> caf::expected<pipeline> {
     if (args.inv.arguments.empty()) {
       return pipeline{};
@@ -49,8 +49,9 @@ auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
     if (!result) {
       if (auto as_expr
           = pipeline::internal_parse(fmt::format("where {}", query))) {
-        VAST_WARN("`vast export <expr>` is deprecated, please use `vast export "
-                  "'where <expr>'` instead");
+        TENZIR_WARN(
+          "`vast export <expr>` is deprecated, please use `vast export "
+          "'where <expr>'` instead");
         result = std::move(as_expr);
       }
     }
@@ -76,7 +77,7 @@ auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
   auto handle
     = self->spawn(exporter, query_opts, std::move(pipe), std::move(index));
-  VAST_VERBOSE("{} spawned an exporter for '{}'", *self, pipe.to_string());
+  TENZIR_VERBOSE("{} spawned an exporter for '{}'", *self, pipe.to_string());
   // Wire the exporter to all components.
   if (accountant)
     self->send(handle, atom::set_v, accountant);
@@ -89,8 +90,8 @@ auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
           // nop
         },
         [=, importer = importer](caf::error err) {
-          VAST_ERROR("{} failed to connect to importer {}: {}", *self, importer,
-                     err);
+          TENZIR_ERROR("{} failed to connect to importer {}: {}", *self,
+                       importer, err);
         });
   return caf::actor_cast<caf::actor>(handle);
 }

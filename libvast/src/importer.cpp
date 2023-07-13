@@ -51,7 +51,7 @@ public:
 
   void process(caf::downstream<table_slice>& out,
                std::vector<table_slice>& slices) override {
-    VAST_TRACE_SCOPE("{}", VAST_ARG(slices));
+    TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(slices));
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
     for (auto&& slice : std::exchange(slices, {})) {
@@ -70,7 +70,7 @@ public:
   }
 
   void finalize(const caf::error& err) override {
-    VAST_DEBUG("{} stopped with message: {}", *state.self, render(err));
+    TENZIR_DEBUG("{} stopped with message: {}", *state.self, render(err));
   }
 
   importer_state& state;
@@ -90,15 +90,15 @@ public:
   void register_input_path(caf::inbound_path* ptr) override {
     driver_.state.inbound_descriptions[ptr]
       = std::exchange(driver_.state.inbound_description, "anonymous");
-    VAST_INFO("{} adds {} source", *driver_.state.self,
-              driver_.state.inbound_descriptions[ptr]);
+    TENZIR_INFO("{} adds {} source", *driver_.state.self,
+                driver_.state.inbound_descriptions[ptr]);
     super::register_input_path(ptr);
   }
 
   void deregister_input_path(caf::inbound_path* ptr) noexcept override {
     if ((flags_ & (is_stopped_flag | is_shutting_down_flag)) == 0) {
-      VAST_INFO("{} removes {} source", *driver_.state.self,
-                driver_.state.inbound_descriptions[ptr]);
+      TENZIR_INFO("{} removes {} source", *driver_.state.self,
+                  driver_.state.inbound_descriptions[ptr]);
       driver_.state.inbound_descriptions.erase(ptr);
     }
     super::deregister_input_path(ptr);
@@ -163,16 +163,16 @@ void importer_state::send_report() {
   auto r = performance_report{
     .data = std::move(samples),
   };
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
+#if TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_VERBOSE
   auto beat = [&](const auto& sample) {
     if (sample.value.events > 0) {
       if (auto rate = sample.value.rate_per_sec(); std::isfinite(rate))
-        VAST_VERBOSE("{} handled {} events at a rate of {} events/sec in {}",
-                     *self, sample.value.events, static_cast<uint64_t>(rate),
-                     to_string(sample.value.duration));
+        TENZIR_VERBOSE("{} handled {} events at a rate of {} events/sec in {}",
+                       *self, sample.value.events, static_cast<uint64_t>(rate),
+                       to_string(sample.value.duration));
       else
-        VAST_VERBOSE("{} handled {} events in {}", *self, sample.value.events,
-                     to_string(sample.value.duration));
+        TENZIR_VERBOSE("{} handled {} events in {}", *self, sample.value.events,
+                       to_string(sample.value.duration));
     }
   };
   beat(r.data[1]);
@@ -186,7 +186,7 @@ importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, index_actor index,
          accountant_actor accountant) {
-  VAST_TRACE_SCOPE("importer {} {}", VAST_ARG(self->id()), VAST_ARG(dir));
+  TENZIR_TRACE_SCOPE("importer {} {}", TENZIR_ARG(self->id()), TENZIR_ARG(dir));
   if (auto ec = std::error_code{};
       std::filesystem::exists(dir / "current_id_block", ec))
     std::filesystem::remove(dir / "current_id_block", ec);
@@ -204,7 +204,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->state.stage->add_outbound_path(self->state.index);
   }
   if (accountant) {
-    VAST_DEBUG("{} registers accountant {}", *self, accountant);
+    TENZIR_DEBUG("{} registers accountant {}", *self, accountant);
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());
     detail::weak_run_delayed_loop(self, defaults::telemetry_rate, [self] {
@@ -214,13 +214,13 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   return {
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) {
-      VAST_DEBUG("{} adds a new sink: {}", *self, sink);
+      TENZIR_DEBUG("{} adds a new sink: {}", *self, sink);
       return self->state.stage->add_outbound_path(sink);
     },
     // Register a FLUSH LISTENER actor.
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      VAST_DEBUG("{} adds new subscriber {}", *self, listener);
-      VAST_ASSERT(self->state.stage != nullptr);
+      TENZIR_DEBUG("{} adds new subscriber {}", *self, listener);
+      TENZIR_ASSERT(self->state.stage != nullptr);
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
     },
@@ -237,13 +237,13 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       // parts. Sadly, the current actor is already stored as the "other side"
       // of the stream in the outbound path, so we can't even hack around this
       // with `caf::unsafe_send_as()` or similar black magic.
-      VAST_DEBUG("{} adds a new source", *self);
+      TENZIR_DEBUG("{} adds a new source", *self);
       return self->state.stage->add_inbound_path(in);
     },
     // -- stream_sink_actor<table_slice, std::string> --------------------------
     [self](caf::stream<table_slice> in, std::string desc) {
       self->state.inbound_description = std::move(desc);
-      VAST_DEBUG("{} adds a new {} source", *self, desc);
+      TENZIR_DEBUG("{} adds a new {} source", *self, desc);
       return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------

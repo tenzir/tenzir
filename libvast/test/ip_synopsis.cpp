@@ -40,7 +40,7 @@ TEST(failed construction) {
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
     factory<synopsis>::add(type{ip_type{}}, make_ip_synopsis<legacy_hash>);
   }
   caf::settings opts;

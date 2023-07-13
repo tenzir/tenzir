@@ -49,7 +49,7 @@ public:
           begin = row + 1;
         }
       }
-      VAST_ASSERT(begin == slice.rows() + 1);
+      TENZIR_ASSERT(begin == slice.rows() + 1);
       previous = std::move(slice);
     }
   }
@@ -70,7 +70,7 @@ private:
   /// @pre `a.schema() == b.schema()`
   static auto is_duplicate(const table_slice& a, size_t a_row,
                            const table_slice& b, size_t b_row) -> bool {
-    VAST_ASSERT_EXPENSIVE(a.schema().prune() == b.schema().prune());
+    TENZIR_ASSERT_EXPENSIVE(a.schema().prune() == b.schema().prune());
     for (auto col = size_t{0}; col < a.columns(); ++col) {
       if (a.at(a_row, col) != b.at(b_row, col)) {
         return false;
@@ -94,4 +94,4 @@ public:
 
 } // namespace vast::plugins::unique
 
-VAST_REGISTER_PLUGIN(vast::plugins::unique::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::unique::plugin)

@@ -63,8 +63,9 @@ caf::expected<std::string> read_query(const std::string& path) {
 }
 
 std::string make_all_query() {
-  VAST_VERBOSE("not providing a query causes everything to be exported; please "
-               "be aware that this operation may be very expensive.");
+  TENZIR_VERBOSE(
+    "not providing a query causes everything to be exported; please "
+    "be aware that this operation may be very expensive.");
   return "";
 }
 
@@ -73,7 +74,7 @@ std::string make_all_query() {
 caf::expected<std::string>
 read_query(const invocation& inv, std::string_view file_option,
            enum must_provide_query must_provide_query, size_t argument_offset) {
-  VAST_TRACE_SCOPE("{} {}", inv, file_option);
+  TENZIR_TRACE_SCOPE("{} {}", inv, file_option);
   // The below logic matches the following behavior:
   // vast export <format> <query>
   //   takes the query from the command line

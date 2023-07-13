@@ -37,9 +37,9 @@ table_slice_builder::table_slice_builder(type schema,
     arrow_builder_{
       this->schema().make_arrow_builder(arrow::default_memory_pool())},
     builder_{initial_buffer_size} {
-  VAST_ASSERT(caf::holds_alternative<record_type>(schema_));
-  VAST_ASSERT(!schema_.name().empty());
-  VAST_ASSERT(schema_);
+  TENZIR_ASSERT(caf::holds_alternative<record_type>(schema_));
+  TENZIR_ASSERT(!schema_.name().empty());
+  TENZIR_ASSERT(schema_);
   for (auto&& leaf : caf::get<record_type>(schema_).leaves())
     leaves_.push_back(std::move(leaf));
   current_leaf_ = leaves_.end();
@@ -53,7 +53,7 @@ table_slice_builder::~table_slice_builder() noexcept {
 
 size_t table_slice_builder::columns() const noexcept {
   auto result = arrow_schema_->num_fields();
-  VAST_ASSERT(result >= 0);
+  TENZIR_ASSERT(result >= 0);
   return detail::narrow_cast<size_t>(result);
 }
 
@@ -67,13 +67,13 @@ table_slice
 create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
                    flatbuffers::FlatBufferBuilder& builder, type schema,
                    table_slice::serialize serialize) {
-  VAST_ASSERT(record_batch);
-#if VAST_ENABLE_ASSERTIONS
+  TENZIR_ASSERT(record_batch);
+#if TENZIR_ENABLE_ASSERTIONS
   // NOTE: There's also a ValidateFull function, but that always errors when
   // using nested struct arrays. Last tested with Arrow 7.0.0. -- DL.
   auto validate_status = record_batch->Validate();
-  VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-#endif // VAST_ENABLE_ASSERTIONS
+  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+#endif // TENZIR_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
   if (serialize == table_slice::serialize::yes) {
     auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
@@ -82,7 +82,7 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
           .ValueOrDie();
     auto status = stream_writer->WriteRecordBatch(*record_batch);
     if (!status.ok())
-      VAST_ERROR("failed to write record batch: {}", status.ToString());
+      TENZIR_ERROR("failed to write record batch: {}", status.ToString());
     auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
     fbs_ipc_buffer = builder.CreateVector(arrow_ipc_buffer->data(),
                                           arrow_ipc_buffer->size());
@@ -139,7 +139,7 @@ verify_record_batch(const arrow::RecordBatch& record_batch) {
 table_slice table_slice_builder::finish() {
   // Sanity check: If this triggers, the calls to add() did not match the number
   // of fields in the schema.
-  VAST_ASSERT(current_leaf_ == leaves_.end());
+  TENZIR_ASSERT(current_leaf_ == leaves_.end());
   // Pack record batch.
   auto combined_array = arrow_builder_->Finish().ValueOrDie();
   auto record_batch = arrow::RecordBatch::Make(
@@ -154,7 +154,7 @@ table_slice table_slice_builder::finish() {
 table_slice table_slice_builder::create(
   const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema,
   table_slice::serialize serialize, size_t initial_buffer_size) {
-  VAST_ASSERT(verify_record_batch(*record_batch));
+  TENZIR_ASSERT(verify_record_batch(*record_batch));
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
   return create_table_slice(record_batch, builder, std::move(schema),
                             serialize);
@@ -191,7 +191,7 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
     [&](const list& xs, const record_type& rt) {
       size_t col = 0;
       for (const auto& field : rt.fields()) {
-        VAST_ASSERT(col < xs.size());
+        TENZIR_ASSERT(col < xs.size());
         if (!recursive_add(xs[col], field.type))
           return false;
         ++col;
@@ -215,7 +215,7 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
         // recursively.
         if (const auto* lt = caf::get_if<list_type>(&t)) {
           auto* l = caf::get_if<list>(&x);
-          VAST_ASSERT(l);
+          TENZIR_ASSERT(l);
           auto result = list{};
           result.reserve(l->size());
           for (size_t i = 0; i < l->size(); ++i)
@@ -230,8 +230,8 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
           if (caf::holds_alternative<caf::none_t>(x))
             return caf::none;
           auto* l = caf::get_if<list>(&x);
-          VAST_ASSERT(l);
-          VAST_ASSERT(l->size() == rt->num_fields());
+          TENZIR_ASSERT(l);
+          TENZIR_ASSERT(l->size() == rt->num_fields());
           auto result = record{};
           result.reserve(l->size());
           for (size_t i = 0; i < l->size(); ++i) {
@@ -259,8 +259,8 @@ bool table_slice_builder::add(data_view x) {
   if (num_rows_ == 0 || current_leaf_ == leaves_.end()) {
     current_leaf_ = leaves_.begin();
     if (auto status = nested_builder->Append(); !status.ok()) {
-      VAST_ERROR("failed to add row to builder with schema {}: {}", schema(),
-                 status.ToString());
+      TENZIR_ERROR("failed to add row to builder with schema {}: {}", schema(),
+                   status.ToString());
       return false;
     }
     ++num_rows_;
@@ -275,9 +275,9 @@ bool table_slice_builder::add(data_view x) {
         });
     if (following_indices_are_zero) {
       if (auto status = nested_builder->Append(); !status.ok()) {
-        VAST_ERROR("failed to add nested record to builder with schema {}: "
-                   "{}",
-                   schema(), status.ToString());
+        TENZIR_ERROR("failed to add nested record to builder with schema {}: "
+                     "{}",
+                     schema(), status.ToString());
         return false;
       }
     }
@@ -287,8 +287,8 @@ bool table_slice_builder::add(data_view x) {
         *nested_builder->field_builder(detail::narrow_cast<int>(index.back())),
         x);
       !status.ok()) {
-    VAST_ERROR("failed to add {} to builder for field {}: {}", x, field,
-               status.ToString());
+    TENZIR_ERROR("failed to add {} to builder for field {}: {}", x, field,
+                 status.ToString());
     return false;
   }
   ++current_leaf_;
@@ -347,7 +347,7 @@ arrow::Status
 append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
                const view<type_to_data_t<ip_type>>& view) noexcept {
   const auto bytes = as_bytes(view);
-  VAST_ASSERT(bytes.size() == 16);
+  TENZIR_ASSERT(bytes.size() == 16);
   return builder.Append(arrow_compat::string_view{
     reinterpret_cast<const char*>(bytes.data()), bytes.size()});
 }

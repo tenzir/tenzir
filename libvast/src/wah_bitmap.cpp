@@ -57,7 +57,7 @@ void wah_bitmap::append_bits(bool bit, size_type n) {
   // Fill up the active word.
   auto unused = word_type::literal_word_size - num_last_;
   auto inject = std::min(unused, n);
-  VAST_ASSERT(inject > 0);
+  TENZIR_ASSERT(inject > 0);
   if (bit)
     blocks_.back() |= word_type::word::lsb_fill(inject) << num_last_;
   num_last_ += inject;
@@ -97,15 +97,15 @@ void wah_bitmap::append_bits(bool bit, size_type n) {
 }
 
 void wah_bitmap::append_block(block_type value, size_type bits) {
-  VAST_ASSERT(bits > 0);
-  VAST_ASSERT(bits <= word_type::width);
+  TENZIR_ASSERT(bits > 0);
+  TENZIR_ASSERT(bits <= word_type::width);
   if (blocks_.empty())
     blocks_.push_back(word_type::none);
   else if (num_last_ == word_type::literal_word_size)
     merge_active_word();
   auto unused = word_type::literal_word_size - num_last_;
   auto inject = std::min(unused, bits);
-  VAST_ASSERT(inject > 0);
+  TENZIR_ASSERT(inject > 0);
   blocks_.back() |= (value & word_type::word::lsb_fill(inject)) << num_last_;
   num_last_ += inject;
   num_bits_ += inject;
@@ -132,8 +132,8 @@ void wah_bitmap::flip() {
 }
 
 void wah_bitmap::merge_active_word() {
-  VAST_ASSERT(!blocks_.empty());
-  VAST_ASSERT(num_last_ == word_type::literal_word_size);
+  TENZIR_ASSERT(!blocks_.empty());
+  TENZIR_ASSERT(num_last_ == word_type::literal_word_size);
   auto guard = caf::detail::make_scope_guard([&] {
     blocks_.push_back(word_type::none);
     num_last_ = 0;
@@ -209,7 +209,7 @@ void wah_bitmap_range::next() {
 }
 
 void wah_bitmap_range::scan() {
-  VAST_ASSERT(begin_ != end_);
+  TENZIR_ASSERT(begin_ != end_);
   if (word_type::is_fill(*begin_)) {
     auto n = word_type::fill_words(*begin_) * word_type::literal_word_size;
     auto value = word_type::fill_type(*begin_);

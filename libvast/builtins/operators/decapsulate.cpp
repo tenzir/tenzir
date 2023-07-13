@@ -208,7 +208,7 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
   // Parse layer 2.
   auto frame = frame::make(bytes, type);
   if (!frame) {
-    VAST_TRACE("failed to parse layer-2 frame");
+    TENZIR_TRACE("failed to parse layer-2 frame");
     return std::nullopt;
   }
   auto ether = builder.push_field("ether").push_record();
@@ -234,7 +234,7 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
   // Parse layer 3.
   auto packet = packet::make(frame->payload, frame->type);
   if (!packet) {
-    VAST_TRACE("failed to parse layer-3 packet");
+    TENZIR_TRACE("failed to parse layer-3 packet");
     return std::nullopt;
   }
   auto ip = builder.push_field("ip").push_record();
@@ -247,7 +247,7 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
   // Parse layer 4.
   auto segment = segment::make(packet->payload, packet->type);
   if (!segment) {
-    VAST_TRACE("failed to parse layer-4 segment");
+    TENZIR_TRACE("failed to parse layer-4 segment");
     return std::nullopt;
   }
   switch (segment->type) {
@@ -388,7 +388,7 @@ public:
     };
     auto op = pipeline::internal_parse_as_operator(
       fmt::format("decapsulate | where {}", expr));
-    VAST_ASSERT_CHEAP(op);
+    TENZIR_ASSERT_CHEAP(op);
     return std::pair{expression{std::move(pred)}, std::move(*op)};
   }
 
@@ -431,4 +431,4 @@ private:
 
 } // namespace vast::plugins::decapsulate
 
-VAST_REGISTER_PLUGIN(vast::plugins::decapsulate::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::decapsulate::plugin)

@@ -6,5 +6,5 @@ services:
       context: ../../resources
       dockerfile: ../docker/matcher/matcher_client.Dockerfile
       args:
-        - VAST_IMAGE
-        - VAST_VERSION
+        - TENZIR_IMAGE
+        - TENZIR_VERSION

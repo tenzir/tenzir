@@ -100,7 +100,7 @@ void partition_synopsis::add(const table_slice& slice,
   };
   if (!schema)
     schema = slice.schema();
-  VAST_ASSERT(schema == slice.schema());
+  TENZIR_ASSERT(schema == slice.schema());
   auto each = caf::get<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;

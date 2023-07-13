@@ -27,15 +27,16 @@ caf::expected<caf::actor>
 spawn_eraser(node_actor::stateful_pointer<node_state> self,
              spawn_arguments& args) {
   using namespace std::string_literals;
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(*self), VAST_ARG(args));
+  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(*self), TENZIR_ARG(args));
   // Parse options.
   auto eraser_query = caf::get_or(args.inv.options, "tenzir.aging-query", ""s);
   if (eraser_query.empty()) {
-    VAST_VERBOSE("{} has no aging-query and skips starting the eraser", *self);
+    TENZIR_VERBOSE("{} has no aging-query and skips starting the eraser",
+                   *self);
     return ec::no_error;
   }
   if (auto expr = to<expression>(eraser_query); !expr) {
-    VAST_WARN("{} got an invalid aging-query {}", *self, eraser_query);
+    TENZIR_WARN("{} got an invalid aging-query {}", *self, eraser_query);
     return expr.error();
   }
   auto aging_frequency = defaults::aging_frequency;
@@ -52,7 +53,7 @@ spawn_eraser(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::missing_component, "index");
   // Spawn the eraser.
   auto handle = self->spawn(eraser, aging_frequency, eraser_query, index);
-  VAST_VERBOSE("{} spawned an eraser for {}", *self, eraser_query);
+  TENZIR_VERBOSE("{} spawned an eraser for {}", *self, eraser_query);
   return caf::actor_cast<caf::actor>(handle);
 }
 

@@ -67,7 +67,7 @@ public:
                   "you've chosen an alignment that is larger than "
                   "alignof(std::max_align_t), and cannot be guaranteed "
                   "by normal operator new");
-    VAST_ASSERT(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
+    TENZIR_ASSERT(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
     auto const aligned_n = align_up(n);
     if (static_cast<decltype(aligned_n)>(buf_ + N - ptr_) >= aligned_n) {
       char* r = ptr_;
@@ -78,7 +78,7 @@ public:
   }
 
   void deallocate(char* p, size_t n) noexcept {
-    VAST_ASSERT(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
+    TENZIR_ASSERT(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
     if (pointer_in_buffer(p)) {
       n = align_up(n);
       if (p + n == ptr_)

@@ -77,7 +77,7 @@ public:
         } else {
           append_status = builder->AppendNull();
         }
-        VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+        TENZIR_ASSERT(append_status.ok(), append_status.ToString().c_str());
       }
       auto new_array = builder->Finish().ValueOrDie();
       return {
@@ -89,9 +89,9 @@ public:
              field_name, schema.name())) {
         auto index_type = caf::get<record_type>(schema).field(index).type;
         if (!caf::holds_alternative<ip_type>(index_type)) {
-          VAST_DEBUG("pseudonymize operator skips field '{}' of unsupported "
-                     "type '{}'",
-                     field_name, index_type.name());
+          TENZIR_DEBUG("pseudonymize operator skips field '{}' of unsupported "
+                       "type '{}'",
+                       field_name, index_type.name());
           continue;
         }
         transformations.push_back({index, std::move(transformation)});
@@ -213,4 +213,4 @@ public:
 
 } // namespace vast::plugins::pseudonymize
 
-VAST_REGISTER_PLUGIN(vast::plugins::pseudonymize::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::pseudonymize::plugin)

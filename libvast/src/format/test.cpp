@@ -44,7 +44,7 @@ caf::expected<distribution> make_distribution(const type& t) {
   if (!parser(*tag, tie))
     return caf::make_error(ec::parse_error, "invalid distribution "
                                             "specification");
-  VAST_DEBUG("generating distribution {} in [{}, {})", name, p0, p1);
+  TENZIR_DEBUG("generating distribution {} in [{}, {})", name, p0, p1);
   if (name == "uniform") {
     if (caf::holds_alternative<int64_type>(t))
       return distribution{std::uniform_int_distribution<int64_t>{
@@ -108,7 +108,7 @@ caf::expected<blueprint> make_blueprint(const type& t) {
   };
   if (auto err = visit(initialize, t))
     return err;
-  VAST_DEBUG("created blueprint for type {} with stub data {}", t, *bp.data);
+  TENZIR_DEBUG("created blueprint for type {} with stub data {}", t, *bp.data);
   return bp;
 }
 
@@ -237,7 +237,7 @@ std::string_view builtin_module = R"__(
 auto default_module() {
   module result;
   auto success = parsers::module(builtin_module, result);
-  VAST_ASSERT(success);
+  TENZIR_ASSERT(success);
   return result;
 }
 
@@ -254,8 +254,8 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
     num_events_ = std::numeric_limits<size_t>::max();
   if (caf::holds_alternative<std::string>(options,
                                           "tenzir.import.read-timeout"))
-    VAST_VERBOSE("{} ingnores the unsupported read timeout option",
-                 detail::pretty_type_name(this));
+    TENZIR_VERBOSE("{} ingnores the unsupported read timeout option",
+                   detail::pretty_type_name(this));
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
@@ -300,13 +300,13 @@ const char* reader::name() const {
 
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
-  VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(max_events), VAST_ARG(max_slice_size),
-                   VAST_ARG(num_events_));
+  TENZIR_TRACE_SCOPE("{} {} {}", TENZIR_ARG(max_events),
+                     TENZIR_ARG(max_slice_size), TENZIR_ARG(num_events_));
   // Sanity checks.
   if (module_.empty())
     if (auto err = module(default_module()))
       return err;
-  VAST_ASSERT(next_ != module_.end());
+  TENZIR_ASSERT(next_ != module_.end());
   if (num_events_ == 0)
     return caf::make_error(ec::end_of_input, "completed generation of events");
   // Loop until we reach the `max_events` limit or exhaust the configured
@@ -316,18 +316,18 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     // Generate random data.
     const auto& t = *next_;
     auto bp = blueprints_.find(t);
-    VAST_ASSERT(bp != blueprints_.end());
+    TENZIR_ASSERT(bp != blueprints_.end());
     auto ptr = builder(t);
-    VAST_ASSERT(ptr != nullptr);
+    TENZIR_ASSERT(ptr != nullptr);
     auto rows = std::min({num_events_, max_events - produced, max_slice_size});
-    VAST_ASSERT(rows > 0);
+    TENZIR_ASSERT(rows > 0);
     for (size_t i = 0; i < rows; ++i) {
       auto randomizer
         = default_randomizer{bp->second.distributions, generator_};
       visit(randomizer, t, *bp->second.data);
       if (!ptr->recursive_add(*bp->second.data, t)) {
-        VAST_ERROR("{} failed to add blueprint data to slice builder",
-                   detail::pretty_type_name(this));
+        TENZIR_ERROR("{} failed to add blueprint data to slice builder",
+                     detail::pretty_type_name(this));
         return caf::make_error(ec::format_error, "failed to add blueprint data "
                                                  "to slice builder");
       }

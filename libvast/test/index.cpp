@@ -100,7 +100,7 @@ receive_result(fixtures::deterministic_actor_system& fixture, index_actor index,
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+      TENZIR_PP_STRINGIFY(SUITE)) {
     auto fs = self->spawn(posix_filesystem, directory, accountant_actor{});
     auto index_dir = directory / "index";
     catalog

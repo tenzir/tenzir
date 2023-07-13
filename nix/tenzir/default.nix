@@ -113,37 +113,37 @@
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
             "-DCAF_ROOT_DIR=${caf}"
             "-DTENZIR_EDITION_NAME=${lib.toUpper pname}"
-            "-DVAST_VERSION_TAG=v${versionLong}"
-            "-DVAST_VERSION_SHORT=v${versionShort}"
-            "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${
+            "-DTENZIR_VERSION_TAG=v${versionLong}"
+            "-DTENZIR_VERSION_SHORT=v${versionShort}"
+            "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=${
               if isStatic
               then "ON"
               else "OFF"
             }"
-            "-DVAST_ENABLE_BACKTRACE=ON"
-            "-DVAST_ENABLE_JEMALLOC=ON"
-            "-DVAST_ENABLE_PYTHON_BINDINGS=OFF"
-            "-DVAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
-            "-DVAST_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
+            "-DTENZIR_ENABLE_BACKTRACE=ON"
+            "-DTENZIR_ENABLE_JEMALLOC=ON"
+            "-DTENZIR_ENABLE_PYTHON_BINDINGS=OFF"
+            "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+            "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
           ]
           ++ lib.optionals isStatic [
             "-DBUILD_SHARED_LIBS:BOOL=OFF"
             "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCPACK_GENERATOR=TGZ;DEB"
-            "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
-            "-DVAST_PACKAGE_FILE_NAME_SUFFIX=static"
+            "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
+            "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
           ]
           ++ lib.optionals stdenv.hostPlatform.isx86_64 [
-            "-DVAST_ENABLE_SSE3_INSTRUCTIONS=ON"
-            "-DVAST_ENABLE_SSSE3_INSTRUCTIONS=ON"
-            "-DVAST_ENABLE_SSE4_1_INSTRUCTIONS=ON"
-            "-DVAST_ENABLE_SSE4_1_INSTRUCTIONS=ON"
+            "-DTENZIR_ENABLE_SSE3_INSTRUCTIONS=ON"
+            "-DTENZIR_ENABLE_SSSE3_INSTRUCTIONS=ON"
+            "-DTENZIR_ENABLE_SSE4_1_INSTRUCTIONS=ON"
+            "-DTENZIR_ENABLE_SSE4_1_INSTRUCTIONS=ON"
             # AVX and up is disabled for compatibility.
-            "-DVAST_ENABLE_AVX_INSTRUCTIONS=OFF"
-            "-DVAST_ENABLE_AVX2_INSTRUCTIONS=OFF"
+            "-DTENZIR_ENABLE_AVX_INSTRUCTIONS=OFF"
+            "-DTENZIR_ENABLE_AVX2_INSTRUCTIONS=OFF"
           ]
           ++ lib.optionals disableTests [
-            "-DVAST_ENABLE_UNIT_TESTS=OFF"
+            "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
           ]
           ++ extraCmakeFlags;
 
@@ -200,7 +200,7 @@
                 nativeBuildInputs = [makeWrapper];
               } ''
                 makeWrapper ${self}/bin/tenzir-ctl $out/bin/tenzir-ctl \
-                  --set VAST_PLUGIN_DIRS "${pluginDir}/lib/vast/plugins"
+                  --set TENZIR_PLUGIN_DIRS "${pluginDir}/lib/vast/plugins"
               '';
         };
 

@@ -16,7 +16,7 @@ namespace {
 auto init_root_builder(const type& start_schema, bool allow_fields_discovery)
   -> std::variant<detail::concrete_series_builder<record_type>,
                   detail::fixed_fields_record_builder> {
-  VAST_ASSERT(caf::holds_alternative<record_type>(start_schema));
+  TENZIR_ASSERT(caf::holds_alternative<record_type>(start_schema));
   if (allow_fields_discovery)
     return detail::concrete_series_builder<record_type>{
       caf::get<record_type>(start_schema)};
@@ -45,7 +45,7 @@ auto adaptive_table_slice_builder::finish(std::string_view slice_schema_name)
   const auto batch
     = arrow::RecordBatch::Make(slice_schema.to_arrow_schema(),
                                struct_array.length(), struct_array.fields());
-  VAST_ASSERT(batch);
+  TENZIR_ASSERT(batch);
   auto ret = table_slice{batch, std::move(slice_schema)};
   ret.offset(0u);
   return ret;

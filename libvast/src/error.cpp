@@ -80,7 +80,7 @@ void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
 
 const char* to_string(ec x) {
   auto index = static_cast<size_t>(x);
-  VAST_ASSERT(index < sizeof(descriptions));
+  TENZIR_ASSERT(index < sizeof(descriptions));
   return descriptions[index];
 }
 

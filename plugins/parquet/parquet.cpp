@@ -184,7 +184,7 @@ align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
         struct_array->null_bitmap(), struct_array->null_count());
     },
     [&](const auto&) -> std::shared_ptr<arrow::Array> {
-      VAST_ASSERT(t.to_arrow_type()->Equals(array->type()));
+      TENZIR_ASSERT(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
   };
@@ -211,7 +211,7 @@ restore_enum_chunk_array(const vast::type& t,
       return map_chunked_array(t, array, align_array_to_type);
     },
     [&](const auto&) -> std::shared_ptr<arrow::ChunkedArray> {
-      VAST_ASSERT(t.to_arrow_type()->Equals(array->type()));
+      TENZIR_ASSERT(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
   };
@@ -236,8 +236,8 @@ align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
   }
   auto new_table = arrow::Table::Make(target_schema, arrays, table->num_rows());
   const auto delta = std::chrono::steady_clock::now() - start;
-  VAST_DEBUG("table schema aligned in {}[ns]",
-             data{std::chrono::duration_cast<duration>(delta)});
+  TENZIR_DEBUG("table schema aligned in {}[ns]",
+               data{std::chrono::duration_cast<duration>(delta)});
   return new_table;
 }
 
@@ -297,7 +297,7 @@ std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
 
 caf::expected<std::shared_ptr<arrow::Table>>
 read_parquet_buffer(const chunk_ptr& chunk) {
-  VAST_ASSERT(chunk);
+  TENZIR_ASSERT(chunk);
   auto bufr = std::make_shared<arrow::io::BufferReader>(as_arrow_buffer(chunk));
   const auto options = ::parquet::default_reader_properties();
   auto parquet_reader = ::parquet::ParquetFileReader::Open(bufr, options);
@@ -339,7 +339,7 @@ auto make_import_time_col(const time& import_time, int64_t rows) {
     die(fmt::format("make time column failed: '{}'", status.ToString()));
   for (int i = 0; i < rows; ++i) {
     auto status = builder->Append(v);
-    VAST_ASSERT(status.ok());
+    TENZIR_ASSERT(status.ok());
   }
   return builder->Finish().ValueOrDie();
 }
@@ -372,7 +372,7 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices,
   auto status
     = ::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink,
                                    1 << 24, writer_props, arrow_writer_props);
-  VAST_ASSERT(status.ok(), status.ToString().c_str());
+  TENZIR_ASSERT(status.ok(), status.ToString().c_str());
   return sink->Finish().ValueOrDie();
 }
 
@@ -443,7 +443,7 @@ public:
       // to partition-local ids. -- DL
       if (slice.offset() == invalid_id)
         slice.offset(num_rows_);
-      VAST_ASSERT(slice.offset() == num_rows_);
+      TENZIR_ASSERT(slice.offset() == num_rows_);
       num_rows_ += slice.rows();
       slices_.push_back(std::move(slice));
     }
@@ -516,4 +516,4 @@ private:
 } // namespace vast::plugins::parquet
 
 // Finally, register our plugin.
-VAST_REGISTER_PLUGIN(vast::plugins::parquet::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::parquet::plugin)

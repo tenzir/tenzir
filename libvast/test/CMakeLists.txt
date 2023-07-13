@@ -1,4 +1,4 @@
-if (NOT VAST_ENABLE_UNIT_TESTS)
+if (NOT TENZIR_ENABLE_UNIT_TESTS)
   return()
 endif ()
 
@@ -36,7 +36,7 @@ set_tests_properties(build-vast-test PROPERTIES FIXTURES_SETUP
 foreach (suite IN LISTS suites)
   string(REPLACE " " "_" test_name ${suite})
   add_test(NAME "libvast/${test_name}"
-           COMMAND vast-test -v 4 -r "${VAST_UNIT_TEST_TIMEOUT}" -s
+           COMMAND vast-test -v 4 -r "${TENZIR_UNIT_TEST_TIMEOUT}" -s
                    "^${suite}$" ${ARGN})
   set_tests_properties("libvast/${test_name}" PROPERTIES FIXTURES_REQUIRED
                                                          vast_unit_test_fixture)

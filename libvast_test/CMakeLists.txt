@@ -1,4 +1,4 @@
-if (NOT VAST_ENABLE_UNIT_TESTS)
+if (NOT TENZIR_ENABLE_UNIT_TESTS)
   return()
 endif ()
 
@@ -9,8 +9,8 @@ VASTTargetEnableTooling(libvast_test)
 target_compile_definitions(
   libvast_test
   PUBLIC
-    $<BUILD_INTERFACE:VAST_TEST_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/\">
-    $<INSTALL_INTERFACE:VAST_TEST_PATH=\"\${_IMPORT_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/test/\">
+    $<BUILD_INTERFACE:TENZIR_TEST_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/\">
+    $<INSTALL_INTERFACE:TENZIR_TEST_PATH=\"\${_IMPORT_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/test/\">
 )
 target_include_directories(
   libvast_test PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -30,8 +30,8 @@ target_sources(
 )
 set_target_properties(
   libvast_test
-  PROPERTIES SOVERSION "${VAST_VERSION_MAJOR}"
-             VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}"
+  PROPERTIES SOVERSION "${TENZIR_VERSION_MAJOR}"
+             VERSION "${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}"
              OUTPUT_NAME vast_test
              EXPORT_NAME test)
 add_library(vast::test ALIAS libvast_test)

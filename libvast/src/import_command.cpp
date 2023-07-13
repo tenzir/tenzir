@@ -32,7 +32,7 @@
 namespace vast {
 
 caf::message import_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE_SCOPE("{}", inv);
+  TENZIR_TRACE_SCOPE("{}", inv);
   auto self = caf::scoped_actor{sys};
   // Get VAST node.
   auto node_opt
@@ -42,7 +42,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   const auto& node = std::holds_alternative<node_actor>(node_opt)
                        ? std::get<node_actor>(node_opt)
                        : std::get<scope_linked<node_actor>>(node_opt).get();
-  VAST_DEBUG("{} received node handle", inv.full_name);
+  TENZIR_DEBUG("{} received node handle", inv.full_name);
   // Get node components.
   auto components = get_node_components< //
     accountant_actor, catalog_actor, importer_actor>(self, node);
@@ -81,7 +81,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   self->request(node, caf::infinite, atom::put_v, src, "source")
     .receive(
       [&](atom::ok) {
-        VAST_DEBUG("{} registered source at node", __PRETTY_FUNCTION__);
+        TENZIR_DEBUG("{} registered source at node", __PRETTY_FUNCTION__);
       },
       [&](caf::error error) {
         err = std::move(error);
@@ -97,13 +97,13 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
       // C++20: remove explicit 'importer' parameter passing.
       [&, importer = importer](const caf::down_msg& msg) {
         if (msg.source == importer) {
-          VAST_DEBUG("{} received DOWN from node importer",
-                     __PRETTY_FUNCTION__);
+          TENZIR_DEBUG("{} received DOWN from node importer",
+                       __PRETTY_FUNCTION__);
           self->send_exit(src, caf::exit_reason::user_shutdown);
           err = ec::remote_node_down;
           stop = true;
         } else if (msg.source == src) {
-          VAST_DEBUG("{} received DOWN from source", __PRETTY_FUNCTION__);
+          TENZIR_DEBUG("{} received DOWN from source", __PRETTY_FUNCTION__);
           // Wait for the ingest to complete. This must also be done when
           // the index is in the same process because otherwise it can
           // happen that the index gets an exit message before the first
@@ -115,19 +115,19 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
           else
             stop = true;
         } else {
-          VAST_DEBUG("{} received unexpected DOWN from {}", __PRETTY_FUNCTION__,
-                     msg.source);
-          VAST_ASSERT(!"unexpected DOWN message");
+          TENZIR_DEBUG("{} received unexpected DOWN from {}",
+                       __PRETTY_FUNCTION__, msg.source);
+          TENZIR_ASSERT(!"unexpected DOWN message");
         }
       },
       [&](atom::flush) {
-        VAST_DEBUG("{} received flush from IMPORTER", __PRETTY_FUNCTION__);
+        TENZIR_DEBUG("{} received flush from IMPORTER", __PRETTY_FUNCTION__);
         stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
-                   ::strsignal(signal));
-        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
+                     ::strsignal(signal));
+        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
         self->send_exit(src, caf::exit_reason::user_shutdown);
       })
     .until(stop);

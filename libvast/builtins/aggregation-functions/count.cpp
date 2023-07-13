@@ -65,4 +65,4 @@ class plugin : public virtual aggregation_function_plugin {
 
 } // namespace vast::plugins::count
 
-VAST_REGISTER_PLUGIN(vast::plugins::count::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::count::plugin)

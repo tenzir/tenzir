@@ -26,26 +26,26 @@ vast::chunk_ptr flatbuffer_container::dissolve() && {
 }
 
 chunk_ptr flatbuffer_container::get_raw(size_t idx) const {
-  VAST_ASSERT_CHEAP(chunk_);
-  VAST_ASSERT_CHEAP(header_);
+  TENZIR_ASSERT_CHEAP(chunk_);
+  TENZIR_ASSERT_CHEAP(header_);
   auto const& segments = *header_->file_segments();
-  VAST_ASSERT_CHEAP(idx <= segments.size());
+  TENZIR_ASSERT_CHEAP(idx <= segments.size());
   auto const* range = segments.Get(idx);
   return chunk_->slice(range->offset(), range->size());
 }
 
 const std::byte* flatbuffer_container::get(size_t idx) const {
-  VAST_ASSERT_CHEAP(chunk_);
-  VAST_ASSERT_CHEAP(header_);
+  TENZIR_ASSERT_CHEAP(chunk_);
+  TENZIR_ASSERT_CHEAP(header_);
   auto const& segments = *header_->file_segments();
-  VAST_ASSERT_CHEAP(idx <= segments.size());
+  TENZIR_ASSERT_CHEAP(idx <= segments.size());
   auto offset = segments.Get(idx)->offset();
   return chunk_->data() + offset;
 }
 
 size_t flatbuffer_container::size() const {
-  VAST_ASSERT_CHEAP(chunk_);
-  VAST_ASSERT_CHEAP(header_);
+  TENZIR_ASSERT_CHEAP(chunk_);
+  TENZIR_ASSERT_CHEAP(header_);
   return header_->file_segments()->size();
 }
 
@@ -101,8 +101,8 @@ flatbuffer_container_builder::finish(const char* identifier) && {
       = header_buffer.size() - PROBABLY_ENOUGH_BYTES_FOR_HEADER;
     auto* header = GetMutableSegmentedFileHeader(file_contents_.data());
     // We just created this so we know the type.
-    VAST_ASSERT(header->header_type()
-                == vast::fbs::segmented_file::SegmentedFileHeader::v0);
+    TENZIR_ASSERT(header->header_type()
+                  == vast::fbs::segmented_file::SegmentedFileHeader::v0);
     auto* v0 = static_cast<fbs::segmented_file::v0*>(header->mutable_header());
     auto* segments = v0->mutable_file_segments();
     for (size_t i = 0; i < segments->size(); ++i) {

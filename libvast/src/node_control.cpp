@@ -24,8 +24,8 @@ auto node_connection_timeout(const caf::settings& options) -> caf::timespan {
   auto timeout_value = get_or_duration(options, "tenzir.connection-timeout",
                                        defaults::node_connection_timeout);
   if (!timeout_value) {
-    VAST_ERROR("client failed to read connection-timeout: {}",
-               timeout_value.error());
+    TENZIR_ERROR("client failed to read connection-timeout: {}",
+                 timeout_value.error());
     return caf::timespan{defaults::node_connection_timeout};
   }
   auto timeout = caf::timespan{*timeout_value};

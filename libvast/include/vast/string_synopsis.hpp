@@ -38,7 +38,7 @@ public:
   /// filter.
   string_synopsis(type x, typename super::bloom_filter_type bf)
     : super{std::move(x), std::move(bf)} {
-    VAST_ASSERT(caf::holds_alternative<string_type>(this->type()));
+    TENZIR_ASSERT(caf::holds_alternative<string_type>(this->type()));
   }
 
   [[nodiscard]] synopsis_ptr clone() const override {
@@ -88,10 +88,10 @@ template <class HashFunction>
 synopsis_ptr
 make_string_synopsis(vast::type type, bloom_filter_parameters params,
                      std::vector<size_t> seeds) {
-  VAST_ASSERT(caf::holds_alternative<string_type>(type));
+  TENZIR_ASSERT(caf::holds_alternative<string_type>(type));
   auto x = make_bloom_filter<HashFunction>(std::move(params), std::move(seeds));
   if (!x) {
-    VAST_WARN("{} failed to construct Bloom filter", __func__);
+    TENZIR_WARN("{} failed to construct Bloom filter", __func__);
     return nullptr;
   }
   using synopsis_type = string_synopsis<HashFunction>;
@@ -109,7 +109,7 @@ make_string_synopsis(vast::type type, bloom_filter_parameters params,
 template <class HashFunction>
 synopsis_ptr
 make_buffered_string_synopsis(vast::type type, bloom_filter_parameters params) {
-  VAST_ASSERT(caf::holds_alternative<string_type>(type));
+  TENZIR_ASSERT(caf::holds_alternative<string_type>(type));
   if (!params.p) {
     return nullptr;
   }
@@ -125,7 +125,7 @@ make_buffered_string_synopsis(vast::type type, bloom_filter_parameters params) {
 /// @relates string_synopsis
 template <class HashFunction>
 synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
-  VAST_ASSERT(caf::holds_alternative<string_type>(type));
+  TENZIR_ASSERT(caf::holds_alternative<string_type>(type));
   if (auto xs = parse_parameters(type))
     return make_string_synopsis<HashFunction>(std::move(type), std::move(*xs));
   // If no explicit Bloom filter parameters were attached to the type, we try
@@ -134,8 +134,8 @@ synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
   using int_type = caf::config_value::integer;
   auto max_part_size = caf::get_if<int_type>(&opts, "max-partition-size");
   if (!max_part_size) {
-    VAST_ERROR("{} could not determine Bloom filter parameters",
-               __PRETTY_FUNCTION__);
+    TENZIR_ERROR("{} could not determine Bloom filter parameters",
+                 __PRETTY_FUNCTION__);
     return nullptr;
   }
   bloom_filter_parameters params;
@@ -150,8 +150,8 @@ synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
         ? make_buffered_string_synopsis<HashFunction>(std::move(type), params)
         : make_string_synopsis<HashFunction>(std::move(annotated_type), params);
   if (!result)
-    VAST_ERROR("{} failed to evaluate Bloom filter parameters: {} {}", __func__,
-               params.n, params.p);
+    TENZIR_ERROR("{} failed to evaluate Bloom filter parameters: {} {}",
+                 __func__, params.n, params.p);
   return result;
 }
 

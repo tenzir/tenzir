@@ -60,7 +60,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
       "unable to write to db-directory:", abs_dir.string());
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
-  VAST_DEBUG("node acquires PID lock {}", pid_file.string());
+  TENZIR_DEBUG("node acquires PID lock {}", pid_file.string());
   if (auto err = detail::acquire_pid_file(pid_file))
     return err;
   // Remove old VERSION file if it exists. This can be removed once the minimum
@@ -69,21 +69,21 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     auto err = std::error_code{};
     std::filesystem::remove(abs_dir / "VERSION", err);
     if (err)
-      VAST_WARN("failed to remove outdated VERSION file: {}", err.message());
+      TENZIR_WARN("failed to remove outdated VERSION file: {}", err.message());
   }
   // Register self as the termination handler.
   auto signal_reflector
     = self->system().registry().get<signal_reflector_actor>("signal-reflector");
   self->send(signal_reflector, atom::subscribe_v);
   // Spawn the node.
-  VAST_DEBUG("{} spawns local node: {}", __func__, id);
+  TENZIR_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to node.
   auto detach_filesystem
     = detach_components ? detach_components::yes : detach_components::no;
   auto actor = self->spawn(node, id, abs_dir, detach_filesystem);
   actor->attach_functor([=, pid_file = std::move(pid_file)](
                           const caf::error&) -> caf::result<void> {
-    VAST_DEBUG("node removes PID lock: {}", pid_file);
+    TENZIR_DEBUG("node removes PID lock: {}", pid_file);
     std::error_code err{};
     std::filesystem::remove_all(pid_file, err);
     if (err)
@@ -110,7 +110,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     = {"catalog", "index", "importer", "eraser", "disk-monitor"};
   for (auto& c : components) {
     if (auto err = spawn_component(c)) {
-      VAST_ERROR("node failed to spawn {}: {}", c, err);
+      TENZIR_ERROR("node failed to spawn {}: {}", c, err);
       return err;
     }
   }

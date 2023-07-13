@@ -81,7 +81,7 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes,
         // The internal queue is limited by the configuration property
         // queue.buffering.max.messages and queue.buffering.max.kbytes
         auto ms = 1000;
-        VAST_WARN("queue full, retrying in {}ms", ms);
+        TENZIR_WARN("queue full, retrying in {}ms", ms);
         producer_->poll(ms);
         break;
       }

@@ -13,13 +13,13 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
-#if VAST_POSIX
+#if TENZIR_POSIX
 #  include <sys/stat.h>
 #  include <sys/types.h>
 
 #  include <fcntl.h>
 #  include <stdio.h>
-#endif // VAST_POSIX
+#endif // TENZIR_POSIX
 
 namespace vast {
 
@@ -38,7 +38,7 @@ caf::expected<void> file::open(open_mode mode, bool append) {
   if (mode == read_only && append)
     return caf::make_error(ec::filesystem_error, "cannot open file in read and "
                                                  "append mode simultaneously");
-#if VAST_POSIX
+#if TENZIR_POSIX
   // Support reading from STDIN and writing to STDOUT.
   if (path_.string() == "-") {
     if (mode == read_write)
@@ -88,7 +88,7 @@ caf::expected<void> file::open(open_mode mode, bool append) {
                          "failed in open(2):", std::strerror(errno));
 #else
   return caf::make_error(ec::filesystem_error, "not yet implemented");
-#endif // VAST_POSIX
+#endif // TENZIR_POSIX
 }
 
 bool file::close() {

@@ -138,7 +138,7 @@ flatbuffers::Offset<fbs::ValueIndex> ip_index::pack_impl(
 
 caf::error ip_index::unpack_impl(const fbs::ValueIndex& from) {
   const auto* from_ip = from.value_index_as_ip();
-  VAST_ASSERT(from_ip);
+  TENZIR_ASSERT(from_ip);
   if (from_ip->byte_indexes()->size() != bytes_.size())
     return caf::make_error(ec::format_error,
                            fmt::format("unexpected number of byte indexes in "

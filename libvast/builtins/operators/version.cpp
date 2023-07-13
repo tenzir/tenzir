@@ -27,7 +27,7 @@
 
 #include <yaml-cpp/yaml.h>
 
-#if VAST_ENABLE_JEMALLOC
+#if TENZIR_ENABLE_JEMALLOC
 #  include <jemalloc/jemalloc.h>
 #endif
 
@@ -37,7 +37,7 @@ namespace {
 
 auto add_value(auto& field, auto value) {
   [[maybe_unused]] auto err = field.add(value);
-  VAST_ASSERT(not err);
+  TENZIR_ASSERT(not err);
 }
 
 class version_operator final : public crtp_operator<version_operator> {
@@ -89,7 +89,7 @@ public:
       if (dev_mode_) {
         auto dependencies_field = row.push_field("dependencies");
         auto dependencies = dependencies_field.push_list();
-#define VAST_ADD_DEPENDENCY(name, version)                                     \
+#define TENZIR_ADD_DEPENDENCY(name, version)                                   \
   do {                                                                         \
     auto name##_record = dependencies.push_record();                           \
     {                                                                          \
@@ -104,44 +104,44 @@ public:
       }                                                                        \
     }                                                                          \
   } while (false)
-        VAST_ADD_DEPENDENCY(arrow, fmt::format("{}.{}.{}", ARROW_VERSION_MAJOR,
-                                               ARROW_VERSION_MINOR,
-                                               ARROW_VERSION_PATCH));
-        VAST_ADD_DEPENDENCY(
+        TENZIR_ADD_DEPENDENCY(
+          arrow, fmt::format("{}.{}.{}", ARROW_VERSION_MAJOR,
+                             ARROW_VERSION_MINOR, ARROW_VERSION_PATCH));
+        TENZIR_ADD_DEPENDENCY(
           boost, fmt::format("{}.{}.{}", BOOST_VERSION / 100000,
                              BOOST_VERSION / 100 % 1000, BOOST_VERSION % 100));
-        VAST_ADD_DEPENDENCY(caf,
-                            fmt::format("{}.{}.{}", CAF_MAJOR_VERSION,
-                                        CAF_MINOR_VERSION, CAF_PATCH_VERSION));
-        VAST_ADD_DEPENDENCY(fast_float, "");
-        VAST_ADD_DEPENDENCY(flatbuffers,
-                            fmt::format("{}.{}.{}", FLATBUFFERS_VERSION_MAJOR,
-                                        FLATBUFFERS_VERSION_MINOR,
-                                        FLATBUFFERS_VERSION_REVISION));
-        VAST_ADD_DEPENDENCY(fmt, fmt::format("{}.{}.{}", FMT_VERSION / 10000,
-                                             FMT_VERSION % 10000 / 100,
-                                             FMT_VERSION % 100));
-#if VAST_ENABLE_JEMALLOC
-        VAST_ADD_DEPENDENCY(jemalloc, JEMALLOC_VERSION);
+        TENZIR_ADD_DEPENDENCY(caf, fmt::format("{}.{}.{}", CAF_MAJOR_VERSION,
+                                               CAF_MINOR_VERSION,
+                                               CAF_PATCH_VERSION));
+        TENZIR_ADD_DEPENDENCY(fast_float, "");
+        TENZIR_ADD_DEPENDENCY(flatbuffers,
+                              fmt::format("{}.{}.{}", FLATBUFFERS_VERSION_MAJOR,
+                                          FLATBUFFERS_VERSION_MINOR,
+                                          FLATBUFFERS_VERSION_REVISION));
+        TENZIR_ADD_DEPENDENCY(fmt, fmt::format("{}.{}.{}", FMT_VERSION / 10000,
+                                               FMT_VERSION % 10000 / 100,
+                                               FMT_VERSION % 100));
+#if TENZIR_ENABLE_JEMALLOC
+        TENZIR_ADD_DEPENDENCY(jemalloc, JEMALLOC_VERSION);
 #endif
-#if VAST_ENABLE_LIBUNWIND
-        VAST_ADD_DEPENDENCY(libunwind, "");
+#if TENZIR_ENABLE_LIBUNWIND
+        TENZIR_ADD_DEPENDENCY(libunwind, "");
 #endif
-        VAST_ADD_DEPENDENCY(
+        TENZIR_ADD_DEPENDENCY(
           openssl, fmt::format("{}.{}.{}", OPENSSL_CONFIGURED_API / 10000,
                                OPENSSL_CONFIGURED_API % 10000 / 100,
                                OPENSSL_CONFIGURED_API % 100));
-        VAST_ADD_DEPENDENCY(re2, "");
-        VAST_ADD_DEPENDENCY(robin_map, "");
-        VAST_ADD_DEPENDENCY(simdjson, SIMDJSON_VERSION);
-        VAST_ADD_DEPENDENCY(spdlog,
-                            fmt::format("{}.{}.{}", SPDLOG_VER_MAJOR,
-                                        SPDLOG_VER_MINOR, SPDLOG_VER_PATCH));
-        VAST_ADD_DEPENDENCY(xxhash, fmt::format("{}.{}.{}", XXH_VERSION_MAJOR,
-                                                XXH_VERSION_MINOR,
-                                                XXH_VERSION_RELEASE));
-        VAST_ADD_DEPENDENCY(yaml_cpp, "");
-#undef VAST_ADD_DEPENDENCY
+        TENZIR_ADD_DEPENDENCY(re2, "");
+        TENZIR_ADD_DEPENDENCY(robin_map, "");
+        TENZIR_ADD_DEPENDENCY(simdjson, SIMDJSON_VERSION);
+        TENZIR_ADD_DEPENDENCY(spdlog,
+                              fmt::format("{}.{}.{}", SPDLOG_VER_MAJOR,
+                                          SPDLOG_VER_MINOR, SPDLOG_VER_PATCH));
+        TENZIR_ADD_DEPENDENCY(xxhash, fmt::format("{}.{}.{}", XXH_VERSION_MAJOR,
+                                                  XXH_VERSION_MINOR,
+                                                  XXH_VERSION_RELEASE));
+        TENZIR_ADD_DEPENDENCY(yaml_cpp, "");
+#undef TENZIR_ADD_DEPENDENCY
       }
       {
         auto plugins_field = row.push_field("plugins");
@@ -165,32 +165,32 @@ public:
           if (dev_mode_) {
             auto types_field = plugin_record.push_field("types");
             auto types = types_field.push_list();
-#define VAST_ADD_PLUGIN_TYPE(category)                                         \
+#define TENZIR_ADD_PLUGIN_TYPE(category)                                       \
   do {                                                                         \
     if (plugin.as<category##_plugin>()) {                                      \
       add_value(types, #category);                                             \
     }                                                                          \
   } while (false)
-            VAST_ADD_PLUGIN_TYPE(component);
-            VAST_ADD_PLUGIN_TYPE(analyzer);
-            VAST_ADD_PLUGIN_TYPE(command);
-            VAST_ADD_PLUGIN_TYPE(reader);
-            VAST_ADD_PLUGIN_TYPE(writer);
-            VAST_ADD_PLUGIN_TYPE(operator_parser);
-            VAST_ADD_PLUGIN_TYPE(operator_serialization);
-            VAST_ADD_PLUGIN_TYPE(aggregation_function);
-            VAST_ADD_PLUGIN_TYPE(language);
-            VAST_ADD_PLUGIN_TYPE(rest_endpoint);
-            VAST_ADD_PLUGIN_TYPE(loader_parser);
-            VAST_ADD_PLUGIN_TYPE(loader_serialization);
-            VAST_ADD_PLUGIN_TYPE(parser_parser);
-            VAST_ADD_PLUGIN_TYPE(parser_serialization);
-            VAST_ADD_PLUGIN_TYPE(printer_parser);
-            VAST_ADD_PLUGIN_TYPE(printer_serialization);
-            VAST_ADD_PLUGIN_TYPE(saver_parser);
-            VAST_ADD_PLUGIN_TYPE(saver_serialization);
-            VAST_ADD_PLUGIN_TYPE(store);
-#undef VAST_ADD_PLUGIN_TYPE
+            TENZIR_ADD_PLUGIN_TYPE(component);
+            TENZIR_ADD_PLUGIN_TYPE(analyzer);
+            TENZIR_ADD_PLUGIN_TYPE(command);
+            TENZIR_ADD_PLUGIN_TYPE(reader);
+            TENZIR_ADD_PLUGIN_TYPE(writer);
+            TENZIR_ADD_PLUGIN_TYPE(operator_parser);
+            TENZIR_ADD_PLUGIN_TYPE(operator_serialization);
+            TENZIR_ADD_PLUGIN_TYPE(aggregation_function);
+            TENZIR_ADD_PLUGIN_TYPE(language);
+            TENZIR_ADD_PLUGIN_TYPE(rest_endpoint);
+            TENZIR_ADD_PLUGIN_TYPE(loader_parser);
+            TENZIR_ADD_PLUGIN_TYPE(loader_serialization);
+            TENZIR_ADD_PLUGIN_TYPE(parser_parser);
+            TENZIR_ADD_PLUGIN_TYPE(parser_serialization);
+            TENZIR_ADD_PLUGIN_TYPE(printer_parser);
+            TENZIR_ADD_PLUGIN_TYPE(printer_serialization);
+            TENZIR_ADD_PLUGIN_TYPE(saver_parser);
+            TENZIR_ADD_PLUGIN_TYPE(saver_serialization);
+            TENZIR_ADD_PLUGIN_TYPE(store);
+#undef TENZIR_ADD_PLUGIN_TYPE
           }
           if (dev_mode_) {
             auto kind_field = plugin_record.push_field("kind");
@@ -247,4 +247,4 @@ public:
 
 } // namespace vast::plugins::version
 
-VAST_REGISTER_PLUGIN(vast::plugins::version::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::version::plugin)

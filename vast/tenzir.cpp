@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
               << std::endl;
     return EXIT_FAILURE;
   }
-  auto loaded_plugin_paths = plugins::load({VAST_BUNDLED_PLUGINS}, cfg);
+  auto loaded_plugin_paths = plugins::load({TENZIR_BUNDLED_PLUGINS}, cfg);
   if (!loaded_plugin_paths) {
     fmt::print(stderr, "{}\n", loaded_plugin_paths.error());
     return EXIT_FAILURE;
@@ -102,13 +102,13 @@ int main(int argc, char** argv) {
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
   for (const auto& file : loaded_config_files())
-    VAST_INFO("loaded configuration file: {}", file);
+    TENZIR_INFO("loaded configuration file: {}", file);
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : *loaded_plugin_paths)
-    VAST_VERBOSE("loaded plugin: {}", file);
+    TENZIR_VERBOSE("loaded plugin: {}", file);
   // Initialize successfully loaded plugins.
   if (auto err = plugins::initialize(cfg)) {
-    VAST_ERROR("failed to initialize plugins: {}", err);
+    TENZIR_ERROR("failed to initialize plugins: {}", err);
     return EXIT_FAILURE;
   }
   // Eagerly verify that the Arrow libraries we're using have Zstd support so
@@ -117,8 +117,8 @@ int main(int argc, char** argv) {
     const auto default_compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
     if (!default_compression_level.ok()) {
-      VAST_ERROR("failed to configure Zstd codec for Apache Arrow: {}",
-                 default_compression_level.status().ToString());
+      TENZIR_ERROR("failed to configure Zstd codec for Apache Arrow: {}",
+                   default_compression_level.status().ToString());
       return EXIT_FAILURE;
     }
     auto compression_level
@@ -129,45 +129,45 @@ int main(int argc, char** argv) {
     auto max_level
       = arrow::util::Codec::MaximumCompressionLevel(arrow::Compression::ZSTD);
     if (!min_level.ok()) {
-      VAST_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
-                 min_level.status().ToString());
+      TENZIR_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
+                   min_level.status().ToString());
       return EXIT_FAILURE;
     }
     if (!max_level.ok()) {
-      VAST_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
-                 max_level.status().ToString());
+      TENZIR_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
+                   max_level.status().ToString());
       return EXIT_FAILURE;
     }
     if (compression_level < min_level.ValueUnsafe()
         || compression_level > max_level.ValueUnsafe()) {
-      VAST_ERROR("Zstd compression level '{}' outside of valid range [{}, {}]",
-                 compression_level, min_level.ValueUnsafe(),
-                 max_level.ValueUnsafe());
+      TENZIR_ERROR(
+        "Zstd compression level '{}' outside of valid range [{}, {}]",
+        compression_level, min_level.ValueUnsafe(), max_level.ValueUnsafe());
       return EXIT_FAILURE;
     }
     auto codec
       = arrow::util::Codec::Create(arrow::Compression::ZSTD, compression_level);
     if (!codec.ok()) {
-      VAST_ERROR("failed to create Zstd codec for Apache Arrow: {}",
-                 codec.status().ToString());
+      TENZIR_ERROR("failed to create Zstd codec for Apache Arrow: {}",
+                   codec.status().ToString());
       return EXIT_FAILURE;
     }
   }
   // Warn if vast.pipeline-triggers are defined, as the functionality went away
   // alongside the old pipeline executor.
   if (caf::get_if<caf::settings>(&cfg, "tenzir.pipeline-triggers")) {
-    VAST_WARN("the 'tenzir.pipeline-triggers' option is no longer functional"
-              "use inline import and export pipelines instead");
+    TENZIR_WARN("the 'tenzir.pipeline-triggers' option is no longer functional"
+                "use inline import and export pipelines instead");
   }
   // Set up the modules singleton.
   auto module = load_module(cfg);
   if (not module) {
-    VAST_ERROR("failed to read schema dirs: {}", module.error());
+    TENZIR_ERROR("failed to read schema dirs: {}", module.error());
     return EXIT_FAILURE;
   }
   auto taxonomies = load_taxonomies(cfg);
   if (not taxonomies) {
-    VAST_ERROR("failed to load concepts: {}", taxonomies.error());
+    TENZIR_ERROR("failed to load concepts: {}", taxonomies.error());
     return EXIT_FAILURE;
   }
   modules::init(*module, std::move(taxonomies->concepts));
@@ -177,20 +177,20 @@ int main(int argc, char** argv) {
   for (auto prefix : {"tenzir.operators"sv, "tenzir.pipelines"sv}) {
     if (auto const* settings = caf::get_if<caf::settings>(&cfg, prefix)) {
       if (prefix == "tenzir.pipelines") {
-        VAST_WARN("the config section `tenzir.pipelines` is deprecated, use "
-                  "`tenzir.operators` instead");
+        TENZIR_WARN("the config section `tenzir.pipelines` is deprecated, use "
+                    "`tenzir.operators` instead");
       }
       auto r = to<record>(*settings);
       if (!r) {
-        VAST_ERROR("could not load `{}`: invalid record", prefix);
+        TENZIR_ERROR("could not load `{}`: invalid record", prefix);
         return EXIT_FAILURE;
       }
       for (auto&& [name, value] : *r) {
         auto* definition = caf::get_if<std::string>(&value);
         if (!definition) {
-          VAST_ERROR("could not load `{}`: alias `{}` does not "
-                     "resolve to a string",
-                     prefix, name);
+          TENZIR_ERROR("could not load `{}`: alias `{}` does not "
+                       "resolve to a string",
+                       prefix, name);
           return EXIT_FAILURE;
         }
         aliases.emplace(std::move(name), *definition);
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
   std::atomic<bool> stop = false;
   // clang-format off
   auto signal_monitoring_thread = std::thread([&]()
-#if VAST_GCC
+#if TENZIR_GCC
       // Workaround for an ASAN bug that only occurs with GCC.
       // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=101476
       __attribute__((no_sanitize_address))
@@ -216,7 +216,7 @@ int main(int argc, char** argv) {
       {
         int signum = 0;
         sigwait(&sigset, &signum);
-        VAST_DEBUG("received signal {}", signum);
+        TENZIR_DEBUG("received signal {}", signum);
         if (!stop)
           caf::anon_send<caf::message_priority::high>(
             reflector.get(), atom::internal_v, atom::signal_v, signum);
@@ -234,7 +234,7 @@ int main(int argc, char** argv) {
   sys.registry().erase("signal-reflector");
   stop = true;
   if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0)
-    VAST_ERROR("failed to cancel signal monitoring thread");
+    TENZIR_ERROR("failed to cancel signal monitoring thread");
   signal_monitoring_thread.join();
   pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {

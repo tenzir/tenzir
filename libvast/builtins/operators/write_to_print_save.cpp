@@ -160,7 +160,7 @@ public:
       throw_printer_not_found(*name);
     }
     auto printer = plugin->parse_printer(p);
-    VAST_DIAG_ASSERT(printer);
+    TENZIR_DIAG_ASSERT(printer);
     return std::make_unique<print_operator>(std::move(printer));
   }
 };
@@ -240,7 +240,7 @@ public:
       throw_saver_not_found(*name);
     }
     auto saver = plugin->parse_saver(p);
-    VAST_DIAG_ASSERT(saver);
+    TENZIR_DIAG_ASSERT(saver);
     return std::make_unique<save_operator>(std::move(saver));
   }
 };
@@ -318,10 +318,10 @@ private:
 auto make_stdout_saver() -> std::unique_ptr<plugin_saver> {
   auto diag = null_diagnostic_handler{};
   auto plugin = plugins::find<saver_parser_plugin>("file");
-  VAST_DIAG_ASSERT(plugin);
+  TENZIR_DIAG_ASSERT(plugin);
   auto parser = tql::make_parser_interface("-", diag);
   auto saver = plugin->parse_saver(*parser);
-  VAST_DIAG_ASSERT(saver);
+  TENZIR_DIAG_ASSERT(saver);
   return saver;
 }
 
@@ -348,14 +348,14 @@ public:
     }
     auto q = until_keyword_parser{"to", p};
     auto printer = l_plugin->parse_printer(q);
-    VAST_DIAG_ASSERT(printer);
-    VAST_DIAG_ASSERT(q.at_end());
+    TENZIR_DIAG_ASSERT(printer);
+    TENZIR_DIAG_ASSERT(q.at_end());
     auto saver = std::unique_ptr<plugin_saver>{};
     if (p.at_end()) {
       saver = make_stdout_saver();
     } else {
       auto read = p.accept_identifier();
-      VAST_DIAG_ASSERT(read && read->name == "to");
+      TENZIR_DIAG_ASSERT(read && read->name == "to");
       auto p_name = p.accept_shell_arg();
       if (!p_name) {
         diagnostic::error("expected saver name")
@@ -369,7 +369,7 @@ public:
         throw_saver_not_found(*p_name);
       }
       saver = p_plugin->parse_saver(p);
-      VAST_DIAG_ASSERT(saver);
+      TENZIR_DIAG_ASSERT(saver);
     }
     // If the saver does not want to join different schemas, we cannot use a
     // single `print_operator` here, because its output would be joined. Thus,
@@ -397,11 +397,11 @@ auto parse_default_printer(std::string definition)
   auto diag = null_diagnostic_handler{};
   auto p = tql::make_parser_interface(std::move(definition), diag);
   auto p_name = p->accept_identifier();
-  VAST_DIAG_ASSERT(p_name);
+  TENZIR_DIAG_ASSERT(p_name);
   auto const* p_plugin = plugins::find<printer_parser_plugin>(p_name->name);
-  VAST_DIAG_ASSERT(p_plugin);
+  TENZIR_DIAG_ASSERT(p_plugin);
   auto printer = p_plugin->parse_printer(*p);
-  VAST_DIAG_ASSERT(printer);
+  TENZIR_DIAG_ASSERT(printer);
   return printer;
 }
 
@@ -428,14 +428,14 @@ public:
     }
     auto q = until_keyword_parser{"write", p};
     auto saver = l_plugin->parse_saver(q);
-    VAST_DIAG_ASSERT(saver);
-    VAST_DIAG_ASSERT(q.at_end());
+    TENZIR_DIAG_ASSERT(saver);
+    TENZIR_DIAG_ASSERT(q.at_end());
     auto printer = std::unique_ptr<plugin_printer>{};
     if (p.at_end()) {
       printer = parse_default_printer(saver->default_printer());
     } else {
       auto read = p.accept_identifier();
-      VAST_DIAG_ASSERT(read && read->name == "write");
+      TENZIR_DIAG_ASSERT(read && read->name == "write");
       auto p_name = p.accept_shell_arg();
       if (!p_name) {
         diagnostic::error("expected printer name")
@@ -449,7 +449,7 @@ public:
         throw_printer_not_found(*p_name);
       }
       printer = p_plugin->parse_printer(p);
-      VAST_DIAG_ASSERT(printer);
+      TENZIR_DIAG_ASSERT(printer);
     }
     // If the saver does not want to join different schemas, we cannot use a
     // single `print_operator` here, because its output would be joined. Thus,
@@ -476,8 +476,8 @@ using print_and_save_plugin
 
 } // namespace vast::plugins::write_to_print_save
 
-VAST_REGISTER_PLUGIN(vast::plugins::write_to_print_save::write_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::write_to_print_save::to_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::write_to_print_save::print_and_save_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::write_to_print_save::save_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::write_to_print_save::print_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::write_to_print_save::write_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::write_to_print_save::to_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::write_to_print_save::print_and_save_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::write_to_print_save::save_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::write_to_print_save::print_plugin)

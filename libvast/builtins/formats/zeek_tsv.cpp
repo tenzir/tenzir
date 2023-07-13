@@ -409,8 +409,8 @@ struct zeek_printer {
     auto operator()(const view<record>& x) noexcept -> bool {
       // TODO: This won't be needed when flatten() for table_slices is in the
       // codebase.
-      VAST_WARN("printing records as zeek-tsv data is currently a work in "
-                "progress; printing null instead");
+      TENZIR_WARN("printing records as zeek-tsv data is currently a work in "
+                  "progress; printing null instead");
       auto first = true;
       for (const auto& v : x) {
         if (not first) {
@@ -669,7 +669,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
           .emit(ctrl.diagnostics());
         co_return;
       }
-      VAST_ASSERT_EXPENSIVE(add_ok);
+      TENZIR_ASSERT_EXPENSIVE(add_ok);
       const auto separator_ok = separator(f, l, unused);
       if (not separator_ok) [[unlikely]] {
         diagnostic::error("failed to parse Zeek separator at index {} in `{}`",
@@ -756,14 +756,14 @@ public:
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto first = true;
       for (const auto& row : values(input_type, *array)) {
-        VAST_ASSERT_CHEAP(row);
+        TENZIR_ASSERT_CHEAP(row);
         if (first) {
           printer.print_header(out_iter, input_schema);
           first = false;
           out_iter = fmt::format_to(out_iter, "\n");
         }
         const auto ok = printer.print_values(out_iter, *row);
-        VAST_ASSERT_CHEAP(ok);
+        TENZIR_ASSERT_CHEAP(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
       printer.print_closing_line(out_iter);
@@ -841,4 +841,4 @@ public:
 
 } // namespace vast::plugins::zeek_tsv
 
-VAST_REGISTER_PLUGIN(vast::plugins::zeek_tsv::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::zeek_tsv::plugin)

@@ -119,4 +119,4 @@ public:
 
 } // namespace vast::plugins::select
 
-VAST_REGISTER_PLUGIN(vast::plugins::select::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::select::plugin)

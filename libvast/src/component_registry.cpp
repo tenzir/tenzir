@@ -16,13 +16,13 @@ namespace vast {
 
 bool component_registry::add(caf::actor comp, std::string type,
                              std::string label) {
-  VAST_ASSERT(comp);
-  VAST_ASSERT(!type.empty());
+  TENZIR_ASSERT(comp);
+  TENZIR_ASSERT(!type.empty());
   if (label.empty())
     label = type;
-#if VAST_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
   auto pred = [&](auto& x) { return x.second.actor == comp; };
-  VAST_ASSERT(std::none_of(components_.begin(), components_.end(), pred));
+  TENZIR_ASSERT(std::none_of(components_.begin(), components_.end(), pred));
 #endif
   return components_
     .emplace(std::move(label), component{std::move(comp), std::move(type)})

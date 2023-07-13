@@ -42,7 +42,7 @@ public:
     auto result = child{std::move(command)};
     try {
       auto exit_handler = [](int exit, std::error_code ec) {
-        VAST_DEBUG("child exited with code {}: {}", exit, ec.message());
+        TENZIR_DEBUG("child exited with code {}: {}", exit, ec.message());
       };
       result.child_ = bp::child{
         result.command_,
@@ -65,19 +65,19 @@ public:
   }
 
   auto read(std::span<std::byte> buffer) -> caf::expected<size_t> {
-    VAST_ASSERT(!buffer.empty());
-    VAST_DEBUG("trying to read {} bytes", buffer.size());
+    TENZIR_ASSERT(!buffer.empty());
+    TENZIR_DEBUG("trying to read {} bytes", buffer.size());
     auto* data = reinterpret_cast<char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
     stdout_.read(data, size);
     auto bytes_read = stdout_.gcount();
-    VAST_DEBUG("read {} bytes", bytes_read);
+    TENZIR_DEBUG("read {} bytes", bytes_read);
     return detail::narrow_cast<size_t>(bytes_read);
   }
 
   auto write(std::span<const std::byte> buffer) -> caf::error {
-    VAST_ASSERT(!buffer.empty());
-    VAST_DEBUG("writing {} bytes to child's stdin", buffer.size());
+    TENZIR_ASSERT(!buffer.empty());
+    TENZIR_DEBUG("writing {} bytes to child's stdin", buffer.size());
     const auto* data = reinterpret_cast<const char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
     if (not stdin_.write(data, size))
@@ -89,14 +89,14 @@ public:
   void close_stdin() {
     // See https://github.com/boostorg/process/issues/125 for why we
     // seemingly double-close the pipe.
-    VAST_DEBUG("sending EOF to child's stdin");
+    TENZIR_DEBUG("sending EOF to child's stdin");
     stdin_.close();
     stdin_.pipe().close();
   }
 
 private:
   explicit child(std::string command) : command_{std::move(command)} {
-    VAST_ASSERT(!command_.empty());
+    TENZIR_ASSERT(!command_.empty());
   }
 
   std::string command_;
@@ -130,7 +130,7 @@ public:
         }
         buffer.resize(*bytes_read);
         auto chk = chunk::make(std::exchange(buffer, {}));
-        VAST_DEBUG("yielding chunk with {} bytes", chk->size());
+        TENZIR_DEBUG("yielding chunk with {} bytes", chk->size());
         co_yield chk;
       }
     }
@@ -165,7 +165,7 @@ public:
       // Coroutines require RAII-style exit handling.
       auto at_exit = caf::detail::make_scope_guard([&] {
         child->close_stdin();
-        VAST_DEBUG("joining thread");
+        TENZIR_DEBUG("joining thread");
         thread.join();
       });
       // Loop over input chunks.
@@ -188,8 +188,8 @@ public:
           while (not chunks.empty()) {
             auto chk = chunks.front();
             chunks.pop();
-            VAST_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total,
-                       chk->size());
+            TENZIR_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total,
+                         chk->size());
             co_yield chk;
           }
         } else {
@@ -203,7 +203,8 @@ public:
     auto total = chunks.size();
     while (not chunks.empty()) {
       auto chk = chunks.front();
-      VAST_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total, chk->size());
+      TENZIR_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total,
+                   chk->size());
       co_yield chk;
       chunks.pop();
     }
@@ -251,4 +252,4 @@ public:
 } // namespace
 } // namespace vast::plugins::shell
 
-VAST_REGISTER_PLUGIN(vast::plugins::shell::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::shell::plugin)

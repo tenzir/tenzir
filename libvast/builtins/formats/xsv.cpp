@@ -314,14 +314,14 @@ public:
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto first = true;
       for (const auto& row : values(input_type, *array)) {
-        VAST_ASSERT_CHEAP(row);
+        TENZIR_ASSERT_CHEAP(row);
         if (first) {
           printer.print_header(out_iter, *row);
           first = false;
           out_iter = fmt::format_to(out_iter, "\n");
         }
         const auto ok = printer.print_values(out_iter, *row);
-        VAST_ASSERT_CHEAP(ok);
+        TENZIR_ASSERT_CHEAP(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
       auto chunk = chunk::make(std::move(buffer));
@@ -445,7 +445,7 @@ using ssv_plugin = configured_xsv_plugin<"ssv", ' ', ',', "-">;
 
 } // namespace vast::plugins::xsv
 
-VAST_REGISTER_PLUGIN(vast::plugins::xsv::xsv_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::xsv::csv_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::xsv::tsv_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::xsv::ssv_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::xsv::xsv_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::xsv::csv_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::xsv::tsv_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::xsv::ssv_plugin)

@@ -23,7 +23,7 @@ public:
 
 private:
   [[nodiscard]] type output_type() const override {
-    VAST_ASSERT(caf::holds_alternative<Type>(input_type()));
+    TENZIR_ASSERT(caf::holds_alternative<Type>(input_type()));
     return input_type();
   }
 
@@ -75,4 +75,4 @@ class plugin : public virtual aggregation_function_plugin {
 
 } // namespace vast::plugins::min
 
-VAST_REGISTER_PLUGIN(vast::plugins::min::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::min::plugin)

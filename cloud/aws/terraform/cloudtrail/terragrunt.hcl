@@ -13,9 +13,9 @@ dependency "core_2" {
 }
 
 locals {
-  region_name          = get_env("VAST_AWS_REGION")
-  source_bucket_name   = get_env("VAST_CLOUDTRAIL_BUCKET_NAME", "temporary-dummy-name")
-  source_bucket_region = get_env("VAST_CLOUDTRAIL_BUCKET_REGION", "us-east-1") # needs to be a real region to pass validation
+  region_name          = get_env("TENZIR_AWS_REGION")
+  source_bucket_name   = get_env("TENZIR_CLOUDTRAIL_BUCKET_NAME", "temporary-dummy-name")
+  source_bucket_region = get_env("TENZIR_CLOUDTRAIL_BUCKET_REGION", "us-east-1") # needs to be a real region to pass validation
 }
 
 

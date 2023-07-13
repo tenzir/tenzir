@@ -104,7 +104,7 @@ public:
     self_->request(diagnostic_handler_, caf::infinite, std::move(d))
       .then([]() {},
             [](caf::error& e) {
-              VAST_WARN("failed to send diagnostic: {}", e);
+              TENZIR_WARN("failed to send diagnostic: {}", e);
             });
     if (d.severity == severity::error and not has_seen_error_) {
       has_seen_error_ = true;
@@ -143,7 +143,7 @@ public:
   }
 
   auto abort(caf::error error) noexcept -> void override {
-    VAST_ASSERT(error != caf::none);
+    TENZIR_ASSERT(error != caf::none);
     if (error != ec::silent) {
       diagnostic::error("{}", error)
         .note("from `{}`", state_.op->to_string())
@@ -328,7 +328,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
 
   auto start(std::vector<caf::actor> previous) -> caf::result<void> {
     auto time_starting_guard = make_timer_guard(time_scheduled, time_starting);
-    VAST_DEBUG("{} received start request for `{}`", *self, op->to_string());
+    TENZIR_DEBUG("{} received start request for `{}`", *self, op->to_string());
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} was already started", *self));
@@ -355,11 +355,11 @@ struct exec_node_state : inbound_state_mixin<Input>,
       self->set_down_handler([this](const caf::down_msg& msg) {
         auto time_scheduled_guard = make_timer_guard(time_scheduled);
         if (msg.source != this->previous.address()) {
-          VAST_DEBUG("ignores down msg from unknown source: {}", msg.reason);
+          TENZIR_DEBUG("ignores down msg from unknown source: {}", msg.reason);
           return;
         }
-        VAST_DEBUG("{} got down from previous execution node: {}", op->name(),
-                   msg.reason);
+        TENZIR_DEBUG("{} got down from previous execution node: {}", op->name(),
+                     msg.reason);
         this->previous = nullptr;
         // We empirically noticed that sometimes, we get a down message from a
         // previous execution node in a different actor system, but do not get
@@ -380,8 +380,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
       auto time_scheduled_guard = make_timer_guard(time_running);
       auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
       if (not output_generator) {
-        VAST_VERBOSE("{} could not instantiate operator: {}", *self,
-                     output_generator.error());
+        TENZIR_VERBOSE("{} could not instantiate operator: {}", *self,
+                       output_generator.error());
         return add_context(output_generator.error(),
                            "{} failed to instantiate operator", *self);
       }
@@ -393,17 +393,17 @@ struct exec_node_state : inbound_state_mixin<Input>,
       }
       instance.emplace();
       instance->gen = std::get<generator<Output>>(std::move(*output_generator));
-      VAST_TRACE("{} calls begin on instantiated operator", *self);
+      TENZIR_TRACE("{} calls begin on instantiated operator", *self);
       instance->it = instance->gen.begin();
       if (abort) {
-        VAST_DEBUG("{} was aborted during begin: {}", *self, op->to_string(),
-                   abort);
+        TENZIR_DEBUG("{} was aborted during begin: {}", *self, op->to_string(),
+                     abort);
         return abort;
       }
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
-      VAST_TRACE("{} is the sink and requests start from {}", *self,
-                 this->previous);
+      TENZIR_TRACE("{} is the sink and requests start from {}", *self,
+                   this->previous);
       auto rp = self->make_response_promise<void>();
       self
         ->request(this->previous, caf::infinite, atom::start_v,
@@ -412,21 +412,21 @@ struct exec_node_state : inbound_state_mixin<Input>,
           [this, rp]() mutable {
             auto time_starting_guard
               = make_timer_guard(time_scheduled, time_starting);
-            VAST_DEBUG("{} schedules run of sink after successful startup",
-                       *self);
+            TENZIR_DEBUG("{} schedules run of sink after successful startup",
+                         *self);
             schedule_run();
             rp.deliver();
           },
           [this, rp](caf::error& error) mutable {
             auto time_starting_guard
               = make_timer_guard(time_scheduled, time_starting);
-            VAST_DEBUG("{} forwards error during startup: {}", *self, error);
+            TENZIR_DEBUG("{} forwards error during startup: {}", *self, error);
             rp.deliver(std::move(error));
           });
       return rp;
     }
     if constexpr (not std::is_same_v<Input, std::monostate>) {
-      VAST_DEBUG("{} delegates start to {}", *self, this->previous);
+      TENZIR_DEBUG("{} delegates start to {}", *self, this->previous);
       return self->delegate(this->previous, atom::start_v, std::move(previous));
     }
     return {};
@@ -439,7 +439,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // 1. The space in our inbound buffer is below the minimum batch size.
     // 2. The previous execution node is down.
     // 3. We already have an open request for more input.
-    VAST_ASSERT(this->inbound_buffer_size <= defaults<Input>::max_buffered);
+    TENZIR_ASSERT(this->inbound_buffer_size <= defaults<Input>::max_buffered);
     const auto batch_size
       = std::min(defaults<Input>::max_buffered - this->inbound_buffer_size,
                  defaults<Input>::max_batch_size);
@@ -483,8 +483,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
 
   auto advance_generator() -> bool {
     auto time_running_guard = make_timer_guard(time_running);
-    VAST_ASSERT(instance);
-    VAST_ASSERT(instance->it != instance->gen.end());
+    TENZIR_ASSERT(instance);
+    TENZIR_ASSERT(instance->it != instance->gen.end());
     bool empty = false;
     if constexpr (not std::is_same_v<Output, std::monostate>) {
       if (this->outbound_buffer_size >= defaults<Output>::max_buffered) {
@@ -522,14 +522,14 @@ struct exec_node_state : inbound_state_mixin<Input>,
     while (this->previous or this->inbound_buffer_size > 0
            or this->signaled_demand) {
       if (this->inbound_buffer_size == 0) {
-        VAST_ASSERT(this->inbound_buffer.empty());
+        TENZIR_ASSERT(this->inbound_buffer.empty());
         stalled = true;
         co_yield {};
         continue;
       }
       while (not this->inbound_buffer.empty()) {
         auto next = std::move(this->inbound_buffer.front());
-        VAST_ASSERT(size(next) != 0);
+        TENZIR_ASSERT(size(next) != 0);
         this->inbound_buffer_size -= size(next);
         this->inbound_buffer.erase(this->inbound_buffer.begin());
         stalled = false;
@@ -551,7 +551,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     //   using `ctrl.self().request(...).await(...)`.
     auto action = [this] {
       auto time_scheduled_guard = make_timer_guard(time_scheduled);
-      VAST_ASSERT(run_scheduled);
+      TENZIR_ASSERT(run_scheduled);
       run_scheduled = false;
       run();
     };
@@ -568,7 +568,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     if (not this->current_demand or this->current_demand->ongoing) {
       return;
     }
-    VAST_ASSERT(instance);
+    TENZIR_ASSERT(instance);
     if (not force
         and ((instance->it == instance->gen.end()
               or this->outbound_buffer_size < this->current_demand->batch_size)
@@ -579,7 +579,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     const auto capped_demand
       = std::min(this->outbound_buffer_size, this->current_demand->batch_size);
     if (capped_demand == 0) {
-      VAST_DEBUG("{} short-circuits delivery of zero batches", op->name());
+      TENZIR_DEBUG("{} short-circuits delivery of zero batches", op->name());
       this->current_demand->rp.deliver();
       this->current_demand.reset();
       schedule_run();
@@ -588,7 +588,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto [lhs, _] = split(this->outbound_buffer, capped_demand);
     auto handle_result = [this, capped_demand]() {
       auto time_scheduled_guard = make_timer_guard(time_scheduled);
-      VAST_TRACE("{} pushed successfully", op->name());
+      TENZIR_TRACE("{} pushed successfully", op->name());
       outbound_total += capped_demand;
       auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
       num_outbound_batches += lhs.size();
@@ -605,7 +605,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     };
     auto handle_error = [this](caf::error& error) {
       auto time_scheduled_guard = make_timer_guard(time_scheduled);
-      VAST_DEBUG("{} failed to push", op->name());
+      TENZIR_DEBUG("{} failed to push", op->name());
       this->current_demand->rp.deliver(std::move(error));
       this->current_demand.reset();
       schedule_run();
@@ -613,13 +613,13 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto response_handle = self->request(
       this->current_demand->sink, caf::infinite, atom::push_v, std::move(lhs));
     if (force or this->outbound_buffer_size >= defaults<Output>::max_buffered) {
-      VAST_TRACE("{} pushes {}/{} buffered elements and suspends execution",
-                 op->name(), capped_demand, this->outbound_buffer_size);
+      TENZIR_TRACE("{} pushes {}/{} buffered elements and suspends execution",
+                   op->name(), capped_demand, this->outbound_buffer_size);
       std::move(response_handle)
         .await(std::move(handle_result), std::move(handle_error));
     } else {
-      VAST_TRACE("{} pushes {}/{} buffered elements", op->name(), capped_demand,
-                 this->outbound_buffer_size);
+      TENZIR_TRACE("{} pushes {}/{} buffered elements", op->name(),
+                   capped_demand, this->outbound_buffer_size);
       std::move(response_handle)
         .then(std::move(handle_result), std::move(handle_error));
     }
@@ -635,19 +635,19 @@ struct exec_node_state : inbound_state_mixin<Input>,
                  .count()
              * 100.0;
     };
-    VAST_VERBOSE("{} was scheduled for {:.2g}% of total runtime", op->name(),
-                 percentage(time_scheduled, elapsed));
-    VAST_VERBOSE("{} spent {:.2g}% of scheduled time starting", op->name(),
-                 percentage(time_starting, time_scheduled));
-    VAST_VERBOSE("{} spent {:.2g}% of scheduled time running", op->name(),
-                 percentage(time_running, time_scheduled));
+    TENZIR_VERBOSE("{} was scheduled for {:.2g}% of total runtime", op->name(),
+                   percentage(time_scheduled, elapsed));
+    TENZIR_VERBOSE("{} spent {:.2g}% of scheduled time starting", op->name(),
+                   percentage(time_starting, time_scheduled));
+    TENZIR_VERBOSE("{} spent {:.2g}% of scheduled time running", op->name(),
+                   percentage(time_running, time_scheduled));
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       constexpr auto inbound_unit
         = std::is_same_v<Input, chunk_ptr> ? "MiB" : "events";
       constexpr auto ratio
         = std::is_same_v<Input, chunk_ptr> ? 1'048'576.0 : 1.0;
       const auto total = static_cast<double>(inbound_total) / ratio;
-      VAST_VERBOSE(
+      TENZIR_VERBOSE(
         "{} inbound {:.0f} {} in {} rate = {:.2g} {}/s avg batch size = {:.2f} "
         "{}",
         op->name(), total, inbound_unit, data{elapsed},
@@ -665,7 +665,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       constexpr auto ratio
         = std::is_same_v<Output, chunk_ptr> ? 1'048'576.0 : 1.0;
       const auto total = static_cast<double>(outbound_total) / ratio;
-      VAST_VERBOSE(
+      TENZIR_VERBOSE(
         "{} outbound {:.0f} {} in {} rate = {:.2g} {}/s avg batch size = "
         "{:.2f} {}",
         op->name(), total, outbound_unit, data{elapsed},
@@ -681,12 +681,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
   }
 
   auto run() -> void {
-    VAST_TRACE("{} enters run loop", op->name());
-    VAST_ASSERT(instance);
+    TENZIR_TRACE("{} enters run loop", op->name());
+    TENZIR_ASSERT(instance);
     const auto now = std::chrono::steady_clock::now();
     // Check if we're done.
     if (instance->it == instance->gen.end()) {
-      VAST_DEBUG("{} is at the end of its generator", op->name());
+      TENZIR_DEBUG("{} is at the end of its generator", op->name());
       // Shut down the previous execution node immediately if we're done.
       // We send an unreachable error here slightly before this execution
       // node shuts down. This is merely an optimization; we call self->quit
@@ -695,7 +695,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       // can prevent the upstream operators from running unnecessarily.
       if constexpr (not std::is_same_v<Input, std::monostate>) {
         if (this->previous) {
-          VAST_DEBUG("{} shuts down previous operator", op->name());
+          TENZIR_DEBUG("{} shuts down previous operator", op->name());
           self->send_exit(this->previous, caf::exit_reason::normal);
         }
       }
@@ -706,20 +706,20 @@ struct exec_node_state : inbound_state_mixin<Input>,
       // - There must not be anything remaining in the buffer.
       if constexpr (not std::is_same_v<Output, std::monostate>) {
         if (this->current_demand and this->outbound_buffer_size == 0) {
-          VAST_DEBUG("{} rejects further demand from next operator",
-                     op->name());
+          TENZIR_DEBUG("{} rejects further demand from next operator",
+                       op->name());
           this->reject_demand = true;
         }
         if (this->current_demand or this->outbound_buffer_size > 0) {
-          VAST_DEBUG("{} forcibly delivers batches", op->name());
+          TENZIR_DEBUG("{} forcibly delivers batches", op->name());
           deliver_batches(now, true);
           schedule_run();
           return;
         }
-        VAST_ASSERT(not this->current_demand);
-        VAST_ASSERT(this->outbound_buffer_size == 0);
+        TENZIR_ASSERT(not this->current_demand);
+        TENZIR_ASSERT(this->outbound_buffer_size == 0);
       }
-      VAST_VERBOSE("{} is done", op);
+      TENZIR_VERBOSE("{} is done", op);
       print_metrics();
       self->quit();
       return;
@@ -745,7 +745,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       if (not stalled) {
         schedule_run();
       } else {
-        VAST_ASSERT(this->signaled_demand);
+        TENZIR_ASSERT(this->signaled_demand);
       }
     } else if constexpr (std::is_same_v<Input, std::monostate>) {
       if (not stalled
@@ -876,11 +876,11 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostic_handler)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
-  VAST_ASSERT(self);
-  VAST_ASSERT(op != nullptr);
-  VAST_ASSERT(node != nullptr
-              or not(op->location() == operator_location::remote));
-  VAST_ASSERT(diagnostic_handler != nullptr);
+  TENZIR_ASSERT(self);
+  TENZIR_ASSERT(op != nullptr);
+  TENZIR_ASSERT(node != nullptr
+                or not(op->location() == operator_location::remote));
+  TENZIR_ASSERT(diagnostic_handler != nullptr);
   auto output_type = op->infer_type(input_type);
   if (not output_type) {
     return caf::make_error(ec::logic_error,

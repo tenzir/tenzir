@@ -100,7 +100,7 @@ public:
 
   auto add(view<type_to_data_t<Type>> view) {
     const auto s = append_builder(caf::get<Type>(type_), *builder_, view);
-    VAST_ASSERT(s.ok());
+    TENZIR_ASSERT(s.ok());
   }
 
   auto finish() {
@@ -120,9 +120,9 @@ public:
   }
 
   auto add_up_to_n_nulls(arrow_length_type max_null_count) -> void {
-    VAST_ASSERT(max_null_count >= length());
+    TENZIR_ASSERT(max_null_count >= length());
     const auto status = builder_->AppendNulls(max_null_count - length());
-    VAST_ASSERT(status.ok());
+    TENZIR_ASSERT(status.ok());
   }
 
   auto remove_last_row() -> bool {
@@ -130,7 +130,7 @@ public:
     auto new_array = array->Slice(0, array->length() - 1);
     const auto status
       = builder_->AppendArraySlice(*new_array->data(), 0u, new_array->length());
-    VAST_ASSERT(status.ok());
+    TENZIR_ASSERT(status.ok());
     return builder_->null_count() == builder_->length();
   }
 
@@ -157,11 +157,11 @@ public:
         = caf::get<enumeration_type>(type_).resolve(string_value)) {
       const auto s = append_builder(caf::get<enumeration_type>(type_),
                                     *builder_, *resolved);
-      VAST_ASSERT(s.ok());
+      TENZIR_ASSERT(s.ok());
       return;
     }
     const auto s = builder_->AppendNull();
-    VAST_ASSERT(s.ok());
+    TENZIR_ASSERT(s.ok());
   }
 
   using concrete_series_builder_base<enumeration_type>::add;
@@ -227,7 +227,7 @@ public:
 
   template <class TypeToCastTo = arrow::ArrayBuilder>
   auto get_child_builder(const vast::type& t) -> TypeToCastTo& {
-    VAST_ASSERT(child_builders_.contains(t));
+    TENZIR_ASSERT(child_builders_.contains(t));
     return static_cast<TypeToCastTo&>(*child_builders_[t]);
   }
 

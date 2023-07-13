@@ -97,11 +97,11 @@ template <class... Args>
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
   if (!in)
     return std::move(in);
-  VAST_ASSERT(in.category() == caf::type_id_v<vast::ec>);
+  TENZIR_ASSERT(in.category() == caf::type_id_v<vast::ec>);
   auto hdl = caf::message_handler{
     [&, f = fmt::format("{}{{}}", fstring)](std::string& s) {
       return caf::make_message(fmt::format(
-        VAST_FMT_RUNTIME(f), std::forward<Args>(args)..., std::move(s)));
+        TENZIR_FMT_RUNTIME(f), std::forward<Args>(args)..., std::move(s)));
     },
   };
   auto ctx = in.context();
@@ -109,7 +109,7 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
     return {static_cast<vast::ec>(in.code()), std::move(*new_msg)};
 
   return caf::make_error(static_cast<vast::ec>(in.code()),
-                         fmt::format(VAST_FMT_RUNTIME(fstring),
+                         fmt::format(TENZIR_FMT_RUNTIME(fstring),
                                      std::forward<Args>(args)...));
 }
 
@@ -467,7 +467,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
       // can also handle a prefix to get the record.
       auto value = record_resolve_key(record_resolve_key, *element_rec,
                                       stripped_record_prefix);
-      VAST_ASSERT(value);
+      TENZIR_ASSERT(value);
       if (auto err = convert(value->second, value_dst, stripped_vt.type))
         return caf::make_error(ec::convert_error,
                                fmt::format("failed to convert stripped map "
@@ -526,7 +526,7 @@ public:
     auto err = apply(*current_iterator_, x);
     ++current_iterator_;
     if (err) {
-      VAST_WARN("{}", err);
+      TENZIR_WARN("{}", err);
       return false;
     }
     return true;

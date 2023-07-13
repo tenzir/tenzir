@@ -35,7 +35,7 @@ void line_range::next_impl() {
 }
 
 void line_range::next() {
-  VAST_ASSERT(!done());
+  TENZIR_ASSERT(!done());
   line_.clear();
   next_impl();
 }

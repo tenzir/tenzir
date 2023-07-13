@@ -58,7 +58,7 @@ public:
     bloom_filter_parameters params;
     params.p = p_;
     params.n = next_power_of_two;
-    VAST_DEBUG("shrinks buffered synopsis to {} elements", params.n);
+    TENZIR_DEBUG("shrinks buffered synopsis to {} elements", params.n);
     auto type = annotate_parameters(this->type(), params);
     // TODO: If we can get rid completely of the `ip_synopsis` and
     // `string_synopsis` types, we could also call the correct constructor here.
@@ -75,7 +75,7 @@ public:
   // Implementation of the remainder of the `synopsis` API.
   void add(data_view x) override {
     auto v = caf::get_if<view_type>(&x);
-    VAST_ASSERT(v);
+    TENZIR_ASSERT(v);
     data_.insert(materialize(*v));
   }
 
@@ -109,7 +109,7 @@ public:
   }
 
   bool inspect_impl(supported_inspectors&) override {
-    VAST_ERROR("attempted to inspect a buffered_string_synopsis");
+    TENZIR_ERROR("attempted to inspect a buffered_string_synopsis");
     return false;
   }
 

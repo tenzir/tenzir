@@ -37,7 +37,7 @@ query_processor::query_processor(caf::event_based_actor* self)
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
     [this](const query_cursor& cursor) {
-      VAST_ASSERT(cursor.scheduled_partitions <= cursor.candidate_partitions);
+      TENZIR_ASSERT(cursor.scheduled_partitions <= cursor.candidate_partitions);
       if (cursor.candidate_partitions == 0u) {
         process_done();
       }
@@ -69,12 +69,12 @@ void query_processor::start(vast::query_context query_context,
 bool query_processor::request_more_results() {
   auto n
     = std::min(partitions_.total - partitions_.received, partitions_.scheduled);
-  VAST_ASSERT(partitions_.received + n <= partitions_.total);
+  TENZIR_ASSERT(partitions_.received + n <= partitions_.total);
   if (n == 0)
     return false;
-  VAST_DEBUG("{} asks the INDEX for more hits by scheduling {}"
-             "additional partitions",
-             *self_, n);
+  TENZIR_DEBUG("{} asks the INDEX for more hits by scheduling {}"
+               "additional partitions",
+               *self_, n);
   partitions_.scheduled = n;
   self_->send(index_, atom::query_v, query_id_, n);
   return true;
@@ -83,7 +83,7 @@ bool query_processor::request_more_results() {
 // -- state management ---------------------------------------------------------
 
 void query_processor::transition_to(state_name x) {
-  VAST_DEBUG("{} transitions from state {} to state {}", *self_, state_, x);
+  TENZIR_DEBUG("{} transitions from state {} to state {}", *self_, state_, x);
   self_->become(behaviors_[x]);
   state_ = x;
 }

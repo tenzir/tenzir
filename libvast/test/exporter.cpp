@@ -50,7 +50,7 @@ dummy_sink(caf::event_based_actor* self, std::vector<table_slice>* result) {
 }
 
 struct fixture : fixture_base {
-  fixture() : fixture_base(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixture_base(TENZIR_PP_STRINGIFY(SUITE)) {
     expr = unbox(to<expression>("service == \"dns\" "
                                 "&& :ip == 192.168.1.1"));
   }

@@ -11,7 +11,7 @@ dependency "core_2" {
 }
 
 locals {
-  region_name = get_env("VAST_AWS_REGION")
+  region_name = get_env("TENZIR_AWS_REGION")
 }
 
 

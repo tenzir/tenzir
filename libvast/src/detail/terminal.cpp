@@ -92,7 +92,7 @@ bool enable_echo() {
 bool get(char& c, int timeout) {
   auto ready = rpoll(::fileno(stdin), timeout);
   if (!ready) {
-    VAST_ERROR("{} {}", __func__, render(ready.error()));
+    TENZIR_ERROR("{} {}", __func__, render(ready.error()));
     return false;
   }
   if (!*ready)

@@ -52,7 +52,7 @@ void catalog_state::create_from(
                      std::vector<std::pair<uuid, partition_synopsis_ptr>>>
     flat_data_map;
   for (auto&& [uuid, synopsis] : std::move(ps)) {
-    VAST_ASSERT(synopsis->get_reference_count() == 1ull);
+    TENZIR_ASSERT(synopsis->get_reference_count() == 1ull);
     update_unprunable_fields(*synopsis);
     flat_data_map[synopsis->schema].emplace_back(uuid, std::move(synopsis));
   }
@@ -109,17 +109,17 @@ catalog_state::lookup(const expression& expr) const {
   }
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     stopwatch::now() - start);
-  VAST_VERBOSE("catalog lookup found {} candidates in {} microseconds",
-               num_candidates, delta.count());
-  VAST_TRACEPOINT(catalog_lookup, delta.count(), num_candidates);
+  TENZIR_VERBOSE("catalog lookup found {} candidates in {} microseconds",
+                 num_candidates, delta.count());
+  TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidates);
   return total_candidates;
 }
 
 catalog_lookup_result::candidate_info
 catalog_state::lookup_impl(const expression& expr, const type& schema) const {
-  VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
+  TENZIR_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   auto synopsis_map_per_type_it = synopses_per_type.find(schema);
-  VAST_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
+  TENZIR_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
   const auto& partition_synopses = synopsis_map_per_type_it->second;
   // The partition UUIDs must be sorted, otherwise the invariants of the
   // inplace union and intersection algorithms are violated, leading to
@@ -140,7 +140,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
   };
   auto f = detail::overload{
     [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
-      VAST_ASSERT(!x.empty());
+      TENZIR_ASSERT(!x.empty());
       auto i = x.begin();
       auto result = lookup_impl(*i, schema);
       if (!result.partition_infos.empty())
@@ -152,8 +152,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
           if (xs.partition_infos.empty())
             return xs; // short-circuit
           detail::inplace_intersect(result.partition_infos, xs.partition_infos);
-          VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                     result.partition_infos.end()));
+          TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                       result.partition_infos.end()));
         }
       return result;
     },
@@ -165,11 +165,11 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         auto xs = lookup_impl(op, schema);
         if (xs.partition_infos.size() == partition_synopses.size())
           return xs; // short-circuit
-        VAST_ASSERT(
+        TENZIR_ASSERT(
           std::is_sorted(xs.partition_infos.begin(), xs.partition_infos.end()));
         detail::inplace_unify(result.partition_infos, xs.partition_infos);
-        VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                   result.partition_infos.end()));
+        TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                     result.partition_infos.end()));
       }
       return result;
     },
@@ -187,7 +187,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
       // uses a qualified_record_field to determine whether the synopsis
       // should be queried.
       auto search = [&](auto match) {
-        VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
+        TENZIR_ASSERT(caf::holds_alternative<data>(x.rhs));
         const auto& rhs = caf::get<data>(x.rhs);
         catalog_lookup_result::candidate_info result;
         // dont iterate through all synopses, rewrite lookup_impl to use a
@@ -208,8 +208,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
               if (syn) {
                 auto opt = syn->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_TRACE("{} selects {} at predicate {}",
-                             detail::pretty_type_name(this), part_id, x);
+                  TENZIR_TRACE("{} selects {} at predicate {}",
+                               detail::pretty_type_name(this), part_id, x);
                   result.partition_infos.emplace_back(part_id, *part_syn);
                   break;
                 }
@@ -219,8 +219,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                          it != part_syn->type_synopses_.end() && it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_TRACE("{} selects {} at predicate {}",
-                             detail::pretty_type_name(this), part_id, x);
+                  TENZIR_TRACE("{} selects {} at predicate {}",
+                               detail::pretty_type_name(this), part_id, x);
                   result.partition_infos.emplace_back(part_id, *part_syn);
                   break;
                 }
@@ -233,13 +233,13 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             }
           }
         }
-        VAST_DEBUG("{} checked {} partitions for predicate {} and got {} "
-                   "results",
-                   detail::pretty_type_name(this), synopses_per_type.size(), x,
-                   result.partition_infos.size());
+        TENZIR_DEBUG("{} checked {} partitions for predicate {} and got {} "
+                     "results",
+                     detail::pretty_type_name(this), synopses_per_type.size(),
+                     x, result.partition_infos.size());
         // Some calling paths require the result to be sorted.
-        VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                   result.partition_infos.end()));
+        TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                     result.partition_infos.end()));
         return result;
       };
       auto extract_expr = detail::overload{
@@ -262,31 +262,31 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 }
               }
             }
-            VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                       result.partition_infos.end()));
+            TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                         result.partition_infos.end()));
             return result;
           }
           if (lhs.kind == meta_extractor::schema_id) {
             auto result = catalog_lookup_result::candidate_info{};
             result.exp = expr;
             for (const auto& [part_id, part_syn] : partition_synopses) {
-              VAST_ASSERT(part_syn->schema == schema);
+              TENZIR_ASSERT(part_syn->schema == schema);
             }
             if (evaluate(schema.make_fingerprint(), x.op, d)) {
               for (const auto& [part_id, part_syn] : partition_synopses) {
                 result.partition_infos.emplace_back(part_id, *part_syn);
               }
             }
-            VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                       result.partition_infos.end()));
+            TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                         result.partition_infos.end()));
             return result;
           }
           if (lhs.kind == meta_extractor::import_time) {
             catalog_lookup_result::candidate_info result;
             for (const auto& [part_id, part_syn] : partition_synopses) {
-              VAST_ASSERT(part_syn->min_import_time
-                            <= part_syn->max_import_time,
-                          "encountered empty or moved-from partition synopsis");
+              TENZIR_ASSERT(
+                part_syn->min_import_time <= part_syn->max_import_time,
+                "encountered empty or moved-from partition synopsis");
               auto ts = time_synopsis{
                 part_syn->min_import_time,
                 part_syn->max_import_time,
@@ -297,12 +297,12 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 result.partition_infos.emplace_back(part_id, *part_syn);
               }
             }
-            VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                       result.partition_infos.end()));
+            TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                         result.partition_infos.end()));
             return result;
           }
-          VAST_WARN("{} cannot process meta extractor: {}",
-                    detail::pretty_type_name(this), lhs.kind);
+          TENZIR_WARN("{} cannot process meta extractor: {}",
+                      detail::pretty_type_name(this), lhs.kind);
           return all_partitions();
         },
         [&](const field_extractor& lhs,
@@ -331,7 +331,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             };
             if (!match_name())
               return false;
-            VAST_ASSERT(!field.is_standalone_type());
+            TENZIR_ASSERT(!field.is_standalone_type());
             return compatible(field.type(), x.op, d);
           };
           return search(pred);
@@ -357,17 +357,17 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
           return result;
         },
         [&](const auto&, const auto&) -> catalog_lookup_result::candidate_info {
-          VAST_WARN("{} cannot process predicate: {}",
-                    detail::pretty_type_name(this), x);
+          TENZIR_WARN("{} cannot process predicate: {}",
+                      detail::pretty_type_name(this), x);
           return all_partitions();
         },
       };
       return caf::visit(extract_expr, x.lhs, x.rhs);
     },
     [&](caf::none_t) -> catalog_lookup_result::candidate_info {
-      VAST_ERROR("{} received an empty expression",
-                 detail::pretty_type_name(this));
-      VAST_ASSERT(!"invalid expression");
+      TENZIR_ERROR("{} received an empty expression",
+                   detail::pretty_type_name(this));
+      TENZIR_ASSERT(!"invalid expression");
       return all_partitions();
     },
   };
@@ -447,8 +447,8 @@ caf::error catalog_state::load_type_registry_from_disk() {
                            fmt::format("failed to find directory {}: {}",
                                        type_registry_dir, err.message()));
   if (!dir_exists) {
-    VAST_DEBUG("{} found no directory {} to load from", *self,
-               type_registry_dir);
+    TENZIR_DEBUG("{} found no directory {} to load from", *self,
+                 type_registry_dir);
     return caf::none;
   }
   // Support the legacy CAF-serialized state, and delete it afterwards.
@@ -475,13 +475,13 @@ caf::error catalog_state::load_type_registry_from_disk() {
           entry.emplace(type::from_legacy_type(v));
         type_data.emplace(k, entry);
       }
-      VAST_DEBUG("{} loaded state from disk", *self);
+      TENZIR_DEBUG("{} loaded state from disk", *self);
       // We save the new state already now before removing the old state just
       // to be save against crashes.
       if (auto err = save_type_registry_to_disk())
         return err;
       if (!std::filesystem::remove(fname, err) || err)
-        VAST_DEBUG("failed to delete legacy type-registry state");
+        TENZIR_DEBUG("failed to delete legacy type-registry state");
       return caf::none;
     }
   }
@@ -512,7 +512,7 @@ caf::error catalog_state::load_type_registry_from_disk() {
             type{flatbuffer.chunk()->slice(as_bytes(*value->buffer()))});
         type_data.emplace(entry->key()->string_view(), std::move(types));
       }
-      VAST_DEBUG("{} loaded state from disk", *self);
+      TENZIR_DEBUG("{} loaded state from disk", *self);
     }
   }
   return caf::none;
@@ -527,12 +527,12 @@ void catalog_state::insert(vast::type schema) {
     // whether the new schema is a superset of it.
     if (old_schemas.begin() != hint) {
       if (!is_subset(*old_schemas.begin(), *hint))
-        VAST_WARN("{} detected an incompatible schema change for {}", *self,
-                  hint->name());
+        TENZIR_WARN("{} detected an incompatible schema change for {}", *self,
+                    hint->name());
       else
-        VAST_INFO("{} detected a schema change for {}", *self, hint->name());
+        TENZIR_INFO("{} detected a schema change for {}", *self, hint->name());
     }
-    VAST_DEBUG("{} registered {}", *self, hint->name());
+    TENZIR_DEBUG("{} registered {}", *self, hint->name());
   }
   // Move the newly inserted schema to the front.
   std::rotate(old_schemas.begin(), hint, std::next(hint));
@@ -546,13 +546,13 @@ type_set catalog_state::types() const {
 }
 
 void catalog_state::emit_metrics() const {
-  VAST_ASSERT(accountant);
+  TENZIR_ASSERT(accountant);
   auto num_partitions_and_events_per_schema_and_version
     = detail::stable_map<std::pair<std::string_view, uint64_t>,
                          std::pair<uint64_t, uint64_t>>{};
   for (const auto& [type, id_synopsis_map] : synopses_per_type) {
     for (const auto& [id, synopsis] : id_synopsis_map) {
-      VAST_ASSERT(synopsis);
+      TENZIR_ASSERT(synopsis);
       auto& [num_partitions, num_events]
         = num_partitions_and_events_per_schema_and_version[std::pair{
           synopsis->schema.name(), synopsis->version}];
@@ -614,9 +614,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
   self->state.type_registry_dir = type_reg_dir;
   // Register the exit handler.
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
+    TENZIR_DEBUG("{} got EXIT from {}", *self, msg.source);
     if (auto err = self->state.save_type_registry_to_disk())
-      VAST_ERROR("{} failed to persist state to disk: {}", *self, err);
+      TENZIR_ERROR("{} failed to persist state to disk: {}", *self, err);
     self->quit(msg.reason);
   });
   // Load existing state from disk if possible.
@@ -634,11 +634,11 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
   self->state.taxonomies.models = std::move(taxonomies->models);
   //  Load loaded schema types from the singleton.
   //  TODO: Move to the load handler and re-parse the files.
-  VAST_DIAGNOSTIC_PUSH
-  VAST_DIAGNOSTIC_IGNORE_DEPRECATED
+  TENZIR_DIAGNOSTIC_PUSH
+  TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED
   if (const auto* module = modules::global_module())
     self->state.configuration_module = *module;
-  VAST_DIAGNOSTIC_POP
+  TENZIR_DIAGNOSTIC_POP
   if (accountant) {
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());
@@ -675,7 +675,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     },
     [self](atom::merge, uuid partition,
            partition_synopsis_ptr& synopsis) -> atom::ok {
-      VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(partition));
+      TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(partition));
       self->state.merge(partition, std::move(synopsis));
       return atom::ok_v;
     },
@@ -698,7 +698,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return result;
     },
     [self](atom::get, atom::type) {
-      VAST_TRACE_SCOPE("{} retrieves a list of all known types", *self);
+      TENZIR_TRACE_SCOPE("{} retrieves a list of all known types", *self);
       // TODO: We can generate this list out of partition_synopses
       // when we drop partition version 0 support.
       return self->state.types();
@@ -717,7 +717,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     },
     [self](atom::candidates, const vast::query_context& query_context)
       -> caf::result<catalog_lookup_result> {
-      VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
+      TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(query_context));
       bool has_expression = query_context.expr != vast::expression{};
       bool has_ids = !query_context.ids.empty();
       if (has_ids)
@@ -808,7 +808,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         for (const auto& [type, id_synopsis_map] :
              self->state.synopses_per_type) {
           for (const auto& [id, synopsis] : id_synopsis_map) {
-            VAST_ASSERT(synopsis);
+            TENZIR_ASSERT(synopsis);
             auto partition = record{
               {"id", fmt::to_string(id)},
               {"schema", synopsis->schema
@@ -833,11 +833,11 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return result;
     },
     [self](atom::put, vast::type schema) {
-      VAST_TRACE_SCOPE("");
+      TENZIR_TRACE_SCOPE("");
       self->state.insert(std::move(schema));
     },
     [self](atom::get, atom::taxonomies) {
-      VAST_TRACE_SCOPE("");
+      TENZIR_TRACE_SCOPE("");
       return self->state.taxonomies;
     },
   };

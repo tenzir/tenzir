@@ -420,8 +420,8 @@ protected:
   handle_known_schema(simdjson::ondemand::document_reference doc_ref,
                       std::string_view json_source, parser_state& state) const
     -> std::pair<parser_action, std::optional<table_slice>> {
-    VAST_ASSERT(not schema_);
-    VAST_ASSERT(selector_);
+    TENZIR_ASSERT(not schema_);
+    TENZIR_ASSERT(selector_);
     auto maybe_schema_name = get_schema_name(doc_ref, *selector_);
     if (not maybe_schema_name) {
       ctrl_.warn(std::move(maybe_schema_name.error()));
@@ -612,7 +612,7 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
   if (schema) {
     const auto [it, inserted] = state.builders_per_schema.emplace(
       schema->name(), adaptive_table_slice_builder{*schema, infer_types});
-    VAST_ASSERT(inserted);
+    TENZIR_ASSERT(inserted);
     state.last_used_builder = std::addressof(it->second);
   } else {
     state.last_used_builder = std::addressof(state.unknown_schema_builder);
@@ -634,7 +634,7 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
 
 auto parse_selector(std::string_view x, location source) -> selector {
   auto split = detail::split(x, ":");
-  VAST_ASSERT(!x.empty());
+  TENZIR_ASSERT(!x.empty());
   if (split.size() > 2 or split[0].empty()) {
     diagnostic::error("invalid selector `{}`: must contain at most "
                       "one `:` and field name must "
@@ -792,9 +792,9 @@ public:
         auto out_iter = std::back_inserter(buffer);
         for (const auto& row :
              values(caf::get<record_type>(resolved_slice.schema()), *array)) {
-          VAST_ASSERT_CHEAP(row);
+          TENZIR_ASSERT_CHEAP(row);
           const auto ok = printer.print(out_iter, *row);
-          VAST_ASSERT_CHEAP(ok);
+          TENZIR_ASSERT_CHEAP(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
         auto chunk = chunk::make(std::move(buffer));
@@ -884,6 +884,6 @@ using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 
 } // namespace vast::plugins::json
 
-VAST_REGISTER_PLUGIN(vast::plugins::json::plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::json::suricata_parser)
-VAST_REGISTER_PLUGIN(vast::plugins::json::zeek_parser)
+TENZIR_REGISTER_PLUGIN(vast::plugins::json::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::json::suricata_parser)
+TENZIR_REGISTER_PLUGIN(vast::plugins::json::zeek_parser)

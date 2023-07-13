@@ -239,7 +239,7 @@ public:
   ~reader() override = default;
 
   void reset(std::unique_ptr<std::istream> in) override {
-    VAST_ASSERT(in != nullptr);
+    TENZIR_ASSERT(in != nullptr);
     input_ = std::move(in);
     lines_ = std::make_unique<detail::line_range>(*input_);
   }
@@ -263,8 +263,9 @@ protected:
     using namespace std::string_literals;
     uint64_t invalid_line = num_invalid_lines_;
     if (num_invalid_lines_ > 0)
-      VAST_WARN("{} failed to parse {} of {} recent lines",
-                detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
+      TENZIR_WARN("{} failed to parse {} of {} recent lines",
+                  detail::pretty_type_name(this), num_invalid_lines_,
+                  num_lines_);
     num_invalid_lines_ = 0;
     num_lines_ = 0;
     return {.data = {
@@ -274,8 +275,8 @@ protected:
 
   caf::error
   read_impl(size_t max_events, size_t max_slice_size, consumer& cons) override {
-    VAST_ASSERT(max_events > 0);
-    VAST_ASSERT(max_slice_size > 0);
+    TENZIR_ASSERT(max_events > 0);
+    TENZIR_ASSERT(max_slice_size > 0);
     size_t produced = 0;
     table_slice_builder_ptr bptr = nullptr;
     while (produced < max_events) {
@@ -284,27 +285,28 @@ protected:
                                                               "exhausted"));
       if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
           && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-        VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
+        TENZIR_DEBUG("{} reached batch timeout",
+                     detail::pretty_type_name(this));
         return finish(cons, ec::timeout);
       }
       bool timed_out = lines_->next_timeout(read_timeout_);
       if (timed_out) {
-        VAST_DEBUG("{} stalled at line {}", detail::pretty_type_name(this),
-                   lines_->line_number());
+        TENZIR_DEBUG("{} stalled at line {}", detail::pretty_type_name(this),
+                     lines_->line_number());
         return ec::stalled;
       }
       auto& line = lines_->get();
       ++num_lines_;
       if (line.empty()) {
         // Ignore empty lines.
-        VAST_DEBUG("{} ignores empty line at {}",
-                   detail::pretty_type_name(this), lines_->line_number());
+        TENZIR_DEBUG("{} ignores empty line at {}",
+                     detail::pretty_type_name(this), lines_->line_number());
         continue;
       }
       auto msg = to<message_view>(std::string_view{line});
       if (!msg) {
-        VAST_WARN("{} failed to parse CEF messge: {}",
-                  detail::pretty_type_name(this), msg.error());
+        TENZIR_WARN("{} failed to parse CEF messge: {}",
+                    detail::pretty_type_name(this), msg.error());
         ++num_invalid_lines_;
         continue;
       }
@@ -313,9 +315,9 @@ protected:
       if (bptr == nullptr)
         return caf::make_error(ec::parse_error, "unable to get a builder");
       if (auto err = add(*msg, *bptr)) {
-        VAST_WARN("{} failed to parse line {}: {} ({})",
-                  detail::pretty_type_name(this), lines_->line_number(), line,
-                  err);
+        TENZIR_WARN("{} failed to parse line {}: {} ({})",
+                    detail::pretty_type_name(this), lines_->line_number(), line,
+                    err);
         ++num_invalid_lines_;
         continue;
       }
@@ -344,7 +346,7 @@ auto impl(generator<std::optional<std::string_view>> lines,
       continue;
     }
     if (line->empty()) {
-      VAST_DEBUG("CEF parser ignored empty line");
+      TENZIR_DEBUG("CEF parser ignored empty line");
       continue;
     }
     auto msg = to<message_view>(*line);
@@ -426,4 +428,4 @@ class plugin final : public virtual reader_plugin,
 
 } // namespace vast::plugins::cef
 
-VAST_REGISTER_PLUGIN(vast::plugins::cef::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::cef::plugin)

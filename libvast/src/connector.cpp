@@ -119,9 +119,9 @@ bool is_recoverable_error(const caf::error& err) {
   const auto err_code = std::underlying_type_t<caf::sec>{err.code()};
   auto err_enum = caf::sec{caf::sec::none};
   if (!caf::from_integer(err_code, err_enum)) {
-    VAST_WARN("unable to retrieve error code for a remote node connection "
-              "error:{}",
-              err);
+    TENZIR_WARN("unable to retrieve error code for a remote node connection "
+                "error:{}",
+                err);
     return true;
   }
   return is_recoverable_error_enum(err_enum);
@@ -152,11 +152,11 @@ std::string format_time(caf::timespan timespan) {
 void log_connection_failed(connect_request request,
                            caf::timespan remaining_time,
                            caf::timespan retry_delay) {
-  VAST_INFO("client failed to connect to remote node {}:{}{}; attempting to "
-            "reconnect in {} (remaining time: {})",
-            request.host, request.port,
-            formatted_resolved_host_suffix(request.host),
-            format_time(retry_delay), format_time(remaining_time));
+  TENZIR_INFO("client failed to connect to remote node {}:{}{}; attempting to "
+              "reconnect in {} (remaining time: {})",
+              request.host, request.port,
+              formatted_resolved_host_suffix(request.host),
+              format_time(retry_delay), format_time(remaining_time));
 }
 
 connector_actor::behavior_type make_no_retry_behavior(
@@ -178,8 +178,8 @@ connector_actor::behavior_type make_no_retry_behavior(
         .then(
           [rp, request](const caf::node_id&, caf::strong_actor_ptr& node,
                         const std::set<std::string>&) mutable {
-            VAST_INFO("client connected to node at {}:{}", request.host,
-                      request.port);
+            TENZIR_INFO("client connected to node at {}:{}", request.host,
+                        request.port);
             rp.deliver(caf::actor_cast<node_actor>(std::move(node)));
           },
           [rp, request](caf::error& err) mutable {
@@ -213,8 +213,8 @@ connector(connector_actor::stateful_pointer<connector_state> self,
                                fmt::format("{} couldn't connect to node "
                                            "within a given deadline",
                                            *self));
-      VAST_INFO("client connects to {}:{}{}", request.host, request.port,
-                formatted_resolved_host_suffix(request.host));
+      TENZIR_INFO("client connects to {}:{}{}", request.host, request.port,
+                  formatted_resolved_host_suffix(request.host));
       auto rp = self->make_response_promise<node_actor>();
       self
         ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
@@ -222,7 +222,8 @@ connector(connector_actor::stateful_pointer<connector_state> self,
         .then(
           [rp, req = request](const caf::node_id&, caf::strong_actor_ptr& node,
                               const std::set<std::string>&) mutable {
-            VAST_INFO("client connected to node at {}:{}", req.host, req.port);
+            TENZIR_INFO("client connected to node at {}:{}", req.host,
+                        req.port);
             rp.deliver(caf::actor_cast<node_actor>(std::move(node)));
           },
           [self, rp, request, delay, deadline](caf::error& err) mutable {

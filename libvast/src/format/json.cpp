@@ -571,7 +571,7 @@ caf::error add(const ::simdjson::dom::element& value, const type& type,
     }
     case ::simdjson::dom::element_type::NULL_VALUE: {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
       return caf::none;
     }
   }
@@ -582,66 +582,66 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
   auto f = detail::overload{
     [&](const bool_type&) noexcept {
       const auto added = builder.add(value != 0);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const int64_type&) noexcept {
       const auto added = builder.add(view<int64_t>{value});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
       if (value >= 0) {
         const auto added
           = builder.add(detail::narrow_cast<view<uint64_t>>(value));
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const double_type&) noexcept {
       const auto added = builder.add(detail::narrow_cast<view<double>>(value));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const duration_type&) noexcept {
       const auto added = builder.add(std::chrono::duration_cast<duration>(
         std::chrono::duration<int64_t>{value}));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const time_type&) noexcept {
       const auto added = builder.add(time{}
                                      + std::chrono::duration_cast<duration>(
                                        std::chrono::duration<int64_t>{value}));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(fmt::to_string(value));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const subnet_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const enumeration_type& et) noexcept {
       if (auto key = detail::narrow_cast<view<enumeration>>(value);
           !et.field(key).empty()) {
         const auto added = builder.add(key);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const list_type& lt) noexcept {
       const auto added = builder.add(list{extract(value, lt.value_type())});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const map_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
@@ -654,66 +654,66 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
   auto f = detail::overload{
     [&](const bool_type&) noexcept {
       const auto added = builder.add(value != 0);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const int64_type&) noexcept {
       if (value <= std::numeric_limits<int64_t>::max()) {
         const auto added
           = builder.add(view<int64_t>{detail::narrow_cast<int64_t>(value)});
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
       const auto added = builder.add(view<uint64_t>{value});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const double_type&) noexcept {
       const auto added = builder.add(detail::narrow_cast<view<double>>(value));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const duration_type&) noexcept {
       const auto added = builder.add(std::chrono::duration_cast<duration>(
         std::chrono::duration<uint64_t>{value}));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const time_type&) noexcept {
       const auto added = builder.add(time{}
                                      + std::chrono::duration_cast<duration>(
                                        std::chrono::duration<uint64_t>{value}));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(fmt::to_string(value));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const subnet_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const enumeration_type& et) noexcept {
       if (auto key = detail::narrow_cast<view<enumeration>>(value);
           !et.field(key).empty()) {
         const auto added = builder.add(key);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const list_type& lt) noexcept {
       const auto added = builder.add(list{extract(value, lt.value_type())});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const map_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
@@ -726,55 +726,55 @@ void add(double value, const type& type, table_slice_builder& builder) {
   auto f = detail::overload{
     [&](const bool_type&) noexcept {
       const auto added = builder.add(value != 0);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const int64_type&) noexcept {
       const auto added
         = builder.add(view<int64_t>{detail::narrow_cast<int64_t>(value)});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
       const auto added = builder.add(detail::narrow_cast<uint64_t>(value));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const double_type&) noexcept {
       const auto added = builder.add(value);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const duration_type&) noexcept {
       const auto added = builder.add(std::chrono::duration_cast<duration>(
         std::chrono::duration<double>{value}));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const time_type&) noexcept {
       const auto added = builder.add(time{}
                                      + std::chrono::duration_cast<duration>(
                                        std::chrono::duration<double>{value}));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(fmt::to_string(value));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const subnet_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const enumeration_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const list_type& lt) noexcept {
       const auto added = builder.add(list{extract(value, lt.value_type())});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const map_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
@@ -787,51 +787,51 @@ void add(bool value, const type& type, table_slice_builder& builder) {
   auto f = detail::overload{
     [&](const bool_type&) noexcept {
       const auto added = builder.add(value);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const int64_type&) noexcept {
       const auto added = builder.add(value ? int64_t{1} : int64_t{0});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
       const auto added = builder.add(value ? uint64_t{1} : uint64_t{0});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const double_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const duration_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const time_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(fmt::to_string(value));
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const subnet_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const enumeration_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const list_type& lt) noexcept {
       const auto added = builder.add(list{extract(value, lt.value_type())});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const map_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
@@ -846,70 +846,70 @@ void add(std::string_view value, const type& type,
     [&](const bool_type&) noexcept {
       if (bool result = {}; parsers::json_boolean(value, result)) {
         const auto added = builder.add(result);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const int64_type&) noexcept {
       if (int64_t result = {}; parsers::json_int(value, result)) {
         const auto added = builder.add(view<int64_t>{result});
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       if (double result = {}; parsers::json_number(value, result)) {
         const auto added
           = builder.add(view<int64_t>{detail::narrow_cast<int64_t>(result)});
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
       if (uint64_t result = {}; parsers::json_count(value, result)) {
         const auto added = builder.add(result);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       if (double result = {}; parsers::json_number(value, result)) {
         const auto added
           = builder.add(detail::narrow_cast<view<uint64_t>>(result));
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const double_type&) noexcept {
       if (double result = {}; parsers::json_number(value, result)) {
         const auto added = builder.add(result);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const duration_type&) noexcept {
       if (auto result = to<duration>(value)) {
         const auto added = builder.add(*result);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       if (double result = {}; parsers::json_number(value, result)) {
         const auto added = builder.add(std::chrono::duration_cast<duration>(
           std::chrono::duration<double>(result)));
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const time_type&) noexcept {
       if (auto result = to<time>(value)) {
         const auto added = builder.add(*result);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       if (double result = {}; parsers::json_number(value, result)) {
@@ -917,51 +917,51 @@ void add(std::string_view value, const type& type,
           = builder.add(time{}
                         + std::chrono::duration_cast<duration>(
                           std::chrono::duration<double>(result)));
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(value);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const ip_type&) noexcept {
       if (auto result = to<ip>(value)) {
         const auto added = builder.add(*result);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const subnet_type&) noexcept {
       if (auto result = to<subnet>(value)) {
         const auto added = builder.add(*result);
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const enumeration_type& et) noexcept {
       if (auto internal = et.resolve(value)) {
         const auto added
           = builder.add(detail::narrow_cast<enumeration>(*internal));
-        VAST_ASSERT(added);
+        TENZIR_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const list_type& lt) noexcept {
       const auto added = builder.add(list{extract(value, lt.value_type())});
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const map_type&) noexcept {
       const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     },
     [&](const record_type&) noexcept {
       __builtin_unreachable();
@@ -990,30 +990,30 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
               for (const auto& [k, v] : object)
                 result.emplace(extract(k, kt), extract(v, vt));
               const auto added = builder.add(result);
-              VAST_ASSERT(added);
+              TENZIR_ASSERT(added);
             } else {
               const auto added = builder.add(caf::none);
-              VAST_ASSERT(added);
+              TENZIR_ASSERT(added);
             }
           },
           [&](const record_type& rt) {
             if (element.is_object()) {
               auto err = self(self, element.get_object().value(), rt, "");
-              VAST_ASSERT(!err);
+              TENZIR_ASSERT(!err);
             } else {
               for (size_t i = 0; i < rt.num_leaves(); ++i) {
                 const auto added = builder.add(caf::none);
-                VAST_ASSERT(added);
+                TENZIR_ASSERT(added);
               }
             }
           },
           [&](const auto&) {
             if (element.is_object()) {
               const auto added = builder.add(caf::none);
-              VAST_ASSERT(added);
+              TENZIR_ASSERT(added);
             } else {
               auto err = add(element, field.type, builder);
-              VAST_ASSERT(!err);
+              TENZIR_ASSERT(!err);
             }
           },
         };
@@ -1025,7 +1025,7 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
             return err;
         } else {
           const auto added = builder.add(caf::none);
-          VAST_ASSERT(added);
+          TENZIR_ASSERT(added);
         }
         return caf::none;
       };
@@ -1082,9 +1082,9 @@ caf::error writer::write(const table_slice& x) {
   auto array = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
   auto out_iter = std::ostream_iterator<char>{out()};
   for (const auto& row : values(type, *array)) {
-    VAST_ASSERT_CHEAP(row);
+    TENZIR_ASSERT_CHEAP(row);
     const auto ok = printer_.print(out_iter, *row);
-    VAST_ASSERT_CHEAP(ok);
+    TENZIR_ASSERT_CHEAP(ok);
     out_iter = fmt::format_to(out_iter, "\n");
   }
   return {};
@@ -1096,7 +1096,7 @@ caf::expected<void> writer::flush() {
 }
 
 std::ostream& writer::out() {
-  VAST_ASSERT(out_ != nullptr);
+  TENZIR_ASSERT(out_ != nullptr);
   return *out_;
 }
 
@@ -1113,11 +1113,11 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   if (const auto selector_opt
       = caf::get_if<std::string>(&options, "tenzir.import.json.selector")) {
     auto split = detail::split(*selector_opt, ":");
-    VAST_ASSERT(!split.empty());
+    TENZIR_ASSERT(!split.empty());
     if (split.size() > 2 || split[0].empty()) {
-      VAST_ERROR("failed to parse selector '{}': must contain at most one "
-                 "':' and field name must not be empty; ignoring option",
-                 *selector_opt);
+      TENZIR_ERROR("failed to parse selector '{}': must contain at most one "
+                   "':' and field name must not be empty; ignoring option",
+                   *selector_opt);
       selector_ = std::make_unique<default_selector>();
     } else {
       auto field_name = std::string{split[0]};
@@ -1133,7 +1133,7 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {
-  VAST_ASSERT(in != nullptr);
+  TENZIR_ASSERT(in != nullptr);
   input_ = std::move(in);
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
@@ -1155,11 +1155,12 @@ vast::report reader::status() const {
   uint64_t invalid_line = num_invalid_lines_;
   uint64_t unknown_layout = num_unknown_layouts_;
   if (num_invalid_lines_ > 0)
-    VAST_WARN("{} failed to parse {} of {} recent lines",
-              detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
+    TENZIR_WARN("{} failed to parse {} of {} recent lines",
+                detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
   if (num_unknown_layouts_ > 0)
-    VAST_WARN("{} failed to find a matching type for {} of {} recent lines",
-              detail::pretty_type_name(this), num_unknown_layouts_, num_lines_);
+    TENZIR_WARN("{} failed to find a matching type for {} of {} recent lines",
+                detail::pretty_type_name(this), num_unknown_layouts_,
+                num_lines_);
   num_invalid_lines_ = 0;
   num_unknown_layouts_ = 0;
   num_lines_ = 0;
@@ -1171,9 +1172,10 @@ vast::report reader::status() const {
 
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& cons) {
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(max_events), VAST_ARG(max_slice_size));
-  VAST_ASSERT(max_events > 0);
-  VAST_ASSERT(max_slice_size > 0);
+  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(max_events),
+                     TENZIR_ARG(max_slice_size));
+  TENZIR_ASSERT(max_events > 0);
+  TENZIR_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   table_slice_builder_ptr bptr = nullptr;
   while (produced < max_events) {
@@ -1181,44 +1183,47 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& cons) {
       return finish(cons, caf::make_error(ec::end_of_input, "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
+      TENZIR_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
       return finish(cons, ec::timeout);
     }
     bool timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out) {
-      VAST_DEBUG("{} stalled at line {}", detail::pretty_type_name(this),
-                 lines_->line_number());
+      TENZIR_DEBUG("{} stalled at line {}", detail::pretty_type_name(this),
+                   lines_->line_number());
       return ec::stalled;
     }
     auto& line = lines_->get();
     ++num_lines_;
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_DEBUG("{} ignores empty line at {}", detail::pretty_type_name(this),
-                 lines_->line_number());
+      TENZIR_DEBUG("{} ignores empty line at {}",
+                   detail::pretty_type_name(this), lines_->line_number());
       continue;
     }
     auto parse_result = json_parser_.parse(line);
     if (parse_result.error() != ::simdjson::error_code::SUCCESS) {
       if (num_invalid_lines_ == 0)
-        VAST_WARN("{} failed to parse line {}: {}",
-                  detail::pretty_type_name(this), lines_->line_number(), line);
+        TENZIR_WARN("{} failed to parse line {}: {}",
+                    detail::pretty_type_name(this), lines_->line_number(),
+                    line);
       ++num_invalid_lines_;
       continue;
     }
     auto get_object_result = parse_result.get_object();
     if (get_object_result.error() != ::simdjson::error_code::SUCCESS) {
       if (num_invalid_lines_ == 0)
-        VAST_WARN("{} failed to parse line as JSON object {}: {}",
-                  detail::pretty_type_name(this), lines_->line_number(), line);
+        TENZIR_WARN("{} failed to parse line as JSON object {}: {}",
+                    detail::pretty_type_name(this), lines_->line_number(),
+                    line);
       ++num_invalid_lines_;
       continue;
     }
     auto&& schema = (*selector_)(get_object_result.value());
     if (!schema) {
       if (num_unknown_layouts_ == 0)
-        VAST_WARN("{} failed to find a matching type at line {}: {}",
-                  detail::pretty_type_name(this), lines_->line_number(), line);
+        TENZIR_WARN("{} failed to find a matching type at line {}: {}",
+                    detail::pretty_type_name(this), lines_->line_number(),
+                    line);
       ++num_unknown_layouts_;
       continue;
     }

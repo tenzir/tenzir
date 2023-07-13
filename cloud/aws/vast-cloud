@@ -55,7 +55,7 @@ run () {
     -e AWS_SECRET_ACCESS_KEY \
     -e VASTCLOUD_NO_PTY \
     -e VASTCLOUD_TRACE \
-    --env-file <(env | grep VAST_) \
+    --env-file <(env | grep TENZIR_) \
     --env-file <(env | grep TF_) \
     --env-file <(env | grep HOST_) \
     --rm \

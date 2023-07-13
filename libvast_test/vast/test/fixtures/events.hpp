@@ -57,7 +57,7 @@ struct events {
   }
 
   auto take(const std::vector<table_slice>& xs, size_t n) {
-    VAST_ASSERT(n <= xs.size());
+    TENZIR_ASSERT(n <= xs.size());
     auto first = xs.begin();
     auto last = first + n;
     return std::vector<table_slice>(first, last);

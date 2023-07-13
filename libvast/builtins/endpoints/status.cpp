@@ -68,12 +68,12 @@ auto status_handler(
   return {
     [self](atom::http_request, uint64_t,
            const vast::record& params) -> caf::result<rest_response> {
-      VAST_VERBOSE("{} handles /status request", *self);
+      TENZIR_VERBOSE("{} handles /status request", *self);
       auto arguments = std::vector<std::string>{};
       if (params.contains("component")) {
         auto const& component = params.at("component");
         // The server should have already type-checked this.
-        VAST_ASSERT(caf::holds_alternative<std::string>(component));
+        TENZIR_ASSERT(caf::holds_alternative<std::string>(component));
         arguments.push_back(caf::get<std::string>(component));
       }
       auto options = caf::settings{};
@@ -107,7 +107,7 @@ auto status_handler(
             // a `std::string`, which is not what its type signature says. This
             // will arrive as an "unexpected_response" error here.
             if (caf::sec{e.code()} != caf::sec::unexpected_response) {
-              VAST_ERROR("node error {}", e);
+              TENZIR_ERROR("node error {}", e);
               rp.deliver(rest_response::make_error(500, "internal error\n",
                                                    caf::error{}));
               return;
@@ -142,7 +142,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     if (version != api_version::v0)
       return vast::record{};
     auto result = from_yaml(SPEC_V0);
-    VAST_ASSERT(result);
+    TENZIR_ASSERT(result);
     return *result;
   }
 
@@ -174,4 +174,4 @@ class plugin final : public virtual rest_endpoint_plugin {
 
 } // namespace vast::plugins::rest_api::status
 
-VAST_REGISTER_PLUGIN(vast::plugins::rest_api::status::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::rest_api::status::plugin)

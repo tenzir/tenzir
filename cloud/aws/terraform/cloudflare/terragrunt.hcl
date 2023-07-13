@@ -15,12 +15,12 @@ dependency "core_2" {
 }
 
 locals {
-  region_name                  = get_env("VAST_AWS_REGION")
-  cloudflare_account_id        = get_env("VAST_CLOUDFLARE_ACCOUNT_ID", "dummy_id")
-  cloudflare_api_token         = get_env("VAST_CLOUDFLARE_API_TOKEN", "dummy_token")
-  cloudflare_zone              = get_env("VAST_CLOUDFLARE_ZONE", "dummy.zone")
-  cloudflare_target_count      = length(split(",", get_env("VAST_CLOUDFLARE_EXPOSE", "dummy.url")))
-  cloudflare_authorized_emails = split(",", get_env("VAST_CLOUDFLARE_AUTHORIZED_EMAILS", "dummy@dummy.dummy"))
+  region_name                  = get_env("TENZIR_AWS_REGION")
+  cloudflare_account_id        = get_env("TENZIR_CLOUDFLARE_ACCOUNT_ID", "dummy_id")
+  cloudflare_api_token         = get_env("TENZIR_CLOUDFLARE_API_TOKEN", "dummy_token")
+  cloudflare_zone              = get_env("TENZIR_CLOUDFLARE_ZONE", "dummy.zone")
+  cloudflare_target_count      = length(split(",", get_env("TENZIR_CLOUDFLARE_EXPOSE", "dummy.url")))
+  cloudflare_authorized_emails = split(",", get_env("TENZIR_CLOUDFLARE_AUTHORIZED_EMAILS", "dummy@dummy.dummy"))
 }
 
 inputs = {

@@ -22,16 +22,16 @@ endif ()
 set(CPACK_PACKAGE_NAME "tenzir")
 set(CPACK_PACKAGE_VENDOR "Tenzir")
 set(CPACK_PACKAGE_CONTACT "engineering@tenzir.com")
-string(REGEX REPLACE "^v" "" CPACK_PACKAGE_VERSION "${VAST_VERSION_SHORT}")
+string(REGEX REPLACE "^v" "" CPACK_PACKAGE_VERSION "${TENZIR_VERSION_SHORT}")
 if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
   # CPACK_SYSTEM_NAME is empty when this is evaluated.
   string(TOLOWER "${TENZIR_EDITION_NAME}" _edition_name_lower)
   string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_name_lower)
   set(CPACK_PACKAGE_FILE_NAME
-      "${_edition_name_lower}-${VAST_VERSION_SHORT}-${_system_name_lower}")
+      "${_edition_name_lower}-${TENZIR_VERSION_SHORT}-${_system_name_lower}")
   unset(_system_name_lower)
-  if (VAST_PACKAGE_FILE_NAME_SUFFIX)
-    string(APPEND CPACK_PACKAGE_FILE_NAME "-${VAST_PACKAGE_FILE_NAME_SUFFIX}")
+  if (TENZIR_PACKAGE_FILE_NAME_SUFFIX)
+    string(APPEND CPACK_PACKAGE_FILE_NAME "-${TENZIR_PACKAGE_FILE_NAME_SUFFIX}")
   endif ()
   if (NOT DEFINED CPACK_DEBIAN_FILE_NAME)
     # Taken from CPackDeb.cmake (BSD 3-Clause).
@@ -81,7 +81,7 @@ set(CPACK_DEBIAN_PACKAGE_DEBUG ON)
 
 # For the static binary builds it doesn't make much sense to install development
 # utilities, so we never do so.
-if (VAST_ENABLE_STATIC_EXECUTABLE)
+if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   get_cmake_property(CPACK_COMPONENTS_ALL COMPONENTS)
   list(REMOVE_ITEM CPACK_COMPONENTS_ALL "Development" "Unspecified")
 endif ()

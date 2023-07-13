@@ -130,7 +130,8 @@ auto list_guard::push_record() -> list_guard::list_record_guard {
   }
   auto provider = [this]() -> series_builder& {
     auto& b = builder_provider_.provide();
-    VAST_ASSERT(std::holds_alternative<concrete_series_builder<list_type>>(b));
+    TENZIR_ASSERT(
+      std::holds_alternative<concrete_series_builder<list_type>>(b));
     auto& builder = std::get<concrete_series_builder<list_type>>(b);
     return builder.get_record_builder();
   };
@@ -145,12 +146,12 @@ auto list_guard::propagate_type(type child_type) -> void {
                      .get_child_builder<type_to_arrow_builder_t<list_type>>(
                        vast::type{list_type{value_type}})
                      .Append();
-    VAST_ASSERT(s.ok());
+    TENZIR_ASSERT(s.ok());
   } else {
     auto& builder = get_root_list_builder();
     builder.create_builder(value_type);
     const auto s = builder.get_arrow_builder()->Append();
-    VAST_ASSERT(s.ok());
+    TENZIR_ASSERT(s.ok());
   }
 }
 
@@ -161,7 +162,7 @@ auto list_guard::get_root_list_builder()
   auto& series_builder = builder_provider_.provide();
   list_builder_
     = std::get_if<concrete_series_builder<list_type>>(&series_builder);
-  VAST_ASSERT(list_builder_);
+  TENZIR_ASSERT(list_builder_);
   return *list_builder_;
 }
 
@@ -173,7 +174,7 @@ auto list_guard::push_list() -> list_guard {
       = get_root_list_builder()
           .get_child_builder<type_to_arrow_builder_t<list_type>>(value_type)
           .Append();
-    VAST_ASSERT(s.ok());
+    TENZIR_ASSERT(s.ok());
   }
   return list_guard{builder_provider_, this, child_value_type};
 }
@@ -193,7 +194,7 @@ auto field_guard::push_list() -> list_guard {
                      builder_provider_.provide())
                      .get_arrow_builder()
                      ->Append();
-    VAST_ASSERT(s.ok());
+    TENZIR_ASSERT(s.ok());
     return list_guard{std::move(builder_provider_), nullptr,
                       std::move(value_type)};
   }

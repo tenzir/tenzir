@@ -40,7 +40,7 @@ value_index_ptr make(type x, caf::settings opts) {
   // The cardinality must be an integer.
   if (auto i = opts.find("cardinality"); i != opts.end()) {
     if (!caf::holds_alternative<int_type>(i->second)) {
-      VAST_ERROR("{} invalid cardinality type", __func__);
+      TENZIR_ERROR("{} invalid cardinality type", __func__);
       return nullptr;
     }
   }
@@ -48,11 +48,11 @@ value_index_ptr make(type x, caf::settings opts) {
   if (auto i = opts.find("base"); i != opts.end()) {
     auto str = caf::get_if<caf::config_value::string>(&i->second);
     if (!str) {
-      VAST_ERROR("{} invalid base type (string type needed)", __func__);
+      TENZIR_ERROR("{} invalid base type (string type needed)", __func__);
       return nullptr;
     }
     if (!parsers::base(*str)) {
-      VAST_ERROR("{} invalid base specification", __func__);
+      TENZIR_ERROR("{} invalid base specification", __func__);
       return nullptr;
     }
   }
@@ -63,21 +63,21 @@ value_index_ptr make(type x, caf::settings opts) {
         // Default to a 40-bit hash value -> good for 2^20 unique digests.
         return std::make_unique<hash_index<5>>(std::move(x));
       const auto* cardinality_option = caf::get_if<int_type>(&i->second);
-      VAST_ASSERT(cardinality_option); // checked in make(x, opts)
+      TENZIR_ASSERT(cardinality_option); // checked in make(x, opts)
       // caf::settings doesn't support unsigned integers, but the
       // cardinality is a size_t, so we may get negative values if someone
       // provides an uint64_t value, e.g., numeric_limits<size_t>::max().
       if (*cardinality_option < 0) {
-        VAST_WARN("{} got an explicit cardinality of 2^64, using "
-                  "max digest size of 8 bytes",
-                  __func__);
+        TENZIR_WARN("{} got an explicit cardinality of 2^64, using "
+                    "max digest size of 8 bytes",
+                    __func__);
         return std::make_unique<hash_index<8>>(std::move(x));
       }
       // Need an unsigned value for bit-level operations below.
       auto cardinality
         = static_cast<std::make_unsigned_t<int_type>>(*cardinality_option);
       if (!std::has_single_bit(cardinality))
-        VAST_WARN("{} cardinality not a power of 2", __func__);
+        TENZIR_WARN("{} cardinality not a power of 2", __func__);
       // For 2^n unique values, we expect collisions after sqrt(2^n).
       // Thus, we use 2n bits as digest size.
       size_t digest_bits = std::has_single_bit(cardinality)
@@ -86,17 +86,17 @@ value_index_ptr make(type x, caf::settings opts) {
       auto digest_bytes = digest_bits / 8;
       if (digest_bits % 8 > 0)
         ++digest_bytes;
-      VAST_DEBUG("{} creating hash index with a digest of {} bytes", __func__,
-                 digest_bytes);
+      TENZIR_DEBUG("{} creating hash index with a digest of {} bytes", __func__,
+                   digest_bytes);
       if (digest_bytes > 8) {
-        VAST_WARN("{} expected cardinality exceeds "
-                  "maximum digest size, capping at 8 bytes",
-                  __func__);
+        TENZIR_WARN("{} expected cardinality exceeds "
+                    "maximum digest size, capping at 8 bytes",
+                    __func__);
         digest_bytes = 8;
       }
       switch (digest_bytes) {
         default:
-          VAST_ERROR("{} invalid digest size {}", __func__, cardinality);
+          TENZIR_ERROR("{} invalid digest size {}", __func__, cardinality);
           return nullptr;
         case 1:
           return std::make_unique<hash_index<1>>(std::move(x), std::move(opts));

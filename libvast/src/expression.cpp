@@ -88,7 +88,7 @@ bool operator<(const predicate& x, const predicate& y) {
 // -- curried_predicate --------------------------------------------------------
 
 curried_predicate curried(const predicate& pred) {
-  VAST_ASSERT(caf::holds_alternative<data>(pred.rhs));
+  TENZIR_ASSERT(caf::holds_alternative<data>(pred.rhs));
   return {pred.op, caf::get<data>(pred.rhs)};
 }
 
@@ -199,7 +199,7 @@ caf::expected<expression> normalize_and_validate(expression expr) {
 }
 
 caf::expected<expression> tailor(expression expr, const type& schema) {
-  VAST_ASSERT(caf::holds_alternative<record_type>(schema));
+  TENZIR_ASSERT(caf::holds_alternative<record_type>(schema));
   if (caf::holds_alternative<caf::none_t>(expr))
     return caf::make_error(ec::unspecified, fmt::format("unable to tailor "
                                                         "empty expression"));
@@ -218,7 +218,7 @@ namespace {
 
 // Helper function to lookup an expression at a particular offset
 const expression* at(const expression* expr, offset::value_type i) {
-  VAST_ASSERT(expr != nullptr);
+  TENZIR_ASSERT(expr != nullptr);
   auto f = detail::overload{
     [&](const conjunction& xs) -> const expression* {
       return i < xs.size() ? &xs[i] : nullptr;
@@ -289,7 +289,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
       return true;
     },
     [&](caf::none_t) {
-      VAST_ASSERT(!"invalid expression node");
+      TENZIR_ASSERT(!"invalid expression node");
       return false;
     },
   };

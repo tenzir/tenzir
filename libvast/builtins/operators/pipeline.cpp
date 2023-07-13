@@ -21,4 +21,4 @@ class plugin final : public virtual operator_inspection_plugin<vast::pipeline> {
 
 } // namespace vast::plugins::pipeline
 
-VAST_REGISTER_PLUGIN(vast::plugins::pipeline::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::pipeline::plugin)

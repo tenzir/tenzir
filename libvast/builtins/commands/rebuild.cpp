@@ -72,7 +72,7 @@ public:
         continue;
       }
       const auto buffered_rows = rows(buffer);
-      VAST_ASSERT(buffered_rows < desired_batch_size_);
+      TENZIR_ASSERT(buffered_rows < desired_batch_size_);
       // We don't have enough yet.
       if (buffered_rows + slice.rows() < desired_batch_size_) {
         buffer.push_back(std::move(slice));
@@ -81,7 +81,7 @@ public:
       }
       // We've got enough, so we can now concatenate and yield.
       const auto remainder = desired_batch_size_ - buffered_rows;
-      VAST_ASSERT(remainder <= slice.rows());
+      TENZIR_ASSERT(remainder <= slice.rows());
       auto [head, tail] = split(slice, slice.rows() - remainder);
       buffer.push_back(head);
       co_yield concatenate(std::exchange(buffer, {}));
@@ -252,10 +252,10 @@ struct rebuilder_state {
     }
     run.emplace();
     run->options = std::move(options);
-    VAST_DEBUG("{} requests {}{} partitions matching the expression {}", *self,
-               run->options.all ? "all" : "outdated",
-               run->options.undersized ? " undersized" : "",
-               run->options.expression);
+    TENZIR_DEBUG("{} requests {}{} partitions matching the expression {}",
+                 *self, run->options.all ? "all" : "outdated",
+                 run->options.undersized ? " undersized" : "",
+                 run->options.expression);
     auto rp = self->make_response_promise<void>();
     auto finish = [this, rp](caf::error err, bool silent = false) mutable {
       if (!silent) {
@@ -263,12 +263,13 @@ struct rebuilder_state {
         // was manually requested.
         if (run->statistics.num_completed == 0)
           if (run->options.automatic)
-            VAST_VERBOSE("{} had nothing to do", *self);
+            TENZIR_VERBOSE("{} had nothing to do", *self);
           else
-            VAST_INFO("{} had nothing to do", *self);
+            TENZIR_INFO("{} had nothing to do", *self);
         else
-          VAST_INFO("{} rebuilt {} into {} partitions", *self,
-                    run->statistics.num_completed, run->statistics.num_results);
+          TENZIR_INFO("{} rebuilt {} into {} partitions", *self,
+                      run->statistics.num_completed,
+                      run->statistics.num_results);
       }
       for (auto&& rp : std::exchange(run->stop_requests, {}))
         rp.deliver();
@@ -291,7 +292,7 @@ struct rebuilder_state {
                 std::move(query_context))
       .then(
         [this, finish](catalog_lookup_result& lookup_result) mutable {
-          VAST_ASSERT(run->statistics.num_total == 0);
+          TENZIR_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
             if (not run->options.all) {
               std::erase_if(
@@ -330,18 +331,19 @@ struct rebuilder_state {
                                              result.partition_infos.end());
           }
           if (run->statistics.num_total == 0) {
-            VAST_DEBUG("{} ignores rebuild request for 0 partitions", *self);
+            TENZIR_DEBUG("{} ignores rebuild request for 0 partitions", *self);
             return finish({}, true);
           }
           if (run->options.automatic)
-            VAST_VERBOSE("{} triggered an automatic run for {} candidate "
-                         "partitions with {} threads",
-                         *self, run->statistics.num_total,
-                         run->options.parallel);
+            TENZIR_VERBOSE("{} triggered an automatic run for {} candidate "
+                           "partitions with {} threads",
+                           *self, run->statistics.num_total,
+                           run->options.parallel);
           else
-            VAST_INFO("{} triggered a run for {} candidate partitions with {} "
-                      "threads",
-                      *self, run->statistics.num_total, run->options.parallel);
+            TENZIR_INFO(
+              "{} triggered a run for {} candidate partitions with {} "
+              "threads",
+              *self, run->statistics.num_total, run->options.parallel);
           self
             ->fan_out_request<caf::policy::select_all>(
               std::vector<rebuilder_actor>(run->options.parallel, self),
@@ -364,22 +366,23 @@ struct rebuilder_state {
   auto stop(const stop_options& options) -> caf::result<void> {
     if (!run) {
       if (!stopping)
-        VAST_DEBUG("{} got request to stop rebuild but no rebuild is running",
-                   *self);
+        TENZIR_DEBUG("{} got request to stop rebuild but no rebuild is running",
+                     *self);
       else
-        VAST_INFO("{} stopped ongoing rebuild", *self);
+        TENZIR_INFO("{} stopped ongoing rebuild", *self);
       stopping = false;
       return {};
     }
     stopping = true;
     if (!run->remaining_partitions.empty()) {
-      VAST_ASSERT(run->remaining_partitions.size()
-                  == run->statistics.num_total - run->statistics.num_rebuilding
-                       - run->statistics.num_completed);
-      VAST_INFO("{} schedules stop after rebuild of {} partitions currently "
-                "in rebuilding, and will not touch remaining {} partitions",
-                *self, run->statistics.num_rebuilding,
-                run->remaining_partitions.size());
+      TENZIR_ASSERT(run->remaining_partitions.size()
+                    == run->statistics.num_total
+                         - run->statistics.num_rebuilding
+                         - run->statistics.num_completed);
+      TENZIR_INFO("{} schedules stop after rebuild of {} partitions currently "
+                  "in rebuilding, and will not touch remaining {} partitions",
+                  *self, run->statistics.num_rebuilding,
+                  run->remaining_partitions.size());
       run->statistics.num_total -= run->remaining_partitions.size();
       run->remaining_partitions.clear();
       emit_telemetry();
@@ -411,10 +414,10 @@ struct rebuilder_state {
             && current_run_events < max_partition_size) {
           current_run_events += partition.events;
           current_run_partitions.push_back(partition);
-          VAST_TRACE("{} selects partition {} (v{}, {}) with "
-                     "{} events (total: {})",
-                     *self, partition.uuid, partition.version, partition.schema,
-                     partition.events, current_run_events);
+          TENZIR_TRACE("{} selects partition {} (v{}, {}) with "
+                       "{} events (total: {})",
+                       *self, partition.uuid, partition.version,
+                       partition.schema, partition.events, current_run_events);
           return true;
         }
         return false;
@@ -432,10 +435,10 @@ struct rebuilder_state {
              == version::current_partition_version
         && current_run_partitions[0].events <= max_partition_size;
     if (skip_rebuild) {
-      VAST_DEBUG("{} skips rebuilding of undersized partition {} because no "
-                 "other partition of schema {} exists",
-                 *self, current_run_partitions[0].uuid,
-                 current_run_partitions[0].schema);
+      TENZIR_DEBUG("{} skips rebuilding of undersized partition {} because no "
+                   "other partition of schema {} exists",
+                   *self, current_run_partitions[0].uuid,
+                   current_run_partitions[0].schema);
       run->statistics.num_rebuilding -= 1;
       run->statistics.num_total -= 1;
       // Pick up new work until we run out of remainig partitions.
@@ -466,9 +469,9 @@ struct rebuilder_state {
         [this, rp, current_run_events, num_partitions,
          is_oversized](std::vector<partition_info>& result) mutable {
           if (result.empty()) {
-            VAST_DEBUG("{} skipped {} partitions as they are already being "
-                       "transformed by another actor",
-                       *self, num_partitions);
+            TENZIR_DEBUG("{} skipped {} partitions as they are already being "
+                         "transformed by another actor",
+                         *self, num_partitions);
             run->statistics.num_total -= num_partitions;
             run->statistics.num_rebuilding -= num_partitions;
             // Pick up new work until we run out of remaining partitions.
@@ -477,8 +480,8 @@ struct rebuilder_state {
                         atom::rebuild_v);
             return;
           }
-          VAST_DEBUG("{} rebuilt {} into {} partitions", *self, num_partitions,
-                     result.size());
+          TENZIR_DEBUG("{} rebuilt {} into {} partitions", *self,
+                       num_partitions, result.size());
           // Determines whether we moved partitions back.
           bool needs_second_stage = false;
           // If the number of events in the resulting partitions does not
@@ -492,18 +495,18 @@ struct rebuilder_state {
                                       return partition.events;
                                     });
           if (current_run_events != result_events)
-            VAST_WARN("{} detected a mismatch: rebuilt {} events from {} "
-                      "partitions into {} events in {} partitions",
-                      *self, current_run_events, num_partitions, result_events,
-                      result.size());
+            TENZIR_WARN("{} detected a mismatch: rebuilt {} events from {} "
+                        "partitions into {} events in {} partitions",
+                        *self, current_run_events, num_partitions,
+                        result_events, result.size());
           // Adjust the counters, update the indicator, and move back
           // undersized transformed partitions to the list of remainig
           // partitions as desired.
-          VAST_ASSERT(!result.empty());
+          TENZIR_ASSERT(!result.empty());
           run->statistics.num_completed += num_partitions;
           run->statistics.num_results += result.size();
           if (is_oversized) {
-            VAST_ASSERT(result.size() > 1);
+            TENZIR_ASSERT(result.size() > 1);
             if (result.back().events <= detail::narrow_cast<size_t>(
                   detail::narrow_cast<double>(max_partition_size)
                   * undersized_threshold)) {
@@ -528,7 +531,7 @@ struct rebuilder_state {
         },
         [this, num_partitions = current_run_partitions.size(),
          rp](caf::error& error) mutable {
-          VAST_WARN("{} failed to rebuild partititons: {}", *self, error);
+          TENZIR_WARN("{} failed to rebuild partititons: {}", *self, error);
           run->statistics.num_rebuilding -= num_partitions;
           // Pick up new work until we run out of remainig partitions.
           emit_telemetry();
@@ -556,10 +559,10 @@ struct rebuilder_state {
                 atom::start_v, std::move(options))
       .then(
         [this] {
-          VAST_DEBUG("{} finished automatic rebuild", *self);
+          TENZIR_DEBUG("{} finished automatic rebuild", *self);
         },
         [this](const caf::error& err) {
-          VAST_WARN("{} failed during automatic rebuild: {}", *self, err);
+          TENZIR_WARN("{} failed during automatic rebuild: {}", *self, err);
         });
   }
 
@@ -609,7 +612,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     self->state.schedule();
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} received EXIT from {}: {}", *self, msg.source, msg.reason);
+    TENZIR_DEBUG("{} received EXIT from {}: {}", *self, msg.source, msg.reason);
     if (!self->state.run) {
       self->quit(msg.reason);
       return;
@@ -672,7 +675,7 @@ get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
           // registry, and lookup by label only works reliably for singleton
           // components, and we cannot make the MATCHER SUPERVISOR a singleton
           // component from outside libvast.
-          VAST_ASSERT(actors.size() == 1);
+          TENZIR_ASSERT(actors.size() == 1);
           result = std::move(actors[0]);
         }
       },
@@ -829,5 +832,5 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_rebuild_plugin_types, 1400)
                   (vast::plugins::rebuild::stop_options))
 CAF_END_TYPE_ID_BLOCK(vast_rebuild_plugin_types)
 
-VAST_REGISTER_PLUGIN(vast::plugins::rebuild::plugin)
-VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_rebuild_plugin_types)
+TENZIR_REGISTER_PLUGIN(vast::plugins::rebuild::plugin)
+TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_rebuild_plugin_types)

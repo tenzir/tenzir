@@ -18,11 +18,11 @@ TS_FILE="last_queried.ts"
 
 Q=${1:-""}
 S=${2:-5}
-SOURCE_VAST_ENDPOINT=${3:-:5158}
-DESTINATION_VAST_ENDPOINT=${4:-:5160}
-VAST_BINARY="${5:-vast}"
+SOURCE_TENZIR_ENDPOINT=${3:-:5158}
+DESTINATION_TENZIR_ENDPOINT=${4:-:5160}
+TENZIR_BINARY="${5:-vast}"
 
->&2 echo "syncing $SOURCE_VAST_ENDPOINT to $DESTINATION_VAST_ENDPOINT every $S seconds"
+>&2 echo "syncing $SOURCE_TENZIR_ENDPOINT to $DESTINATION_TENZIR_ENDPOINT every $S seconds"
 
 if [ -e $TS_FILE ]
 then
@@ -45,12 +45,12 @@ while true; do
   >&2 echo " processing time range: $PREVIOUS_TIMESTAMP <= #import_time < $TIMESTAMP"
 
   # count events - only run sync when count != 0
-  EVENTS=`$VAST_BINARY -e $SOURCE_VAST_ENDPOINT count --estimate "$QUERY"`
+  EVENTS=`$TENZIR_BINARY -e $SOURCE_TENZIR_ENDPOINT count --estimate "$QUERY"`
   >&2 echo "events to sync: $EVENTS"
   if [ $EVENTS -ne 0 ]
   then
-    $VAST_BINARY -e $SOURCE_VAST_ENDPOINT export arrow "$QUERY" \
-      |  $VAST_BINARY -e $DESTINATION_VAST_ENDPOINT import arrow
+    $TENZIR_BINARY -e $SOURCE_TENZIR_ENDPOINT export arrow "$QUERY" \
+      |  $TENZIR_BINARY -e $DESTINATION_TENZIR_ENDPOINT import arrow
     status=$?
     if [ $status -eq 0 ]
     then

@@ -122,7 +122,7 @@ auto concrete_series_builder<record_type>::type() const -> vast::type {
 }
 
 auto record_series_builder_base::append() -> void {
-  VAST_ASSERT(arrow_builder_);
+  TENZIR_ASSERT(arrow_builder_);
   for (auto& [_, builder] : field_builders_) {
     std::visit(
       []<class Builder>(Builder& b) {
@@ -133,7 +133,7 @@ auto record_series_builder_base::append() -> void {
       *builder);
   }
   const auto status = arrow_builder_->Append();
-  VAST_ASSERT(status.ok());
+  TENZIR_ASSERT(status.ok());
 }
 
 auto record_series_builder_base::remove_last_row() -> void {
@@ -162,9 +162,9 @@ std::shared_ptr<arrow::Array> concrete_series_builder<list_type>::finish() {
 auto concrete_series_builder<list_type>::add_up_to_n_nulls(
   arrow_length_type max_null_count) -> void {
   if (builder_) {
-    VAST_ASSERT(max_null_count >= length());
+    TENZIR_ASSERT(max_null_count >= length());
     const auto status = builder_->AppendNulls(max_null_count - length());
-    VAST_ASSERT(status.ok());
+    TENZIR_ASSERT(status.ok());
     return;
   }
   nulls_to_prepend_ = std::max(max_null_count, nulls_to_prepend_);
@@ -182,14 +182,14 @@ auto concrete_series_builder<list_type>::length() const -> arrow_length_type {
 
 auto concrete_series_builder<list_type>::create_builder(
   const vast::type& value_type) -> void {
-  VAST_ASSERT(value_type);
+  TENZIR_ASSERT(value_type);
   type_ = vast::type{list_type{value_type}};
   builder_
     = std::make_shared<arrow::ListBuilder>(arrow::default_memory_pool(),
                                            create_builder_impl(value_type),
                                            type_.to_arrow_type());
   const auto s = builder_->AppendNulls(nulls_to_prepend_);
-  VAST_ASSERT(s.ok());
+  TENZIR_ASSERT(s.ok());
   nulls_to_prepend_ = 0u;
 }
 auto concrete_series_builder<list_type>::get_arrow_builder()
@@ -216,7 +216,7 @@ auto concrete_series_builder<list_type>::remove_last_row() -> bool {
   auto new_array = array->Slice(0, array->length() - 1);
   const auto status
     = builder_->AppendArraySlice(*new_array->data(), 0u, new_array->length());
-  VAST_ASSERT(status.ok());
+  TENZIR_ASSERT(status.ok());
   if (are_fields_fixed_)
     return false;
   return builder_->null_count() == builder_->length();

@@ -98,7 +98,7 @@ void serialize(
     if (chunk_it == self->state.chunks.end()) {
       auto error = caf::make_error(ec::logic_error, "no chunk for for actor id "
                                                       + to_string(actor_id));
-      VAST_ERROR("{} failed to serialize: {}", *self, render(error));
+      TENZIR_ERROR("{} failed to serialize: {}", *self, render(error));
       self->state.persistence_promise.deliver(error);
       return;
     }
@@ -115,19 +115,19 @@ void serialize(
   if (!combined_schema) {
     auto err = caf::make_error(ec::logic_error, "unable to create "
                                                 "combined schema");
-    VAST_ERROR("{} failed to serialize {} with error: {}", *self, *self, err);
+    TENZIR_ERROR("{} failed to serialize {} with error: {}", *self, *self, err);
     self->state.persistence_promise.deliver(err);
     return;
   }
   auto partition = pack_full(self->state.data, *combined_schema);
   if (!partition) {
-    VAST_ERROR("{} failed to serialize {} with error: {}", *self, *self,
-               partition.error());
+    TENZIR_ERROR("{} failed to serialize {} with error: {}", *self, *self,
+                 partition.error());
     self->state.persistence_promise.deliver(partition.error());
     return;
   }
-  VAST_ASSERT(self->state.persist_path);
-  VAST_ASSERT(self->state.synopsis_path);
+  TENZIR_ASSERT(self->state.persist_path);
+  TENZIR_ASSERT(self->state.synopsis_path);
   // Note that this is a performance optimization: We used to store
   // the partition synopsis inside the `Partition` flatbuffer, and
   // then on startup the index would mmap all partitions and read
@@ -151,21 +151,21 @@ void serialize(
                 *self->state.synopsis_path, std::move(ps_chunk))
       .then(
         [=](atom::ok) {
-          VAST_DEBUG("{} persisted partition synopsis", *self);
+          TENZIR_DEBUG("{} persisted partition synopsis", *self);
         },
         [=](const caf::error& err) {
-          VAST_WARN("{} failed to persist partition synopsis to {} and will "
-                    "attempt to restore it on the next start: {}",
-                    *self, *self->state.synopsis_path, err);
+          TENZIR_WARN("{} failed to persist partition synopsis to {} and will "
+                      "attempt to restore it on the next start: {}",
+                      *self, *self->state.synopsis_path, err);
         });
   } else {
-    VAST_WARN("{} failed to serialize partition synopsis and will attempt to "
-              "restore it on the next start",
-              *self);
+    TENZIR_WARN("{} failed to serialize partition synopsis and will attempt to "
+                "restore it on the next start",
+                *self);
   }
-  VAST_DEBUG("{} persists partition with a total size of "
-             "{} bytes",
-             *self, (*partition)->size());
+  TENZIR_DEBUG("{} persists partition with a total size of "
+               "{} bytes",
+               *self, (*partition)->size());
   // TODO: Add a proper timeout.
   self
     ->request(self->state.filesystem, caf::infinite, atom::write_v,
@@ -187,7 +187,7 @@ bool should_skip_index_creation(const type& type,
   // String indexes are currently disabled as they are very inefficient and use
   // too much memory. We may bring them back in the future.
   if (caf::holds_alternative<string_type>(type)) {
-    VAST_DEBUG("skipping string index creation for {}", qf.name());
+    TENZIR_DEBUG("skipping string index creation for {}", qf.name());
     return true;
   }
   if (type.attribute("skip").has_value()) {
@@ -198,7 +198,7 @@ bool should_skip_index_creation(const type& type,
 
 /// Gets the ACTIVE INDEXER at a certain position.
 active_indexer_actor active_partition_state::indexer_at(size_t position) const {
-  VAST_ASSERT(position < indexers.size());
+  TENZIR_ASSERT(position < indexers.size());
   return as_vector(indexers)[position].second;
 }
 
@@ -218,14 +218,14 @@ active_partition_state::type_ids() const {
 }
 
 void active_partition_state::add_flush_listener(flush_listener_actor listener) {
-  VAST_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
+  TENZIR_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
   flush_listeners.emplace_back(std::move(listener));
   detail::notify_listeners_if_clean(*this, *stage);
 }
 
 void active_partition_state::notify_flush_listeners() {
-  VAST_DEBUG("{} sends 'flush' messages to {} listeners", *self,
-             flush_listeners.size());
+  TENZIR_DEBUG("{} sends 'flush' messages to {} listeners", *self,
+               flush_listeners.size());
   for (auto& listener : flush_listeners)
     self->send(listener, atom::flush_v);
   flush_listeners.clear();
@@ -341,8 +341,8 @@ active_partition_actor::behavior_type active_partition(
   filesystem_actor filesystem, caf::settings index_opts,
   const index_config& synopsis_opts, const store_actor_plugin* store_plugin,
   std::shared_ptr<vast::taxonomies> taxonomies) {
-  VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
-                   VAST_ARG(id));
+  TENZIR_TRACE_SCOPE("active partition {} {}", TENZIR_ARG(self->id()),
+                     TENZIR_ARG(id));
   self->state.self = self;
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
@@ -363,8 +363,8 @@ active_partition_actor::behavior_type active_partition(
         // nop
       },
       [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-        VAST_TRACE_SCOPE("partition {} got table slice {} {}",
-                         self->state.data.id, VAST_ARG(out), VAST_ARG(x));
+        TENZIR_TRACE_SCOPE("partition {} got table slice {} {}",
+                           self->state.data.id, TENZIR_ARG(out), TENZIR_ARG(x));
         // The index already sets the correct offset for this slice, but in some
         // unit tests we test this component separately, causing incoming table
         // slices not to have an offset at all. We should fix the unit tests
@@ -372,7 +372,7 @@ active_partition_actor::behavior_type active_partition(
         // to partition-local ids. -- DL
         if (x.offset() == invalid_id)
           x.offset(self->state.data.events);
-        VAST_ASSERT(x.offset() == self->state.data.events);
+        TENZIR_ASSERT(x.offset() == self->state.data.events);
         // Adjust the import time range iff necessary.
         auto& mutable_synopsis = self->state.data.synopsis.unshared();
         mutable_synopsis.min_import_time = std::min(
@@ -385,10 +385,10 @@ active_partition_actor::behavior_type active_partition(
         auto first = x.offset();
         auto last = x.offset() + x.rows();
         const auto& schema = x.schema();
-        VAST_ASSERT(!schema.name().empty());
+        TENZIR_ASSERT(!schema.name().empty());
         auto it = self->state.data.type_ids.emplace(schema.name(), ids{}).first;
         auto& ids = it->second;
-        VAST_ASSERT(first >= ids.size());
+        TENZIR_ASSERT(first >= ids.size());
         // Mark the ids of this table slice for the current type.
         ids.append_bits(false, first - ids.size());
         ids.append_bits(true, last - first);
@@ -411,27 +411,27 @@ active_partition_actor::behavior_type active_partition(
           auto value_index
             = factory<vast::value_index>::make(field.type, index_opts);
           if (!value_index) {
-            VAST_WARN("{} failed to spawn active indexer with options {} for "
-                      "field {}: value index missing",
-                      *self, index_opts, field);
+            TENZIR_WARN("{} failed to spawn active indexer with options {} for "
+                        "field {}: value index missing",
+                        *self, index_opts, field);
             continue;
           }
           idx = self->spawn(active_indexer, column_idx, std::move(value_index));
           auto slot = self->state.stage->add_outbound_path(idx);
-          VAST_DEBUG("{} spawned new active indexer for field {} at slot {}",
-                     *self, field.name, slot);
+          TENZIR_DEBUG("{} spawned new active indexer for field {} at slot {}",
+                       *self, field.name, slot);
         }
         out.push(x);
       },
       [=](caf::unit_t&, const caf::error& err) {
-        VAST_DEBUG("active partition {} finalized streaming {}", id,
-                   render(err));
+        TENZIR_DEBUG("active partition {} finalized streaming {}", id,
+                     render(err));
         // We get an 'unreachable' error when the stream becomes unreachable
         // because the actor was destroyed; in this case the state was already
         // destroyed during `local_actor::on_exit()`.
         if (err && err != caf::exit_reason::unreachable
             && err != ec::end_of_input) {
-          VAST_ERROR("{} aborts with error: {}", *self, err);
+          TENZIR_ERROR("{} aborts with error: {}", *self, err);
           return;
         }
       },
@@ -442,8 +442,8 @@ active_partition_actor::behavior_type active_partition(
   auto builder_and_header = self->state.store_plugin->make_store_builder(
     self->state.accountant, self->state.filesystem, self->state.data.id);
   if (!builder_and_header) {
-    VAST_ERROR("{} failed to create a store builder: {}", *self,
-               builder_and_header.error());
+    TENZIR_ERROR("{} failed to create a store builder: {}", *self,
+                 builder_and_header.error());
     return active_partition_actor::behavior_type::make_empty_behavior();
   }
   auto& [builder, header] = *builder_and_header;
@@ -453,19 +453,19 @@ active_partition_actor::behavior_type active_partition(
   auto slot = self->state.stage->add_outbound_path(builder);
   dynamic_cast<decltype(make_stage())::pointer>(self->state.stage.get())
     ->set_notification_slot(slot);
-  VAST_DEBUG("{} spawned new active store at slot {}", *self, slot);
+  TENZIR_DEBUG("{} spawned new active store at slot {}", *self, slot);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
-               msg.reason);
+    TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
+                 msg.reason);
     if (self->state.streaming_initiated && self->state.stage) {
       detail::shutdown_stream_stage(self->state.stage);
     }
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
       std::call_once(self->state.shutdown_once, [=] {
-        VAST_DEBUG("{} delays partition shutdown because it is still "
-                   "writing to disk",
-                   *self);
+        TENZIR_DEBUG("{} delays partition shutdown because it is still "
+                     "writing to disk",
+                     *self);
       });
       using namespace std::chrono_literals;
       // Ideally, we would use a self->delayed_delegate(self, ...) here, but CAF
@@ -477,7 +477,7 @@ active_partition_actor::behavior_type active_partition(
       caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
       return;
     }
-    VAST_VERBOSE("{} shuts down after persisting partition state", *self);
+    TENZIR_VERBOSE("{} shuts down after persisting partition state", *self);
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
     // on 'std::vector<caf::actor>' only. That should probably be generalized
     // in the future.
@@ -493,7 +493,7 @@ active_partition_actor::behavior_type active_partition(
       // Erase is sent by the disk monitor to erase this partition
       // from disk, but an active partition does not have any files
       // on disk, so it should never get selected for deletion.
-      VAST_WARN("{} got erase atom as an active partition", *self);
+      TENZIR_WARN("{} got erase atom as an active partition", *self);
       return caf::make_error(ec::logic_error, "can not erase the active "
                                               "partition");
     },
@@ -507,9 +507,9 @@ active_partition_actor::behavior_type active_partition(
     [self](atom::persist, const std::filesystem::path& part_dir,
            const std::filesystem::path& synopsis_dir)
       -> caf::result<partition_synopsis_ptr> {
-      VAST_DEBUG("{} got persist atom", *self);
+      TENZIR_DEBUG("{} got persist atom", *self);
       // Ensure that the response promise has not already been initialized.
-      VAST_ASSERT(!self->state.persistence_promise.source());
+      TENZIR_ASSERT(!self->state.persistence_promise.source());
       self->state.persist_path = part_dir;
       self->state.synopsis_path = synopsis_dir;
       self->state.persisted_indexers = 0;
@@ -519,8 +519,8 @@ active_partition_actor::behavior_type active_partition(
       return self->state.persistence_promise;
     },
     [self](atom::internal, atom::persist, atom::resume) -> caf::result<void> {
-      VAST_TRACE("{} resumes persist atom {}", *self,
-                 self->state.indexers.size());
+      TENZIR_TRACE("{} resumes persist atom {}", *self,
+                   self->state.indexers.size());
       if (self->state.streaming_initiated && self->state.stage) {
         if (self->state.stage->inbound_paths().empty()) {
           detail::shutdown_stream_stage(self->state.stage);
@@ -549,7 +549,7 @@ active_partition_actor::behavior_type active_partition(
         serialize(self);
         return {};
       }
-      VAST_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);
+      TENZIR_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);
       for (auto& [field, indexer] : self->state.indexers) {
         if (indexer == nullptr)
           continue;
@@ -558,32 +558,33 @@ active_partition_actor::behavior_type active_partition(
             [=](chunk_ptr chunk) {
               ++self->state.persisted_indexers;
               if (!self->state.persistence_promise.pending()) {
-                VAST_WARN("{} ignores persisted indexer because the "
-                          "persistence promise is already fulfilled",
-                          *self);
+                TENZIR_WARN("{} ignores persisted indexer because the "
+                            "persistence promise is already fulfilled",
+                            *self);
                 return;
               }
               auto sender = self->current_sender()->id();
               if (!chunk) {
-                VAST_ERROR("{} failed to persist indexer {}", *self, sender);
+                TENZIR_ERROR("{} failed to persist indexer {}", *self, sender);
                 self->state.persistence_promise.deliver(caf::make_error(
                   ec::unspecified, "failed to persist indexer", sender));
                 return;
               }
-              VAST_DEBUG("{} got chunk from {}", *self, sender);
+              TENZIR_DEBUG("{} got chunk from {}", *self, sender);
               self->state.chunks.emplace(sender, chunk);
               if (self->state.persisted_indexers
                   < detail::narrow_cast<size_t>(valid_count)) {
-                VAST_DEBUG("{} waits for more chunks after receiving {} out of "
-                           "{}",
-                           *self, self->state.persisted_indexers, valid_count);
+                TENZIR_DEBUG(
+                  "{} waits for more chunks after receiving {} out of "
+                  "{}",
+                  *self, self->state.persisted_indexers, valid_count);
                 return;
               }
               serialize(self);
             },
             [=, field_ = field](caf::error err) {
-              VAST_ERROR("{} failed to persist indexer for {} with error: {}",
-                         *self, field_.name(), err);
+              TENZIR_ERROR("{} failed to persist indexer for {} with error: {}",
+                           *self, field_.name(), err);
               ++self->state.persisted_indexers;
               if (!self->state.persistence_promise.pending())
                 self->state.persistence_promise.deliver(std::move(err));
@@ -638,8 +639,8 @@ active_partition_actor::behavior_type active_partition(
               merge(response, ps, policy::merge_lists::no);
           },
           [rs, &ps, &field = i.first](caf::error& err) {
-            VAST_WARN("{} failed to retrieve status from {}: {}", *rs->self,
-                      field.name(), err);
+            TENZIR_WARN("{} failed to retrieve status from {}: {}", *rs->self,
+                        field.name(), err);
             ps["error"] = fmt::to_string(err);
           });
       }

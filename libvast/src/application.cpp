@@ -369,11 +369,11 @@ make_application(std::string_view path) {
   }
   if (name == "tenzir") {
     const auto* exec = plugins::find<command_plugin>("exec");
-    VAST_ASSERT(exec);
+    TENZIR_ASSERT(exec);
     auto [cmd, cmd_factory] = exec->make_command();
-    VAST_ASSERT(cmd);
+    TENZIR_ASSERT(cmd);
     add_root_opts(*cmd);
-    VAST_ASSERT(cmd_factory.contains("exec"));
+    TENZIR_ASSERT(cmd_factory.contains("exec"));
     cmd->name = "";
     return {
       std::move(cmd),
@@ -415,7 +415,7 @@ make_application(std::string_view path) {
     fmt::print(stderr, "\n- Prefix environment variables with ");
     fmt::print(stderr, fmt::emphasis::bold, "TENZIR_");
     fmt::print(stderr, " instead of ");
-    fmt::print(stderr, fmt::emphasis::bold, "VAST_");
+    fmt::print(stderr, fmt::emphasis::bold, "TENZIR_");
     fmt::print(stderr, "\n\n");
   }
   auto root = make_root_command(name);
@@ -455,7 +455,8 @@ void render_error(const command& root, const caf::error& err,
           if (auto cmd = resolve(root, name))
             helptext(*cmd, os);
         } else {
-          VAST_ASSERT(!"User visible error contexts must consist of strings!");
+          TENZIR_ASSERT(
+            !"User visible error contexts must consist of strings!");
         }
         break;
       }

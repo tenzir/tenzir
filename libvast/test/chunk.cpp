@@ -135,7 +135,7 @@ TEST(as_bytes) {
 namespace {
 
 struct fixture : public fixtures::filesystem {
-  fixture() : fixtures::filesystem(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::filesystem(TENZIR_PP_STRINGIFY(SUITE)) {
   }
 };
 

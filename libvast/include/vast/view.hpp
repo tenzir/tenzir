@@ -40,7 +40,7 @@ struct view_trait;
 template <class T>
 using view = typename view_trait<T>::type;
 
-#define VAST_VIEW_TRAIT(type_name)                                             \
+#define TENZIR_VIEW_TRAIT(type_name)                                           \
   template <>                                                                  \
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
@@ -49,17 +49,17 @@ using view = typename view_trait<T>::type;
     return x;                                                                  \
   }
 
-VAST_VIEW_TRAIT(bool)
-VAST_VIEW_TRAIT(int64_t)
-VAST_VIEW_TRAIT(uint64_t)
-VAST_VIEW_TRAIT(double)
-VAST_VIEW_TRAIT(duration)
-VAST_VIEW_TRAIT(time)
-VAST_VIEW_TRAIT(enumeration)
-VAST_VIEW_TRAIT(ip)
-VAST_VIEW_TRAIT(subnet)
+TENZIR_VIEW_TRAIT(bool)
+TENZIR_VIEW_TRAIT(int64_t)
+TENZIR_VIEW_TRAIT(uint64_t)
+TENZIR_VIEW_TRAIT(double)
+TENZIR_VIEW_TRAIT(duration)
+TENZIR_VIEW_TRAIT(time)
+TENZIR_VIEW_TRAIT(enumeration)
+TENZIR_VIEW_TRAIT(ip)
+TENZIR_VIEW_TRAIT(subnet)
 
-#undef VAST_VIEW_TRAIT
+#undef TENZIR_VIEW_TRAIT
 
 /// @relates view_trait
 template <>
@@ -433,7 +433,7 @@ view<T> make_view(const T& x) {
     return record_view_handle{
       record_view_ptr{caf::make_counted<default_record_view>(x)}};
   } else {
-    VAST_ASSERT(!"missing branch");
+    TENZIR_ASSERT(!"missing branch");
     return {};
   }
 }

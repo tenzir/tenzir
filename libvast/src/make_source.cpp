@@ -70,7 +70,7 @@ make_source(caf::actor_system& sys, const std::string& format,
   if (!extract_settings(encoding, options, "tenzir.import.batch-encoding"))
     return caf::make_error(ec::invalid_configuration, "failed to extract "
                                                       "batch-encoding option");
-  VAST_ASSERT(encoding != table_slice_encoding::none);
+  TENZIR_ASSERT(encoding != table_slice_encoding::none);
   auto slice_size = caf::get_or(options, "tenzir.import.batch-size",
                                 defaults::import::table_slice_size);
   if (slice_size == 0)
@@ -95,8 +95,8 @@ make_source(caf::actor_system& sys, const std::string& format,
     if (ep.port->type() == port_type::unknown)
       // Fall back to tcp if we don't know anything else.
       ep.port = port{ep.port->number(), port_type::tcp};
-    VAST_INFO("{}-reader listens for data on {}", format,
-              ep.host + ":" + to_string(*ep.port));
+    TENZIR_INFO("{}-reader listens for data on {}", format,
+                ep.host + ":" + to_string(*ep.port));
     switch (ep.port->type()) {
       default:
         return caf::make_error(vast::ec::unimplemented,
@@ -115,10 +115,10 @@ make_source(caf::actor_system& sys, const std::string& format,
                                                         "reader factory",
                                                         format));
   if (slice_size == std::numeric_limits<decltype(slice_size)>::max())
-    VAST_VERBOSE("{} produces {} table slices", (*reader)->name(), encoding);
+    TENZIR_VERBOSE("{} produces {} table slices", (*reader)->name(), encoding);
   else
-    VAST_VERBOSE("{} produces {} table slices of at most {} events",
-                 (*reader)->name(), encoding, slice_size);
+    TENZIR_VERBOSE("{} produces {} table slices of at most {} events",
+                   (*reader)->name(), encoding, slice_size);
   // Spawn the source, falling back to the default spawn function.
   auto local_module = module ? std::move(*module) : vast::module{};
   auto type_filter = type ? std::move(*type) : std::string{};
@@ -137,12 +137,12 @@ make_source(caf::actor_system& sys, const std::string& format,
       return sys.spawn(source, std::forward<decltype(args)>(args)...);
     }(std::move(*reader), slice_size, max_events, std::move(catalog),
       std::move(local_module), std::move(type_filter), std::move(accountant));
-  VAST_ASSERT(src);
+  TENZIR_ASSERT(src);
   if (!caf::holds_alternative<caf::none_t>(expr)) {
     send_to_source(src, atom::normalize_v, std::move(expr));
   }
   // Connect source to importer.
-  VAST_DEBUG("{} connects to {}", inv.full_name, VAST_ARG(importer));
+  TENZIR_DEBUG("{} connects to {}", inv.full_name, TENZIR_ARG(importer));
   send_to_source(src, importer);
   return src;
 }

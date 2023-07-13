@@ -196,7 +196,7 @@ std::string_view custom_log_1_event = R"__(#separator \x09
 #close	2022-03-15-11-01-01)__";
 
 struct fixture : fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
   }
   std::vector<table_slice>
   read(std::unique_ptr<std::istream> input, size_t slice_size,
@@ -383,7 +383,7 @@ FIXTURE_SCOPE_END()
 namespace {
 
 struct writer_fixture : fixtures::events, fixtures::filesystem {
-  writer_fixture() : fixtures::filesystem(VAST_PP_STRINGIFY(SUITE)) {
+  writer_fixture() : fixtures::filesystem(TENZIR_PP_STRINGIFY(SUITE)) {
   }
 };
 

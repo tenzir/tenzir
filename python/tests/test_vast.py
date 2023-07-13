@@ -9,10 +9,10 @@ import shutil
 
 logger = pyvast.utils.logging.get("vast.test")
 
-if "VAST_PYTHON_INTEGRATION" not in os.environ:
+if "TENZIR_PYTHON_INTEGRATION" not in os.environ:
     # Tests in this module require access to integration test files and the VAST binary
     pytest.skip(
-        "VAST_PYTHON_INTEGRATION not defined, skipping vast tests",
+        "TENZIR_PYTHON_INTEGRATION not defined, skipping vast tests",
         allow_module_level=True,
     )
 

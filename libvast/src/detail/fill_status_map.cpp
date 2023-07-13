@@ -23,7 +23,7 @@
 #include <sstream>
 #include <thread>
 
-#if VAST_LINUX
+#if TENZIR_LINUX
 
 #  ifndef _GNU_SOURCE
 #    define _GNU_SOURCE
@@ -34,7 +34,7 @@
 
 #  include <unistd.h>
 
-#endif // VAST_LINUX
+#endif // TENZIR_LINUX
 
 namespace {
 
@@ -44,7 +44,7 @@ std::string thread_id() {
   return std::move(ss).str();
 }
 
-#if VAST_LINUX
+#if TENZIR_LINUX
 
 // Gets the PID associated with a certain PThread for comparison with the PID
 // shown in htop's tree mode.
@@ -53,7 +53,7 @@ pid_t pthread_id() {
   return syscall(SYS_gettid);
 }
 
-#endif // VAST_LINUX
+#endif // TENZIR_LINUX
 
 } // namespace
 
@@ -103,9 +103,9 @@ record fill_status_map(caf::stream_manager& mgr) {
 void fill_status_map(record& xs, caf::scheduled_actor* self) {
   xs["actor-id"] = uint64_t{self->id()};
   xs["thread-id"] = thread_id();
-#if VAST_LINUX
+#if TENZIR_LINUX
   xs["pthread-id"] = int64_t{pthread_id()};
-#endif // VAST_LINUX
+#endif // TENZIR_LINUX
   xs["name"] = self->name();
   xs["mailbox-size"] = uint64_t{self->mailbox().size()};
   size_t counter = 0;

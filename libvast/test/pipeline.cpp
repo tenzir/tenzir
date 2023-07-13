@@ -47,7 +47,7 @@ public:
   }
 
   auto abort(caf::error error) noexcept -> void override {
-    VAST_ASSERT(error != caf::none);
+    TENZIR_ASSERT(error != caf::none);
     error_ = error;
   }
 
@@ -143,7 +143,8 @@ struct sink final : public crtp_operator<sink> {
 };
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() : deterministic_actor_system_and_events{VAST_PP_STRINGIFY(SUITE)} {
+  fixture()
+    : deterministic_actor_system_and_events{TENZIR_PP_STRINGIFY(SUITE)} {
   }
 
   auto execute(pipeline p) -> caf::expected<void> {
@@ -605,22 +606,24 @@ TEST(operator argument parsing and escaping) {
 }
 
 TEST(file loader - arguments) {
-  auto success = {
-    "from -",
-    "from file -",
-    "from file - read json",
-    "from file " VAST_TEST_PATH "artifacts/inputs/json.json",
-    "from file " VAST_TEST_PATH "artifacts/inputs/json.json read json",
-    "read json from file " VAST_TEST_PATH "artifacts/inputs/json.json",
-    "read json from file " VAST_TEST_PATH "artifacts/inputs/json.json --follow",
-    "read json from file " VAST_TEST_PATH "artifacts/inputs/json.json -f",
-    "read json from file --follow " VAST_TEST_PATH "artifacts/inputs/json.json",
-    "read json from file -f " VAST_TEST_PATH "artifacts/inputs/json.json",
-    "read json from file -",
-    "load file " VAST_TEST_PATH "artifacts/inputs/json.json | parse json",
-    "load file - | parse json",
-    "load file " VAST_TEST_PATH
-    "artifacts/inputs/json.json --timeout 2m | parse json"};
+  auto success
+    = {"from -",
+       "from file -",
+       "from file - read json",
+       "from file " TENZIR_TEST_PATH "artifacts/inputs/json.json",
+       "from file " TENZIR_TEST_PATH "artifacts/inputs/json.json read json",
+       "read json from file " TENZIR_TEST_PATH "artifacts/inputs/json.json",
+       "read json from file " TENZIR_TEST_PATH
+       "artifacts/inputs/json.json --follow",
+       "read json from file " TENZIR_TEST_PATH "artifacts/inputs/json.json -f",
+       "read json from file --follow " TENZIR_TEST_PATH
+       "artifacts/inputs/json.json",
+       "read json from file -f " TENZIR_TEST_PATH "artifacts/inputs/json.json",
+       "read json from file -",
+       "load file " TENZIR_TEST_PATH "artifacts/inputs/json.json | parse json",
+       "load file - | parse json",
+       "load file " TENZIR_TEST_PATH
+       "artifacts/inputs/json.json --timeout 2m | parse json"};
   auto error
     = {"from - --timeout",
        "from - --timeout nope",
@@ -629,9 +632,9 @@ TEST(file loader - arguments) {
        "from file",
        "from file --timeout 2m",
        "load stdin --timeout 1s /home/dakostu/Documents/vast2/version.json",
-       "load file " VAST_TEST_PATH
+       "load file " TENZIR_TEST_PATH
        "artifacts/inputs/json.json --timeout | parse json",
-       "load file " VAST_TEST_PATH
+       "load file " TENZIR_TEST_PATH
        "artifacts/inputs/json.json --timeout wtf | parse json"};
   for (const auto* x : success) {
     MESSAGE(x);

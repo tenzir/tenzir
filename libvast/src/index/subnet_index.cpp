@@ -29,7 +29,7 @@ namespace {
 bool serialize(auto& serializer, value_index& network,
                subnet_index::prefix_index& length) {
   auto* network_as_ip = dynamic_cast<ip_index*>(&network);
-  VAST_ASSERT(network_as_ip);
+  TENZIR_ASSERT(network_as_ip);
   return serializer.apply(*network_as_ip) && serializer.apply(length);
 }
 
@@ -37,7 +37,7 @@ bool deserialize(auto& deserializer, value_index_ptr& network,
                  subnet_index::prefix_index& length) {
   network = factory<value_index>::make(vast::type{ip_type{}}, caf::settings{});
   auto* network_as_ip = dynamic_cast<ip_index*>(network.get());
-  VAST_ASSERT(network_as_ip);
+  TENZIR_ASSERT(network_as_ip);
   return deserializer.apply(*network_as_ip) && deserializer.apply(length);
 }
 
@@ -173,7 +173,7 @@ flatbuffers::Offset<fbs::ValueIndex> subnet_index::pack_impl(
 
 caf::error subnet_index::unpack_impl(const fbs::ValueIndex& from) {
   const auto* from_subnet = from.value_index_as_subnet();
-  VAST_ASSERT(from_subnet);
+  TENZIR_ASSERT(from_subnet);
   if (auto err = unpack(*from_subnet->ip_index(), network_))
     return err;
   return unpack(*from_subnet->prefix_index(), length_);

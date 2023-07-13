@@ -13,7 +13,7 @@
 namespace vast {
 
 bool_synopsis::bool_synopsis(vast::type x) : synopsis{std::move(x)} {
-  VAST_ASSERT(caf::holds_alternative<bool_type>(type()));
+  TENZIR_ASSERT(caf::holds_alternative<bool_type>(type()));
 }
 
 bool_synopsis::bool_synopsis(bool true_, bool false_)
@@ -25,7 +25,7 @@ synopsis_ptr bool_synopsis::clone() const {
 }
 
 void bool_synopsis::add(data_view x) {
-  VAST_ASSERT(caf::holds_alternative<view<bool>>(x));
+  TENZIR_ASSERT(caf::holds_alternative<view<bool>>(x));
   if (caf::get<view<bool>>(x))
     true_ = true;
   else

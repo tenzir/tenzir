@@ -100,23 +100,23 @@ public:
   }
 
   bitmap_type& bitmap_at(size_t index) {
-    VAST_ASSERT(index == 0);
+    TENZIR_ASSERT(index == 0);
     return bitmap_;
   }
 
   [[nodiscard]] const bitmap_type& bitmap_at(size_t index) const {
-    VAST_ASSERT(index == 0);
+    TENZIR_ASSERT(index == 0);
     return bitmap_;
   }
 
   void encode(value_type x, size_type n = 1) {
-    VAST_ASSERT(Bitmap::max_size - size() >= n);
+    TENZIR_ASSERT(Bitmap::max_size - size() >= n);
     bitmap_.append_bits(x, n);
   }
 
   [[nodiscard]] Bitmap decode(relational_operator op, value_type x) const {
-    VAST_ASSERT(op == relational_operator::equal
-                || op == relational_operator::not_equal);
+    TENZIR_ASSERT(op == relational_operator::equal
+                  || op == relational_operator::not_equal);
     auto result = bitmap_;
     if ((x && op == relational_operator::equal)
         || (!x && op == relational_operator::not_equal))
@@ -275,7 +275,7 @@ public:
 
 protected:
   void append(const vector_coder& other, bool bit) {
-    VAST_ASSERT(bitmaps_.size() == other.bitmaps_.size());
+    TENZIR_ASSERT(bitmaps_.size() == other.bitmaps_.size());
     for (auto i = 0u; i < bitmaps_.size(); ++i) {
       bitmaps_[i].append_bits(bit, this->size() - bitmaps_[i].size());
       bitmaps_[i].append(other.bitmaps_[i]);
@@ -314,20 +314,20 @@ public:
   }
 
   void encode(value_type x, size_type n = 1) {
-    VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
-    VAST_ASSERT(x < this->bitmaps_.size());
+    TENZIR_ASSERT(Bitmap::max_size - this->size_ >= n);
+    TENZIR_ASSERT(x < this->bitmaps_.size());
     bitmap_at(x).append_bits(true, n);
     this->size_ += n;
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
-    VAST_ASSERT(op == relational_operator::less
-                || op == relational_operator::less_equal
-                || op == relational_operator::equal
-                || op == relational_operator::not_equal
-                || op == relational_operator::greater_equal
-                || op == relational_operator::greater);
-    VAST_ASSERT(x < this->bitmaps_.size());
+    TENZIR_ASSERT(op == relational_operator::less
+                  || op == relational_operator::less_equal
+                  || op == relational_operator::equal
+                  || op == relational_operator::not_equal
+                  || op == relational_operator::greater_equal
+                  || op == relational_operator::greater);
+    TENZIR_ASSERT(x < this->bitmaps_.size());
     switch (op) {
       default:
         return Bitmap{this->size_, false};
@@ -416,8 +416,8 @@ public:
   }
 
   void encode(value_type x, size_type n = 1) {
-    VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
-    VAST_ASSERT(x < this->bitmaps_.size() + 1);
+    TENZIR_ASSERT(Bitmap::max_size - this->size_ >= n);
+    TENZIR_ASSERT(x < this->bitmaps_.size() + 1);
     // Lazy append: we only add 0s until we hit index i of value x. The
     // remaining bitmaps are always 1, by definition of the range coding
     // property i >= x for all i in [0,N).
@@ -427,13 +427,13 @@ public:
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
-    VAST_ASSERT(op == relational_operator::less
-                || op == relational_operator::less_equal
-                || op == relational_operator::equal
-                || op == relational_operator::not_equal
-                || op == relational_operator::greater_equal
-                || op == relational_operator::greater);
-    VAST_ASSERT(x < this->bitmaps_.size() + 1);
+    TENZIR_ASSERT(op == relational_operator::less
+                  || op == relational_operator::less_equal
+                  || op == relational_operator::equal
+                  || op == relational_operator::not_equal
+                  || op == relational_operator::greater_equal
+                  || op == relational_operator::greater);
+    TENZIR_ASSERT(x < this->bitmaps_.size() + 1);
     switch (op) {
       default:
         return Bitmap{this->size_, false};
@@ -516,7 +516,7 @@ public:
   }
 
   void encode(value_type x, size_type n = 1) {
-    VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
+    TENZIR_ASSERT(Bitmap::max_size - this->size_ >= n);
     for (auto i = 0u; i < this->bitmaps_.size(); ++i)
       bitmap_at(i).append_bits(((x >> i) & 1) == 0, n);
     this->size_ += n;
@@ -666,7 +666,7 @@ public:
   }
 
   void append(const multi_level_coder& other) {
-    VAST_ASSERT(coders_.size() == other.coders_.size());
+    TENZIR_ASSERT(coders_.size() == other.coders_.size());
     for (auto i = 0u; i < coders_.size(); ++i)
       coders_[i].append(other.coders_[i]);
   }
@@ -758,11 +758,11 @@ public:
 
 private:
   void init() {
-    VAST_ASSERT(base_.well_defined());
+    TENZIR_ASSERT(base_.well_defined());
     xs_.resize(base_.size());
     coders_.resize(base_.size());
     init_coders(coders_); // dispatch on coder_type
-    VAST_ASSERT(coders_.size() == base_.size());
+    TENZIR_ASSERT(coders_.size() == base_.size());
   }
 
   // TODO
@@ -792,13 +792,13 @@ private:
   // Range-Eval-Opt
   auto decode(const std::vector<range_coder<bitmap_type>>& coders,
               relational_operator op, value_type x) const {
-    VAST_ASSERT(
+    TENZIR_ASSERT(
       !(op == relational_operator::in || op == relational_operator::not_in));
     // All coders must have the same number of elements.
     auto pred = [n = size()](const auto& c) {
       return c.size() == n;
     };
-    VAST_ASSERT(std::all_of(coders.begin(), coders.end(), pred));
+    TENZIR_ASSERT(std::all_of(coders.begin(), coders.end(), pred));
     // Check boundaries first.
     if (x == 0) {
       if (op == relational_operator::less) // A < min => false
@@ -855,8 +855,8 @@ private:
     requires(is_equality_coder<C>::value || is_bitslice_coder<C>::value)
   auto decode(const std::vector<C>& coders, relational_operator op,
               value_type x) const -> bitmap_type {
-    VAST_ASSERT(op == relational_operator::equal
-                || op == relational_operator::not_equal);
+    TENZIR_ASSERT(op == relational_operator::equal
+                  || op == relational_operator::not_equal);
     base_.decompose(x, xs_);
     auto result = coders[0].decode(relational_operator::equal, xs_[0]);
     for (auto i = 1u; i < base_.size(); ++i)

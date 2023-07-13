@@ -75,7 +75,7 @@ auto make_import_time_col(const time& import_time, int64_t rows) {
     die(fmt::format("make time column failed: '{}'", status.ToString()));
   for (int i = 0; i < rows; ++i) {
     auto status = builder->Append(v);
-    VAST_ASSERT(status.ok());
+    TENZIR_ASSERT(status.ok());
   }
   return builder->Finish().ValueOrDie();
 }
@@ -127,7 +127,7 @@ auto decode_ipc_stream(chunk_ptr chunk)
       auto next = gen();
       if (!next.is_finished())
         next.Wait();
-      VAST_ASSERT(next.is_finished());
+      TENZIR_ASSERT(next.is_finished());
       auto result = next.MoveResult().ValueOrDie();
       if (arrow::IsIterationEnd(result))
         co_return;
@@ -153,11 +153,11 @@ class passive_feather_store final : public passive_store {
     auto i = size_t{};
     while (true) {
       if (i < cached_slices_.size()) {
-        VAST_ASSERT(offset == cached_slices_[i].offset());
+        TENZIR_ASSERT(offset == cached_slices_[i].offset());
       } else if (remaining_slices_iterator_
                  != remaining_slices_generator_.end()) {
         auto batch = std::move(*remaining_slices_iterator_);
-        VAST_ASSERT(batch);
+        TENZIR_ASSERT(batch);
         ++remaining_slices_iterator_;
         auto import_time_column = batch->GetColumnByName("import_time");
         auto slice = cached_slices_.empty()
@@ -214,7 +214,7 @@ public:
       // to partition-local ids. -- DL
       if (slice.offset() == invalid_id)
         slice.offset(num_events_);
-      VAST_ASSERT(slice.offset() == num_events_);
+      TENZIR_ASSERT(slice.offset() == num_events_);
       num_events_ += slice.rows();
       num_new_events_ += slice.rows();
       new_slices_.push_back(std::move(slice));
@@ -225,7 +225,7 @@ public:
       new_slices_ = std::move(rhs);
       num_new_events_ -= defaults::import::table_slice_size;
     }
-    VAST_ASSERT(num_new_events_ == rows(new_slices_));
+    TENZIR_ASSERT(num_new_events_ == rows(new_slices_));
     return {};
   }
 
@@ -318,4 +318,4 @@ private:
 
 } // namespace vast::plugins::feather
 
-VAST_REGISTER_PLUGIN(vast::plugins::feather::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::feather::plugin)

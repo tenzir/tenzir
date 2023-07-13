@@ -81,9 +81,9 @@ struct fixture {
     for (const auto& key : env_variables) {
       auto unset = detail::unsetenv(key);
       if (unset != caf::none) {
-        VAST_TRACE(unset);
+        TENZIR_TRACE(unset);
       }
-      VAST_ASSERT(unset == caf::none);
+      TENZIR_ASSERT(unset == caf::none);
     }
   }
 
@@ -98,7 +98,7 @@ FIXTURE_SCOPE(configuration_tests, fixture)
 TEST(environment key mangling and value parsing) {
   env("TENZIR_ENDPOINT", "");      // empty values are not considered.
   env("TENZIR_BARE_MODE", "true"); // bool parsed manually
-  env("VAST_NODE", "true");      // bool parsed late (via automatic conversion)
+  env("TENZIR_NODE", "true"); // bool parsed late (via automatic conversion)
   env("TENZIR_IMPORT__BATCH_SIZE", "42"); // numbers should not be strings
   env("TENZIR_PLUGINS", "foo,bar");       // list parsed manually
   env("TENZIR_INVALID", "foo,bar");       // list parsed late

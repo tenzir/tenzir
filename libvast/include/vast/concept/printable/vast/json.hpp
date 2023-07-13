@@ -278,8 +278,8 @@ struct json_printer : printer_base<json_printer> {
     }
 
     void dedent() noexcept {
-      VAST_ASSERT_EXPENSIVE(indentation_ >= options_.indentation,
-                            "imbalanced calls between indent() and dedent()");
+      TENZIR_ASSERT_EXPENSIVE(indentation_ >= options_.indentation,
+                              "imbalanced calls between indent() and dedent()");
       indentation_ -= options_.indentation;
     }
 

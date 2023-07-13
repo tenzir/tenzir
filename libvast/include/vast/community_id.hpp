@@ -60,7 +60,7 @@ void community_id_hash_append(HashAlgorithm& h, const ip& x) {
 /// @relates flow
 template <incremental_hash HashAlgorithm>
 void community_id_hash_append(HashAlgorithm& h, const flow& x) {
-  VAST_ASSERT(x.src_port.type() == x.dst_port.type());
+  TENZIR_ASSERT(x.src_port.type() == x.dst_port.type());
   auto src_port_num = x.src_port.number();
   auto dst_port_num = x.dst_port.number();
   auto is_one_way = false;

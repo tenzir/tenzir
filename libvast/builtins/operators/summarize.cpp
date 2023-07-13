@@ -310,7 +310,7 @@ template <class T, class... Ts>
 auto zip_equal(T& x, Ts&... xs) -> detail::zip<T, Ts...> {
   auto size = x.size();
   auto match = ((xs.size() == size) && ...);
-  VAST_ASSERT(match);
+  TENZIR_ASSERT(match);
   return detail::zip{x, xs...};
 }
 
@@ -339,11 +339,11 @@ public:
     auto find_or_create_bucket = [&](int64_t row) -> bucket* {
       for (size_t col = 0; col < bound.group_by_columns.size(); ++col) {
         if (bound.group_by_columns[col]) {
-          VAST_ASSERT(group_by_arrays[col].has_value());
+          TENZIR_ASSERT(group_by_arrays[col].has_value());
           reusable_key_view[col] = value_at(bound.group_by_columns[col]->type,
                                             **group_by_arrays[col], row);
         } else {
-          VAST_ASSERT(!group_by_arrays[col].has_value());
+          TENZIR_ASSERT(!group_by_arrays[col].has_value());
           reusable_key_view[col] = caf::none;
         }
       }
@@ -415,7 +415,7 @@ public:
             continue;
           }
           auto& func = aggr.get_active();
-          VAST_ASSERT(func);
+          TENZIR_ASSERT(func);
           if (func->input_type() != column->type) {
             diagnostic::warning("summarize aggregation function for group `{}` "
                                 "expected type `{}`, but got `{}`",
@@ -464,7 +464,7 @@ public:
       }
       auto [it, inserted] = buckets.emplace(materialize(reusable_key_view),
                                             std::move(new_bucket));
-      VAST_ASSERT(inserted);
+      TENZIR_ASSERT(inserted);
       return it.value().get();
     };
     // This lambda is called for consecutive rows that belong to the same group
@@ -491,7 +491,7 @@ public:
     // update the corresponding bucket.
     auto first_row = int64_t{0};
     auto* first_bucket = find_or_create_bucket(first_row);
-    VAST_ASSERT(slice.rows() > 0);
+    TENZIR_ASSERT(slice.rows() > 0);
     for (auto row = int64_t{1}; row < detail::narrow<int64_t>(slice.rows());
          ++row) {
       auto* bucket = find_or_create_bucket(row);
@@ -512,7 +512,7 @@ public:
     // code below will create a single table slice for each group, but we could
     // use this knowledge to create batches instead.
     for (auto&& [group, bucket] : buckets) {
-      VAST_ASSERT(config.aggregations.size() == bucket->aggregations.size());
+      TENZIR_ASSERT(config.aggregations.size() == bucket->aggregations.size());
       // When building the output schema, we use the `string` type if the
       // associated column was not present in the input schema. This is because
       // we have to pick a type for the `null` values.
@@ -538,7 +538,7 @@ public:
       });
       auto builder = caf::get<record_type>(output_schema)
                        .make_arrow_builder(arrow::default_memory_pool());
-      VAST_ASSERT(builder);
+      TENZIR_ASSERT(builder);
       auto status = builder->Append();
       if (!status.ok()) {
         co_yield caf::make_error(ec::system_error,
@@ -632,7 +632,7 @@ private:
     }
 
     static auto make_active(T x) -> dead_empty_or {
-      VAST_ASSERT(x);
+      TENZIR_ASSERT(x);
       return dead_empty_or{std::move(x)};
     }
 
@@ -649,12 +649,12 @@ private:
     }
 
     void set_active(T x) {
-      VAST_ASSERT(x);
+      TENZIR_ASSERT(x);
       state_ = std::move(x);
     }
 
     auto get_active() -> T& {
-      VAST_ASSERT(is_active());
+      TENZIR_ASSERT(is_active());
       return *state_;
     }
 
@@ -835,4 +835,4 @@ public:
 
 } // namespace vast::plugins::summarize
 
-VAST_REGISTER_PLUGIN(vast::plugins::summarize::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::summarize::plugin)

@@ -222,7 +222,7 @@ struct column_evaluator {
                       const Rhs& rhs, const ids& selection) noexcept {
     ids result{};
     for (auto id : select(selection)) {
-      VAST_ASSERT(id >= offset);
+      TENZIR_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);
       // TODO: Instead of this in the loop, do selection &= array.null_bitmap
       // outside of it.
@@ -248,7 +248,7 @@ struct column_evaluator<relational_operator::equal, LhsType, caf::none_t> {
     // bitmaps yet.
     ids result{};
     for (auto id : select(selection)) {
-      VAST_ASSERT(id >= offset);
+      TENZIR_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);
       if (!array.IsNull(row))
         continue;
@@ -271,7 +271,7 @@ struct column_evaluator<relational_operator::not_equal, LhsType, caf::none_t> {
     // bitmaps yet.
     ids result{};
     for (auto id : select(selection)) {
-      VAST_ASSERT(id >= offset);
+      TENZIR_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);
       if (array.IsNull(row))
         continue;
@@ -321,7 +321,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
   switch (lhs.kind) {
     case meta_extractor::kind::schema: {
       switch (op) {
-#define VAST_EVAL_DISPATCH(op)                                                 \
+#define TENZIR_EVAL_DISPATCH(op)                                               \
   case relational_operator::op: {                                              \
     auto f = [&](const auto& rhs) noexcept {                                   \
       return cell_evaluator<relational_operator::op>::evaluate(                \
@@ -329,23 +329,23 @@ bool evaluate_meta_extractor(const table_slice& slice,
     };                                                                         \
     return caf::visit(f, rhs);                                                 \
   }
-        VAST_EVAL_DISPATCH(equal);
-        VAST_EVAL_DISPATCH(not_equal);
-        VAST_EVAL_DISPATCH(in);
-        VAST_EVAL_DISPATCH(less);
-        VAST_EVAL_DISPATCH(not_in);
-        VAST_EVAL_DISPATCH(greater);
-        VAST_EVAL_DISPATCH(greater_equal);
-        VAST_EVAL_DISPATCH(less_equal);
-        VAST_EVAL_DISPATCH(ni);
-        VAST_EVAL_DISPATCH(not_ni);
-#undef VAST_EVAL_DISPATCH
+        TENZIR_EVAL_DISPATCH(equal);
+        TENZIR_EVAL_DISPATCH(not_equal);
+        TENZIR_EVAL_DISPATCH(in);
+        TENZIR_EVAL_DISPATCH(less);
+        TENZIR_EVAL_DISPATCH(not_in);
+        TENZIR_EVAL_DISPATCH(greater);
+        TENZIR_EVAL_DISPATCH(greater_equal);
+        TENZIR_EVAL_DISPATCH(less_equal);
+        TENZIR_EVAL_DISPATCH(ni);
+        TENZIR_EVAL_DISPATCH(not_ni);
+#undef TENZIR_EVAL_DISPATCH
       }
       die("unreachable");
     }
     case meta_extractor::kind::schema_id: {
       switch (op) {
-#define VAST_EVAL_DISPATCH(op)                                                 \
+#define TENZIR_EVAL_DISPATCH(op)                                               \
   case relational_operator::op: {                                              \
     auto f = [&](const auto& rhs) noexcept {                                   \
       return cell_evaluator<relational_operator::op>::evaluate(                \
@@ -353,23 +353,23 @@ bool evaluate_meta_extractor(const table_slice& slice,
     };                                                                         \
     return caf::visit(f, rhs);                                                 \
   }
-        VAST_EVAL_DISPATCH(equal);
-        VAST_EVAL_DISPATCH(not_equal);
-        VAST_EVAL_DISPATCH(in);
-        VAST_EVAL_DISPATCH(less);
-        VAST_EVAL_DISPATCH(not_in);
-        VAST_EVAL_DISPATCH(greater);
-        VAST_EVAL_DISPATCH(greater_equal);
-        VAST_EVAL_DISPATCH(less_equal);
-        VAST_EVAL_DISPATCH(ni);
-        VAST_EVAL_DISPATCH(not_ni);
-#undef VAST_EVAL_DISPATCH
+        TENZIR_EVAL_DISPATCH(equal);
+        TENZIR_EVAL_DISPATCH(not_equal);
+        TENZIR_EVAL_DISPATCH(in);
+        TENZIR_EVAL_DISPATCH(less);
+        TENZIR_EVAL_DISPATCH(not_in);
+        TENZIR_EVAL_DISPATCH(greater);
+        TENZIR_EVAL_DISPATCH(greater_equal);
+        TENZIR_EVAL_DISPATCH(less_equal);
+        TENZIR_EVAL_DISPATCH(ni);
+        TENZIR_EVAL_DISPATCH(not_ni);
+#undef TENZIR_EVAL_DISPATCH
       }
       die("unreachable");
     }
     case meta_extractor::kind::import_time: {
       switch (op) {
-#define VAST_EVAL_DISPATCH(op)                                                 \
+#define TENZIR_EVAL_DISPATCH(op)                                               \
   case relational_operator::op: {                                              \
     auto f = [&](const auto& rhs) noexcept {                                   \
       return cell_evaluator<relational_operator::op>::evaluate(                \
@@ -377,17 +377,17 @@ bool evaluate_meta_extractor(const table_slice& slice,
     };                                                                         \
     return caf::visit(f, rhs);                                                 \
   }
-        VAST_EVAL_DISPATCH(equal);
-        VAST_EVAL_DISPATCH(not_equal);
-        VAST_EVAL_DISPATCH(in);
-        VAST_EVAL_DISPATCH(less);
-        VAST_EVAL_DISPATCH(not_in);
-        VAST_EVAL_DISPATCH(greater);
-        VAST_EVAL_DISPATCH(greater_equal);
-        VAST_EVAL_DISPATCH(less_equal);
-        VAST_EVAL_DISPATCH(ni);
-        VAST_EVAL_DISPATCH(not_ni);
-#undef VAST_EVAL_DISPATCH
+        TENZIR_EVAL_DISPATCH(equal);
+        TENZIR_EVAL_DISPATCH(not_equal);
+        TENZIR_EVAL_DISPATCH(in);
+        TENZIR_EVAL_DISPATCH(less);
+        TENZIR_EVAL_DISPATCH(not_in);
+        TENZIR_EVAL_DISPATCH(greater);
+        TENZIR_EVAL_DISPATCH(greater_equal);
+        TENZIR_EVAL_DISPATCH(less_equal);
+        TENZIR_EVAL_DISPATCH(ni);
+        TENZIR_EVAL_DISPATCH(not_ni);
+#undef TENZIR_EVAL_DISPATCH
       }
       die("unreachable");
     }
@@ -439,9 +439,9 @@ ids evaluate(const expression& expr, const table_slice& slice,
       const auto index
         = caf::get<record_type>(slice.schema()).resolve_flat_index(lhs.column);
       const auto type_and_array = index.get(slice);
-      VAST_ASSERT(type_and_array.second);
+      TENZIR_ASSERT(type_and_array.second);
       switch (op) {
-#define VAST_EVAL_DISPATCH(op)                                                 \
+#define TENZIR_EVAL_DISPATCH(op)                                               \
   case relational_operator::op: {                                              \
     auto f = [&]<concrete_type Type, class Rhs>(                               \
                Type type, const Rhs& rhs) noexcept -> ids {                    \
@@ -450,17 +450,17 @@ ids evaluate(const expression& expr, const table_slice& slice,
     };                                                                         \
     return caf::visit(f, type_and_array.first, rhs);                           \
   }
-        VAST_EVAL_DISPATCH(equal);
-        VAST_EVAL_DISPATCH(not_equal);
-        VAST_EVAL_DISPATCH(in);
-        VAST_EVAL_DISPATCH(less);
-        VAST_EVAL_DISPATCH(not_in);
-        VAST_EVAL_DISPATCH(greater);
-        VAST_EVAL_DISPATCH(greater_equal);
-        VAST_EVAL_DISPATCH(less_equal);
-        VAST_EVAL_DISPATCH(ni);
-        VAST_EVAL_DISPATCH(not_ni);
-#undef VAST_EVAL_DISPATCH
+        TENZIR_EVAL_DISPATCH(equal);
+        TENZIR_EVAL_DISPATCH(not_equal);
+        TENZIR_EVAL_DISPATCH(in);
+        TENZIR_EVAL_DISPATCH(less);
+        TENZIR_EVAL_DISPATCH(not_in);
+        TENZIR_EVAL_DISPATCH(greater);
+        TENZIR_EVAL_DISPATCH(greater_equal);
+        TENZIR_EVAL_DISPATCH(less_equal);
+        TENZIR_EVAL_DISPATCH(ni);
+        TENZIR_EVAL_DISPATCH(not_ni);
+#undef TENZIR_EVAL_DISPATCH
       }
       die("unreachable");
     },
@@ -520,10 +520,10 @@ ids evaluate(const expression& expr, const table_slice& slice,
     }
     selection.append(false, offset + num_rows - selection.size());
   }
-  VAST_ASSERT(selection.size() == offset + num_rows);
+  TENZIR_ASSERT(selection.size() == offset + num_rows);
   auto result
     = evaluate_expression(evaluate_expression, expr, std::move(selection));
-  VAST_ASSERT(result.size() == offset + num_rows);
+  TENZIR_ASSERT(result.size() == offset + num_rows);
   return result;
 }
 

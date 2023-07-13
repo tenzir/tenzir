@@ -1098,7 +1098,7 @@ namespace {
 
 class fixture : public fixtures::deterministic_actor_system {
 public:
-  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
   }
 };
 

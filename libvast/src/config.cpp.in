@@ -13,17 +13,17 @@
 
 namespace vast::version {
 
-const char* version = "@VAST_VERSION_TAG@";
-const char* major = "@VAST_VERSION_MAJOR@";
-const char* minor = "@VAST_VERSION_MINOR@";
-const char* patch = "@VAST_VERSION_PATCH@";
-const char* tweak = "@VAST_VERSION_TWEAK@";
-const uint64_t current_partition_version = @VAST_PARTITION_VERSION@;
+const char* version = "@TENZIR_VERSION_TAG@";
+const char* major = "@TENZIR_VERSION_MAJOR@";
+const char* minor = "@TENZIR_VERSION_MINOR@";
+const char* patch = "@TENZIR_VERSION_PATCH@";
+const char* tweak = "@TENZIR_VERSION_TWEAK@";
+const uint64_t current_partition_version = @TENZIR_PARTITION_VERSION@;
 
 supported_versions
 support_for_partition_version(uint64_t partition_version) noexcept {
   static constexpr auto table
-    = std::array<supported_versions, @VAST_PARTITION_VERSION@ +1>{
+    = std::array<supported_versions, @TENZIR_PARTITION_VERSION@ +1>{
       // Partition version 0 was introduced implicitly; it's used when no
       // partition version was specified.
       supported_versions{"VAST v1.0", "VAST v2.4"},
@@ -43,28 +43,28 @@ support_for_partition_version(uint64_t partition_version) noexcept {
 
 namespace build {
 
-const char* type = "@VAST_BUILD_TYPE@";
-const char* tree_hash = "@VAST_BUILD_TREE_HASH@";
+const char* type = "@TENZIR_BUILD_TYPE@";
+const char* tree_hash = "@TENZIR_BUILD_TREE_HASH@";
 
-#undef VAST_ENABLE_ASSERTIONS
-#cmakedefine01 VAST_ENABLE_ASSERTIONS
-#if VAST_ENABLE_ASSERTIONS
+#undef TENZIR_ENABLE_ASSERTIONS
+#cmakedefine01 TENZIR_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
 bool has_assertions = true;
 #else
 bool has_assertions = false;
 #endif
 
-#undef VAST_ENABLE_ASAN
-#cmakedefine01 VAST_ENABLE_ASAN
-#if VAST_ENABLE_ASAN
+#undef TENZIR_ENABLE_ASAN
+#cmakedefine01 TENZIR_ENABLE_ASAN
+#if TENZIR_ENABLE_ASAN
 bool has_address_sanitizer = true;
 #else
 bool has_address_sanitizer = false;
 #endif
 
-#undef VAST_ENABLE_UBSAN
-#cmakedefine01 VAST_ENABLE_UBSAN
-#if VAST_ENABLE_UBSAN
+#undef TENZIR_ENABLE_UBSAN
+#cmakedefine01 TENZIR_ENABLE_UBSAN
+#if TENZIR_ENABLE_UBSAN
 bool has_undefined_behavior_sanitizer = true;
 #else
 bool has_undefined_behavior_sanitizer = false;

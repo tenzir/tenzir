@@ -799,7 +799,7 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
           /// Retrieve the pointer to the object
           auto box = static_cast<T*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
-          VAST_ASSERT(box && "The object must not be over aligned or null!");
+          TENZIR_ASSERT(box && "The object must not be over aligned or null!");
 
           if (!IsInplace) {
             // Just swap both pointers if we allocated on the heap
@@ -826,10 +826,10 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         case opcode::op_copy: {
           auto box = static_cast<T const*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
-          VAST_ASSERT(box && "The object must not be over aligned or null!");
+          TENZIR_ASSERT(box && "The object must not be over aligned or null!");
 
-          VAST_ASSERT(std::is_copy_constructible<T>::value
-                      && "The box is required to be copyable here!");
+          TENZIR_ASSERT(std::is_copy_constructible<T>::value
+                        && "The box is required to be copyable here!");
 
           // Try to allocate the object inplace
           construct(std::is_copy_constructible<T>{}, *box, to_table, to,
@@ -838,7 +838,7 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         }
         case opcode::op_destroy:
         case opcode::op_weak_destroy: {
-          VAST_ASSERT(!to && !to_capacity && "Arg overflow!");
+          TENZIR_ASSERT(!to && !to_capacity && "Arg overflow!");
           auto box = static_cast<T*>(
             retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
 
@@ -1103,9 +1103,9 @@ public:
       this->opaque_ptr(), capacity());
   }
 
-  VAST_DIAGNOSTIC_PUSH
+  TENZIR_DIAGNOSTIC_PUSH
   // False positive when bool(callable) can never be false.
-  VAST_DIAGNOSTIC_IGNORE_ADDRESS
+  TENZIR_DIAGNOSTIC_IGNORE_ADDRESS
 
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
   FU2_DETAIL_CXX14_CONSTEXPR
@@ -1123,7 +1123,7 @@ public:
     }
   }
 
-  VAST_DIAGNOSTIC_POP
+  TENZIR_DIAGNOSTIC_POP
 
   ~erasure() {
     vtable_.weak_destroy(this->opaque_ptr(), capacity());

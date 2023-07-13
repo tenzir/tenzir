@@ -30,10 +30,10 @@ caf::error authenticator_state::initialize_from(chunk_ptr chunk) {
   auto const* state = (*fb)->server_state_as_v0();
   if (state == nullptr)
     return caf::make_error(ec::format_error, "missing state");
-  VAST_ASSERT_CHEAP(state->auth_tokens() != nullptr);
+  TENZIR_ASSERT_CHEAP(state->auth_tokens() != nullptr);
   using clock = std::chrono::system_clock;
   for (auto const* token : *state->auth_tokens()) {
-    VAST_ASSERT_CHEAP(token);
+    TENZIR_ASSERT_CHEAP(token);
     auto token_desc = token_description{
       .name = token->name()->str(),
       .issued_at = clock::from_time_t(token->issued_at()),
@@ -126,7 +126,7 @@ get_authenticator(caf::scoped_actor& self, node_actor node,
                               "running without the web plugin");
         } else {
           // There should always only be one AUTHENTICATOR at a given time.
-          VAST_ASSERT_CHEAP(actors.size() == 1);
+          TENZIR_ASSERT_CHEAP(actors.size() == 1);
           maybe_authenticator = std::move(actors[0]);
         }
       },
@@ -150,17 +150,17 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
       [self](chunk_ptr chunk) {
         auto error = self->state.initialize_from(std::move(chunk));
         if (error) {
-          VAST_ERROR("{} encountered error while deserializing state: {}",
-                     *self, error);
+          TENZIR_ERROR("{} encountered error while deserializing state: {}",
+                       *self, error);
           self->quit(error);
         }
       },
       [self](const caf::error& e) {
         if (vast::ec{e.code()} == vast::ec::no_such_file) {
-          VAST_VERBOSE("{} starts from a fresh state", *self);
+          TENZIR_VERBOSE("{} starts from a fresh state", *self);
           return;
         }
-        VAST_WARN("{} failed to load server state: {}", *self, e);
+        TENZIR_WARN("{} failed to load server state: {}", *self, e);
       });
   return {
     [self](atom::generate) -> caf::result<token_t> {

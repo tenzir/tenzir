@@ -11,7 +11,7 @@ on: workflow_dispatch
 #   be configured in the repository secrets as AWS_REGION and PEERED_VPC_ID.
 # - The VAST deployment creates a new VPC. Its ip range should not overlap an
 #   existing one in your account. Configure its CIDR in the repository secrets
-#   as VAST_CIDR (for example 172.30.0.0/16).
+#   as TENZIR_CIDR (for example 172.30.0.0/16).
 # - The CI run uses Terraform Cloud to store the state. In Github Action
 #   secrets, set TF_ORGANIZATION with your Terraform Cloud organizations name
 #   and TF_API_TOKEN with a Terraform Cloud API key (for instance a user token).
@@ -30,9 +30,9 @@ on: workflow_dispatch
 
 # Set these secrets to configure the CI run
 env:
-  VAST_PEERED_VPC_ID: "${{ secrets.VAST_PEERED_VPC_ID }}"
-  VAST_CIDR: "${{ secrets.VAST_CIDR }}"
-  VAST_AWS_REGION: "${{ secrets.VAST_AWS_REGION }}"
+  TENZIR_PEERED_VPC_ID: "${{ secrets.TENZIR_PEERED_VPC_ID }}"
+  TENZIR_CIDR: "${{ secrets.TENZIR_CIDR }}"
+  TENZIR_AWS_REGION: "${{ secrets.TENZIR_AWS_REGION }}"
   TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
   TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX  || 'gh-act-' }}"
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
@@ -127,9 +127,9 @@ jobs:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,tfcloud,misp"
+      TENZIR_CLOUD_PLUGINS: "workbucket,tfcloud,misp"
       # Run on the latest release to avoid glitches from unstable versions
-      VAST_VERSION: ${{ needs.determine-version.outputs.release-version }}
+      TENZIR_VERSION: ${{ needs.determine-version.outputs.release-version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -137,10 +137,10 @@ jobs:
           fetch-depth: 0
       - name: Secret hashes
         run: |
-          echo -n $VAST_VERSION
-          echo -n $VAST_PEERED_VPC_ID | md5sum
-          echo -n $VAST_CIDR | md5sum
-          echo -n $VAST_AWS_REGION | md5sum
+          echo -n $TENZIR_VERSION
+          echo -n $TENZIR_PEERED_VPC_ID | md5sum
+          echo -n $TENZIR_CIDR | md5sum
+          echo -n $TENZIR_AWS_REGION | md5sum
           echo -n $TF_ORGANIZATION | md5sum
           echo -n $TF_WORKSPACE_PREFIX | md5sum
           echo -n $TF_API_TOKEN | md5sum
@@ -166,7 +166,7 @@ jobs:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,tests,misp"
+      TENZIR_CLOUD_PLUGINS: "workbucket,tests,misp"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -199,7 +199,7 @@ jobs:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "tfcloud,workbucket,flowlogs"
+      TENZIR_CLOUD_PLUGINS: "tfcloud,workbucket,flowlogs"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -211,14 +211,14 @@ jobs:
           docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Preset source bucket env
         run: |
-          echo "VAST_FLOWLOGS_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
-          echo "VAST_FLOWLOGS_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
+          echo "TENZIR_FLOWLOGS_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
+          echo "TENZIR_FLOWLOGS_BUCKET_REGION=$TENZIR_AWS_REGION" >> $GITHUB_ENV
       - name: Init
         run: ./vast-cloud init
       - name: Replace actual source bucket name env
         run: |
           ACTUAL_BUCKET=$(./vast-cloud workbucket.name)
-          echo "VAST_FLOWLOGS_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
+          echo "TENZIR_FLOWLOGS_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
       - name: Deploy flowlogs
@@ -238,7 +238,7 @@ jobs:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "tfcloud,workbucket,cloudtrail"
+      TENZIR_CLOUD_PLUGINS: "tfcloud,workbucket,cloudtrail"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -250,14 +250,14 @@ jobs:
           docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Preset source bucket env
         run: |
-          echo "VAST_CLOUDTRAIL_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
-          echo "VAST_CLOUDTRAIL_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
+          echo "TENZIR_CLOUDTRAIL_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
+          echo "TENZIR_CLOUDTRAIL_BUCKET_REGION=$TENZIR_AWS_REGION" >> $GITHUB_ENV
       - name: Init
         run: ./vast-cloud init
       - name: Replace actual source bucket name env
         run: |
           ACTUAL_BUCKET=$(./vast-cloud workbucket.name)
-          echo "VAST_CLOUDTRAIL_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
+          echo "TENZIR_CLOUDTRAIL_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
       - name: Deploy cloudtrail
@@ -280,7 +280,7 @@ jobs:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,misp"
+      TENZIR_CLOUD_PLUGINS: "workbucket,misp"
     steps:
       - name: Checkout
         uses: actions/checkout@v3

@@ -26,9 +26,9 @@ std::pair<std::filesystem::path, std::filesystem::path>
 install_prefix_and_suffix() {
   auto prefix_from_libdir = [](const auto& libdir) {
     auto err = std::error_code{};
-    auto prefix = libdir / "@VAST_LIBDIR_TO_PREFIX@";
+    auto prefix = libdir / "@TENZIR_LIBDIR_TO_PREFIX@";
     prefix = std::filesystem::canonical(prefix, err);
-    VAST_ASSERT(!err);
+    TENZIR_ASSERT(!err);
     return prefix;
   };
   const auto libdir = install_libdir();

@@ -19,7 +19,7 @@ namespace vast {
 std::variant<caf::error, node_actor, scope_linked<node_actor>>
 spawn_or_connect_to_node(caf::scoped_actor& self, const caf::settings& opts,
                          const caf::settings& node_opts) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(opts));
+  TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(opts));
   auto convert = [](auto&& result)
     -> std::variant<caf::error, node_actor, scope_linked<node_actor>> {
     if (result)

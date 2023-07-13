@@ -25,7 +25,7 @@ static legacy_type type_factory() {
   if constexpr (!DeprecationNotice.str().empty()) {
     static auto flag = std::once_flag{};
     std::call_once(flag, []() noexcept {
-      VAST_WARN("{}", DeprecationNotice.str());
+      TENZIR_WARN("{}", DeprecationNotice.str());
     });
   }
   return T{};

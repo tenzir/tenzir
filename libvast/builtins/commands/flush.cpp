@@ -71,4 +71,4 @@ public:
 
 } // namespace vast::plugins::flush
 
-VAST_REGISTER_PLUGIN(vast::plugins::flush::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::flush::plugin)

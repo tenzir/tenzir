@@ -77,7 +77,7 @@ public:
       if (!caf::holds_alternative<record_type>(entry))
         continue;
       if (entry.name().empty()) {
-        VAST_WARN("unexpectedly unnamed schema in schema: {}", entry);
+        TENZIR_WARN("unexpectedly unnamed schema in schema: {}", entry);
         continue;
       }
       std::vector<std::string> cache_entry;

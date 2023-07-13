@@ -28,7 +28,7 @@ save(const std::filesystem::path& filename, std::span<const std::byte> xs) {
   if (auto err = write(tmp, xs)) {
     std::error_code ec{};
     if (const auto removed = std::filesystem::remove(tmp, ec); !removed || ec)
-      VAST_WARN("failed to remove file {} : {}", tmp, ec.message());
+      TENZIR_WARN("failed to remove file {} : {}", tmp, ec.message());
     return err;
   }
   std::error_code ec{};

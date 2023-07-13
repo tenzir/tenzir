@@ -69,7 +69,7 @@ vast::indexer_actor::behavior_type dummy_indexer(counts xs) {
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+      TENZIR_PP_STRINGIFY(SUITE)) {
     // Spin up our dummies.
     auto& x_indexers = indexers["x"];
     add_indexer(x_indexers, {12, 42, 42, 17, 42, 75, 38, 11, 10});
@@ -114,9 +114,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto expr = unbox(to<expression>(expr_str));
     std::vector<evaluation_triple> triples;
     auto resolved = resolve(expr, schema);
-    VAST_ASSERT(resolved.size() > 0);
+    TENZIR_ASSERT(resolved.size() > 0);
     for (auto& [expr_position, pred] : resolved) {
-      VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
+      TENZIR_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
       auto& dx = caf::get<data_extractor>(pred.lhs);
       std::string field_name = dx.column == 0 ? "x" : "y";
       auto& xs = indexers[field_name];
@@ -131,9 +131,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto expr = unbox(to<expression>(expr_str));
     std::vector<evaluation_triple> triples;
     auto resolved = resolve(expr, schema);
-    VAST_ASSERT(resolved.size() > 0);
+    TENZIR_ASSERT(resolved.size() > 0);
     for (auto& [expr_position, pred] : resolved) {
-      VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
+      TENZIR_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
       triples.emplace_back(expr_position, curried(pred), vast::indexer_actor{});
     }
 

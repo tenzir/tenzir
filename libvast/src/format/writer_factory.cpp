@@ -55,7 +55,7 @@ void factory_traits<format::writer>::initialize() {
             if (plugin->name() != name)
               continue;
             const auto* writer = plugin.as<writer_plugin>();
-            VAST_ASSERT(writer);
+            TENZIR_ASSERT(writer);
             return writer->make_writer(options);
           }
           return caf::make_error(ec::logic_error,

@@ -36,7 +36,7 @@ std::string method_to_string(const vast::http_method method) {
 }
 
 struct fixture : public fixtures::node {
-  fixture() : fixtures::node(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::node(TENZIR_PP_STRINGIFY(SUITE)) {
   }
 
   ~fixture() override = default;

@@ -24,15 +24,15 @@ done
 
 export COMPOSE_FILE="compose/vast.yaml"
 if (( "${build}" == 1 )); then
-  export VAST_CONTAINER_REGISTRY='docker.io'
-  export VAST_CONTAINER_REF='latest'
+  export TENZIR_CONTAINER_REGISTRY='docker.io'
+  export TENZIR_CONTAINER_REF='latest'
   export COMPOSE_FILE="${COMPOSE_FILE}:compose/vast.build.yaml"
   build_policy='--pull=never'
 else
-  export VAST_CONTAINER_REGISTRY="${VAST_CONTAINER_REGISTRY:-ghcr.io}"
-  export VAST_CONTAINER_REF="${VAST_CONTAINER_REF:-$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')}"
-  if [[ "${VAST_CONTAINER_REF}" == "main" ]]; then
-    export VAST_CONTAINER_REF="$(git rev-parse HEAD)"
+  export TENZIR_CONTAINER_REGISTRY="${TENZIR_CONTAINER_REGISTRY:-ghcr.io}"
+  export TENZIR_CONTAINER_REF="${TENZIR_CONTAINER_REF:-$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')}"
+  if [[ "${TENZIR_CONTAINER_REF}" == "main" ]]; then
+    export TENZIR_CONTAINER_REF="$(git rev-parse HEAD)"
   fi
   build_policy='--pull=always'
 fi

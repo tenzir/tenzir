@@ -37,8 +37,8 @@ multi_schema_reader::finish(consumer& f, table_slice_builder_ptr& builder_ptr,
       // implementation (which is required to bump batch_events_ for every
       // successfully added event), but it is not an error, so there is no
       // reason to treat it as one.
-      VAST_WARN("{} detected event counting mismatch: expected {}, got {}",
-                name(), rows, batch_events_);
+      TENZIR_WARN("{} detected event counting mismatch: expected {}, got {}",
+                  name(), rows, batch_events_);
       batch_events_ = 0;
     }
     auto slice = builder_ptr->finish();
@@ -63,8 +63,8 @@ table_slice_builder_ptr multi_schema_reader::builder(const type& t) {
   if (i != builders_.end())
     return i->second;
   if (!caf::holds_alternative<record_type>(t)) {
-    VAST_ERROR("{} cannot create slice builder for non-record type: {}", name(),
-               t);
+    TENZIR_ERROR("{} cannot create slice builder for non-record type: {}",
+                 name(), t);
     // Insert a nullptr into the map and return it to make sure the error gets
     // printed only once.
     return builders_[t];

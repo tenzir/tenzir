@@ -39,7 +39,7 @@ auto order(T x) {
   } else if constexpr (std::is_floating_point_v<T>) {
     static_assert(std::numeric_limits<T>::is_iec559, "can only order IEEE 754 "
                                                      "double types");
-    VAST_ASSERT(!std::isnan(x));
+    TENZIR_ASSERT(!std::isnan(x));
     uint64_t result;
     switch (std::fpclassify(x)) {
       default:

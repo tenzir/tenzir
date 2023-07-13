@@ -91,7 +91,7 @@ struct factory {
   /// @pre `factory != nullptr`
   template <class Key>
   static bool add(Key&& key, signature factory) {
-    VAST_ASSERT(factory != nullptr);
+    TENZIR_ASSERT(factory != nullptr);
     if constexpr (std::is_convertible_v<std::decay_t<Key>, key_type>)
       return factories().emplace(std::forward<Key>(key), factory).second;
     else

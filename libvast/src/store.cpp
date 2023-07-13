@@ -40,7 +40,7 @@ namespace {
 template <class Actor>
 caf::result<uint64_t>
 handle_query(const auto& self, const query_context& query_context) {
-  VAST_TRACE("{} got a query: {}", *self, query_context);
+  TENZIR_TRACE("{} got a query: {}", *self, query_context);
   const auto start = std::chrono::steady_clock::now();
   const auto schema = self->state.store->schema();
   const auto tailored_expr = tailor(query_context.expr, schema);
@@ -87,11 +87,11 @@ handle_query(const auto& self, const query_context& query_context) {
         .then(
           [self, issuer = query_context.issuer, query_id = query_context.id,
            rp]() mutable {
-            VAST_DEBUG("{} finished working on count query {}", *self,
-                       query_id);
+            TENZIR_DEBUG("{} finished working on count query {}", *self,
+                         query_id);
             auto it = self->state.running_counts.find(query_id);
             if (it == self->state.running_counts.end()) {
-              VAST_DEBUG("{} cancelled count query {}", *self, query_id);
+              TENZIR_DEBUG("{} cancelled count query {}", *self, query_id);
               // TODO: should we actually send out metrics here for cancelled
               // queries?
               rp.deliver(uint64_t{0});
@@ -121,8 +121,8 @@ handle_query(const auto& self, const query_context& query_context) {
           },
           [self, expr = query_context.expr, query_id = query_context.id,
            rp](caf::error& err) mutable {
-            VAST_WARN("{} failed to execute count query {}: {}", *self,
-                      query_id, err);
+            TENZIR_WARN("{} failed to execute count query {}: {}", *self,
+                        query_id, err);
             rp.deliver(caf::make_error(
               ec::unspecified, fmt::format("{} failed to complete count "
                                            "query '{}': {}",
@@ -150,11 +150,11 @@ handle_query(const auto& self, const query_context& query_context) {
         .then(
           [self, issuer = query_context.issuer, query_id = query_context.id,
            rp]() mutable {
-            VAST_DEBUG("{} finished working on extract query {}", *self,
-                       query_id);
+            TENZIR_DEBUG("{} finished working on extract query {}", *self,
+                         query_id);
             auto it = self->state.running_extractions.find(query_id);
             if (it == self->state.running_extractions.end()) {
-              VAST_DEBUG("{} cancelled extract query {}", *self, query_id);
+              TENZIR_DEBUG("{} cancelled extract query {}", *self, query_id);
               rp.deliver(uint64_t{0});
               return;
             }
@@ -181,8 +181,8 @@ handle_query(const auto& self, const query_context& query_context) {
           },
           [self, expr = query_context.expr, query_id = query_context.id,
            rp](caf::error& err) mutable {
-            VAST_WARN("{} failed to execute extract query {}: {}", *self,
-                      query_id, err);
+            TENZIR_WARN("{} failed to execute extract query {}: {}", *self,
+                        query_id, err);
             rp.deliver(caf::make_error(
               ec::unspecified, fmt::format("{} failed to complete extract "
                                            "query '{}': {}",
@@ -197,16 +197,16 @@ handle_query(const auto& self, const query_context& query_context) {
 auto remove_down_source(auto* self, const caf::down_msg& down_msg) {
   for (const auto& [query_id, state] : self->state.running_extractions) {
     if (state.sink->address() == down_msg.source) {
-      VAST_DEBUG("{} received DOWN from extract query {}: {}", *self, query_id,
-                 down_msg.reason);
+      TENZIR_DEBUG("{} received DOWN from extract query {}: {}", *self,
+                   query_id, down_msg.reason);
       self->state.running_extractions.erase(query_id);
       break; // a sink can only have one active extract query, so we stop
     }
   }
   for (const auto& [query_id, state] : self->state.running_counts) {
     if (state.sink->address() == down_msg.source) {
-      VAST_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
-                 down_msg.reason);
+      TENZIR_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
+                   down_msg.reason);
       self->state.running_counts.erase(query_id);
       break; // a sink can only have one active count query, so we stop
     }
@@ -276,7 +276,7 @@ default_passive_store_actor::behavior_type default_passive_store(
   return {
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
-      VAST_DEBUG("{} starts working on query {}", *self, query_context.id);
+      TENZIR_DEBUG("{} starts working on query {}", *self, query_context.id);
       return handle_query<default_passive_store_actor>(self, query_context);
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
@@ -284,8 +284,8 @@ default_passive_store_actor::behavior_type default_passive_store(
       // everything.
       const auto num_events = self->state.store->num_events();
 
-      VAST_DEBUG("{} erases {} events", *self, num_events);
-      VAST_ASSERT(rank(selection) == 0 || rank(selection) == num_events);
+      TENZIR_DEBUG("{} erases {} events", *self, num_events);
+      TENZIR_ASSERT(rank(selection) == 0 || rank(selection) == num_events);
       auto rp = self->make_response_promise<uint64_t>();
       self
         ->request(self->state.filesystem, caf::infinite, atom::erase_v,
@@ -301,15 +301,17 @@ default_passive_store_actor::behavior_type default_passive_store(
     },
     [self](atom::internal, atom::extract,
            const uuid& query_id) -> caf::result<void> {
-      VAST_DEBUG("{} continuous working on extract query {}", *self, query_id);
+      TENZIR_DEBUG("{} continuous working on extract query {}", *self,
+                   query_id);
       auto it = self->state.running_extractions.find(query_id);
       if (it == self->state.running_extractions.end())
         return {};
       auto& [_, state] = *it;
       if (state.result_iterator == state.result_generator.end()) {
-        VAST_DEBUG("{} ignores extract continuation request for query {} after "
-                   "query already finished",
-                   *self, query_id);
+        TENZIR_DEBUG("{} ignores extract continuation request for query {} "
+                     "after "
+                     "query already finished",
+                     *self, query_id);
         return {};
       }
       auto slice = *state.result_iterator;
@@ -323,15 +325,15 @@ default_passive_store_actor::behavior_type default_passive_store(
     },
     [self](atom::internal, atom::count,
            const uuid& query_id) -> caf::result<void> {
-      VAST_DEBUG("{} continuous working on count query {}", *self, query_id);
+      TENZIR_DEBUG("{} continuous working on count query {}", *self, query_id);
       auto it = self->state.running_counts.find(query_id);
       if (it == self->state.running_counts.end())
         return {};
       auto& [_, state] = *it;
       if (state.result_iterator == state.result_generator.end()) {
-        VAST_DEBUG("{} ignores count continuation request for query {} after "
-                   "query already finished",
-                   *self, query_id);
+        TENZIR_DEBUG("{} ignores count continuation request for query {} after "
+                     "query already finished",
+                     *self, query_id);
         return {};
       }
       state.num_hits += *state.result_iterator;
@@ -362,7 +364,7 @@ default_active_store_actor::behavior_type default_active_store(
   return {
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
-      VAST_DEBUG("{} starts working on query {}", *self, query_context.id);
+      TENZIR_DEBUG("{} starts working on query {}", *self, query_context.id);
       if (self->state.store->num_events() == 0)
         return 0ull;
       return handle_query<default_active_store_actor>(self, query_context);
@@ -371,7 +373,7 @@ default_active_store_actor::behavior_type default_active_store(
       // For new, partition-local stores we know that we always erase
       // everything.
       const auto num_events = self->state.store->num_events();
-      VAST_ASSERT(rank(selection) == 0 || rank(selection) == num_events);
+      TENZIR_ASSERT(rank(selection) == 0 || rank(selection) == num_events);
       // We don't actually need to erase anything in the store itself, but
       // rather just don't need to persist when shutting down the stream, so
       // we set a flag for that in the actor state.
@@ -405,8 +407,8 @@ default_active_store_actor::behavior_type default_active_store(
         },
         [self](stream_state& stream_state, const caf::error& error) {
           if (ec::end_of_input == error) {
-            VAST_WARN("store encountered unexpected end of input before "
-                      "shutdown");
+            TENZIR_WARN("store encountered unexpected end of input before "
+                        "shutdown");
           } else if (error) {
             self->quit(error);
             return;
@@ -426,8 +428,8 @@ default_active_store_actor::behavior_type default_active_store(
             .then(
               [self, stream_state](atom::ok) {
                 static_cast<void>(stream_state);
-                VAST_DEBUG("{} ({}) persisted itself to {}", *self,
-                           self->state.store_type, self->state.path);
+                TENZIR_DEBUG("{} ({}) persisted itself to {}", *self,
+                             self->state.store_type, self->state.path);
               },
               [self, stream_state](caf::error& error) {
                 static_cast<void>(stream_state);
@@ -445,15 +447,17 @@ default_active_store_actor::behavior_type default_active_store(
     },
     [self](atom::internal, atom::extract,
            const uuid& query_id) -> caf::result<void> {
-      VAST_DEBUG("{} continuous working on extract query {}", *self, query_id);
+      TENZIR_DEBUG("{} continuous working on extract query {}", *self,
+                   query_id);
       auto it = self->state.running_extractions.find(query_id);
       if (it == self->state.running_extractions.end())
         return {};
       auto& [_, state] = *it;
       if (state.result_iterator == state.result_generator.end()) {
-        VAST_DEBUG("{} ignores extract continuation request for query {} after "
-                   "query already finished",
-                   *self, query_id);
+        TENZIR_DEBUG("{} ignores extract continuation request for query {} "
+                     "after "
+                     "query already finished",
+                     *self, query_id);
         return {};
       }
       auto slice = *state.result_iterator;
@@ -467,15 +471,15 @@ default_active_store_actor::behavior_type default_active_store(
     },
     [self](atom::internal, atom::count,
            const uuid& query_id) -> caf::result<void> {
-      VAST_DEBUG("{} continuous working on count query {}", *self, query_id);
+      TENZIR_DEBUG("{} continuous working on count query {}", *self, query_id);
       auto it = self->state.running_counts.find(query_id);
       if (it == self->state.running_counts.end())
         return {};
       auto& [_, state] = *it;
       if (state.result_iterator == state.result_generator.end()) {
-        VAST_DEBUG("{} ignores count continuation request for query {} after "
-                   "query already finished",
-                   *self, query_id);
+        TENZIR_DEBUG("{} ignores count continuation request for query {} after "
+                     "query already finished",
+                     *self, query_id);
         return {};
       }
       state.num_hits += *state.result_iterator;

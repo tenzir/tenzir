@@ -34,7 +34,7 @@ macro (create_tenzir_symlink name)
   # different depending on whether the CMAKE_INSTALL_BINDIR is set to an
   # absolute path or not. We emulate this behavior for the symlinks here so they
   # will always end up in the same location.
-  if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+  if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
     install(
       CODE "
       execute_process(COMMAND
@@ -84,8 +84,8 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
     if (NOT IS_ABSOLUTE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
       string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
     endif ()
-    set(VAST_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
-    set(VAST_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/tenzir\")
+    set(TENZIR_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
+    set(TENZIR_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/tenzir\")
     message(STATUS
       \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\")
     configure_file(
@@ -121,8 +121,8 @@ file(
      fi
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>-ctl\"
-     update=\"$<IF:$<BOOL:${VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
+     export app=\"$<IF:$<BOOL:${TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>-ctl\"
+     update=\"$<IF:$<BOOL:${TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
      set -e
      if [ ! -f \"$env_dir/bin/activate\" ]; then
        python3 -m venv \"$env_dir\"
@@ -170,17 +170,17 @@ if (EXISTS contrib/tenzir-plugins/.git)
   list(APPEND plugins_default "contrib/tenzir-plugins/*")
 endif ()
 
-set(VAST_PLUGINS
+set(TENZIR_PLUGINS
     ${plugins_default}
     CACHE STRING "Specify a list of plugins to build with VAST (supports
     globbing)")
 cmake_dependent_option(
-  VAST_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF
-  "NOT VAST_ENABLE_STATIC_EXECUTABLE" ON)
-add_feature_info("VAST_ENABLE_STATIC_PLUGINS" VAST_ENABLE_STATIC_PLUGINS
+  TENZIR_ENABLE_STATIC_PLUGINS "Force plugins to be linked statically" OFF
+  "NOT TENZIR_ENABLE_STATIC_EXECUTABLE" ON)
+add_feature_info("TENZIR_ENABLE_STATIC_PLUGINS" TENZIR_ENABLE_STATIC_PLUGINS
                  "force plugins to be linked statically.")
-if (VAST_PLUGINS)
-  foreach (plugin_source_glob IN LISTS VAST_PLUGINS)
+if (TENZIR_PLUGINS)
+  foreach (plugin_source_glob IN LISTS TENZIR_PLUGINS)
     if (IS_ABSOLUTE "${plugin_source_glob}")
       list(APPEND plugin_source_globs "${plugin_source_glob}")
     else ()
@@ -203,25 +203,25 @@ if (VAST_PLUGINS)
   endforeach ()
 endif ()
 
-get_property(VAST_BUNDLED_PLUGINS GLOBAL
-             PROPERTY "VAST_BUNDLED_PLUGINS_PROPERTY")
-list(TRANSFORM VAST_BUNDLED_PLUGINS PREPEND "\"")
-list(TRANSFORM VAST_BUNDLED_PLUGINS APPEND "\"")
-list(JOIN VAST_BUNDLED_PLUGINS "," joined_bundled_plugins)
+get_property(TENZIR_BUNDLED_PLUGINS GLOBAL
+             PROPERTY "TENZIR_BUNDLED_PLUGINS_PROPERTY")
+list(TRANSFORM TENZIR_BUNDLED_PLUGINS PREPEND "\"")
+list(TRANSFORM TENZIR_BUNDLED_PLUGINS APPEND "\"")
+list(JOIN TENZIR_BUNDLED_PLUGINS "," joined_bundled_plugins)
 target_compile_definitions(
-  tenzir PRIVATE "VAST_BUNDLED_PLUGINS=${joined_bundled_plugins}")
+  tenzir PRIVATE "TENZIR_BUNDLED_PLUGINS=${joined_bundled_plugins}")
 
 # -- man page ------------------------------------------------------------------
 
 # TODO: Feed the last commit date in. Using the current date breaks
 # deterministic builds.
-string(TIMESTAMP VAST_LAST_COMMIT_DATE)
-if (VAST_ENABLE_MANPAGES)
+string(TIMESTAMP TENZIR_LAST_COMMIT_DATE)
+if (TENZIR_ENABLE_MANPAGES)
   add_custom_target(
     vast-manpage
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md"
     COMMAND
-      "${PANDOC}" -s -f gfm -t man -V date:${VAST_LAST_COMMIT_DATE}
+      "${PANDOC}" -s -f gfm -t man -V date:${TENZIR_LAST_COMMIT_DATE}
       "${CMAKE_CURRENT_SOURCE_DIR}/vast.1.md" -o
       "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/vast.1"

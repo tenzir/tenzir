@@ -167,7 +167,7 @@ struct cast_helper<FromType, ToType> {
        const std::shared_ptr<type_to_arrow_array_t<type>>& from_array,
        const ToType& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
-    VAST_ASSERT(can_cast(from_type, to_type));
+    TENZIR_ASSERT(can_cast(from_type, to_type));
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
           const ConcreteFromType& from_type,
@@ -226,7 +226,7 @@ struct cast_helper<Type, Type> {
                    std::shared_ptr<type_to_arrow_array_t<Type>> from_array,
                    const Type& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<Type>> {
-    VAST_ASSERT(can_cast(from_type, to_type));
+    TENZIR_ASSERT(can_cast(from_type, to_type));
     return from_array;
   }
 };
@@ -250,7 +250,7 @@ struct cast_helper<list_type, list_type> {
                    std::shared_ptr<type_to_arrow_array_t<list_type>> from_array,
                    const list_type& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<list_type>> {
-    VAST_ASSERT(can_cast(from_type, to_type));
+    TENZIR_ASSERT(can_cast(from_type, to_type));
     if (from_type == to_type)
       return from_array;
     const auto offsets = from_array->offsets();
@@ -296,7 +296,7 @@ struct cast_helper<record_type, record_type> {
        std::shared_ptr<type_to_arrow_array_t<record_type>> from_array,
        const record_type& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<record_type>> {
-    VAST_ASSERT(can_cast(from_type, to_type));
+    TENZIR_ASSERT(can_cast(from_type, to_type));
     if (from_type == to_type)
       return from_array;
     // NOLINTNEXTLINE
@@ -720,7 +720,7 @@ struct cast_helper<FromType, string_type> {
                          const string_type&) noexcept
     -> caf::expected<std::string> {
     auto field_name = enum_type.field(static_cast<uint32_t>(value));
-    VAST_ASSERT(not field_name.empty());
+    TENZIR_ASSERT(not field_name.empty());
     return std::string{field_name};
   }
 
@@ -812,7 +812,7 @@ struct cast_helper<string_type, ToType> {
   static auto from_str(std::string_view in, const record_type&)
     -> caf::expected<record> {
     if (auto ret = data{}; parsers::data(in, ret)) {
-      VAST_ASSERT(caf::holds_alternative<record>(ret));
+      TENZIR_ASSERT(caf::holds_alternative<record>(ret));
       return caf::get<record>(ret);
     }
     return caf::make_error(
@@ -822,7 +822,7 @@ struct cast_helper<string_type, ToType> {
   static auto from_str(std::string_view in, const list_type&)
     -> caf::expected<list> {
     if (auto ret = data{}; parsers::data(in, ret)) {
-      VAST_ASSERT(caf::holds_alternative<list>(ret));
+      TENZIR_ASSERT(caf::holds_alternative<list>(ret));
       return caf::get<list>(ret);
     }
     return caf::make_error(ec::convert_error,
@@ -933,7 +933,7 @@ cast_to_builder(const FromType& from_type,
   for (const auto& v : values(from_type, *in)) {
     if (not v) {
       auto status = ret->AppendNull();
-      VAST_ASSERT(status.ok());
+      TENZIR_ASSERT(status.ok());
       continue;
     }
     auto converted = cast_value(from_type, *v, to_type);
@@ -941,7 +941,7 @@ cast_to_builder(const FromType& from_type,
       return converted.error();
     if constexpr (not std::is_same_v<decltype(converted), caf::expected<void>>) {
       auto status = append_builder(to_type, *ret, *converted);
-      VAST_ASSERT(status.ok());
+      TENZIR_ASSERT(status.ok());
     }
   }
 

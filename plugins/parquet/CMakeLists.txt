@@ -51,7 +51,7 @@ endif ()
 
 target_link_libraries(parquet PRIVATE "${PARQUET_LIBRARY}")
 
-if (VAST_ENABLE_STATIC_EXECUTABLE)
+if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   # Work around missing dependency links in the Parquet target
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
   find_package(Thrift REQUIRED)

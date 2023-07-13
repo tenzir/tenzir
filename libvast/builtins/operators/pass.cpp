@@ -57,4 +57,4 @@ public:
 
 } // namespace vast::plugins::pass
 
-VAST_REGISTER_PLUGIN(vast::plugins::pass::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::pass::plugin)

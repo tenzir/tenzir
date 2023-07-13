@@ -16,11 +16,11 @@ namespace vast::sketch {
 
 frozen_bloom_filter::frozen_bloom_filter(chunk_ptr table) noexcept
   : table_{std::move(table)} {
-  VAST_ASSERT(table_ != nullptr);
-  VAST_ASSERT(table_->data() != nullptr);
+  TENZIR_ASSERT(table_ != nullptr);
+  TENZIR_ASSERT(table_->data() != nullptr);
   auto root = fbs::GetBloomFilter(table_->data());
   auto err = unpack(*root, view_);
-  VAST_ASSERT(!err);
+  TENZIR_ASSERT(!err);
 }
 
 bool frozen_bloom_filter::lookup(uint64_t digest) const noexcept {
@@ -81,13 +81,13 @@ caf::expected<frozen_bloom_filter> freeze(const bloom_filter& x) {
     return bloom_filter_offset.error();
   builder.Finish(*bloom_filter_offset);
   auto buffer = builder.Release();
-  VAST_ASSERT(buffer.size() == expected_size);
+  TENZIR_ASSERT(buffer.size() == expected_size);
   return frozen_bloom_filter{chunk::make(std::move(buffer))};
 }
 
 bloom_filter::bloom_filter(bloom_filter_params params) {
-  VAST_ASSERT(params.m > 0);
-  VAST_ASSERT(params.m & 1);
+  TENZIR_ASSERT(params.m > 0);
+  TENZIR_ASSERT(params.m & 1);
   bits_.resize((params.m + 63) / 64); // integer ceiling
   std::fill(bits_.begin(), bits_.end(), 0);
   view_ = {params, std::span{bits_.data(), bits_.size()}};

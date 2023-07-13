@@ -60,7 +60,7 @@ public:
       const auto ok
         = builder.add(time{std::chrono::system_clock::now()}, events,
                       slice.schema().name(), slice.schema().make_fingerprint());
-      VAST_ASSERT(ok);
+      TENZIR_ASSERT(ok);
       if (real_time_ or builder.rows() == batch_size_
           or last_finish + batch_timeout < now) {
         last_finish = now;
@@ -100,7 +100,7 @@ public:
       const auto ok = builder.add(std::chrono::time_point_cast<time::duration>(
                                     std::chrono::system_clock::now()),
                                   counter);
-      VAST_ASSERT(ok);
+      TENZIR_ASSERT(ok);
       if (real_time_ or builder.rows() == batch_size_
           or last_finish + batch_timeout < now) {
         last_finish = now;
@@ -155,4 +155,4 @@ private:
 
 } // namespace vast::plugins::measure
 
-VAST_REGISTER_PLUGIN(vast::plugins::measure::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::measure::plugin)

@@ -67,7 +67,7 @@ struct lexer_traits<binary_op> {
       return {binary_op::add, source};
     if (parsed == "*")
       return {binary_op::mul, source};
-    VAST_UNREACHABLE();
+    TENZIR_UNREACHABLE();
   }
 };
 
@@ -269,16 +269,16 @@ public:
                 continue;
               }
               // Now only the root extractor `.` remains.
-              VAST_DIAG_ASSERT(path.empty());
+              TENZIR_DIAG_ASSERT(path.empty());
               return extractor{{}, *dot};
             }
             throw_at_current("expected extractor");
           } else {
-            VAST_DIAG_ASSERT(dot);
+            TENZIR_DIAG_ASSERT(dot);
             throw_at_current("expected `*` or identifier");
           }
         } else {
-          VAST_DIAG_ASSERT(!path.empty());
+          TENZIR_DIAG_ASSERT(!path.empty());
           auto source = location{start, path.back().source().end};
           return extractor{std::move(path), source};
         }
@@ -419,7 +419,7 @@ private:
       if (extr.path.size() == 1 && legacy_accept("(")) {
         // TODO: Make this better, remove assertion.
         auto ident_ptr = std::get_if<identifier>(&extr.path[0]);
-        VAST_DIAG_ASSERT(ident_ptr);
+        TENZIR_DIAG_ASSERT(ident_ptr);
         auto ident = std::move(*ident_ptr);
         auto args = std::vector<expression>{};
         while (true) {
@@ -487,7 +487,7 @@ private:
       case mul:
         return 4;
     }
-    VAST_UNREACHABLE();
+    TENZIR_UNREACHABLE();
   }
 
   auto left_associative(binary_op op) const -> bool {
@@ -499,7 +499,7 @@ private:
       case mul:
         return true;
     }
-    VAST_UNREACHABLE();
+    TENZIR_UNREACHABLE();
   }
 
   auto parse_expr_prec(int min_precedence) -> expression {
@@ -509,7 +509,7 @@ private:
       if (op_prec < min_precedence) {
         break;
       }
-      VAST_DIAG_ASSERT(accept<binary_op>() == op);
+      TENZIR_DIAG_ASSERT(accept<binary_op>() == op);
       auto rhs
         = parse_expr_prec(left_associative(op->first) ? op_prec + 1 : op_prec);
       lhs = expression{binary_expr{std::move(lhs), op->first, op->second,
@@ -546,8 +546,8 @@ private:
     auto multiline_comment
       = "/*" >> *(parsers::any - (parsers::chr{'*'} >> &parsers::chr{'/'}))
         >> "*/";
-    VAST_DIAG_ASSERT((*(parsers::space | line_comment | multiline_comment))
-                       .apply(current_, end_));
+    TENZIR_DIAG_ASSERT((*(parsers::space | line_comment | multiline_comment))
+                         .apply(current_, end_));
   }
 
   auto next_pos() -> size_t {

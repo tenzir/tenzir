@@ -127,7 +127,7 @@ default_record_view::default_record_view(const record& xs) : xs_{xs} {
 }
 
 default_record_view::value_type default_record_view::at(size_type i) const {
-  VAST_ASSERT(i < xs_.size());
+  TENZIR_ASSERT(i < xs_.size());
   auto& [key, value] = *std::next(xs_.begin(), i);
   return {key, make_data_view(value)};
 }
@@ -155,7 +155,7 @@ std::string materialize(std::string_view x) {
 pattern materialize(pattern_view x) {
   auto options = pattern_options{x.case_insensitive()};
   auto result = pattern::make(std::string{x.string()}, options);
-  VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
+  TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
   return std::move(*result);
 }
 
@@ -223,8 +223,8 @@ bool type_check(const type& x, const data_view& y) {
         // Technically lists can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
-        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
-                    "expected a homogenous list");
+        TENZIR_ASSERT(std::all_of(it + 1, u.end(), check), //
+                      "expected a homogenous list");
         return true;
       }
       return false;
@@ -242,8 +242,8 @@ bool type_check(const type& x, const data_view& y) {
         // Technically maps can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
-        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
-                    "expected a homogenous map");
+        TENZIR_ASSERT(std::all_of(it + 1, u.end(), check), //
+                      "expected a homogenous map");
         return true;
       }
       return false;

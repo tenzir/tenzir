@@ -37,7 +37,7 @@ public:
 
   template <class Connective>
   ids operator()(const Connective& xs) {
-    VAST_ASSERT(xs.size() > 0);
+    TENZIR_ASSERT(xs.size() > 0);
     push();
     auto result = caf::visit(*this, xs[0]);
     for (size_t index = 1; index < xs.size(); ++index) {
@@ -76,7 +76,7 @@ private:
   }
 
   void next() {
-    VAST_ASSERT(!position_.empty());
+    TENZIR_ASSERT(!position_.empty());
     ++position_.back();
   }
 
@@ -93,14 +93,14 @@ evaluator_state::evaluator_state(
 }
 
 void evaluator_state::handle_result(const offset& position, const ids& result) {
-  VAST_DEBUG("{} got {} new hits for predicate at position {}", *self,
-             rank(result), position);
+  TENZIR_DEBUG("{} got {} new hits for predicate at position {}", *self,
+               rank(result), position);
   auto ptr = hits_for(position);
-  VAST_ASSERT(ptr != nullptr);
+  TENZIR_ASSERT(ptr != nullptr);
   auto& [missing, accumulated_hits] = *ptr;
   accumulated_hits |= result;
   if (--missing == 0) {
-    VAST_DEBUG("{} collected all results at position {}", *self, position);
+    TENZIR_DEBUG("{} collected all results at position {}", *self, position);
     evaluate();
   }
   decrement_pending();
@@ -108,13 +108,13 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
 
 void evaluator_state::handle_missing_result(
   const offset& position, [[maybe_unused]] const caf::error& err) {
-  VAST_WARN("{} received {} instead of a result for predicate at "
-            "position {}",
-            *self, render(err), position);
+  TENZIR_WARN("{} received {} instead of a result for predicate at "
+              "position {}",
+              *self, render(err), position);
   auto ptr = hits_for(position);
-  VAST_ASSERT(ptr != nullptr);
+  TENZIR_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
-    VAST_DEBUG("{} collected all results at position {}", *self, position);
+    TENZIR_DEBUG("{} collected all results at position {}", *self, position);
     evaluate();
   }
   decrement_pending();
@@ -126,8 +126,8 @@ void evaluator_state::handle_no_indexer(const offset& position) {
 
 void evaluator_state::evaluate() {
   auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
-  VAST_DEBUG("{} got predicate_hits: {} expr_hits: {}", *self, predicate_hits,
-             expr_hits);
+  TENZIR_DEBUG("{} got predicate_hits: {} expr_hits: {}", *self, predicate_hits,
+               expr_hits);
   hits |= expr_hits;
 }
 
@@ -151,8 +151,8 @@ evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           expression expr, std::vector<evaluation_triple> eval,
           ids ids_to_use_for_no_indexer) {
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(expr), caf::deep_to_string(eval));
-  VAST_ASSERT(!eval.empty());
+  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(expr), caf::deep_to_string(eval));
+  TENZIR_ASSERT(!eval.empty());
   self->state.expr = std::move(expr);
   self->state.eval = std::move(eval);
   self->state.ids_to_use_for_no_indexer = std::move(ids_to_use_for_no_indexer);
@@ -177,7 +177,7 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
             });
       }
       if (self->state.pending_responses == 0) {
-        VAST_DEBUG("{} has nothing to evaluate for expression", *self);
+        TENZIR_DEBUG("{} has nothing to evaluate for expression", *self);
         self->state.promise.deliver(ids{});
       }
       return self->state.promise;

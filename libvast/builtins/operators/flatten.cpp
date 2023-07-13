@@ -83,4 +83,4 @@ public:
 
 } // namespace vast::plugins::flatten
 
-VAST_REGISTER_PLUGIN(vast::plugins::flatten::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::flatten::plugin)

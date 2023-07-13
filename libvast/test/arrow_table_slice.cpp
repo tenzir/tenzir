@@ -859,7 +859,7 @@ TEST(full_table_slice) {
 namespace {
 
 struct fixture : public fixtures::table_slices {
-  fixture() : fixtures::table_slices(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::table_slices(TENZIR_PP_STRINGIFY(SUITE)) {
   }
 };
 

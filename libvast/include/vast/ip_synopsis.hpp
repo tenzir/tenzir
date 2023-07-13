@@ -37,7 +37,7 @@ public:
   /// Bloom filter.
   ip_synopsis(type x, typename super::bloom_filter_type bf)
     : super{std::move(x), std::move(bf)} {
-    VAST_ASSERT_CHEAP(caf::holds_alternative<ip_type>(this->type()));
+    TENZIR_ASSERT_CHEAP(caf::holds_alternative<ip_type>(this->type()));
   }
 
   [[nodiscard]] synopsis_ptr clone() const override {
@@ -84,10 +84,10 @@ using buffered_ip_synopsis = buffered_synopsis<vast::ip, HashFunction>;
 template <class HashFunction>
 synopsis_ptr make_ip_synopsis(vast::type type, bloom_filter_parameters params,
                               std::vector<size_t> seeds) {
-  VAST_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
+  TENZIR_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
   auto x = make_bloom_filter<HashFunction>(params, std::move(seeds));
   if (!x) {
-    VAST_WARN("{} failed to construct Bloom filter", __func__);
+    TENZIR_WARN("{} failed to construct Bloom filter", __func__);
     return nullptr;
   }
   using synopsis_type = ip_synopsis<HashFunction>;
@@ -105,7 +105,7 @@ synopsis_ptr make_ip_synopsis(vast::type type, bloom_filter_parameters params,
 template <class HashFunction>
 synopsis_ptr
 make_buffered_ip_synopsis(vast::type type, bloom_filter_parameters params) {
-  VAST_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
+  TENZIR_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
   if (!params.p) {
     return nullptr;
   }
@@ -121,7 +121,7 @@ make_buffered_ip_synopsis(vast::type type, bloom_filter_parameters params) {
 /// @relates ip_synopsis
 template <class HashFunction>
 synopsis_ptr make_ip_synopsis(vast::type type, const caf::settings& opts) {
-  VAST_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
+  TENZIR_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
   if (auto xs = parse_parameters(type))
     return make_ip_synopsis<HashFunction>(std::move(type), *xs);
   // If no explicit Bloom filter parameters were attached to the type, we try
@@ -130,8 +130,8 @@ synopsis_ptr make_ip_synopsis(vast::type type, const caf::settings& opts) {
   using int_type = caf::config_value::integer;
   auto max_part_size = caf::get_if<int_type>(&opts, "max-partition-size");
   if (!max_part_size) {
-    VAST_ERROR("{} could not determine Bloom filter parameters",
-               __PRETTY_FUNCTION__);
+    TENZIR_ERROR("{} could not determine Bloom filter parameters",
+                 __PRETTY_FUNCTION__);
     return nullptr;
   }
   bloom_filter_parameters params;
@@ -146,8 +146,8 @@ synopsis_ptr make_ip_synopsis(vast::type type, const caf::settings& opts) {
         ? make_buffered_ip_synopsis<HashFunction>(std::move(type), params)
         : make_ip_synopsis<HashFunction>(std::move(annotated_type), params);
   if (!result)
-    VAST_ERROR("{} failed to evaluate Bloom filter parameters: {} {}", __func__,
-               params.n, params.p);
+    TENZIR_ERROR("{} failed to evaluate Bloom filter parameters: {} {}",
+                 __func__, params.n, params.p);
   return result;
 }
 

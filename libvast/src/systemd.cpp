@@ -16,7 +16,7 @@
 
 namespace vast::systemd {
 
-#if VAST_LINUX
+#if TENZIR_LINUX
 
 bool connected_to_journal() {
   auto journal_env = detail::getenv("JOURNAL_STREAM");
@@ -26,7 +26,7 @@ bool connected_to_journal() {
   size_t inode_number = 0;
   auto parser = parsers::u64 >> ':' >> parsers::u64;
   if (!parser(*journal_env, device_number, inode_number)) {
-    // Can't use VAST_WARN() here, because this is called as part
+    // Can't use TENZIR_WARN() here, because this is called as part
     // of the logger setup.
     std::cerr << "could not parse systemd environment variable "
                  "$JOURNAL_STREAM="
@@ -53,12 +53,12 @@ caf::error notify_ready() {
   caf::detail::scope_guard guard([] {
     // Always unset $NOTIFY_SOCKET.
     if (auto err = detail::unsetenv("NOTIFY_SOCKET"))
-      VAST_WARN("failed to unset NOTIFY_SOCKET: {}", err);
+      TENZIR_WARN("failed to unset NOTIFY_SOCKET: {}", err);
   });
   auto notify_socket_env = detail::getenv("NOTIFY_SOCKET");
   if (!notify_socket_env)
     return caf::none;
-  VAST_VERBOSE("notifying systemd at {}", *notify_socket_env);
+  TENZIR_VERBOSE("notifying systemd at {}", *notify_socket_env);
   int socket = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
   if (socket < 0)
     return caf::make_error(ec::system_error, "failed to create unix socket");
@@ -67,7 +67,7 @@ caf::error notify_ready() {
   return caf::none;
 }
 
-#else // !VAST_LINUX
+#else // !TENZIR_LINUX
 
 bool connected_to_journal() {
   return false;
@@ -78,6 +78,6 @@ caf::error notify_ready() {
   return caf::none;
 }
 
-#endif // VAST_LINUX
+#endif // TENZIR_LINUX
 
 } // namespace vast::systemd

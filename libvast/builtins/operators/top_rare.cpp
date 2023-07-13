@@ -88,5 +88,5 @@ using rare_plugin = top_rare_plugin<"rare", "asc">;
 
 } // namespace vast::plugins::top_rare
 
-VAST_REGISTER_PLUGIN(vast::plugins::top_rare::top_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::top_rare::rare_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::top_rare::top_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::top_rare::rare_plugin)

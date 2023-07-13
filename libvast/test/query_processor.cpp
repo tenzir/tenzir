@@ -117,7 +117,7 @@ public:
 
 struct fixture : fixtures::deterministic_actor_system {
   fixture()
-    : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)),
+    : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)),
       query_id(unbox(to<uuid>(uuid_str))) {
     index = sys.spawn(mock_index);
     aut = sys.spawn([=](caf::stateful_actor<mock_processor>* self) {

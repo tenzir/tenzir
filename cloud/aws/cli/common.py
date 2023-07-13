@@ -21,7 +21,7 @@ def s3_regions():
 
 
 AWS_REGION_VALIDATOR = dynaconf.Validator(
-    "VAST_AWS_REGION", must_exist=True, is_in=s3_regions()
+    "TENZIR_AWS_REGION", must_exist=True, is_in=s3_regions()
 )
 
 EXIT_CODE_TASK_NOT_RUNNING = 8
@@ -37,7 +37,7 @@ HOSTROOT = "/host"
 
 def conf(validators=[]) -> dict:
     """Load variables from both the environment and the .env file if:
-    - their key is prefixed with either VAST_, TF_ or AWS_"""
+    - their key is prefixed with either TENZIR_, TF_ or AWS_"""
     dc = dynaconf.Dynaconf(
         load_dotenv=True,
         envvar_prefix=False,
@@ -46,7 +46,7 @@ def conf(validators=[]) -> dict:
     return {
         k: v
         for (k, v) in dc.as_dict().items()
-        if k.startswith(("VAST_", "TF_", "AWS_"))
+        if k.startswith(("TENZIR_", "TF_", "AWS_"))
     }
 
 
@@ -69,8 +69,8 @@ def list_modules(c: Context) -> List[str]:
 
 def active_plugins() -> Set[str]:
     """Cloud CLI plugins activated"""
-    plugin_var = conf([dynaconf.Validator("VAST_CLOUD_PLUGINS", default="")])[
-        "VAST_CLOUD_PLUGINS"
+    plugin_var = conf([dynaconf.Validator("TENZIR_CLOUD_PLUGINS", default="")])[
+        "TENZIR_CLOUD_PLUGINS"
     ]
     plugin_set = {plugin.strip() for plugin in plugin_var.split(",")}
     plugin_set.discard("")
@@ -116,7 +116,7 @@ def terraform_output(c: Context, step, key) -> str:
 
 
 def AWS_REGION():
-    return conf(AWS_REGION_VALIDATOR)["VAST_AWS_REGION"]
+    return conf(AWS_REGION_VALIDATOR)["TENZIR_AWS_REGION"]
 
 
 def aws(service, resource=False):

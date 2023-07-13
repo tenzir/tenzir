@@ -53,7 +53,7 @@ class bits : detail::equality_comparable<bits<T>> {
   bits(value_type x, size_type n)
     : data_{n < width() ? value_type(x & word<T>::lsb_mask(n)) : x},
       size_{n} {
-    VAST_ASSERT(n <= width() || word<T>::all_or_none(x));
+    TENZIR_ASSERT(n <= width() || word<T>::all_or_none(x));
   }
 
   /// @returns The data block of the bit sequence.
@@ -102,7 +102,7 @@ class bits : detail::equality_comparable<bits<T>> {
   /// @returns The i-th bit value from the LSB.
   /// @pre `i < size`.
   bool operator[](size_type i) const {
-    VAST_ASSERT(i < size_);
+    TENZIR_ASSERT(i < size_);
     return is_run() ? !!data_ : data_ & word<T>::mask(i);
   }
 
@@ -111,7 +111,7 @@ class bits : detail::equality_comparable<bits<T>> {
   /// @returns A new bit sequence that starts at *offset*.
   /// @pre `offset < size()`
   [[nodiscard]] bits slice(size_type offset) const {
-    VAST_ASSERT(offset < size());
+    TENZIR_ASSERT(offset < size());
     return slice(offset, size_ - offset);
   }
 
@@ -121,7 +121,7 @@ class bits : detail::equality_comparable<bits<T>> {
   /// @returns A new bit sequence of size *length* that starts at *offset*.
   /// @pre `offset + length <= size()`
   [[nodiscard]] bits slice(size_type offset, size_type length) const {
-    VAST_ASSERT(offset + length <= size());
+    TENZIR_ASSERT(offset + length <= size());
     return bits(is_run() ? data_ : data_ >> offset, length);
   }
 
@@ -263,7 +263,7 @@ auto rank(const bits<T>& b) {
 /// @pre `i < b.size()`
 template <bool Bit = true, class T>
 auto rank(const bits<T>& b, typename bits<T>::size_type i) {
-  VAST_ASSERT(i < b.size());
+  TENZIR_ASSERT(i < b.size());
   T data = Bit ? b.data() : ~b.data();
   if (b.size() > word<T>::width)
     return data == word<T>::none ? 0 : i + 1;
@@ -279,8 +279,8 @@ auto rank(const bits<T>& b, typename bits<T>::size_type i) {
 /// @pre `i > 0 && i <= b.size()`
 template <bool Bit = true, class T>
 auto select(const bits<T>& b, typename bits<T>::size_type i) {
-  VAST_ASSERT(i > 0);
-  VAST_ASSERT(i <= b.size());
+  TENZIR_ASSERT(i > 0);
+  TENZIR_ASSERT(i <= b.size());
   T data = Bit ? b.data() : ~b.data();
   if (b.size() > word<T>::width)
     return data == word<T>::all ? i - 1 : bits<T>::npos;

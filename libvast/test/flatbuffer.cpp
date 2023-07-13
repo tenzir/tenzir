@@ -53,7 +53,7 @@ TEST(lifetime) {
 namespace {
 
 struct fixture : public fixtures::deterministic_actor_system {
-  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
   }
 };
 

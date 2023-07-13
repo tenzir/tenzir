@@ -97,17 +97,17 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
     if (lhs_bits.empty()) {
       if (lhs_begin != lhs_end) {
         lhs_bits = *lhs_begin++;
-        VAST_ASSERT(!lhs_bits.empty());
+        TENZIR_ASSERT(!lhs_bits.empty());
       }
     }
     if (rhs_bits.empty()) {
       if (rhs_begin != rhs_end) {
         rhs_bits = *rhs_begin++;
-        VAST_ASSERT(!rhs_bits.empty());
+        TENZIR_ASSERT(!rhs_bits.empty());
       }
     }
   }
-  VAST_ASSERT(result.size() <= std::max(lhs.size(), rhs.size()));
+  TENZIR_ASSERT(result.size() <= std::max(lhs.size(), rhs.size()));
   // Fill the remaining bits, either with zeros or with the longer bitmap. If
   // we woudn't fill up the bitmap, we would end up with a shorter bitmap that
   // doesn't reflect the true result size.
@@ -124,7 +124,7 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
       result.append(*rhs_begin++);
   }
   auto max_size = std::max(lhs.size(), rhs.size());
-  VAST_ASSERT(max_size >= result.size());
+  TENZIR_ASSERT(max_size >= result.size());
   result.append(false, max_size - result.size());
   return result;
 }
@@ -249,7 +249,7 @@ auto nary_xor(Iterator begin, Iterator end) {
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
 rank(const Bitmap& bm, typename Bitmap::size_type i) {
-  VAST_ASSERT(i < bm.size());
+  TENZIR_ASSERT(i < bm.size());
   auto result = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
   for (auto b : bit_range(bm)) {
@@ -280,7 +280,7 @@ typename Bitmap::size_type rank(const Bitmap& bm) {
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
 select(const Bitmap& bm, typename Bitmap::size_type i) {
-  VAST_ASSERT(i > 0);
+  TENZIR_ASSERT(i > 0);
   auto rnk = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
   if (i == Bitmap::word_type::npos) {
@@ -323,21 +323,21 @@ public:
   /// @returns The current bit sequence.
   /// @pre `!done()`
   [[nodiscard]] const bits_type& bits() const {
-    VAST_ASSERT(!done());
+    TENZIR_ASSERT(!done());
     return rng_.get();
   }
 
   /// @returns The current position in the range.
   /// @pre `!done()`
   [[nodiscard]] id offset() const {
-    VAST_ASSERT(!done());
+    TENZIR_ASSERT(!done());
     return n_ + i_;
   }
 
   /// @returns The bit value at the current position.
   /// @pre `!done()`
   [[nodiscard]] bool value() const {
-    VAST_ASSERT(!done());
+    TENZIR_ASSERT(!done());
     return bits()[i_];
   }
 
@@ -346,7 +346,7 @@ public:
   /// Retrieves the current position in the range.
   /// @pre `!done()`
   [[nodiscard]] size_type get() const {
-    VAST_ASSERT(!done());
+    TENZIR_ASSERT(!done());
     return offset();
   }
 
@@ -357,7 +357,7 @@ public:
 
   /// Advances to the next bit in the range.
   void next() {
-    VAST_ASSERT(!done());
+    TENZIR_ASSERT(!done());
     ++i_;
     if (i_ == bits().size()) {
       n_ += bits().size();
@@ -372,9 +372,9 @@ public:
   /// @param k The number of bits to seek forward.
   /// @pre `!done() && k > 0`
   void next(size_type k) {
-    VAST_ASSERT(k > 0);
-    VAST_ASSERT(i_ != npos);
-    VAST_ASSERT(!bits().empty());
+    TENZIR_ASSERT(k > 0);
+    TENZIR_ASSERT(i_ != npos);
+    TENZIR_ASSERT(!bits().empty());
     auto remaining_bits = bits().size() - i_ - 1;
     if (k <= remaining_bits) {
       i_ += k - 1;
@@ -395,7 +395,7 @@ public:
   /// @tparam Bit The bit value to move forward to.
   template <bool Bit = true>
   void select() {
-    VAST_ASSERT(i_ != npos);
+    TENZIR_ASSERT(i_ != npos);
     i_ = find_next<Bit>(bits(), i_);
     while (i_ == npos) {
       n_ += bits().size();
@@ -412,19 +412,19 @@ public:
   /// @param k The number bits of value *Bit* to move forward.
   template <bool Bit = true>
   void select(size_type k) {
-    VAST_ASSERT(k > 0);
-    VAST_ASSERT(i_ != npos);
+    TENZIR_ASSERT(k > 0);
+    TENZIR_ASSERT(i_ != npos);
     using vast::select;
     auto prev = rank<Bit>(bits(), i_);
     auto remaining = rank<Bit>(bits()) - prev;
     if (k <= remaining) {
       i_ = select<Bit>(bits(), prev + k);
-      VAST_ASSERT(i_ != npos);
+      TENZIR_ASSERT(i_ != npos);
       return;
     }
     for (k -= remaining, i_ = npos, n_ += bits().size(), rng_.next();
          !rng_.done(); n_ += bits().size(), rng_.next()) {
-      VAST_ASSERT(k > 0);
+      TENZIR_ASSERT(k > 0);
       if (k <= bits().size()) {
         i_ = select<Bit>(bits(), k);
         if (i_ != npos)
@@ -439,8 +439,8 @@ public:
   /// @pre `!done() && x >= offset()`
   template <bool Bit = true>
   void select_from(id x) {
-    VAST_ASSERT(!done());
-    VAST_ASSERT(x >= offset());
+    TENZIR_ASSERT(!done());
+    TENZIR_ASSERT(x >= offset());
     if (x > offset()) {
       next(x - offset());
       if (done())

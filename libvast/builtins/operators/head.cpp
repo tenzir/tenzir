@@ -37,7 +37,7 @@ public:
     auto remaining = limit_;
     for (auto&& slice : input) {
       slice = vast::head(slice, remaining);
-      VAST_ASSERT(remaining >= slice.rows());
+      TENZIR_ASSERT(remaining >= slice.rows());
       remaining -= slice.rows();
       co_yield std::move(slice);
       if (remaining == 0) {
@@ -77,4 +77,4 @@ public:
 
 } // namespace vast::plugins::head
 
-VAST_REGISTER_PLUGIN(vast::plugins::head::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::head::plugin)

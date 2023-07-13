@@ -18,8 +18,8 @@
 namespace vast {
 
 TEST(segment store queries) {
-  auto bytes = unbox(vast::io::read(VAST_TEST_PATH "artifacts/segment_stores/"
-                                                   "zeek.conn.store"));
+  auto bytes = unbox(vast::io::read(TENZIR_TEST_PATH "artifacts/segment_stores/"
+                                                     "zeek.conn.store"));
   auto chunk = chunk::make(std::move(bytes));
   auto segment = unbox(segment::make(std::move(chunk)));
   CHECK_EQUAL(segment.num_slices(), 1u);

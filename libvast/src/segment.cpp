@@ -42,7 +42,7 @@ segment::iterator::iterator(size_t slice_idx, interval_iterator intervals,
 [[nodiscard]] table_slice segment::iterator::dereference() const {
   auto slice = parent_->get_slice_(slice_idx_);
   slice.offset((*intervals_)->begin());
-  VAST_ASSERT(slice.offset() + slice.rows() == (*intervals_)->end());
+  TENZIR_ASSERT(slice.offset() + slice.rows() == (*intervals_)->end());
   return slice;
 }
 
@@ -93,7 +93,7 @@ uuid segment::id() const {
   auto const* segment_v0 = flatbuffer_->segment_as_v0();
   auto result = vast::uuid{};
   if (auto error = unpack(*segment_v0->uuid(), result))
-    VAST_ERROR("couldnt get uuid from segment: {}", error);
+    TENZIR_ERROR("couldnt get uuid from segment: {}", error);
   return result;
 }
 
@@ -135,7 +135,7 @@ segment::lookup(const vast::ids& xs) const {
   auto const* segment = flatbuffer_->segment_as_v0();
   if (!segment)
     return caf::make_error(ec::format_error, "invalid segment version");
-  VAST_ASSERT(segment->ids()->size() == segment->slices()->size());
+  TENZIR_ASSERT(segment->ids()->size() == segment->slices()->size());
   auto f = [&](const auto& idx) noexcept {
     auto const* interval = segment->ids()->Get(idx);
     return std::pair{interval->begin(), interval->end()};
@@ -144,10 +144,10 @@ segment::lookup(const vast::ids& xs) const {
     auto const* interval = segment->ids()->Get(idx);
     auto slice = get_slice_(idx);
     slice.offset(interval->begin());
-    VAST_ASSERT(slice.offset() == interval->begin());
-    VAST_ASSERT(slice.offset() + slice.rows() == interval->end());
-    VAST_DEBUG("{} returns slice from lookup: {}",
-               detail::pretty_type_name(this), to_string(slice));
+    TENZIR_ASSERT(slice.offset() == interval->begin());
+    TENZIR_ASSERT(slice.offset() + slice.rows() == interval->end());
+    TENZIR_DEBUG("{} returns slice from lookup: {}",
+                 detail::pretty_type_name(this), to_string(slice));
     result.push_back(std::move(slice));
     return caf::none;
   };
@@ -162,9 +162,9 @@ caf::expected<std::vector<table_slice>>
 segment::erase(const vast::ids& xs) const {
   const auto* segment = flatbuffer_->segment_as_v0();
   auto intervals = std::vector(segment->ids()->begin(), segment->ids()->end());
-  VAST_ASSERT(segment->ids()->size()
-                == segment->slices()->size() + segment->overflow_slices(),
-              "inconsistent number of ids and slices");
+  TENZIR_ASSERT(segment->ids()->size()
+                  == segment->slices()->size() + segment->overflow_slices(),
+                "inconsistent number of ids and slices");
   // We have IDs we wish to delete in `xs`, but we need a bitmap of what to
   // keep for `select` in order to fill `new_slices` with the table slices
   // that remain after dropping all deleted IDs from the segment.
@@ -185,7 +185,7 @@ segment::erase(const vast::ids& xs) const {
 }
 
 vast::table_slice segment::get_slice_(size_t idx) const {
-  VAST_ASSERT_CHEAP(idx < num_slices());
+  TENZIR_ASSERT_CHEAP(idx < num_slices());
   const auto* segment = flatbuffer_->segment_as_v0();
   if (idx < segment->slices()->size())
     return table_slice{*segment->slices()->Get(idx), chunk(),
@@ -200,8 +200,8 @@ std::vector<const vast::fbs::FlatTableSlice*> segment::flat_slices_() const {
   result.reserve(num_slices());
   result.insert(result.end(), segment->slices()->begin(),
                 segment->slices()->end());
-  VAST_ASSERT_CHEAP(!container_
-                    || container_->size() == segment->overflow_slices() + 1);
+  TENZIR_ASSERT_CHEAP(!container_
+                      || container_->size() == segment->overflow_slices() + 1);
   for (size_t i = 0; i < segment->overflow_slices(); ++i)
     // Chunk 0 is the segment itself, so we apply an offset of 1
     result.push_back(container_->as_flatbuffer<fbs::FlatTableSlice>(1 + i));

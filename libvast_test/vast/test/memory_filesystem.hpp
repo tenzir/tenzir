@@ -24,7 +24,7 @@ inline vast::filesystem_actor::behavior_type memory_filesystem() {
   return {
     [chunks](vast::atom::write, const std::filesystem::path& path,
              vast::chunk_ptr& chunk) {
-      VAST_ASSERT(chunk, "attempted to write a null chunk");
+      TENZIR_ASSERT(chunk, "attempted to write a null chunk");
       (*chunks)[path] = std::move(chunk);
       return vast::atom::ok_v;
     },

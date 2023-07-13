@@ -35,9 +35,9 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   if (!index)
     return caf::make_error(ec::missing_component, "index");
   auto handle = self->spawn(importer, args.dir / args.label, index, accountant);
-  VAST_VERBOSE("{} spawned the importer", *self);
+  TENZIR_VERBOSE("{} spawned the importer", *self);
   for (auto& source : self->state.registry.find_by_type("source")) {
-    VAST_DEBUG("{} connects source to new importer", *self);
+    TENZIR_DEBUG("{} connects source to new importer", *self);
     self->anon_send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
   }
   return caf::actor_cast<caf::actor>(handle);

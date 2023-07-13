@@ -116,7 +116,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const value_index_ptr& value) {
                          type_bytes.size()));
   auto options_data = data{};
   const auto convert_ok = convert(value->opts_, options_data);
-  VAST_ASSERT(convert_ok);
+  TENZIR_ASSERT(convert_ok);
   const auto options_offset = pack(builder, options_data);
   const auto base_offset = fbs::value_index::detail::CreateValueIndexBase(
     builder, mask_offset, none_offset, type_offset, options_offset);

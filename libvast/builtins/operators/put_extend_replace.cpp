@@ -138,7 +138,7 @@ public:
       return {};
     const auto& layout = caf::get<record_type>(slice.schema());
     auto batch = to_record_batch(slice);
-    VAST_ASSERT(batch);
+    TENZIR_ASSERT(batch);
     auto transformations = std::vector<indexed_transformation>{};
     switch (Mode) {
       case mode::put: {
@@ -288,6 +288,6 @@ using replace_plugin = plugin<mode::replace>;
 
 } // namespace vast::plugins::put_extend_replace
 
-VAST_REGISTER_PLUGIN(vast::plugins::put_extend_replace::put_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::put_extend_replace::extend_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::put_extend_replace::replace_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::put_extend_replace::put_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::put_extend_replace::extend_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::put_extend_replace::replace_plugin)

@@ -27,7 +27,7 @@ using namespace std::chrono_literals;
 namespace vast {
 
 caf::message remote_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE_SCOPE("{}", inv);
+  TENZIR_TRACE_SCOPE("{}", inv);
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
@@ -60,9 +60,9 @@ caf::message remote_command(const invocation& inv, caf::actor_system& sys) {
       err = std::move(e);
     },
     [&](atom::signal, int signal) {
-      VAST_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
-                 ::strsignal(signal));
-      VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+      TENZIR_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
+                   ::strsignal(signal));
+      TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
     });
   if (err)
     return caf::make_message(std::move(err));

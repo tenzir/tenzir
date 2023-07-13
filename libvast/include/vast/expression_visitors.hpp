@@ -238,7 +238,7 @@ private:
   }
 
   void next() {
-    VAST_ASSERT(!offset_.empty());
+    TENZIR_ASSERT(!offset_.empty());
     ++offset_.back();
   }
 

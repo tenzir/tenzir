@@ -124,8 +124,9 @@ public:
     auto offset = RdKafka::Topic::OFFSET_END;
     if (args_.offset) {
       auto success = offset_parser()(args_.offset->inner, offset);
-      VAST_ASSERT(success); // validated earlier;
-      VAST_INFO("kafka adjusts offset to {} ({})", args_.offset->inner, offset);
+      TENZIR_ASSERT(success); // validated earlier;
+      TENZIR_INFO("kafka adjusts offset to {} ({})", args_.offset->inner,
+                  offset);
     }
     if (auto err = cfg->set_rebalance_cb(offset)) {
       ctrl.diagnostics().emit(
@@ -143,7 +144,7 @@ public:
         return {};
       }
       for (const auto& [key, value] : options) {
-        VAST_INFO("providing librdkafka option {}={}", key, value);
+        TENZIR_INFO("providing librdkafka option {}={}", key, value);
         if (auto err = cfg->set(key, value)) {
           ctrl.diagnostics().emit(
             diagnostic::error("failed to set librdkafka option {}={}: {}", key,
@@ -156,7 +157,7 @@ public:
     }
     // Create the consumer.
     if (auto value = cfg->get("bootstrap.servers")) {
-      VAST_INFO("kafka connects to broker: {}", *value);
+      TENZIR_INFO("kafka connects to broker: {}", *value);
     }
     auto client = consumer::make(*cfg);
     if (!client) {
@@ -166,7 +167,7 @@ public:
       return {};
     };
     auto topic = args_.topic ? args_.topic->inner : default_topic;
-    VAST_INFO("kafka subscribes to topic {}", topic);
+    TENZIR_INFO("kafka subscribes to topic {}", topic);
     if (auto err = client->subscribe({topic})) {
       ctrl.diagnostics().emit(
         diagnostic::error("failed to subscribe to topic: {}", err).done());
@@ -187,7 +188,7 @@ public:
             // Upgrade to a counter and only break out of the loop once this
             // signal has been received N times.
             break;
-          VAST_ERROR(msg.error());
+          TENZIR_ERROR(msg.error());
           break;
         }
         co_yield *msg;
@@ -257,24 +258,24 @@ public:
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto cfg = configuration::make(config_);
     if (!cfg) {
-      VAST_ERROR("kafka failed to create configuration: {}", cfg.error());
+      TENZIR_ERROR("kafka failed to create configuration: {}", cfg.error());
       return cfg.error();
     };
     if (auto value = cfg->get("bootstrap.servers")) {
-      VAST_INFO("kafka connects to broker: {}", *value);
+      TENZIR_INFO("kafka connects to broker: {}", *value);
     }
     auto client = producer::make(*cfg);
     if (!client) {
-      VAST_ERROR(client.error());
+      TENZIR_ERROR(client.error());
       return client.error();
     };
     auto guard = caf::detail::make_scope_guard([client = *client]() mutable {
-      VAST_VERBOSE("waiting 10 seconds to flush pending messages");
+      TENZIR_VERBOSE("waiting 10 seconds to flush pending messages");
       if (auto err = client.flush(10s))
-        VAST_WARN(err);
+        TENZIR_WARN(err);
       auto num_messages = client.queue_size();
       if (num_messages > 0)
-        VAST_ERROR("{} messages were not delivered", num_messages);
+        TENZIR_ERROR("{} messages were not delivered", num_messages);
     });
     auto topic = args_.topic ? args_.topic->inner : default_topic;
     auto topics = std::vector<std::string>{std::move(topic)};
@@ -284,7 +285,7 @@ public:
     time timestamp;
     if (args_.timestamp) {
       auto result = parsers::time(args_.timestamp->inner, timestamp);
-      VAST_ASSERT(result); // validated earlier
+      TENZIR_ASSERT(result); // validated earlier
     }
     return [&ctrl, client = *client, key = std::move(key), ts = timestamp,
             topics = std::move(topics),
@@ -293,7 +294,7 @@ public:
       if (!chunk || chunk->size() == 0)
         return;
       for (const auto& topic : topics) {
-        VAST_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
+        TENZIR_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
         if (auto error = client.produce(topic, as_bytes(*chunk), key, ts)) {
           ctrl.abort(std::move(error));
           return;
@@ -395,4 +396,4 @@ private:
 
 } // namespace vast::plugins::kafka
 
-VAST_REGISTER_PLUGIN(vast::plugins::kafka::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::kafka::plugin)

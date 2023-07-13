@@ -28,7 +28,7 @@
 
 #include <cctype>
 
-#if VAST_ENABLE_JOURNALD_LOGGING
+#if TENZIR_ENABLE_JOURNALD_LOGGING
 #  include <spdlog/sinks/systemd_sink.h>
 #endif
 
@@ -52,19 +52,19 @@ int loglevel_to_int(std::string x, int default_value) {
   for (auto& ch : x)
     ch = std::tolower(ch);
   if (x == "quiet")
-    return VAST_LOG_LEVEL_QUIET;
+    return TENZIR_LOG_LEVEL_QUIET;
   if (x == "error")
-    return VAST_LOG_LEVEL_ERROR;
+    return TENZIR_LOG_LEVEL_ERROR;
   if (x == "warning")
-    return VAST_LOG_LEVEL_WARNING;
+    return TENZIR_LOG_LEVEL_WARNING;
   if (x == "info")
-    return VAST_LOG_LEVEL_INFO;
+    return TENZIR_LOG_LEVEL_INFO;
   if (x == "verbose")
-    return VAST_LOG_LEVEL_VERBOSE;
+    return TENZIR_LOG_LEVEL_VERBOSE;
   if (x == "debug")
-    return VAST_LOG_LEVEL_DEBUG;
+    return TENZIR_LOG_LEVEL_DEBUG;
   if (x == "trace")
-    return VAST_LOG_LEVEL_TRACE;
+    return TENZIR_LOG_LEVEL_TRACE;
   return default_value;
 }
 
@@ -74,28 +74,28 @@ namespace {
 spdlog::level::level_enum vast_loglevel_to_spd(const int value) {
   spdlog::level::level_enum level = spdlog::level::off;
   switch (value) {
-    case VAST_LOG_LEVEL_QUIET:
+    case TENZIR_LOG_LEVEL_QUIET:
       break;
-    case VAST_LOG_LEVEL_ERROR:
+    case TENZIR_LOG_LEVEL_ERROR:
       level = spdlog::level::err;
       break;
-    case VAST_LOG_LEVEL_WARNING:
+    case TENZIR_LOG_LEVEL_WARNING:
       level = spdlog::level::warn;
       break;
-    case VAST_LOG_LEVEL_INFO:
+    case TENZIR_LOG_LEVEL_INFO:
       level = spdlog::level::info;
       break;
-    case VAST_LOG_LEVEL_VERBOSE:
+    case TENZIR_LOG_LEVEL_VERBOSE:
       level = spdlog::level::debug;
       break;
-    case VAST_LOG_LEVEL_DEBUG:
+    case TENZIR_LOG_LEVEL_DEBUG:
       level = spdlog::level::trace;
       break;
-    case VAST_LOG_LEVEL_TRACE:
+    case TENZIR_LOG_LEVEL_TRACE:
       level = spdlog::level::trace;
       break;
     default:
-      VAST_ASSERT(false, "unhandled log level");
+      TENZIR_ASSERT(false, "unhandled log level");
   }
   return level;
 }
@@ -107,7 +107,7 @@ namespace detail {
 bool setup_spdlog(const vast::invocation& cmd_invocation,
                   const caf::settings& cfg_file) try {
   if (vast::detail::logger()->name() != "/dev/null") {
-    VAST_ERROR("Log already up");
+    TENZIR_ERROR("Log already up");
     return false;
   }
   bool is_server = cmd_invocation.full_name == "start"
@@ -161,7 +161,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     log_file = *cmdline_log_file;
   if (is_server) {
     if (log_file == defaults::logger::log_file
-        && vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
+        && vast_file_verbosity != TENZIR_LOG_LEVEL_QUIET) {
       std::filesystem::path log_dir = caf::get_or(
         cfg_file, "tenzir.db-directory", defaults::db_directory.data());
       std::error_code err{};
@@ -188,7 +188,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     if (client_log_file)
       log_file = *client_log_file;
     else // If there is no client log file, turn off file logging
-      vast_file_verbosity = VAST_LOG_LEVEL_QUIET;
+      vast_file_verbosity = TENZIR_LOG_LEVEL_QUIET;
   }
   auto default_queue_size = is_server ? defaults::logger::server_queue_size
                                       : defaults::logger::client_queue_size;
@@ -198,7 +198,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   std::vector<spdlog::sink_ptr> sinks;
   // Add console sink.
   std::string default_sink_type
-    = VAST_ENABLE_JOURNALD_LOGGING && systemd::connected_to_journal()
+    = TENZIR_ENABLE_JOURNALD_LOGGING && systemd::connected_to_journal()
         ? "journald"
         : "stderr";
   auto sink_type
@@ -209,7 +209,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
         = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
       return stderr_sink;
     } else if (sink_type == "journald") {
-#if !VAST_ENABLE_JOURNALD_LOGGING
+#if !TENZIR_ENABLE_JOURNALD_LOGGING
       fmt::print(stderr,
                  "failed to start logger; tenzir.console-sink 'journald' "
                  "required VAST built with systemd support\n");
@@ -239,7 +239,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   console_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
   sinks.push_back(console_sink);
   // Add file sink.
-  if (vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
+  if (vast_file_verbosity != TENZIR_LOG_LEVEL_QUIET) {
     bool disable_rotation = caf::get_or(cfg_file, "tenzir.disable-log-rotation",
                                         defaults::logger::disable_log_rotation);
     spdlog::sink_ptr file_sink = nullptr;
@@ -278,7 +278,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
 }
 
 void shutdown_spdlog() {
-  VAST_DEBUG("shut down logging");
+  TENZIR_DEBUG("shut down logging");
   spdlog::shutdown();
 }
 

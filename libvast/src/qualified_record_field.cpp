@@ -21,10 +21,10 @@ namespace vast {
 
 qualified_record_field::qualified_record_field(const class type& schema,
                                                const offset& index) noexcept {
-  VAST_ASSERT(!schema.name().empty());
-  VAST_ASSERT(!index.empty());
+  TENZIR_ASSERT(!schema.name().empty());
+  TENZIR_ASSERT(!index.empty());
   const auto* rt = caf::get_if<record_type>(&schema);
-  VAST_ASSERT(rt);
+  TENZIR_ASSERT(rt);
   schema_name_ = schema.name();
   // We cannot assign the field_view directly, but rather need to store a field
   // with a corrected name, as that needs to be flattened here.

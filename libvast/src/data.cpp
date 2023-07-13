@@ -234,7 +234,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       auto list_buffer = list{};
       list_buffer.reserve(from.data_as_list()->values()->size());
       for (const auto* value : *from.data_as_list()->values()) {
-        VAST_ASSERT(value);
+        TENZIR_ASSERT(value);
         auto element_buffer = data{};
         if (auto err = unpack(*value, element_buffer))
           return err;
@@ -247,7 +247,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       auto map_buffer = map::vector_type{};
       map_buffer.reserve(from.data_as_map()->entries()->size());
       for (const auto* entry : *from.data_as_map()->entries()) {
-        VAST_ASSERT(entry);
+        TENZIR_ASSERT(entry);
         auto key_buffer = data{};
         if (auto err = unpack(*entry->key(), key_buffer))
           return err;
@@ -263,7 +263,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       auto record_buffer = record::vector_type{};
       record_buffer.reserve(from.data_as_record()->fields()->size());
       for (const auto* field : *from.data_as_record()->fields()) {
-        VAST_ASSERT(field);
+        TENZIR_ASSERT(field);
         auto data_buffer = data{};
         if (auto err = unpack(*field->data(), data_buffer))
           return err;
@@ -319,7 +319,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   };
   switch (op) {
     default:
-      VAST_ASSERT(!"missing case");
+      TENZIR_ASSERT(!"missing case");
       return false;
     case relational_operator::in:
       return eval_in(lhs, rhs);
@@ -419,8 +419,8 @@ namespace {
 record flatten(const record& r, size_t max_recursion) {
   record result;
   if (max_recursion == 0) {
-    VAST_WARN("partially discarding record: recursion limit of {} exceeded",
-              defaults::max_recursion);
+    TENZIR_WARN("partially discarding record: recursion limit of {} exceeded",
+                defaults::max_recursion);
     return result;
   }
   for (const auto& [k, v] : r) {
@@ -437,8 +437,8 @@ std::optional<record>
 flatten(const record& r, const record_type& rt, size_t max_recursion) {
   record result;
   if (max_recursion == 0) {
-    VAST_WARN("partially discarding record: recursion limit of {} exceeded",
-              defaults::max_recursion);
+    TENZIR_WARN("partially discarding record: recursion limit of {} exceeded",
+                defaults::max_recursion);
     return result;
   }
   for (const auto& [k, v] : r) {
@@ -468,8 +468,8 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
 std::optional<data>
 flatten(const data& x, const type& t, size_t max_recursion) {
   if (max_recursion == 0) {
-    VAST_WARN("partially discarding record: recursion limit of {} exceeded",
-              defaults::max_recursion);
+    TENZIR_WARN("partially discarding record: recursion limit of {} exceeded",
+                defaults::max_recursion);
     return caf::none;
   }
   const auto* xs = caf::get_if<record>(&x);
@@ -498,8 +498,8 @@ namespace {
 void merge(const record& src, record& dst, enum policy::merge_lists merge_lists,
            const size_t max_recursion) {
   if (max_recursion == 0) {
-    VAST_WARN("partially discarding record: recursion limit of {} exceeded",
-              defaults::max_recursion);
+    TENZIR_WARN("partially discarding record: recursion limit of {} exceeded",
+                defaults::max_recursion);
     return;
   }
   for (const auto& [k, v] : src) {

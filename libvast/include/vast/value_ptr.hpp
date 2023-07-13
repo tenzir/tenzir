@@ -45,12 +45,12 @@ public:
   }
 
   auto operator*() const -> T& {
-    VAST_ASSERT_EXPENSIVE(*this);
+    TENZIR_ASSERT_EXPENSIVE(*this);
     return *ptr_;
   }
 
   auto operator->() const -> T* {
-    VAST_ASSERT_EXPENSIVE(*this);
+    TENZIR_ASSERT_EXPENSIVE(*this);
     return &*ptr_;
   }
 

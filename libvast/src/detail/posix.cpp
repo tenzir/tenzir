@@ -126,13 +126,13 @@ uds_datagram_sender::make(const std::string& path) {
   // -> We can delegate the socket removal to the kernel by calling unlink on
   //    it right away.
   if (::unlink(src_name) != 0) {
-    VAST_WARN("{} failed in unlink({}): {}", __func__, src_name,
-              ::strerror(errno));
+    TENZIR_WARN("{} failed in unlink({}): {}", __func__, src_name,
+                ::strerror(errno));
   } else {
     src_name[16] = '\0';
     if (::rmdir(src_name) != 0)
-      VAST_WARN("{} failed in rmdir({}): {}", __func__, src_name,
-                ::strerror(errno));
+      TENZIR_WARN("{} failed in rmdir({}): {}", __func__, src_name,
+                  ::strerror(errno));
   }
   // Prepare the destination socket address.
   std::memset(&result.dst, 0, sizeof(result.dst));
@@ -199,7 +199,7 @@ int uds_connect(const std::string& path, socket_type type) {
       std::strncpy(clt.sun_path, client_path.data(), sizeof(clt.sun_path) - 1);
       ::unlink(client_path.c_str()); // Always remove previous socket file.
       if (::bind(fd, reinterpret_cast<sockaddr*>(&clt), sizeof(clt)) < 0) {
-        VAST_WARN("{} failed in bind: {}", __func__, ::strerror(errno));
+        TENZIR_WARN("{} failed in bind: {}", __func__, ::strerror(errno));
         return -1;
       }
       break;
@@ -210,7 +210,7 @@ int uds_connect(const std::string& path, socket_type type) {
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
     if (!(type == socket_type::datagram && errno == ENOENT)) {
-      VAST_WARN("{} failed in connect: {}", __func__, ::strerror(errno));
+      TENZIR_WARN("{} failed in connect: {}", __func__, ::strerror(errno));
       return -1;
     }
   }
@@ -218,8 +218,8 @@ int uds_connect(const std::string& path, socket_type type) {
 }
 
 // On Mac OS, CMSG_SPACE is for some reason not a constant expression.
-VAST_DIAGNOSTIC_PUSH
-VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION
+TENZIR_DIAGNOSTIC_PUSH
+TENZIR_DIAGNOSTIC_IGNORE_VLA_EXTENSION
 
 bool uds_send_fd(int socket, int fd) {
   if (socket < 0)
@@ -277,7 +277,7 @@ int uds_recv_fd(int socket) {
   return -1;
 }
 
-VAST_DIAGNOSTIC_POP
+TENZIR_DIAGNOSTIC_POP
 
 int uds_sendmsg(int socket, const std::string& destination,
                 const std::string& msg, int flags) {
@@ -327,12 +327,12 @@ unix_domain_socket::operator bool() const {
 }
 
 bool unix_domain_socket::send_fd(int fd) {
-  VAST_ASSERT(*this);
+  TENZIR_ASSERT(*this);
   return detail::uds_send_fd(this->fd, fd);
 }
 
 int unix_domain_socket::recv_fd() {
-  VAST_ASSERT(*this);
+  TENZIR_ASSERT(*this);
   return detail::uds_recv_fd(fd);
 }
 

@@ -49,8 +49,8 @@ command_runner(command_runner_actor::pointer self) {
       auto [root, root_factory] = make_application("tenzir-ctl");
       auto result = run(invocation, self->home_system(), root_factory);
       if (!result)
-        VAST_ERROR("failed to run start command {}: {}", invocation,
-                   result.error());
+        TENZIR_ERROR("failed to run start command {}: {}", invocation,
+                     result.error());
       return {};
     },
   };
@@ -61,9 +61,9 @@ command_runner(command_runner_actor::pointer self) {
 using namespace std::chrono_literals;
 
 caf::message start_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(inv.options),
-                   VAST_ARG("args", inv.arguments.begin(),
-                            inv.arguments.end()));
+  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(inv.options),
+                     TENZIR_ARG("args", inv.arguments.begin(),
+                                inv.arguments.end()));
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "tenzir.node", false))
     return caf::make_message(
@@ -103,7 +103,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   if (!bound_port)
     return caf::make_message(std::move(bound_port.error()));
   auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
-  VAST_INFO("node is listening on {}", listen_addr);
+  TENZIR_INFO("node is listening on {}", listen_addr);
   // Notify the service manager if it expects an update.
   if (auto error = systemd::notify_ready())
     return caf::make_message(std::move(error));
@@ -126,7 +126,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     auto [root, root_factory] = make_application("tenzir-ctl");
     // We're already in the start command, so we can safely assert that
     // make_application works as expected.
-    VAST_ASSERT(root);
+    TENZIR_ASSERT(root);
     for (auto const& command : commands) {
       // We use std::quoted for correct tokenization of quoted strings. The
       // invocation parser expects a vector of strings that are correctly
@@ -136,7 +136,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
       auto current = std::string{};
       while (tokenizer >> std::quoted(current))
         cli.push_back(std::move(current));
-      VAST_INFO("running post-start command {}", command);
+      TENZIR_INFO("running post-start command {}", command);
       auto hook_invocation = parse(*root, cli.begin(), cli.end());
       if (!hook_invocation)
         return caf::make_message(hook_invocation.error());
@@ -150,15 +150,15 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   self
     ->do_receive(
       [&](caf::down_msg& msg) {
-        VAST_ASSERT(msg.source == node);
-        VAST_DEBUG("{} received DOWN from node", *self);
+        TENZIR_ASSERT(msg.source == node);
+        TENZIR_DEBUG("{} received DOWN from node", *self);
         stop = true;
         if (msg.reason != caf::exit_reason::user_shutdown)
           err = std::move(msg.reason);
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} got {}", *self, ::strsignal(signal));
-        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_DEBUG("{} got {}", *self, ::strsignal(signal));
+        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
         self->send_exit(node, caf::exit_reason::user_shutdown);
       })
     .until([&] {

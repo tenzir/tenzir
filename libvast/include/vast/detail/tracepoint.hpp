@@ -22,8 +22,8 @@
 //
 // Notable changes from the upstream version:
 //  * Add a written overview to the top of the file.
-//  * Add `VAST_TRACEPOINT()` convenience macro.
-//  * Use `VAST_ENABLE_SDT` macro instead of `FOLLY_DISABLE_SDT` to enable or
+//  * Add `TENZIR_TRACEPOINT()` convenience macro.
+//  * Use `TENZIR_ENABLE_SDT` macro instead of `FOLLY_DISABLE_SDT` to enable or
 //    disable this feature.
 //  * Add pragmas to ignore warnings for GNU extensions when using clang.
 
@@ -50,7 +50,7 @@
 //
 //     sudo bpftrace -e 'usdt:/opt/tenzir/bin/vast:vast:catalog_lookup { printf("%d candidates\n", arg1); }'
 //
-// The main entry point for users is the `VAST_TRACEPOINT()` macro defined
+// The main entry point for users is the `TENZIR_TRACEPOINT()` macro defined
 // at the bottom of this file.
 //
 // [1]: Note that for bpftrace versions <= 0.8, the tracepoint name in this
@@ -246,12 +246,12 @@
 
 
 #if defined(__ELF__) && (defined(__x86_64__) || defined(__i386__)) && \
-    VAST_ENABLE_SDT
+    TENZIR_ENABLE_SDT
 
 /// Defines a USDT trace point for provider 'vast' with given parameters.
 /// @param name The name of the trace point. Different tracing tools use
 ///             different naming conventions on how to refer to a USDT that
-///             was creating using the invocation `VAST_TRACEPOINT(foo)`:
+///             was creating using the invocation `TENZIR_TRACEPOINT(foo)`:
 ///
 ///               perf probe:        `sdt_vast:foo` or `%foo`
 ///               bpftrace:          `usdt:/path/to/libvast.so:vast:foo`
@@ -268,7 +268,7 @@
 ///             integers or pointers, and no more than the number of available
 ///             registers. On x86, only the first 6 arguments can be accessed
 ///             at runtime.
-#define VAST_TRACEPOINT(name, ...) \
+#define TENZIR_TRACEPOINT(name, ...) \
   FOLLY_SDT(vast, name, __VA_ARGS__)
 
 // NOTE: There is a mechanism called a "USDT semaphore" that can be used to
@@ -285,17 +285,17 @@
 // process. Due to this, we currently don't wrap the API, however when a use
 // case arises the following macros can be used as needed:
 //
-// #define VAST_SDT_WITH_SEMAPHORE(name)
+// #define TENZIR_SDT_WITH_SEMAPHORE(name)
 //   (vast, name, __VA_ARGS__)
 //
-// #define VAST_SDT_IS_ENABLED(name)
+// #define TENZIR_SDT_IS_ENABLED(name)
 //   (FOLLY_SDT_SEMAPHORE(vast, name) > 0)
 
 #else
 
 #include "vast/detail/discard.hpp"
 
-#define VAST_TRACEPOINT(name, ...) \
-  VAST_DISCARD_ARGS(__VA_ARGS__)
+#define TENZIR_TRACEPOINT(name, ...) \
+  TENZIR_DISCARD_ARGS(__VA_ARGS__)
 
 #endif

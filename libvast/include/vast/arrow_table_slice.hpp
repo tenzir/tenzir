@@ -144,30 +144,30 @@ template <concrete_type Type>
 view<type_to_data_t<Type>>
 value_at([[maybe_unused]] const Type& type,
          const type_to_arrow_array_storage_t<Type>& arr, int64_t row) noexcept {
-  VAST_ASSERT(!arr.IsNull(row));
+  TENZIR_ASSERT(!arr.IsNull(row));
   if constexpr (detail::is_any_v<Type, bool_type, uint64_type, double_type>) {
     return arr.GetView(row);
   } else if constexpr (std::is_same_v<Type, int64_type>) {
     return int64_t{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, duration_type>) {
-    VAST_ASSERT(
+    TENZIR_ASSERT(
       caf::get<type_to_arrow_type_t<duration_type>>(*arr.type()).unit()
       == arrow::TimeUnit::NANO);
     return duration{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, time_type>) {
-    VAST_ASSERT(caf::get<type_to_arrow_type_t<time_type>>(*arr.type()).unit()
-                == arrow::TimeUnit::NANO);
+    TENZIR_ASSERT(caf::get<type_to_arrow_type_t<time_type>>(*arr.type()).unit()
+                  == arrow::TimeUnit::NANO);
     return time{} + duration{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, string_type>) {
     const auto str = arr.GetView(row);
     return {str.data(), str.size()};
   } else if constexpr (std::is_same_v<Type, ip_type>) {
-    VAST_ASSERT(arr.byte_width() == 16);
+    TENZIR_ASSERT(arr.byte_width() == 16);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     const auto* bytes = arr.raw_values() + (row * 16);
     return ip::v6(std::span<const uint8_t, 16>{bytes, 16});
   } else if constexpr (std::is_same_v<Type, subnet_type>) {
-    VAST_ASSERT(arr.num_fields() == 2);
+    TENZIR_ASSERT(arr.num_fields() == 2);
     auto network = value_at(
       ip_type{},
       *caf::get<type_to_arrow_array_t<ip_type>>(*arr.field(0)).storage(), row);
@@ -221,7 +221,7 @@ value_at([[maybe_unused]] const Type& type,
           // nop
         }
         value_type at(size_type i) const override {
-          VAST_ASSERT(!key_array->IsNull(value_offset + i));
+          TENZIR_ASSERT(!key_array->IsNull(value_offset + i));
           if (item_array->IsNull(value_offset + i))
             return {value_at(key_type, *key_array, value_offset + i), {}};
           return {
@@ -278,8 +278,8 @@ template <concrete_type Type>
 view<type_to_data_t<Type>>
 value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
          int64_t row) noexcept {
-  VAST_ASSERT(type.to_arrow_type()->id() == arr.type_id());
-  VAST_ASSERT(!arr.IsNull(row));
+  TENZIR_ASSERT(type.to_arrow_type()->id() == arr.type_id());
+  TENZIR_ASSERT(!arr.IsNull(row));
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value)
     return value_at(type, *caf::get<type_to_arrow_array_t<Type>>(arr).storage(),
                     row);
@@ -289,7 +289,7 @@ value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
 
 data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
                    int64_t row) noexcept {
-  VAST_ASSERT(type.to_arrow_type()->id() == arr.type_id());
+  TENZIR_ASSERT(type.to_arrow_type()->id() == arr.type_id());
   if (arr.IsNull(row))
     return caf::none;
   auto f = [&]<concrete_type Type>(const Type& type) noexcept -> data_view {

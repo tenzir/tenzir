@@ -47,7 +47,7 @@ struct bloom_filter_view {
   /// Constructs a view from Bloom filter parameters and a span of bytes.
   bloom_filter_view(bloom_filter_params params, std::span<Word> bits)
     : params_{params}, bits_{bits} {
-    VAST_ASSERT(params.m & 1, "worm hashing requires odd m");
+    TENZIR_ASSERT(params.m & 1, "worm hashing requires odd m");
   }
 
   /// Adds a hash digest to the filter.

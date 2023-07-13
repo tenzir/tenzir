@@ -10,7 +10,7 @@ locals {
       portMappings = []
       volumesFrom  = []
       environment = [{
-        name  = "VAST_ENDPOINT"
+        name  = "TENZIR_ENDPOINT"
         value = var.vast_server_hostname
         }, {
         name  = "QUEUE_URL"

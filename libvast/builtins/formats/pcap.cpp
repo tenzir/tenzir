@@ -40,7 +40,7 @@ auto make_byte_reader(generator<chunk_ptr> input) {
       // The internal chunk is not available when we first enter this function
       // and as well when we have no more chunks (at the end).
       if (!chunk) {
-        VAST_ASSERT(chunk_offset == 0);
+        TENZIR_ASSERT(chunk_offset == 0);
         // Can we fulfill our request from the buffer?
         if (buffer.size() - buffer_offset >= num_bytes) {
           auto result = as_bytes(buffer).subspan(buffer_offset, num_bytes);
@@ -53,7 +53,7 @@ auto make_byte_reader(generator<chunk_ptr> input) {
           // We're done and return an underful chunk.
           auto result = as_bytes(buffer).subspan(buffer_offset);
           buffer_offset = buffer.size();
-          VAST_ASSERT(result.size() < num_bytes);
+          TENZIR_ASSERT(result.size() < num_bytes);
           return result;
         }
         chunk = std::move(*current);
@@ -62,7 +62,7 @@ auto make_byte_reader(generator<chunk_ptr> input) {
           return std::nullopt;
       }
       // We have a chunk.
-      VAST_ASSERT(chunk != nullptr);
+      TENZIR_ASSERT(chunk != nullptr);
       if (buffer.size() == buffer_offset) {
         // Have consumed the entire chunk last time? Then reset and try again.
         if (chunk_offset == chunk->size()) {
@@ -70,7 +70,7 @@ auto make_byte_reader(generator<chunk_ptr> input) {
           chunk = nullptr;
           return std::nullopt;
         }
-        VAST_ASSERT(chunk_offset < chunk->size());
+        TENZIR_ASSERT(chunk_offset < chunk->size());
         // If we have a chunk, but not enough bytes, then we must buffer.
         if (chunk->size() - chunk_offset < num_bytes) {
           buffer = {chunk->begin() + chunk_offset, chunk->end()};
@@ -158,12 +158,12 @@ public:
         co_return;
       }
       if (*need_swap)
-        VAST_DEBUG("detected different byte order in file and host");
+        TENZIR_DEBUG("detected different byte order in file and host");
       else
-        VAST_DEBUG("detected identical byte order in file and host");
+        TENZIR_DEBUG("detected identical byte order in file and host");
       if (*need_swap)
         input_file_header = byteswap(input_file_header);
-      VAST_DEBUG("parsed PCAP file header");
+      TENZIR_DEBUG("parsed PCAP file header");
       if (emit_file_header) {
         auto builder = table_slice_builder{file_header_type()};
         if (!(builder.add(input_file_header.magic_number)
@@ -204,7 +204,7 @@ public:
             continue;
           }
           if (bytes->empty()) {
-            VAST_DEBUG("completed trace of {} packets", num_packets);
+            TENZIR_DEBUG("completed trace of {} packets", num_packets);
             if (builder.rows() > 0) {
               co_yield builder.finish();
             }
@@ -244,7 +244,8 @@ public:
           break;
         }
         ++num_packets;
-        VAST_DEBUG("packet #{} got size: {}", num_packets, packet.data.size());
+        TENZIR_DEBUG("packet #{} got size: {}", num_packets,
+                     packet.data.size());
         /// Build record.
         auto seconds = std::chrono::seconds(packet.header.timestamp);
         auto timestamp = time{std::chrono::duration_cast<duration>(seconds)};
@@ -363,7 +364,7 @@ public:
         // tells us how we should write timestamps and if we need to byte-swap
         // packet headers.
         if (slice.schema().name() == "pcap.file_header") {
-          VAST_DEBUG("got external PCAP file header");
+          TENZIR_DEBUG("got external PCAP file header");
           if (output_file_header) {
             diagnostic::warning("ignoring external PCAP file header")
               .note("cannot re-emit file header after having emitted packets")
@@ -392,7 +393,7 @@ public:
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_record, *array)) {
-          VAST_ASSERT_CHEAP(row);
+          TENZIR_ASSERT_CHEAP(row);
           // NB: the API for record_view is just wrong. It should expose a
           // field-based access method, as opposed to just key-value pairs.
           auto timestamp = time{};
@@ -420,7 +421,7 @@ public:
           // Print the file header once.
           if (!file_header_printed) {
             if (output_file_header) {
-              VAST_DEBUG("using provided PCAP file header");
+              TENZIR_DEBUG("using provided PCAP file header");
               auto swap = need_byte_swap(output_file_header->magic_number);
               if (!swap) {
                 diagnostic::error("got invalid PCAP magic number: {0:x}",
@@ -435,7 +436,7 @@ public:
               else
                 co_yield pack(*output_file_header);
             } else {
-              VAST_DEBUG("generating a PCAP file header");
+              TENZIR_DEBUG("generating a PCAP file header");
               auto header = file_header{
                 .magic_number = magic_number_2,
                 .major_version = 2,
@@ -539,4 +540,4 @@ private:
 
 } // namespace vast::plugins::pcap
 
-VAST_REGISTER_PLUGIN(vast::plugins::pcap::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::pcap::plugin)

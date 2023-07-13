@@ -21,7 +21,7 @@ struct fixture : public fixtures::deterministic_actor_system {
   using response_type = decltype(std::declval<caf::blocking_actor>().request(
     std::declval<actor_type>(), caf::infinite, vast::atom::status_v));
 
-  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
   }
 
   ~fixture() {

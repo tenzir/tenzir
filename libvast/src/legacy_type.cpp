@@ -279,7 +279,7 @@ priority_merge(const legacy_record_type& lhs, const legacy_record_type& rhs,
 
 std::optional<legacy_record_type>
 remove_field(const legacy_record_type& r, std::vector<std::string_view> path) {
-  VAST_ASSERT(!path.empty());
+  TENZIR_ASSERT(!path.empty());
   auto result = legacy_record_type{}.name(r.name()).attributes(r.attributes());
   for (const auto& f : r.fields) {
     if (f.name == path.front()) {
@@ -305,7 +305,7 @@ remove_field(const legacy_record_type& r, std::vector<std::string_view> path) {
 
 std::optional<legacy_record_type>
 remove_field(const legacy_record_type& r, offset o) {
-  VAST_ASSERT(!o.empty());
+  TENZIR_ASSERT(!o.empty());
   auto result = legacy_record_type{}.name(r.name()).attributes(r.attributes());
   if (o.front() >= r.fields.size())
     return {};

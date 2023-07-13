@@ -44,7 +44,7 @@ template <class Policy>
 std::vector<table_slice> make_integers(size_t count) {
   auto schema = type{"test.int", record_type{{"value", int64_type{}}}};
   auto builder = std::make_shared<table_slice_builder>(schema);
-  VAST_ASSERT(builder != nullptr);
+  TENZIR_ASSERT(builder != nullptr);
   std::vector<table_slice> result;
   result.reserve(count);
   auto i = size_t{0};
@@ -64,7 +64,7 @@ std::vector<table_slice> make_integers(size_t count) {
   // Add last slice.
   if (i % events::slice_size != 0)
     result.push_back(builder->finish());
-  VAST_ASSERT(!result.empty());
+  TENZIR_ASSERT(!result.empty());
   return result;
 }
 

@@ -40,7 +40,7 @@ git diff | git -C "${WORKING_DIR}" apply
 pushd "${WORKING_DIR}"
 on_exit=('popd' "${on_exit[@]}")
 cmake "${@}" -B "${WORKING_DIR}/build" \
-  -DVAST_ENABLE_TIME_TRACE:BOOL=ON
+  -DTENZIR_ENABLE_TIME_TRACE:BOOL=ON
 
 # When not on main, build first, then touch the changed files
 if [ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then

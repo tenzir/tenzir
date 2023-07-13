@@ -68,7 +68,7 @@ public:
 
   dynamic_repeat_parser(Parser p, T min, U max)
     : parser_{std::move(p)}, min_{min}, max_{max} {
-    VAST_ASSERT(min <= max);
+    TENZIR_ASSERT(min <= max);
   }
 
   template <class Iterator, class Attribute>

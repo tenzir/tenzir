@@ -29,17 +29,17 @@ concept_ mappend(concept_ lhs, concept_ rhs) {
   if (lhs.description.empty())
     lhs.description = std::move(rhs.description);
   else if (!rhs.description.empty() && lhs.description != rhs.description)
-    VAST_WARN("encountered conflicting descriptions: \"{}\" and \"{}\"",
-              lhs.description, rhs.description);
+    TENZIR_WARN("encountered conflicting descriptions: \"{}\" and \"{}\"",
+                lhs.description, rhs.description);
   for (auto& field : rhs.fields) {
     if (std::count(lhs.fields.begin(), lhs.fields.end(), field) > 0)
-      VAST_WARN("ignoring duplicate field {}", field);
+      TENZIR_WARN("ignoring duplicate field {}", field);
     else
       lhs.fields.push_back(std::move(field));
   }
   for (auto& c : rhs.concepts) {
     if (std::count(lhs.concepts.begin(), lhs.concepts.end(), c) > 0)
-      VAST_WARN("ignoring duplicate field {}", c);
+      TENZIR_WARN("ignoring duplicate field {}", c);
     else
       lhs.concepts.push_back(std::move(c));
   }
@@ -80,7 +80,7 @@ resolve_concepts(const concepts_map& concepts,
     = [&](auto& self, auto&& field_or_concept,
           const size_t recursion_limit = defaults::max_recursion) -> void {
     if (recursion_limit == 0) {
-      VAST_WARN("reached recursion limit in concept resolution");
+      TENZIR_WARN("reached recursion limit in concept resolution");
       return;
     }
     if (auto it = concepts.find(field_or_concept); it != concepts.end()) {
@@ -108,7 +108,7 @@ resolve_concepts(const concepts_map& concepts,
 static bool contains(const type& schema, const std::string& x,
                      relational_operator op, const vast::data& data) {
   const auto* rt = caf::get_if<record_type>(&schema);
-  VAST_ASSERT(rt);
+  TENZIR_ASSERT(rt);
   for (const auto& offset : rt->resolve_key_suffix(x, schema.name())) {
     if (compatible(rt->field(offset).type, op, data))
       return true;
@@ -210,7 +210,7 @@ resolve(const taxonomies& ts, const expression& e, const type& schema) {
           if (!levels.empty()) {
             descend();
             // Empty models ought to be rejected at load time.
-            VAST_ASSERT(levels.top().first != levels.top().second);
+            TENZIR_ASSERT(levels.top().first != levels.top().second);
           }
         };
         // The conjunction for all model concepts that are restriced by a value

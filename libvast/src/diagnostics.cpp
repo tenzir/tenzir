@@ -70,7 +70,7 @@ public:
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
       if (!annotation.source) {
-        VAST_WARN("annotation does not have source: {}", annotation);
+        TENZIR_WARN("annotation does not have source: {}", annotation);
         continue;
       }
       auto [line, col] = line_col_indices(annotation.source.begin);
@@ -120,7 +120,7 @@ private:
       case severity::note:
         return '-';
     }
-    VAST_UNREACHABLE();
+    TENZIR_UNREACHABLE();
   }
 
   auto color(severity s) const -> std::string_view {
@@ -132,7 +132,7 @@ private:
       case severity::note:
         return blue;
     }
-    VAST_UNREACHABLE();
+    TENZIR_UNREACHABLE();
   }
 
   /// Returned indices are zero-based.
@@ -140,7 +140,7 @@ private:
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      VAST_ASSERT(line < lines_.size());
+      TENZIR_ASSERT(line < lines_.size());
       if (col <= lines_[line].size()) {
         break;
       }

@@ -20,7 +20,7 @@ namespace detail {
 
 fdinbuf::fdinbuf(int fd, size_t buffer_size)
   : fd_{fd}, buffer_(buffer_size), timeout_fail_(false) {
-  VAST_ASSERT(buffer_size > putback_area_size);
+  TENZIR_ASSERT(buffer_size > putback_area_size);
   setg(buffer_.data() + putback_area_size,  // beginning of putback area
        buffer_.data() + putback_area_size,  // read position
        buffer_.data() + putback_area_size); // end position

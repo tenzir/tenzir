@@ -21,7 +21,7 @@ namespace {
 
 class fixture : public fixtures::actor_system_and_events {
 public:
-  fixture() : fixtures::actor_system_and_events(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::actor_system_and_events(TENZIR_PP_STRINGIFY(SUITE)) {
   }
 };
 

@@ -45,15 +45,15 @@ endmacro ()
 
 # Helper utility for printing the status of dependencies.
 macro (dependency_summary name what category)
-  get_property(VAST_DEPENDENCY_SUMMARY_CATEGORIES GLOBAL
-               PROPERTY "VAST_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY")
-  if (NOT "${category}" IN_LIST VAST_DEPENDENCY_SUMMARY_CATEGORIES)
-    list(APPEND VAST_DEPENDENCY_SUMMARY_CATEGORIES "${category}")
-    set_property(GLOBAL PROPERTY "VAST_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY"
-                                 "${VAST_DEPENDENCY_SUMMARY_CATEGORIES}")
+  get_property(TENZIR_DEPENDENCY_SUMMARY_CATEGORIES GLOBAL
+               PROPERTY "TENZIR_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY")
+  if (NOT "${category}" IN_LIST TENZIR_DEPENDENCY_SUMMARY_CATEGORIES)
+    list(APPEND TENZIR_DEPENDENCY_SUMMARY_CATEGORIES "${category}")
+    set_property(GLOBAL PROPERTY "TENZIR_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY"
+                                 "${TENZIR_DEPENDENCY_SUMMARY_CATEGORIES}")
   endif ()
-  get_property(VAST_DEPENDENCY_SUMMARY GLOBAL
-               PROPERTY "VAST_DEPENDENCY_SUMMARY_${category}_PROPERTY")
+  get_property(TENZIR_DEPENDENCY_SUMMARY GLOBAL
+               PROPERTY "TENZIR_DEPENDENCY_SUMMARY_${category}_PROPERTY")
   if (TARGET ${what})
     get_target_property(type "${what}" TYPE)
     if (type STREQUAL "INTERFACE_LIBRARY")
@@ -77,9 +77,9 @@ macro (dependency_summary name what category)
   elseif ("${location}" MATCHES "-NOTFOUND$")
     set(location "Not found")
   endif ()
-  list(APPEND VAST_DEPENDENCY_SUMMARY " * ${name}: ${location}")
-  list(SORT VAST_DEPENDENCY_SUMMARY)
-  list(REMOVE_DUPLICATES VAST_DEPENDENCY_SUMMARY)
-  set_property(GLOBAL PROPERTY "VAST_DEPENDENCY_SUMMARY_${category}_PROPERTY"
-                               "${VAST_DEPENDENCY_SUMMARY}")
+  list(APPEND TENZIR_DEPENDENCY_SUMMARY " * ${name}: ${location}")
+  list(SORT TENZIR_DEPENDENCY_SUMMARY)
+  list(REMOVE_DUPLICATES TENZIR_DEPENDENCY_SUMMARY)
+  set_property(GLOBAL PROPERTY "TENZIR_DEPENDENCY_SUMMARY_${category}_PROPERTY"
+                               "${TENZIR_DEPENDENCY_SUMMARY}")
 endmacro ()

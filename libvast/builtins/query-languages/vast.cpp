@@ -52,9 +52,10 @@ auto parse(std::string_view repr, const record& config,
       }
       if (*result != nullptr) {
         if (prefix == old_config_prefix) {
-          VAST_WARN("configuring operator aliases with `{}` is deprecated, use "
-                    "`{}` instead",
-                    old_config_prefix, new_config_prefix);
+          TENZIR_WARN("configuring operator aliases with `{}` is deprecated, "
+                      "use "
+                      "`{}` instead",
+                      old_config_prefix, new_config_prefix);
         }
         definition = *result;
         used_config_prefix = prefix;
@@ -134,4 +135,4 @@ private:
 
 } // namespace vast::plugins::vast
 
-VAST_REGISTER_PLUGIN(vast::plugins::vast::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::vast::plugin)

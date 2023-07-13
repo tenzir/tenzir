@@ -141,7 +141,7 @@ TEST(stdin loader - chunking longer input) {
   stdin_file_input<"artifacts/inputs/longer_input.txt"> file;
   constexpr auto max_chunk_size = size_t{16384};
   const auto file_size = std::filesystem::file_size(
-    VAST_TEST_PATH "artifacts/inputs/longer_input.txt");
+    TENZIR_TEST_PATH "artifacts/inputs/longer_input.txt");
   auto chunks = collect(current_loader());
   REQUIRE_EQUAL(chunks.size(), size_t{3});
   REQUIRE_EQUAL(chunks[0]->size(), max_chunk_size);

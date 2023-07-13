@@ -54,7 +54,7 @@ auto offset::get(const arrow::StructArray& struct_array) const noexcept
   auto impl
     = [](auto&& impl, std::span<const offset::value_type> index,
          const arrow::StructArray& array) -> std::shared_ptr<arrow::Array> {
-    VAST_ASSERT(not index.empty());
+    TENZIR_ASSERT(not index.empty());
     auto field
       = array.GetFlattenedField(detail::narrow_cast<int>(index.front()))
           .ValueOrDie();

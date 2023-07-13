@@ -146,4 +146,4 @@ public:
 
 } // namespace vast::plugins::export_
 
-VAST_REGISTER_PLUGIN(vast::plugins::export_::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::export_::plugin)

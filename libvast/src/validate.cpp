@@ -115,7 +115,7 @@ auto validate_(const vast::data& data, const vast::type& type,
               return caf::make_error(vast::ec::invalid_configuration,
                                      fmt::format("unknown field {}.{}", prefix,
                                                  k));
-            VAST_WARN("ignoring unknown config field {}.{}", prefix, k);
+            TENZIR_WARN("ignoring unknown config field {}.{}", prefix, k);
             continue;
           }
           auto field = record_type.field(*field_offset);

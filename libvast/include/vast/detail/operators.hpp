@@ -55,7 +55,7 @@ template <class T, class U = T>
 struct totally_ordered : equality_comparable<T, U>,
                          less_than_comparable<T, U> {};
 
-#define VAST_BINARY_OPERATOR_NON_COMMUTATIVE(NAME, OP)                         \
+#define TENZIR_BINARY_OPERATOR_NON_COMMUTATIVE(NAME, OP)                       \
   template <class T, class U = T>                                              \
   struct NAME {                                                                \
     friend T operator OP(const T& x, const U& y) {                             \
@@ -65,7 +65,7 @@ struct totally_ordered : equality_comparable<T, U>,
     }                                                                          \
   };
 
-#define VAST_BINARY_OPERATOR_COMMUTATIVE(NAME, OP)                             \
+#define TENZIR_BINARY_OPERATOR_COMMUTATIVE(NAME, OP)                           \
   template <class T, class U = T>                                              \
   struct NAME {                                                                \
     friend T operator OP(const T& x, const U& y) {                             \
@@ -83,16 +83,16 @@ struct totally_ordered : equality_comparable<T, U>,
     }                                                                          \
   };
 
-VAST_BINARY_OPERATOR_COMMUTATIVE(addable, +)
-VAST_BINARY_OPERATOR_COMMUTATIVE(multipliable, *)
-VAST_BINARY_OPERATOR_NON_COMMUTATIVE(subtractable, -)
-VAST_BINARY_OPERATOR_NON_COMMUTATIVE(dividable, / )
-VAST_BINARY_OPERATOR_NON_COMMUTATIVE(modable, % )
-VAST_BINARY_OPERATOR_COMMUTATIVE(xorable, ^)
-VAST_BINARY_OPERATOR_COMMUTATIVE(andable, &)
-VAST_BINARY_OPERATOR_COMMUTATIVE(orable, | )
+TENZIR_BINARY_OPERATOR_COMMUTATIVE(addable, +)
+TENZIR_BINARY_OPERATOR_COMMUTATIVE(multipliable, *)
+TENZIR_BINARY_OPERATOR_NON_COMMUTATIVE(subtractable, -)
+TENZIR_BINARY_OPERATOR_NON_COMMUTATIVE(dividable, /)
+TENZIR_BINARY_OPERATOR_NON_COMMUTATIVE(modable, %)
+TENZIR_BINARY_OPERATOR_COMMUTATIVE(xorable, ^)
+TENZIR_BINARY_OPERATOR_COMMUTATIVE(andable, &)
+TENZIR_BINARY_OPERATOR_COMMUTATIVE(orable, |)
 
-#undef VAST_BINARY_OPERATOR_COMMUTATIVE
+#undef TENZIR_BINARY_OPERATOR_COMMUTATIVE
 
 template <class T, class U = T>
 struct additive : addable<T, U>, subtractable<T, U> {};

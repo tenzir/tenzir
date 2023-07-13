@@ -73,7 +73,7 @@ struct fixture : fixtures::deterministic_actor_system {
 
   module m;
 
-  fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  fixture() : fixtures::deterministic_actor_system(TENZIR_PP_STRINGIFY(SUITE)) {
     m.add(l0);
     m.add(l1);
     m.add(l2);

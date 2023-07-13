@@ -81,4 +81,4 @@ public:
 
 } // namespace vast::plugins::tail
 
-VAST_REGISTER_PLUGIN(vast::plugins::tail::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::tail::plugin)

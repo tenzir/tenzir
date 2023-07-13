@@ -75,16 +75,16 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
     return;
   }
   // At this point, we have enough bits remaining to generate clean blocks.
-  VAST_ASSERT(n >= word_type::width);
+  TENZIR_ASSERT(n >= word_type::width);
   auto clean_blocks = n / word_type::width;
   auto remaining_bits = n % word_type::width;
   // Invariant: the last block shall always be dirty.
   if (remaining_bits == 0) {
-    VAST_ASSERT(clean_blocks > 0);
+    TENZIR_ASSERT(clean_blocks > 0);
     --clean_blocks;
     remaining_bits = word_type::width;
   }
-  VAST_ASSERT(clean_blocks > 0);
+  TENZIR_ASSERT(clean_blocks > 0);
   num_bits_ += n;
   auto& marker = blocks_[last_marker_];
   // If we have currently no dirty blocks and the current marker is of the same
@@ -124,8 +124,8 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
 }
 
 void ewah_bitmap::append_block(block_type value, size_type bits) {
-  VAST_ASSERT(bits > 0);
-  VAST_ASSERT(bits <= word_type::width);
+  TENZIR_ASSERT(bits > 0);
+  TENZIR_ASSERT(bits <= word_type::width);
   if (blocks_.empty())
     blocks_.push_back(0); // Always begin with an empty marker.
   else if (num_bits_ % word_type::width == 0)
@@ -154,7 +154,7 @@ void ewah_bitmap::append_block(block_type value, size_type bits) {
 void ewah_bitmap::flip() {
   if (blocks_.empty())
     return;
-  VAST_ASSERT(blocks_.size() >= 2);
+  TENZIR_ASSERT(blocks_.size() >= 2);
   auto next_marker = size_type{0};
   for (auto i = 0u; i < blocks_.size() - 1; ++i) {
     auto& block = blocks_[i];
@@ -176,9 +176,9 @@ void ewah_bitmap::flip() {
 }
 
 void ewah_bitmap::integrate_last_block() {
-  VAST_ASSERT(blocks_.size() >= 2); // at least one marker plus dirty block
-  VAST_ASSERT(last_marker_ < blocks_.size() - 1); // no marker as last block
-  VAST_ASSERT(num_bits_ % word_type::width == 0); // must have a full block
+  TENZIR_ASSERT(blocks_.size() >= 2); // at least one marker plus dirty block
+  TENZIR_ASSERT(last_marker_ < blocks_.size() - 1); // no marker as last block
+  TENZIR_ASSERT(num_bits_ % word_type::width == 0); // must have a full block
   auto& last_block = blocks_.back();
   auto blocks_after_marker = blocks_.size() - last_marker_ - 1;
   // Check whether we can coalesce the current dirty block with the last
@@ -216,12 +216,12 @@ void ewah_bitmap::integrate_last_block() {
     // The current block is dirty.
     bump_dirty_count();
   }
-  VAST_ASSERT(last_marker_ < blocks_.size());
+  TENZIR_ASSERT(last_marker_ < blocks_.size());
 }
 
 void ewah_bitmap::bump_dirty_count() {
-  VAST_ASSERT(num_bits_ % word_type::width == 0);
-  VAST_ASSERT(last_marker_ < blocks_.size());
+  TENZIR_ASSERT(num_bits_ % word_type::width == 0);
+  TENZIR_ASSERT(last_marker_ < blocks_.size());
   auto& marker = blocks_[last_marker_];
   auto num_dirty = word_type::marker_num_dirty(marker);
   if (num_dirty == word_type::marker_dirty_max) {
@@ -271,13 +271,13 @@ bool ewah_bitmap_range::done() const {
 }
 
 void ewah_bitmap_range::next() {
-  VAST_ASSERT(!done());
+  TENZIR_ASSERT(!done());
   if (++next_ != bm_->blocks().size())
     scan();
 }
 
 void ewah_bitmap_range::scan() {
-  VAST_ASSERT(next_ < bm_->blocks().size());
+  TENZIR_ASSERT(next_ < bm_->blocks().size());
   auto block = bm_->blocks()[next_];
   if (next_ + 1 == bm_->blocks().size()) {
     // The ast block; always dirty.

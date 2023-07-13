@@ -4,10 +4,10 @@ fixtures:
   ExampleConfigFileTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
-                    work_dir, name='node', port=VAST_PORT,
+                    ['-e', f'127.0.0.1:{TENZIR_PORT}', '-i', 'node', 'start'],
+                    work_dir, name='node', port=TENZIR_PORT,
                     config_file='tenzir.yaml.example')
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{TENZIR_PORT}']
 
     exit: | # python
       node.stop()
@@ -15,10 +15,10 @@ fixtures:
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
-                    work_dir, name='node', port=VAST_PORT,
+                    ['-e', f'127.0.0.1:{TENZIR_PORT}', '-i', 'node', 'start'],
+                    work_dir, name='node', port=TENZIR_PORT,
                     config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{TENZIR_PORT}']
 
     exit: | # python
       node.stop()
@@ -26,11 +26,11 @@ fixtures:
   ServerTesterMetricsEnabled:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node',
+                    ['-e', f'127.0.0.1:{TENZIR_PORT}', '-i', 'node',
                     '--enable-metrics', 'start'],
-                    work_dir, name='node', port=VAST_PORT,
+                    work_dir, name='node', port=TENZIR_PORT,
                     config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{TENZIR_PORT}']
 
     exit: | # python
       node.stop()
@@ -38,7 +38,7 @@ fixtures:
   DiskMonitorTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}',
+                    ['-e', f'127.0.0.1:{TENZIR_PORT}',
                      '-i', 'node',
                      '--max-partition-size=8462',
                      'start',
@@ -46,8 +46,8 @@ fixtures:
                      '--disk-budget-check-binary=' + os.path.dirname(os.path.abspath(__file__)) + '/misc/scripts/count_partitions_plus1.sh',
                      '--disk-budget-high=1',
                      '--disk-budget-low=0'],
-                    work_dir, name='node', port=VAST_PORT)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+                    work_dir, name='node', port=TENZIR_PORT)
+      cmd += ['-e', f'127.0.0.1:{TENZIR_PORT}']
 
     exit: | # python
       node.stop()

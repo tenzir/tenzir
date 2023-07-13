@@ -26,7 +26,7 @@ template <typename PartitionState>
 indexer_actor
 fetch_indexer(const PartitionState& state, const data_extractor& dx,
               relational_operator op, const data& x) {
-  VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
+  TENZIR_TRACE_SCOPE("{} {} {}", TENZIR_ARG(dx), TENZIR_ARG(op), TENZIR_ARG(x));
   return state.indexer_at(dx.column);
 }
 
@@ -40,7 +40,7 @@ template <typename PartitionState>
 indexer_actor
 fetch_indexer(const PartitionState& state, const meta_extractor& ex,
               relational_operator op, const data& x) {
-  VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
+  TENZIR_TRACE_SCOPE("{} {} {}", TENZIR_ARG(ex), TENZIR_ARG(op), TENZIR_ARG(x));
   ids row_ids;
   if (ex.kind == meta_extractor::schema) {
     // We know the answer immediately: all IDs that are part of the table.
@@ -76,7 +76,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
         row_ids |= ids;
     }
   } else {
-    VAST_WARN("{} got unsupported attribute: {}", *state.self, ex.kind);
+    TENZIR_WARN("{} got unsupported attribute: {}", *state.self, ex.kind);
     return {};
   }
   // TODO: Spawning a one-shot actor is quite expensive. Maybe the
@@ -87,7 +87,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
         return row_ids;
       },
       [](atom::shutdown) {
-        VAST_DEBUG("one-shot indexer received shutdown request");
+        TENZIR_DEBUG("one-shot indexer received shutdown request");
       },
     };
   });
@@ -104,8 +104,8 @@ evaluate(const PartitionState& state, const expression& expr) {
     // The partition may not have a combined schema yet, simply because it does
     // not have any events yet. This is not an error, so we simply return an
     // empty set of evaluation triples here.
-    VAST_DEBUG("{} cannot evaluate expression because it has no schema",
-               *state.self);
+    TENZIR_DEBUG("{} cannot evaluate expression because it has no schema",
+                 *state.self);
     return {};
   }
   // Pretend the partition is a table, and return fitted predicates for the

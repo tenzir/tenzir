@@ -28,7 +28,7 @@ public:
   /// @param k The number of hash digests to compute.
   /// @pre `k > 0`
   explicit hasher(size_t k) : digests_(k) {
-    VAST_ASSERT(k > 0);
+    TENZIR_ASSERT(k > 0);
   }
 
   /// Computes a digest for a hasheable object.
@@ -87,7 +87,7 @@ public:
   /// @pre `!xs.empty()`
   explicit simple_hasher(size_t k = 1, std::vector<size_t> xs = {0})
     : super{k}, seeds_{std::move(xs)} {
-    VAST_ASSERT(k == seeds_.size());
+    TENZIR_ASSERT(k == seeds_.size());
   }
 
   /// Hashes a value *k* times with *k* hash functions.
@@ -95,7 +95,7 @@ public:
   /// @param Ts xs The sequence to write the digests into.
   template <class T, class Ts>
   void hash(const T& x, Ts& xs) {
-    VAST_ASSERT(xs.size() == seeds_.size());
+    TENZIR_ASSERT(xs.size() == seeds_.size());
     for (size_t i = 0; i < xs.size(); ++i)
       xs[i] = seeded_hash<HashFunction>{seeds_[i]}(x);
   }
@@ -133,7 +133,7 @@ public:
   /// @param xs The vector with seeds for the hash functions.
   explicit double_hasher(size_t k = 2, const std::vector<size_t>& xs = {0, 1})
     : super{k} {
-    VAST_ASSERT(xs.size() == 2);
+    TENZIR_ASSERT(xs.size() == 2);
     seed1_ = xs[0];
     seed2_ = xs[1];
   }

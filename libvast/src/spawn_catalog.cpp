@@ -27,7 +27,7 @@ spawn_catalog(node_actor::stateful_pointer<node_state> self,
     = detached
         ? self->spawn<caf::detached>(catalog, accountant, args.dir / args.label)
         : self->spawn(catalog, accountant, args.dir / args.label);
-  VAST_VERBOSE("{} spawned the catalog", *self);
+  TENZIR_VERBOSE("{} spawned the catalog", *self);
   return caf::actor_cast<caf::actor>(handle);
 }
 

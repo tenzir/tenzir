@@ -37,7 +37,7 @@ public:
   void pull(caf::downstream<table_slice>& out, size_t num) override {
     auto it = input_.unsafe_current();
     for (size_t i = 0; i < num; ++i) {
-      VAST_ASSERT(it != input_.end());
+      TENZIR_ASSERT(it != input_.end());
       ++it;
       if (it == input_.end())
         return;
@@ -95,7 +95,7 @@ public:
       // successfully initialized, which implies that analyzers have been
       // initialized as well.
       auto analyzer = plugin->analyzer();
-      VAST_ASSERT(analyzer);
+      TENZIR_ASSERT(analyzer);
       source->add_outbound_path(analyzer);
     }
     while (input.unsafe_current() != input.end()) {
@@ -114,10 +114,10 @@ public:
             std::chrono::duration<double, std::chrono::seconds::period>>(
             elapsed)
             .count();
-    VAST_DEBUG("imported {} events in {}{}", num_events, data{elapsed},
-               std::isfinite(rate)
-                 ? fmt::format(" at a rate of {:.2f} events/s", rate)
-                 : "");
+    TENZIR_DEBUG("imported {} events in {}{}", num_events, data{elapsed},
+                 std::isfinite(rate)
+                   ? fmt::format(" at a rate of {:.2f} events/s", rate)
+                   : "");
   }
 
   auto name() const -> std::string override {
@@ -148,4 +148,4 @@ public:
 
 } // namespace vast::plugins::import
 
-VAST_REGISTER_PLUGIN(vast::plugins::import::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::import::plugin)

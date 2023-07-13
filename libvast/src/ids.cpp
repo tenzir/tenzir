@@ -16,7 +16,7 @@ ids make_ids(std::initializer_list<id_range> ranges, size_t min_size,
              bool default_bit) {
   ids result;
   for (auto [first, last] : ranges) {
-    VAST_ASSERT(first < last);
+    TENZIR_ASSERT(first < last);
     if (first >= result.size()) {
       result.append_bits(false, first - result.size());
       result.append_bits(true, (last - first));

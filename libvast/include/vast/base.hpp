@@ -40,7 +40,7 @@ public:
   template <int Bits>
   static base uniform(size_t b) {
     static_assert(Bits > 0 && Bits <= 64, "Bits must be in (0, 64]");
-    VAST_ASSERT(b > 0);
+    TENZIR_ASSERT(b > 0);
     size_t n = std::ceil(Bits / std::log2(b));
     return uniform(b, n);
   }
@@ -62,7 +62,7 @@ public:
   void decompose(T x, Range& rng) const {
     using std::begin;
     using std::end;
-    VAST_ASSERT(end(rng) - begin(rng) >= static_cast<long>(size()));
+    TENZIR_ASSERT(end(rng) - begin(rng) >= static_cast<long>(size()));
     auto i = begin(rng);
     for (auto b : values_) {
       *i++ = x % b;
@@ -78,7 +78,7 @@ public:
   T compose(Range&& rng) const {
     using std::begin;
     using std::end;
-    VAST_ASSERT(end(rng) - begin(rng) >= static_cast<long>(size()));
+    TENZIR_ASSERT(end(rng) - begin(rng) >= static_cast<long>(size()));
     auto result = T{0};
     auto m = T{1};
     auto i = begin(rng);

@@ -44,7 +44,7 @@ public:
   /// @param capacity The maximum number of elements in the cache.
   /// @pre `capacity > 0`
   cache(size_t capacity = 100) : capacity_{capacity} {
-    VAST_ASSERT(capacity_ > 0);
+    TENZIR_ASSERT(capacity_ > 0);
   }
 
   // -- capacity -------------------------------------------------------------
@@ -59,9 +59,9 @@ public:
   /// @returns The evicted key-value pair.
   /// @pre `!empty()`
   value_type evict() {
-    VAST_ASSERT(!empty());
+    TENZIR_ASSERT(!empty());
     auto i = tracker_.find(xs_.front().first);
-    VAST_ASSERT(i != tracker_.end());
+    TENZIR_ASSERT(i != tracker_.end());
     tracker_.erase(i);
     auto victim = std::move(xs_.front());
     xs_.pop_front();
@@ -81,7 +81,7 @@ public:
   /// @param c the new capacity.
   /// @pre `c > 0`
   void capacity(size_t c) {
-    VAST_ASSERT(c > 0);
+    TENZIR_ASSERT(c > 0);
     capacity_ = c;
     auto n = size();
     for (auto i = c; i < n; ++i)

@@ -26,7 +26,7 @@ namespace vast {
 caf::expected<caf::actor>
 spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
                    spawn_arguments& args) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(args));
+  TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(args));
   auto [index] = self->state.registry.find<index_actor>();
   if (!index)
     return caf::make_error(ec::missing_component, "index");
@@ -56,12 +56,12 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
     return error;
   if (!*hiwater) {
     if (command)
-      VAST_WARN(
+      TENZIR_WARN(
         "'tenzir.start.disk-budget-check-binary' is configured but "
         "'tenzir.start.disk-budget-high' is unset; disk-monitor will not "
         "be spawned");
     else
-      VAST_VERBOSE(
+      TENZIR_VERBOSE(
         "'tenzir.start.disk-budget-high' is unset; disk-monitor will "
         "not be spawned");
     return ec::no_error;
@@ -78,7 +78,7 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::filesystem_error, "could not find database "
                                                  "directory");
   auto handle = self->spawn(disk_monitor, config, db_dir_abs, index);
-  VAST_VERBOSE("{} spawned a disk monitor", *self);
+  TENZIR_VERBOSE("{} spawned a disk monitor", *self);
   return caf::actor_cast<caf::actor>(handle);
 }
 

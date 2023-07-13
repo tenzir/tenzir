@@ -21,10 +21,10 @@ public:
   fdostream(int fd);
 
 private:
-  VAST_DIAGNOSTIC_PUSH
-  VAST_DIAGNOSTIC_IGNORE_DEPRECATED
+  TENZIR_DIAGNOSTIC_PUSH
+  TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED
   fdoutbuf buf_;
-  VAST_DIAGNOSTIC_POP
+  TENZIR_DIAGNOSTIC_POP
 };
 
 } // namespace vast::detail

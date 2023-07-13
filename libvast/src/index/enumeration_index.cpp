@@ -80,7 +80,7 @@ flatbuffers::Offset<fbs::ValueIndex> enumeration_index::pack_impl(
 
 caf::error enumeration_index::unpack_impl(const fbs::ValueIndex& from) {
   const auto* from_enumeration = from.value_index_as_enumeration();
-  VAST_ASSERT(from_enumeration);
+  TENZIR_ASSERT(from_enumeration);
   return unpack(*from_enumeration->index(), index_);
 }
 

@@ -16,10 +16,10 @@
 
 #include <functional>
 
-/// Similar to `VAST_ASSERT(...)`, but throws a `diagnostic` instead of
-/// aborting. Unlike `VAST_ASSERT(...)`, this assertion is always checked, hence
-/// the expression is allowed to have side-effects.
-#define VAST_DIAG_ASSERT(x)                                                    \
+/// Similar to `TENZIR_ASSERT(...)`, but throws a `diagnostic` instead of
+/// aborting. Unlike `TENZIR_ASSERT(...)`, this assertion is always checked,
+/// hence the expression is allowed to have side-effects.
+#define TENZIR_DIAG_ASSERT(x)                                                  \
   do {                                                                         \
     if (!(x)) {                                                                \
       ::vast::diagnostic::error("internal error: assertion `{}` failed at "    \
@@ -328,7 +328,7 @@ struct fmt::formatter<vast::severity> {
                               case note:
                                 return "note";
                             }
-                            VAST_UNREACHABLE();
+                            TENZIR_UNREACHABLE();
                           }));
   }
 };
@@ -353,7 +353,7 @@ struct fmt::formatter<vast::diagnostic_note_kind> {
                               case docs:
                                 return "docs";
                             }
-                            VAST_UNREACHABLE();
+                            TENZIR_UNREACHABLE();
                           }));
   }
 };

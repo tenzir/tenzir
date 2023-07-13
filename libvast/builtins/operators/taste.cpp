@@ -73,4 +73,4 @@ public:
 
 } // namespace vast::plugins::taste
 
-VAST_REGISTER_PLUGIN(vast::plugins::taste::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::taste::plugin)

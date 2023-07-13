@@ -54,7 +54,7 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
         cfg, "tenzir.plugin-dirs"))
     result.insert(dirs->begin(), dirs->end());
   else
-    VAST_WARN("failed to to extract plugin dirs: {}", dirs.error());
+    TENZIR_WARN("failed to to extract plugin dirs: {}", dirs.error());
   if (!bare_mode)
     if (auto home = detail::getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
@@ -67,7 +67,7 @@ caf::expected<std::filesystem::path>
 resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs,
                     std::string_view name) {
   auto plugin_file_name
-    = fmt::format("libvast-plugin-{}.{}", name, VAST_MACOS ? "dylib" : "so");
+    = fmt::format("libvast-plugin-{}.{}", name, TENZIR_MACOS ? "dylib" : "so");
   for (const auto& dir : plugin_dirs) {
     auto maybe_path = dir / plugin_file_name;
     auto ec = std::error_code{};
@@ -252,8 +252,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
   if (auto global_opts_data = to<record>(global_opts)) {
     global_config = std::move(*global_opts_data);
   } else {
-    VAST_DEBUG("unable to read global configuration options: {}",
-               global_opts_data.error());
+    TENZIR_DEBUG("unable to read global configuration options: {}",
+                 global_opts_data.error());
   }
   auto plugins_record = record{};
   if (global_config.contains("plugins")) {
@@ -262,8 +262,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
       plugins_record = std::move(*plugins_entry);
     }
   }
-  VAST_DEBUG("collected {} global options for plugin initialization",
-             global_config.size());
+  TENZIR_DEBUG("collected {} global options for plugin initialization",
+               global_config.size());
   std::unordered_set<std::string> disabled_plugins;
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
@@ -306,7 +306,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
           continue;
         if (const auto& opts_data = caf::get_if<record>(&*opts)) {
           merge(*opts_data, merged_config, policy::merge_lists::yes);
-          VAST_INFO("loaded plugin configuration file: {}", path);
+          TENZIR_INFO("loaded plugin configuration file: {}", path);
           loaded_config_files_singleton.push_back(path);
         } else {
           return caf::make_error(ec::invalid_configuration,
@@ -321,8 +321,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
     }
     // Third, initialize the plugin with the merged configuration.
     if (plugin.type() != plugin_ptr::type::builtin)
-      VAST_VERBOSE("initializing the {} plugin with options: {}",
-                   plugin->name(), merged_config);
+      TENZIR_VERBOSE("initializing the {} plugin with options: {}",
+                     plugin->name(), merged_config);
     if (auto err = plugin->initialize(merged_config, global_config))
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to initialize "
@@ -354,14 +354,14 @@ analyzer_plugin::analyzer(node_actor::stateful_pointer<node_state> node) const {
     return {};
   auto handle = make_analyzer(node);
   auto [importer] = node->state.registry.find<importer_actor>();
-  VAST_ASSERT(importer);
+  TENZIR_ASSERT(importer);
   node
     ->request(importer, caf::infinite,
               static_cast<stream_sink_actor<table_slice>>(handle))
     .then([](const caf::outbound_stream_slot<table_slice>&) {},
           [&](const caf::error& error) {
-            VAST_ERROR("failed to connect analyzer {} to the importer: {}",
-                       name(), error);
+            TENZIR_ERROR("failed to connect analyzer {} to the importer: {}",
+                         name(), error);
           });
   weak_handle_ = handle;
   spawned_once_ = true;
@@ -526,7 +526,7 @@ public:
 
   auto instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    VAST_ASSERT(input_schema != type{});
+    TENZIR_ASSERT(input_schema != type{});
     auto store = plugin_->make_active_store();
     if (not store) {
       return caf::make_error(ec::logic_error,
@@ -717,7 +717,7 @@ enum plugin_ptr::type plugin_ptr::type() const noexcept {
 
 void plugin_ptr::release() noexcept {
   if (instance_) {
-    VAST_ASSERT(deleter_);
+    TENZIR_ASSERT(deleter_);
     deleter_(instance_);
     instance_ = {};
     deleter_ = {};

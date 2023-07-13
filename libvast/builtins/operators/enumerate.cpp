@@ -57,13 +57,14 @@ public:
       auto builder
         = uint64_type::make_arrow_builder(arrow::default_memory_pool());
       auto reserve_result = builder->Reserve(n);
-      VAST_ASSERT_CHEAP(reserve_result.ok(), reserve_result.ToString().c_str());
+      TENZIR_ASSERT_CHEAP(reserve_result.ok(),
+                          reserve_result.ToString().c_str());
       // Fill the column.
       auto& offset = offsets[current_type];
       for (uint64_t i = 0; i < detail::narrow_cast<uint64_t>(n); ++i) {
         auto append_result
           = append_builder(rid_type, *builder, view<uint64_t>{offset + i});
-        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+        TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
       }
       offset += n;
       // Replace first column with a pair of (RID, first).
@@ -163,4 +164,4 @@ public:
 
 } // namespace vast::plugins::enumerate
 
-VAST_REGISTER_PLUGIN(vast::plugins::enumerate::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::enumerate::plugin)

@@ -116,7 +116,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   auto handler = self->spawn(
     [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
       self->set_down_handler([&, self](const caf::down_msg& msg) {
-        VAST_DEBUG("command received down: {}", msg.reason);
+        TENZIR_DEBUG("command received down: {}", msg.reason);
         if (msg.reason) {
           result = msg.reason;
         }
@@ -128,10 +128,10 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
       self->request(self->state.executor, caf::infinite, atom::start_v)
         .then(
           []() {
-            VAST_DEBUG("started pipeline successfully");
+            TENZIR_DEBUG("started pipeline successfully");
           },
           [&, self](caf::error& err) {
-            VAST_DEBUG("failed to start pipeline: {}", err);
+            TENZIR_DEBUG("failed to start pipeline: {}", err);
             result = std::move(err);
             self->quit();
           });
@@ -142,7 +142,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
       };
     });
   self->wait_for(handler);
-  VAST_DEBUG("command is done");
+  TENZIR_DEBUG("command is done");
   return result;
 }
 
@@ -289,4 +289,4 @@ public:
 
 } // namespace vast::plugins::exec
 
-VAST_REGISTER_PLUGIN(vast::plugins::exec::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::exec::plugin)

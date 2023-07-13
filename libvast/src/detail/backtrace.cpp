@@ -10,7 +10,7 @@
 
 #include "vast/config.hpp"
 
-#if !VAST_ENABLE_BACKTRACE
+#if !TENZIR_ENABLE_BACKTRACE
 
 namespace vast::detail {
 
@@ -19,9 +19,9 @@ void backtrace() {
 
 } // namespace vast::detail
 
-#else // VAST_ENABLE_BACKTRACE
+#else // TENZIR_ENABLE_BACKTRACE
 
-#  if VAST_ENABLE_LIBUNWIND
+#  if TENZIR_ENABLE_LIBUNWIND
 #    define UNW_LOCAL_ONLY
 #    include <cstdio>
 #    include <cstdlib>
@@ -68,7 +68,7 @@ void backtrace() {
 
 } // namespace vast::detail
 
-#  elif VAST_ENABLE_LIBBACKTRACE && __has_include(<backtrace.h>)
+#  elif TENZIR_ENABLE_LIBBACKTRACE && __has_include(<backtrace.h>)
 
 #    include <backtrace.h>
 
@@ -81,7 +81,7 @@ void backtrace() {
 
 } // namespace vast::detail
 
-#  elif VAST_ENABLE_LIBEXECINFO && __has_include(<execinfo.h>)
+#  elif TENZIR_ENABLE_LIBEXECINFO && __has_include(<execinfo.h>)
 
 #    include <execinfo.h>
 #    include <unistd.h>
@@ -103,4 +103,4 @@ void backtrace() {
 
 #  endif
 
-#endif // VAST_ENABLE_BACKTRACE
+#endif // TENZIR_ENABLE_BACKTRACE

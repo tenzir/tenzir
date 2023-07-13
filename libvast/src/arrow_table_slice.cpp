@@ -71,13 +71,13 @@ public:
 
   std::shared_ptr<arrow::RecordBatch>
   decode(const std::shared_ptr<arrow::Buffer>& flat_record_batch) noexcept {
-    VAST_ASSERT(!record_batch_);
+    TENZIR_ASSERT(!record_batch_);
     if (auto status = decoder_.Consume(flat_record_batch); !status.ok()) {
-      VAST_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
-                 status.ToString());
+      TENZIR_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
+                   status.ToString());
       return {};
     }
-    VAST_ASSERT(record_batch_);
+    TENZIR_ASSERT(record_batch_);
     return std::exchange(record_batch_, {});
   }
 
@@ -143,23 +143,23 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     }
     if (schema) {
       state_.schema = std::move(schema);
-      VAST_ASSERT(state_.schema
-                  == type::from_arrow(*state_.record_batch->schema()));
+      TENZIR_ASSERT(state_.schema
+                    == type::from_arrow(*state_.record_batch->schema()));
     } else {
       state_.schema = type::from_arrow(*state_.record_batch->schema());
     }
-    VAST_ASSERT(caf::holds_alternative<record_type>(state_.schema));
+    TENZIR_ASSERT(caf::holds_alternative<record_type>(state_.schema));
     state_.flat_columns = index_column_arrays(state_.record_batch);
-    VAST_ASSERT(state_.flat_columns.size()
-                == caf::get<record_type>(state_.schema).num_leaves());
+    TENZIR_ASSERT(state_.flat_columns.size()
+                  == caf::get<record_type>(state_.schema).num_leaves());
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
   }
-#if VAST_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
   auto validate_status = state_.record_batch->Validate();
-  VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-#endif // VAST_ENABLE_ASSERTIONS
+  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+#endif // TENZIR_ENABLE_ASSERTIONS
 }
 
 template <class FlatBuffer>
@@ -245,7 +245,7 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             table_slice::size_type column,
                                             const type& t) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
-    VAST_ASSERT(congruent(
+    TENZIR_ASSERT(congruent(
       caf::get<record_type>(this->schema())
         .field(caf::get<record_type>(this->schema()).resolve_flat_index(column))
         .type,
@@ -274,7 +274,7 @@ void arrow_table_slice<FlatBuffer>::import_time(
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     auto result = const_cast<FlatBuffer&>(slice_).mutate_import_time(
       import_time.time_since_epoch().count());
-    VAST_ASSERT(result, "failed to mutate import time");
+    TENZIR_ASSERT(result, "failed to mutate import time");
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled table slice "
                                                       "encoding");
@@ -292,19 +292,19 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   type schema, const std::shared_ptr<arrow::StructArray>& struct_array,
   const std::vector<indexed_transformation>& transformations) noexcept {
-  VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
-              "transformations must be sorted by index");
-  VAST_ASSERT(transformations.end()
-                == std::adjacent_find(
-                  transformations.begin(), transformations.end(),
-                  [](const auto& lhs, const auto& rhs) noexcept {
-                    const auto [lhs_mismatch, rhs_mismatch]
-                      = std::mismatch(lhs.index.begin(), lhs.index.end(),
-                                      rhs.index.begin(), rhs.index.end());
-                    return lhs_mismatch == lhs.index.end();
-                  }),
-              "transformation indices must not be a subset of the following "
-              "transformation's index");
+  TENZIR_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
+                "transformations must be sorted by index");
+  TENZIR_ASSERT(transformations.end()
+                  == std::adjacent_find(
+                    transformations.begin(), transformations.end(),
+                    [](const auto& lhs, const auto& rhs) noexcept {
+                      const auto [lhs_mismatch, rhs_mismatch]
+                        = std::mismatch(lhs.index.begin(), lhs.index.end(),
+                                        rhs.index.begin(), rhs.index.end());
+                      return lhs_mismatch == lhs.index.end();
+                    }),
+                "transformation indices must not be a subset of the following "
+                "transformation's index");
   // The current unpacked layer of the transformation, i.e., the pieces required
   // to re-assemble the current layer of both the record type and the record
   // batch.
@@ -315,7 +315,7 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   const auto impl
     = [](const auto& impl, unpacked_layer layer, offset index, auto& current,
          const auto sentinel) noexcept -> unpacked_layer {
-    VAST_ASSERT(!index.empty());
+    TENZIR_ASSERT(!index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer. For every entry in the current layer, we
     // need to do one of three things:
@@ -338,7 +338,7 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
         return {is_prefix_match, is_exact_match};
       }();
       if (is_exact_match) {
-        VAST_ASSERT(current != sentinel);
+        TENZIR_ASSERT(current != sentinel);
         for (auto&& [field, array] : std::invoke(
                std::move(current->fun), std::move(layer.fields[index.back()]),
                std::move(layer.arrays[index.back()]))) {
@@ -398,9 +398,9 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
     layer.fields.push_back({std::string{name}, type});
   // Run the possibly recursive implementation.
   layer = impl(impl, std::move(layer), {0}, current, sentinel);
-  VAST_ASSERT(current == sentinel, "index out of bounds");
+  TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record batch after the transformation.
-  VAST_ASSERT(layer.fields.size() == layer.arrays.size());
+  TENZIR_ASSERT(layer.fields.size() == layer.arrays.size());
   if (layer.fields.empty())
     return {};
   auto new_schema = type{record_type{layer.fields}};
@@ -411,10 +411,10 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
     arrow_fields.push_back(field.type.to_arrow_field(field.name));
   auto new_struct_array
     = arrow::StructArray::Make(layer.arrays, arrow_fields).ValueOrDie();
-#if VAST_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
   auto validate_status = new_struct_array->Validate();
-  VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-#endif // VAST_ENABLE_ASSERTIONS
+  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+#endif // TENZIR_ENABLE_ASSERTIONS
   return {
     std::move(new_schema),
     std::move(new_struct_array),
@@ -444,11 +444,12 @@ table_slice transform_columns(
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                const std::vector<offset>& indices) noexcept {
-  VAST_ASSERT(batch->schema()->Equals(schema.to_arrow_schema()),
-              "VAST schema and Arrow schema must match");
-  VAST_ASSERT(std::is_sorted(indices.begin(), indices.end()), "indices must be "
-                                                              "sorted");
-  VAST_ASSERT(
+  TENZIR_ASSERT(batch->schema()->Equals(schema.to_arrow_schema()),
+                "VAST schema and Arrow schema must match");
+  TENZIR_ASSERT(std::is_sorted(indices.begin(), indices.end()),
+                "indices must be "
+                "sorted");
+  TENZIR_ASSERT(
     indices.end()
       == std::adjacent_find(indices.begin(), indices.end(),
                             [](const auto& lhs, const auto& rhs) noexcept {
@@ -468,7 +469,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   const auto impl
     = [](const auto& impl, unpacked_layer layer, offset index, auto& current,
          const auto sentinel) noexcept -> unpacked_layer {
-    VAST_ASSERT(!index.empty());
+    TENZIR_ASSERT(!index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer, backwards. For every entry in the current
     // layer, we need to do one of two things:
@@ -488,7 +489,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
         return {is_prefix_match, is_exact_match};
       }();
       if (is_exact_match) {
-        VAST_ASSERT(current != sentinel);
+        TENZIR_ASSERT(current != sentinel);
         result.fields.push_back(std::move(layer.fields[index.back()]));
         result.arrays.push_back(std::move(layer.arrays[index.back()]));
         ++current;
@@ -538,9 +539,9 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
     layer.fields.push_back({std::string{name}, type});
   // Run the possibly recursive implementation, starting at the last field.
   layer = impl(impl, std::move(layer), {0}, current, sentinel);
-  VAST_ASSERT(current == sentinel, "index out of bounds");
+  TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record batch after the transformation.
-  VAST_ASSERT(layer.fields.size() == layer.arrays.size());
+  TENZIR_ASSERT(layer.fields.size() == layer.arrays.size());
   if (layer.fields.empty())
     return {};
   auto new_schema = type{record_type{layer.fields}};

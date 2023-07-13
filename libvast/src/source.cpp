@@ -82,21 +82,21 @@ void source_state::initialize(const catalog_actor& catalog,
                 merged_module.add(type);
           // Third, try to set the new module.
           if (auto err = reader->module(std::move(merged_module)))
-            VAST_ERROR("{} source failed to set schema: {}", reader->name(),
-                       err);
+            TENZIR_ERROR("{} source failed to set schema: {}", reader->name(),
+                         err);
         },
         [this](const caf::error& err) {
-          VAST_ERROR("{} source failed to receive schema: {}", reader->name(),
-                     err);
+          TENZIR_ERROR("{} source failed to receive schema: {}", reader->name(),
+                       err);
         });
   } else {
     // We usually expect to have the type registry at the ready, but if we
     // don't we fall back to only using the modules from disk.
-    VAST_WARN("{} source failed to retrieve registered types and only "
-              "considers types local to the import command",
-              reader->name());
+    TENZIR_WARN("{} source failed to retrieve registered types and only "
+                "considers types local to the import command",
+                reader->name());
     if (auto err = reader->module(std::move(local_module)))
-      VAST_ERROR("{} source failed to set schema: {}", reader->name(), err);
+      TENZIR_ERROR("{} source failed to set schema: {}", reader->name(), err);
   }
 }
 
@@ -109,16 +109,17 @@ void source_state::send_report() {
   for (const auto& [key, m, _] : r.data) {
     if (m.events > 0) {
       if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-        VAST_INFO("{} source produced {} events at a rate of {} events/sec in "
-                  "{}",
-                  reader->name(), m.events, static_cast<uint64_t>(rate),
-                  to_string(m.duration));
+        TENZIR_INFO("{} source produced {} events at a rate of {} events/sec "
+                    "in "
+                    "{}",
+                    reader->name(), m.events, static_cast<uint64_t>(rate),
+                    to_string(m.duration));
       else
-        VAST_INFO("{} source produced {} events in {}", reader->name(),
-                  m.events, to_string(m.duration));
+        TENZIR_INFO("{} source produced {} events in {}", reader->name(),
+                    m.events, to_string(m.duration));
     } else {
-      VAST_DEBUG("{} source produced 0 events in {}", reader->name(),
-                 to_string(m.duration));
+      TENZIR_DEBUG("{} source produced 0 events in {}", reader->name(),
+                   to_string(m.duration));
     }
   }
   metrics = measurement{};
@@ -135,17 +136,17 @@ void source_state::filter_and_push(
   const auto unfiltered_rows = slice.rows();
   if (filter) {
     if (auto filtered_slice = vast::filter(slice, *filter)) {
-      VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
-                 reader->name(), filtered_slice->rows(), unfiltered_rows,
-                 slice.schema());
+      TENZIR_DEBUG("{} forwards {}/{} produced {} events after filtering",
+                   reader->name(), filtered_slice->rows(), unfiltered_rows,
+                   slice.schema());
       push_to_out(std::move(*filtered_slice));
     } else {
-      VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
-                 reader->name(), unfiltered_rows, slice.schema());
+      TENZIR_DEBUG("{} forwards 0/{} produced {} events after filtering",
+                   reader->name(), unfiltered_rows, slice.schema());
     }
   } else {
-    VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
-               unfiltered_rows, slice.schema());
+    TENZIR_DEBUG("{} forwards {} produced {} events", reader->name(),
+                 unfiltered_rows, slice.schema());
     push_to_out(std::move(slice));
   }
 }
@@ -155,7 +156,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
        const catalog_actor& catalog, vast::module local_module,
        std::string type_filter, accountant_actor accountant) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(*self));
+  TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(*self));
   // Initialize state.
   self->state.self = self;
   self->state.name = reader->name();
@@ -170,7 +171,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->send(self->state.accountant, atom::announce_v, self->state.name);
   self->state.initialize(catalog, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
+    TENZIR_VERBOSE("{} received EXIT from {}", *self, msg.source);
     self->state.done = true;
     if (self->state.mgr) {
       self->state.mgr->shutdown();
@@ -192,9 +193,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     // get next element
     [self](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
       if (self->state.has_sink && self->state.mgr->out().num_paths() == 0) {
-        VAST_WARN("{} discards request for {} messages because all its "
-                  "outbound paths were removed",
-                  *self, num);
+        TENZIR_WARN("{} discards request for {} messages because all its "
+                    "outbound paths were removed",
+                    *self, num);
         return;
       }
       // Extract events until the source has exhausted its input or until
@@ -214,7 +215,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto t = timer::start(self->state.metrics);
       auto [err, produced] = self->state.reader->read(
         events, self->state.table_slice_size, push_slice);
-      VAST_DEBUG("{} read {} events", *self, produced);
+      TENZIR_DEBUG("{} read {} events", *self, produced);
       // TODO: We use the produced number in metrics and INFO logs, but it is
       // the number _before_ filtering which may be a bit unexpected to the
       // user. Because we filter the slices 1-by-1 this isn't an easy change to
@@ -228,7 +229,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       };
       if (self->state.requested
           && self->state.count >= *self->state.requested) {
-        VAST_DEBUG("{} finished with {} events", *self, self->state.count);
+        TENZIR_DEBUG("{} finished with {} events", *self, self->state.count);
         return finish();
       }
       if (err == ec::stalled) {
@@ -237,15 +238,15 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
           // message. Sending another one would create a parallel wakeup cycle.
           self->state.waiting_for_input = true;
           detail::weak_run_delayed(self, self->state.wakeup_delay, [self] {
-            VAST_VERBOSE("{} wakes up to check for new input", *self);
+            TENZIR_VERBOSE("{} wakes up to check for new input", *self);
             self->state.waiting_for_input = false;
             // If we are here, the reader returned with ec::stalled the last
             // time it was called. Let's check if we can read something now.
             if (self->state.mgr->generate_messages())
               self->state.mgr->push();
           });
-          VAST_DEBUG("{} scheduled itself to resume after {}", *self,
-                     self->state.wakeup_delay);
+          TENZIR_DEBUG("{} scheduled itself to resume after {}", *self,
+                       self->state.wakeup_delay);
           // Exponential backoff for the wakeup calls.
           // For each consecutive invocation of this generate handler that does
           // not emit any events, we double the wakeup delay.
@@ -256,22 +257,23 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                    < self->state.reader->batch_timeout_ / 2)
             self->state.wakeup_delay *= 2;
         } else {
-          VAST_DEBUG("{} timed out but is already scheduled for wakeup", *self);
+          TENZIR_DEBUG("{} timed out but is already scheduled for wakeup",
+                       *self);
         }
         return;
       }
       self->state.wakeup_delay = std::chrono::milliseconds::zero();
       if (err == ec::timeout) {
-        VAST_DEBUG("{} reached batch timeout and flushes its buffers", *self);
+        TENZIR_DEBUG("{} reached batch timeout and flushes its buffers", *self);
         self->state.mgr->out().force_emit_batches();
       } else if (err != caf::none) {
         if (err != vast::ec::end_of_input)
-          VAST_INFO("{} completed with message: {}", *self, render(err));
+          TENZIR_INFO("{} completed with message: {}", *self, render(err));
         else
-          VAST_DEBUG("{} completed at end of input", *self);
+          TENZIR_DEBUG("{} completed at end of input", *self);
         return finish();
       }
-      VAST_DEBUG("{} ended a generation round regularly", *self);
+      TENZIR_DEBUG("{} ended a generation round regularly", *self);
     },
     // done?
     [self](const caf::unit_t&) {
@@ -282,7 +284,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       return self->state.reader->module();
     },
     [self](atom::put, class module module) -> caf::result<void> {
-      VAST_DEBUG("{} received schema {}", *self, module);
+      TENZIR_DEBUG("{} received schema {}", *self, module);
       if (auto err = self->state.reader->module(std::move(module)))
         return err;
       return caf::unit;
@@ -299,8 +301,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       return {};
     },
     [self](stream_sink_actor<table_slice, std::string> sink) {
-      VAST_ASSERT(sink);
-      VAST_DEBUG("{} registers sink {}", *self, VAST_ARG(sink));
+      TENZIR_ASSERT(sink);
+      TENZIR_DEBUG("{} registers sink {}", *self, TENZIR_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.

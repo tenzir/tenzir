@@ -10,7 +10,7 @@ from common import (
     terraform_output,
 )
 
-VALIDATORS = [dynaconf.Validator("VAST_MISP_VERSION", default="v2.4.145a")]
+VALIDATORS = [dynaconf.Validator("TENZIR_MISP_VERSION", default="v2.4.145a")]
 
 
 def service_outputs(c: Context) -> Tuple[str, str, str]:

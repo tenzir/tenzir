@@ -58,9 +58,9 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   const auto& node = std::holds_alternative<node_actor>(node_opt)
                        ? std::get<node_actor>(node_opt)
                        : std::get<scope_linked<node_actor>>(node_opt).get();
-  VAST_ASSERT(node != nullptr);
+  TENZIR_ASSERT(node != nullptr);
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
-  VAST_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
+  TENZIR_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
   if (!maybe_exporter)
     return caf::make_message(std::move(maybe_exporter.error()));
@@ -81,8 +81,8 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
     return caf::make_message(std::move(components.error()));
   auto [accountant] = std::move(*components);
   if (accountant) {
-    VAST_DEBUG("{} assigns accountant to new sink",
-               detail::pretty_type_name(inv.full_name));
+    TENZIR_DEBUG("{} assigns accountant to new sink",
+                 detail::pretty_type_name(inv.full_name));
     self->send(snk, caf::actor_cast<accountant_actor>(accountant));
   }
   // Register self as the statistics actor.
@@ -96,16 +96,16 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
     if (auto timeout = to<duration>(*timeout_str))
       self->delayed_send(self, *timeout, atom::shutdown_v, *timeout);
     else
-      VAST_ERROR("{} was unable parse timeout option {} as duration: {}",
-                 inv.full_name, *timeout_str, timeout.error());
+      TENZIR_ERROR("{} was unable parse timeout option {} as duration: {}",
+                   inv.full_name, *timeout_str, timeout.error());
   }
   // Start the receive-loop.
   auto stop = false;
   self
     ->do_receive(
       [&](atom::shutdown, const duration& timeout) {
-        VAST_INFO("{} shuts down after {} timeout", inv.full_name,
-                  to_string(timeout));
+        TENZIR_INFO("{} shuts down after {} timeout", inv.full_name,
+                    to_string(timeout));
         stop = true;
         err = caf::make_error(ec::timeout,
                               fmt::format("{} shut down after {} timeout",
@@ -114,7 +114,8 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
       [&, node_addr = node->address(), snk_addr = snk->address(),
        exporter_addr = exporter->address()](caf::down_msg& msg) {
         stop = true;
-        VAST_DEBUG("{} received DOWN from sink {}", inv.full_name, msg.reason);
+        TENZIR_DEBUG("{} received DOWN from sink {}", inv.full_name,
+                     msg.reason);
         self->send_exit(exporter, caf::exit_reason::user_shutdown);
         exporter = nullptr;
         snk = nullptr;
@@ -123,38 +124,40 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         }
       },
       [&]([[maybe_unused]] const performance_report& report) {
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
+#if TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_INFO
         // Log a set of named measurements.
         for (const auto& [name, measurement, _] : report.data) {
           if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
-            VAST_INFO("{} processed {} events at a rate of {} events/sec in {}",
-                      name, measurement.events, static_cast<uint64_t>(rate),
-                      to_string(measurement.duration));
+            TENZIR_INFO("{} processed {} events at a rate of {} events/sec in "
+                        "{}",
+                        name, measurement.events, static_cast<uint64_t>(rate),
+                        to_string(measurement.duration));
           else
-            VAST_INFO("{} processed {} events", name, measurement.events);
+            TENZIR_INFO("{} processed {} events", name, measurement.events);
         }
 #endif
       },
       [&]([[maybe_unused]] const std::string& name,
           [[maybe_unused]] const query_status& query_status) {
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
+#if TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_INFO
         if (auto rate
             = measurement{query_status.runtime, query_status.processed}
                 .rate_per_sec();
             std::isfinite(rate))
-          VAST_INFO("{} processed {} candidates at a rate of {} candidates/sec "
-                    "and shipped {} results in {}",
-                    name, query_status.processed, static_cast<uint64_t>(rate),
-                    query_status.shipped, to_string(query_status.runtime));
+          TENZIR_INFO("{} processed {} candidates at a rate of {} "
+                      "candidates/sec "
+                      "and shipped {} results in {}",
+                      name, query_status.processed, static_cast<uint64_t>(rate),
+                      query_status.shipped, to_string(query_status.runtime));
         else
-          VAST_INFO("{} processed {} candidates and shipped {} results in {}",
-                    name, query_status.processed, query_status.shipped,
-                    to_string(query_status.runtime));
+          TENZIR_INFO("{} processed {} candidates and shipped {} results in {}",
+                      name, query_status.processed, query_status.shipped,
+                      to_string(query_status.runtime));
 #endif
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} got {}", inv.full_name, ::strsignal(signal));
-        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_DEBUG("{} got {}", inv.full_name, ::strsignal(signal));
+        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
         stop = true;
       })
     .until([&] {

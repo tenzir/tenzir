@@ -72,7 +72,7 @@ void factory_traits<format::reader>::initialize() {
             if (plugin->name() != name)
               continue;
             const auto* reader = plugin.as<reader_plugin>();
-            VAST_ASSERT(reader);
+            TENZIR_ASSERT(reader);
             return reader->make_reader(options);
           }
           return caf::make_error(ec::logic_error,

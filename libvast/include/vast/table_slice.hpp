@@ -187,15 +187,15 @@ public:
 #if defined(__GNUC__) && __GNUC__ <= 10
       // gcc-10 issues a bogus maybe-uninitialized warning for the return value
       // here. See also: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
-      VAST_DIAGNOSTIC_PUSH
-      VAST_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED
+      TENZIR_DIAGNOSTIC_PUSH
+      TENZIR_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED
       return {};
-      VAST_DIAGNOSTIC_POP
+      TENZIR_DIAGNOSTIC_POP
 #else
       return {};
 #endif
     }
-    VAST_ASSERT(caf::holds_alternative<view<type_to_data_t<T>>>(result));
+    TENZIR_ASSERT(caf::holds_alternative<view<type_to_data_t<T>>>(result));
     return caf::get<view<type_to_data_t<T>>>(result);
   }
 
@@ -230,7 +230,7 @@ public:
         // chunk is unique.
         x = table_slice{std::move(chunk), table_slice::verify::no};
         x.offset_ = offset;
-        VAST_ASSERT(x.is_serialized());
+        TENZIR_ASSERT(x.is_serialized());
         return true;
       };
 

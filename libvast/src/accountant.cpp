@@ -107,7 +107,7 @@ struct accountant_state_impl {
     if (!builder || builder->rows() == 0)
       return;
     auto slice = builder->finish();
-    VAST_DEBUG("{} generated slice with {} rows", *self, slice.rows());
+    TENZIR_DEBUG("{} generated slice with {} rows", *self, slice.rows());
     slice_buffer.push(std::move(slice));
     mgr->tick(self->clock().now());
   }
@@ -119,7 +119,7 @@ struct accountant_state_impl {
     // handle NaN, and a bug that we were unable to reproduce reliably caused
     // the accountant to forward NaN to the index here.
     if (!std::isfinite(x)) {
-      VAST_DEBUG("{} cannot record a non-finite metric", *self);
+      TENZIR_DEBUG("{} cannot record a non-finite metric", *self);
       return;
     }
     auto& builder = builders[key];
@@ -140,20 +140,20 @@ struct accountant_state_impl {
         record_type{schema_fields},
       };
       builder = std::make_shared<table_slice_builder>(schema);
-      VAST_DEBUG("{} obtained a table slice builder", *self);
+      TENZIR_DEBUG("{} obtained a table slice builder", *self);
     }
     {
       const auto added = builder->add(ts, std::string_view{version::version},
                                       actor_map[actor_id], x);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     }
     for (const auto& [_, value] : meta1) {
       const auto added = builder->add(value);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     }
     for (const auto& [_, value] : meta2) {
       const auto added = builder->add(value);
-      VAST_ASSERT(added);
+      TENZIR_ASSERT(added);
     }
     if (builder->rows() == static_cast<size_t>(cfg.self_sink.slice_size))
       finish_slice(builder);
@@ -185,7 +185,7 @@ struct accountant_state_impl {
     auto buf = std::vector<char>{};
     auto iter = std::back_inserter(buf);
     const auto ok = printer.print(iter, entry);
-    VAST_ASSERT_CHEAP(ok);
+    TENZIR_ASSERT_CHEAP(ok);
     *iter++ = '\n';
     return buf;
   }
@@ -224,7 +224,7 @@ struct accountant_state_impl {
         uds_datagram_sink_dropping = true;
       if (code != last_uds_error) {
         last_uds_error = code;
-        VAST_WARN("{} failed to write metrics to UDS sink: {}", *self, err);
+        TENZIR_WARN("{} failed to write metrics to UDS sink: {}", *self, err);
       }
       return;
     } else {
@@ -267,7 +267,8 @@ struct accountant_state_impl {
     bool start_file_sink = cfg.file_sink.enable && !old.file_sink.enable;
     bool stop_file_sink = !cfg.file_sink.enable && old.file_sink.enable;
     if (stop_file_sink) {
-      VAST_INFO("{} closing metrics output file {}", *self, old.file_sink.path);
+      TENZIR_INFO("{} closing metrics output file {}", *self,
+                  old.file_sink.path);
       file_sink.reset(nullptr);
     }
     if (start_file_sink) {
@@ -275,41 +276,41 @@ struct accountant_state_impl {
                                           std::filesystem::file_type::regular,
                                           std::ios_base::app);
       if (s) {
-        VAST_INFO("{} writing metrics to {}", *self, cfg.file_sink.path);
+        TENZIR_INFO("{} writing metrics to {}", *self, cfg.file_sink.path);
         file_sink = std::move(*s);
       } else {
-        VAST_INFO("{} could not open {} for metrics: {}", *self,
-                  cfg.file_sink.path, s.error());
+        TENZIR_INFO("{} could not open {} for metrics: {}", *self,
+                    cfg.file_sink.path, s.error());
       }
     }
     // Act on uds sink config.
     bool start_uds_sink = cfg.uds_sink.enable && !old.uds_sink.enable;
     bool stop_uds_sink = !cfg.uds_sink.enable && old.uds_sink.enable;
     if (stop_uds_sink) {
-      VAST_INFO("{} closing metrics output socket {}", *self,
-                old.uds_sink.path);
+      TENZIR_INFO("{} closing metrics output socket {}", *self,
+                  old.uds_sink.path);
       uds_sink.reset(nullptr);
     }
     if (start_uds_sink) {
       if (cfg.uds_sink.type == detail::socket_type::datagram) {
         auto s = detail::uds_datagram_sender::make(root / cfg.uds_sink.path);
         if (s) {
-          VAST_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);
+          TENZIR_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);
           uds_datagram_sink
             = std::make_unique<detail::uds_datagram_sender>(std::move(*s));
         } else {
-          VAST_INFO("{} could not open {} for metrics: {}", *self,
-                    cfg.uds_sink.path, s.error());
+          TENZIR_INFO("{} could not open {} for metrics: {}", *self,
+                      cfg.uds_sink.path, s.error());
         }
       } else {
         auto s = detail::make_output_stream(root / cfg.uds_sink.path,
                                             cfg.uds_sink.type);
         if (s) {
-          VAST_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);
+          TENZIR_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);
           uds_sink = std::move(*s);
         } else {
-          VAST_INFO("{} could not open {} for metrics: {}", *self,
-                    cfg.uds_sink.path, s.error());
+          TENZIR_INFO("{} could not open {} for metrics: {}", *self,
+                      cfg.uds_sink.path, s.error());
         }
       }
     }
@@ -323,7 +324,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
   self->state.reset(
     new accountant_state_impl{self, std::move(cfg), std::move(root)});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
+    TENZIR_DEBUG("{} got EXIT from {}", *self, msg.source);
     for (auto& [_, builder] : self->state->builders)
       self->state->finish_slice(builder);
     self->state->record(self->id(), "shutdown", 0, {}, {});
@@ -333,10 +334,10 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     auto& st = *self->state;
     auto i = st.actor_map.find(msg.source.id());
     if (i != st.actor_map.end())
-      VAST_DEBUG("{} received DOWN from {} aka {}", *self, i->second,
-                 msg.source);
+      TENZIR_DEBUG("{} received DOWN from {} aka {}", *self, i->second,
+                   msg.source);
     else
-      VAST_DEBUG("{} received DOWN from {}", *self, msg.source);
+      TENZIR_DEBUG("{} received DOWN from {}", *self, msg.source);
     st.actor_map.erase(msg.source.id());
   });
   self->state->mgr = caf::attach_continuous_stream_source(
@@ -353,9 +354,9 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         out.push(std::move(slice));
         st.slice_buffer.pop();
       }
-      VAST_TRACE_SCOPE("{} was asked for {} slices and produced {} ; {} are "
-                       "remaining in buffer",
-                       *self, num, produced, st.slice_buffer.size());
+      TENZIR_TRACE_SCOPE("{} was asked for {} slices and produced {} ; {} are "
+                         "remaining in buffer",
+                         *self, num, produced, st.slice_buffer.size());
     },
     // done?
     [](const bool&) {
@@ -372,42 +373,42 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     },
     [self](atom::metrics, const std::string& key, duration value,
            metrics_metadata& metadata) {
-      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
-                       self->current_sender());
+      TENZIR_TRACE_SCOPE("{} received {} from {}", *self, key,
+                         self->current_sender());
       self->state->record(self->current_sender()->id(), key, value, metadata,
                           {});
     },
     [self](atom::metrics, const std::string& key, time value,
            metrics_metadata& metadata) {
-      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
-                       self->current_sender());
+      TENZIR_TRACE_SCOPE("{} received {} from {}", *self, key,
+                         self->current_sender());
       self->state->record(self->current_sender()->id(), key, value, metadata,
                           {});
     },
     [self](atom::metrics, const std::string& key, int64_t value,
            metrics_metadata& metadata) {
-      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
-                       self->current_sender());
+      TENZIR_TRACE_SCOPE("{} received {} from {}", *self, key,
+                         self->current_sender());
       self->state->record(self->current_sender()->id(), key,
                           detail::narrow_cast<double>(value), metadata, {});
     },
     [self](atom::metrics, const std::string& key, uint64_t value,
            metrics_metadata& metadata) {
-      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
-                       self->current_sender());
+      TENZIR_TRACE_SCOPE("{} received {} from {}", *self, key,
+                         self->current_sender());
       self->state->record(self->current_sender()->id(), key,
                           detail::narrow_cast<double>(value), metadata, {});
     },
     [self](atom::metrics, const std::string& key, double value,
            metrics_metadata& metadata) {
-      VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
-                       self->current_sender());
+      TENZIR_TRACE_SCOPE("{} received {} from {}", *self, key,
+                         self->current_sender());
       self->state->record(self->current_sender()->id(), key, value, metadata,
                           {});
     },
     [self](atom::metrics, const report& r) {
-      VAST_TRACE_SCOPE("{} received a report from {}", *self,
-                       self->current_sender());
+      TENZIR_TRACE_SCOPE("{} received a report from {}", *self,
+                         self->current_sender());
       time ts = std::chrono::system_clock::now();
       for (const auto& [key, value, meta] : r.data) {
         auto f = [&, &key = key, &meta = meta](const auto& x) {
@@ -418,8 +419,8 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       }
     },
     [self](atom::metrics, const performance_report& r) {
-      VAST_TRACE_SCOPE("{} received a performance report from {}", *self,
-                       self->current_sender());
+      TENZIR_TRACE_SCOPE("{} received a performance report from {}", *self,
+                         self->current_sender());
       time ts = std::chrono::system_clock::now();
       for (const auto& [key, value, meta] : r.data) {
         self->state->record(self->current_sender()->id(), key + ".events",

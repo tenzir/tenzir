@@ -16,7 +16,7 @@
 
 #include <dlfcn.h>
 
-#if VAST_LINUX
+#if TENZIR_LINUX
 #  include "vast/concept/parseable/core/operators.hpp"
 #  include "vast/concept/parseable/string/any.hpp"
 #  include "vast/concept/parseable/string/char_class.hpp"
@@ -28,7 +28,7 @@
 #  include <fstream>
 #  include <limits.h>
 #  include <unistd.h>
-#elif VAST_MACOS
+#elif TENZIR_MACOS
 #  include <mach/mach_init.h>
 #  include <mach/task.h>
 #  include <sys/types.h>
@@ -36,14 +36,14 @@
 #  include <unistd.h>
 #endif
 
-#if VAST_POSIX && !VAST_LINUX
+#if TENZIR_POSIX && !TENZIR_LINUX
 #  include <sys/resource.h>
 #  include <sys/sysctl.h>
 #  include <sys/time.h>
 #  include <sys/types.h>
 #endif
 
-#if VAST_LINUX
+#if TENZIR_LINUX
 
 namespace vast::detail {
 
@@ -70,7 +70,7 @@ static record get_status_proc() {
       break;
     auto line = lines.get();
     if (!p(line))
-      VAST_WARN("failed to parse /proc/self/status: {}", line);
+      TENZIR_WARN("failed to parse /proc/self/status: {}", line);
   }
   return result;
 }
@@ -78,7 +78,7 @@ static record get_status_proc() {
 } // namespace vast::detail
 #endif
 
-#if VAST_MACOS
+#if TENZIR_MACOS
 
 namespace vast::detail {
 
@@ -99,7 +99,7 @@ static record get_settings_mach() {
 } // namespace vast::detail
 #endif
 
-#if VAST_POSIX && !VAST_LINUX
+#if TENZIR_POSIX && !TENZIR_LINUX
 
 namespace vast::detail {
 
@@ -107,7 +107,8 @@ static record get_status_rusage() {
   record result;
   struct rusage ru;
   if (getrusage(RUSAGE_SELF, &ru) != 0) {
-    VAST_WARN("{} failed to obtain rusage: {}", __func__, std::strerror(errno));
+    TENZIR_WARN("{} failed to obtain rusage: {}", __func__,
+                std::strerror(errno));
     return result;
   }
   result["peak-memory-usage"] = uint64_t{ru.ru_maxrss * 1024ull};
@@ -134,7 +135,7 @@ caf::expected<std::filesystem::path> objectpath_dynamic(const void* addr) {
 }
 
 caf::expected<std::filesystem::path> objectpath_static() {
-#if VAST_LINUX
+#if TENZIR_LINUX
   struct stat sb;
   auto self = "/proc/self/exe";
   if (lstat(self, &sb) == -1)
@@ -160,16 +161,16 @@ caf::expected<std::filesystem::path> objectpath(const void* addr) {
 }
 
 record get_status() {
-#if VAST_LINUX
+#if TENZIR_LINUX
   return get_status_proc();
-#elif VAST_MACOS
+#elif TENZIR_MACOS
   auto result = get_status_rusage();
   merge(get_settings_mach(), result, policy::merge_lists::no);
   return result;
-#elif VAST_POSIX
+#elif TENZIR_POSIX
   return get_status_rusage();
 #else
-  VAST_DEBUG("getting process information not supported");
+  TENZIR_DEBUG("getting process information not supported");
   // Not implemented.
   return record{};
 #endif

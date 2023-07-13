@@ -13,5 +13,5 @@ copies the VAST Python bindings (`python/`) and test data
 their relative structure identical.
 
 Build arguments:
-- `VAST_VERSION`: version of the base VAST image
-- `VAST_CONTAINER_REGISTRY`: registry url of the base VAST image
+- `TENZIR_VERSION`: version of the base VAST image
+- `TENZIR_CONTAINER_REGISTRY`: registry url of the base VAST image

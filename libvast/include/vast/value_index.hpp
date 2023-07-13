@@ -140,7 +140,7 @@ bool deserialize(auto& source, value_index_ptr& x) {
     return false;
   x = make_value_index(type::from_legacy_type(lt), std::move(opts));
   if (x == nullptr) {
-    VAST_WARN("failed to construct value index");
+    TENZIR_WARN("failed to construct value index");
     return false;
   }
   value_index::supported_inspectors i{std::ref(source)};
@@ -174,7 +174,7 @@ bool serialize(auto& sink, value_index_ptr& x) {
       return sink.get_error();
     });
   if (err) {
-    VAST_WARN("Error during value_index_ptr serialization, {}", err);
+    TENZIR_WARN("Error during value_index_ptr serialization, {}", err);
     return false;
   }
   return true;

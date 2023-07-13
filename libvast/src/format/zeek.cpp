@@ -189,7 +189,7 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {
-  VAST_ASSERT(in != nullptr);
+  TENZIR_ASSERT(in != nullptr);
   input_ = std::move(in);
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
@@ -212,13 +212,13 @@ const char* reader::name() const {
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   // Sanity checks.
-  VAST_ASSERT(max_events > 0);
-  VAST_ASSERT(max_slice_size > 0);
+  TENZIR_ASSERT(max_events > 0);
+  TENZIR_ASSERT(max_slice_size > 0);
   auto next_line = [&] {
     auto timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out)
-      VAST_DEBUG("{} reached input timeout at line {}",
-                 detail::pretty_type_name(this), lines_->line_number());
+      TENZIR_DEBUG("{} reached input timeout at line {}",
+                   detail::pretty_type_name(this), lines_->line_number());
     return timed_out;
   };
   // EOF check.
@@ -250,7 +250,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
                     output_schema_);
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
+      TENZIR_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
       return finish(f, ec::timeout, output_schema_);
     }
     auto timed_out = next_line();
@@ -260,14 +260,14 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_DEBUG("{} ignores empty line at {}", detail::pretty_type_name(this),
-                 lines_->line_number());
+      TENZIR_DEBUG("{} ignores empty line at {}",
+                   detail::pretty_type_name(this), lines_->line_number());
       continue;
     } else if (line.starts_with("#separator")) {
       // We encountered a new log file.
       if (auto err = finish(f, caf::none, output_schema_))
         return err;
-      VAST_DEBUG("{} restarts with new log", detail::pretty_type_name(this));
+      TENZIR_DEBUG("{} restarts with new log", detail::pretty_type_name(this));
       separator_.clear();
       if (auto err = parse_header())
         return err;
@@ -277,15 +277,15 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
           lines_->line_number());
     } else if (line.starts_with('#')) {
       // Ignore comments.
-      VAST_DEBUG("{} ignores comment at line {}",
-                 detail::pretty_type_name(this), lines_->line_number());
+      TENZIR_DEBUG("{} ignores comment at line {}",
+                   detail::pretty_type_name(this), lines_->line_number());
     } else {
       auto fields = detail::split(lines_->get(), separator_);
       if (fields.size() != parsers_.size()) {
-        VAST_WARN("{} ignores invalid record at line {}: got {}"
-                  "fields but need {}",
-                  detail::pretty_type_name(this), lines_->line_number(),
-                  fields.size(), parsers_.size());
+        TENZIR_WARN("{} ignores invalid record at line {}: got {}"
+                    "fields but need {}",
+                    detail::pretty_type_name(this), lines_->line_number(),
+                    fields.size(), parsers_.size());
         continue;
       }
       // Construct the record.
@@ -354,7 +354,7 @@ caf::error reader::parse_header() {
     pos = lines_->get().find("\\x", pos);
     if (pos != std::string::npos) {
       auto c = std::stoi(lines_->get().substr(pos + 2, 2), nullptr, 16);
-      VAST_ASSERT(c >= 0 && c <= 255);
+      TENZIR_ASSERT(c >= 0 && c <= 255);
       separator_.push_back(c);
       pos += 2;
     }
@@ -407,17 +407,17 @@ caf::error reader::parse_header() {
   }
   // Construct type.
   auto schema = record_type{record_fields};
-  VAST_DEBUG("{} parsed zeek header:", detail::pretty_type_name(this));
-  VAST_DEBUG("{}     #separator {}", detail::pretty_type_name(this),
-             separator_);
-  VAST_DEBUG("{}     #set_separator {}", detail::pretty_type_name(this),
-             set_separator_);
-  VAST_DEBUG("{}     #empty_field {}", detail::pretty_type_name(this),
-             empty_field_);
-  VAST_DEBUG("{}     #unset_field {}", detail::pretty_type_name(this),
-             unset_field_);
-  VAST_DEBUG("{}     #path {}", detail::pretty_type_name(this), path);
-  VAST_DEBUG("{}     #fields:", detail::pretty_type_name(this));
+  TENZIR_DEBUG("{} parsed zeek header:", detail::pretty_type_name(this));
+  TENZIR_DEBUG("{}     #separator {}", detail::pretty_type_name(this),
+               separator_);
+  TENZIR_DEBUG("{}     #set_separator {}", detail::pretty_type_name(this),
+               set_separator_);
+  TENZIR_DEBUG("{}     #empty_field {}", detail::pretty_type_name(this),
+               empty_field_);
+  TENZIR_DEBUG("{}     #unset_field {}", detail::pretty_type_name(this),
+               unset_field_);
+  TENZIR_DEBUG("{}     #path {}", detail::pretty_type_name(this), path);
+  TENZIR_DEBUG("{}     #fields:", detail::pretty_type_name(this));
   schema = detail::zeekify(schema);
   auto name = std::string{type_name_prefix} + path;
   // If a congruent type exists in the module, we give the type in the module
@@ -426,16 +426,16 @@ caf::error reader::parse_header() {
   if (auto* t = module_.find(name)) {
     auto is_castable = can_cast(schema, *t);
     if (!is_castable) {
-      VAST_WARN("zeek-reader ignores incompatible schema '{}' from schema "
-                "files: {}",
-                *t, is_castable.error());
+      TENZIR_WARN("zeek-reader ignores incompatible schema '{}' from schema "
+                  "files: {}",
+                  *t, is_castable.error());
     } else {
       output_schema_ = *t;
     }
   }
   for (auto i = 0u; i < schema.num_fields(); ++i)
-    VAST_DEBUG("{}       {}) {} : {}", detail::pretty_type_name(this), i,
-               schema.field(i).name, schema.field(i).type);
+    TENZIR_DEBUG("{}       {}) {} : {}", detail::pretty_type_name(this), i,
+                 schema.field(i).name, schema.field(i).type);
   // After having modified schema attributes, we no longer make changes to the
   // type and can now safely copy it.
   schema_ = type{name, schema};
@@ -488,8 +488,8 @@ public:
       }
       return true;
     } else if constexpr (std::is_same_v<T, view<map>>) {
-      VAST_ERROR("{} cannot print maps in Zeek TSV format",
-                 detail::pretty_type_name(this));
+      TENZIR_ERROR("{} cannot print maps in Zeek TSV format",
+                   detail::pretty_type_name(this));
       return false;
     } else {
       make_printer<T> p;
@@ -576,13 +576,13 @@ caf::error writer::write(const table_slice& slice) {
   auto&& schema = slice.schema();
   if (dir_.string().empty()) {
     if (writers_.empty()) {
-      VAST_DEBUG("{} creates a new stream for STDOUT",
-                 detail::pretty_type_name(this));
+      TENZIR_DEBUG("{} creates a new stream for STDOUT",
+                   detail::pretty_type_name(this));
       // TODO
-      VAST_DIAGNOSTIC_PUSH
-      VAST_DIAGNOSTIC_IGNORE_DEPRECATED
+      TENZIR_DIAGNOSTIC_PUSH
+      TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED
       auto out = std::make_unique<detail::fdostream>(1);
-      VAST_DIAGNOSTIC_POP
+      TENZIR_DIAGNOSTIC_POP
       writers_.emplace(schema.name(), std::make_unique<writer_child>(
                                         std::move(out), show_timestamp_tags_));
     }
@@ -596,8 +596,8 @@ caf::error writer::write(const table_slice& slice) {
     if (i != writers_.end()) {
       child = i->second.get();
     } else {
-      VAST_DEBUG("{} creates new stream for schema {}",
-                 detail::pretty_type_name(this), schema.name());
+      TENZIR_DEBUG("{} creates new stream for schema {}",
+                   detail::pretty_type_name(this), schema.name());
       std::error_code err{};
       const auto exists = std::filesystem::exists(dir_, err);
       if (err)
@@ -625,7 +625,7 @@ caf::error writer::write(const table_slice& slice) {
       child = i.first->second.get();
     }
   }
-  VAST_ASSERT(child != nullptr);
+  TENZIR_ASSERT(child != nullptr);
   return child->write(slice);
 }
 

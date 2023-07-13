@@ -23,7 +23,7 @@ public:
 
   void add(data_view x) override {
     auto y = caf::get_if<view<T>>(&x);
-    VAST_ASSERT(y != nullptr);
+    TENZIR_ASSERT(y != nullptr);
     if (*y < min_)
       min_ = *y;
     if (*y > max_)
@@ -114,7 +114,7 @@ private:
     // Thus, for range comparisons we need to test `min op rhs || max op rhs`.
     switch (op) {
       default:
-        VAST_ASSERT(!"unsupported operator");
+        TENZIR_ASSERT(!"unsupported operator");
         return false;
       case relational_operator::equal:
         return min_ <= x && x <= max_;

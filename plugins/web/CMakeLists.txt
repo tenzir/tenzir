@@ -26,13 +26,13 @@ VASTRegisterPlugin(
 
 find_package(OpenSSL REQUIRED)
 
-option(VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
+option(TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
        "Always use the bundled and patched restinio" ON)
 add_feature_info(
-  "VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO"
-  VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
+  "TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO"
+  TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
   "always use the bundled and patched restinio.")
-if (NOT VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO)
+if (NOT TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO)
   find_package(fmt REQUIRED)
   find_package(restinio REQUIRED)
   # OpenSSL link is missing from restinio.

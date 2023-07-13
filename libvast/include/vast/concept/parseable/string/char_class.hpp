@@ -46,44 +46,44 @@ public:
   }
 
 private:
-#define VAST_DEFINE_CHAR_TEST(klass, fun)                                      \
+#define TENZIR_DEFINE_CHAR_TEST(klass, fun)                                    \
   static bool test_char(int c, klass##_class) {                                \
     return std::fun(c);                                                        \
   }
 
-  VAST_DEFINE_CHAR_TEST(alnum, isalnum)
-  VAST_DEFINE_CHAR_TEST(alpha, isalpha)
-  VAST_DEFINE_CHAR_TEST(blank, isblank)
-  VAST_DEFINE_CHAR_TEST(cntrl, iscntrl)
-  VAST_DEFINE_CHAR_TEST(digit, isdigit)
-  VAST_DEFINE_CHAR_TEST(graph, isgraph)
-  VAST_DEFINE_CHAR_TEST(lower, islower)
-  VAST_DEFINE_CHAR_TEST(print, isprint)
-  VAST_DEFINE_CHAR_TEST(punct, ispunct)
-  VAST_DEFINE_CHAR_TEST(space, isspace)
-  VAST_DEFINE_CHAR_TEST(upper, isupper)
-  VAST_DEFINE_CHAR_TEST(xdigit, isxdigit)
+  TENZIR_DEFINE_CHAR_TEST(alnum, isalnum)
+  TENZIR_DEFINE_CHAR_TEST(alpha, isalpha)
+  TENZIR_DEFINE_CHAR_TEST(blank, isblank)
+  TENZIR_DEFINE_CHAR_TEST(cntrl, iscntrl)
+  TENZIR_DEFINE_CHAR_TEST(digit, isdigit)
+  TENZIR_DEFINE_CHAR_TEST(graph, isgraph)
+  TENZIR_DEFINE_CHAR_TEST(lower, islower)
+  TENZIR_DEFINE_CHAR_TEST(print, isprint)
+  TENZIR_DEFINE_CHAR_TEST(punct, ispunct)
+  TENZIR_DEFINE_CHAR_TEST(space, isspace)
+  TENZIR_DEFINE_CHAR_TEST(upper, isupper)
+  TENZIR_DEFINE_CHAR_TEST(xdigit, isxdigit)
 
-#undef VAST_DEFINE_CHAR_TEST
+#undef TENZIR_DEFINE_CHAR_TEST
 };
 
-#define VAST_DEFINE_CHAR_CLASS_PARSER(klass)                                   \
+#define TENZIR_DEFINE_CHAR_CLASS_PARSER(klass)                                 \
   using klass##_parser = char_class_parser<klass##_class>
 
-VAST_DEFINE_CHAR_CLASS_PARSER(alnum);
-VAST_DEFINE_CHAR_CLASS_PARSER(alpha);
-VAST_DEFINE_CHAR_CLASS_PARSER(blank);
-VAST_DEFINE_CHAR_CLASS_PARSER(cntrl);
-VAST_DEFINE_CHAR_CLASS_PARSER(digit);
-VAST_DEFINE_CHAR_CLASS_PARSER(graph);
-VAST_DEFINE_CHAR_CLASS_PARSER(lower);
-VAST_DEFINE_CHAR_CLASS_PARSER(print);
-VAST_DEFINE_CHAR_CLASS_PARSER(punct);
-VAST_DEFINE_CHAR_CLASS_PARSER(space);
-VAST_DEFINE_CHAR_CLASS_PARSER(upper);
-VAST_DEFINE_CHAR_CLASS_PARSER(xdigit);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(alnum);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(alpha);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(blank);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(cntrl);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(digit);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(graph);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(lower);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(print);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(punct);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(space);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(upper);
+TENZIR_DEFINE_CHAR_CLASS_PARSER(xdigit);
 
-#undef VAST_DEFINE_CHAR_CLASS_PARSER
+#undef TENZIR_DEFINE_CHAR_CLASS_PARSER
 
 namespace parsers {
 

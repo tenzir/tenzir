@@ -4,14 +4,14 @@ cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
 
 # Semicolon-separated list of directories specifying a search path for CMake.
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-set(VAST_VERSION_TAG_BACKUP "${VAST_VERSION_TAG}")
+set(TENZIR_VERSION_TAG_BACKUP "${TENZIR_VERSION_TAG}")
 include(VASTVersion)
 
 # Create the VAST project.
 project(
   VAST
   VERSION
-    ${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}.${VAST_VERSION_TWEAK}
+    ${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}.${TENZIR_VERSION_TWEAK}
   DESCRIPTION "Visibility Across Space and Time"
   HOMEPAGE_URL "https://vast.io"
   LANGUAGES C CXX)
@@ -93,15 +93,15 @@ include(VASTUtilities)
 # Determine whether we're building VAST a subproject. This is used to determine
 # good default values for many options. VAST should not modify global CMake if
 # built as a subproject, unless explicitly requested to do so with options.
-get_directory_property(_VAST_PARENT_DIRECTORY PARENT_DIRECTORY)
-if (_VAST_PARENT_DIRECTORY)
-  set(VAST_IS_SUBPROJECT ON)
-  set(VAST_IS_NOT_SUBPROJECT OFF)
+get_directory_property(_TENZIR_PARENT_DIRECTORY PARENT_DIRECTORY)
+if (_TENZIR_PARENT_DIRECTORY)
+  set(TENZIR_IS_SUBPROJECT ON)
+  set(TENZIR_IS_NOT_SUBPROJECT OFF)
 else ()
-  set(VAST_IS_SUBPROJECT OFF)
-  set(VAST_IS_NOT_SUBPROJECT ON)
+  set(TENZIR_IS_SUBPROJECT OFF)
+  set(TENZIR_IS_NOT_SUBPROJECT ON)
 endif ()
-unset(_VAST_PARENT_DIRECTORY)
+unset(_TENZIR_PARENT_DIRECTORY)
 
 # -- changelog -----------------------------------------------------------------
 
@@ -118,20 +118,20 @@ add_custom_target(
           ${changelog_dependencies}
   COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake")
 
-option(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
+option(TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
        "Skip build configuration after update-changelog target" OFF)
-mark_as_advanced(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
-if (VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
+mark_as_advanced(TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
+if (TENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
   return()
 endif ()
 
 # -- testing -------------------------------------------------------------------
 
-cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast" ON
-                       "NOT CMAKE_CROSS_COMPILING" OFF)
-add_feature_info("VAST_ENABLE_UNIT_TESTS" VAST_ENABLE_UNIT_TESTS
+cmake_dependent_option(TENZIR_ENABLE_UNIT_TESTS "Build unit tests for libvast"
+                       ON "NOT CMAKE_CROSS_COMPILING" OFF)
+add_feature_info("TENZIR_ENABLE_UNIT_TESTS" TENZIR_ENABLE_UNIT_TESTS
                  "build unit tests for libvast.")
-set(VAST_UNIT_TEST_TIMEOUT
+set(TENZIR_UNIT_TEST_TIMEOUT
     "60"
     CACHE STRING "The per-test timeout in unit tests" FORCE)
 
@@ -147,13 +147,13 @@ add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
 # VAST installation. Concretely, it enables the dynamic binary and libraries to
 # use relative paths for loading their dependencies. On macOS, always enable
 # relocatable installations as it's very uncommon not to do so.
-cmake_dependent_option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS
+cmake_dependent_option(TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
                        "Enable relocatable installations" ON "NOT APPLE" ON)
 add_feature_info(
-  "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  "enable relocatable installations.")
+  "TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS"
+  TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS "enable relocatable installations.")
 
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   # For relocatable builds we need the configured install directories to be
   # relative so we can interpret them relative to the object path of the running
   # binary instead of a fixed install prefix.
@@ -173,7 +173,7 @@ endif ()
 # `DESTDIR=<path/to/install> cmake --build <path/to/build> --target install`.
 # Doing so breaks non-relocatable installations, so we abort the installation
 # when encountering this.
-if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+if (NOT TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   install(
     CODE "\
     cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
@@ -226,44 +226,47 @@ endif ()
 
 # -- optimizations -------------------------------------------------------------
 
-option(VAST_ENABLE_AUTO_VECTORIZATION "Enable SSE instructions" ON)
+option(TENZIR_ENABLE_AUTO_VECTORIZATION "Enable SSE instructions" ON)
 add_feature_info(
-  "VAST_ENABLE_AUTO_VECTORIZATION" VAST_ENABLE_AUTO_VECTORIZATION
+  "TENZIR_ENABLE_AUTO_VECTORIZATION" TENZIR_ENABLE_AUTO_VECTORIZATION
   "enable auto-vectorization via supported SSE/AVX instructions.")
-if (VAST_ENABLE_AUTO_VECTORIZATION)
+if (TENZIR_ENABLE_AUTO_VECTORIZATION)
   find_package(SSE QUIET)
-  option(VAST_ENABLE_SSE_INSTRUCTIONS "Enable SSE instructions" "${SSE_FOUND}")
-  add_feature_info("VAST_ENABLE_SSE_INSTRUCTIONS" VAST_ENABLE_SSE_INSTRUCTIONS
-                   "enable SSE instructions.")
-  option(VAST_ENABLE_SSE2_INSTRUCTIONS "Enable SSE2 instructions"
+  option(TENZIR_ENABLE_SSE_INSTRUCTIONS "Enable SSE instructions"
+         "${SSE_FOUND}")
+  add_feature_info("TENZIR_ENABLE_SSE_INSTRUCTIONS"
+                   TENZIR_ENABLE_SSE_INSTRUCTIONS "enable SSE instructions.")
+  option(TENZIR_ENABLE_SSE2_INSTRUCTIONS "Enable SSE2 instructions"
          "${SSE2_FOUND}")
-  add_feature_info("VAST_ENABLE_SSE2_INSTRUCTIONS"
-                   VAST_ENABLE_SSE2_INSTRUCTIONS "enable SSE2 instructions.")
-  option(VAST_ENABLE_SSE3_INSTRUCTIONS "Enable SSE3 instructions"
+  add_feature_info("TENZIR_ENABLE_SSE2_INSTRUCTIONS"
+                   TENZIR_ENABLE_SSE2_INSTRUCTIONS "enable SSE2 instructions.")
+  option(TENZIR_ENABLE_SSE3_INSTRUCTIONS "Enable SSE3 instructions"
          "${SSE3_FOUND}")
-  add_feature_info("VAST_ENABLE_SSE3_INSTRUCTIONS"
-                   VAST_ENABLE_SSE3_INSTRUCTIONS "enable SSE3 instructions.")
-  option(VAST_ENABLE_SSSE3_INSTRUCTIONS "Enable SSSE3 instructions"
+  add_feature_info("TENZIR_ENABLE_SSE3_INSTRUCTIONS"
+                   TENZIR_ENABLE_SSE3_INSTRUCTIONS "enable SSE3 instructions.")
+  option(TENZIR_ENABLE_SSSE3_INSTRUCTIONS "Enable SSSE3 instructions"
          "${SSSE3_FOUND}")
-  add_feature_info("VAST_ENABLE_SSSE3_INSTRUCTIONS"
-                   VAST_ENABLE_SSSE3_INSTRUCTIONS "enable SSSE3 instructions.")
-  option(VAST_ENABLE_SSE4_1_INSTRUCTIONS "Enable SSE4.1 instructions"
+  add_feature_info(
+    "TENZIR_ENABLE_SSSE3_INSTRUCTIONS" TENZIR_ENABLE_SSSE3_INSTRUCTIONS
+    "enable SSSE3 instructions.")
+  option(TENZIR_ENABLE_SSE4_1_INSTRUCTIONS "Enable SSE4.1 instructions"
          "${SSE4_1_FOUND}")
   add_feature_info(
-    "VAST_ENABLE_SSE4_1_INSTRUCTIONS" VAST_ENABLE_SSE4_1_INSTRUCTIONS
+    "TENZIR_ENABLE_SSE4_1_INSTRUCTIONS" TENZIR_ENABLE_SSE4_1_INSTRUCTIONS
     "enable SSE4.1 instructions.")
-  option(VAST_ENABLE_SSE4_2_INSTRUCTIONS "Enable SSE4.2 instructions"
+  option(TENZIR_ENABLE_SSE4_2_INSTRUCTIONS "Enable SSE4.2 instructions"
          "${SSE4_2_FOUND}")
   add_feature_info(
-    "VAST_ENABLE_SSE4_2_INSTRUCTIONS" VAST_ENABLE_SSE4_2_INSTRUCTIONS
+    "TENZIR_ENABLE_SSE4_2_INSTRUCTIONS" TENZIR_ENABLE_SSE4_2_INSTRUCTIONS
     "enable SSE4.2 instructions.")
-  option(VAST_ENABLE_AVX_INSTRUCTIONS "Enable AVX instructions" "${AVX_FOUND}")
-  add_feature_info("VAST_ENABLE_AVX_INSTRUCTIONS" VAST_ENABLE_AVX_INSTRUCTIONS
-                   "enable AVX instructions.")
-  option(VAST_ENABLE_AVX2_INSTRUCTIONS "Enable AVX2 instructions"
+  option(TENZIR_ENABLE_AVX_INSTRUCTIONS "Enable AVX instructions"
+         "${AVX_FOUND}")
+  add_feature_info("TENZIR_ENABLE_AVX_INSTRUCTIONS"
+                   TENZIR_ENABLE_AVX_INSTRUCTIONS "enable AVX instructions.")
+  option(TENZIR_ENABLE_AVX2_INSTRUCTIONS "Enable AVX2 instructions"
          "${AVX2_FOUND}")
-  add_feature_info("VAST_ENABLE_AVX2_INSTRUCTIONS"
-                   VAST_ENABLE_AVX2_INSTRUCTIONS "enable AVX2 instructions.")
+  add_feature_info("TENZIR_ENABLE_AVX2_INSTRUCTIONS"
+                   TENZIR_ENABLE_AVX2_INSTRUCTIONS "enable AVX2 instructions.")
 endif ()
 
 target_compile_options(
@@ -274,14 +277,14 @@ target_compile_options(
             $<$<CONFIG:Debug>:-O0>
             $<$<CONFIG:CI>:-O2
             -g1>
-            $<$<BOOL:${VAST_ENABLE_SSE_INSTRUCTIONS}>:-msse>
-            $<$<BOOL:${VAST_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
-            $<$<BOOL:${VAST_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
-            $<$<BOOL:${VAST_ENABLE_SSSE3_INSTRUCTIONS}>:-mssse3>
-            $<$<BOOL:${VAST_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
-            $<$<BOOL:${VAST_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
-            $<$<BOOL:${VAST_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
-            $<$<BOOL:${VAST_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>)
+            $<$<BOOL:${TENZIR_ENABLE_SSE_INSTRUCTIONS}>:-msse>
+            $<$<BOOL:${TENZIR_ENABLE_SSE2_INSTRUCTIONS}>:-msse2>
+            $<$<BOOL:${TENZIR_ENABLE_SSE3_INSTRUCTIONS}>:-msse3>
+            $<$<BOOL:${TENZIR_ENABLE_SSSE3_INSTRUCTIONS}>:-mssse3>
+            $<$<BOOL:${TENZIR_ENABLE_SSE4_1_INSTRUCTIONS}>:-msse4.1>
+            $<$<BOOL:${TENZIR_ENABLE_SSE4_2_INSTRUCTIONS}>:-msse4.2>
+            $<$<BOOL:${TENZIR_ENABLE_AVX_INSTRUCTIONS}>:-mavx>
+            $<$<BOOL:${TENZIR_ENABLE_AVX2_INSTRUCTIONS}>:-mavx2>)
 
 # -- warnings ------------------------------------------------------------------
 
@@ -315,35 +318,35 @@ target_compile_options(
 # -- build id ------------------------------------------------------------------
 
 cmake_dependent_option(
-  VAST_ENABLE_BUILDID "Include a unique identifier in the elf notes section" ON
-  "CMAKE_EXECUTABLE_FORMAT STREQUAL ELF" OFF)
-add_feature_info("VAST_ENABLE_BUILDID" VAST_ENABLE_BUILDID
+  TENZIR_ENABLE_BUILDID "Include a unique identifier in the elf notes section"
+  ON "CMAKE_EXECUTABLE_FORMAT STREQUAL ELF" OFF)
+add_feature_info("TENZIR_ENABLE_BUILDID" TENZIR_ENABLE_BUILDID
                  "a unique identifier in the ELF notes section.")
-if (VAST_ENABLE_BUILDID)
+if (TENZIR_ENABLE_BUILDID)
   target_link_options(libvast_internal INTERFACE "-Wl,--build-id")
 endif ()
 
 # -- USDT tracepoints ----------------------------------------------------------
 
-option(VAST_ENABLE_SDT "Generate USDT tracepoint instrumentation" ON)
-add_feature_info("VAST_ENABLE_SDT" VAST_ENABLE_SDT
+option(TENZIR_ENABLE_SDT "Generate USDT tracepoint instrumentation" ON)
+add_feature_info("TENZIR_ENABLE_SDT" TENZIR_ENABLE_SDT
                  "generate USDT tracepoint instrumentation.")
 
 # -- build profiling -----------------------------------------------------------
 
-option(VAST_ENABLE_TIME_REPORT
+option(TENZIR_ENABLE_TIME_REPORT
        "Print information where time was spent during compilation" OFF)
-add_feature_info("VAST_ENABLE_TIME_REPORT" VAST_ENABLE_TIME_REPORT
+add_feature_info("TENZIR_ENABLE_TIME_REPORT" TENZIR_ENABLE_TIME_REPORT
                  "print information where time was spent during compilation.")
-if (VAST_ENABLE_TIME_REPORT)
+if (TENZIR_ENABLE_TIME_REPORT)
   target_compile_options(libvast_internal INTERFACE "-ftime-report")
 endif ()
 
-option(VAST_ENABLE_TIME_TRACE
+option(TENZIR_ENABLE_TIME_TRACE
        "Generate tracing JSON for compilation time profiling" OFF)
-add_feature_info("VAST_ENABLE_TIME_TRACE" VAST_ENABLE_TIME_TRACE
+add_feature_info("TENZIR_ENABLE_TIME_TRACE" TENZIR_ENABLE_TIME_TRACE
                  "generate tracing JSON for compilation time profiling.")
-if (VAST_ENABLE_TIME_TRACE)
+if (TENZIR_ENABLE_TIME_TRACE)
   include(CheckCXXCompilerFlag)
   check_cxx_compiler_flag("-ftime-trace" _time_trace_supported)
   if (NOT _time_trace_supported)
@@ -358,44 +361,45 @@ endif ()
 # -- assertions ----------------------------------------------------------------
 
 if (CMAKE_BUILD_TYPE STREQUAL Release)
-  set(_VAST_ENABLE_ASSERTIONS_DEFAULT OFF)
+  set(_TENZIR_ENABLE_ASSERTIONS_DEFAULT OFF)
 else ()
-  set(_VAST_ENABLE_ASSERTIONS_DEFAULT ON)
+  set(_TENZIR_ENABLE_ASSERTIONS_DEFAULT ON)
 endif ()
 
-option(VAST_ENABLE_ASSERTIONS "Enable assertions"
-       "${_VAST_ENABLE_ASSERTIONS_DEFAULT}")
-add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
+option(TENZIR_ENABLE_ASSERTIONS "Enable assertions"
+       "${_TENZIR_ENABLE_ASSERTIONS_DEFAULT}")
+add_feature_info("TENZIR_ENABLE_ASSERTIONS" TENZIR_ENABLE_ASSERTIONS
                  "enable assertions.")
 
-unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
+unset(_TENZIR_ENABLE_ASSERTIONS_DEFAULT)
 
-option(VAST_ENABLE_ASSERTIONS_CHEAP "Enable cheap assertions" ON)
-add_feature_info("VAST_ENABLE_ASSERTIONS_CHEAP" VAST_ENABLE_ASSERTIONS_CHEAP
-                 "enable assertions that are cheap to check.")
+option(TENZIR_ENABLE_ASSERTIONS_CHEAP "Enable cheap assertions" ON)
+add_feature_info(
+  "TENZIR_ENABLE_ASSERTIONS_CHEAP" TENZIR_ENABLE_ASSERTIONS_CHEAP
+  "enable assertions that are cheap to check.")
 
 # -- static build support ------------------------------------------------------
 
 cmake_dependent_option(
-  VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
-  "$ENV{VAST_ENABLE_STATIC_EXECUTABLE}" "NOT BUILD_SHARED_LIBS" OFF)
-add_feature_info("VAST_ENABLE_STATIC_EXECUTABLE" VAST_ENABLE_STATIC_EXECUTABLE
-                 "link VAST statically.")
-if (VAST_ENABLE_STATIC_EXECUTABLE)
+  TENZIR_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
+  "$ENV{TENZIR_ENABLE_STATIC_EXECUTABLE}" "NOT BUILD_SHARED_LIBS" OFF)
+add_feature_info("TENZIR_ENABLE_STATIC_EXECUTABLE"
+                 TENZIR_ENABLE_STATIC_EXECUTABLE "link VAST statically.")
+if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   target_link_libraries(libvast_internal INTERFACE -static-libgcc
                                                    -static-libstdc++ -static)
 endif ()
 
-if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
+if (TENZIR_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   message(FATAL_ERROR "Cannot create static binary with dynamic libraries")
 endif ()
 
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   # Note that we cannot use the target property INSTALL_RPATH on
   # libvast_internal, because it is an interface library. We should probably fix
   # this by making the config header part of libvast_internal so it is not just
   # an interface library.
-  if (NOT VAST_ENABLE_STATIC_EXECUTABLE)
+  if (NOT TENZIR_ENABLE_STATIC_EXECUTABLE)
     if (APPLE)
       list(PREPEND CMAKE_INSTALL_RPATH
            "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
@@ -407,12 +411,12 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   # For relocatable builds we need to find the relative difference between the
   # install prefix and the library location, or the binary location for static
   # VAST binaries.
-  if (VAST_ENABLE_STATIC_EXECUTABLE)
+  if (TENZIR_ENABLE_STATIC_EXECUTABLE)
     set(_libdir "${CMAKE_INSTALL_FULL_BINDIR}")
   else ()
     set(_libdir "${CMAKE_INSTALL_FULL_LIBDIR}")
   endif ()
-  file(RELATIVE_PATH VAST_LIBDIR_TO_PREFIX "${_libdir}"
+  file(RELATIVE_PATH TENZIR_LIBDIR_TO_PREFIX "${_libdir}"
        "${CMAKE_INSTALL_PREFIX}")
   unset(_libdir)
 endif ()
@@ -421,23 +425,23 @@ endif ()
 
 # Address Sanitizer
 set(_vast_build_types_with_default_asan "Debug;CI")
-if (NOT VAST_ENABLE_STATIC_EXECUTABLE AND CMAKE_BUILD_TYPE IN_LIST
-                                          _vast_build_types_with_default_asan)
-  set(_VAST_ENABLE_ASAN_DEFAULT ON)
+if (NOT TENZIR_ENABLE_STATIC_EXECUTABLE AND CMAKE_BUILD_TYPE IN_LIST
+                                            _vast_build_types_with_default_asan)
+  set(_TENZIR_ENABLE_ASAN_DEFAULT ON)
 else ()
-  set(_VAST_ENABLE_ASAN_DEFAULT OFF)
+  set(_TENZIR_ENABLE_ASAN_DEFAULT OFF)
 endif ()
 
-option(VAST_ENABLE_ASAN
+option(TENZIR_ENABLE_ASAN
        "Insert pointer and reference checks into the generated binaries"
-       "${_VAST_ENABLE_ASAN_DEFAULT}")
+       "${_TENZIR_ENABLE_ASAN_DEFAULT}")
 add_feature_info(
-  "VAST_ENABLE_ASAN" VAST_ENABLE_ASAN
+  "TENZIR_ENABLE_ASAN" TENZIR_ENABLE_ASAN
   "inserts pointer and reference checks into the generated binaries.")
 
-unset(_VAST_ENABLE_ASAN_DEFAULT)
+unset(_TENZIR_ENABLE_ASAN_DEFAULT)
 
-if (VAST_ENABLE_ASAN)
+if (TENZIR_ENABLE_ASAN)
   # We need to enable the address sanitizer both globally and for the
   # libvast_internal targets in order to build (1) the bundled CAF with it and
   # (2) build external plugins with it.
@@ -449,13 +453,13 @@ if (VAST_ENABLE_ASAN)
 endif ()
 
 # Undefined Behavior Sanitizer
-option(VAST_ENABLE_UBSAN
+option(TENZIR_ENABLE_UBSAN
        "Add run-time checks for undefined behavior into the generated binaries"
        OFF)
 add_feature_info(
-  "VAST_ENABLE_UBSAN" VAST_ENABLE_UBSAN
+  "TENZIR_ENABLE_UBSAN" TENZIR_ENABLE_UBSAN
   "adds run-time checks for undefined behavior into the generated binaries.")
-if (VAST_ENABLE_UBSAN)
+if (TENZIR_ENABLE_UBSAN)
   add_compile_options(-fsanitize=undefined)
   add_link_options(-fsanitize=undefined)
   target_compile_options(libvast_internal INTERFACE -fsanitize=undefined)
@@ -464,36 +468,36 @@ endif ()
 
 # -- jemalloc ------------------------------------------------------------------
 
-option(VAST_ENABLE_JEMALLOC "Use jemalloc instead of libc malloc"
-       "${VAST_ENABLE_STATIC_EXECUTABLE}")
-add_feature_info("VAST_ENABLE_JEMALLOC" VAST_ENABLE_JEMALLOC
+option(TENZIR_ENABLE_JEMALLOC "Use jemalloc instead of libc malloc"
+       "${TENZIR_ENABLE_STATIC_EXECUTABLE}")
+add_feature_info("TENZIR_ENABLE_JEMALLOC" TENZIR_ENABLE_JEMALLOC
                  "use jemalloc instead of libc malloc.")
-if (VAST_ENABLE_JEMALLOC)
+if (TENZIR_ENABLE_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
-  string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
   target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
   dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
 endif ()
 
 # -- developer mode ------------------------------------------------------------
 
-option(VAST_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
-add_feature_info("VAST_ENABLE_CLANG_TIDY" VAST_ENABLE_CLANG_TIDY
+option(TENZIR_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
+add_feature_info("TENZIR_ENABLE_CLANG_TIDY" TENZIR_ENABLE_CLANG_TIDY
                  "run clang-tidy during build.")
-set(VAST_CLANG_TIDY_ARGS
+set(TENZIR_CLANG_TIDY_ARGS
     "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
 
-option(VAST_ENABLE_CODE_COVERAGE "Add code coverage targets" OFF)
-add_feature_info("VAST_ENABLE_CODE_COVERAGE" VAST_ENABLE_CODE_COVERAGE
+option(TENZIR_ENABLE_CODE_COVERAGE "Add code coverage targets" OFF)
+add_feature_info("TENZIR_ENABLE_CODE_COVERAGE" TENZIR_ENABLE_CODE_COVERAGE
                  "add code coverage targets.")
-if (VAST_ENABLE_CODE_COVERAGE)
+if (TENZIR_ENABLE_CODE_COVERAGE)
   if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(
       WARNING
         "Code coverage reports may be inaccurate for compilers other than gcc")
   endif ()
-  set(CODE_COVERAGE "${VAST_ENABLE_CODE_COVERAGE}")
+  set(CODE_COVERAGE "${TENZIR_ENABLE_CODE_COVERAGE}")
   include(CodeCoverage)
   mark_as_advanced(CODE_COVERAGE)
   install(CODE "\
@@ -505,7 +509,7 @@ VASTTargetEnableTooling(libvast_internal INTERFACE)
 
 # Add a custom executable that runs the CMake build targets 'test' and
 # 'integration' so we can instrument them toether for combined code coverage.
-if (VAST_ENABLE_CODE_COVERAGE)
+if (TENZIR_ENABLE_CODE_COVERAGE)
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/all_tests.c.in"
                  "${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c" @ONLY)
   add_executable(all-tests "${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c")
@@ -515,13 +519,13 @@ endif ()
 # Build VAST in developer mode. This is enabled by default when not building
 # VAST as a subproject. The developer mode contains CCache support and many
 # other niceties.
-option(VAST_ENABLE_DEVELOPER_MODE
+option(TENZIR_ENABLE_DEVELOPER_MODE
        "Enables build settings for a nicer development environment"
-       "${VAST_IS_NOT_SUBPROJECT}")
-add_feature_info("VAST_ENABLE_DEVELOPER_MODE" VAST_ENABLE_DEVELOPER_MODE
+       "${TENZIR_IS_NOT_SUBPROJECT}")
+add_feature_info("TENZIR_ENABLE_DEVELOPER_MODE" TENZIR_ENABLE_DEVELOPER_MODE
                  "enables build settings for a nicer development environment.")
 
-if (VAST_ENABLE_DEVELOPER_MODE)
+if (TENZIR_ENABLE_DEVELOPER_MODE)
   # Support tools like clang-tidy by creating a compilation database and
   # copying it to the project root.
   VASTExportCompileCommands(libvast_internal)
@@ -546,7 +550,7 @@ if (VAST_ENABLE_DEVELOPER_MODE)
                              INTERFACE CAF_ENABLE_TYPE_ID_CHECKS)
 endif ()
 
-if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
+if (TENZIR_ENABLE_DEVELOPER_MODE OR TENZIR_ENABLE_BUILDID)
   # Relocate debug paths to a common prefix for CCache users that work from
   # multiple worktrees.
   # The debug paths affect the build-id, we rewrite them to get a more
@@ -556,19 +560,19 @@ if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
     INTERFACE "-fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 endif ()
 
-option(VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES
+option(TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES
        "Update references when running in integration tests" OFF)
 add_feature_info(
-  "VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES"
-  VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES
+  "TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES"
+  TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES
   "update references when running integration tests.")
 
 # -- additional warnings -------------------------------------------------------
 
-option(VAST_ENABLE_MORE_WARNINGS "Enable addditional warnings" OFF)
-add_feature_info("VAST_ENABLE_MORE_WARNINGS" VAST_ENABLE_MORE_WARNINGS
+option(TENZIR_ENABLE_MORE_WARNINGS "Enable addditional warnings" OFF)
+add_feature_info("TENZIR_ENABLE_MORE_WARNINGS" TENZIR_ENABLE_MORE_WARNINGS
                  "enable additional warnings.")
-if (VAST_ENABLE_MORE_WARNINGS)
+if (TENZIR_ENABLE_MORE_WARNINGS)
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(
       libvast_internal
@@ -671,10 +675,10 @@ endif ()
 
 # -- schemas -------------------------------------------------------------------
 
-option(VAST_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with VAST" ON)
-add_feature_info("VAST_ENABLE_BUNDLED_SCHEMAS" VAST_ENABLE_BUNDLED_SCHEMAS
+option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with VAST" ON)
+add_feature_info("TENZIR_ENABLE_BUNDLED_SCHEMAS" TENZIR_ENABLE_BUNDLED_SCHEMAS
                  "install bundled schemas with VAST.")
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   add_custom_target(
     vast-schema
     COMMAND
@@ -683,7 +687,7 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
     COMMENT "Copying schema directory")
 endif ()
 
-if (VAST_ENABLE_BUNDLED_SCHEMAS)
+if (TENZIR_ENABLE_BUNDLED_SCHEMAS)
   install(
     DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
@@ -692,10 +696,10 @@ endif ()
 
 # -- manpages ------------------------------------------------------------------
 
-option(VAST_ENABLE_MANPAGES "Generate manpages for binaries" ON)
-add_feature_info("VAST_ENABLE_MANPAGES" VAST_ENABLE_MANPAGES
+option(TENZIR_ENABLE_MANPAGES "Generate manpages for binaries" ON)
+add_feature_info("TENZIR_ENABLE_MANPAGES" TENZIR_ENABLE_MANPAGES
                  "generate manpages for binaries.")
-if (VAST_ENABLE_MANPAGES)
+if (TENZIR_ENABLE_MANPAGES)
   find_package(Pandoc REQUIRED)
 endif ()
 
@@ -709,18 +713,18 @@ find_package(OpenSSL REQUIRED)
 
 # TODO: Require CAF to be installed.
 
-if (VAST_ENABLE_DEVELOPER_MODE
+if (TENZIR_ENABLE_DEVELOPER_MODE
     AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt"
     AND NOT CAF_ROOT_DIR)
-  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT ON)
+  set(TENZIR_ENABLE_BUNDLED_CAF_DEFAULT ON)
 else ()
-  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT OFF)
+  set(TENZIR_ENABLE_BUNDLED_CAF_DEFAULT OFF)
 endif ()
-option(VAST_ENABLE_BUNDLED_CAF "Use the CAF submodule"
-       "${VAST_ENABLE_BUNDLED_CAF_DEFAULT}")
-add_feature_info("VAST_ENABLE_BUNDLED_CAF" VAST_ENABLE_BUNDLED_CAF
+option(TENZIR_ENABLE_BUNDLED_CAF "Use the CAF submodule"
+       "${TENZIR_ENABLE_BUNDLED_CAF_DEFAULT}")
+add_feature_info("TENZIR_ENABLE_BUNDLED_CAF" TENZIR_ENABLE_BUNDLED_CAF
                  "use the CAF submodule.")
-if (NOT VAST_ENABLE_BUNDLED_CAF)
+if (NOT TENZIR_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
     CAF
@@ -732,7 +736,7 @@ if (NOT VAST_ENABLE_BUNDLED_CAF)
   endif ()
   string(
     APPEND
-    VAST_FIND_DEPENDENCY_LIST
+    TENZIR_FIND_DEPENDENCY_LIST
     "\nfind_package(CAF ${CAF_VERSION} COMPONENTS core io test openssl REQUIRED)"
   )
   dependency_summary("CAF" CAF::core "Dependencies")
@@ -744,8 +748,8 @@ else ()
         "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the libvast/aux/caf submodule"
     )
   else ()
-    set(VAST_ENABLE_BUNDLED_CAF ON)
-    set(CAF_LOG_LEVEL ${VAST_CAF_LOG_LEVEL})
+    set(TENZIR_ENABLE_BUNDLED_CAF ON)
+    set(CAF_LOG_LEVEL ${TENZIR_CAF_LOG_LEVEL})
     set(CAF_ENABLE_EXAMPLES OFF)
     set(CAF_ENABLE_TESTING OFF)
     set(CAF_ENABLE_TOOLS OFF)
@@ -789,7 +793,7 @@ else ()
     VASTSystemizeTarget(libcaf_test)
     set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
     mark_as_advanced(caf_build_header_path)
-    string(APPEND VAST_EXTRA_TARGETS_FILES
+    string(APPEND TENZIR_EXTRA_TARGETS_FILES
            "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/../CAF/CAFTargets.cmake\")"
            "\nmark_as_advanced(caf_build_header_path)")
     set(CAF_FOUND true)
@@ -802,7 +806,7 @@ else ()
                      "Dependencies")
 endif ()
 
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
+if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
     AND BUILD_SHARED_LIBS
     AND CAF_LIBRARY_CORE)
   # Copy CAF libraries to installation directory
@@ -835,7 +839,8 @@ install(
 
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-  VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}"
+  VERSION
+    "${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}"
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(
@@ -860,10 +865,10 @@ install(
 
 # TODO: Make other scripts installable as well.
 
-option(VAST_ENABLE_CORELIGHT_CAT "Install corelight-cat with VAST" OFF)
-add_feature_info("VAST_ENABLE_CORELIGHT_CAT" VAST_ENABLE_CORELIGHT_CAT
+option(TENZIR_ENABLE_CORELIGHT_CAT "Install corelight-cat with VAST" OFF)
+add_feature_info("TENZIR_ENABLE_CORELIGHT_CAT" TENZIR_ENABLE_CORELIGHT_CAT
                  "install corelight-cat with VAST.")
-if (VAST_ENABLE_CORELIGHT_CAT)
+if (TENZIR_ENABLE_CORELIGHT_CAT)
   install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
     # These should be inherited from the source but they
@@ -880,10 +885,12 @@ if (VAST_ENABLE_CORELIGHT_CAT)
     COMPONENT Runtime)
 endif ()
 
-option(VAST_ENABLE_VAST_DF_PERCENT "Install tenzir-df-percent.sh with VAST" ON)
-add_feature_info("VAST_ENABLE_VAST_DF_PERCENT" VAST_ENABLE_VAST_DF_PERCENT
-                 "install tenzir-df-percent.sh with VAST.")
-if (VAST_ENABLE_VAST_DF_PERCENT)
+option(TENZIR_ENABLE_TENZIR_DF_PERCENT "Install tenzir-df-percent.sh with VAST"
+       ON)
+add_feature_info(
+  "TENZIR_ENABLE_TENZIR_DF_PERCENT" TENZIR_ENABLE_TENZIR_DF_PERCENT
+  "install tenzir-df-percent.sh with VAST.")
+if (TENZIR_ENABLE_TENZIR_DF_PERCENT)
   install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/tenzir-df-percent.sh"
     # These should be inherited from the source but they
@@ -915,22 +922,22 @@ install(
 
 # -- python bindings ----------------------------------------------------------
 
-option(VAST_ENABLE_PYTHON_BINDINGS "Install Python bindings (requires poetry)"
-       ON)
-add_feature_info("VAST_ENABLE_PYTHON_BINDINGS" VAST_ENABLE_PYTHON_BINDINGS
+option(TENZIR_ENABLE_PYTHON_BINDINGS
+       "Install Python bindings (requires poetry)" ON)
+add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
                  "install Python bindings (requires poetry).")
 # Currently, we install all dependencies for the Python bindings alongside the
 # Python bindings by default. We are not sure whether this is a good choice, or
 # whether it works well with the Nix sandbox, so this may change in the future.
 cmake_dependent_option(
-  VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
-  "Install Python bindings with dependencies" ON "VAST_ENABLE_PYTHON_BINDINGS"
-  OFF)
+  TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
+  "Install Python bindings with dependencies" ON
+  "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
 add_feature_info(
-  "VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES"
-  VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
+  "TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES"
+  TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
   "install Python bindings with dependencies.")
-if (VAST_ENABLE_PYTHON_BINDINGS)
+if (TENZIR_ENABLE_PYTHON_BINDINGS)
   find_program(POETRY_PATH poetry)
   if (NOT POETRY_PATH)
     message(
@@ -942,9 +949,9 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
   # command, so in order to make the installation not modify the source directory
   # we need to copy the Python bindings in their entirety into the build directory
   # first.
-  unset(VAST_POETRY_EXTRA_INSTALL_ARGS)
-  if (NOT VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES)
-    list(APPEND VAST_POETRY_EXTRA_INSTALL_ARGS "--no-deps")
+  unset(TENZIR_POETRY_EXTRA_INSTALL_ARGS)
+  if (NOT TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES)
+    list(APPEND TENZIR_POETRY_EXTRA_INSTALL_ARGS "--no-deps")
   endif ()
   install(
     CODE "
@@ -963,23 +970,23 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
       WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\"
       COMMAND_ERROR_IS_FATAL ANY)
     file(
-      GLOB VAST_PYTHON_WHL
+      GLOB TENZIR_PYTHON_WHL
       \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python/dist/*.whl\")
     file(
-      GLOB VAST_OLD_INSTALLED_BINS
+      GLOB TENZIR_OLD_INSTALLED_BINS
       \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
     execute_process(
       COMMAND \"${POETRY_PATH}\" run pip install
-        ${VAST_POETRY_EXTRA_INSTALL_ARGS}
+        ${TENZIR_POETRY_EXTRA_INSTALL_ARGS}
         --prefix \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\"
-        \"\${VAST_PYTHON_WHL}\"
+        \"\${TENZIR_PYTHON_WHL}\"
       WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\"
       COMMAND_ERROR_IS_FATAL ANY)
     file(
-      GLOB VAST_NEW_INSTALLED_BINS
+      GLOB TENZIR_NEW_INSTALLED_BINS
       \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
-    foreach (bin IN LISTS VAST_NEW_INSTALLED_BINS)
-      if (NOT \"\${bin}\" IN_LIST VAST_OLD_INSTALLED_BINS)
+    foreach (bin IN LISTS TENZIR_NEW_INSTALLED_BINS)
+      if (NOT \"\${bin}\" IN_LIST TENZIR_OLD_INSTALLED_BINS)
         file(REMOVE \"\${bin}\")
       endif ()
     endforeach ()"
@@ -999,14 +1006,14 @@ feature_summary(
   APPEND)
 
 # Print the feature and build summary if we're not a subproject.
-if (NOT VAST_IS_SUBPROJECT)
+if (NOT TENZIR_IS_SUBPROJECT)
   feature_summary(WHAT ENABLED_FEATURES DISABLED_FEATURES
                   INCLUDE_QUIET_PACKAGES)
   unset(build_summary)
   list(APPEND build_summary "Build summary:\n")
   list(APPEND build_summary " * Edition: ${TENZIR_EDITION_NAME}")
-  list(APPEND build_summary " * Version: ${VAST_VERSION_TAG}")
-  list(APPEND build_summary " * Build Tree Hash: ${VAST_BUILD_TREE_HASH}")
+  list(APPEND build_summary " * Version: ${TENZIR_VERSION_TAG}")
+  list(APPEND build_summary " * Build Tree Hash: ${TENZIR_BUILD_TREE_HASH}")
   list(APPEND build_summary "")
   if (CMAKE_CONFIGURATION_TYPES)
     list(APPEND build_summary
@@ -1042,15 +1049,15 @@ if (NOT VAST_IS_SUBPROJECT)
   list(APPEND build_summary "")
   list(JOIN build_summary "\n" build_summary_joined)
   message(STATUS "${build_summary_joined}")
-  get_property(VAST_DEPENDENCY_SUMMARY_CATEGORIES GLOBAL
-               PROPERTY "VAST_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY")
-  foreach (category IN LISTS VAST_DEPENDENCY_SUMMARY_CATEGORIES)
-    get_property(VAST_DEPENDENCY_SUMMARY GLOBAL
-                 PROPERTY "VAST_DEPENDENCY_SUMMARY_${category}_PROPERTY")
-    if (VAST_DEPENDENCY_SUMMARY)
+  get_property(TENZIR_DEPENDENCY_SUMMARY_CATEGORIES GLOBAL
+               PROPERTY "TENZIR_DEPENDENCY_SUMMARY_CATEGORIES_PROPERTY")
+  foreach (category IN LISTS TENZIR_DEPENDENCY_SUMMARY_CATEGORIES)
+    get_property(TENZIR_DEPENDENCY_SUMMARY GLOBAL
+                 PROPERTY "TENZIR_DEPENDENCY_SUMMARY_${category}_PROPERTY")
+    if (TENZIR_DEPENDENCY_SUMMARY)
       unset(build_summary)
       list(APPEND build_summary "${category}:")
-      foreach (summary IN LISTS VAST_DEPENDENCY_SUMMARY)
+      foreach (summary IN LISTS TENZIR_DEPENDENCY_SUMMARY)
         list(APPEND build_summary "${summary}")
       endforeach ()
       list(APPEND build_summary "")

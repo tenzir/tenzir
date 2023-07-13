@@ -32,7 +32,7 @@ reader::reader(const caf::settings& options) {
   auto parse_timeout = [&](std::string_view key, duration fallback) {
     auto timeout_value = get_or_duration(options, key, fallback);
     if (!timeout_value) {
-      VAST_WARN("client failed to read '{}': {}", key, timeout_value.error());
+      TENZIR_WARN("client failed to read '{}': {}", key, timeout_value.error());
       return fallback;
     }
     return *timeout_value;

@@ -19,7 +19,7 @@
 
 #include <filesystem>
 
-#define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast_actors, type)
+#define TENZIR_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast_actors, type)
 
 namespace vast {
 
@@ -461,39 +461,39 @@ using connector_actor = typed_actor_fwd<
 
 CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
 
-  VAST_ADD_TYPE_ID((std::filesystem::path))
-  VAST_ADD_TYPE_ID(
+  TENZIR_ADD_TYPE_ID((std::filesystem::path))
+  TENZIR_ADD_TYPE_ID(
     (std::vector<std::pair<std::filesystem::path, std::filesystem::path>>))
-  VAST_ADD_TYPE_ID(
+  TENZIR_ADD_TYPE_ID(
     (std::vector<
       std::tuple<vast::exec_node_actor, vast::operator_type, std::string>>))
 
-  VAST_ADD_TYPE_ID((vast::accountant_actor))
-  VAST_ADD_TYPE_ID((vast::active_indexer_actor))
-  VAST_ADD_TYPE_ID((vast::active_partition_actor))
-  VAST_ADD_TYPE_ID((vast::analyzer_plugin_actor))
-  VAST_ADD_TYPE_ID((vast::catalog_actor))
-  VAST_ADD_TYPE_ID((vast::default_active_store_actor))
-  VAST_ADD_TYPE_ID((vast::default_passive_store_actor))
-  VAST_ADD_TYPE_ID((vast::disk_monitor_actor))
-  VAST_ADD_TYPE_ID((vast::evaluator_actor))
-  VAST_ADD_TYPE_ID((vast::exec_node_actor))
-  VAST_ADD_TYPE_ID((vast::exec_node_sink_actor))
-  VAST_ADD_TYPE_ID((vast::exporter_actor))
-  VAST_ADD_TYPE_ID((vast::filesystem_actor))
-  VAST_ADD_TYPE_ID((vast::flush_listener_actor))
-  VAST_ADD_TYPE_ID((vast::importer_actor))
-  VAST_ADD_TYPE_ID((vast::index_actor))
-  VAST_ADD_TYPE_ID((vast::indexer_actor))
-  VAST_ADD_TYPE_ID((vast::node_actor))
-  VAST_ADD_TYPE_ID((vast::partition_actor))
-  VAST_ADD_TYPE_ID((vast::partition_creation_listener_actor))
-  VAST_ADD_TYPE_ID((vast::receiver_actor<vast::atom::done>))
-  VAST_ADD_TYPE_ID((vast::receiver_actor<vast::diagnostic>))
-  VAST_ADD_TYPE_ID((vast::rest_handler_actor))
-  VAST_ADD_TYPE_ID((vast::status_client_actor))
-  VAST_ADD_TYPE_ID((vast::stream_sink_actor<vast::table_slice>))
-  VAST_ADD_TYPE_ID((vast::stream_sink_actor<vast::table_slice, std::string>))
+  TENZIR_ADD_TYPE_ID((vast::accountant_actor))
+  TENZIR_ADD_TYPE_ID((vast::active_indexer_actor))
+  TENZIR_ADD_TYPE_ID((vast::active_partition_actor))
+  TENZIR_ADD_TYPE_ID((vast::analyzer_plugin_actor))
+  TENZIR_ADD_TYPE_ID((vast::catalog_actor))
+  TENZIR_ADD_TYPE_ID((vast::default_active_store_actor))
+  TENZIR_ADD_TYPE_ID((vast::default_passive_store_actor))
+  TENZIR_ADD_TYPE_ID((vast::disk_monitor_actor))
+  TENZIR_ADD_TYPE_ID((vast::evaluator_actor))
+  TENZIR_ADD_TYPE_ID((vast::exec_node_actor))
+  TENZIR_ADD_TYPE_ID((vast::exec_node_sink_actor))
+  TENZIR_ADD_TYPE_ID((vast::exporter_actor))
+  TENZIR_ADD_TYPE_ID((vast::filesystem_actor))
+  TENZIR_ADD_TYPE_ID((vast::flush_listener_actor))
+  TENZIR_ADD_TYPE_ID((vast::importer_actor))
+  TENZIR_ADD_TYPE_ID((vast::index_actor))
+  TENZIR_ADD_TYPE_ID((vast::indexer_actor))
+  TENZIR_ADD_TYPE_ID((vast::node_actor))
+  TENZIR_ADD_TYPE_ID((vast::partition_actor))
+  TENZIR_ADD_TYPE_ID((vast::partition_creation_listener_actor))
+  TENZIR_ADD_TYPE_ID((vast::receiver_actor<vast::atom::done>))
+  TENZIR_ADD_TYPE_ID((vast::receiver_actor<vast::diagnostic>))
+  TENZIR_ADD_TYPE_ID((vast::rest_handler_actor))
+  TENZIR_ADD_TYPE_ID((vast::status_client_actor))
+  TENZIR_ADD_TYPE_ID((vast::stream_sink_actor<vast::table_slice>))
+  TENZIR_ADD_TYPE_ID((vast::stream_sink_actor<vast::table_slice, std::string>))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
 
@@ -508,4 +508,4 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
 #undef vast_uuid_synopsis_map
 
-#undef VAST_ADD_TYPE_ID
+#undef TENZIR_ADD_TYPE_ID

@@ -23,7 +23,7 @@ namespace vast::plugins::sort {
 namespace {
 
 auto is_extension_type(const type& type) -> bool {
-  VAST_ASSERT(type);
+  TENZIR_ASSERT(type);
   const auto f = []<concrete_type Type>(const Type&) {
     return not std::is_same_v<type_to_arrow_array_t<Type>,
                               type_to_arrow_array_storage_t<Type>>;
@@ -47,7 +47,7 @@ public:
       return {};
     }
     auto batch = to_record_batch(slice);
-    VAST_ASSERT(batch);
+    TENZIR_ASSERT(batch);
     sort_keys_.push_back(path->get(*batch));
     offset_table_.push_back(offset_table_.back()
                             + detail::narrow_cast<int64_t>(slice.rows()));
@@ -72,14 +72,14 @@ public:
       = arrow::compute::SortIndices(*chunked_key, sort_options_).ValueOrDie();
     auto result_buffer = std::vector<table_slice>{};
     for (const auto& index : static_cast<const arrow::Int64Array&>(*indices)) {
-      VAST_ASSERT(index.has_value());
+      TENZIR_ASSERT(index.has_value());
       const auto offset = std::prev(
         std::upper_bound(offset_table_.begin(), offset_table_.end(), *index));
       const auto cache_index = std::distance(offset_table_.begin(), offset);
       const auto row = *index - *offset;
       const auto& slice = cache_[cache_index];
       auto result = subslice(slice, row, row + 1);
-      VAST_ASSERT(result.rows() == 1);
+      TENZIR_ASSERT(result.rows() == 1);
       // TODO: Yielding slices with 1 row is very inefficient, and we probably
       // want to batch them to larger slices here before yielding (or implicitly
       // run the results through the rebatch operator).
@@ -247,4 +247,4 @@ public:
 
 } // namespace vast::plugins::sort
 
-VAST_REGISTER_PLUGIN(vast::plugins::sort::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::sort::plugin)

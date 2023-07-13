@@ -384,7 +384,7 @@ private:
 
 inline auto inspect(auto& f, operator_ptr& x) -> bool {
   // TODO: Is this the best way to do it?
-  // VAST_ASSERT(x);
+  // TENZIR_ASSERT(x);
   // if (auto* pipe = dynamic_cast<pipeline*>(x.get())) {
   //   return f.apply(*pipe);
   // }

@@ -51,7 +51,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
                                                             *settings));
     if (auto err = convert(as_data, index_config))
       return err;
-    VAST_VERBOSE("using customized indexing configuration {}", index_config);
+    TENZIR_VERBOSE("using customized indexing configuration {}", index_config);
   }
   auto handle = self->spawn(
     index, accountant, filesystem, catalog, indexdir,
@@ -64,7 +64,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     opt("tenzir.max-queries", sd::num_query_supervisors),
     std::filesystem::path{opt("tenzir.catalog-dir", indexdir.string())},
     std::move(index_config));
-  VAST_VERBOSE("{} spawned the index", *self);
+  TENZIR_VERBOSE("{} spawned the index", *self);
   return caf::actor_cast<caf::actor>(handle);
 }
 

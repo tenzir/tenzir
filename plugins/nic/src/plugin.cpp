@@ -46,10 +46,10 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    VAST_ASSERT(!args_.iface.inner.empty());
+    TENZIR_ASSERT(!args_.iface.inner.empty());
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
-    VAST_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
-               snaplen);
+    TENZIR_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
+                 snaplen);
     auto make = [](auto& ctrl, auto iface,
                    auto snaplen) mutable -> generator<chunk_ptr> {
       auto put_iface_in_promiscuous_mode = 1;
@@ -86,9 +86,9 @@ public:
         const auto now = std::chrono::steady_clock::now();
         if (num_buffered_packets >= defaults::import::table_slice_size
             or last_finish + defaults::import::batch_timeout < now) {
-          VAST_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
-                     vast::data{now - last_finish}, num_buffered_packets,
-                     buffer.size());
+          TENZIR_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
+                       vast::data{now - last_finish}, num_buffered_packets,
+                       buffer.size());
           last_finish = now;
           co_yield chunk::make(std::exchange(buffer, {}));
           // Reduce number of small allocations based on what we've seen
@@ -108,7 +108,7 @@ public:
           continue;
         }
         if (r == -2) {
-          VAST_DEBUG("reached end of trace with {} packets", num_packets);
+          TENZIR_DEBUG("reached end of trace with {} packets", num_packets);
           break;
         }
         if (r == PCAP_ERROR) {
@@ -123,7 +123,7 @@ public:
         // allowing users to use the `pcap` format to parse the byte stream.
         if (num_packets == 0) {
           auto linktype = pcap_datalink(pcap.get());
-          VAST_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
+          TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
           auto header = pcap::file_header{
 #ifdef PCAP_TSTAMP_PRECISION_NANO
             .magic_number = pcap::magic_number_2,
@@ -222,4 +222,4 @@ private:
 
 } // namespace vast::plugins::nic
 
-VAST_REGISTER_PLUGIN(vast::plugins::nic::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::nic::plugin)

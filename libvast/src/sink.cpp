@@ -29,16 +29,16 @@ namespace vast {
 namespace {
 
 void process_slice(caf::stateful_actor<sink_state>* self, table_slice slice) {
-  VAST_DEBUG("{} got: {} events from {}", *self, slice.rows(),
-             self->current_sender());
+  TENZIR_DEBUG("{} got: {} events from {}", *self, slice.rows(),
+               self->current_sender());
   auto now = std::chrono::steady_clock::now();
   auto time_since_flush = now - self->state.last_flush;
   if (self->state.processed == 0) {
-    VAST_INFO("{} received first result with a latency of {}", self->state.name,
-              to_string(time_since_flush));
+    TENZIR_INFO("{} received first result with a latency of {}",
+                self->state.name, to_string(time_since_flush));
   }
   auto reached_max_events = [&] {
-    VAST_INFO("{} reached limit of {} events", *self, self->state.max_events);
+    TENZIR_INFO("{} reached limit of {} events", *self, self->state.max_events);
     self->state.writer->flush();
     self->state.send_report();
     self->quit();
@@ -55,7 +55,7 @@ void process_slice(caf::stateful_actor<sink_state>* self, table_slice slice) {
     slice = head(std::move(slice), remaining);
   // Handle events.
   if (auto err = self->state.writer->write(slice)) {
-    VAST_ERROR("{} {}", *self, render(err));
+    TENZIR_ERROR("{} {}", *self, render(err));
     t.stop(self->state.processed - starting_rows);
     self->quit(std::move(err));
     return;
@@ -92,13 +92,13 @@ void sink_state::send_report() {
 
 caf::behavior sink(caf::stateful_actor<sink_state>* self,
                    format::writer_ptr&& writer, uint64_t max_events) {
-  VAST_DEBUG("{} spawned ({}, {})", *self, writer->name(),
-             VAST_ARG(max_events));
+  TENZIR_DEBUG("{} spawned ({}, {})", *self, writer->name(),
+               TENZIR_ARG(max_events));
   using namespace std::chrono;
   self->state.writer = std::move(writer);
   self->state.last_flush = steady_clock::now();
   if (max_events > 0) {
-    VAST_DEBUG("{} caps event export at {} events", *self, max_events);
+    TENZIR_DEBUG("{} caps event export at {} events", *self, max_events);
     self->state.max_events = max_events;
   } else {
     // Interpret 0 as infinite.
@@ -137,22 +137,22 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       process_slice(self, std::move(slice));
     },
     [self](atom::limit, uint64_t max) {
-      VAST_DEBUG("{} caps event export at {} events", *self, max);
+      TENZIR_DEBUG("{} caps event export at {} events", *self, max);
       if (self->state.processed < max)
         self->state.max_events = max;
       else
-        VAST_WARN("{} ignores new limit of {} (already processed {} events)",
-                  *self, max, self->state.processed);
+        TENZIR_WARN("{} ignores new limit of {} (already processed {} events)",
+                    *self, max, self->state.processed);
     },
     [self](accountant_actor accountant) {
-      VAST_DEBUG("{} sets accountant to {}", *self, accountant);
+      TENZIR_DEBUG("{} sets accountant to {}", *self, accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, atom::announce_v, st.name);
     },
     [self](atom::statistics, const caf::actor& statistics_subscriber) {
-      VAST_DEBUG("{} sets statistics subscriber to {}", *self,
-                 statistics_subscriber);
+      TENZIR_DEBUG("{} sets statistics subscriber to {}", *self,
+                   statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
     [self](atom::status, status_verbosity v) {

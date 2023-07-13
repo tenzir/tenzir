@@ -34,11 +34,11 @@ TF_BACKEND_VALIDATORS = [
 VALIDATORS = [
     *TF_BACKEND_VALIDATORS,
     AWS_REGION_VALIDATOR,
-    dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
-    dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
-    dynaconf.Validator("VAST_IMAGE", default="tenzir/vast"),
-    dynaconf.Validator("VAST_VERSION", default="latest"),
-    dynaconf.Validator("VAST_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]),
+    dynaconf.Validator("TENZIR_CIDR", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_PEERED_VPC_ID", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_IMAGE", default="tenzir/vast"),
+    dynaconf.Validator("TENZIR_VERSION", default="latest"),
+    dynaconf.Validator("TENZIR_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]),
 ]
 
 
@@ -146,8 +146,8 @@ def current_image(c, service):
 def build_images(c, step):
     """Build the provided VAST based Dockerfile using the configured base image
     and version"""
-    if conf(VALIDATORS)["VAST_VERSION"] == "build":
-        c.run(f"docker build -t $VAST_IMAGE:build {REPOROOT}")
+    if conf(VALIDATORS)["TENZIR_VERSION"] == "build":
+        c.run(f"docker build -t $TENZIR_IMAGE:build {REPOROOT}")
     c.run(f"{docker_compose(step)} build")
 
 

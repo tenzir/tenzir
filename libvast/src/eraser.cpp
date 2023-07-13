@@ -33,8 +33,9 @@ record eraser_state::status(status_verbosity) const {
 eraser_actor::behavior_type
 eraser(eraser_actor::stateful_pointer<eraser_state> self,
        caf::timespan interval, std::string query, index_actor index) {
-  VAST_TRACE_SCOPE("eraser: {} {} {} {}", VAST_ARG(self->id()),
-                   VAST_ARG(interval), VAST_ARG(query), VAST_ARG(index));
+  TENZIR_TRACE_SCOPE("eraser: {} {} {} {}", TENZIR_ARG(self->id()),
+                     TENZIR_ARG(interval), TENZIR_ARG(query),
+                     TENZIR_ARG(index));
   // Set member variables.
   self->state.interval_ = interval;
   self->state.query_ = std::move(query);
@@ -47,19 +48,19 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
                   atom::run_v)
         .then(
           [self](atom::ok) {
-            VAST_VERBOSE("{} successfully finishes run", *self);
+            TENZIR_VERBOSE("{} successfully finishes run", *self);
             self->delayed_send(static_cast<eraser_actor>(self),
                                self->state.interval_, atom::ping_v);
           },
           [self](const caf::error& e) {
-            VAST_WARN("{} encountered error while erasing: {}", *self, e);
+            TENZIR_WARN("{} encountered error while erasing: {}", *self, e);
             self->delayed_send(static_cast<eraser_actor>(self),
                                self->state.interval_, atom::ping_v);
           });
     },
     [self](atom::run) -> caf::result<atom::ok> {
       auto const& query = self->state.query_;
-      VAST_VERBOSE("{} runs with query {}", *self, query);
+      TENZIR_VERBOSE("{} runs with query {}", *self, query);
       auto expr = to<expression>(query);
       if (!expr)
         return caf::make_error(ec::invalid_query, fmt::format("{} failed to "
@@ -79,9 +80,9 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
           [self, transform = std::move(*transform),
            rp](catalog_lookup_result& result) mutable {
             for (const auto& [_, partition_infos] : result.candidate_infos) {
-              VAST_DEBUG("{} resolved query {} to {} partitions", *self,
-                         self->state.query_,
-                         partition_infos.partition_infos.size());
+              TENZIR_DEBUG("{} resolved query {} to {} partitions", *self,
+                           self->state.query_,
+                           partition_infos.partition_infos.size());
               if (partition_infos.partition_infos.empty()) {
                 rp.deliver(atom::ok_v);
                 continue;
@@ -94,19 +95,19 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
                           keep_original_partition::no)
                 .then(
                   [self, rp](const std::vector<vast::partition_info>&) mutable {
-                    VAST_DEBUG("{} applied filter transform with query {}",
-                               *self, self->state.query_);
+                    TENZIR_DEBUG("{} applied filter transform with query {}",
+                                 *self, self->state.query_);
                     rp.deliver(atom::ok_v);
                   },
                   [self, rp](const caf::error& e) mutable {
-                    VAST_WARN("{} failed to apply filter query {}: {}", *self,
-                              self->state.query_, e);
+                    TENZIR_WARN("{} failed to apply filter query {}: {}", *self,
+                                self->state.query_, e);
                     rp.deliver(e);
                   });
             }
           },
           [rp](const caf::error& e) mutable {
-            VAST_ASSERT(false, caf::deep_to_string(e).c_str());
+            TENZIR_ASSERT(false, caf::deep_to_string(e).c_str());
             rp.deliver(e);
           });
       return rp;

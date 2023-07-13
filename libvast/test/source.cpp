@@ -61,7 +61,7 @@ class fixture : public fixtures::deterministic_actor_system_and_events {
 public:
   fixture()
     : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+      TENZIR_PP_STRINGIFY(SUITE)) {
   }
 };
 

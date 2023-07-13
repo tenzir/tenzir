@@ -51,13 +51,13 @@ private:
   }
 
   void increment() {
-    VAST_ASSERT(rng_);
-    VAST_ASSERT(!rng_->complete());
+    TENZIR_ASSERT(rng_);
+    TENZIR_ASSERT(!rng_->complete());
     rng_->increment();
   }
 
   [[nodiscard]] decltype(auto) dereference() const {
-    VAST_ASSERT(rng_);
+    TENZIR_ASSERT(rng_);
     return rng_->dereference();
   }
 
@@ -90,7 +90,7 @@ protected:
   }
 
 // FIXME: Why doesn't GCC like the above friend declaration?
-#if VAST_GCC
+#if TENZIR_GCC
 public:
 #endif
   [[nodiscard]] decltype(auto) dereference() const {

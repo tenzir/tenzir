@@ -30,7 +30,7 @@ public:
     if (auto* op = dynamic_cast<local_remote_operator*>(op_.get())) {
       op_ = std::move(op->op_);
     }
-    VAST_ASSERT(not dynamic_cast<const local_remote_operator*>(op_.get()));
+    TENZIR_ASSERT(not dynamic_cast<const local_remote_operator*>(op_.get()));
   }
 
   auto predicate_pushdown(expression const& expr) const
@@ -138,6 +138,6 @@ using serialization_plugin = operator_inspection_plugin<local_remote_operator>;
 
 } // namespace vast::plugins::local_remote
 
-VAST_REGISTER_PLUGIN(vast::plugins::local_remote::local_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::local_remote::remote_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::local_remote::serialization_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::local_remote::local_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::local_remote::remote_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::local_remote::serialization_plugin)

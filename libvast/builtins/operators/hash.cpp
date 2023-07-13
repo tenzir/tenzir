@@ -80,14 +80,14 @@ public:
           const auto digest = vast::hash(value, *config_.salt);
           const auto append_result
             = hashes_builder->Append(fmt::format("{:x}", digest));
-          VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+          TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
         }
       } else {
         for (const auto& value : values(field.type, *array)) {
           const auto digest = vast::hash(value);
           const auto append_result
             = hashes_builder->Append(fmt::format("{:x}", digest));
-          VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+          TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
         }
       }
       return {
@@ -188,4 +188,4 @@ public:
 
 } // namespace vast::plugins::hash
 
-VAST_REGISTER_PLUGIN(vast::plugins::hash::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::hash::plugin)

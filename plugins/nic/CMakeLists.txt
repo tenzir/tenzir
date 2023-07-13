@@ -12,11 +12,8 @@ project(
 include(CTest)
 
 find_package(VAST REQUIRED)
-VASTRegisterPlugin(
-  TARGET nic
-  ENTRYPOINT src/plugin.cpp
-  #TEST_SOURCES tests.cpp
-  )
+VASTRegisterPlugin(TARGET nic ENTRYPOINT src/plugin.cpp #TEST_SOURCES tests.cpp
+)
 
 # Link nic plugin against libpcap.
 find_package(PkgConfig REQUIRED QUIET)

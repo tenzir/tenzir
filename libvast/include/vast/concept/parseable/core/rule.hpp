@@ -175,7 +175,7 @@ public:
 
   template <class T>
   bool parse(Iterator& f, const Iterator& l, T&& x) const {
-    VAST_ASSERT(*parser_ != nullptr);
+    TENZIR_ASSERT(*parser_ != nullptr);
     return (*parser_)->parse(f, l, std::forward<T>(x));
   }
 
@@ -219,13 +219,13 @@ public:
 
   bool parse(Iterator& f, const Iterator& l, unused_type x) const {
     auto ptr = parser_.lock();
-    VAST_ASSERT(ptr != nullptr);
+    TENZIR_ASSERT(ptr != nullptr);
     return (*ptr)->parse(f, l, x);
   }
 
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     auto ptr = parser_.lock();
-    VAST_ASSERT(ptr != nullptr);
+    TENZIR_ASSERT(ptr != nullptr);
     return (*ptr)->parse(f, l, x);
   }
 

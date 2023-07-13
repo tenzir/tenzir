@@ -74,4 +74,4 @@ public:
 
 } // namespace vast::plugins::unflatten
 
-VAST_REGISTER_PLUGIN(vast::plugins::unflatten::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::unflatten::plugin)

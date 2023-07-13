@@ -82,7 +82,7 @@ Cortex VAST Analyzer, run the default configuration:
 docker compose -f thehive.yaml up --build
 ```
 
-You can also use the `VAST_ENDPOINT` environment variable to target a remote
+You can also use the `TENZIR_ENDPOINT` environment variable to target a remote
 VAST server.
 
 ## With VAST running as a Compose service

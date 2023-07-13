@@ -109,7 +109,7 @@ handle_lookup(Actor& self, const vast::query_context& query_context,
       }
     },
     [&](const extract_query_context& extract) {
-      VAST_ASSERT(slices.size() == checkers.size());
+      TENZIR_ASSERT(slices.size() == checkers.size());
       for (size_t i = 0; i < slices.size(); ++i) {
         const auto& slice = slices[i];
         const auto& checker = checkers[i];
@@ -149,14 +149,14 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       rp.deliver(caf::make_error(ec::lookup_error, "partition store shutting "
                                                    "down"));
   });
-  VAST_DEBUG("{} loads passive store from path {}", *self, self->state.path);
+  TENZIR_DEBUG("{} loads passive store from path {}", *self, self->state.path);
   self->request(self->state.fs, caf::infinite, atom::mmap_v, self->state.path)
     .then(
       [self, start](chunk_ptr chunk) {
         auto seg = segment::make(std::move(chunk));
         if (!seg) {
-          VAST_ERROR("{} couldn't create segment from chunk: {}", *self,
-                     seg.error());
+          TENZIR_ERROR("{} couldn't create segment from chunk: {}", *self,
+                       seg.error());
           self->send_exit(self,
                           caf::make_error(vast::ec::format_error,
                                           fmt::format("{} failed to create "
@@ -168,18 +168,18 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
         self->state.name
           = fmt::format("passive-store-{}", self->state.segment->id());
         // Delegate all deferred evaluations now that we have the partition chunk.
-        VAST_DEBUG("{} delegates {} deferred evaluations", *self,
-                   self->state.deferred_requests.size());
+        TENZIR_DEBUG("{} delegates {} deferred evaluations", *self,
+                     self->state.deferred_requests.size());
         for (auto&& [query, rp] :
              std::exchange(self->state.deferred_requests, {})) {
-          VAST_TRACE("{} delegates {} (pending: {})", *self, query,
-                     rp.pending());
+          TENZIR_TRACE("{} delegates {} (pending: {})", *self, query,
+                       rp.pending());
           rp.delegate(static_cast<store_actor>(self), atom::query_v,
                       std::move(query));
         }
         for (auto&& [ids, rp] :
              std::exchange(self->state.deferred_erasures, {})) {
-          VAST_TRACE("{} delegates erase (pending: {})", *self, rp.pending());
+          TENZIR_TRACE("{} delegates erase (pending: {})", *self, rp.pending());
           rp.delegate(static_cast<store_actor>(self), atom::erase_v,
                       std::move(ids));
         }
@@ -191,8 +191,8 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
                    });
       },
       [self](caf::error& err) {
-        VAST_ERROR("{} could not map passive store segment into memory: {}",
-                   *self, render(err));
+        TENZIR_ERROR("{} could not map passive store segment into memory: {}",
+                     *self, render(err));
         for (auto&& [_, rp] : std::exchange(self->state.deferred_requests, {}))
           rp.deliver(err);
         for (auto&& [_, rp] : std::exchange(self->state.deferred_erasures, {}))
@@ -201,7 +201,7 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       });
   return {
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
-      VAST_DEBUG("{} handles new query {}", *self, query_context.id);
+      TENZIR_DEBUG("{} handles new query {}", *self, query_context.id);
       if (!self->state.segment) {
         auto rp = self->make_response_promise<uint64_t>();
         self->state.deferred_requests.emplace_back(query_context, rp);
@@ -244,13 +244,13 @@ passive_local_store(store_actor::stateful_pointer<passive_store_state> self,
       auto segment_size = rank(segment_ids);
       auto intersection = segment_ids & xs;
       auto intersection_size = rank(intersection);
-      VAST_DEBUG("{} erases {} of {} events", *self, intersection_size,
-                 segment_size);
+      TENZIR_DEBUG("{} erases {} of {} events", *self, intersection_size,
+                   segment_size);
       if (!is_subset(self->state.segment->ids(), xs))
         return caf::make_error(
           ec::logic_error, "attempted to partially erase a partition-local "
                            "segment store, which is an unsupported operation");
-      VAST_VERBOSE("{} gets wholly erased from {}", *self, self->state.path);
+      TENZIR_VERBOSE("{} gets wholly erased from {}", *self, self->state.path);
       // There is a (small) chance one or more lookups are currently still in
       // progress, so we dont call `self->quit()` here but instead rely on
       // ref-counting. The lookups can still finish normally because the
@@ -308,4 +308,4 @@ public:
 
 } // namespace vast::plugins::segment_store
 
-VAST_REGISTER_PLUGIN(vast::plugins::segment_store::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::segment_store::plugin)

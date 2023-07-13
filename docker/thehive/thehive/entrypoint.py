@@ -12,7 +12,7 @@ import requests
 logging.getLogger().setLevel(logging.DEBUG)
 
 CORTEX_URL = os.environ["CORTEX_URL"]
-VAST_ENDPOINT = os.environ["VAST_ENDPOINT"]
+TENZIR_ENDPOINT = os.environ["TENZIR_ENDPOINT"]
 THEHIVE_URL = "http://localhost:9000"
 
 CONFIG_LOCATION = "/opt/thp/thehive/conf/application.conf"
@@ -176,7 +176,7 @@ def init_cortex():
         {
             "name": "VAST-Search_1_0",
             "configuration": {
-                "endpoint": VAST_ENDPOINT,
+                "endpoint": TENZIR_ENDPOINT,
                 "max_events": 40,
                 "auto_extract_artifacts": False,
                 "check_tlp": False,

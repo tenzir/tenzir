@@ -225,7 +225,7 @@ struct fmt::formatter<vast::tql::meta_extractor> {
                               case schema:
                                 return "#schema";
                             }
-                            VAST_UNREACHABLE();
+                            TENZIR_UNREACHABLE();
                           }));
   }
 };
@@ -238,8 +238,8 @@ struct fmt::formatter<vast::tql::binary_expr> {
 
   template <typename FormatContext>
   auto format(const vast::tql::binary_expr& x, FormatContext& ctx) const {
-    VAST_ASSERT(x.left);
-    VAST_ASSERT(x.right);
+    TENZIR_ASSERT(x.left);
+    TENZIR_ASSERT(x.right);
     return fmt::format_to(ctx.out(), "({} {} {})", *x.left, x.op, *x.right);
   }
 };
@@ -287,7 +287,7 @@ struct fmt::formatter<vast::tql::binary_op> {
                               case mul:
                                 return "*";
                             }
-                            VAST_UNREACHABLE();
+                            TENZIR_UNREACHABLE();
                           }));
   }
 };

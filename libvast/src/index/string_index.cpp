@@ -172,7 +172,7 @@ flatbuffers::Offset<fbs::ValueIndex> string_index::pack_impl(
 
 caf::error string_index::unpack_impl(const fbs::ValueIndex& from) {
   const auto* from_string = from.value_index_as_string();
-  VAST_ASSERT(from_string);
+  TENZIR_ASSERT(from_string);
   max_length_ = from_string->max_length();
   if (auto err = unpack(*from_string->length_index(), length_))
     return err;

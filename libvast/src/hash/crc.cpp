@@ -120,7 +120,7 @@ crc32::crc32(seed_type seed) noexcept : digest_{seed} {
 }
 
 void crc32::add(std::span<const std::byte> bytes) noexcept {
-  VAST_ASSERT(bytes.size() <= (1u << 31) - 1);
+  TENZIR_ASSERT(bytes.size() <= (1u << 31) - 1);
   crc(bytes.data(), static_cast<int>(bytes.size()), digest_, &digest_);
 }
 

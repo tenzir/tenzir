@@ -71,7 +71,7 @@ private:
     const auto& typed_view = caf::get<view_type>(view);
     if (!distinct_.contains(typed_view)) {
       const auto [it, inserted] = distinct_.insert(materialize(typed_view));
-      VAST_ASSERT(inserted);
+      TENZIR_ASSERT(inserted);
     }
   }
 
@@ -109,4 +109,4 @@ class plugin : public virtual aggregation_function_plugin {
 
 } // namespace vast::plugins::count_distinct
 
-VAST_REGISTER_PLUGIN(vast::plugins::count_distinct::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::count_distinct::plugin)

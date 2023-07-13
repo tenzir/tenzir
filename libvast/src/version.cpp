@@ -17,7 +17,7 @@
 
 #include <arrow/util/config.h>
 
-#if VAST_ENABLE_JEMALLOC
+#if TENZIR_ENABLE_JEMALLOC
 #  include <jemalloc/jemalloc.h>
 #endif
 
@@ -45,7 +45,7 @@ record retrieve_versions() {
   arrow_version << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
                 << ARROW_VERSION_PATCH;
   result["Apache Arrow"] = arrow_version.str();
-#if VAST_ENABLE_JEMALLOC
+#if TENZIR_ENABLE_JEMALLOC
   result["jemalloc"] = JEMALLOC_VERSION;
 #else
   result["jemalloc"] = data{};

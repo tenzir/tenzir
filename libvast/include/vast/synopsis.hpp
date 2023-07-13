@@ -133,8 +133,8 @@ bool deserialize(auto& source, synopsis_ptr& ptr) {
   // Deserialize into a new instance.
   auto new_ptr = make_synopsis(type::from_legacy_type(t));
   if (!new_ptr) {
-    VAST_WARN("Error during synopsis deserialization {}",
-              caf::make_error(ec::invalid_synopsis_type));
+    TENZIR_WARN("Error during synopsis deserialization {}",
+                caf::make_error(ec::invalid_synopsis_type));
     return false;
   }
   synopsis::supported_inspectors i{std::ref(source)};
@@ -168,7 +168,7 @@ bool serialize(auto& sink, synopsis_ptr& ptr) {
     });
 
   if (err) {
-    VAST_WARN("Error during synopsis_ptr serialization, {}", err);
+    TENZIR_WARN("Error during synopsis_ptr serialization, {}", err);
     return false;
   }
   return true;

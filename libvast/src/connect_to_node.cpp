@@ -87,22 +87,22 @@ auto get_deadline(caf::timespan timeout)
   const auto local_version = retrieve_versions();
   assert_data_completness(remote_version, local_version);
   if (local_version.at("Tenzir") != remote_version.at("Tenzir")) {
-    VAST_WARN("client version {} does not match node version {}; "
-              "this may cause unexpected behavior",
-              local_version.at("Tenzir"), remote_version.at("Tenzir"));
+    TENZIR_WARN("client version {} does not match node version {}; "
+                "this may cause unexpected behavior",
+                local_version.at("Tenzir"), remote_version.at("Tenzir"));
     return false;
   }
-  VAST_DEBUG("client verified that client version matches node "
-             "version {}",
-             local_version.at("Tenzir"));
+  TENZIR_DEBUG("client verified that client version matches node "
+               "version {}",
+               local_version.at("Tenzir"));
   if (local_version.at("plugins") != remote_version.at("plugins")) {
-    VAST_WARN("client plugins {} do not match node plugins {}; "
-              "this may cause unexpected behavior",
-              local_version.at("plugins"), remote_version.at("plugins"));
+    TENZIR_WARN("client plugins {} do not match node plugins {}; "
+                "this may cause unexpected behavior",
+                local_version.at("plugins"), remote_version.at("plugins"));
     return false;
   }
-  VAST_DEBUG("client verified that local plugins match node plugins {}",
-             local_version.at("plugins"));
+  TENZIR_DEBUG("client verified that local plugins match node plugins {}",
+               local_version.at("plugins"));
   return true;
 }
 
@@ -155,7 +155,7 @@ connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
                                      details::get_deadline(timeout));
   auto result = caf::expected<node_actor>{caf::error{}};
   // `get_node_endpoint()` will add a default value.
-  VAST_ASSERT_CHEAP(node_endpoint->port.has_value());
+  TENZIR_ASSERT_CHEAP(node_endpoint->port.has_value());
   self
     ->request(connector_actor, caf::infinite, atom::connect_v,
               connect_request{node_endpoint->port->number(),

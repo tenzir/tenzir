@@ -173,9 +173,9 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
                                                          std::move(err)));
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
-                   ::strsignal(signal));
-        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
+                     ::strsignal(signal));
+        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
       });
   }
   if (show_schemas && !command_result.error()) {
@@ -204,9 +204,9 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
                                                      std::move(err)));
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
-                   ::strsignal(signal));
-        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
+                     ::strsignal(signal));
+        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
       });
   }
   if (!command_result)
@@ -258,4 +258,4 @@ public:
 
 } // namespace vast::plugins::show
 
-VAST_REGISTER_PLUGIN(vast::plugins::show::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::show::plugin)

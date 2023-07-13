@@ -52,18 +52,18 @@ struct tag_variant : std::variant<tag<Ts>...> {
     }
     if constexpr (Inspector::is_loading) {
       switch (index) {
-#define VAST_TAG_VARIANT_APPLY_INDEX(idx)                                      \
+#define TENZIR_TAG_VARIANT_APPLY_INDEX(idx)                                    \
   case idx:                                                                    \
     if constexpr ((idx) < sizeof...(Ts)) {                                     \
       x.template emplace<idx>();                                               \
       return true;                                                             \
     }                                                                          \
     return false
-        VAST_TAG_VARIANT_APPLY_INDEX(0);
-        VAST_TAG_VARIANT_APPLY_INDEX(1);
-        VAST_TAG_VARIANT_APPLY_INDEX(2);
-        VAST_TAG_VARIANT_APPLY_INDEX(3);
-#undef VAST_TAG_VARIANT_APPLY_INDEX
+        TENZIR_TAG_VARIANT_APPLY_INDEX(0);
+        TENZIR_TAG_VARIANT_APPLY_INDEX(1);
+        TENZIR_TAG_VARIANT_APPLY_INDEX(2);
+        TENZIR_TAG_VARIANT_APPLY_INDEX(3);
+#undef TENZIR_TAG_VARIANT_APPLY_INDEX
         default:
           die("unimplemented");
       }

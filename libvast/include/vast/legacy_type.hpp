@@ -370,7 +370,7 @@ public:
       static_assert(detail::always_false_v<Derived>, "cannot inspect non-leaf "
                                                      "type");
     }
-    VAST_ASSERT(!name.empty());
+    TENZIR_ASSERT(!name.empty());
     auto tid = type_id<Derived>();
     return f.object(x).pretty_name(name).fields(
       f.field("type-id", tid), f.field("name", x.name_),
@@ -381,7 +381,7 @@ protected:
   // Convenience function to cast an abstract type into an instance of this
   // type. Useful in, e.g., the implementation of comparison operators.
   static const Derived& downcast(const legacy_abstract_type& x) {
-    VAST_ASSERT(dynamic_cast<const Derived*>(&x) != nullptr);
+    TENZIR_ASSERT(dynamic_cast<const Derived*>(&x) != nullptr);
     return static_cast<const Derived&>(x);
   }
 

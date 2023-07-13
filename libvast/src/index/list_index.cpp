@@ -40,7 +40,7 @@ list_index::list_index(vast::type t, caf::settings opts)
     },
   };
   value_type_ = caf::visit(f, value_index::type());
-  VAST_ASSERT(value_type_);
+  TENZIR_ASSERT(value_type_);
   size_t components = std::log10(max_size_);
   if (max_size_ % 10 != 0)
     ++components;
@@ -68,8 +68,8 @@ bool list_index::append_impl(data_view x, id pos) {
         for (auto i = old; i < elements_.size(); ++i) {
           elements_[i] = factory<value_index>::make(value_type_, options());
           if (!elements_[i])
-            VAST_DEBUG("{} failed to create value index for type {}",
-                       detail::pretty_type_name(this), value_type_);
+            TENZIR_DEBUG("{} failed to create value index for type {}",
+                         detail::pretty_type_name(this), value_type_);
         }
       }
       auto x = v->begin();
@@ -133,7 +133,7 @@ flatbuffers::Offset<fbs::ValueIndex> list_index::pack_impl(
 
 caf::error list_index::unpack_impl(const fbs::ValueIndex& from) {
   const auto* from_list = from.value_index_as_list();
-  VAST_ASSERT(from_list);
+  TENZIR_ASSERT(from_list);
   elements_.clear();
   elements_.reserve(from_list->elements()->size());
   for (const auto* element : *from_list->elements()) {

@@ -235,8 +235,8 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
                                         "tenzir.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
   if (!cfg) {
-    VAST_ERROR("{} failed to parse metrics configuration: {}", *self,
-               cfg.error());
+    TENZIR_ERROR("{} failed to parse metrics configuration: {}", *self,
+                 cfg.error());
     return {};
   }
   auto accountant = self->spawn<caf::detached>(
@@ -244,7 +244,7 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
   auto err = register_component(self, caf::actor_cast<caf::actor>(accountant),
                                 "accountant");
   // Registration cannot fail; empty registry.
-  VAST_ASSERT(err == caf::none);
+  TENZIR_ASSERT(err == caf::none);
   return accountant;
 }
 
@@ -273,9 +273,10 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
   }
   auto timeout = *timeout_value;
   if (inv.arguments.empty())
-    VAST_VERBOSE("{} collects status for all components", *self);
+    TENZIR_VERBOSE("{} collects status for all components", *self);
   else
-    VAST_VERBOSE("{} collects status for components {}", *self, inv.arguments);
+    TENZIR_VERBOSE("{} collects status for components {}", *self,
+                   inv.arguments);
   collect_component_status(self, verbosity, timeout, inv.arguments);
   return {};
 }
@@ -295,7 +296,7 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self,
 caf::expected<caf::actor>
 spawn_component(node_actor::stateful_pointer<node_state> self,
                 const invocation& inv, spawn_arguments& args) {
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(inv), VAST_ARG(args));
+  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(inv), TENZIR_ARG(args));
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
     return caf::make_error(ec::unspecified, "invalid spawn component");
@@ -360,7 +361,7 @@ std::string generate_label(node_actor::stateful_pointer<node_state> self,
 caf::message
 node_state::spawn_command(const invocation& inv,
                           [[maybe_unused]] caf::actor_system& sys) {
-  VAST_TRACE_SCOPE("{}", inv);
+  TENZIR_TRACE_SCOPE("{}", inv);
   using std::begin;
   using std::end;
   auto* self = this_node;
@@ -369,7 +370,7 @@ node_state::spawn_command(const invocation& inv,
       ec::no_error, "can't spawn a component while tearing down"));
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
-  VAST_ASSERT(inv_name_split.size() > 1);
+  TENZIR_ASSERT(inv_name_split.size() > 1);
   std::string comp_type{inv_name_split[1]};
   // Auto-generate label if none given.
   std::string label;
@@ -388,23 +389,23 @@ node_state::spawn_command(const invocation& inv,
     label = comp_type;
     if (!is_singleton(comp_type)) {
       label = generate_label(self, comp_type);
-      VAST_DEBUG("{} auto-generated new label: {}", *self, label);
+      TENZIR_DEBUG("{} auto-generated new label: {}", *self, label);
     }
   }
-  VAST_DEBUG("{} spawns a {} with the label {}", *self, comp_type, label);
+  TENZIR_DEBUG("{} spawns a {} with the label {}", *self, comp_type, label);
   auto spawn_inv = inv;
   // Spawn our new VAST component.
   spawn_arguments args{spawn_inv, self->state.dir, label};
   auto component = spawn_component(self, args.inv, args);
   if (!component) {
     if (component.error())
-      VAST_WARN("{} failed to spawn component: {}", __func__,
-                render(component.error()));
+      TENZIR_WARN("{} failed to spawn component: {}", __func__,
+                  render(component.error()));
     return caf::make_message(std::move(component.error()));
   }
   if (auto err = register_component(self, *component, comp_type, label))
     return caf::make_message(std::move(err));
-  VAST_DEBUG("{} registered {} as {}", *self, comp_type, label);
+  TENZIR_DEBUG("{} registered {} as {}", *self, comp_type, label);
   return caf::make_message(*component);
 }
 
@@ -426,7 +427,7 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   auto result = rest_handlers.find(desc.canonical_path);
   // If no canonical path matches, `find_endpoint_plugin()` should
   // have already returned `nullptr`.
-  VAST_ASSERT_CHEAP(result != rest_handlers.end());
+  TENZIR_ASSERT_CHEAP(result != rest_handlers.end());
   return result->second;
 }
 
@@ -447,34 +448,34 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
               : self->spawn(posix_filesystem, self->state.dir, accountant);
   auto err
     = register_component(self, caf::actor_cast<caf::actor>(fs), "filesystem");
-  VAST_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
+  TENZIR_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
-    VAST_DEBUG("{} got DOWN from {}", *self, msg.source);
+    TENZIR_DEBUG("{} got DOWN from {}", *self, msg.source);
     if (!self->state.tearing_down) {
       auto actor = caf::actor_cast<caf::actor>(msg.source);
       auto component = self->state.registry.remove(actor);
-      VAST_ASSERT(component);
+      TENZIR_ASSERT(component);
       // Terminate if a singleton dies.
       if (is_core_component(component->type)) {
-        VAST_ERROR("{} terminates after DOWN from {} with reason {}", *self,
-                   component->type, msg.reason);
+        TENZIR_ERROR("{} terminates after DOWN from {} with reason {}", *self,
+                     component->type, msg.reason);
         self->send_exit(self, caf::exit_reason::user_shutdown);
       }
     }
   });
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
+    TENZIR_DEBUG("{} got EXIT from {}", *self, msg.source);
     self->state.tearing_down = true;
     // Ignore duplicate EXIT messages except for hard kills.
     self->set_exit_handler([=](const caf::exit_msg& msg) {
       if (msg.reason == caf::exit_reason::kill) {
-        VAST_WARN("{} received hard kill and terminates immediately", *self);
+        TENZIR_WARN("{} received hard kill and terminates immediately", *self);
         self->quit(msg.reason);
       } else {
-        VAST_DEBUG("{} ignores duplicate EXIT message from {}", *self,
-                   msg.source);
+        TENZIR_DEBUG("{} ignores duplicate EXIT message from {}", *self,
+                     msg.source);
       }
     });
     auto& registry = self->state.registry;
@@ -490,7 +491,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       "importer", "index", "catalog", "accountant", "filesystem",
     };
     // Make sure that these remain in sync.
-    VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
+    TENZIR_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
     for (const char* name : shutdown_sequence) {
       if (auto comp = registry.remove(name)) {
         if (comp->type == "filesystem")
@@ -525,30 +526,31 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     terminate<policy::parallel>(self, std::move(aux_components))
       .then(
         [self, core_shutdown_sequence](atom::done) mutable {
-          VAST_DEBUG("{} terminated auxiliary actors, commencing core shutdown "
-                     "sequence...",
-                     *self);
+          TENZIR_DEBUG("{} terminated auxiliary actors, commencing core "
+                       "shutdown "
+                       "sequence...",
+                       *self);
           core_shutdown_sequence();
         },
         [self, core_shutdown_sequence](const caf::error& err) mutable {
-          VAST_ERROR("{} failed to cleanly terminate auxiliary actors {}, "
-                     "shutting down core components",
-                     *self, err);
+          TENZIR_ERROR("{} failed to cleanly terminate auxiliary actors {}, "
+                       "shutting down core components",
+                       *self, err);
           core_shutdown_sequence();
         });
   });
   // Define the node behavior.
   return {
     [self](atom::run, const invocation& inv) -> caf::result<caf::message> {
-      VAST_DEBUG("{} got command {} with options {} and arguments {}", *self,
-                 inv.full_name, inv.options, inv.arguments);
+      TENZIR_DEBUG("{} got command {} with options {} and arguments {}", *self,
+                   inv.full_name, inv.options, inv.arguments);
       // Run the command.
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
     },
     [self](atom::proxy,
            http_request_description& desc) -> caf::result<rest_response> {
-      VAST_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);
+      TENZIR_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler)
         // TODO: Distinguish between 404 (unknown path) and 500 (failed to
@@ -597,8 +599,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       return {};
     },
     [self](atom::spawn, const invocation& inv) {
-      VAST_DEBUG("{} got spawn command {} with options {} and arguments {}",
-                 *self, inv.full_name, inv.options, inv.arguments);
+      TENZIR_DEBUG("{} got spawn command {} with options {} and arguments {}",
+                   *self, inv.full_name, inv.options, inv.arguments);
       // Run the command.
       this_node = self;
       auto msg = run(inv, self->system(), node_state::command_factory);
@@ -606,7 +608,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       if (!msg) {
         result = caf::result<caf::actor>{std::move(msg.error())};
       } else if (msg->empty()) {
-        VAST_VERBOSE("{} encountered empty invocation response", *self);
+        TENZIR_VERBOSE("{} encountered empty invocation response", *self);
       } else {
         auto f = caf::message_handler{
           [&](caf::error& x) {
@@ -616,8 +618,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
             result = caf::result<caf::actor>{std::move(x)};
           },
           [&](caf::message& x) {
-            VAST_ERROR("{} encountered invalid invocation response: {}", *self,
-                       deep_to_string(x));
+            TENZIR_ERROR("{} encountered invalid invocation response: {}",
+                         *self, deep_to_string(x));
             result = caf::result<caf::actor>{caf::make_error(
               ec::invalid_result, "invalid spawn invocation response",
               std::move(x))};
@@ -629,7 +631,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     },
     [self](atom::put, const caf::actor& component,
            const std::string& type) -> caf::result<atom::ok> {
-      VAST_DEBUG("{} got new {}", *self, type);
+      TENZIR_DEBUG("{} got new {}", *self, type);
       if (type.empty())
         return caf::make_error(ec::unspecified, "empty component type");
       // Check if the new component is a singleton.
@@ -638,33 +640,33 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         return caf::make_error(ec::unspecified, "component already exists");
       // Generate label
       auto label = generate_label(self, type);
-      VAST_DEBUG("{} generated new component label {}", *self, label);
+      TENZIR_DEBUG("{} generated new component label {}", *self, label);
       if (auto err = register_component(self, component, type, label))
         return err;
       return atom::ok_v;
     },
     [self](atom::get, atom::type, const std::string& type) {
-      VAST_DEBUG("{} got a request for a component of type {}", *self, type);
+      TENZIR_DEBUG("{} got a request for a component of type {}", *self, type);
       auto result = self->state.registry.find_by_type(type);
-      VAST_DEBUG("{} responds to the request for {} with {}", *self, type,
-                 result);
+      TENZIR_DEBUG("{} responds to the request for {} with {}", *self, type,
+                   result);
       return result;
     },
     [self](atom::get, atom::label, const std::string& label) {
-      VAST_DEBUG("{} got a request for the component {}", *self, label);
+      TENZIR_DEBUG("{} got a request for the component {}", *self, label);
       auto result = self->state.registry.find_by_label(label);
-      VAST_DEBUG("{} responds to the request for {} with {}", *self, label,
-                 result);
+      TENZIR_DEBUG("{} responds to the request for {} with {}", *self, label,
+                   result);
       return result;
     },
     [self](atom::get, atom::label, const std::vector<std::string>& labels) {
-      VAST_DEBUG("{} got a request for the components {}", *self, labels);
+      TENZIR_DEBUG("{} got a request for the components {}", *self, labels);
       std::vector<caf::actor> result;
       result.reserve(labels.size());
       for (const auto& label : labels)
         result.push_back(self->state.registry.find_by_label(label));
-      VAST_DEBUG("{} responds to the request for {} with {}", *self, labels,
-                 result);
+      TENZIR_DEBUG("{} responds to the request for {} with {}", *self, labels,
+                   result);
       return result;
     },
     [](atom::get, atom::version) { //
@@ -672,7 +674,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     },
     [self](atom::config) -> record {
       auto result = to_data(self->config().content);
-      VAST_ASSERT(caf::holds_alternative<record>(result));
+      TENZIR_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
     [self](atom::spawn, operator_box& box, operator_type input_type,

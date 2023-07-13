@@ -26,18 +26,18 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs) {
   // Ignore duplicate EXIT messages except for hard kills.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     if (msg.reason == caf::exit_reason::kill) {
-      VAST_WARN("{} received hard kill and terminates immediately", *self);
+      TENZIR_WARN("{} received hard kill and terminates immediately", *self);
       self->quit(msg.reason);
     } else {
-      VAST_DEBUG("{} ignores duplicate EXIT message from {}", *self,
-                 msg.source);
+      TENZIR_DEBUG("{} ignores duplicate EXIT message from {}", *self,
+                   msg.source);
     }
   });
   // Terminate actors as requested.
   terminate<Policy>(self, std::move(xs))
     .then(
       [=](atom::done) {
-        VAST_DEBUG("{} terminates after shutting down all dependents", *self);
+        TENZIR_DEBUG("{} terminates after shutting down all dependents", *self);
         self->quit(caf::exit_reason::user_shutdown);
       },
       [=](const caf::error& err) {
@@ -57,7 +57,7 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs) {
   terminate<Policy>(self, std::move(xs))
     .receive(
       [&](atom::done) {
-        VAST_DEBUG("{} terminates after shutting down all dependents", *self);
+        TENZIR_DEBUG("{} terminates after shutting down all dependents", *self);
       },
       [&](const caf::error& err) {
         die(

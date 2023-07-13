@@ -93,7 +93,7 @@ caf::expected<size_t> compute_dbdir_size(std::filesystem::path dbdir,
     return detail::recursive_size(dbdir);
   }
   const auto& command = fmt::format("{} {}", *config.scan_binary, dbdir);
-  VAST_VERBOSE("executing command '{}' to determine size of dbdir", command);
+  TENZIR_VERBOSE("executing command '{}' to determine size of dbdir", command);
   auto cmd_output = detail::execute_blocking(command);
   if (!cmd_output)
     return cmd_output.error();
@@ -116,9 +116,9 @@ disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              const disk_monitor_config& config,
              const std::filesystem::path& db_dir, index_actor index) {
-  VAST_TRACE_SCOPE("disk_monitor {} {} {} {}", VAST_ARG(self->id()),
-                   VAST_ARG(config.high_water_mark),
-                   VAST_ARG(config.low_water_mark), VAST_ARG(db_dir));
+  TENZIR_TRACE_SCOPE("disk_monitor {} {} {} {}", TENZIR_ARG(self->id()),
+                     TENZIR_ARG(config.high_water_mark),
+                     TENZIR_ARG(config.low_water_mark), TENZIR_ARG(db_dir));
   using namespace std::string_literals;
   if (auto error = validate(config)) {
     self->quit(error);
@@ -132,9 +132,9 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
     [self](atom::ping) {
       self->delayed_send(self, self->state.config.scan_interval, atom::ping_v);
       if (self->state.purging()) {
-        VAST_DEBUG("{} ignores ping because a deletion is still in "
-                   "progress",
-                   *self);
+        TENZIR_DEBUG("{} ignores ping because a deletion is still in "
+                     "progress",
+                     *self);
         return;
       }
       // TODO: This is going to do one syscall per file in the database
@@ -144,11 +144,11 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // `inotify()` or similar to do real-time tracking of the db size.
       auto size = compute_dbdir_size(self->state.dbdir, self->state.config);
       if (!size) {
-        VAST_WARN("{} failed to calculate recursive size of {}: {}", *self,
-                  self->state.dbdir, size.error());
+        TENZIR_WARN("{} failed to calculate recursive size of {}: {}", *self,
+                    self->state.dbdir, size.error());
         return;
       }
-      VAST_VERBOSE("{} checks db-directory of size {}", *self, *size);
+      TENZIR_VERBOSE("{} checks db-directory of size {}", *self, *size);
       if (*size > self->state.config.high_water_mark) {
         self
           ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
@@ -158,7 +158,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
               // nop
             },
             [=](const caf::error& err) {
-              VAST_ERROR("{} failed to purge db-directory: {}", *self, err);
+              TENZIR_ERROR("{} failed to purge db-directory: {}", *self, err);
             });
       }
     },
@@ -181,7 +181,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           continue;
         uuid id = {};
         if (!parsers::uuid(partition, id)) {
-          VAST_VERBOSE("{} failed to find partition {}", *self, partition);
+          TENZIR_VERBOSE("{} failed to find partition {}", *self, partition);
           continue;
         }
         if (entry.is_regular_file()) {
@@ -191,16 +191,16 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           if (!err && file_size != static_cast<std::uintmax_t>(-1))
             partitions.push_back({id, file_size, mtime});
           else
-            VAST_WARN("{} failed to get file size and last write time for "
-                      "partition {}",
-                      *self, partition);
+            TENZIR_WARN("{} failed to get file size and last write time for "
+                        "partition {}",
+                        *self, partition);
         }
       }
       if (partitions.empty()) {
-        VAST_VERBOSE("{} failed to find any partitions to delete", *self);
+        TENZIR_VERBOSE("{} failed to find any partitions to delete", *self);
         return {};
       }
-      VAST_DEBUG("{} found {} partitions on disk", *self, partitions.size());
+      TENZIR_DEBUG("{} found {} partitions on disk", *self, partitions.size());
       auto& blacklist = self->state.blacklist;
       if (!blacklist.empty()) {
         // Sort partitions so they're usable for `std::set_difference`.
@@ -208,10 +208,10 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                   [](const auto& lhs, const auto& rhs) {
                     return lhs.id < rhs.id;
                   });
-        VAST_ASSERT(std::is_sorted(blacklist.begin(), blacklist.end(),
-                                   [](const auto& lhs, const auto& rhs) {
-                                     return lhs.id < rhs.id;
-                                   }));
+        TENZIR_ASSERT(std::is_sorted(blacklist.begin(), blacklist.end(),
+                                     [](const auto& lhs, const auto& rhs) {
+                                       return lhs.id < rhs.id;
+                                     }));
         std::vector<partition_diskstate> good_partitions;
         std::set_difference(partitions.begin(), partitions.end(),
                             blacklist.begin(), blacklist.end(),
@@ -233,11 +233,11 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           if (const auto size
               = compute_dbdir_size(self->state.dbdir, self->state.config);
               !size) {
-            VAST_WARN("{} failed to calculate size of {}: {}", *self,
-                      self->state.dbdir, size.error());
+            TENZIR_WARN("{} failed to calculate size of {}: {}", *self,
+                        self->state.dbdir, size.error());
           } else {
-            VAST_VERBOSE("{} erased ids from index; leftover size is {}", *self,
-                         *size);
+            TENZIR_VERBOSE("{} erased ids from index; leftover size is {}",
+                           *self, *size);
             if (*size > self->state.config.low_water_mark) {
               // Repeat until we're below the low water mark
               self->send(self, atom::erase_v);
@@ -247,7 +247,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       };
       for (size_t i = 0; i < idx; ++i) {
         auto& partition = partitions.at(i);
-        VAST_VERBOSE("{} erases partition {} from index", *self, partition.id);
+        TENZIR_VERBOSE("{} erases partition {} from index", *self,
+                       partition.id);
         self
           ->request(self->state.index, erase_timeout, atom::erase_v,
                     partition.id)
@@ -256,8 +257,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
               continuation();
             },
             [=, id = partition.id](caf::error& e) {
-              VAST_WARN("{} failed to erase partition {} within {}: {}", *self,
-                        id, erase_timeout, e);
+              TENZIR_WARN("{} failed to erase partition {} within {}: {}",
+                          *self, id, erase_timeout, e);
               self->state.blacklist.insert(
                 disk_monitor_state::blacklist_entry{id, std::move(e)});
               continuation();

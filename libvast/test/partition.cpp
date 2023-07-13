@@ -39,15 +39,15 @@ using mock_filesystem_actor
 
 //  CAF_ADD_TYPE_ID generated unused const variable warning when compiled with
 //  clang. The other fix would be to place the macros in a header file
-VAST_DIAGNOSTIC_PUSH
-VAST_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE
+TENZIR_DIAGNOSTIC_PUSH
+TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE
 
 CAF_BEGIN_TYPE_ID_BLOCK(partition_ut_block, 10000)
   CAF_ADD_TYPE_ID(partition_ut_block, (mock_filesystem_actor))
   CAF_ADD_TYPE_ID(partition_ut_block, (deliver_mmap_promise))
 CAF_END_TYPE_ID_BLOCK(partition_ut_block)
 
-VAST_DIAGNOSTIC_POP
+TENZIR_DIAGNOSTIC_POP
 
 namespace {
 mock_filesystem_actor::behavior_type mock_filesystem(
@@ -62,7 +62,7 @@ mock_filesystem_actor::behavior_type mock_filesystem(
     },
     [](atom::write, const std::filesystem::path&,
        const chunk_ptr& chk) -> caf::result<atom::ok> {
-      VAST_ASSERT(chk != nullptr);
+      TENZIR_ASSERT(chk != nullptr);
       return atom::ok_v;
     },
     [](atom::read, const std::filesystem::path&) -> caf::result<chunk_ptr> {
@@ -96,7 +96,7 @@ mock_filesystem_actor::behavior_type mock_filesystem(
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+      TENZIR_PP_STRINGIFY(SUITE)) {
     caf::init_global_meta_objects<caf::id_block::partition_ut_block>();
   }
 };

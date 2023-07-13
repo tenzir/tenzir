@@ -37,7 +37,7 @@ table_slice_column::table_slice_column(table_slice slice,
 }
 
 data_view table_slice_column::operator[](size_t row) const {
-  VAST_ASSERT(row < size());
+  TENZIR_ASSERT(row < size());
   return slice_.at(row, column_);
 }
 

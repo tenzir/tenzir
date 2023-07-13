@@ -42,7 +42,7 @@ std::span<const std::byte> none_type_representation() {
     const auto type = fbs::CreateType(builder);
     builder.Finish(type);
     auto result = builder.Release();
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -59,7 +59,7 @@ constexpr size_t reserved_string_size(std::string_view str) {
 const fbs::Type*
 resolve_transparent(const fbs::Type* root, enum type::transparent transparent
                                            = type::transparent::yes) {
-  VAST_ASSERT(root);
+  TENZIR_ASSERT(root);
   while (transparent == type::transparent::yes) {
     switch (root->type_type()) {
       case fbs::type::Type::pattern_type:
@@ -82,7 +82,7 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
         break;
       case fbs::type::Type::enriched_type:
         root = root->type_as_enriched_type()->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         break;
     }
   }
@@ -116,9 +116,9 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
         return result;
       case fbs::type::Type::enriched_type: {
         const auto* enriched = root->type_as_enriched_type();
-        VAST_ASSERT(enriched);
+        TENZIR_ASSERT(enriched);
         root = enriched->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         result = as_bytes(*enriched->type());
         break;
       }
@@ -132,8 +132,8 @@ template <class T>
            || std::is_same_v<T, enumeration_type::field_view>)
 void construct_enumeration_type(stateful_type_base& self, const T* begin,
                                 const T* end) {
-  VAST_ASSERT(begin != end, "An enumeration type must not have zero "
-                            "fields");
+  TENZIR_ASSERT(begin != end, "An enumeration type must not have zero "
+                              "fields");
   // Unlike for other concrete types, we do not calculate the exact amount of
   // bytes we need to allocate beforehand. This is because the individual
   // fields are stored in a flat hash map, whose size cannot trivially be
@@ -166,7 +166,7 @@ void construct_enumeration_type(stateful_type_base& self, const T* begin,
 template <class T>
 void construct_record_type(stateful_type_base& self, const T& begin,
                            const T& end) {
-  VAST_ASSERT(begin != end, "A record type must not have zero fields.");
+  TENZIR_ASSERT(begin != end, "A record type must not have zero fields.");
   const auto reserved_size = [&]() noexcept {
     // By default the builder allocates 1024 bytes, which is much more than
     // what we require, and since we can easily calculate the exact amount we
@@ -179,7 +179,7 @@ void construct_record_type(stateful_type_base& self, const T& begin,
     for (auto it = begin; it != end; ++it) {
       const auto& type_bytes = as_bytes(it->type);
       size += 24;
-      VAST_ASSERT(!it->name.empty(), "Record field names must not be empty.");
+      TENZIR_ASSERT(!it->name.empty(), "Record field names must not be empty.");
       size += reserved_string_size(it->name);
       size += type_bytes.size();
     }
@@ -204,7 +204,7 @@ void construct_record_type(stateful_type_base& self, const T& begin,
     builder, fbs::type::Type::record_type, record_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
-  VAST_ASSERT(result.size() == reserved_size);
+  TENZIR_ASSERT(result.size() == reserved_size);
   auto chunk = chunk::make(std::move(result));
   self = type{std::move(chunk)};
 }
@@ -224,8 +224,8 @@ type enrich_type_with_arrow_metadata(class type type,
     std::vector<std::pair<std::string, std::string>> attributes{};
     for (auto f : doc.get_object()) {
       if (!f.value.is_string()) {
-        VAST_WARN("ignoring non-string Arrow metadata: {}",
-                  simdjson::to_string(f));
+        TENZIR_WARN("ignoring non-string Arrow metadata: {}",
+                    simdjson::to_string(f));
         continue;
       }
       auto value = std::string{f.value.get_string().value()};
@@ -254,7 +254,7 @@ type enrich_type_with_arrow_metadata(class type type,
       names_and_attributes[index].second = deserialize_attributes(value);
       continue;
     }
-    VAST_WARN("unhandled Arrow metadata key '{}'", key);
+    TENZIR_WARN("unhandled Arrow metadata key '{}'", key);
   }
   for (auto it = names_and_attributes.rbegin();
        it != names_and_attributes.rend(); ++it) {
@@ -322,7 +322,7 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
           values.push_back(serialize_attributes(*enriched_type->attributes()));
         }
         root = enriched_type->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         break;
       }
     }
@@ -347,19 +347,19 @@ type& type::operator=(type&& other) noexcept = default;
 type::~type() noexcept = default;
 
 type::type(chunk_ptr&& table) noexcept {
-#if VAST_ENABLE_ASSERTIONS
-  VAST_ASSERT(table);
-  VAST_ASSERT(table->size() > 0);
+#if TENZIR_ENABLE_ASSERTIONS
+  TENZIR_ASSERT(table);
+  TENZIR_ASSERT(table->size() > 0);
   const auto* const data = reinterpret_cast<const uint8_t*>(table->data());
   auto verifier = flatbuffers::Verifier{data, table->size()};
-  VAST_ASSERT(fbs::GetType(data)->Verify(verifier),
-              "Encountered invalid vast.fbs.Type FlatBuffers table.");
+  TENZIR_ASSERT(fbs::GetType(data)->Verify(verifier),
+                "Encountered invalid vast.fbs.Type FlatBuffers table.");
 #  if defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
-  VAST_ASSERT(verifier.GetComputedSize() == table->size(),
-              "Encountered unexpected excess bytes in vast.fbs.Type "
-              "FlatBuffers table.");
+  TENZIR_ASSERT(verifier.GetComputedSize() == table->size(),
+                "Encountered unexpected excess bytes in vast.fbs.Type "
+                "FlatBuffers table.");
 #  endif // defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
-#endif   // VAST_ENABLE_ASSERTIONS
+#endif   // TENZIR_ENABLE_ASSERTIONS
   table_ = std::move(table);
 }
 
@@ -405,7 +405,7 @@ type::type(std::string_view name, const type& nested,
           }
           if (const auto* stripped_attributes = enriched_type->attributes()) {
             for (const auto* stripped_attribute : *stripped_attributes) {
-              VAST_ASSERT(stripped_attribute->key());
+              TENZIR_ASSERT(stripped_attribute->key());
               // Skip over any attributes that were already in the new list of
               // attributes.
               if (std::any_of(
@@ -426,7 +426,7 @@ type::type(std::string_view name, const type& nested,
           }
           nested_bytes = as_bytes(*enriched_type->type());
           root = enriched_type->type_nested_root();
-          VAST_ASSERT(root);
+          TENZIR_ASSERT(root);
           break;
         }
       }
@@ -541,12 +541,12 @@ type type::infer(const data& value) noexcept {
       // Technically lists can contain heterogeneous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
       auto value_type = infer(*list.begin());
-      VAST_ASSERT(std::all_of(list.begin() + 1, list.end(),
-                              [&](const auto& elem) noexcept {
-                                return value_type.type_index()
-                                       == infer(elem).type_index();
-                              }),
-                  "expected a homogenous list");
+      TENZIR_ASSERT(std::all_of(list.begin() + 1, list.end(),
+                                [&](const auto& elem) noexcept {
+                                  return value_type.type_index()
+                                         == infer(elem).type_index();
+                                }),
+                    "expected a homogenous list");
       return type{list_type{value_type}};
     },
     [](const map& map) noexcept -> type {
@@ -557,14 +557,15 @@ type type::infer(const data& value) noexcept {
       // purposes we only check the first element when assertions are disabled.
       auto key_type = infer(map.begin()->first);
       auto value_type = infer(map.begin()->second);
-      VAST_ASSERT(std::all_of(map.begin() + 1, map.end(),
-                              [&](const auto& elem) noexcept {
-                                return key_type.type_index()
-                                         == infer(elem.first).type_index()
-                                       && value_type.type_index()
-                                            == infer(elem.second).type_index();
-                              }),
-                  "expected a homogenous map");
+      TENZIR_ASSERT(
+        std::all_of(map.begin() + 1, map.end(),
+                    [&](const auto& elem) noexcept {
+                      return key_type.type_index()
+                               == infer(elem.first).type_index()
+                             && value_type.type_index()
+                                  == infer(elem.second).type_index();
+                    }),
+        "expected a homogenous map");
       return type{map_type{key_type, value_type}};
     },
     [](const record& record) noexcept -> type {
@@ -692,8 +693,8 @@ legacy_type type::to_legacy_type() const noexcept {
     [&](const enumeration_type& enumeration) noexcept -> legacy_type {
       auto result = legacy_enumeration_type{};
       for (uint32_t i = 0; const auto& field : enumeration.fields()) {
-        VAST_ASSERT(i++ == field.key, "failed to convert enumeration type to "
-                                      "legacy enumeration type");
+        TENZIR_ASSERT(i++ == field.key, "failed to convert enumeration type to "
+                                        "legacy enumeration type");
         result.fields.emplace_back(std::string{field.name});
       }
       return result;
@@ -735,9 +736,9 @@ legacy_type type::to_legacy_type() const noexcept {
 const fbs::Type& type::table(enum transparent transparent) const noexcept {
   const auto repr = as_bytes(*this);
   const auto* table = fbs::GetType(repr.data());
-  VAST_ASSERT(table);
+  TENZIR_ASSERT(table);
   const auto* resolved = resolve_transparent(table, transparent);
-  VAST_ASSERT(resolved);
+  TENZIR_ASSERT(resolved);
   return *resolved;
 }
 
@@ -792,7 +793,7 @@ data type::construct() const noexcept {
 }
 
 data type::to_definition(bool expand) const noexcept {
-  VAST_ASSERT(*this);
+  TENZIR_ASSERT(*this);
   // Utility function for adding the attributes to a type definition, if
   // required.
   auto attributes_enriched_definition
@@ -825,7 +826,7 @@ data type::to_definition(bool expand) const noexcept {
   }
   // At this point we've gone through all named aliases, but the last innermost
   // type may still have attributes.
-  VAST_ASSERT(name().empty());
+  TENZIR_ASSERT(name().empty());
   auto make_type_definition = detail::overload{
     [](const basic_type auto& self) noexcept -> data {
       return fmt::to_string(self);
@@ -875,11 +876,11 @@ type type::from_arrow(const arrow::DataType& other) noexcept {
       return type{vast_type{}};
     },
     [](const duration_type::arrow_type& dt) noexcept -> type {
-      VAST_ASSERT(dt.unit() == arrow::TimeUnit::NANO);
+      TENZIR_ASSERT(dt.unit() == arrow::TimeUnit::NANO);
       return type{duration_type{}};
     },
     [](const time_type::arrow_type& dt) noexcept -> type {
-      VAST_ASSERT(dt.unit() == arrow::TimeUnit::NANO);
+      TENZIR_ASSERT(dt.unit() == arrow::TimeUnit::NANO);
       return type{time_type{}};
     },
     [](const enumeration_type::arrow_type& et) noexcept -> type {
@@ -887,21 +888,21 @@ type type::from_arrow(const arrow::DataType& other) noexcept {
     },
     [](const list_type::arrow_type& lt) noexcept -> type {
       const auto value_field = lt.value_field();
-      VAST_ASSERT(value_field);
+      TENZIR_ASSERT(value_field);
       return type{list_type{from_arrow(*value_field)}};
     },
     [](const map_type::arrow_type& mt) noexcept -> type {
       const auto key_field = mt.key_field();
       const auto item_field = mt.item_field();
-      VAST_ASSERT(key_field);
-      VAST_ASSERT(item_field);
+      TENZIR_ASSERT(key_field);
+      TENZIR_ASSERT(item_field);
       return type{map_type{from_arrow(*key_field), from_arrow(*item_field)}};
     },
     [](const record_type::arrow_type& rt) noexcept -> type {
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(rt.num_fields());
       for (const auto& field : rt.fields()) {
-        VAST_ASSERT(field);
+        TENZIR_ASSERT(field);
         fields.emplace_back(field->name(), from_arrow(*field));
       }
       return type{record_type{fields}};
@@ -911,7 +912,7 @@ type type::from_arrow(const arrow::DataType& other) noexcept {
 }
 
 type type::from_arrow(const arrow::Field& field) noexcept {
-  VAST_ASSERT(field.type());
+  TENZIR_ASSERT(field.type());
   auto result = from_arrow(*field.type());
   if (const auto& metadata = field.metadata())
     result = enrich_type_with_arrow_metadata(std::move(result), *metadata);
@@ -922,7 +923,7 @@ type type::from_arrow(const arrow::Schema& schema) noexcept {
   auto fields = std::vector<record_type::field_view>{};
   fields.reserve(schema.num_fields());
   for (const auto& field : schema.fields()) {
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     fields.emplace_back(field->name(), from_arrow(*field));
   }
   auto result = type{record_type{fields}};
@@ -946,8 +947,8 @@ type::to_arrow_field(std::string_view name, bool nullable) const noexcept {
 }
 
 std::shared_ptr<arrow::Schema> type::to_arrow_schema() const noexcept {
-  VAST_ASSERT(!name().empty());
-  VAST_ASSERT(caf::holds_alternative<record_type>(*this));
+  TENZIR_ASSERT(!name().empty());
+  TENZIR_ASSERT(caf::holds_alternative<record_type>(*this));
   return arrow::schema(caf::get<record_type>(*this).to_arrow_type()->fields(),
                        make_arrow_metadata(*this));
 }
@@ -1066,7 +1067,7 @@ std::string_view type::name() const& noexcept {
         if (const auto* name = enriched_type->name())
           return name->string_view();
         root = enriched_type->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         break;
       }
     }
@@ -1100,7 +1101,7 @@ generator<std::string_view> type::names() const& noexcept {
         if (const auto* name = enriched_type->name())
           co_yield name->string_view();
         root = enriched_type->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         break;
       }
     }
@@ -1140,7 +1141,7 @@ type::attribute(const char* key) const& noexcept {
           }
         }
         root = enriched_type->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         break;
       }
     }
@@ -1176,7 +1177,7 @@ bool type::has_attributes() const noexcept {
             return true;
         }
         root = enriched_type->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         break;
       }
     }
@@ -1221,7 +1222,7 @@ type::attributes(type::recurse recurse) const& noexcept {
         if (recurse == type::recurse::no)
           co_return;
         root = enriched_type->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         break;
       }
     }
@@ -1255,7 +1256,7 @@ generator<type> type::aliases() const noexcept {
         if (enriched_type->name())
           co_yield type{table_->slice(as_bytes(*enriched_type->type()))};
         root = enriched_type->type_nested_root();
-        VAST_ASSERT(root);
+        TENZIR_ASSERT(root);
         break;
       }
     }
@@ -1512,8 +1513,8 @@ bool type_check(const type& x, const data& y) noexcept {
         // Technically lists can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
-        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
-                    "expected a homogenous list");
+        TENZIR_ASSERT(std::all_of(it + 1, u.end(), check), //
+                      "expected a homogenous list");
         return true;
       }
       return false;
@@ -1531,8 +1532,8 @@ bool type_check(const type& x, const data& y) noexcept {
         // Technically maps can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
-        VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
-                    "expected a homogenous map");
+        TENZIR_ASSERT(std::all_of(it + 1, u.end(), check), //
+                      "expected a homogenous map");
         return true;
       }
       return false;
@@ -1589,7 +1590,7 @@ std::span<const std::byte> as_bytes(const bool_type&) noexcept {
       = fbs::CreateType(builder, fbs::type::Type::bool_type, bool_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1623,7 +1624,7 @@ std::span<const std::byte> as_bytes(const int64_type&) noexcept {
                                       int64_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1657,7 +1658,7 @@ std::span<const std::byte> as_bytes(const uint64_type&) noexcept {
                                       uint64_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1692,7 +1693,7 @@ std::span<const std::byte> as_bytes(const double_type&) noexcept {
     builder.Finish(type);
     auto result = builder.Release();
 
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1727,7 +1728,7 @@ std::span<const std::byte> as_bytes(const duration_type&) noexcept {
     builder.Finish(type);
     auto result = builder.Release();
 
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1765,7 +1766,7 @@ std::span<const std::byte> as_bytes(const time_type&) noexcept {
     builder.Finish(type);
     auto result = builder.Release();
 
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1801,7 +1802,7 @@ std::span<const std::byte> as_bytes(const string_type&) noexcept {
     builder.Finish(type);
     auto result = builder.Release();
 
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1835,7 +1836,7 @@ std::span<const std::byte> as_bytes(const ip_type&) noexcept {
       = fbs::CreateType(builder, fbs::type::Type::ip_type, ip_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1858,7 +1859,7 @@ void ip_type::arrow_type::register_extension() noexcept {
   if (arrow::GetExtensionType(name))
     return;
   auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
-  VAST_ASSERT(status.ok());
+  TENZIR_ASSERT(status.ok());
   // We also register the IP type as vast.address for backwards compatibility.
   struct compat : arrow_type {
     using arrow_type::arrow_type;
@@ -1867,7 +1868,7 @@ void ip_type::arrow_type::register_extension() noexcept {
     }
   };
   auto compat_status = arrow::RegisterExtensionType(std::make_shared<compat>());
-  VAST_ASSERT(compat_status.ok());
+  TENZIR_ASSERT(compat_status.ok());
 }
 
 ip_type::builder_type::builder_type(arrow::MemoryPool* pool)
@@ -1945,7 +1946,7 @@ std::span<const std::byte> as_bytes(const subnet_type&) noexcept {
     builder.Finish(type);
     auto result = builder.Release();
 
-    VAST_ASSERT(result.size() == reserved_size);
+    TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
   return as_bytes(buffer);
@@ -1987,7 +1988,7 @@ void subnet_type::arrow_type::register_extension() noexcept {
   if (arrow::GetExtensionType(name))
     return;
   auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
-  VAST_ASSERT(status.ok());
+  TENZIR_ASSERT(status.ok());
   // We also register the subnet type as vast.subnet for backwards compatibility.
   struct compat : arrow_type {
     using arrow_type::arrow_type;
@@ -1996,7 +1997,7 @@ void subnet_type::arrow_type::register_extension() noexcept {
     }
   };
   auto compat_status = arrow::RegisterExtensionType(std::make_shared<compat>());
-  VAST_ASSERT(compat_status.ok());
+  TENZIR_ASSERT(compat_status.ok());
 }
 
 subnet_type::arrow_type::arrow_type() noexcept
@@ -2078,9 +2079,9 @@ enumeration_type::enumeration_type(
 const fbs::Type& enumeration_type::table() const noexcept {
   const auto repr = as_bytes(*this);
   const auto* table = fbs::GetType(repr.data());
-  VAST_ASSERT(table);
-  VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::enumeration_type);
+  TENZIR_ASSERT(table);
+  TENZIR_ASSERT(table == resolve_transparent(table));
+  TENZIR_ASSERT(table->type_type() == fbs::type::Type::enumeration_type);
   return *table;
 }
 
@@ -2093,15 +2094,15 @@ std::span<const std::byte> as_bytes(const enumeration_type& x) noexcept {
 
 enumeration enumeration_type::construct() const noexcept {
   const auto* fields = table().type_as_enumeration_type()->fields();
-  VAST_ASSERT(fields);
-  VAST_ASSERT(fields->size() > 0);
+  TENZIR_ASSERT(fields);
+  TENZIR_ASSERT(fields->size() > 0);
   const auto value = fields->Get(0)->key();
   // TODO: Currently, enumeration can not holds keys that don't fit a uint8_t;
   // when switching to a strong typedef for enumeration we should change that.
   // An example use case fbs::type::Type::is NetFlow, where many enumeration
   // values require usage of a uint16_t, which for now we would need to model as
   // strings in schemas.
-  VAST_ASSERT(value <= std::numeric_limits<enumeration>::max());
+  TENZIR_ASSERT(value <= std::numeric_limits<enumeration>::max());
   return static_cast<enumeration>(value);
 }
 
@@ -2117,7 +2118,7 @@ enumeration_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
 
 std::string_view enumeration_type::field(uint32_t key) const& noexcept {
   const auto* fields = table().type_as_enumeration_type()->fields();
-  VAST_ASSERT(fields);
+  TENZIR_ASSERT(fields);
   if (const auto* field = fields->LookupByKey(key))
     return field->name()->string_view();
   return std::string_view{};
@@ -2126,7 +2127,7 @@ std::string_view enumeration_type::field(uint32_t key) const& noexcept {
 std::vector<enumeration_type::field_view>
 enumeration_type::fields() const& noexcept {
   const auto* fields = table().type_as_enumeration_type()->fields();
-  VAST_ASSERT(fields);
+  TENZIR_ASSERT(fields);
   auto result = std::vector<field_view>{};
   result.reserve(fields->size());
   for (const auto& field : *fields)
@@ -2137,7 +2138,7 @@ enumeration_type::fields() const& noexcept {
 std::optional<uint32_t>
 enumeration_type::resolve(std::string_view key) const noexcept {
   const auto* fields = table().type_as_enumeration_type()->fields();
-  VAST_ASSERT(fields);
+  TENZIR_ASSERT(fields);
   for (const auto& field : *fields)
     if (field->name()->string_view() == key)
       return field->key();
@@ -2149,7 +2150,7 @@ void enumeration_type::arrow_type::register_extension() noexcept {
     return;
   auto status = arrow::RegisterExtensionType(
     std::make_shared<arrow_type>(enumeration_type{{"stub"}}));
-  VAST_ASSERT(status.ok());
+  TENZIR_ASSERT(status.ok());
   // We also register the enumeration type as vast.enumeration for backwards
   // compatibility.
   struct compat : arrow_type {
@@ -2160,7 +2161,7 @@ void enumeration_type::arrow_type::register_extension() noexcept {
   };
   auto compat_status = arrow::RegisterExtensionType(
     std::make_shared<compat>(enumeration_type{{"stub"}}));
-  VAST_ASSERT(compat_status.ok());
+  TENZIR_ASSERT(compat_status.ok());
 }
 
 arrow::Result<std::shared_ptr<enumeration_type::array_type>>
@@ -2172,7 +2173,7 @@ enumeration_type::array_type::make(
   for (const auto& [canonical, internal] : type->vast_type_.fields()) {
     const auto append_status = dict_builder->Append(
       arrow_compat::string_view{canonical.data(), canonical.size()});
-    VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+    TENZIR_ASSERT(append_status.ok(), append_status.ToString().c_str());
   }
   ARROW_ASSIGN_OR_RAISE(auto dict, dict_builder->Finish());
   ARROW_ASSIGN_OR_RAISE(auto storage, arrow::DictionaryArray::FromArrays(
@@ -2192,8 +2193,8 @@ enumeration_type::builder_type::builder_type(std::shared_ptr<arrow_type> type,
       = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
         arrow_compat::string_view{canonical.data(), canonical.size()},
         &memo_index);
-    VAST_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
-    VAST_ASSERT(memo_index == detail::narrow_cast<int32_t>(internal));
+    TENZIR_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
+    TENZIR_ASSERT(memo_index == detail::narrow_cast<int32_t>(internal));
   }
 }
 
@@ -2202,19 +2203,19 @@ std::shared_ptr<arrow::DataType> enumeration_type::builder_type::type() const {
 }
 
 arrow::Status enumeration_type::builder_type::Append(enumeration index) {
-#if VAST_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
   // In builds with assertions, we additionally check that the index was already
   // in the prepopulated memo table.
   const auto canonical = type_->vast_type_.field(index);
-  VAST_ASSERT(!canonical.empty());
+  TENZIR_ASSERT(!canonical.empty());
   auto memo_index = int32_t{-1};
   const auto memo_table_status
     = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
       arrow_compat::string_view{canonical.data(), canonical.size()},
       &memo_index);
-  VAST_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
-  VAST_ASSERT(memo_index == index);
-#endif // VAST_ENABLE_ASSERTIONS
+  TENZIR_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
+  TENZIR_ASSERT(memo_index == index);
+#endif // TENZIR_ENABLE_ASSERTIONS
   ARROW_RETURN_NOT_OK(Reserve(1));
   ARROW_RETURN_NOT_OK(indices_builder_.Append(index));
   length_ += 1;
@@ -2315,16 +2316,16 @@ list_type::list_type(const type& value_type) noexcept {
                                            list_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
-  VAST_ASSERT(result.size() == reserved_size);
+  TENZIR_ASSERT(result.size() == reserved_size);
   table_ = chunk::make(std::move(result));
 }
 
 const fbs::Type& list_type::table() const noexcept {
   const auto repr = as_bytes(*this);
   const auto* table = fbs::GetType(repr.data());
-  VAST_ASSERT(table);
-  VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::list_type);
+  TENZIR_ASSERT(table);
+  TENZIR_ASSERT(table == resolve_transparent(table));
+  TENZIR_ASSERT(table->type_type() == fbs::type::Type::list_type);
   return *table;
 }
 
@@ -2353,7 +2354,7 @@ list_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
 
 type list_type::value_type() const noexcept {
   const auto* view = table().type_as_list_type()->type();
-  VAST_ASSERT(view);
+  TENZIR_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
 
@@ -2387,16 +2388,16 @@ map_type::map_type(const type& key_type, const type& value_type) noexcept {
                                            map_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
-  VAST_ASSERT(result.size() == reserved_size);
+  TENZIR_ASSERT(result.size() == reserved_size);
   table_ = chunk::make(std::move(result));
 }
 
 const fbs::Type& map_type::table() const noexcept {
   const auto repr = as_bytes(*this);
   const auto* table = fbs::GetType(repr.data());
-  VAST_ASSERT(table);
-  VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::map_type);
+  TENZIR_ASSERT(table);
+  TENZIR_ASSERT(table == resolve_transparent(table));
+  TENZIR_ASSERT(table->type_type() == fbs::type::Type::map_type);
   return *table;
 }
 
@@ -2425,13 +2426,13 @@ map_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
 
 type map_type::key_type() const noexcept {
   const auto* view = table().type_as_map_type()->key_type();
-  VAST_ASSERT(view);
+  TENZIR_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
 
 type map_type::value_type() const noexcept {
   const auto* view = table().type_as_map_type()->value_type();
-  VAST_ASSERT(view);
+  TENZIR_ASSERT(view);
   return type{table_->slice(as_bytes(*view))};
 }
 
@@ -2469,9 +2470,9 @@ record_type::record_type(const std::vector<struct field>& fields) noexcept {
 const fbs::Type& record_type::table() const noexcept {
   const auto repr = as_bytes(*this);
   const auto* table = fbs::GetType(repr.data());
-  VAST_ASSERT(table);
-  VAST_ASSERT(table == resolve_transparent(table));
-  VAST_ASSERT(table->type_type() == fbs::type::Type::record_type);
+  TENZIR_ASSERT(table);
+  TENZIR_ASSERT(table == resolve_transparent(table));
+  TENZIR_ASSERT(table->type_type() == fbs::type::Type::record_type);
   return *table;
 }
 
@@ -2518,9 +2519,9 @@ record_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
 
 generator<record_type::field_view> record_type::fields() const noexcept {
   const auto* record = table().type_as_record_type();
-  VAST_ASSERT(record);
+  TENZIR_ASSERT(record);
   const auto* fields = record->fields();
-  VAST_ASSERT(fields);
+  TENZIR_ASSERT(fields);
   for (const auto* field : *fields) {
     co_yield {
       field->name()->string_view(),
@@ -2536,9 +2537,9 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
     table().type_as_record_type()};
   while (!index.empty()) {
     const auto* record = history.back();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer. We must also reset the target key at this point.
     if (index.back() >= fields->size()) {
@@ -2549,9 +2550,9 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     const auto* field_type = resolve_transparent(field->type_nested_root());
-    VAST_ASSERT(field_type);
+    TENZIR_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
         __builtin_unreachable();
@@ -2594,7 +2595,7 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
 
 size_t record_type::num_fields() const noexcept {
   const auto* record = table().type_as_record_type();
-  VAST_ASSERT(record);
+  TENZIR_ASSERT(record);
   return record->fields()->size();
 }
 
@@ -2605,9 +2606,9 @@ size_t record_type::num_leaves() const noexcept {
     table().type_as_record_type()};
   while (!index.empty()) {
     const auto* record = history.back();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer. We must also reset the target key at this point.
     if (index.back() >= fields->size()) {
@@ -2618,9 +2619,9 @@ size_t record_type::num_leaves() const noexcept {
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     const auto* field_type = resolve_transparent(field->type_nested_root());
-    VAST_ASSERT(field_type);
+    TENZIR_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
         __builtin_unreachable();
@@ -2661,9 +2662,9 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
     table().type_as_record_type()};
   while (!index.empty()) {
     const auto* record = history.back();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer. We must also reset the target key at this point.
     if (index.back() >= fields->size()) {
@@ -2674,9 +2675,9 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     const auto* field_type = resolve_transparent(field->type_nested_root());
-    VAST_ASSERT(field_type);
+    TENZIR_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
         __builtin_unreachable();
@@ -2721,9 +2722,9 @@ record_type::resolve_key(std::string_view key) const noexcept {
   }};
   while (!index.empty()) {
     const auto& [record, remaining_key] = history.back();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer. We must also reset the target key at this point.
     if (index.back() >= fields->size() || remaining_key.empty()) {
@@ -2734,11 +2735,11 @@ record_type::resolve_key(std::string_view key) const noexcept {
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     const auto* field_name = field->name();
-    VAST_ASSERT(field_name);
+    TENZIR_ASSERT(field_name);
     const auto* field_type = resolve_transparent(field->type_nested_root());
-    VAST_ASSERT(field_type);
+    TENZIR_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
         __builtin_unreachable();
@@ -2813,9 +2814,9 @@ record_type::resolve_key_suffix(std::string_view key,
   }
   while (!index.empty()) {
     auto& [record, remaining_keys] = history.back();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we
     // need to step out one layer. We must also reset the target key at this
     // point.
@@ -2827,11 +2828,11 @@ record_type::resolve_key_suffix(std::string_view key,
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     const auto* field_name = field->name();
-    VAST_ASSERT(field_name);
+    TENZIR_ASSERT(field_name);
     const auto* field_type = resolve_transparent(field->type_nested_root());
-    VAST_ASSERT(field_type);
+    TENZIR_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
         __builtin_unreachable();
@@ -2908,9 +2909,9 @@ generator<offset> record_type::resolve_type_extractor(
   };
   while (!index.empty()) {
     const auto* record = history.back();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we
     // need to step out one layer. We must also reset the target key at this
     // point.
@@ -2922,9 +2923,9 @@ generator<offset> record_type::resolve_type_extractor(
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     const auto* field_type = field->type_nested_root();
-    VAST_ASSERT(field_type);
+    TENZIR_ASSERT(field_type);
     bool matched_enriched_type = false;
   recurse_enriched_type:
     switch (field_type->type_type()) {
@@ -2935,7 +2936,7 @@ generator<offset> record_type::resolve_type_extractor(
         ++index.back();
         break;
       }
-#define VAST_MATCH(t)                                                          \
+#define TENZIR_MATCH(t)                                                        \
   case fbs::type::Type::t##_type: {                                            \
     if (matched_enriched_type || type_extractor == #t)                         \
       co_yield index;                                                          \
@@ -2943,17 +2944,17 @@ generator<offset> record_type::resolve_type_extractor(
     ++index.back();                                                            \
     break;                                                                     \
   }
-        VAST_MATCH(bool)
-        VAST_MATCH(int64)
-        VAST_MATCH(uint64)
-        VAST_MATCH(double)
-        VAST_MATCH(duration)
-        VAST_MATCH(time)
-        VAST_MATCH(string)
-        VAST_MATCH(ip)
-        VAST_MATCH(subnet)
-        VAST_MATCH(enumeration)
-#undef VAST_MATCH
+        TENZIR_MATCH(bool)
+        TENZIR_MATCH(int64)
+        TENZIR_MATCH(uint64)
+        TENZIR_MATCH(double)
+        TENZIR_MATCH(duration)
+        TENZIR_MATCH(time)
+        TENZIR_MATCH(string)
+        TENZIR_MATCH(ip)
+        TENZIR_MATCH(subnet)
+        TENZIR_MATCH(enumeration)
+#undef TENZIR_MATCH
       case fbs::type::Type::list_type:
         [[fallthrough]];
       case fbs::type::Type::map_type: {
@@ -2962,20 +2963,20 @@ generator<offset> record_type::resolve_type_extractor(
       }
       case fbs::type::Type::record_type: {
         const auto* record = field_type->type_as_record_type();
-        VAST_ASSERT(record);
+        TENZIR_ASSERT(record);
         history.push_back(record);
         index.push_back(0);
         break;
       }
       case fbs::type::Type::enriched_type: {
         const auto* enriched = field_type->type_as_enriched_type();
-        VAST_ASSERT(enriched);
+        TENZIR_ASSERT(enriched);
         const auto* name = enriched->name();
-        VAST_ASSERT(name);
+        TENZIR_ASSERT(name);
         if (type_extractor == name->string_view())
           matched_enriched_type = true;
         field_type = field_type->type_as_enriched_type()->type_nested_root();
-        VAST_ASSERT(field_type);
+        TENZIR_ASSERT(field_type);
         goto recurse_enriched_type; // NOLINT
       }
     }
@@ -2984,30 +2985,30 @@ generator<offset> record_type::resolve_type_extractor(
 
 std::string_view record_type::key(size_t index) const& noexcept {
   const auto* record = table().type_as_record_type();
-  VAST_ASSERT(record);
-  VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
+  TENZIR_ASSERT(record);
+  TENZIR_ASSERT(index < record->fields()->size(), "index out of bounds");
   const auto* field = record->fields()->Get(index);
-  VAST_ASSERT(field);
+  TENZIR_ASSERT(field);
   return field->name()->string_view();
 }
 
 std::string record_type::key(const offset& index) const noexcept {
   auto result = std::string{};
   const auto* record = table().type_as_record_type();
-  VAST_ASSERT(record);
+  TENZIR_ASSERT(record);
   for (size_t i = 0; i < index.size() - 1; ++i) {
-    VAST_ASSERT(index[i] < record->fields()->size());
+    TENZIR_ASSERT(index[i] < record->fields()->size());
     const auto* field = record->fields()->Get(index[i]);
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     fmt::format_to(std::back_inserter(result), "{}.",
                    field->name()->string_view());
     record
       = resolve_transparent(field->type_nested_root())->type_as_record_type();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
   }
-  VAST_ASSERT(index.back() < record->fields()->size());
+  TENZIR_ASSERT(index.back() < record->fields()->size());
   const auto* field = record->fields()->Get(index.back());
-  VAST_ASSERT(field);
+  TENZIR_ASSERT(field);
   fmt::format_to(std::back_inserter(result), "{}",
                  field->name()->string_view());
   return result;
@@ -3015,11 +3016,11 @@ std::string record_type::key(const offset& index) const noexcept {
 
 record_type::field_view record_type::field(size_t index) const noexcept {
   const auto* record = table().type_as_record_type();
-  VAST_ASSERT(record);
-  VAST_ASSERT(index < record->fields()->size(), "index out of bounds");
+  TENZIR_ASSERT(record);
+  TENZIR_ASSERT(index < record->fields()->size(), "index out of bounds");
   const auto* field = record->fields()->Get(index);
-  VAST_ASSERT(field);
-  VAST_ASSERT(field->type());
+  TENZIR_ASSERT(field);
+  TENZIR_ASSERT(field->type());
   return {
     field->name()->string_view(),
     type{table_->slice(as_bytes(*field->type()))},
@@ -3027,19 +3028,19 @@ record_type::field_view record_type::field(size_t index) const noexcept {
 }
 
 record_type::field_view record_type::field(const offset& index) const noexcept {
-  VAST_ASSERT(!index.empty(), "offset must not be empty");
+  TENZIR_ASSERT(!index.empty(), "offset must not be empty");
   const auto* record = table().type_as_record_type();
-  VAST_ASSERT(record);
+  TENZIR_ASSERT(record);
   for (size_t i = 0; i < index.size() - 1; ++i) {
-    VAST_ASSERT(index[i] < record->fields()->size(), "index out of bounds");
+    TENZIR_ASSERT(index[i] < record->fields()->size(), "index out of bounds");
     record
       = resolve_transparent(record->fields()->Get(index[i])->type_nested_root())
           ->type_as_record_type();
-    VAST_ASSERT(record, "offset contains excess indices");
+    TENZIR_ASSERT(record, "offset contains excess indices");
   }
-  VAST_ASSERT(index.back() < record->fields()->size(), "index out of bounds");
+  TENZIR_ASSERT(index.back() < record->fields()->size(), "index out of bounds");
   const auto* field = record->fields()->Get(index.back());
-  VAST_ASSERT(field);
+  TENZIR_ASSERT(field);
   return {
     field->name()->string_view(),
     type{table_->slice(as_bytes(*field->type()))},
@@ -3047,30 +3048,30 @@ record_type::field_view record_type::field(const offset& index) const noexcept {
 }
 
 size_t record_type::flat_index(const offset& index) const noexcept {
-  VAST_ASSERT(!index.empty(), "index must not be empty");
+  TENZIR_ASSERT(!index.empty(), "index must not be empty");
   auto flat_index = size_t{0};
   auto current_index = offset{0};
   auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
     table().type_as_record_type()};
   while (true) {
-    VAST_ASSERT(current_index <= index, "index out of bounds");
+    TENZIR_ASSERT(current_index <= index, "index out of bounds");
     const auto* record = history.back();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer.
     if (current_index.back() >= fields->size()) {
       history.pop_back();
       current_index.pop_back();
-      VAST_ASSERT(!current_index.empty());
+      TENZIR_ASSERT(!current_index.empty());
       ++current_index.back();
       continue;
     }
     const auto* field = record->fields()->Get(current_index.back());
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     const auto* field_type = resolve_transparent(field->type_nested_root());
-    VAST_ASSERT(field_type);
+    TENZIR_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
         __builtin_unreachable();
@@ -3094,7 +3095,7 @@ size_t record_type::flat_index(const offset& index) const noexcept {
         break;
       }
       case fbs::type::Type::record_type: {
-        VAST_ASSERT(index != current_index);
+        TENZIR_ASSERT(index != current_index);
         history.emplace_back(field_type->type_as_record_type());
         current_index.push_back(0);
         break;
@@ -3142,19 +3143,19 @@ record_type::insert_after(std::vector<struct field> fields) noexcept {
 
 std::optional<record_type> record_type::transform(
   std::vector<transformation> transformations) const noexcept {
-  VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
-              "transformations must be sorted by index");
-  VAST_ASSERT(transformations.end()
-                == std::adjacent_find(
-                  transformations.begin(), transformations.end(),
-                  [](const auto& lhs, const auto& rhs) noexcept {
-                    const auto [lhs_mismatch, rhs_mismatch]
-                      = std::mismatch(lhs.index.begin(), lhs.index.end(),
-                                      rhs.index.begin(), rhs.index.end());
-                    return lhs_mismatch == lhs.index.end();
-                  }),
-              "transformation indices must not be a subset of the following "
-              "transformation's index");
+  TENZIR_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
+                "transformations must be sorted by index");
+  TENZIR_ASSERT(transformations.end()
+                  == std::adjacent_find(
+                    transformations.begin(), transformations.end(),
+                    [](const auto& lhs, const auto& rhs) noexcept {
+                      const auto [lhs_mismatch, rhs_mismatch]
+                        = std::mismatch(lhs.index.begin(), lhs.index.end(),
+                                        rhs.index.begin(), rhs.index.end());
+                      return lhs_mismatch == lhs.index.end();
+                    }),
+                "transformation indices must not be a subset of the following "
+                "transformation's index");
   // The current unpacked layer of the transformation, i.e., the pieces required
   // to re-assemble the current layer of both the record type and the record
   // batch.
@@ -3164,7 +3165,7 @@ std::optional<record_type> record_type::transform(
   const auto impl
     = [](const auto& impl, unpacked_layer layer, offset index, auto& current,
          const auto sentinel) noexcept -> unpacked_layer {
-    VAST_ASSERT(!index.empty());
+    TENZIR_ASSERT(!index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer. For every entry in the current layer, we
     // need to do one of three things:
@@ -3187,7 +3188,7 @@ std::optional<record_type> record_type::transform(
         return {is_prefix_match, is_exact_match};
       }();
       if (is_exact_match) {
-        VAST_ASSERT(current != sentinel);
+        TENZIR_ASSERT(current != sentinel);
         auto new_fields
           = std::invoke(std::move(current->fun), record_type::field_view{
                                                    layer[index.back()].name,
@@ -3228,7 +3229,7 @@ std::optional<record_type> record_type::transform(
     layer.push_back({std::string{name}, type});
   // Run the possibly recursive implementation.
   layer = impl(impl, std::move(layer), {0}, current, sentinel);
-  VAST_ASSERT(current == sentinel, "index out of bounds");
+  TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record type after the transformation.
   if (layer.empty())
     return {};
@@ -3333,12 +3334,12 @@ merge(const record_type& lhs, const record_type& rhs,
   auto result = lhs.transform(std::move(transformations));
   if (err)
     return err;
-  VAST_ASSERT(result);
+  TENZIR_ASSERT(result);
   result = result->transform({{
     {result->num_fields() - 1},
     record_type::insert_after(std::move(additions)),
   }});
-  VAST_ASSERT(result);
+  TENZIR_ASSERT(result);
   return std::move(*result);
 }
 
@@ -3383,7 +3384,7 @@ sum_type_access<vast::type>::index_from_type(const vast::type& x) noexcept {
    std::make_integer_sequence<uint8_t, caf::detail::tl_size<types>::value>());
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
   auto result = table[x.type_index()];
-  VAST_ASSERT(result != std::numeric_limits<uint8_t>::max());
+  TENZIR_ASSERT(result != std::numeric_limits<uint8_t>::max());
   return result;
 }
 
@@ -3428,13 +3429,13 @@ int sum_type_access<arrow::DataType>::index_from_type(
         int, caf::detail::tl_size<extension_types>::value>());
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
   auto result = table[x.id()];
-  VAST_ASSERT(result != unknown_id,
-              fmt::format(VAST_FMT_RUNTIME("unexpected Arrow type id '{}' "
-                                           "for type '{}' is not in "
-                                           "caf::sum_type_access<arrow::"
-                                           "DataType>::types"),
-                          static_cast<int>(x.id()), x.ToString())
-                .c_str());
+  TENZIR_ASSERT(result != unknown_id,
+                fmt::format(TENZIR_FMT_RUNTIME("unexpected Arrow type id '{}' "
+                                               "for type '{}' is not in "
+                                               "caf::sum_type_access<arrow::"
+                                               "DataType>::types"),
+                            static_cast<int>(x.id()), x.ToString())
+                  .c_str());
   if (result == extension_id) {
     for (const auto& [id, index] : extension_table) {
       if (id == static_cast<const arrow::ExtensionType&>(x).extension_name())

@@ -261,14 +261,14 @@ struct managed_serve_operator {
     // Clear the delayed attempt and the continuation token.
     delayed_attempt.dispose();
     requested = 0;
-    VAST_DEBUG("clearing continuation token");
+    TENZIR_DEBUG("clearing continuation token");
     last_continuation_token = std::exchange(continuation_token, {});
     last_results = results;
     // If the pipeline is at its end then we must not assign a new token, but
     // rather end here.
     if (stop_rp.pending() and buffer.empty()) {
-      VAST_ASSERT(not put_rp.pending());
-      VAST_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
+      TENZIR_ASSERT(not put_rp.pending());
+      TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
       return true;
@@ -279,8 +279,8 @@ struct managed_serve_operator {
       put_rp.deliver();
     }
     continuation_token = fmt::to_string(uuid::random());
-    VAST_DEBUG("serve for id {} is now available with continuation token {}",
-               escape_operator_arg(serve_id), continuation_token);
+    TENZIR_DEBUG("serve for id {} is now available with continuation token {}",
+                 escape_operator_arg(serve_id), continuation_token);
     get_rp.deliver(std::make_tuple(continuation_token, std::move(results)));
     return true;
   }
@@ -300,14 +300,15 @@ struct serve_manager_state {
           return op.source == msg.source;
         });
     if (found == ops.end()) {
-      VAST_WARN("{} received unepexted DOWN from {}: {}", *self, msg.source,
-                msg.reason);
+      TENZIR_WARN("{} received unepexted DOWN from {}: {}", *self, msg.source,
+                  msg.reason);
       return;
     }
     if (not found->continuation_token.empty()) {
-      VAST_DEBUG("{} received premature DOWN for serve id {} with continuation "
-                 "token {}",
-                 *self, found->serve_id, found->continuation_token);
+      TENZIR_DEBUG("{} received premature DOWN for serve id {} with "
+                   "continuation "
+                   "token {}",
+                   *self, found->serve_id, found->continuation_token);
     }
     // We delay the actual removal by 1 minute because we support fetching the
     // last set of events again by reusing the last continuation token.
@@ -390,8 +391,8 @@ struct serve_manager_state {
     if (found->get_rp.pending()) {
       const auto delivered = found->try_deliver_results(false);
       if (delivered) {
-        VAST_DEBUG("{} delivered results eagerly for serve id {}", *self,
-                   escape_operator_arg(serve_id));
+        TENZIR_DEBUG("{} delivered results eagerly for serve id {}", *self,
+                     escape_operator_arg(serve_id));
       }
     }
     if (rows(found->buffer) < std::max(found->requested, found->buffer_size)) {
@@ -447,12 +448,12 @@ struct serve_manager_state {
               return op.continuation_token == continuation_token;
             });
         if (found == ops.end()) {
-          VAST_DEBUG("unable to find serve request after timeout expired");
+          TENZIR_DEBUG("unable to find serve request after timeout expired");
           return;
         }
         const auto delivered = found->try_deliver_results(true);
         if (not delivered) {
-          VAST_DEBUG("failed to deliver results after timeout expired");
+          TENZIR_DEBUG("failed to deliver results after timeout expired");
         }
       });
     return found->get_rp;
@@ -638,9 +639,9 @@ struct serve_handler_state {
         first = false;
         out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
                                   slice.schema().make_fingerprint());
-        VAST_ASSERT_CHEAP(row);
+        TENZIR_ASSERT_CHEAP(row);
         const auto ok = printer.print(out_iter, *row);
-        VAST_ASSERT_CHEAP(ok);
+        TENZIR_ASSERT_CHEAP(ok);
       }
     }
     // Write schemas
@@ -659,7 +660,7 @@ struct serve_handler_state {
                                 schema.make_fingerprint());
       const auto ok
         = printer.print(out_iter, schema.to_definition(/*expand*/ false));
-      VAST_ASSERT_CHEAP(ok);
+      TENZIR_ASSERT_CHEAP(ok);
     }
     out_iter = fmt::format_to(out_iter, "}}]}}{}", '\n');
     return result;
@@ -672,8 +673,8 @@ struct serve_handler_state {
                              fmt::format("unepexted /serve endpoint id {}",
                                          endpoint_id));
     }
-    VAST_DEBUG("{} handles /serve request for endpoint id {} with params {}",
-               *self, endpoint_id, params);
+    TENZIR_DEBUG("{} handles /serve request for endpoint id {} with params {}",
+                 *self, endpoint_id, params);
     auto maybe_request = try_parse_request(params);
     if (auto* error = std::get_if<parse_error>(&maybe_request)) {
       return rest_response::make_error(400, std::move(error->message),
@@ -707,7 +708,7 @@ auto serve_handler(
   self->request(node, caf::infinite, atom::get_v, atom::type_v, "serve-manager")
     .await(
       [self](std::vector<caf::actor>& actors) {
-        VAST_ASSERT(actors.size() == 1);
+        TENZIR_ASSERT(actors.size() == 1);
         self->state.serve_manager
           = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
       },
@@ -750,7 +751,7 @@ public:
                   "serve-manager")
         .receive(
           [&](std::vector<caf::actor>& actors) {
-            VAST_ASSERT(actors.size() == 1);
+            TENZIR_ASSERT(actors.size() == 1);
             serve_manager
               = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
           },
@@ -765,8 +766,8 @@ public:
                   buffer_size_)
         .receive(
           [&]() {
-            VAST_DEBUG("serve for id {} is now available",
-                       escape_operator_arg(serve_id_));
+            TENZIR_DEBUG("serve for id {} is now available",
+                         escape_operator_arg(serve_id_));
           },
           [&](const caf::error& err) { //
             ctrl.abort(caf::make_error(
@@ -853,7 +854,7 @@ public:
     if (version != api_version::v0)
       return vast::record{};
     auto result = from_yaml(SPEC_V0);
-    VAST_ASSERT(result);
+    TENZIR_ASSERT(result);
     return *result;
   }
 
@@ -908,4 +909,4 @@ public:
 
 } // namespace vast::plugins::serve
 
-VAST_REGISTER_PLUGIN(vast::plugins::serve::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::serve::plugin)

@@ -46,4 +46,4 @@ private:
 
 } // namespace vast::plugins::dash
 
-VAST_REGISTER_PLUGIN(vast::plugins::dash::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::dash::plugin)

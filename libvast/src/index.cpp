@@ -206,7 +206,7 @@ caf::error extract_partition_synopsis(
                   static_cast<uint8_t>(partition->partition_type()),
                   partition_path));
   const auto* partition_legacy = partition->partition_as_legacy();
-  VAST_ASSERT(partition_legacy);
+  TENZIR_ASSERT(partition_legacy);
   partition_synopsis ps;
   if (auto error = unpack(*partition_legacy, ps))
     return error;
@@ -227,9 +227,9 @@ caf::error extract_partition_synopsis(
 
 caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
-  VAST_DEBUG("index persists {} uuids of definitely persisted and {}"
-             "uuids of maybe persisted partitions",
-             state.persisted_partitions.size(), state.unpersisted.size());
+  TENZIR_DEBUG("index persists {} uuids of definitely persisted and {}"
+               "uuids of maybe persisted partitions",
+               state.persisted_partitions.size(), state.unpersisted.size());
   std::vector<flatbuffers::Offset<fbs::LegacyUUID>> partition_offsets;
   for (const auto& uuid : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
@@ -299,11 +299,12 @@ filesystem_actor& partition_factory::filesystem() {
 partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
   if (state_.persisted_partitions.find(id) == state_.persisted_partitions.end())
-    VAST_WARN("{} did not find partition {} in it's internal state, but tries "
-              "to load it regardless",
-              *state_.self, id);
+    TENZIR_WARN("{} did not find partition {} in it's internal state, but "
+                "tries "
+                "to load it regardless",
+                *state_.self, id);
   const auto path = state_.partition_path(id);
-  VAST_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
+  TENZIR_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
   materializations_++;
   return state_.self->spawn(passive_partition, id, state_.accountant,
                             filesystem_, path);
@@ -363,7 +364,8 @@ caf::error index_state::load_from_disk() {
   std::error_code err{};
   auto const file_exists = std::filesystem::exists(dir, err);
   if (!file_exists) {
-    VAST_VERBOSE("{} found no prior state, starting with a clean slate", *self);
+    TENZIR_VERBOSE("{} found no prior state, starting with a clean slate",
+                   *self);
     return caf::none;
   }
   // Start by finishing up any in-progress transforms.
@@ -382,23 +384,23 @@ caf::error index_state::load_from_disk() {
           continue;
         auto chunk = vast::chunk::mmap(entry.path());
         if (!chunk) {
-          VAST_WARN("{} failed to mmap chunk at {}: {}", *self, entry.path(),
-                    chunk.error());
+          TENZIR_WARN("{} failed to mmap chunk at {}: {}", *self, entry.path(),
+                      chunk.error());
           continue;
         }
         auto maybe_flatbuffer
           = vast::flatbuffer<vast::fbs::PartitionTransform>::make(
             std::move(*chunk));
         if (!maybe_flatbuffer) {
-          VAST_WARN("{} failed to open transform {}: {}", *self, entry.path(),
-                    err.message());
+          TENZIR_WARN("{} failed to open transform {}: {}", *self, entry.path(),
+                      err.message());
           continue;
         }
         auto& transform_flatbuffer = *maybe_flatbuffer;
         if (transform_flatbuffer->transform_type()
             != vast::fbs::partition_transform::PartitionTransform::v0) {
-          VAST_WARN("{} detected unknown transform version at {}", *self,
-                    entry.path());
+          TENZIR_WARN("{} detected unknown transform version at {}", *self,
+                      entry.path());
           continue;
         }
         auto const* transform_v0 = transform_flatbuffer->transform_as_v0();
@@ -415,37 +417,37 @@ caf::error index_state::load_from_disk() {
             self->request(partition, caf::infinite, atom::erase_v)
               .then(
                 [this, uuid](atom::done) {
-                  VAST_DEBUG("{} erased partition {} during startup", *self,
-                             uuid);
+                  TENZIR_DEBUG("{} erased partition {} during startup", *self,
+                               uuid);
                 },
                 [this, uuid](const caf::error& e) {
-                  VAST_WARN("{} failed to erase partition {} during startup: "
-                            "{}",
-                            *self, uuid, e);
+                  TENZIR_WARN("{} failed to erase partition {} during startup: "
+                              "{}",
+                              *self, uuid, e);
                 });
           }
         }
         for (auto const* id : *transform_v0->output_partitions()) {
           const auto uuid = vast::uuid::from_flatbuffer(*id);
           const auto from_partition = fmt::format(
-            VAST_FMT_RUNTIME(transformer_partition_path_template()), uuid);
+            TENZIR_FMT_RUNTIME(transformer_partition_path_template()), uuid);
           const auto to_partition = partition_path(uuid);
           const auto from_partition_synopsis = fmt::format(
-            VAST_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
+            TENZIR_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
             uuid);
           const auto to_partition_synopsis = partition_synopsis_path(uuid);
           auto ec = std::error_code{};
           std::filesystem::rename(from_partition, to_partition, ec);
           if (ec)
-            VAST_WARN("failed to rename '{}' to '{}': {}", from_partition,
-                      to_partition, ec.message());
+            TENZIR_WARN("failed to rename '{}' to '{}': {}", from_partition,
+                        to_partition, ec.message());
           ec.clear();
           std::filesystem::rename(from_partition_synopsis,
                                   to_partition_synopsis, ec);
           if (ec)
-            VAST_WARN("failed to rename '{}' to '{}': {}",
-                      from_partition_synopsis, to_partition_synopsis,
-                      ec.message());
+            TENZIR_WARN("failed to rename '{}' to '{}': {}",
+                        from_partition_synopsis, to_partition_synopsis,
+                        ec.message());
         }
       }
       // TODO: This does not handle store files, which may already have been
@@ -456,7 +458,7 @@ caf::error index_state::load_from_disk() {
       return caf::none;
     }();
     if (error)
-      VAST_WARN("{} failed to finish leftover transforms: {}", *self, error);
+      TENZIR_WARN("{} failed to finish leftover transforms: {}", *self, error);
   }
   auto dir_iter = std::filesystem::directory_iterator(dir, err);
   if (err)
@@ -487,9 +489,9 @@ caf::error index_state::load_from_disk() {
         if (std::filesystem::exists(store_path, err))
           oversized_partitions.push_back(partition_uuid);
         else
-          VAST_WARN("{} did not find a store file for the oversized "
-                    "partition {} and won't attempt to recover the data",
-                    *self, partition_uuid);
+          TENZIR_WARN("{} did not find a store file for the oversized "
+                      "partition {} and won't attempt to recover the data",
+                      *self, partition_uuid);
       } else
         partitions.push_back(partition_uuid);
     } else if (ext == std::filesystem::path{".mdx"})
@@ -503,7 +505,7 @@ caf::error index_state::load_from_disk() {
                       std::back_inserter(orphans));
   // Do a bit of housekeeping. MDX files without matching partitions shouldn't
   // be there in the first place.
-  VAST_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
+  TENZIR_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
   for (auto& orphan : orphans)
     std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
   // Now try to load the partitions - with a progress indicator.
@@ -511,8 +513,8 @@ caf::error index_state::load_from_disk() {
     auto partition_uuid = partitions[idx];
     auto error = [&]() -> caf::error {
       auto part_path = partition_path(partition_uuid);
-      VAST_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid, idx,
-                 partitions.size());
+      TENZIR_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid,
+                   idx, partitions.size());
       // Generate external partition synopsis file if it doesn't exist.
       auto synopsis_path = partition_synopsis_path(partition_uuid);
       if (!exists(synopsis_path)) {
@@ -538,8 +540,8 @@ caf::error index_state::load_from_disk() {
       return caf::none;
     }();
     if (error)
-      VAST_ERROR("{} failed to load partition {}: {}", *self, partition_uuid,
-                 error);
+      TENZIR_ERROR("{} failed to load partition {}: {}", *self, partition_uuid,
+                   error);
   }
   // Reimport oversized partitions to rescue the data.
   // This loop is an attempt to recover from a critical issue that would
@@ -547,7 +549,7 @@ caf::error index_state::load_from_disk() {
   // before 2.3 if too many events were inserted into a single partition.
   // (although it was unlikely to happen with default settings).
   for (const auto& id : oversized_partitions) {
-    VAST_INFO("{} recovers corrupted partition {}", *self, id);
+    TENZIR_INFO("{} recovers corrupted partition {}", *self, id);
     auto store_id = std::string{store_actor_plugin->name()};
     // For this recovery we don't use the 'markers' mechanism
     // and store the output directly in the index directory.
@@ -562,25 +564,25 @@ caf::error index_state::load_from_disk() {
     auto part_path = dir / to_string(id);
     auto chk = chunk::mmap(store_path);
     if (!chk) {
-      VAST_WARN("{} failed to recover data from {}: {}\n"
-                "You can try to manually recover the data with\n"
-                "$ tenzir 'from {} | import'",
-                *self, store_path, chk.error(), store_path);
+      TENZIR_WARN("{} failed to recover data from {}: {}\n"
+                  "You can try to manually recover the data with\n"
+                  "$ tenzir 'from {} | import'",
+                  *self, store_path, chk.error(), store_path);
       continue;
     }
     auto seg = segment::make(std::move(*chk));
     if (!seg) {
-      VAST_WARN("{} failed to construct a segment from  {}: {}", *self,
-                store_path, seg.error());
+      TENZIR_WARN("{} failed to construct a segment from  {}: {}", *self,
+                  store_path, seg.error());
       continue;
     }
     std::error_code err{};
     if (!std::filesystem::remove(store_path, err))
-      VAST_WARN("{} failed to remove store file {} after recovery: {}", *self,
-                store_path, err);
+      TENZIR_WARN("{} failed to remove store file {} after recovery: {}", *self,
+                  store_path, err);
     if (!std::filesystem::remove(part_path, err))
-      VAST_WARN("{} failed to remove partition file {} after recovery: {}",
-                *self, part_path, err);
+      TENZIR_WARN("{} failed to remove partition file {} after recovery: {}",
+                  *self, part_path, err);
     for (auto slice : *seg)
       self->send(transformer, std::move(slice));
     self->send(transformer, atom::done_v);
@@ -588,16 +590,16 @@ caf::error index_state::load_from_disk() {
     blocking->request(transformer, caf::infinite, atom::persist_v)
       .receive(
         [&synopses, this](std::vector<partition_synopsis_pair>& result) {
-          VAST_INFO("recovered {} corrupted partitions on startup",
-                    result.size());
+          TENZIR_INFO("recovered {} corrupted partitions on startup",
+                      result.size());
           for (auto&& x : std::exchange(result, {})) {
-            VAST_VERBOSE("adding newly created partition {}", x.uuid);
+            TENZIR_VERBOSE("adding newly created partition {}", x.uuid);
             persisted_partitions.emplace(x.uuid);
             synopses->emplace(x.uuid, std::move(x.synopsis));
           }
         },
         [](const caf::error& e) {
-          VAST_WARN("error while recovering partition: {}", e);
+          TENZIR_WARN("error while recovering partition: {}", e);
         });
   }
   //  Recommend the user to run 'vast rebuild' if any partition syopses are
@@ -609,31 +611,32 @@ caf::error index_state::load_from_disk() {
              < version::current_partition_version;
     });
   if (num_outdated > 0) {
-    VAST_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
-              "rebuild' to upgrade existing partitions in the background",
-              *self, num_outdated, synopses->size());
+    TENZIR_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
+                "rebuild' to upgrade existing partitions in the background",
+                *self, num_outdated, synopses->size());
   }
   // We collect all synopses to send them in bulk, since the `await` interface
   // doesn't lend itself to a huge number of awaited messages: Only the tip of
   // the current awaited list is considered, leading to an O(n**2) worst-case
   // behavior if the responses arrive in the same order to how they were sent.
-  VAST_DEBUG("{} requesting bulk merge of {} partitions", *self,
-             synopses->size());
+  TENZIR_DEBUG("{} requesting bulk merge of {} partitions", *self,
+               synopses->size());
   this->accept_queries = false;
   self
     ->request(catalog, caf::infinite, atom::merge_v,
               std::exchange(synopses, {}))
     .then(
       [this](atom::ok) {
-        VAST_VERBOSE("{} finished initializing and is ready to accept queries",
-                     *self);
+        TENZIR_VERBOSE(
+          "{} finished initializing and is ready to accept queries", *self);
         this->accept_queries = true;
         for (auto&& [rp, query_context] : std::exchange(delayed_queries, {}))
           rp.delegate(static_cast<index_actor>(self), atom::evaluate_v,
                       std::move(query_context));
       },
       [this](caf::error& err) {
-        VAST_ERROR("{} failed to load catalog state from disk: {}", *self, err);
+        TENZIR_ERROR("{} failed to load catalog state from disk: {}", *self,
+                     err);
         self->send_exit(self, std::move(err));
       });
 
@@ -645,7 +648,7 @@ void index_state::flush_to_disk() {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto index = pack(builder, *this);
   if (!index) {
-    VAST_WARN("{} failed to pack index: {}", *self, index.error());
+    TENZIR_WARN("{} failed to pack index: {}", *self, index.error());
     return;
   }
   auto chunk = fbs::release(builder);
@@ -653,17 +656,17 @@ void index_state::flush_to_disk() {
     ->request(filesystem, caf::infinite, atom::write_v, index_filename(), chunk)
     .then(
       [this](atom::ok) {
-        VAST_DEBUG("{} successfully persisted index state", *self);
+        TENZIR_DEBUG("{} successfully persisted index state", *self);
       },
       [this](const caf::error& err) {
-        VAST_WARN("{} failed to persist index state: {}", *self, render(err));
+        TENZIR_WARN("{} failed to persist index state: {}", *self, render(err));
       });
 }
 
 // -- flush handling -----------------------------------------------------------
 
 void index_state::add_flush_listener(flush_listener_actor listener) {
-  VAST_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
+  TENZIR_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
   flush_listeners.emplace_back(std::move(listener));
   // We may need to call `notify_listeners_if_clean` if the subscription
   // happens after the data has already completely passed the index, but
@@ -682,8 +685,8 @@ void index_state::add_flush_listener(flush_listener_actor listener) {
 // TODO(ch19583): Rip out the whole 'notifying_stream_manager' and replace it
 // with some kind of ping/pong protocol.
 void index_state::notify_flush_listeners() {
-  VAST_DEBUG("{} sends 'flush' messages to {} listeners", *self,
-             flush_listeners.size());
+  TENZIR_DEBUG("{} sends 'flush' messages to {} listeners", *self,
+               flush_listeners.size());
   for (auto& listener : flush_listeners) {
     bool downstream = false;
     for (const auto& [_, active_partition] : active_partitions) {
@@ -708,13 +711,13 @@ bool i_partition_selector::operator()(const type& filter,
 
 caf::expected<std::unordered_map<type, active_partition_info>::iterator>
 index_state::create_active_partition(const type& schema) {
-  VAST_ASSERT(taxonomies);
-  VAST_ASSERT(schema);
+  TENZIR_ASSERT(taxonomies);
+  TENZIR_ASSERT(schema);
   auto id = uuid::random();
   const auto [active_partition, inserted]
     = active_partitions.emplace(schema, active_partition_info{});
-  VAST_ASSERT(inserted);
-  VAST_ASSERT(active_partition != active_partitions.end());
+  TENZIR_ASSERT(inserted);
+  TENZIR_ASSERT(active_partition != active_partitions.end());
   active_partition->second.spawn_time = std::chrono::steady_clock::now();
   active_partition->second.actor
     = self->spawn(::vast::active_partition, schema, id, accountant, filesystem,
@@ -727,17 +730,17 @@ index_state::create_active_partition(const type& schema) {
   self->request(catalog, caf::infinite, atom::put_v, schema)
     .then([]() {},
           [this](const caf::error& error) {
-            VAST_WARN("{} failed to register type with catalog: {}", *self,
-                      error);
+            TENZIR_WARN("{} failed to register type with catalog: {}", *self,
+                        error);
           });
-  VAST_DEBUG("{} created new partition {}", *self, id);
+  TENZIR_DEBUG("{} created new partition {}", *self, id);
   return active_partition;
 }
 
 void index_state::decommission_active_partition(
   const type& schema, std::function<void(const caf::error&)> completion) {
   const auto active_partition = active_partitions.find(schema);
-  VAST_ASSERT(active_partition != active_partitions.end());
+  TENZIR_ASSERT(active_partition != active_partitions.end());
   const auto id = active_partition->second.id;
   const auto actor = std::exchange(active_partition->second.actor, {});
   const auto type = active_partition->first;
@@ -746,19 +749,19 @@ void index_state::decommission_active_partition(
   stage->out().close(active_partition->second.stream_slot);
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
-  VAST_ASSERT(!unpersisted.contains(id));
+  TENZIR_ASSERT(!unpersisted.contains(id));
   unpersisted[id] = {type, actor};
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
   const auto part_dir = partition_path(id);
   const auto synopsis_dir = partition_synopsis_path(id);
-  VAST_VERBOSE("{} persists active partition {} to {}", *self, schema,
-               part_dir);
+  TENZIR_VERBOSE("{} persists active partition {} to {}", *self, schema,
+                 part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        VAST_VERBOSE("{} successfully persisted partition {} {}", *self, schema,
-                     id);
+        TENZIR_VERBOSE("{} successfully persisted partition {} {}", *self,
+                       schema, id);
         // Send a metric to the accountant.
         if (accountant) {
           auto report = vast::report {
@@ -778,8 +781,8 @@ void index_state::decommission_active_partition(
         self->request(catalog, caf::infinite, atom::merge_v, id, ps)
           .then(
             [=, this](atom::ok) {
-              VAST_VERBOSE("{} inserted partition {} {} to the catalog", *self,
-                           schema, id);
+              TENZIR_VERBOSE("{} inserted partition {} {} to the catalog",
+                             *self, schema, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
@@ -790,10 +793,11 @@ void index_state::decommission_active_partition(
                 completion(caf::none);
             },
             [=, this](const caf::error& err) {
-              VAST_ERROR("{} failed to commit partition {} {} to the catalog, "
-                         "the contained data will not be available for "
-                         "queries: {}",
-                         *self, schema, id, err);
+              TENZIR_ERROR("{} failed to commit partition {} {} to the "
+                           "catalog, "
+                           "the contained data will not be available for "
+                           "queries: {}",
+                           *self, schema, id, err);
               unpersisted.erase(id);
               self->send_exit(actor, err);
               if (completion)
@@ -801,9 +805,10 @@ void index_state::decommission_active_partition(
             });
       },
       [=, this](caf::error& err) {
-        VAST_ERROR("{} failed to persist partition {} {} and evicts data from "
-                   "memory to preserve process integrity: {}",
-                   *self, schema, id, err);
+        TENZIR_ERROR("{} failed to persist partition {} {} and evicts data "
+                     "from "
+                     "memory to preserve process integrity: {}",
+                     *self, schema, id, err);
         unpersisted.erase(id);
         self->send_exit(actor, err);
         if (completion)
@@ -831,29 +836,30 @@ auto index_state::schedule_lookups() -> size_t {
     // 1. Get the partition with the highest accumulated priority.
     auto next = pending_queries.next();
     if (!next) {
-      VAST_DEBUG("{} did not find a partition to query", *self);
+      TENZIR_DEBUG("{} did not find a partition to query", *self);
       break;
     }
     auto immediate_completion = [&](const query_queue::entry& x) {
       for (auto qid : x.queries) {
         if (auto client = pending_queries.handle_completion(qid)) {
-          VAST_DEBUG("{} completes query {} immediately", *self, qid);
+          TENZIR_DEBUG("{} completes query {} immediately", *self, qid);
           self->send(*client, atom::done_v);
         }
       }
     };
     if (next->erased) {
-      VAST_VERBOSE("{} skips erased partition {}", *self, next->partition);
+      TENZIR_VERBOSE("{} skips erased partition {}", *self, next->partition);
       immediate_completion(*next);
       continue;
     }
     if (next->queries.empty()) {
-      VAST_VERBOSE("{} skips partition {} because it has no scheduled queries",
-                   *self, next->partition);
+      TENZIR_VERBOSE("{} skips partition {} because it has no scheduled "
+                     "queries",
+                     *self, next->partition);
       continue;
     }
-    VAST_DEBUG("{} schedules partition {} for {}", *self, next->partition,
-               next->queries);
+    TENZIR_DEBUG("{} schedules partition {} for {}", *self, next->partition,
+                 next->queries);
     // 2. Acquire the actor for the selected partition, potentially materializing
     //    it from its persisted state.
     auto acquire = [&](const uuid& partition_id) -> partition_actor {
@@ -877,8 +883,8 @@ auto index_state::schedule_lookups() -> size_t {
         }
       }
       if (!part)
-        VAST_WARN("{} failed to load partition {} that was part of a query",
-                  *self, partition_id);
+        TENZIR_WARN("{} failed to load partition {} that was part of a query",
+                    *self, partition_id);
       return part;
     };
     auto partition_actor = acquire(next->partition);
@@ -898,7 +904,7 @@ auto index_state::schedule_lookups() -> size_t {
     for (auto qid : next->queries) {
       auto it = pending_queries.queries().find(qid);
       if (it == pending_queries.queries().end()) {
-        VAST_WARN("{} tried to access non-existent query {}", *self, qid);
+        TENZIR_WARN("{} tried to access non-existent query {}", *self, qid);
         auto& qs = std::get<2>(*active_lookup).queries;
         qs.erase(std::remove(qs.begin(), qs.end(), qid), qs.end());
         if (qs.empty()) {
@@ -918,24 +924,24 @@ auto index_state::schedule_lookups() -> size_t {
           active_lookups.begin(), active_lookups.end(), [&](const auto& entry) {
             return std::get<0>(entry) == active_lookup_id;
           });
-        VAST_ASSERT(active_lookup != active_lookups.end());
+        TENZIR_ASSERT(active_lookup != active_lookups.end());
         auto& qs = std::get<2>(*active_lookup).queries;
         qs.erase(std::remove(qs.begin(), qs.end(), qid), qs.end());
         if (qs.empty()) {
           --running_partition_lookups;
           active_lookups.erase(active_lookup);
           const auto num_scheduled = schedule_lookups();
-          VAST_DEBUG("{} scheduled {} partitions after completion of a "
-                     "previously scheduled lookup",
-                     *self, num_scheduled);
+          TENZIR_DEBUG("{} scheduled {} partitions after completion of a "
+                       "previously scheduled lookup",
+                       *self, num_scheduled);
         }
       };
       const auto& context_it
         = it->second.query_contexts_per_type.find(next->schema);
       if (context_it == it->second.query_contexts_per_type.end()) {
-        VAST_WARN("{} failed to evaluate query {} for partition {}: query "
-                  "context for schema is already unvailable",
-                  *self, qid, next->partition);
+        TENZIR_WARN("{} failed to evaluate query {} for partition {}: query "
+                    "context for schema is already unvailable",
+                    *self, qid, next->partition);
         inmem_partitions.drop(next->partition);
         handle_completion();
         continue;
@@ -945,15 +951,15 @@ auto index_state::schedule_lookups() -> size_t {
                   context_it->second)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
-            VAST_DEBUG("{} received {} results for query {} from partition "
-                       "{}",
-                       *self, n, qid, pid);
+            TENZIR_DEBUG("{} received {} results for query {} from partition "
+                         "{}",
+                         *self, n, qid, pid);
             handle_completion();
           },
           [this, handle_completion, qid,
            pid = next->partition](const caf::error& err) {
-            VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
-                      *self, qid, pid, err);
+            TENZIR_WARN("{} failed to evaluate query {} for partition {}: {}",
+                        *self, qid, pid, err);
             // We don't know if this was a transient error or if the
             // partition/store is corrupted. However, the partition actor has
             // possibly already exited so at least we have to clear it from
@@ -966,7 +972,7 @@ auto index_state::schedule_lookups() -> size_t {
     running_partition_lookups++;
     num_scheduled++;
   }
-  VAST_ASSERT_CHEAP(running_partition_lookups >= previous_partition_lookups);
+  TENZIR_ASSERT_CHEAP(running_partition_lookups >= previous_partition_lookups);
   return running_partition_lookups - previous_partition_lookups;
 }
 
@@ -1121,8 +1127,8 @@ index_state::status(status_verbosity v, duration d) const {
               xs.push_back(std::move(ps));
             },
             [=, this, &xs](const caf::error& err) {
-              VAST_WARN("{} failed to retrieve status from {} : {}", *self, id,
-                        render(err));
+              TENZIR_WARN("{} failed to retrieve status from {} : {}", *self,
+                          id, render(err));
               auto ps = record{};
               ps["id"] = to_string(id);
               ps["error"] = render(err);
@@ -1167,20 +1173,19 @@ index(index_actor::stateful_pointer<index_state> self,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t taste_partitions, size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
-  VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
-                   VAST_ARG(filesystem), VAST_ARG(dir),
-                   VAST_ARG(partition_capacity),
-                   VAST_ARG(active_partition_timeout),
-                   VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
-                   VAST_ARG(max_concurrent_partition_lookups),
-                   VAST_ARG(catalog_dir), VAST_ARG(index_config));
-  VAST_VERBOSE("{} initializes index in {} with a maximum partition "
-               "size of {} events and {} resident partitions",
-               *self, dir, partition_capacity, max_inmem_partitions);
+  TENZIR_TRACE_SCOPE(
+    "index {} {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
+    TENZIR_ARG(filesystem), TENZIR_ARG(dir), TENZIR_ARG(partition_capacity),
+    TENZIR_ARG(active_partition_timeout), TENZIR_ARG(max_inmem_partitions),
+    TENZIR_ARG(taste_partitions), TENZIR_ARG(max_concurrent_partition_lookups),
+    TENZIR_ARG(catalog_dir), TENZIR_ARG(index_config));
+  TENZIR_VERBOSE("{} initializes index in {} with a maximum partition "
+                 "size of {} events and {} resident partitions",
+                 *self, dir, partition_capacity, max_inmem_partitions);
   self->state.index_opts["cardinality"] = partition_capacity;
   self->state.synopsis_opts = std::move(index_config);
   if (dir != catalog_dir)
-    VAST_VERBOSE("{} uses {} for catalog data", *self, catalog_dir);
+    TENZIR_VERBOSE("{} uses {} for catalog data", *self, catalog_dir);
   // Set members.
   self->state.self = self;
   self->state.accept_queries = true;
@@ -1193,7 +1198,7 @@ index(index_actor::stateful_pointer<index_state> self,
                                  fmt::format("could not find "
                                              "store plugin '{}'",
                                              store_backend));
-    VAST_ERROR("{}", render(error));
+    TENZIR_ERROR("{}", render(error));
     self->quit(error);
     return index_actor::behavior_type::make_empty_behavior();
   }
@@ -1209,9 +1214,9 @@ index(index_actor::stateful_pointer<index_state> self,
           = std::make_shared<vast::taxonomies>(std::move(taxonomies));
       },
       [](caf::error& err) {
-        VAST_WARN("catalog failed to load taxonomy "
-                  "definitions: {}",
-                  std::move(err));
+        TENZIR_WARN("catalog failed to load taxonomy "
+                    "definitions: {}",
+                    std::move(err));
         // TODO: Shutdown when failing?
       });
   self->state.dir = dir;
@@ -1230,7 +1235,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // nop
     },
     [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      VAST_ASSERT(x.encoding() != table_slice_encoding::none);
+      TENZIR_ASSERT(x.encoding() != table_slice_encoding::none);
       if (!self->state.stage->running())
         return;
       auto&& schema = x.schema();
@@ -1249,9 +1254,9 @@ index(index_actor::stateful_pointer<index_state> self,
         }
         active_partition = *part;
       } else if (x.rows() > active_partition->second.capacity) {
-        VAST_DEBUG("{} exceeds active capacity by {} rows", *self,
-                   x.rows() - active_partition->second.capacity);
-        VAST_VERBOSE(
+        TENZIR_DEBUG("{} exceeds active capacity by {} rows", *self,
+                     x.rows() - active_partition->second.capacity);
+        TENZIR_VERBOSE(
           "{} flushes active partition {} with {}/{} events", *self, schema,
           self->state.partition_capacity - active_partition->second.capacity,
           self->state.partition_capacity);
@@ -1267,19 +1272,19 @@ index(index_actor::stateful_pointer<index_state> self,
         }
         active_partition = *part;
       }
-      VAST_ASSERT(active_partition->second.actor);
+      TENZIR_ASSERT(active_partition->second.actor);
       const auto offset
         = self->state.partition_capacity - active_partition->second.capacity;
       x.offset(offset);
       out.push(x);
       if (active_partition->second.capacity == self->state.partition_capacity
           && x.rows() > active_partition->second.capacity) {
-        VAST_WARN("{} got table slice with {} rows that exceeds the "
-                  "default partition capacity of {} rows",
-                  *self, x.rows(), self->state.partition_capacity);
+        TENZIR_WARN("{} got table slice with {} rows that exceeds the "
+                    "default partition capacity of {} rows",
+                    *self, x.rows(), self->state.partition_capacity);
         active_partition->second.capacity = 0;
       } else {
-        VAST_ASSERT(active_partition->second.capacity >= x.rows());
+        TENZIR_ASSERT(active_partition->second.capacity >= x.rows());
         active_partition->second.capacity -= x.rows();
       }
     },
@@ -1290,12 +1295,12 @@ index(index_actor::stateful_pointer<index_state> self,
       // We get an 'unreachable' error when the stream becomes unreachable
       // during actor destruction; in this case we can't use `self->state`
       // anymore since it will already be destroyed.
-      VAST_DEBUG("index finalized streaming with error {}", err);
+      TENZIR_DEBUG("index finalized streaming with error {}", err);
       if (err && err != caf::exit_reason::unreachable) {
         if (err == caf::exit_reason::user_shutdown)
-          VAST_DEBUG("{} got a user shutdown error: {}", *self, err);
+          TENZIR_DEBUG("{} got a user shutdown error: {}", *self, err);
         else if (err != ec::end_of_input)
-          VAST_ERROR("{} got a stream error: {}", *self, err);
+          TENZIR_ERROR("{} got a stream error: {}", *self, err);
         // We can shutdown now because we only get a single stream from the
         // importer.
         self->send_exit(self, err);
@@ -1325,21 +1330,21 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.unpersisted.clear();
       self->state.inmem_partitions.clear();
       // Terminate partition actors.
-      VAST_DEBUG("{} brings down {} partitions", *self, partitions.size());
+      TENZIR_DEBUG("{} brings down {} partitions", *self, partitions.size());
       shutdown<policy::parallel>(self, std::move(partitions));
     },
     caf::policy::arg<caf::broadcast_downstream_manager<
       table_slice, vast::type, i_partition_selector>>{});
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
-    VAST_ERROR("{} failed to load index state from disk: {}", *self,
-               render(err));
+    TENZIR_ERROR("{} failed to load index state from disk: {}", *self,
+                 render(err));
     self->quit(err);
     return index_actor::behavior_type::make_empty_behavior();
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
-               msg.reason);
+    TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
+                 msg.reason);
     for (auto&& [rp, _] : std::exchange(self->state.delayed_queries, {}))
       rp.deliver(msg.reason);
     // Flush buffered batches and end stream.
@@ -1349,7 +1354,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->set_down_handler([=](const caf::down_msg& msg) {
     auto it = self->state.monitored_queries.find(msg.source);
     if (it == self->state.monitored_queries.end()) {
-      VAST_WARN("{} received DOWN from unexpected sender", *self);
+      TENZIR_WARN("{} received DOWN from unexpected sender", *self);
       return;
     }
     const auto& [_, ids] = *it;
@@ -1357,14 +1362,14 @@ index(index_actor::stateful_pointer<index_state> self,
       // Workaround to {fmt} 7 / gcc 10 combo, which errors with "passing views
       // as lvalues is disallowed" when not formating the join view separately.
       const auto ids_string = fmt::to_string(fmt::join(ids, ", "));
-      VAST_DEBUG("{} received DOWN for queries [{}] and drops remaining "
-                 "query results",
-                 *self, ids_string);
+      TENZIR_DEBUG("{} received DOWN for queries [{}] and drops remaining "
+                   "query results",
+                   *self, ids_string);
       for (const auto& id : ids) {
         if (auto err = self->state.pending_queries.remove_query(id))
-          VAST_DEBUG("{} did not remove {} from the query queue. It was "
-                     "presumably already removed upon completion ({})",
-                     *self, id, err);
+          TENZIR_DEBUG("{} did not remove {} from the query queue. It was "
+                       "presumably already removed upon completion ({})",
+                       *self, id, err);
       }
     }
     self->state.monitored_queries.erase(it);
@@ -1392,15 +1397,15 @@ index(index_actor::stateful_pointer<index_state> self,
             for (const auto& schema : decommissioned) {
               auto active_partition
                 = self->state.active_partitions.find(schema);
-              VAST_ASSERT(active_partition
-                          != self->state.active_partitions.end());
-              VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
-                           "after {} timeout",
-                           *self, schema,
-                           self->state.partition_capacity
-                             - active_partition->second.capacity,
-                           self->state.partition_capacity,
-                           data{self->state.active_partition_timeout});
+              TENZIR_ASSERT(active_partition
+                            != self->state.active_partitions.end());
+              TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events "
+                             "after {} timeout",
+                             *self, schema,
+                             self->state.partition_capacity
+                               - active_partition->second.capacity,
+                             self->state.partition_capacity,
+                             data{self->state.active_partition_timeout});
               self->state.decommission_active_partition(schema, {});
             }
             self->state.flush_to_disk();
@@ -1410,21 +1415,21 @@ index(index_actor::stateful_pointer<index_state> self,
   }
   return {
     [self](atom::done, uuid partition_id) {
-      VAST_DEBUG("{} queried partition {} successfully", *self, partition_id);
+      TENZIR_DEBUG("{} queried partition {} successfully", *self, partition_id);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_DEBUG("{} got a new stream source", *self);
+      TENZIR_DEBUG("{} got a new stream source", *self);
       return self->state.stage->add_inbound_path(in);
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      VAST_DEBUG("{} adds flush listener", *self);
+      TENZIR_DEBUG("{} adds flush listener", *self);
       self->state.add_flush_listener(std::move(listener));
     },
     [self](atom::subscribe, atom::create,
            const partition_creation_listener_actor& listener,
            send_initial_dbstate should_send) {
-      VAST_DEBUG("{} adds partition creation listener", *self);
+      TENZIR_DEBUG("{} adds partition creation listener", *self);
       self->state.add_partition_creation_listener(listener);
       if (should_send == send_initial_dbstate::no)
         return;
@@ -1438,8 +1443,8 @@ index(index_actor::stateful_pointer<index_state> self,
             self->send(listener, atom::update_v, std::move(v));
           },
           [](const caf::error& e) {
-            VAST_WARN("index failed to get list of partitions from catalog: {}",
-                      e);
+            TENZIR_WARN(
+              "index failed to get list of partitions from catalog: {}", e);
           });
     },
     [self](atom::evaluate,
@@ -1448,20 +1453,20 @@ index(index_actor::stateful_pointer<index_state> self,
       auto sender = self->current_sender();
       // Sanity check.
       if (!sender) {
-        VAST_WARN("{} ignores an anonymous query", *self);
+        TENZIR_WARN("{} ignores an anonymous query", *self);
         return caf::sec::invalid_argument;
       }
       // Abort if the index is already shutting down.
       if (!self->state.stage->running()) {
-        VAST_WARN("{} ignores query {} because it is shutting down", *self,
-                  query_context);
+        TENZIR_WARN("{} ignores query {} because it is shutting down", *self,
+                    query_context);
         return ec::remote_node_down;
       }
       // If we're not yet ready to start, we delay the query until further
       // notice.
       if (!self->state.accept_queries) {
-        VAST_VERBOSE("{} delays query {} because it is still starting up",
-                     *self, query_context);
+        TENZIR_VERBOSE("{} delays query {} because it is still starting up",
+                       *self, query_context);
         auto rp = self->make_response_promise<query_cursor>();
         self->state.delayed_queries.emplace_back(rp, std::move(query_context));
         return rp;
@@ -1535,10 +1540,10 @@ index(index_actor::stateful_pointer<index_state> self,
                  lookup_result.candidate_infos) {
               query_contexts[type] = query_context;
               query_contexts[type].expr = lookup_result.exp;
-              VAST_DEBUG("{} got initial candidates {} for schema {} and from "
-                         "catalog {}",
-                         *self, candidates, type,
-                         lookup_result.partition_infos);
+              TENZIR_DEBUG(
+                "{} got initial candidates {} for schema {} and from "
+                "catalog {}",
+                *self, candidates, type, lookup_result.partition_infos);
             }
             // Allows the client to query further results after initial taste.
             auto query_id = query_context.id;
@@ -1555,8 +1560,8 @@ index(index_actor::stateful_pointer<index_state> self,
               },
               query_context.cmd);
             if (lookup_result.empty()) {
-              VAST_DEBUG("{} returns without result: no partitions qualify",
-                         *self);
+              TENZIR_DEBUG("{} returns without result: no partitions qualify",
+                           *self);
               rp.deliver(query_cursor{query_id, 0u, 0u});
               self->send(client, atom::done_v);
               return;
@@ -1576,9 +1581,9 @@ index(index_actor::stateful_pointer<index_state> self,
               rp.deliver(err);
             rp.deliver(query_cursor{query_id, num_candidates, scheduled});
             const auto num_scheduled = self->state.schedule_lookups();
-            VAST_DEBUG("{} scheduled {} partitions for lookup after a new "
-                       "query came in",
-                       *self, num_scheduled);
+            TENZIR_DEBUG("{} scheduled {} partitions for lookup after a new "
+                         "query came in",
+                         *self, num_scheduled);
           },
           [rp](const caf::error& e) mutable {
             rp.deliver(caf::make_error(
@@ -1600,14 +1605,14 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::query, const uuid& query_id, uint32_t num_partitions) {
       if (auto err
           = self->state.pending_queries.activate(query_id, num_partitions))
-        VAST_WARN("{} can't activate unknown query: {}", *self, err);
+        TENZIR_WARN("{} can't activate unknown query: {}", *self, err);
       const auto num_scheduled = self->state.schedule_lookups();
-      VAST_DEBUG("{} scheduled {} partitions following the request to "
-                 "activate {} partitions for query {}",
-                 *self, num_scheduled, num_partitions, query_id);
+      TENZIR_DEBUG("{} scheduled {} partitions following the request to "
+                   "activate {} partitions for query {}",
+                   *self, num_scheduled, num_partitions, query_id);
     },
     [self](atom::erase, uuid partition_id) -> caf::result<atom::done> {
-      VAST_VERBOSE("{} erases partition {}", *self, partition_id);
+      TENZIR_VERBOSE("{} erases partition {}", *self, partition_id);
       auto rp = self->make_response_promise<atom::done>();
       auto path = self->state.partition_path(partition_id);
       auto synopsis_path = self->state.partition_synopsis_path(partition_id);
@@ -1626,8 +1631,8 @@ index(index_actor::stateful_pointer<index_state> self,
           self->state.catalog, caf::infinite, atom::erase_v, partition_id)
         .then(
           [self, partition_id, path, synopsis_path, rp](atom::ok) mutable {
-            VAST_DEBUG("{} erased partition {} from catalog", *self,
-                       partition_id);
+            TENZIR_DEBUG("{} erased partition {} from catalog", *self,
+                         partition_id);
             self->state.persisted_partitions.erase(partition_id);
             // We don't remove the partition from the queue directly because the
             // query API requires clients to keep track of the number of
@@ -1645,14 +1650,14 @@ index(index_actor::stateful_pointer<index_state> self,
                                                      synopsis_path)
               .then(
                 [self, partition_id](atom::done) {
-                  VAST_DEBUG("{} erased partition synopsis {} from "
-                             "filesystem",
-                             *self, partition_id);
+                  TENZIR_DEBUG("{} erased partition synopsis {} from "
+                               "filesystem",
+                               *self, partition_id);
                 },
                 [self, partition_id, synopsis_path](const caf::error& err) {
-                  VAST_WARN("{} failed to erase partition "
-                            "synopsis {} at {}: {}",
-                            *self, partition_id, synopsis_path, err);
+                  TENZIR_WARN("{} failed to erase partition "
+                              "synopsis {} at {}: {}",
+                              *self, partition_id, synopsis_path, err);
                 });
             // A helper function to erase the dense index file with some
             // logging.
@@ -1662,12 +1667,12 @@ index(index_actor::stateful_pointer<index_state> self,
                   self->state.filesystem, caf::infinite, atom::erase_v, path)
                 .then(
                   [self, partition_id](atom::done) {
-                    VAST_DEBUG("{} erased partition {} from filesystem", *self,
-                               partition_id);
+                    TENZIR_DEBUG("{} erased partition {} from filesystem",
+                                 *self, partition_id);
                   },
                   [self, partition_id, path](const caf::error& err) {
-                    VAST_WARN("{} failed to erase partition {} at {}: {}",
-                              *self, partition_id, path, err);
+                    TENZIR_WARN("{} failed to erase partition {} at {}: {}",
+                                *self, partition_id, path, err);
                   });
             };
             auto store_path
@@ -1680,17 +1685,17 @@ index(index_actor::stateful_pointer<index_state> self,
             // Fallback path: In case the store file is not found
             // at the expected path we need to load the partition
             // and retrieve the correct path from the store header.
-            VAST_DEBUG("{} did not find a store for partition {}, inspecting "
-                       "the store header",
-                       *self, partition_id);
+            TENZIR_DEBUG("{} did not find a store for partition {}, inspecting "
+                         "the store header",
+                         *self, partition_id);
             self
               ->request<caf::message_priority::high>(
                 self->state.filesystem, caf::infinite, atom::mmap_v, path)
               .then(
                 [=](const chunk_ptr& chunk) mutable {
-                  VAST_DEBUG("{} mmapped partition {} to extract store path "
-                             "for erasure",
-                             *self, partition_id);
+                  TENZIR_DEBUG("{} mmapped partition {} to extract store path "
+                               "for erasure",
+                               *self, partition_id);
                   if (!chunk) {
                     erase_dense_index_file();
                     rp.deliver(caf::make_error( //
@@ -1703,12 +1708,13 @@ index(index_actor::stateful_pointer<index_state> self,
                   if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
                       && flatbuffers::BufferHasIdentifier(
                         chunk->data(), fbs::PartitionIdentifier())) {
-                    VAST_WARN("failed to load partition for deletion at {} "
-                              "because its size of {} exceeds the maximum "
-                              "allowed size of {}. The index statistics will "
-                              "be incorrect until the database has been "
-                              "rebuilt and restarted",
-                              path, chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
+                    TENZIR_WARN("failed to load partition for deletion at {} "
+                                "because its size of {} exceeds the maximum "
+                                "allowed size of {}. The index statistics will "
+                                "be incorrect until the database has been "
+                                "rebuilt and restarted",
+                                path, chunk->size(),
+                                FLATBUFFERS_MAX_BUFFER_SIZE);
                     erase_dense_index_file();
                     rp.deliver(caf::make_error(ec::filesystem_error,
                                                "aborting erasure due to "
@@ -1725,16 +1731,17 @@ index(index_actor::stateful_pointer<index_state> self,
                   rp.delegate(partition_actor, atom::erase_v);
                 },
                 [=](caf::error& err) mutable {
-                  VAST_WARN("{} failed to load partition {} for erase fallback "
-                            "path: {}",
-                            *self, partition_id, err);
+                  TENZIR_WARN("{} failed to load partition {} for erase "
+                              "fallback "
+                              "path: {}",
+                              *self, partition_id, err);
                   erase_dense_index_file();
                   rp.deliver(std::move(err));
                 });
           },
           [self, partition_id, rp](caf::error& err) mutable {
-            VAST_WARN("{} failed to erase partition {} from catalog: {}", *self,
-                      partition_id, err);
+            TENZIR_WARN("{} failed to erase partition {} from catalog: {}",
+                        *self, partition_id, err);
             rp.deliver(std::move(err));
           });
       return rp;
@@ -1774,15 +1781,15 @@ index(index_actor::stateful_pointer<index_state> self,
       const auto current_sender = self->current_sender();
       if (selected_partitions.empty())
         return caf::make_error(ec::invalid_argument, "no partitions given");
-      VAST_DEBUG("{} applies a pipeline to partitions {}", *self,
-                 selected_partitions);
-      VAST_ASSERT(self->state.store_actor_plugin);
+      TENZIR_DEBUG("{} applies a pipeline to partitions {}", *self,
+                   selected_partitions);
+      TENZIR_ASSERT(self->state.store_actor_plugin);
       std::erase_if(selected_partitions, [&](const auto& entry) {
         if (self->state.persisted_partitions.contains(entry.uuid)) {
           return false;
         }
-        VAST_WARN("{} skips unknown partition {} for pipeline {}", *self,
-                  entry.uuid, pipe.to_string());
+        TENZIR_WARN("{} skips unknown partition {} for pipeline {}", *self,
+                    entry.uuid, pipe.to_string());
         return true;
       });
       auto corrected_partitions = catalog_lookup_result{};
@@ -1798,9 +1805,9 @@ index(index_actor::stateful_pointer<index_state> self,
           // TODO: Implement some synchronization mechanism for partition
           // erasure so rebuild, compaction, and aging can properly
           // synchronize.
-          VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
-                    "because it is currently being transformed",
-                    *self, pipe.to_string(), partition.uuid);
+          TENZIR_WARN("{} refuses to apply transformation '{}' to partition {} "
+                      "because it is currently being transformed",
+                      *self, pipe.to_string(), partition.uuid);
         }
       }
       if (corrected_partitions.empty())
@@ -1826,8 +1833,8 @@ index(index_actor::stateful_pointer<index_state> self,
       // We set the query priority for partition transforms to zero so they
       // always get less priority than queries.
       query_context.priority = 0;
-      VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
-                 pipe.to_string());
+      TENZIR_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
+                   pipe.to_string());
       auto query_contexts = query_state::type_query_context_map{};
       for (const auto& [type, _] : corrected_partitions.candidate_infos) {
         query_contexts[type] = query_context;
@@ -1841,11 +1848,11 @@ index(index_actor::stateful_pointer<index_state> self,
                     .candidate_partitions = input_size,
                     .requested_partitions = input_size},
         catalog_lookup_result{corrected_partitions});
-      VAST_ASSERT(err == caf::none);
+      TENZIR_ASSERT(err == caf::none);
       const auto num_scheduled = self->state.schedule_lookups();
-      VAST_DEBUG("{} scheduled {} partitions following a request to "
-                 "transform partitions",
-                 *self, num_scheduled);
+      TENZIR_DEBUG("{} scheduled {} partitions following a request to "
+                   "transform partitions",
+                   *self, num_scheduled);
       auto marker_path = self->state.marker_path(transform_id);
       auto rp = self->make_response_promise<std::vector<partition_info>>();
       auto deliver
@@ -1861,8 +1868,9 @@ index(index_actor::stateful_pointer<index_state> self,
                                  ;
                 },
                 [self, marker_path](const caf::error& e) {
-                  VAST_DEBUG("{} failed to erase in-progress marker at {}: {}",
-                             *self, marker_path, e);
+                  TENZIR_DEBUG("{} failed to erase in-progress marker at {}: "
+                               "{}",
+                               *self, marker_path, e);
                 });
             for (const auto& [_, candidate_info] :
                  corrected_partitions.candidate_infos) {
@@ -1902,7 +1910,7 @@ index(index_actor::stateful_pointer<index_state> self,
               // If synopsis was null (ie. all events were deleted),
               // the partition transformer should not have included
               // it in the result.
-              VAST_ASSERT(aps.synopsis);
+              TENZIR_ASSERT(aps.synopsis);
               auto info = partition_info{
                 aps.uuid,
                 *aps.synopsis,
@@ -1993,9 +2001,10 @@ index(index_actor::stateful_pointer<index_state> self,
                         }
                       },
                       [self, rp](caf::error& e) mutable {
-                        VAST_WARN("{} failed to finalize partition transformer "
-                                  "output: {}",
-                                  *self, e);
+                        TENZIR_WARN("{} failed to finalize partition "
+                                    "transformer "
+                                    "output: {}",
+                                    *self, e);
                         rp.deliver(std::move(e));
                       });
                 },
@@ -2009,8 +2018,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::flush) -> caf::result<void> {
-      VAST_DEBUG("{} got a flush request from {}", *self,
-                 self->current_sender());
+      TENZIR_DEBUG("{} got a flush request from {}", *self,
+                   self->current_sender());
       // If we've got nothing to flush we can just exit immediately.
       if (self->state.active_partitions.empty())
         return {};

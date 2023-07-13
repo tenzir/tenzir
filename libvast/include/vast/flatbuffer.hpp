@@ -47,11 +47,11 @@ public:
     no,  ///< Skip extensive buffer verification.
   };
 
-#if VAST_ENABLE_ASSERTIONS
+#if TENZIR_ENABLE_ASSERTIONS
   static constexpr auto verify_default = verify::yes;
 #else
   static constexpr auto verify_default = verify::no;
-#endif // VAST_ENABLE_ASSERTIONS
+#endif // TENZIR_ENABLE_ASSERTIONS
 
   // -- constructors, destructors, and assignment operators -------------------
 
@@ -85,7 +85,7 @@ public:
                                            "verification failed",
                                            qualified_name()));
 #if defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
-      VAST_ASSERT(verifier.GetComputedSize() >= chunk->size());
+      TENZIR_ASSERT(verifier.GetComputedSize() >= chunk->size());
       if (verifier.GetComputedSize() > chunk->size())
         return caf::make_error(
           ec::format_error,
@@ -121,7 +121,7 @@ public:
   {
     builder.Finish(offset, file_identifier);
     auto chunk = chunk::make(builder.Release());
-    VAST_ASSERT(chunk);
+    TENZIR_ASSERT(chunk);
     *this = flatbuffer{chunk};
   }
 
@@ -134,10 +134,10 @@ public:
              const Table& table) noexcept
     requires(Type == flatbuffer_type::child)
     : chunk_{std::exchange(parent.chunk_, {})}, table_{&table} {
-    VAST_ASSERT(chunk_);
-    VAST_ASSERT(reinterpret_cast<const std::byte*>(table_) >= chunk_->data());
-    VAST_ASSERT(reinterpret_cast<const std::byte*>(table_)
-                < (chunk_->data() + chunk_->size()));
+    TENZIR_ASSERT(chunk_);
+    TENZIR_ASSERT(reinterpret_cast<const std::byte*>(table_) >= chunk_->data());
+    TENZIR_ASSERT(reinterpret_cast<const std::byte*>(table_)
+                  < (chunk_->data() + chunk_->size()));
   }
 
   ~flatbuffer() noexcept = default;
@@ -174,12 +174,12 @@ public:
   }
 
   const Table& operator*() const noexcept {
-    VAST_ASSERT(table_);
+    TENZIR_ASSERT(table_);
     return *table_;
   }
 
   const Table* operator->() const noexcept {
-    VAST_ASSERT(table_);
+    TENZIR_ASSERT(table_);
     return table_;
   }
 
@@ -193,7 +193,7 @@ public:
   template <class ChildTable>
   [[nodiscard]] flatbuffer<ChildTable, flatbuffer_type::child>
   slice(const ChildTable& child_table) const noexcept {
-    VAST_ASSERT(*this);
+    TENZIR_ASSERT(*this);
     return {*this, child_table};
   }
 
@@ -206,9 +206,10 @@ public:
   [[nodiscard]] flatbuffer<ChildTable, flatbuffer_type::root>
   slice(const ChildTable& child_table,
         const flatbuffers::Vector<uint8_t>& nested_flatbuffer) const noexcept {
-    VAST_ASSERT(*this);
-    VAST_ASSERT(&child_table
-                == flatbuffers::GetRoot<ChildTable>(nested_flatbuffer.data()));
+    TENZIR_ASSERT(*this);
+    TENZIR_ASSERT(
+      &child_table
+      == flatbuffers::GetRoot<ChildTable>(nested_flatbuffer.data()));
     return {chunk_->slice(as_bytes(nested_flatbuffer))};
   }
 
@@ -221,7 +222,7 @@ public:
 
   // -- concepts --------------------------------------------------------------
 
-  VAST_CONSTEVAL static auto qualified_name() noexcept -> std::string_view {
+  TENZIR_CONSTEVAL static auto qualified_name() noexcept -> std::string_view {
     return std::string_view{Table::GetFullyQualifiedName()};
   }
 

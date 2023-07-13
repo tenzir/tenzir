@@ -30,7 +30,7 @@ Tuple tuple_map_impl(Range&& xs, F&& f, std::index_sequence<Is...>) {
 template <class Tuple, class F, class Range>
 Tuple tuple_map(Range&& xs, F&& f) {
   constexpr auto tuple_size = std::tuple_size_v<Tuple>;
-  VAST_ASSERT(xs.size() == tuple_size);
+  TENZIR_ASSERT(xs.size() == tuple_size);
   return tuple_map_impl<Tuple>(std::forward<Range>(xs), std::forward<F>(f),
                                std::make_index_sequence<tuple_size>{});
 }

@@ -42,7 +42,7 @@ void argument_parser::parse_impl(parser_interface& p) const {
   if (has_positional_expression) {
     for (const auto& option : named_) {
       for (const auto& name : option.names) {
-        VAST_DIAG_ASSERT(name.starts_with("--"));
+        TENZIR_DIAG_ASSERT(name.starts_with("--"));
       }
     }
   }
@@ -58,7 +58,7 @@ void argument_parser::parse_impl(parser_interface& p) const {
                      || (arg->inner.size() > 1 && arg->inner.starts_with("-")
                          && !has_positional_expression);
     if (is_option) {
-      VAST_DIAG_ASSERT(arg == p.accept_shell_arg());
+      TENZIR_DIAG_ASSERT(arg == p.accept_shell_arg());
       auto split = detail::split(arg->inner, "=", "", 1);
       auto name = located<std::string_view>{};
       auto value = std::optional<located<std::string_view>>{};
@@ -66,7 +66,7 @@ void argument_parser::parse_impl(parser_interface& p) const {
         name.inner = arg->inner;
         name.source = arg->source;
       } else {
-        VAST_DIAG_ASSERT(split.size() == 2);
+        TENZIR_DIAG_ASSERT(split.size() == 2);
         name.inner = split[0];
         value.emplace();
         value->inner = split[1];
@@ -156,7 +156,7 @@ void argument_parser::parse_impl(parser_interface& p) const {
       positional += 1;
     }
   }
-  VAST_DIAG_ASSERT(positional <= positional_.size());
+  TENZIR_DIAG_ASSERT(positional <= positional_.size());
   auto required = first_optional_ ? *first_optional_ : positional_.size();
   if (positional < required) {
     diagnostic::error("expected {} positional arguments, but got {}",

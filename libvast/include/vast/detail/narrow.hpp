@@ -47,9 +47,9 @@ template <class T, class U>
 T narrow(U y) {
   T x = narrow_cast<T>(y);
   if (static_cast<U>(x) != y)
-    VAST_RAISE_ERROR(narrowing_error, "narrowing error");
+    TENZIR_RAISE_ERROR(narrowing_error, "narrowing error");
   if (!is_same_signedness<T, U>::value && ((x < T{}) != (y < U{})))
-    VAST_RAISE_ERROR(narrowing_error, "narrowing error");
+    TENZIR_RAISE_ERROR(narrowing_error, "narrowing error");
   return x;
 }
 

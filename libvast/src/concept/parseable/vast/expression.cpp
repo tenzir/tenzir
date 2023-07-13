@@ -207,14 +207,14 @@ static auto make_expression_parser() {
       if (op == bool_operator::logical_and) {
         con.emplace_back(std::move(expr));
       } else if (op == bool_operator::logical_or) {
-        VAST_ASSERT(!con.empty());
+        TENZIR_ASSERT(!con.empty());
         if (con.size() == 1)
           dis.emplace_back(std::move(con[0]));
         else
           dis.emplace_back(std::move(con));
         con = conjunction{std::move(expr)};
       } else {
-        VAST_ASSERT(!"negations must not exist here");
+        TENZIR_ASSERT(!"negations must not exist here");
       }
     if (con.size() == 1)
       dis.emplace_back(std::move(con[0]));

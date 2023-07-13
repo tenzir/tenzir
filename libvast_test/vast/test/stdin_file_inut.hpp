@@ -26,7 +26,7 @@ struct stdin_file_input {
     old_stdin_fd = ::dup(fileno(stdin));
     REQUIRE_NOT_EQUAL(old_stdin_fd, -1);
     auto input_file_fd = ::open(
-      fmt::format("{}{}", VAST_TEST_PATH, FileName.str()).c_str(), O_RDONLY);
+      fmt::format("{}{}", TENZIR_TEST_PATH, FileName.str()).c_str(), O_RDONLY);
     REQUIRE_NOT_EQUAL(input_file_fd, -1);
     ::dup2(input_file_fd, fileno(stdin));
     ::close(input_file_fd);

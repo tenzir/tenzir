@@ -73,7 +73,7 @@ public:
     auto ok = detail::apply_all(f, p.str_, p.options_);
     if constexpr (Inspector::is_loading) {
       auto result = pattern::make(std::move(p.str_), p.options_);
-      VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
+      TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
       p = std::move(*result);
     }
     return ok;

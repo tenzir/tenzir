@@ -24,7 +24,7 @@ struct field_selector final : selector {
   /// @pre `!field_name.empty()`
   inline field_selector(std::string field_name, std::string type_prefix)
     : field_name_{std::move(field_name)}, type_prefix_{std::move(type_prefix)} {
-    VAST_ASSERT(!field_name_.empty());
+    TENZIR_ASSERT(!field_name_.empty());
   }
 
   inline std::optional<vast::type>
@@ -38,8 +38,8 @@ struct field_selector final : selector {
     if (it == types.end()) {
       // Keep a list of failed keys to avoid spamming the user with warnings.
       if (unknown_types.insert(field).second)
-        VAST_WARN("{} does not have a schema for {} {}",
-                  detail::pretty_type_name(this), field_name_, field);
+        TENZIR_WARN("{} does not have a schema for {} {}",
+                    detail::pretty_type_name(this), field_name_, field);
       return {};
     }
     return it->second;

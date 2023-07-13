@@ -1,63 +1,63 @@
 file(READ "${CMAKE_CURRENT_LIST_DIR}/../version.json" TENZIR_VERSION_JSON)
 string(JSON TENZIR_VERSION_FALLBACK GET "${TENZIR_VERSION_JSON}"
        tenzir-version-fallback)
-string(JSON VAST_PARTITION_VERSION GET "${TENZIR_VERSION_JSON}"
+string(JSON TENZIR_PARTITION_VERSION GET "${TENZIR_VERSION_JSON}"
        vast-partition-version)
 
 find_package(Git QUIET)
 
-if (NOT VAST_VERSION_TAG)
-  if (DEFINED ENV{VAST_VERSION_TAG})
-    set(VAST_VERSION_TAG "${ENV{VAST_VERSION_TAG}}")
+if (NOT TENZIR_VERSION_TAG)
+  if (DEFINED ENV{TENZIR_VERSION_TAG})
+    set(TENZIR_VERSION_TAG "${ENV{TENZIR_VERSION_TAG}}")
   elseif (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../.git")
     if (Git_FOUND)
       execute_process(
         COMMAND "${GIT_EXECUTABLE}" describe --abbrev=10 --long --dirty
                 "--match=v[0-9]*"
         WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/.."
-        OUTPUT_VARIABLE VAST_VERSION_TAG
+        OUTPUT_VARIABLE TENZIR_VERSION_TAG
         OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE VAST_GIT_DESCRIBE_RESULT)
-      if (NOT VAST_GIT_DESCRIBE_RESULT EQUAL 0)
+        RESULT_VARIABLE TENZIR_GIT_DESCRIBE_RESULT)
+      if (NOT TENZIR_GIT_DESCRIBE_RESULT EQUAL 0)
         message(
           WARNING
-            "git-describe failed: ${VAST_GIT_DESCRIBE_RESULT}; using fallback version"
+            "git-describe failed: ${TENZIR_GIT_DESCRIBE_RESULT}; using fallback version"
         )
-        unset(VAST_VERSION_TAG)
+        unset(TENZIR_VERSION_TAG)
       endif ()
     endif ()
   endif ()
 endif ()
 
-if (NOT VAST_VERSION_SHORT)
-  if (DEFINED ENV{VAST_VERSION_SHORT})
-    set(VAST_VERSION_SHORT "${ENV{VAST_VERSION_SHORT}}")
+if (NOT TENZIR_VERSION_SHORT)
+  if (DEFINED ENV{TENZIR_VERSION_SHORT})
+    set(TENZIR_VERSION_SHORT "${ENV{TENZIR_VERSION_SHORT}}")
   elseif (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../.git")
     if (Git_FOUND)
       # Emit a "non-long" version for use in package file names.
       execute_process(
         COMMAND "${GIT_EXECUTABLE}" describe --abbrev=10 "--match=v[0-9]*"
         WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/.."
-        OUTPUT_VARIABLE VAST_VERSION_SHORT
+        OUTPUT_VARIABLE TENZIR_VERSION_SHORT
         OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE VAST_GIT_DESCRIBE_RESULT)
-      if (NOT VAST_GIT_DESCRIBE_RESULT EQUAL 0)
+        RESULT_VARIABLE TENZIR_GIT_DESCRIBE_RESULT)
+      if (NOT TENZIR_GIT_DESCRIBE_RESULT EQUAL 0)
         message(
           WARNING
-            "git-describe failed: ${VAST_GIT_DESCRIBE_RESULT}; using fallback version"
+            "git-describe failed: ${TENZIR_GIT_DESCRIBE_RESULT}; using fallback version"
         )
-        unset(VAST_VERSION_SHORT)
+        unset(TENZIR_VERSION_SHORT)
       endif ()
     endif ()
   endif ()
 endif ()
 
-if (NOT VAST_VERSION_TAG)
-  set(VAST_VERSION_TAG "v${TENZIR_VERSION_FALLBACK}")
+if (NOT TENZIR_VERSION_TAG)
+  set(TENZIR_VERSION_TAG "v${TENZIR_VERSION_FALLBACK}")
 endif ()
 
-if (NOT VAST_VERSION_SHORT)
-  set(VAST_VERSION_SHORT "v${TENZIR_VERSION_FALLBACK}")
+if (NOT TENZIR_VERSION_SHORT)
+  set(TENZIR_VERSION_SHORT "v${TENZIR_VERSION_FALLBACK}")
 endif ()
 
 # We accept:
@@ -66,14 +66,14 @@ endif ()
 # (3) v1.0.0-13-g3c8009fe4(-dirty)
 # (4) v1.0.0-rc1-13-g3c8009fe4(-dirty)
 
-list(LENGTH "${VAST_VERSION_TAG}" version_tag_list_len)
+list(LENGTH "${TENZIR_VERSION_TAG}" version_tag_list_len)
 if (NOT version_tag_list_len EQUAL 0)
-  message(FATAL_ERROR "Invalid version tag: ${VAST_VERSION_TAG}")
+  message(FATAL_ERROR "Invalid version tag: ${TENZIR_VERSION_TAG}")
 endif ()
 unset(version_tag_list_len)
 
 # Strip the v prefix from the version tag, if it exists.
-string(REGEX REPLACE "^v" "" version_list "${VAST_VERSION_TAG}")
+string(REGEX REPLACE "^v" "" version_list "${TENZIR_VERSION_TAG}")
 
 string(REPLACE "-" ";" version_list "${version_list}")
 # The version string can optionally have a "-dirty" suffix, we strip it now to
@@ -85,19 +85,19 @@ endif ()
 list(LENGTH version_list version_list_len)
 
 # Extract Major, Minor, and Patch.
-list(GET version_list 0 VAST_VERSION_MMP)
-string(REPLACE "." ";" VAST_VERSION_MMP "${VAST_VERSION_MMP}")
-list(GET VAST_VERSION_MMP 0 VAST_VERSION_MAJOR)
-list(GET VAST_VERSION_MMP 1 VAST_VERSION_MINOR)
-list(GET VAST_VERSION_MMP 2 VAST_VERSION_PATCH)
+list(GET version_list 0 TENZIR_VERSION_MMP)
+string(REPLACE "." ";" TENZIR_VERSION_MMP "${TENZIR_VERSION_MMP}")
+list(GET TENZIR_VERSION_MMP 0 TENZIR_VERSION_MAJOR)
+list(GET TENZIR_VERSION_MMP 1 TENZIR_VERSION_MINOR)
+list(GET TENZIR_VERSION_MMP 2 TENZIR_VERSION_PATCH)
 
 # Extract Tweak and Commit.
 if (version_list_len GREATER 2)
-  list(GET version_list -2 VAST_VERSION_TWEAK)
-  list(GET version_list -1 VAST_VERSION_COMMIT)
+  list(GET version_list -2 TENZIR_VERSION_TWEAK)
+  list(GET version_list -1 TENZIR_VERSION_COMMIT)
 else ()
   # Default tweak to 0 and commit to unset.
-  set(VAST_VERSION_TWEAK 0)
+  set(TENZIR_VERSION_TWEAK 0)
 endif ()
 
 unset(version_list)
@@ -141,4 +141,4 @@ foreach (hash_file IN LISTS hash_files)
   endif ()
 endforeach ()
 
-string(MD5 VAST_BUILD_TREE_HASH "${hashes}")
+string(MD5 TENZIR_BUILD_TREE_HASH "${hashes}")

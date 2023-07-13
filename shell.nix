@@ -20,5 +20,5 @@ in
     }
     // lib.optionalAttrs isStatic {
       # Signal static build mode to CMake via the environment.
-      VAST_ENABLE_STATIC_EXECUTABLE = "ON";
+      TENZIR_ENABLE_STATIC_EXECUTABLE = "ON";
     })

@@ -293,7 +293,7 @@ auto plugin_inspect(Inspector& f, std::unique_ptr<Base>& x) -> bool {
     p->deserialize(g, x);
     return x != nullptr;
   } else {
-    VAST_ASSERT(x);
+    TENZIR_ASSERT(x);
     auto name = x->name();
     if (!f.apply(name)) {
       return false;
@@ -325,9 +325,9 @@ public:
   }
 
   auto serialize(inspector& f, const Base& op) const -> bool override {
-    VAST_ASSERT(op.name() == name());
+    TENZIR_ASSERT(op.name() == name());
     auto x = dynamic_cast<const Concrete*>(&op);
-    VAST_ASSERT(x);
+    TENZIR_ASSERT(x);
     // TODO: Can probably remove this const_cast by splitting up `inspector`.
     auto y = const_cast<Concrete*>(x);
     return f.apply(*y);
@@ -834,25 +834,25 @@ generator<const Plugin*> get() noexcept {
 
 // -- helper macros ------------------------------------------------------------
 
-#if defined(VAST_ENABLE_BUILTINS)
-#  define VAST_PLUGIN_VERSION nullptr
+#if defined(TENZIR_ENABLE_BUILTINS)
+#  define TENZIR_PLUGIN_VERSION nullptr
 #else
-extern const char* VAST_PLUGIN_VERSION;
+extern const char* TENZIR_PLUGIN_VERSION;
 #endif
 
-#if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_BUILTINS)
+#if defined(TENZIR_ENABLE_STATIC_PLUGINS) && defined(TENZIR_ENABLE_BUILTINS)
 
 #  error "Plugins cannot be both static and builtin"
 
-#elif defined(VAST_ENABLE_STATIC_PLUGINS) || defined(VAST_ENABLE_BUILTINS)
+#elif defined(TENZIR_ENABLE_STATIC_PLUGINS) || defined(TENZIR_ENABLE_BUILTINS)
 
-#  if defined(VAST_ENABLE_STATIC_PLUGINS)
-#    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_static
+#  if defined(TENZIR_ENABLE_STATIC_PLUGINS)
+#    define TENZIR_MAKE_PLUGIN ::vast::plugin_ptr::make_static
 #  else
-#    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_builtin
+#    define TENZIR_MAKE_PLUGIN ::vast::plugin_ptr::make_builtin
 #  endif
 
-#  define VAST_REGISTER_PLUGIN(name)                                           \
+#  define TENZIR_REGISTER_PLUGIN(name)                                         \
     template <class>                                                           \
     struct auto_register_plugin;                                               \
     template <>                                                                \
@@ -861,18 +861,18 @@ extern const char* VAST_PLUGIN_VERSION;
         static_cast<void>(flag);                                               \
       }                                                                        \
       static auto init() -> bool {                                             \
-        ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
+        ::vast::plugins::get_mutable().push_back(TENZIR_MAKE_PLUGIN(           \
           new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \
           +[](::vast::plugin* plugin) noexcept {                               \
             delete plugin; /* NOLINT(cppcoreguidelines-owning-memory) */       \
           },                                                                   \
-          VAST_PLUGIN_VERSION));                                               \
+          TENZIR_PLUGIN_VERSION));                                             \
         return true;                                                           \
       }                                                                        \
       inline static auto flag = init();                                        \
     };
 
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
+#  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                         \
     struct auto_register_type_id_##name {                                      \
       auto_register_type_id_##name() {                                         \
         static_cast<void>(flag);                                               \
@@ -889,13 +889,13 @@ extern const char* VAST_PLUGIN_VERSION;
       inline static auto flag = init();                                        \
     };
 
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                   \
-    VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name1)                                \
-    VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name2)
+#  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                 \
+    TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name1)                              \
+    TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name2)
 
 #else
 
-#  define VAST_REGISTER_PLUGIN(name)                                           \
+#  define TENZIR_REGISTER_PLUGIN(name)                                         \
     extern "C" auto vast_plugin_create()->::vast::plugin* {                    \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       return new (name);                                                       \
@@ -905,7 +905,7 @@ extern const char* VAST_PLUGIN_VERSION;
       delete plugin;                                                           \
     }                                                                          \
     extern "C" auto vast_plugin_version()->const char* {                       \
-      return VAST_PLUGIN_VERSION;                                              \
+      return TENZIR_PLUGIN_VERSION;                                            \
     }                                                                          \
     extern "C" auto vast_libvast_version()->const char* {                      \
       return ::vast::version::version;                                         \
@@ -914,7 +914,7 @@ extern const char* VAST_PLUGIN_VERSION;
       return ::vast::version::build::tree_hash;                                \
     }
 
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                            \
+#  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                          \
     extern "C" auto vast_plugin_register_type_id_block()->void {                \
       caf::init_global_meta_objects<::caf::id_block::name>();                   \
     }                                                                           \
@@ -922,7 +922,7 @@ extern const char* VAST_PLUGIN_VERSION;
       return {::caf::id_block::name::begin, ::caf::id_block::name::end};        \
     }
 
-#  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                    \
+#  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                  \
     extern "C" auto vast_plugin_register_type_id_block()->void {                \
       caf::init_global_meta_objects<::caf::id_block::name1>();                  \
       caf::init_global_meta_objects<::caf::id_block::name2>();                  \
@@ -938,6 +938,6 @@ extern const char* VAST_PLUGIN_VERSION;
 
 #endif
 
-#define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                                \
-  VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_, __VA_ARGS__)           \
+#define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                              \
+  TENZIR_PP_OVERLOAD(TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_, __VA_ARGS__)       \
   (__VA_ARGS__)

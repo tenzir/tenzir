@@ -59,7 +59,7 @@ container_lookup_impl(const Index& idx, relational_operator op,
 template <class Index>
 caf::expected<ids>
 container_lookup(const Index& idx, relational_operator op, view<list> xs) {
-  VAST_ASSERT(xs);
+  TENZIR_ASSERT(xs);
   return container_lookup_impl(idx, op, *xs);
 }
 

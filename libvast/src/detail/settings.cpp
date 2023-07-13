@@ -22,7 +22,7 @@ namespace {
 void merge_settings_impl(const caf::settings& src, caf::settings& dst,
                          enum policy::merge_lists merge_lists, size_t depth) {
   if (depth > 100) {
-    VAST_ERROR("Exceeded maximum nesting depth in settings.");
+    TENZIR_ERROR("Exceeded maximum nesting depth in settings.");
     return;
   }
   for (auto& [key, value] : src) {
@@ -40,8 +40,8 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
           dst.insert_or_assign(key, value);
         }
       } else if (merge_lists == policy::merge_lists::no) {
-        VAST_ASSERT(merge_lists == policy::merge_lists::no, //
-                    "unsupported merge policy");
+        TENZIR_ASSERT(merge_lists == policy::merge_lists::no, //
+                      "unsupported merge policy");
         dst.insert_or_assign(key, value);
       }
     }

@@ -51,7 +51,7 @@ struct symbol_resolver {
   }
 
   caf::expected<legacy_type> operator()(const legacy_none_type& x) {
-    VAST_ASSERT(!x.name().empty());
+    TENZIR_ASSERT(!x.name().empty());
     auto concrete = lookup(x.name());
     if (!concrete)
       return concrete.error();
@@ -111,14 +111,14 @@ struct symbol_resolver {
       field_type = *y;
     }
     if (has_algebra_attribute(x)) {
-      VAST_ASSERT(x.fields.size() >= 2);
+      TENZIR_ASSERT(x.fields.size() >= 2);
       const auto* base = caf::get_if<legacy_record_type>(&x.fields[0].type);
-      VAST_ASSERT(base);
+      TENZIR_ASSERT(base);
       auto acc = *base;
       auto it = ++x.fields.begin();
       for (; it < x.fields.end(); ++it) {
         const auto* rhs = caf::get_if<legacy_record_type>(&it->type);
-        VAST_ASSERT(rhs);
+        TENZIR_ASSERT(rhs);
         if (it->name == "+") {
           auto result = merge(acc, *rhs);
           if (!result)
@@ -141,7 +141,7 @@ struct symbol_resolver {
           acc = *std::move(acc_removed);
         } else
           // Invalid operation.
-          VAST_ASSERT(true);
+          TENZIR_ASSERT(true);
       }
       // TODO: Consider lifiting the following restriction.
       if (acc.fields.empty())
@@ -151,7 +151,7 @@ struct symbol_resolver {
                                        "supported.",
                                        x.name()));
       for (const auto& field : acc.fields)
-        VAST_ASSERT(!field.name.empty());
+        TENZIR_ASSERT(!field.name.empty());
       return acc.name(x.name());
     }
     return std::move(x);
@@ -225,7 +225,7 @@ struct symbol_map_parser : parser_base<symbol_map_parser> {
         ty = legacy_alias_type{ty}; // TODO: attributes
       ty.name(name);
       if (!out.emplace(name, ty).second) {
-        VAST_ERROR("multiple definitions of {} detected", name);
+        TENZIR_ERROR("multiple definitions of {} detected", name);
         duplicate_symbol = true;
       }
       return ty;
@@ -270,7 +270,7 @@ struct schema_parser : parser_base<schema_parser> {
     auto r = symbol_resolver{global, local};
     auto sch = r.resolve();
     if (!sch) {
-      VAST_WARN("failed to resolve symbol table: {}", sch.error());
+      TENZIR_WARN("failed to resolve symbol table: {}", sch.error());
       return false;
     }
     out = *std::move(sch);

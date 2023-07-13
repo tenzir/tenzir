@@ -22,47 +22,47 @@
 
 namespace artifacts::logs::zeek {
 
-const char* conn = VAST_TEST_PATH "artifacts/logs/zeek/conn.log";
-const char* dns = VAST_TEST_PATH "artifacts/logs/zeek/dns.log";
-const char* ftp = VAST_TEST_PATH "artifacts/logs/zeek/ftp.log";
-const char* http = VAST_TEST_PATH "artifacts/logs/zeek/http.log";
-const char* small_conn = VAST_TEST_PATH "artifacts/logs/zeek/small_conn.log";
-const char* smtp = VAST_TEST_PATH "artifacts/logs/zeek/smtp.log";
-const char* ssl = VAST_TEST_PATH "artifacts/logs/zeek/ssl.log";
+const char* conn = TENZIR_TEST_PATH "artifacts/logs/zeek/conn.log";
+const char* dns = TENZIR_TEST_PATH "artifacts/logs/zeek/dns.log";
+const char* ftp = TENZIR_TEST_PATH "artifacts/logs/zeek/ftp.log";
+const char* http = TENZIR_TEST_PATH "artifacts/logs/zeek/http.log";
+const char* small_conn = TENZIR_TEST_PATH "artifacts/logs/zeek/small_conn.log";
+const char* smtp = TENZIR_TEST_PATH "artifacts/logs/zeek/smtp.log";
+const char* ssl = TENZIR_TEST_PATH "artifacts/logs/zeek/ssl.log";
 
 } // namespace artifacts::logs::zeek
 
 namespace artifacts::logs::suricata {
 
-const char* alert = VAST_TEST_PATH "artifacts/logs/suricata/alert.json";
-const char* dns = VAST_TEST_PATH "artifacts/logs/suricata/dns.json";
-const char* fileinfo = VAST_TEST_PATH "artifacts/logs/suricata/fileinfo.json";
-const char* flow = VAST_TEST_PATH "artifacts/logs/suricata/flow.json";
-const char* http = VAST_TEST_PATH "artifacts/logs/suricata/http.json";
-const char* netflow = VAST_TEST_PATH "artifacts/logs/suricata/netflow.json";
-const char* stats = VAST_TEST_PATH "artifacts/logs/suricata//stats.json";
+const char* alert = TENZIR_TEST_PATH "artifacts/logs/suricata/alert.json";
+const char* dns = TENZIR_TEST_PATH "artifacts/logs/suricata/dns.json";
+const char* fileinfo = TENZIR_TEST_PATH "artifacts/logs/suricata/fileinfo.json";
+const char* flow = TENZIR_TEST_PATH "artifacts/logs/suricata/flow.json";
+const char* http = TENZIR_TEST_PATH "artifacts/logs/suricata/http.json";
+const char* netflow = TENZIR_TEST_PATH "artifacts/logs/suricata/netflow.json";
+const char* stats = TENZIR_TEST_PATH "artifacts/logs/suricata//stats.json";
 
 } // namespace artifacts::logs::suricata
 
 namespace artifacts::logs::syslog {
 
 const char* syslog_msgs
-  = VAST_TEST_PATH "artifacts/logs/syslog/syslog-test.txt";
+  = TENZIR_TEST_PATH "artifacts/logs/syslog/syslog-test.txt";
 
 } // namespace artifacts::logs::syslog
 
 namespace artifacts::schemas {
 
-const char* base = VAST_TEST_PATH "artifacts/schemas/base.schema";
-const char* suricata = VAST_TEST_PATH "artifacts/schemas/suricata.schema";
+const char* base = TENZIR_TEST_PATH "artifacts/schemas/base.schema";
+const char* suricata = TENZIR_TEST_PATH "artifacts/schemas/suricata.schema";
 
 } // namespace artifacts::schemas
 
 namespace artifacts::traces {
 
-const char* nmap_vsn = VAST_TEST_PATH "artifacts/traces/nmap_vsn.pcap";
+const char* nmap_vsn = TENZIR_TEST_PATH "artifacts/traces/nmap_vsn.pcap";
 const char* workshop_2011_browse
-  = VAST_TEST_PATH "artifacts/traces/workshop_2011_browse.pcap";
+  = TENZIR_TEST_PATH "artifacts/traces/workshop_2011_browse.pcap";
 
 } // namespace artifacts::traces
 

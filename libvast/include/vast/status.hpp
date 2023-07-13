@@ -148,8 +148,8 @@ void collect_status(
       s[key] = std::move(response);
     },
     [self = rs->self, key = std::string{key}, &s](const caf::error& err) {
-      VAST_WARN("{} failed to retrieve status for the key {}: {}", *self, key,
-                err);
+      TENZIR_WARN("{} failed to retrieve status for the key {}: {}", *self, key,
+                  err);
       s[key] = fmt::to_string(err);
     });
 }

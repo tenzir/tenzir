@@ -146,4 +146,4 @@ public:
 
 } // namespace vast::plugins::drop
 
-VAST_REGISTER_PLUGIN(vast::plugins::drop::plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::drop::plugin)

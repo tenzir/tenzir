@@ -175,7 +175,7 @@ private:
         // TODO: It should be possible to avoid the `materialize()` here if
         // `seeds_` could be changed to use `data_view` as key type.
         auto result = seeds_.emplace(materialize(x), i);
-        VAST_ASSERT(result.second);
+        TENZIR_ASSERT(result.second);
         unique_digests_.insert(k);
         return k;
       };
@@ -206,7 +206,7 @@ private:
 
   [[nodiscard]] caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override {
-    VAST_ASSERT(rank(this->mask()) == digests_.size());
+    TENZIR_ASSERT(rank(this->mask()) == digests_.size());
     // Some operations we just cannot handle with this index, but they are still
     // valid operations. So for them we need to return all IDs.
     if (caf::holds_alternative<view<pattern>>(x)
@@ -325,8 +325,8 @@ private:
 
   caf::error unpack_impl(const fbs::ValueIndex& from) override {
     const auto* from_hash = from.value_index_as_hash();
-    VAST_ASSERT(from_hash);
-    VAST_ASSERT(from_hash->digests()->size() % sizeof(digest_type) == 0);
+    TENZIR_ASSERT(from_hash);
+    TENZIR_ASSERT(from_hash->digests()->size() % sizeof(digest_type) == 0);
     const auto num_digests = from_hash->digests()->size() / sizeof(digest_type);
     digests_.reserve(num_digests);
     for (size_t i = 0; i < num_digests; ++i) {
@@ -336,7 +336,7 @@ private:
                   sizeof(digest_type));
       digests_.emplace_back(digest);
     }
-    VAST_ASSERT(from_hash->unique_digests()->size() % sizeof(key) == 0);
+    TENZIR_ASSERT(from_hash->unique_digests()->size() % sizeof(key) == 0);
     const auto num_unique_digests
       = from_hash->unique_digests()->size() / sizeof(key);
     unique_digests_.reserve(num_unique_digests);
@@ -353,7 +353,7 @@ private:
       if (auto err = unpack(*seed->key(), key))
         return err;
       auto ok = seeds_.emplace(key, seed->value()).second;
-      VAST_ASSERT(ok);
+      TENZIR_ASSERT(ok);
     }
     return caf::none;
   }

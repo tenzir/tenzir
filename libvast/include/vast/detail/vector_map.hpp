@@ -173,8 +173,8 @@ public:
   [[nodiscard]] mapped_type& at(const L& key) {
     auto i = find(key);
     if (i == end())
-      VAST_RAISE_ERROR(std::out_of_range,
-                       "vast::detail::vector_map::at out of range");
+      TENZIR_RAISE_ERROR(std::out_of_range,
+                         "vast::detail::vector_map::at out of range");
     return i->second;
   }
 
@@ -182,8 +182,8 @@ public:
   [[nodiscard]] const mapped_type& at(const L& key) const {
     auto i = find(key);
     if (i == end())
-      VAST_RAISE_ERROR(std::out_of_range,
-                       "vast::detail::vector_map::at out of range");
+      TENZIR_RAISE_ERROR(std::out_of_range,
+                         "vast::detail::vector_map::at out of range");
     return i->second;
   }
 

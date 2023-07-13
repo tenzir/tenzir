@@ -29,7 +29,7 @@ using namespace std::chrono_literals;
 namespace vast {
 
 caf::message count_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_DEBUG("{}", inv);
+  TENZIR_DEBUG("{}", inv);
   const auto& options = inv.options;
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(inv, "tenzir.count.read", must_provide_query::no);
@@ -45,12 +45,12 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
   const auto& node = std::holds_alternative<node_actor>(node_opt)
                        ? std::get<node_actor>(node_opt)
                        : std::get<scope_linked<node_actor>>(node_opt).get();
-  VAST_ASSERT(node != nullptr);
+  TENZIR_ASSERT(node != nullptr);
   // Spawn COUNTER at the node.
   caf::actor cnt;
   auto args = invocation{options, "spawn counter", {*query}};
-  VAST_DEBUG("{} spawns counter with parameters: {}",
-             detail::pretty_type_name(inv.full_name), query);
+  TENZIR_DEBUG("{} spawns counter with parameters: {}",
+               detail::pretty_type_name(inv.full_name), query);
   auto err = caf::error{};
   self->request(node, caf::infinite, atom::spawn_v, std::move(args))
     .receive(
@@ -80,9 +80,9 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
         counting = false;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
-                   ::strsignal(signal));
-        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
+                     ::strsignal(signal));
+        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
         counting = false;
       });
   std::cout << result << std::endl;

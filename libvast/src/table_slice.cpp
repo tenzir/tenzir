@@ -169,7 +169,7 @@ auto make_unflattened_struct_array(
   // foo struct array with bar and baz as children
   std::unordered_set<unflatten_field*> handled_fields;
   for (const auto& field : fields) {
-    VAST_ASSERT(original_field_name_to_new_field_map.contains(field->name()));
+    TENZIR_ASSERT(original_field_name_to_new_field_map.contains(field->name()));
     auto* f = original_field_name_to_new_field_map.at(field->name());
     if (not handled_fields.contains(f)) {
       new_columns.push_back(f->to_arrow());
@@ -190,7 +190,7 @@ auto append_columns(const record_type& schema,
   // of the value 1, call .data() on that and pass it in here instead.
   const auto append_status
     = builder.AppendValues(array.length(), /*valid_bytes*/ nullptr);
-  VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
+  TENZIR_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
   for (auto field_index = 0; field_index < array.num_fields(); ++field_index) {
     const auto field_type = schema.field(field_index).type;
     const auto& field_array = *array.field(field_index);
@@ -217,8 +217,8 @@ auto append_columns(const record_type& schema,
           const auto append_array_slice_result
             = concrete_field_builder.AppendArraySlice(
               *concrete_field_array.data(), 0, array.length());
-          VAST_ASSERT_CHEAP(append_array_slice_result.ok(),
-                            append_array_slice_result.ToString().c_str());
+          TENZIR_ASSERT_CHEAP(append_array_slice_result.ok(),
+                              append_array_slice_result.ToString().c_str());
         } else {
           // For complex types and extension types we cannot use the
           // AppendArraySlice API, so we need to take a slight detour by
@@ -239,21 +239,21 @@ auto append_columns(const record_type& schema,
           }();
           const auto reserve_result
             = concrete_field_builder.Reserve(array.length());
-          VAST_ASSERT_CHEAP(reserve_result.ok(),
-                            reserve_result.ToString().c_str());
+          TENZIR_ASSERT_CHEAP(reserve_result.ok(),
+                              reserve_result.ToString().c_str());
           for (auto row = 0; row < array.length(); ++row) {
             if (concrete_field_array_storage.IsNull(row)) {
               const auto append_null_result
                 = concrete_field_builder.AppendNull();
-              VAST_ASSERT(append_null_result.ok(),
-                          append_null_result.ToString().c_str());
+              TENZIR_ASSERT(append_null_result.ok(),
+                            append_null_result.ToString().c_str());
               continue;
             }
             const auto append_builder_result = append_builder(
               concrete_field_type, concrete_field_builder,
               value_at(concrete_field_type, concrete_field_array_storage, row));
-            VAST_ASSERT(append_builder_result.ok(),
-                        append_builder_result.ToString().c_str());
+            TENZIR_ASSERT(append_builder_result.ok(),
+                          append_builder_result.ToString().c_str());
           }
         }
       },
@@ -272,7 +272,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
                          const std::shared_ptr<arrow::RecordBatch>& batch,
                          type schema) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
-  VAST_ASSERT(!chunk_ || chunk_->unique());
+  TENZIR_ASSERT(!chunk_ || chunk_->unique());
   if (chunk_) {
     ++num_instances_;
     auto f = detail::overload{
@@ -481,7 +481,7 @@ size_t table_slice::instances() noexcept {
 
 void table_slice::append_column_to_index(table_slice::size_type column,
                                          value_index& index) const {
-  VAST_ASSERT(offset() != invalid_id);
+  TENZIR_ASSERT(offset() != invalid_id);
   auto f = detail::overload{
     []() noexcept {
       die("cannot append column of invalid table slice to index");
@@ -496,8 +496,8 @@ void table_slice::append_column_to_index(table_slice::size_type column,
 
 data_view table_slice::at(table_slice::size_type row,
                           table_slice::size_type column) const {
-  VAST_ASSERT(row < rows());
-  VAST_ASSERT(column < columns());
+  TENZIR_ASSERT(row < rows());
+  TENZIR_ASSERT(column < columns());
   auto f = detail::overload{
     [&]() noexcept -> data_view {
       die("cannot access data of invalid table slice");
@@ -511,8 +511,8 @@ data_view table_slice::at(table_slice::size_type row,
 
 data_view table_slice::at(table_slice::size_type row,
                           table_slice::size_type column, const type& t) const {
-  VAST_ASSERT(row < rows());
-  VAST_ASSERT(column < columns());
+  TENZIR_ASSERT(row < rows());
+  TENZIR_ASSERT(column < columns());
   auto f = detail::overload{
     [&]() noexcept -> data_view {
       die("cannot access data of invalid table slice");
@@ -546,7 +546,7 @@ std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
 // -- concepts -----------------------------------------------------------------
 
 std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
-  VAST_ASSERT(slice.is_serialized());
+  TENZIR_ASSERT(slice.is_serialized());
   return as_bytes(slice.chunk_);
 }
 
@@ -564,17 +564,17 @@ table_slice concatenate(std::vector<table_slice> slices) {
   if (slices.size() == 1)
     return std::move(slices[0]);
   auto schema = slices[0].schema();
-  VAST_ASSERT(std::all_of(slices.begin(), slices.end(),
-                          [&](const auto& slice) {
-                            return slice.schema() == schema;
-                          }),
-              "concatenate requires slices to be homogeneous");
+  TENZIR_ASSERT(std::all_of(slices.begin(), slices.end(),
+                            [&](const auto& slice) {
+                              return slice.schema() == schema;
+                            }),
+                "concatenate requires slices to be homogeneous");
   auto builder = caf::get<record_type>(schema).make_arrow_builder(
     arrow::default_memory_pool());
   auto arrow_schema = schema.to_arrow_schema();
   const auto resize_result
     = builder->Resize(detail::narrow_cast<int64_t>(rows(slices)));
-  VAST_ASSERT(resize_result.ok(), resize_result.ToString().c_str());
+  TENZIR_ASSERT(resize_result.ok(), resize_result.ToString().c_str());
 
   for (const auto& slice : slices) {
     auto batch = to_record_batch(slice);
@@ -596,7 +596,7 @@ table_slice concatenate(std::vector<table_slice> slices) {
 
 generator<table_slice>
 select(const table_slice& slice, expression expr, const ids& hints) {
-  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  TENZIR_ASSERT(slice.encoding() != table_slice_encoding::none);
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   auto slice_ids = make_ids({{offset, offset + slice.rows()}});
   auto selection = slice_ids;
@@ -648,7 +648,7 @@ table_slice tail(table_slice slice, size_t num_rows) {
 
 std::pair<table_slice, table_slice>
 split(const table_slice& slice, size_t partition_point) {
-  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  TENZIR_ASSERT(slice.encoding() != table_slice_encoding::none);
   if (partition_point == 0)
     return {{}, slice};
   if (partition_point >= slice.rows())
@@ -696,8 +696,8 @@ auto split(std::vector<table_slice> events, uint64_t partition_point)
 
 auto subslice(const table_slice& slice, size_t begin, size_t end)
   -> table_slice {
-  VAST_ASSERT(begin <= end);
-  VAST_ASSERT(end <= slice.rows());
+  TENZIR_ASSERT(begin <= end);
+  TENZIR_ASSERT(end <= slice.rows());
   if (begin == 0 && end == slice.rows()) {
     return slice;
   }
@@ -745,7 +745,7 @@ std::optional<table_slice> filter(const table_slice& slice, const ids& hints) {
 
 uint64_t count_matching(const table_slice& slice, const expression& expr,
                         const ids& hints) {
-  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  TENZIR_ASSERT(slice.encoding() != table_slice_encoding::none);
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   if (expr == expression{}) {
     auto result = uint64_t{};
@@ -788,14 +788,14 @@ table_slice resolve_enumerations(table_slice slice) {
              et, caf::get<type_to_arrow_array_t<enumeration_type>>(*array))) {
         if (!value) {
           const auto append_result = builder->AppendNull();
-          VAST_ASSERT_EXPENSIVE(append_result.ok(),
-                                append_result.ToString().c_str());
+          TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
+                                  append_result.ToString().c_str());
           continue;
         }
         const auto append_result
           = append_builder(string_type{}, *builder, et.field(*value));
-        VAST_ASSERT_EXPENSIVE(append_result.ok(),
-                              append_result.ToString().c_str());
+        TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
+                                append_result.ToString().c_str());
       }
       return {{
         {field.name, new_type},
@@ -849,7 +849,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
       auto builder
         = string_type::make_arrow_builder(arrow::default_memory_pool());
       const auto append_result = builder->AppendNulls(batch->num_rows());
-      VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+      TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
       array = builder->Finish().ValueOrDie();
       return;
     }
@@ -860,7 +860,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
         const auto append_result
           = append_builder(inferred_type, *builder,
                            make_view(caf::get<type_to_data_t<Type>>(value)));
-        VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+        TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
       }
       array = builder->Finish().ValueOrDie();
     };
@@ -924,17 +924,17 @@ namespace {
 auto combine_offsets(
   const std::vector<std::shared_ptr<arrow::Array>>& list_offsets)
   -> std::shared_ptr<arrow::Array> {
-  VAST_ASSERT(not list_offsets.empty());
+  TENZIR_ASSERT(not list_offsets.empty());
   auto it = list_offsets.begin();
   auto result = *it++;
   auto builder = arrow::Int32Builder{};
   for (; it < list_offsets.end(); ++it) {
     for (const auto& index : static_cast<const arrow::Int32Array&>(*result)) {
-      VAST_ASSERT(index);
+      TENZIR_ASSERT(index);
       const auto& next = static_cast<const arrow::Int32Array&>(**it);
-      VAST_ASSERT(not next.IsNull(*index));
+      TENZIR_ASSERT(not next.IsNull(*index));
       auto append_result = builder.Append(next.Value(*index));
-      VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
+      TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
     }
     result = builder.Finish().ValueOrDie();
   }
@@ -1016,8 +1016,8 @@ auto flatten_record(
   }
   auto [output_type, output_struct_array]
     = transform_columns(field.type, struct_array, transformations);
-  VAST_ASSERT(output_type);
-  VAST_ASSERT(output_struct_array);
+  TENZIR_ASSERT(output_type);
+  TENZIR_ASSERT(output_struct_array);
   auto result = indexed_transformation::result_type{};
   result.reserve(output_struct_array->num_fields());
   const auto& output_rt = caf::get<record_type>(output_type);
@@ -1114,12 +1114,12 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   }
   slice = transform_columns(slice, transformations);
   // Flattening cannot fail.
-  VAST_ASSERT(slice.rows() > 0);
+  TENZIR_ASSERT(slice.rows() > 0);
   // The slice may contain duplicate field name here, so we perform an
   // additional transformation to rename them in case we detect any.
   transformations.clear();
   const auto& layout = caf::get<record_type>(slice.schema());
-  VAST_ASSERT(layout.num_fields() == layout.num_leaves());
+  TENZIR_ASSERT(layout.num_fields() == layout.num_leaves());
   for (const auto& leaf : layout.leaves()) {
     size_t num_occurences = 0;
     if (std::any_of(transformations.begin(), transformations.end(),
@@ -1156,10 +1156,10 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
       }
     }
   }
-  VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end()));
+  TENZIR_ASSERT(std::is_sorted(transformations.begin(), transformations.end()));
   slice = transform_columns(slice, transformations);
   // Renaming cannot fail.
-  VAST_ASSERT(slice.rows() > 0);
+  TENZIR_ASSERT(slice.rows() > 0);
   return {
     std::move(slice),
     std::move(renamed_fields),
@@ -1188,10 +1188,10 @@ auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
                       .make_arrow_builder(arrow::default_memory_pool());
         }
         auto status = builder->Append();
-        VAST_ASSERT(status.ok());
+        TENZIR_ASSERT(status.ok());
         status = builder->value_builder()->AppendArraySlice(
           *new_f.array_->data(), 0, new_f.array_->length());
-        VAST_ASSERT(status.ok());
+        TENZIR_ASSERT(status.ok());
       }
     }
   } else if (caf::holds_alternative<record_type>(list_value_type)) {
@@ -1214,10 +1214,10 @@ auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
             arrow::default_memory_pool());
         }
         auto status = builder->Append();
-        VAST_ASSERT(status.ok());
+        TENZIR_ASSERT(status.ok());
         status = builder->value_builder()->AppendArraySlice(*array->data(), 0,
                                                             array->length());
-        VAST_ASSERT(status.ok());
+        TENZIR_ASSERT(status.ok());
       }
     }
   }
@@ -1258,9 +1258,10 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
       = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
     if (field_name.starts_with(nested_field_separator)
         or field_name.ends_with(nested_field_separator)) {
-      VAST_WARN("retaining original field {} during unflattening: encountered "
-                "name with separator at beginning/end",
-                field_name);
+      TENZIR_WARN("retaining original field {} during unflattening: "
+                  "encountered "
+                  "name with separator at beginning/end",
+                  field_name);
       continue;
     }
     auto separator_count
@@ -1297,10 +1298,10 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
             field, slice_array->GetFieldByName(std::string{field})};
           original_field_name_to_new_field_map[field]
             = std::addressof(unflattened_field_map[field]);
-          VAST_WARN("retaining original field {} during unflattening: "
-                    "encountered potential value collision with already "
-                    "unflattened field {}",
-                    field, prefix);
+          TENZIR_WARN("retaining original field {} during unflattening: "
+                      "encountered potential value collision with already "
+                      "unflattened field {}",
+                      field, prefix);
           continue;
         }
       }

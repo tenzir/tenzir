@@ -258,9 +258,9 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 /// @pre `!path.empty()`
 inline auto descend(const record* r, std::string_view path)
   -> caf::expected<const data*> {
-  VAST_ASSERT(!path.empty());
+  TENZIR_ASSERT(!path.empty());
   auto names = detail::split(path, ".");
-  VAST_ASSERT(!names.empty());
+  TENZIR_ASSERT(!names.empty());
   auto current = r;
   for (auto& name : names) {
     auto last = &name == &names.back();
@@ -389,7 +389,7 @@ template <class T>
   requires(!std::convertible_to<T, std::string_view>)
 auto get_or(const record& r, std::string_view path, T const& fallback)
   -> T const& {
-  VAST_ASSERT(!path.empty());
+  TENZIR_ASSERT(!path.empty());
   auto result = get_if<T>(&r, path);
   if (result)
     return *result;
@@ -414,14 +414,14 @@ inline auto get_or(const record& r, std::string_view path,
 template <typename T>
 T const& get(record const& r, std::string_view path) {
   auto result = get_if<T>(&r, path);
-  VAST_ASSERT(result);
+  TENZIR_ASSERT(result);
   return *result;
 }
 
 template <typename T>
 T& get(record& r, std::string_view path) {
   auto result = get_if<T>(&r, path);
-  VAST_ASSERT(result);
+  TENZIR_ASSERT(result);
   return *result;
 }
 

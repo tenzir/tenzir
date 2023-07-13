@@ -80,12 +80,12 @@ endmacro ()
 
 # A utility macro for enabling tooling on a target.
 macro (VASTTargetEnableTooling _target)
-  if (VAST_ENABLE_CLANG_TIDY)
+  if (TENZIR_ENABLE_CLANG_TIDY)
     set_target_properties(
-      "${_target}" PROPERTIES CXX_CLANG_TIDY "${VAST_CLANG_TIDY_ARGS}"
-                              C_CLANG_TIDY "${VAST_CLANG_TIDY_ARGS}")
+      "${_target}" PROPERTIES CXX_CLANG_TIDY "${TENZIR_CLANG_TIDY_ARGS}"
+                              C_CLANG_TIDY "${TENZIR_CLANG_TIDY_ARGS}")
   endif ()
-  if (VAST_ENABLE_CODE_COVERAGE)
+  if (TENZIR_ENABLE_CODE_COVERAGE)
     unset(_absolute_plugin_test_sources)
     foreach (plugin_test_source IN LISTS PLUGIN_TEST_SOURCES)
       if (IS_ABSOLUTE "${plugin_test_source}")
@@ -171,7 +171,7 @@ function (VASTCompileFlatBuffers)
   endif ()
   if (TARGET flatbuffers::flatbuffers)
     set(flatbuffers_target flatbuffers::flatbuffers)
-  elseif (NOT VAST_ENABLE_STATIC_EXECUTABLE AND TARGET
+  elseif (NOT TENZIR_ENABLE_STATIC_EXECUTABLE AND TARGET
                                                 flatbuffers::flatbuffers_shared)
     set(flatbuffers_target flatbuffers::flatbuffers_shared)
   else ()
@@ -278,7 +278,7 @@ macro (VASTInstallExampleConfiguration target source prefix destination)
   # Provides install directory variables as defined for GNU software:
   # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
-  if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+  if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
     VASTNormalizeInstallDirs()
   endif ()
 
@@ -386,24 +386,24 @@ function (VASTRegisterPlugin)
   # Safeguard against repeated VASTRegisterPlugin calls from the same project.
   # While technically possible for external pluigins, doing so makes it
   # impossible to build the plugin alongside VAST.
-  get_property(VAST_PLUGIN_PROJECT_SOURCE_DIRS GLOBAL
-               PROPERTY "VAST_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY")
-  if ("${PROJECT_SOURCE_DIR}" IN_LIST VAST_PLUGIN_PROJECT_SOURCE_DIRS)
+  get_property(TENZIR_PLUGIN_PROJECT_SOURCE_DIRS GLOBAL
+               PROPERTY "TENZIR_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY")
+  if ("${PROJECT_SOURCE_DIR}" IN_LIST TENZIR_PLUGIN_PROJECT_SOURCE_DIRS)
     message(
       FATAL_ERROR
         "VASTRegisterPlugin called twice in CMake project ${PROJECT_NAME}")
   endif ()
-  set_property(GLOBAL APPEND PROPERTY "VAST_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY"
+  set_property(GLOBAL APPEND PROPERTY "TENZIR_PLUGIN_PROJECT_SOURCE_DIRS_PROPERTY"
                                       "${PROJECT_SOURCE_DIR}")
 
   # Set a default build type if none was specified.
   if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
     if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
       set(CMAKE_BUILD_TYPE
-          "${VAST_CMAKE_BUILD_TYPE}"
+          "${TENZIR_CMAKE_BUILD_TYPE}"
           CACHE STRING "Choose the type of build." FORCE)
       set(CMAKE_CONFIGURATION_TYPES
-          "${VAST_CMAKE_CONFIGURATION_TYPES}"
+          "${TENZIR_CMAKE_CONFIGURATION_TYPES}"
           CACHE STRING
                 "Choose the types of builds for multi-config generators." FORCE)
       # Set the possible values of build type for cmake-gui.
@@ -416,7 +416,7 @@ function (VASTRegisterPlugin)
   # Provides install directory variables as defined for GNU software:
   # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
-  if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+  if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
     VASTNormalizeInstallDirs()
   endif ()
 
@@ -495,11 +495,11 @@ function (VASTRegisterPlugin)
     # essentially reconstructing git-describe except for the revision count.
     file(
       WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
-      "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@VAST_PLUGIN_VERSION@\";\n")
-    string(TOUPPER "VAST_PLUGIN_${PLUGIN_TARGET}_REVISION"
-                   VAST_PLUGIN_REVISION_VAR)
-    if (DEFINED "${VAST_PLUGIN_REVISION_VAR}")
-      set(VAST_PLUGIN_REVISION_FALLBACK "${${VAST_PLUGIN_REVISION_VAR}}")
+      "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@TENZIR_PLUGIN_VERSION@\";\n")
+    string(TOUPPER "TENZIR_PLUGIN_${PLUGIN_TARGET}_REVISION"
+                   TENZIR_PLUGIN_REVISION_VAR)
+    if (DEFINED "${TENZIR_PLUGIN_REVISION_VAR}")
+      set(TENZIR_PLUGIN_REVISION_FALLBACK "${${TENZIR_PLUGIN_REVISION_VAR}}")
     endif ()
     file(
       WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
@@ -525,11 +525,11 @@ function (VASTRegisterPlugin)
         endif ()
       endif ()
       if (NOT PLUGIN_REVISION)
-        set(PLUGIN_REVISION \"${VAST_PLUGIN_REVISION_FALLBACK}\")
+        set(PLUGIN_REVISION \"${TENZIR_PLUGIN_REVISION_FALLBACK}\")
       endif ()
-      set(VAST_PLUGIN_VERSION \"v${PROJECT_VERSION}\")
+      set(TENZIR_PLUGIN_VERSION \"v${PROJECT_VERSION}\")
       if (PLUGIN_REVISION)
-        string(APPEND VAST_PLUGIN_VERSION \"-\${PLUGIN_REVISION}\")
+        string(APPEND TENZIR_PLUGIN_VERSION \"-\${PLUGIN_REVISION}\")
       endif ()
       configure_file(\"${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in\"
                      \"${CMAKE_CURRENT_BINARY_DIR}/config.cpp\" @ONLY)")
@@ -542,19 +542,19 @@ function (VASTRegisterPlugin)
   set_source_files_properties(
     "${PLUGIN_ENTRYPOINT}"
     PROPERTIES COMPILE_DEFINITIONS
-               "VAST_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}")
+               "TENZIR_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}")
   list(APPEND PLUGIN_ENTRYPOINT "${CMAKE_CURRENT_BINARY_DIR}/config.cpp")
 
   # Create a static library target for our plugin with the entrypoint, and use
-  # static versions of VAST_REGISTER_PLUGIN family of macros.
+  # static versions of TENZIR_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
   VASTTargetEnableTooling(${PLUGIN_TARGET}-static)
   VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
-                             PRIVATE VAST_ENABLE_STATIC_PLUGINS)
+                             PRIVATE TENZIR_ENABLE_STATIC_PLUGINS)
 
-  if (VAST_ENABLE_STATIC_PLUGINS)
+  if (TENZIR_ENABLE_STATIC_PLUGINS)
     # Link our static library against the vast binary directly.
     VASTTargetLinkWholeArchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
   else ()
@@ -619,7 +619,7 @@ function (VASTRegisterPlugin)
       DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
       DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/plugin/${PLUGIN_TARGET}"
       COMPONENT Runtime)
-    if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+    if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
       # Copy schemas from bundled plugins to the build directory so they can be
       # used from a VAST in a build directory (instead if just an installed VAST).
       file(
@@ -652,8 +652,8 @@ function (VASTRegisterPlugin)
   endif ()
 
   # Setup unit tests.
-  if (VAST_ENABLE_UNIT_TESTS AND PLUGIN_TEST_SOURCES)
-    set(VAST_UNIT_TEST_TIMEOUT
+  if (TENZIR_ENABLE_UNIT_TESTS AND PLUGIN_TEST_SOURCES)
+    set(TENZIR_UNIT_TEST_TIMEOUT
         "60"
         CACHE STRING "The per-test timeout in unit tests" FORCE)
     unset(suites)
@@ -682,7 +682,7 @@ function (VASTRegisterPlugin)
       string(REPLACE " " "_" test_name ${suite})
       add_test(NAME "plugin/${PLUGIN_TARGET}/${test_name}"
                COMMAND ${PLUGIN_TARGET}-test -v 4 -r
-                       "${VAST_UNIT_TEST_TIMEOUT}" -s "${suite}")
+                       "${TENZIR_UNIT_TEST_TIMEOUT}" -s "${suite}")
       set_tests_properties(
         "plugin/${PLUGIN_TARGET}/${test_name}"
         PROPERTIES FIXTURES_REQUIRED vast_${PLUGIN_TARGET}_unit_test_fixture)
@@ -726,8 +726,8 @@ function (VASTRegisterPlugin)
         fi
         base_dir=\"${integration_test_path}\"
         env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-        export app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>-ctl\"
-        update=\"$<IF:$<BOOL:${VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
+        export app=\"$<IF:$<BOOL:${TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::tenzir>>-ctl\"
+        update=\"$<IF:$<BOOL:${TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
         set -e
         if [ ! -f \"$env_dir/bin/activate\" ]; then
           python3 -m venv \"$env_dir\"
@@ -735,8 +735,8 @@ function (VASTRegisterPlugin)
         . \"$env_dir/bin/activate\"
         python -m pip install --upgrade pip
         python -m pip install -r \"$base_dir/requirements.txt\"
-        $<$<TARGET_EXISTS:${PLUGIN_TARGET}-shared>:export VAST_PLUGIN_DIRS=\"\$(echo \"$<TARGET_FILE_DIR:${PLUGIN_TARGET}-shared>\" | sed -e \"s/,/\\\\\\\\,/g\")\">
-        export VAST_SCHEMA_DIRS=\"\$(echo \"${CMAKE_CURRENT_SOURCE_DIR}/schema\" | sed -e \"s/,/\\\\\\\\,/g\")\"
+        $<$<TARGET_EXISTS:${PLUGIN_TARGET}-shared>:export TENZIR_PLUGIN_DIRS=\"\$(echo \"$<TARGET_FILE_DIR:${PLUGIN_TARGET}-shared>\" | sed -e \"s/,/\\\\\\\\,/g\")\">
+        export TENZIR_SCHEMA_DIRS=\"\$(echo \"${CMAKE_CURRENT_SOURCE_DIR}/schema\" | sed -e \"s/,/\\\\\\\\,/g\")\"
         python \"$base_dir/integration.py\" \
           --app \"$app\" \
           --set \"${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml\" \
@@ -756,7 +756,7 @@ function (VASTRegisterPlugin)
   if ("${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
     # Provide niceties for building alongside VAST.
     dependency_summary("${PLUGIN_TARGET}" "${CMAKE_CURRENT_LIST_DIR}" "Plugins")
-    set_property(GLOBAL APPEND PROPERTY "VAST_BUNDLED_PLUGINS_PROPERTY"
+    set_property(GLOBAL APPEND PROPERTY "TENZIR_BUNDLED_PLUGINS_PROPERTY"
                                         "${PLUGIN_TARGET}")
   else ()
     # Provide niceties for external plugins that are usually part of VAST.

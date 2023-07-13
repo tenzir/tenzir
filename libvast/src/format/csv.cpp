@@ -177,7 +177,7 @@ caf::error writer::write(const table_slice& x) {
         return err;
       ++column;
     }
-    VAST_ASSERT(column == x.columns());
+    TENZIR_ASSERT(column == x.columns());
     append('\n');
     write_buf();
   }
@@ -201,9 +201,9 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   if (auto separator = get_separator_from_option_string(seperator_option))
     opt_.separator = *separator;
   else
-    VAST_WARN("{} unable to utilize tenzir.import.csv.separator '{}'. Using "
-              "default comma instead",
-              detail::pretty_type_name(*this), seperator_option);
+    TENZIR_WARN("{} unable to utilize tenzir.import.csv.separator '{}'. Using "
+                "default comma instead",
+                detail::pretty_type_name(*this), seperator_option);
   opt_.set_separator = get_or(options, "tenzir.import.csv.set_separator",
                               defaults::set_separator.data());
   opt_.kvp_separator = get_or(options, "tenzir.import.csv.kvp_separator",
@@ -211,7 +211,7 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {
-  VAST_ASSERT(in != nullptr);
+  TENZIR_ASSERT(in != nullptr);
   input_ = std::move(in);
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
@@ -232,7 +232,7 @@ const char* reader::name() const {
 
 caf::optional<type>
 reader::make_schema(const std::vector<std::string>& names, bool first_run) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(names));
+  TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(names));
   for (const auto& t : module_) {
     if (const auto* r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<type> {
@@ -342,9 +342,9 @@ struct container_parser_builder {
       };
       // clang-format on
     } else {
-      VAST_ERROR("csv parser builder failed to fetch a parser for type "
-                 "{}",
-                 caf::detail::pretty_type_name(typeid(T)));
+      TENZIR_ERROR("csv parser builder failed to fetch a parser for type "
+                   "{}",
+                   caf::detail::pretty_type_name(typeid(T)));
       return {};
     }
   }
@@ -428,9 +428,9 @@ struct csv_parser_factory {
         auto p = make_parser<value_type>{};
         return (-(quoted_parser{p} | p)).with(add_t<value_type>{bptr_});
       } else {
-        VAST_ERROR("csv parser builder failed to fetch a parser for type "
-                   "{}",
-                   caf::detail::pretty_type_name(typeid(U)));
+        TENZIR_ERROR("csv parser builder failed to fetch a parser for type "
+                     "{}",
+                     caf::detail::pretty_type_name(typeid(U)));
         return {};
       }
     };
@@ -446,7 +446,7 @@ caf::optional<reader::parser_type>
 make_csv_parser(const record_type& schema, table_slice_builder_ptr builder,
                 const options& opt) {
   auto num_fields = schema.num_fields();
-  VAST_ASSERT(num_fields > 0);
+  TENZIR_ASSERT(num_fields > 0);
   auto factory = csv_parser_factory<Iterator>{opt, builder};
   auto result = factory(schema.field(0).type);
   for (size_t i = 1; i < num_fields; ++i) {
@@ -463,8 +463,8 @@ vast::report reader::status() const {
   uint64_t num_lines = num_lines_;
   uint64_t invalid_lines = num_invalid_lines_;
   if (num_invalid_lines_ > 0)
-    VAST_WARN("{} failed to parse {} of {} recent lines",
-              detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
+    TENZIR_WARN("{} failed to parse {} of {} recent lines",
+                detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
   num_lines_ = 0;
   num_invalid_lines_ = 0;
   return {.data = {
@@ -485,7 +485,7 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto schema = make_schema(columns);
   if (!schema)
     return caf::make_error(ec::parse_error, "unable to derive a schema");
-  VAST_DEBUG("csv_reader derived schema {}", *schema);
+  TENZIR_DEBUG("csv_reader derived schema {}", *schema);
   if (!reset_builder(*schema))
     return caf::make_error(ec::parse_error, "unable to create a builder for "
                                             "schema");
@@ -498,13 +498,13 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
 
 caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& callback) {
-  VAST_ASSERT(max_events > 0);
-  VAST_ASSERT(max_slice_size > 0);
+  TENZIR_ASSERT(max_events > 0);
+  TENZIR_ASSERT(max_slice_size > 0);
   auto next_line = [&] {
     auto timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out)
-      VAST_DEBUG("{} reached input timeout at line {}",
-                 detail::pretty_type_name(this), lines_->line_number());
+      TENZIR_DEBUG("{} reached input timeout at line {}",
+                   detail::pretty_type_name(this), lines_->line_number());
     return timed_out;
   };
   if (!parser_) {
@@ -525,7 +525,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                                               "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
+      TENZIR_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
       return finish(callback, ec::timeout);
     }
     bool timed_out = next_line();
@@ -534,15 +534,16 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_DEBUG("{} ignores empty line at {}", detail::pretty_type_name(this),
-                 lines_->line_number());
+      TENZIR_DEBUG("{} ignores empty line at {}",
+                   detail::pretty_type_name(this), lines_->line_number());
       continue;
     }
     ++num_lines_;
     if (!p(line)) {
       if (num_invalid_lines_ == 0)
-        VAST_WARN("{} failed to parse line {}: {}",
-                  detail::pretty_type_name(this), lines_->line_number(), line);
+        TENZIR_WARN("{} failed to parse line {}: {}",
+                    detail::pretty_type_name(this), lines_->line_number(),
+                    line);
       ++num_invalid_lines_;
       continue;
     }

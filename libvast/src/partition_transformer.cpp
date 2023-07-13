@@ -45,12 +45,12 @@ void store_or_fulfill(
     self,
   partition_transformer_state::stream_data&& stream_data) {
   if (std::holds_alternative<std::monostate>(self->state.persist)) {
-    VAST_DEBUG("{} stores stream data in state.persist", *self);
+    TENZIR_DEBUG("{} stores stream data in state.persist", *self);
     self->state.persist = std::move(stream_data);
   } else {
     auto* path_data = std::get_if<partition_transformer_state::path_data>(
       &self->state.persist);
-    VAST_ASSERT_CHEAP(path_data != nullptr, "unexpected variant content");
+    TENZIR_ASSERT_CHEAP(path_data != nullptr, "unexpected variant content");
     self->state.fulfill(self, std::move(stream_data), std::move(*path_data));
   }
 }
@@ -60,12 +60,12 @@ void store_or_fulfill(
     self,
   partition_transformer_state::path_data&& path_data) {
   if (std::holds_alternative<std::monostate>(self->state.persist)) {
-    VAST_DEBUG("{} stores path data in state.persist", *self);
+    TENZIR_DEBUG("{} stores path data in state.persist", *self);
     self->state.persist = std::move(path_data);
   } else {
     auto* stream_data = std::get_if<partition_transformer_state::stream_data>(
       &self->state.persist);
-    VAST_ASSERT_CHEAP(stream_data != nullptr, "unexpected variant content");
+    TENZIR_ASSERT_CHEAP(stream_data != nullptr, "unexpected variant content");
     self->state.fulfill(self, std::move(*stream_data), std::move(path_data));
   }
 }
@@ -79,7 +79,7 @@ void quit_or_stall(
   if (std::holds_alternative<std::monostate>(shutdown_state)) {
     shutdown_state = std::move(result);
   } else {
-    VAST_ASSERT_CHEAP(
+    TENZIR_ASSERT_CHEAP(
       std::holds_alternative<stores_are_finished>(shutdown_state),
       "unexpected variant content");
     result.promise.deliver(std::move(result.result));
@@ -98,7 +98,7 @@ void quit_or_stall(
     shutdown_state = std::move(result);
   } else {
     auto* finished = std::get_if<transformer_is_finished>(&shutdown_state);
-    VAST_ASSERT_CHEAP(finished != nullptr, "unexpected variant content");
+    TENZIR_ASSERT_CHEAP(finished != nullptr, "unexpected variant content");
     finished->promise.deliver(std::move(finished->result));
     self->quit();
   }
@@ -128,7 +128,7 @@ class collecting_sink final : public crtp_operator<collecting_sink> {
 public:
   explicit collecting_sink(std::shared_ptr<std::vector<table_slice>> result)
     : result_{std::move(result)} {
-    VAST_ASSERT(result_);
+    TENZIR_ASSERT(result_);
   }
 
   auto name() const -> std::string override {
@@ -181,11 +181,11 @@ void partition_transformer_state::update_type_ids_and_indexers(
   auto& ids = it->second;
   auto first = slice.offset();
   auto last = slice.offset() + slice.rows();
-  VAST_ASSERT(first >= ids.size());
+  TENZIR_ASSERT(first >= ids.size());
   ids.append_bits(false, first - ids.size());
   ids.append_bits(true, last - first);
   // Push the event data to the indexers.
-  VAST_ASSERT(slice.columns() == caf::get<record_type>(schema).num_leaves());
+  TENZIR_ASSERT(slice.columns() == caf::get<record_type>(schema).num_leaves());
   for (size_t flat_index = 0;
        const auto& [field, offset] : caf::get<record_type>(schema).leaves()) {
     const auto qf = qualified_record_field{schema, offset};
@@ -209,7 +209,7 @@ void partition_transformer_state::fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   stream_data&& stream_data, path_data&& path_data) const {
-  VAST_DEBUG("{} fulfills promise", *self);
+  TENZIR_DEBUG("{} fulfills promise", *self);
   auto promise = path_data.promise;
   if (self->state.stream_error) {
     promise.deliver(self->state.stream_error);
@@ -245,7 +245,7 @@ void partition_transformer_state::fulfill(
     if (!synopsis_chunk)
       continue;
     auto filename
-      = fmt::format(VAST_FMT_RUNTIME(self->state.synopsis_path_template), id);
+      = fmt::format(TENZIR_FMT_RUNTIME(self->state.synopsis_path_template), id);
     auto synopsis_path = std::filesystem::path{filename};
     self
       ->request(fs, caf::infinite, atom::write_v, synopsis_path, synopsis_chunk)
@@ -253,8 +253,8 @@ void partition_transformer_state::fulfill(
             [synopsis_path, self](const caf::error& e) {
               // The catalog data can always be regenerated on restart, so we
               // don't need strict error handling for it.
-              VAST_WARN("{} could not write transformed synopsis to {}: {}",
-                        *self, synopsis_path, e);
+              TENZIR_WARN("{} could not write transformed synopsis to {}: {}",
+                          *self, synopsis_path, e);
             });
   }
   // Make a write request to the filesystem actor for every partition.
@@ -279,14 +279,14 @@ void partition_transformer_state::fulfill(
     auto it = std::find_if(rng.first, rng.second, [id = id](auto const& kv) {
       return kv.second.id == id;
     });
-    VAST_ASSERT(it != rng.second); // The id must exist with this schema.
+    TENZIR_ASSERT(it != rng.second); // The id must exist with this schema.
     auto synopsis = std::move(it->second.synopsis);
     auto aps = partition_synopsis_pair{
       .uuid = id,
       .synopsis = std::move(synopsis),
     };
-    auto filename
-      = fmt::format(VAST_FMT_RUNTIME(self->state.partition_path_template), id);
+    auto filename = fmt::format(
+      TENZIR_FMT_RUNTIME(self->state.partition_path_template), id);
     auto partition_path = std::filesystem::path{filename};
     self
       ->request(fs, caf::infinite, atom::write_v, partition_path,
@@ -329,9 +329,9 @@ auto partition_transformer(
     // that changes we need to take a bit more care here to avoid
     // a race.
     ++self->state.stores_finished;
-    VAST_DEBUG("{} sees {} finished for a total of {}/{} stores", *self,
-               msg.source, self->state.stores_finished,
-               self->state.stores_launched);
+    TENZIR_DEBUG("{} sees {} finished for a total of {}/{} stores", *self,
+                 msg.source, self->state.stores_finished,
+                 self->state.stores_launched);
     if (self->state.stores_finished >= self->state.stores_launched)
       quit_or_stall(self, partition_transformer_state::stores_are_finished{});
   });
@@ -364,7 +364,8 @@ auto partition_transformer(
       auto executor = make_local_executor(std::move(pipe));
       for (auto&& result : executor) {
         if (!result) {
-          VAST_ERROR("{} failed pipeline execution: {}", *self, result.error());
+          TENZIR_ERROR("{} failed pipeline execution: {}", *self,
+                       result.error());
           self->state.transform_error = result.error();
           return {};
         }
@@ -443,12 +444,12 @@ auto partition_transformer(
           = self->state.stage->add_outbound_path(
             builder_and_header->store_builder);
       }
-      VAST_DEBUG("{} received all table slices", *self);
+      TENZIR_DEBUG("{} received all table slices", *self);
       return self->delegate(static_cast<partition_transformer_actor>(self),
                             atom::internal_v, atom::resume_v, atom::done_v);
     },
     [self](atom::internal, atom::resume, atom::done) {
-      VAST_DEBUG("{} got resume", *self);
+      TENZIR_DEBUG("{} got resume", *self);
       for (auto& [schema, data] : self->state.data) {
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
@@ -534,7 +535,7 @@ auto partition_transformer(
       store_or_fulfill(self, std::move(stream_data));
     },
     [self](atom::persist) -> caf::result<std::vector<partition_synopsis_pair>> {
-      VAST_DEBUG("{} received request to persist", *self);
+      TENZIR_DEBUG("{} received request to persist", *self);
       auto promise
         = self->make_response_promise<std::vector<partition_synopsis_pair>>();
       auto path_data = partition_transformer_state::path_data{

@@ -114,11 +114,11 @@ auto parse_default_parser(std::string definition)
   auto diag = null_diagnostic_handler{};
   auto p = tql::make_parser_interface(std::move(definition), diag);
   auto p_name = p->accept_identifier();
-  VAST_DIAG_ASSERT(p_name);
+  TENZIR_DIAG_ASSERT(p_name);
   auto const* p_plugin = plugins::find<parser_parser_plugin>(p_name->name);
-  VAST_DIAG_ASSERT(p_plugin);
+  TENZIR_DIAG_ASSERT(p_plugin);
   auto parser = p_plugin->parse_parser(*p);
-  VAST_DIAG_ASSERT(parser);
+  TENZIR_DIAG_ASSERT(parser);
   return parser;
 }
 
@@ -169,14 +169,14 @@ public:
     }
     auto q = until_keyword_parser{"read", p};
     auto loader = l_plugin->parse_loader(q);
-    VAST_DIAG_ASSERT(loader);
-    VAST_DIAG_ASSERT(q.at_end());
+    TENZIR_DIAG_ASSERT(loader);
+    TENZIR_DIAG_ASSERT(q.at_end());
     auto parser = std::unique_ptr<plugin_parser>{};
     if (p.at_end()) {
       parser = parse_default_parser(loader->default_parser());
     } else {
       auto read = p.accept_identifier();
-      VAST_DIAG_ASSERT(read && read->name == "read");
+      TENZIR_DIAG_ASSERT(read && read->name == "read");
       auto p_name = p.accept_shell_arg();
       if (!p_name) {
         diagnostic::error("expected parser name")
@@ -190,7 +190,7 @@ public:
         throw_parser_not_found(*p_name);
       }
       parser = p_plugin->parse_parser(p);
-      VAST_DIAG_ASSERT(parser);
+      TENZIR_DIAG_ASSERT(parser);
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<load_operator>(std::move(loader)));
@@ -202,10 +202,10 @@ public:
 auto make_stdin_loader() -> std::unique_ptr<plugin_loader> {
   auto diag = null_diagnostic_handler{};
   auto plugin = plugins::find<loader_parser_plugin>("file");
-  VAST_DIAG_ASSERT(plugin);
+  TENZIR_DIAG_ASSERT(plugin);
   auto parser = tql::make_parser_interface("-", diag);
   auto loader = plugin->parse_loader(*parser);
-  VAST_DIAG_ASSERT(loader);
+  TENZIR_DIAG_ASSERT(loader);
   return loader;
 }
 
@@ -232,14 +232,14 @@ public:
     }
     auto q = until_keyword_parser{"from", p};
     auto parser = p_plugin->parse_parser(q);
-    VAST_DIAG_ASSERT(parser);
-    VAST_DIAG_ASSERT(q.at_end());
+    TENZIR_DIAG_ASSERT(parser);
+    TENZIR_DIAG_ASSERT(q.at_end());
     auto loader = std::unique_ptr<plugin_loader>{};
     if (p.at_end()) {
       loader = make_stdin_loader();
     } else {
       auto from = p.accept_identifier();
-      VAST_DIAG_ASSERT(from && from->name == "from");
+      TENZIR_DIAG_ASSERT(from && from->name == "from");
       auto l_name = p.accept_shell_arg();
       if (!l_name) {
         diagnostic::error("expected loader name")
@@ -253,7 +253,7 @@ public:
         throw_loader_not_found(*l_name);
       }
       loader = l_plugin->parse_loader(p);
-      VAST_DIAG_ASSERT(parser);
+      TENZIR_DIAG_ASSERT(parser);
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<load_operator>(std::move(loader)));
@@ -280,7 +280,7 @@ public:
       throw_loader_not_found(*name);
     }
     auto loader = plugin->parse_loader(p);
-    VAST_DIAG_ASSERT(loader);
+    TENZIR_DIAG_ASSERT(loader);
     return std::make_unique<load_operator>(std::move(loader));
   }
 };
@@ -303,7 +303,7 @@ public:
       throw_parser_not_found(*name);
     }
     auto parser = plugin->parse_parser(p);
-    VAST_DIAG_ASSERT(parser);
+    TENZIR_DIAG_ASSERT(parser);
     return std::make_unique<class parse_operator>(std::move(parser));
   }
 };
@@ -311,7 +311,7 @@ public:
 } // namespace
 } // namespace vast::plugins::from
 
-VAST_REGISTER_PLUGIN(vast::plugins::from::from_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::from::read_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::from::load_plugin)
-VAST_REGISTER_PLUGIN(vast::plugins::from::parse_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::from::from_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::from::read_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::from::load_plugin)
+TENZIR_REGISTER_PLUGIN(vast::plugins::from::parse_plugin)

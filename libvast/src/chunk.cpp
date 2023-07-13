@@ -187,7 +187,7 @@ private:
 chunk::~chunk() noexcept {
   const auto* data = view_.data();
   const auto sz = view_.size();
-  VAST_TRACEPOINT(chunk_delete, data, sz);
+  TENZIR_TRACEPOINT(chunk_delete, data, sz);
   if (deleter_)
     std::invoke(deleter_);
 }
@@ -294,8 +294,8 @@ chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
     return caf::make_error(ec::system_error,
                            fmt::format("failed to decompress chunk: {}",
                                        length.status().ToString()));
-  VAST_ASSERT(buffer.size()
-              == detail::narrow_cast<size_t>(length.ValueUnsafe()));
+  TENZIR_ASSERT(buffer.size()
+                == detail::narrow_cast<size_t>(length.ValueUnsafe()));
   return chunk::make(std::move(buffer));
 }
 
@@ -310,10 +310,10 @@ chunk::size_type chunk::size() const noexcept {
 }
 
 caf::expected<chunk::size_type> chunk::incore() const noexcept {
-#if VAST_LINUX || VAST_BSD || VAST_MACOS
+#if TENZIR_LINUX || TENZIR_BSD || TENZIR_MACOS
   auto sz = sysconf(_SC_PAGESIZE);
   auto pages = (size() / sz) + !!(size() % sz);
-#  if VAST_LINUX
+#  if TENZIR_LINUX
   auto buf = std::vector(pages, static_cast<unsigned char>(0));
 #  else
   auto buf = std::vector(pages, '\0');
@@ -343,15 +343,15 @@ chunk::iterator chunk::end() const noexcept {
 // -- accessors ----------------------------------------------------------------
 
 chunk_ptr chunk::slice(size_type start, size_type length) const {
-  VAST_ASSERT(start < size());
+  TENZIR_ASSERT(start < size());
   if (length > size() - start)
     length = size() - start;
   return slice(view_.subspan(start, length));
 }
 
 chunk_ptr chunk::slice(view_type view) const {
-  VAST_ASSERT(view.begin() >= begin());
-  VAST_ASSERT(view.end() <= end());
+  TENZIR_ASSERT(view.begin() >= begin());
+  TENZIR_ASSERT(view.end() <= end());
   this->ref();
   return make(view, [this]() noexcept {
     this->deref();
@@ -364,8 +364,8 @@ std::shared_ptr<arrow::Buffer> as_arrow_buffer(chunk_ptr chunk) noexcept {
   if (!chunk)
     return nullptr;
   auto buffer = arrow::Buffer::Wrap(chunk->data(), chunk->size());
-  VAST_ASSERT(reinterpret_cast<const std::byte*>(buffer->data())
-              == chunk->data());
+  TENZIR_ASSERT(reinterpret_cast<const std::byte*>(buffer->data())
+                == chunk->data());
   auto* const buffer_data = buffer.get();
   return {buffer_data, [chunk = std::move(chunk), buffer = std::move(buffer)](
                          arrow::Buffer*) mutable noexcept {
@@ -422,7 +422,7 @@ chunk::chunk(view_type view, deleter_type&& deleter) noexcept
   : view_{view}, deleter_{std::move(deleter)} {
   auto data = view.data();
   auto sz = view.size();
-  VAST_TRACEPOINT(chunk_make, data, sz);
+  TENZIR_TRACEPOINT(chunk_make, data, sz);
 }
 
 } // namespace vast

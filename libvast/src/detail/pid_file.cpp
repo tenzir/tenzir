@@ -27,7 +27,7 @@
 
 namespace vast::detail {
 
-#if VAST_LINUX
+#if TENZIR_LINUX
 
 namespace {
 
@@ -35,8 +35,8 @@ bool pid_belongs_to_vast(pid_t pid) {
   const auto proc_pid_path = fmt::format("/proc/{}/status", pid);
   const auto proc_pid_contents = detail::load_contents(proc_pid_path);
   if (!proc_pid_contents) {
-    VAST_DEBUG("failed to read {}: {}", proc_pid_path,
-               proc_pid_contents.error());
+    TENZIR_DEBUG("failed to read {}: {}", proc_pid_path,
+                 proc_pid_contents.error());
     return false;
   }
   // The maximum length of the "vast" process name is 4, so including the
@@ -48,7 +48,7 @@ bool pid_belongs_to_vast(pid_t pid) {
 
 } // namespace
 
-#endif // VAST_LINUX
+#endif // TENZIR_LINUX
 
 caf::error acquire_pid_file(const std::filesystem::path& filename) {
   auto pid = process_id();
@@ -56,8 +56,8 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
   // Check if the db directory is owned by an existing VAST process.
   const auto exists = std::filesystem::exists(filename, err);
   if (err)
-    VAST_WARN("failed to check if the db directory {} exists: {}", filename,
-              err.message());
+    TENZIR_WARN("failed to check if the db directory {} exists: {}", filename,
+                err.message());
   if (exists) {
     // Attempt to read file to display an actionable error message.
     auto contents = detail::load_contents(filename);
@@ -72,7 +72,7 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
       return caf::none;
     // Safeguard in case the pid_file contains a PID of a non-VAST process.
     if (::getpgid(*other_pid) >= 0) {
-#if VAST_LINUX
+#if TENZIR_LINUX
       // In deployments with containers it's rather likely that the PID in the
       // PID file belongs to a different, non-VAST process after a crash,
       // because after a restart of the container the PID may be assigned to
@@ -87,12 +87,13 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
                                fmt::format("PID file found: {}, terminate "
                                            "process {}",
                                            filename, *contents));
-      VAST_DEBUG("ignores conflicting PID file because contained PID does not "
-                 "belong to a VAST process");
+      TENZIR_DEBUG(
+        "ignores conflicting PID file because contained PID does not "
+        "belong to a VAST process");
     }
     // The previous owner is deceased, print a warning an assume ownership.
-    VAST_WARN("node detected an irregular shutdown of the previous "
-              "process on the database directory");
+    TENZIR_WARN("node detected an irregular shutdown of the previous "
+                "process on the database directory");
   }
   // Open the file.
   auto fd = ::open(filename.c_str(), O_WRONLY | O_CREAT, 0600);
@@ -109,7 +110,7 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
   }
   // Write the PID in human readable form into the file.
   auto pid_string = to_string(pid);
-  VAST_ASSERT(!pid_string.empty());
+  TENZIR_ASSERT(!pid_string.empty());
   if (::write(fd, pid_string.data(), pid_string.size()) < 0) {
     ::close(fd);
     return caf::make_error(ec::filesystem_error,

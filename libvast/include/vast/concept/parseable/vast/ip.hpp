@@ -140,7 +140,7 @@ struct ip_parser : vast::parser_base<ip_parser<Policy>> {
         // i.e., it does not work when other characters follow the address.
         char buf[INET6_ADDRSTRLEN];
         std::memset(buf, 0, sizeof(buf));
-        VAST_ASSERT(f - begin < INET6_ADDRSTRLEN);
+        TENZIR_ASSERT(f - begin < INET6_ADDRSTRLEN);
         std::copy(begin, f, buf);
         auto okay = ::inet_pton(AF_INET6, buf, bytes.data()) == 1;
         if (okay)

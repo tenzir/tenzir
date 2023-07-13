@@ -102,7 +102,7 @@ vast::store_builder_actor::behavior_type dummy_store(
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+      TENZIR_PP_STRINGIFY(SUITE)) {
   }
 
   vast::type schema_{

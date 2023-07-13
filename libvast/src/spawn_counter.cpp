@@ -32,7 +32,7 @@ namespace vast {
 caf::expected<caf::actor>
 spawn_counter(node_actor::stateful_pointer<node_state> self,
               spawn_arguments& args) {
-  VAST_TRACE_SCOPE("{}", VAST_ARG(args));
+  TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(args));
   // Parse given expression.
   auto expr = trivially_true_expression();
   if (not args.inv.arguments.empty()) {
@@ -61,7 +61,7 @@ spawn_counter(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::missing_component, "index");
   auto estimate = caf::get_or(args.inv.options, "tenzir.count.estimate", false);
   auto handle = self->spawn(counter, expr, index, estimate);
-  VAST_VERBOSE("{} spawned a counter for {}", *self, to_string(expr));
+  TENZIR_VERBOSE("{} spawned a counter for {}", *self, to_string(expr));
   return handle;
 }
 

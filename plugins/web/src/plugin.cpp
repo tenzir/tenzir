@@ -80,6 +80,6 @@ class plugin final : public virtual command_plugin,
 
 } // namespace vast::plugins::web
 
-VAST_REGISTER_PLUGIN(vast::plugins::web::plugin)
-VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_web_plugin_types,
-                                   vast_web_plugin_actors)
+TENZIR_REGISTER_PLUGIN(vast::plugins::web::plugin)
+TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_web_plugin_types,
+                                     vast_web_plugin_actors)

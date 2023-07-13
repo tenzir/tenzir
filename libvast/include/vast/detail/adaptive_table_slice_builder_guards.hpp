@@ -108,11 +108,11 @@ private:
             value_type);
     if (auto resolved = enum_type->resolve(view)) {
       const auto s = append_builder(*enum_type, builder, *resolved);
-      VAST_ASSERT(s.ok());
+      TENZIR_ASSERT(s.ok());
       return {};
     }
     const auto s = builder.AppendNull();
-    VAST_ASSERT(s.ok());
+    TENZIR_ASSERT(s.ok());
     return {};
   }
 
@@ -123,7 +123,7 @@ private:
       get_root_list_builder().get_child_builder<type_to_arrow_builder_t<Type>>(
         value_type),
       val);
-    VAST_ASSERT(s.ok());
+    TENZIR_ASSERT(s.ok());
   }
 
   template <concrete_type Type>

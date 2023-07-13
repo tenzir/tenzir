@@ -4,19 +4,21 @@
 # 0.6.2, which is not widely available on package managers. We should
 # investigate switching to a different map, e.g., from folly or abseil.
 
-option(VAST_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map" OFF)
-add_feature_info("VAST_ENABLE_BUNDLED_ROBIN_MAP" VAST_ENABLE_BUNDLED_ROBIN_MAP
-                 "always use the bundled tsl-robin-map.")
-if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
+option(TENZIR_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map"
+       OFF)
+add_feature_info(
+  "TENZIR_ENABLE_BUNDLED_ROBIN_MAP" TENZIR_ENABLE_BUNDLED_ROBIN_MAP
+  "always use the bundled tsl-robin-map.")
+if (NOT TENZIR_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map QUIET)
   if (tsl-robin-map_FOUND)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST
+    string(APPEND TENZIR_FIND_DEPENDENCY_LIST
            "\nfind_package(tsl-robin-map REQUIRED)")
     dependency_summary("robin-map" tsl::robin_map "Dependencies")
   endif ()
 endif ()
 if (NOT tsl-robin-map_FOUND)
-  if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
+  if (NOT TENZIR_ENABLE_BUNDLED_ROBIN_MAP)
     message(
       STATUS
         "Cannot find installed tsl-robin-map; falling back to bundled version")
@@ -40,7 +42,7 @@ if (NOT tsl-robin-map_FOUND)
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
     NAMESPACE tsl::
     COMPONENT Development)
-  string(APPEND VAST_EXTRA_TARGETS_FILES
+  string(APPEND TENZIR_EXTRA_TARGETS_FILES
          "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
   add_dependencies(robin_map tsl-robin-map-targets-link)
 endif ()
@@ -75,7 +77,7 @@ mark_as_advanced(
   ZSTD_LIB)
 string(
   APPEND
-  VAST_FIND_DEPENDENCY_LIST
+  TENZIR_FIND_DEPENDENCY_LIST
   "\nfind_package(Arrow REQUIRED CONFIG)"
   "\nmark_as_advanced("
   "\n BROTLI_COMMON_LIBRARY"
@@ -101,41 +103,42 @@ find_package(re2 REQUIRED)
 
 # -- libsystemd ----------------------------------------------------------------
 
-option(VAST_ENABLE_JOURNALD_LOGGING
+option(TENZIR_ENABLE_JOURNALD_LOGGING
        "Build with support for native journald log output" OFF)
-add_feature_info("VAST_ENABLE_JOURNALD_LOGGING" VAST_ENABLE_JOURNALD_LOGGING
-                 "build with support for native journald log output.")
+add_feature_info(
+  "TENZIR_ENABLE_JOURNALD_LOGGING" TENZIR_ENABLE_JOURNALD_LOGGING
+  "build with support for native journald log output.")
 
 # -- log level -----------------------------------------------------------------
 
 # Choose a deafult log level based on build type.
 if (CMAKE_BUILD_TYPE STREQUAL Release)
-  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
+  set(TENZIR_LOG_LEVEL_DEFAULT "DEBUG")
 elseif (CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
-  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
+  set(TENZIR_LOG_LEVEL_DEFAULT "DEBUG")
 elseif (CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
-  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
+  set(TENZIR_LOG_LEVEL_DEFAULT "DEBUG")
 else ()
-  set(VAST_LOG_LEVEL_DEFAULT "TRACE")
+  set(TENZIR_LOG_LEVEL_DEFAULT "TRACE")
 endif ()
 
 # Make sure log level is defined and all-uppercase.
-set(VAST_LOG_LEVEL_DOC "maximum log level available at runtime")
-if (NOT VAST_LOG_LEVEL)
-  set(VAST_LOG_LEVEL
-      "${VAST_LOG_LEVEL_DEFAULT}"
-      CACHE STRING "${VAST_LOG_LEVEL_DOC}")
-elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
+set(TENZIR_LOG_LEVEL_DOC "maximum log level available at runtime")
+if (NOT TENZIR_LOG_LEVEL)
+  set(TENZIR_LOG_LEVEL
+      "${TENZIR_LOG_LEVEL_DEFAULT}"
+      CACHE STRING "${TENZIR_LOG_LEVEL_DOC}")
+elseif (NOT TENZIR_LOG_LEVEL STREQUAL "$CACHE{TENZIR_LOG_LEVEL}")
   # Override cached variable when re-running CMake.
-  string(TOUPPER "${VAST_LOG_LEVEL}" VAST_LOG_LEVEL)
-  set(VAST_LOG_LEVEL
-      "${VAST_LOG_LEVEL}"
-      CACHE STRING "${VAST_LOG_LEVEL_DOC}" FORCE)
+  string(TOUPPER "${TENZIR_LOG_LEVEL}" TENZIR_LOG_LEVEL)
+  set(TENZIR_LOG_LEVEL
+      "${TENZIR_LOG_LEVEL}"
+      CACHE STRING "${TENZIR_LOG_LEVEL_DOC}" FORCE)
 endif ()
 
-set(VAST_CAF_LOG_LEVEL
+set(TENZIR_CAF_LOG_LEVEL
     "WARNING"
-    CACHE STRING ${VAST_LOG_LEVEL_DOC})
+    CACHE STRING ${TENZIR_LOG_LEVEL_DOC})
 
 # Raise an error for invalid log levels.
 set(validLogLevels
@@ -146,9 +149,9 @@ set(validLogLevels
     VERBOSE
     DEBUG
     TRACE)
-list(FIND validLogLevels "${VAST_LOG_LEVEL}" logLevelIndex)
+list(FIND validLogLevels "${TENZIR_LOG_LEVEL}" logLevelIndex)
 if (logLevelIndex LESS 0)
-  message(FATAL_ERROR "Invalid log level: \"${VAST_LOG_LEVEL}\"")
+  message(FATAL_ERROR "Invalid log level: \"${TENZIR_LOG_LEVEL}\"")
 endif ()
 
 # -- libvast -------------------------------------------------------------------
@@ -159,7 +162,7 @@ file(GLOB_RECURSE libvast_builtins_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 foreach (source IN LISTS libvast_builtins_sources)
   file(READ "${source}" lines)
-  if (NOT "${lines}" MATCHES "\n *VAST_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
+  if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
     message(FATAL_ERROR "builtin ${source} does not register as a plugin")
   endif ()
 endforeach ()
@@ -174,7 +177,7 @@ add_library(vast::libvast ALIAS libvast)
 
 add_library(libvast_builtins STATIC ${libvast_builtins_sources})
 VASTTargetEnableTooling(libvast_builtins)
-target_compile_definitions(libvast_builtins PRIVATE VAST_ENABLE_BUILTINS)
+target_compile_definitions(libvast_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_target_properties(libvast_builtins PROPERTIES OUTPUT_NAME vast_builtins)
 add_library(vast::libvast_builtins ALIAS libvast_builtins)
 
@@ -189,12 +192,13 @@ set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
 # remnant of VAST using CalVer before 2022, with the last CalVer release having
 # the SOVERSION 2022.12, and it enforces that v1.0.0 has a larger SOVERSION than
 # the last CalVer release.
-math(EXPR VAST_SOVERSION_MAJOR
-     "256 * (${VAST_VERSION_MAJOR} + 7) + ${VAST_VERSION_MINOR}")
-set(VAST_SOVERSION_MINOR "${VAST_VERSION_PATCH}")
+math(EXPR TENZIR_SOVERSION_MAJOR
+     "256 * (${TENZIR_VERSION_MAJOR} + 7) + ${TENZIR_VERSION_MINOR}")
+set(TENZIR_SOVERSION_MINOR "${TENZIR_VERSION_PATCH}")
 set_target_properties(
-  libvast PROPERTIES SOVERSION "${VAST_SOVERSION_MAJOR}.${VAST_SOVERSION_MINOR}"
-                     OUTPUT_NAME vast)
+  libvast
+  PROPERTIES SOVERSION "${TENZIR_SOVERSION_MAJOR}.${TENZIR_SOVERSION_MINOR}"
+             OUTPUT_NAME vast)
 
 target_include_directories(
   libvast
@@ -215,7 +219,7 @@ target_link_libraries(libvast PUBLIC libvast-fbs)
 
 # Link against OpenSSL
 target_link_libraries(libvast PUBLIC OpenSSL::SSL)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(OpenSSL REQUIRED)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(OpenSSL REQUIRED)")
 dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
@@ -231,12 +235,12 @@ target_compile_definitions(
          XXH_ACCEPT_NULL_INPUT_POINTER=1)
 find_package(xxhash REQUIRED)
 provide_find_module(xxhash)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(xxhash REQUIRED)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(xxhash REQUIRED)")
 target_link_libraries(libvast PUBLIC xxhash::xxhash_header_only)
 dependency_summary("xxHash" xxhash::xxhash_header_only "Dependencies")
 
 # Link against libsystemd.
-if (VAST_ENABLE_JOURNALD_LOGGING)
+if (TENZIR_ENABLE_JOURNALD_LOGGING)
   find_package(systemd REQUIRED)
   target_link_libraries(libvast PRIVATE systemd::systemd)
   dependency_summary("libsystemd" systemd::systemd "Dependencies")
@@ -244,23 +248,24 @@ endif ()
 
 # Link against fmt.
 find_package(fmt 7.1.3 REQUIRED)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(fmt 7.1.3 REQUIRED)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(fmt 7.1.3 REQUIRED)")
 target_link_libraries(libvast PUBLIC fmt::fmt)
 dependency_summary("fmt" fmt::fmt "Dependencies")
 
 target_compile_definitions(libvast PUBLIC SPDLOG_FMT_EXTERNAL)
 find_package(spdlog 1.5.0 REQUIRED)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(spdlog 1.5.0 REQUIRED)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(spdlog 1.5.0 REQUIRED)")
 target_link_libraries(libvast PUBLIC spdlog::spdlog)
 dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
 # Link against simdjson
-option(VAST_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
-add_feature_info("VAST_ENABLE_BUNDLED_SIMDJSON" VAST_ENABLE_BUNDLED_SIMDJSON
-                 "use the simdjson submodule.")
+option(TENZIR_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
+add_feature_info("TENZIR_ENABLE_BUNDLED_SIMDJSON"
+                 TENZIR_ENABLE_BUNDLED_SIMDJSON "use the simdjson submodule.")
 
 unset(_vast_bundled_simdjson)
-if (NOT VAST_ENABLE_BUNDLED_SIMDJSON)
+if (NOT TENZIR_ENABLE_BUNDLED_SIMDJSON)
   find_package(simdjson QUIET)
   if (simdjson_FOUND AND simdjson_VERSION VERSION_LESS 3.1)
     message(FATAL_ERROR "simdjson >= 3.1 required; found ${simdjson_VERSION}")
@@ -309,7 +314,7 @@ if (NOT simdjson_FOUND)
                      "Dependencies")
 endif ()
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
@@ -322,7 +327,7 @@ dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.
 target_link_libraries(libvast PUBLIC Boost::headers Boost::filesystem)
-string(APPEND VAST_FIND_DEPENDENCY_LIST
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\nfind_package(Boost REQUIRED COMPONENTS headers filesystem)")
 dependency_summary("Boost" Boost::headers "Dependencies")
 
@@ -331,10 +336,11 @@ target_link_libraries(libvast PRIVATE re2::re2)
 dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against fast_float
-option(VAST_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
-add_feature_info("VAST_ENABLE_BUNDLED_FASTFLOAT" VAST_ENABLE_BUNDLED_FASTFLOAT
-                 "use the fast_float submodule.")
-if (NOT VAST_ENABLE_BUNDLED_FASTFLOAT)
+option(TENZIR_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
+add_feature_info(
+  "TENZIR_ENABLE_BUNDLED_FASTFLOAT" TENZIR_ENABLE_BUNDLED_FASTFLOAT
+  "use the fast_float submodule.")
+if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
   find_package(FastFloat 3.4.0 CONFIG)
 endif ()
 if (NOT FastFloat_FOUND)
@@ -355,17 +361,17 @@ endif ()
 target_link_libraries(libvast PRIVATE FastFloat::fast_float)
 
 # Link against a backtrace library.
-option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
-add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
+option(TENZIR_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
+add_feature_info("TENZIR_ENABLE_BACKTRACE" TENZIR_ENABLE_BACKTRACE
                  "print a backtrace on unexpected termination.")
-unset(VAST_ENABLE_LIBUNWIND)
-unset(VAST_ENABLE_LIBBACKTRACE)
-if (VAST_ENABLE_BACKTRACE)
+unset(TENZIR_ENABLE_LIBUNWIND)
+unset(TENZIR_ENABLE_LIBBACKTRACE)
+if (TENZIR_ENABLE_BACKTRACE)
   find_package(libunwind)
   if (libunwind_FOUND)
     target_link_libraries(libvast PRIVATE unwind::unwind)
     dependency_summary("libunwind" unwind::unwind "Dependencies")
-    set(VAST_ENABLE_LIBUNWIND ON)
+    set(TENZIR_ENABLE_LIBUNWIND ON)
   else ()
     find_package(Backtrace)
     if (Backtrace_FOUND)
@@ -375,11 +381,11 @@ if (VAST_ENABLE_BACKTRACE)
       if ("${Backtrace_HEADER}" STREQUAL "backtrace.h")
         dependency_summary("libbacktrace" "${Backtrace_INCLUDE_DIR}"
                            "Dependencies")
-        set(VAST_ENABLE_LIBBACKTRACE ON)
+        set(TENZIR_ENABLE_LIBBACKTRACE ON)
       elseif ("${Backtrace_HEADER}" STREQUAL "execinfo.h")
         dependency_summary("libexecinfo" "${Backtrace_INCLUDE_DIR}"
                            "Dependencies")
-        set(VAST_ENABLE_LIBEXECINFO ON)
+        set(TENZIR_ENABLE_LIBEXECINFO ON)
       else ()
         message(
           FATAL_ERROR "Found unexpected backtrace header ${Backtrace_HEADER}")
@@ -389,7 +395,7 @@ if (VAST_ENABLE_BACKTRACE)
 endif ()
 
 # Configure options-dependent code files.
-if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
   configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs_relocatable.cpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
@@ -402,10 +408,10 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/vast/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/vast/config.hpp")
 
 if (CMAKE_BUILD_TYPE)
-  set(VAST_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+  set(TENZIR_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
 elseif (CMAKE_CONFIGURATION_TYPES)
-  list(JOIN CMAKE_CONFIGURATION_TYPES " " VAST_BUILD_TYPE)
-  string(PREPEND VAST_BUILD_TYPE "Multi-Config: ")
+  list(JOIN CMAKE_CONFIGURATION_TYPES " " TENZIR_BUILD_TYPE)
+  string(PREPEND TENZIR_BUILD_TYPE "Multi-Config: ")
 else ()
   message(FATAL_ERROR "Failed to detect build or configuration types")
 endif ()
@@ -415,11 +421,11 @@ file(
   "\
   get_filename_component(CMAKE_MODULE_PATH
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
-  set(VAST_VERSION_TAG \"${VAST_VERSION_TAG_BACKUP}\")
-  set(VAST_BUILD_TYPE \"${VAST_BUILD_TYPE}\")
-  set(VAST_ENABLE_ASSERTIONS \"${VAST_ENABLE_ASSERTIONS}\")
-  set(VAST_ENABLE_ASAN \"${VAST_ENABLE_ASAN}\")
-  set(VAST_ENABLE_UBSAN \"${VAST_ENABLE_UBSAN}\")
+  set(TENZIR_VERSION_TAG \"${TENZIR_VERSION_TAG_BACKUP}\")
+  set(TENZIR_BUILD_TYPE \"${TENZIR_BUILD_TYPE}\")
+  set(TENZIR_ENABLE_ASSERTIONS \"${TENZIR_ENABLE_ASSERTIONS}\")
+  set(TENZIR_ENABLE_ASAN \"${TENZIR_ENABLE_ASAN}\")
+  set(TENZIR_ENABLE_UBSAN \"${TENZIR_ENABLE_UBSAN}\")
   include(VASTVersion)
   configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
                  \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
@@ -471,9 +477,9 @@ install(
 
 add_subdirectory(test)
 
-set(VAST_FIND_DEPENDENCY_LIST
-    "${VAST_FIND_DEPENDENCY_LIST}"
+set(TENZIR_FIND_DEPENDENCY_LIST
+    "${TENZIR_FIND_DEPENDENCY_LIST}"
     PARENT_SCOPE)
-set(VAST_EXTRA_TARGETS_FILES
-    "${VAST_EXTRA_TARGETS_FILES}"
+set(TENZIR_EXTRA_TARGETS_FILES
+    "${TENZIR_EXTRA_TARGETS_FILES}"
     PARENT_SCOPE)

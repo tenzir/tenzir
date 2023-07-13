@@ -121,7 +121,7 @@ struct mock_partition {
 struct fixture : public fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+      TENZIR_PP_STRINGIFY(SUITE)) {
     MESSAGE("register synopsis factory");
     factory<synopsis>::initialize();
     auto fs = self->spawn(posix_filesystem, directory, accountant_actor{});

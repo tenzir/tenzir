@@ -358,12 +358,12 @@ private:
   }
 
   void increment() {
-    VAST_ASSERT(i_ != Bitvector::npos);
+    TENZIR_ASSERT(i_ != Bitvector::npos);
     ++i_;
   }
 
   void decrement() {
-    VAST_ASSERT(i_ != Bitvector::npos);
+    TENZIR_ASSERT(i_ != Bitvector::npos);
     --i_;
   }
 
@@ -376,8 +376,8 @@ private:
   }
 
   [[nodiscard]] auto dereference() const {
-    VAST_ASSERT(!bitvector_->empty());
-    VAST_ASSERT(i_ < bitvector_->size());
+    TENZIR_ASSERT(!bitvector_->empty());
+    TENZIR_ASSERT(i_ < bitvector_->size());
     return (*bitvector_)[i_];
   }
 
@@ -524,14 +524,14 @@ void bitvector<Block, Allocator>::shrink_to_fit() {
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::operator[](size_type i) {
-  VAST_ASSERT(i < size_);
+  TENZIR_ASSERT(i < size_);
   return {&block_at_bit(i), word_type::mask(i % word_type::width)};
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::operator[](size_type i) const {
-  VAST_ASSERT(i < size_);
+  TENZIR_ASSERT(i < size_);
   return (block_at_bit(i) & word_type::mask(i % word_type::width)) != 0;
 }
 
@@ -539,7 +539,7 @@ template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::at(size_type i) {
   if (i >= size_)
-    VAST_RAISE_ERROR(std::out_of_range, "bitvector out of range");
+    TENZIR_RAISE_ERROR(std::out_of_range, "bitvector out of range");
   return (*this)[i];
 }
 
@@ -547,35 +547,35 @@ template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::at(size_type i) const {
   if (i >= size_)
-    VAST_RAISE_ERROR(std::out_of_range, "bitvector out of range");
+    TENZIR_RAISE_ERROR(std::out_of_range, "bitvector out of range");
   return (*this)[i];
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::front() {
-  VAST_ASSERT(!empty());
+  TENZIR_ASSERT(!empty());
   return (*this)[0];
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::front() const {
-  VAST_ASSERT(!empty());
+  TENZIR_ASSERT(!empty());
   return (*this)[0];
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::back() {
-  VAST_ASSERT(!empty());
+  TENZIR_ASSERT(!empty());
   return (*this)[size_ - 1];
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::back() const {
-  VAST_ASSERT(!empty());
+  TENZIR_ASSERT(!empty());
   return (*this)[size_ - 1];
 }
 
@@ -603,7 +603,7 @@ void bitvector<Block, Allocator>::push_back(const value_type& x) {
 
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::pop_back() {
-  VAST_ASSERT(!empty());
+  TENZIR_ASSERT(!empty());
   if (partial_bits() == 1)
     blocks_.pop_back();
   --size_;
@@ -659,8 +659,8 @@ bitvector<Block, Allocator>::blocks() const noexcept {
 
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::append_block(block x, size_type bits) {
-  VAST_ASSERT(bits > 0);
-  VAST_ASSERT(bits <= word_type::width);
+  TENZIR_ASSERT(bits > 0);
+  TENZIR_ASSERT(bits <= word_type::width);
   auto p = partial_bits();
   if (p == 0) {
     blocks_.push_back(x);

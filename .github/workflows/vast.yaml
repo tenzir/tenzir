@@ -133,7 +133,7 @@ jobs:
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
           # For pull requests we make it possible to cache all layers by setting
-          # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
+          # a fixed TENZIR_BUILD_OPTIONS for within a given pull request. We
           # accept the downaside that this means that Docker images created
           # within pull request triggers of this job display the merge-base
           # version.
@@ -147,7 +147,7 @@ jobs:
             vast_container_ref="${{ github.sha }}"
           fi
           echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
-          cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}"
+          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${vast_tag}"
           echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
           #################################
           ######## Decide what jobs to run.
@@ -220,8 +220,8 @@ jobs:
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
-          VAST_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ schema/ tools/ vast/ tenzir.yaml.example version.json)
-          run_if_changed vast "${VAST_SOURCES[@]}"
+          TENZIR_SOURCES=(cmake/ CMakeLists.txt libvast/ libvast_test/ schema/ tools/ vast/ tenzir.yaml.example version.json)
+          run_if_changed vast "${TENZIR_SOURCES[@]}"
           run_if_changed_default tenzir-plugins $run_vast "plugins/" "contrib/tenzir-plugins/"
           # The tenzir-plugins job downloads the VAST artifact from GCS, so we
           # need to run the vast job in case it is missing.
@@ -244,7 +244,7 @@ jobs:
           run_if_changed_default docker-vast $run_docker_vast
           run_if_changed_default regression-tests $run_docker_vast
           run_if_changed vast-nix \
-            "${VAST_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
+            "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
             ".github/workflows/nix.nu" \
             ".github/workflows/nix.yaml" \
             ".github/workflows/nix-config-base.json"
@@ -388,7 +388,7 @@ jobs:
           CC: gcc-12
           CXX: g++-12
         run: |
-          cmake -B build -DVAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
+          cmake -B build -DTENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
       - name: Generate CHANGELOG.md
         run: |
           cmake --build build --target changelog
@@ -437,8 +437,8 @@ jobs:
       - name: Build website
         working-directory: web
         run: |
-          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
-          export VAST_CONTAINER_REGISTRY=ghcr.io
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export TENZIR_CONTAINER_REGISTRY=ghcr.io
           yarn build
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -499,8 +499,8 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       DOCKER_BUILDKIT: 1
-      VAST_CONTAINER_REGISTRY: ghcr.io
-      VAST_CONTAINER_REF: ${{ needs.configure.outputs.vast-container-ref }}
+      TENZIR_CONTAINER_REGISTRY: ghcr.io
+      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.vast-container-ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -527,8 +527,8 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       DOCKER_BUILDKIT: 1
-      VAST_CONTAINER_REGISTRY: ghcr.io
-      VAST_CONTAINER_REF: ${{ needs.configure.outputs.vast-container-ref }}
+      TENZIR_CONTAINER_REGISTRY: ghcr.io
+      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.vast-container-ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -568,8 +568,8 @@ jobs:
       - name: Build Notebooks
         working-directory: examples/notebooks
         run: |
-          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
-          export VAST_CONTAINER_REGISTRY=ghcr.io
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export TENZIR_CONTAINER_REGISTRY=ghcr.io
           make docker
           # TODO: An assertion of the actual content of the output would be welcome
           make docker TARGET=clean
@@ -604,7 +604,7 @@ jobs:
             cc: gcc-12
             cxx: g++-12
             dependencies-script-path: scripts/debian/install-dev-dependencies.sh
-            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
+            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
         # - os: macos-latest
         #   container: null
         #   name: macOS
@@ -612,7 +612,7 @@ jobs:
         #   cc: clang
         #   cxx: clang++
         #   dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
-        #   cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
+        #   cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
     env:
       BUILD_DIR: build
       CC: ${{ matrix.vast.cc }}
@@ -708,7 +708,7 @@ jobs:
             -DCPACK_GENERATOR:STRING=TGZ \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
-            -DVAST_PLUGINS:STRING="plugins/web" \
+            -DTENZIR_PLUGINS:STRING="plugins/web" \
             ${{ needs.configure.outputs.cmake-version-args }} \
             ${{ matrix.vast.cmake-extra-flags }}
       - name: Compile All Targets
@@ -939,7 +939,7 @@ jobs:
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
       - name: Configure Build
         env:
-          VAST_DIR: "${{ env.INSTALL_DIR }}"
+          TENZIR_DIR: "${{ env.INSTALL_DIR }}"
         run: |
           python3 --version
           python3 -m pip --version
@@ -1009,8 +1009,8 @@ jobs:
         working-directory: python
         if: matrix.os == 'ubuntu-latest'
         run: |
-          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
-          export VAST_CONTAINER_REGISTRY=ghcr.io
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export TENZIR_CONTAINER_REGISTRY=ghcr.io
           ./docker-poetry-run.sh pytest
       - name: Build package
         working-directory: python

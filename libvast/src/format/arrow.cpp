@@ -39,7 +39,7 @@ caf::error writer::write(const table_slice& slice) {
       return caf::make_error(ec::logic_error, "failed to update schema");
     current_schema_ = schema;
   }
-  VAST_ASSERT(batch != nullptr);
+  TENZIR_ASSERT(batch != nullptr);
   if (auto status = current_batch_writer_->WriteRecordBatch(*batch);
       !status.ok())
     return caf::make_error(ec::unspecified, "failed to write record batch",
@@ -115,11 +115,12 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
 
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(max_events), VAST_ARG(max_slice_size));
-  VAST_ASSERT(max_events > 0);
+  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(max_events),
+                     TENZIR_ARG(max_slice_size));
+  TENZIR_ASSERT(max_events > 0);
   // TODO: we currently ignore `max_slize_size` because we're just passing
   // through existing table slices / record batches from the producer system.
-  VAST_ASSERT(max_slice_size > 0);
+  TENZIR_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   while (produced < max_events) {
     if (!reader_) {
@@ -133,7 +134,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     }
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
+      TENZIR_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
       return caf::make_error(ec::timeout, "reached batch timeout");
     }
     const auto read_result = reader_->ReadNext();
@@ -166,10 +167,10 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     const auto& metadata = *read_result->batch->schema()->metadata();
     if (metadata.FindKey("TENZIR:name:0") == -1
         && metadata.FindKey("VAST:name:0") == -1) {
-      VAST_WARN("{} skips record batch with {} rows: metadata is "
-                "incomaptible with VAST",
-                detail::pretty_type_name(*this),
-                read_result->batch->num_rows());
+      TENZIR_WARN("{} skips record batch with {} rows: metadata is "
+                  "incomaptible with VAST",
+                  detail::pretty_type_name(*this),
+                  read_result->batch->num_rows());
       continue;
     }
     auto slice = table_slice{read_result->batch};

@@ -22,7 +22,7 @@ namespace vast {
 command::fun make_writer_command(std::string_view format) {
   return [format = std::string{format}](const invocation& inv,
                                         caf::actor_system& sys) {
-    VAST_TRACE_SCOPE("{}", inv);
+    TENZIR_TRACE_SCOPE("{}", inv);
     auto snk = make_sink(sys, format, inv.options);
     if (!snk)
       return make_message(snk.error());

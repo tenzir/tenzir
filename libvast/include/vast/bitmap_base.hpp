@@ -72,7 +72,7 @@ public:
   /// @pre `size() + other.size()` <= max_size`
   template <class Bitmap>
   void append(const Bitmap& other) {
-    VAST_ASSERT(derived().size() + other.size() <= max_size);
+    TENZIR_ASSERT(derived().size() + other.size() <= max_size);
     for (auto bits : bit_range(other))
       append(bits);
   }
@@ -115,7 +115,7 @@ public:
   /// @returns `true` iff bit *i* is 1.
   /// @pre `i < size()`
   bool operator[](size_type i) const {
-    VAST_ASSERT(i < derived().size());
+    TENZIR_ASSERT(i < derived().size());
     auto n = size_type{0};
     for (auto bits : bit_range(derived())) {
       if (i >= n && i < n + bits.size())
