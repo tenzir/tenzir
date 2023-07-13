@@ -70,10 +70,10 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
   # prefix at build-time is different than the install prefix at install-time.
   # The macOS installation below handles this correctly, and the FreeBSD
   # installation should be adapted to work similarly.
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/rc.d/vast.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/vast" @ONLY)
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/rc.d/tenzir.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/tenzir" @ONLY)
   install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/vast"
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/tenzir"
     DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/rc.d"
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE
     COMPONENT Runtime)
@@ -85,7 +85,7 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
       string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
     endif ()
     set(VAST_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
-    set(VAST_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/vast\")
+    set(VAST_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/tenzir\")
     message(STATUS
       \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\")
     configure_file(
@@ -132,7 +132,7 @@ file(
      python3 -m pip install -r \"$base_dir/requirements.txt\"
      python3 \"$base_dir/integration.py\" \
       --app \"$app\" \
-      --directory vast-integration-test \
+      --directory tenzir-integration-test \
       --set \"$base_dir\"/vast_integration_suite.yaml \
       \${update} \
       \"$@\"
@@ -146,22 +146,22 @@ add_custom_target(
 
 add_custom_target(
   link-integration-directory ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/vast"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/tenzir"
   COMMAND
     ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/integration"
-    "${CMAKE_BINARY_DIR}/share/vast/integration"
+    "${CMAKE_BINARY_DIR}/share/tenzir/integration"
   COMMENT "Linking integration test directory")
 
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
   COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
   PATTERN "integration/tenzir.yaml.example" EXCLUDE)
 
 install(
   FILES "${PROJECT_SOURCE_DIR}/tenzir.yaml.example"
   COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/integration")
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
 
 # -- add plugins ---------------------------------------------------------------
 
