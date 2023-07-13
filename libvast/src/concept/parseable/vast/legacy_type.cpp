@@ -20,14 +20,8 @@
 
 namespace vast {
 
-template <class T, detail::string_literal DeprecationNotice = "">
+template <class T>
 static legacy_type type_factory() {
-  if constexpr (!DeprecationNotice.str().empty()) {
-    static auto flag = std::once_flag{};
-    std::call_once(flag, []() noexcept {
-      VAST_WARN("{}", DeprecationNotice.str());
-    });
-  }
   return T{};
 }
 
@@ -53,22 +47,14 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     =
     ( "bool"_p      ->* type_factory<legacy_bool_type>
     | "int64"_p     ->* type_factory<legacy_integer_type>
-    | "int"_p       ->* type_factory<legacy_integer_type,
-        "the type token 'int' is deprecated; use 'int64' instead">
     | "uint64"_p    ->* type_factory<legacy_count_type>
-    | "count"_p     ->* type_factory<legacy_count_type,
-        "the type token 'count' is deprecated; use 'uint64' instead">
     | "double"_p    ->* type_factory<legacy_real_type>
-    | "real"_p      ->* type_factory<legacy_real_type,
-        "the type token 'real' is deprecated; use 'double' instead">
     | "duration"_p  ->* type_factory<legacy_duration_type>
     | "time"_p      ->* type_factory<legacy_time_type>
     | "string"_p    ->* type_factory<legacy_string_type>
     // We removed support for pattern types with VAST v3.0.
     // | "pattern"_p   ->* type_factory<legacy_pattern_type>
     | "ip"_p        ->* type_factory<legacy_address_type>
-    | "addr"_p      ->* type_factory<legacy_address_type,
-        "the type token 'addr' is deprecated; use 'ip' instead">
     | "subnet"_p    ->* type_factory<legacy_subnet_type>
     ) >> &(!parsers::identifier_char)
     ;
