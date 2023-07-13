@@ -19,9 +19,9 @@ namespace tenzir {
 ///     auto v = tenzir::collect<std::vector<std::string>>(g);
 template <class Container, class T>
   requires requires(Container c, T& t) {
-             c.reserve(size_t{});
-             c.emplace(c.end(), t);
-           }
+    c.reserve(size_t{});
+    c.emplace(c.end(), t);
+  }
 Container collect(tenzir::generator<T> g, size_t size_hint = 0) {
   Container result = {};
   if (size_hint)

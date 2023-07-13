@@ -1071,8 +1071,8 @@ public:
   explicit map_type(const type& key_type, const type& value_type) noexcept;
 
   template <type_or_concrete_type T, type_or_concrete_type U>
-    requires(
-      !std::is_same_v<T, tenzir::type> || !std::is_same_v<U, tenzir::type>)
+    requires(!std::is_same_v<T, tenzir::type>
+             || !std::is_same_v<U, tenzir::type>)
   explicit map_type(const T& key_type, const U& value_type) noexcept
     : map_type{type{key_type}, type{value_type}} {
     // nop
@@ -1564,17 +1564,16 @@ struct sum_type_access<tenzir::type> final {
       []<tenzir::concrete_type... Ts, uint8_t... Indices>(
         detail::type_list<Ts...>,
         std::integer_sequence<uint8_t, Indices...>) noexcept {
-      return std::array{
-        +[](const tenzir::type& x, Visitor&& v, Args&&... xs) -> Result {
+        return std::array{+[](const tenzir::type& x, Visitor&& v,
+                              Args&&... xs) -> Result {
           auto xs_as_tuple = std::forward_as_tuple(xs...);
           auto indices = detail::get_indices(xs_as_tuple);
           return detail::apply_args_suffxied(
             std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
             get(x, sum_type_token<Ts, Indices>{}));
         }...};
-    }
-    (types{},
-     std::make_integer_sequence<uint8_t, detail::tl_size<types>::value>());
+      }(types{},
+        std::make_integer_sequence<uint8_t, detail::tl_size<types>::value>());
     const auto dispatch = table[index_from_type(x)];
     TENZIR_ASSERT(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);

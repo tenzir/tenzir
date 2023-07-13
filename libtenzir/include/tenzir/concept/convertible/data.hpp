@@ -591,8 +591,8 @@ caf::error convert(std::string_view src, To& dst) {
 template <class From, class To, class Type>
 concept is_concrete_typed_convertible
   = requires(const From& src, To& dst, const Type& type) {
-  { tenzir::convert(src, dst, type) } -> std::same_as<caf::error>;
-};
+      { tenzir::convert(src, dst, type) } -> std::same_as<caf::error>;
+    };
 
 // The same concept but this time to check for any untyped convert
 // overloads.

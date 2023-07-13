@@ -89,9 +89,8 @@ std::string render(caf::error err) {
     return "";
   std::ostringstream oss;
   auto category = err.category();
-  if (category
-        == caf::type_id_v<
-          tenzir::ec> && static_cast<tenzir::ec>(err.code()) == ec::silent)
+  if (category == caf::type_id_v<tenzir::ec>
+      && static_cast<tenzir::ec>(err.code()) == ec::silent)
     return "";
   oss << "!! ";
   switch (category) {

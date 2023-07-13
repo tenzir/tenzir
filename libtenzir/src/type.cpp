@@ -3374,16 +3374,16 @@ static_assert(
 
 uint8_t
 sum_type_access<tenzir::type>::index_from_type(const tenzir::type& x) noexcept {
-  static const auto table = []<tenzir::concrete_type... Ts, uint8_t... Indices>(
-    caf::detail::type_list<Ts...>,
-    std::integer_sequence<uint8_t, Indices...>) noexcept {
-    std::array<uint8_t, std::numeric_limits<uint8_t>::max()> tbl{};
-    tbl.fill(std::numeric_limits<uint8_t>::max());
-    (static_cast<void>(tbl[Ts::type_index] = Indices), ...);
-    return tbl;
-  }
-  (types{},
-   std::make_integer_sequence<uint8_t, caf::detail::tl_size<types>::value>());
+  static const auto table =
+    []<tenzir::concrete_type... Ts, uint8_t... Indices>(
+      caf::detail::type_list<Ts...>,
+      std::integer_sequence<uint8_t, Indices...>) noexcept {
+      std::array<uint8_t, std::numeric_limits<uint8_t>::max()> tbl{};
+      tbl.fill(std::numeric_limits<uint8_t>::max());
+      (static_cast<void>(tbl[Ts::type_index] = Indices), ...);
+      return tbl;
+    }(types{},
+      std::make_integer_sequence<uint8_t, caf::detail::tl_size<types>::value>());
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
   auto result = table[x.type_index()];
   TENZIR_ASSERT(result != std::numeric_limits<uint8_t>::max());

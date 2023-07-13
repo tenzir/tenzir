@@ -658,7 +658,8 @@ public:
   /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual caf::expected<builder_and_header>
   make_store_builder(accountant_actor accountant, filesystem_actor fs,
-                     const tenzir::uuid& id) const = 0;
+                     const tenzir::uuid& id) const
+    = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
   /// partition that uses this partition as a store backend.

@@ -75,8 +75,9 @@ struct totally_ordered : equality_comparable<T, U>,
     }                                                                          \
                                                                                \
     template <std::same_as<T> Lhs, std::same_as<U> Rhs>                        \
-    friend Lhs operator OP(const Rhs& y, const Lhs& x) requires(               \
-      !std::same_as<Lhs, Rhs> && std::is_constructible_v<Lhs, Rhs>) {          \
+    friend Lhs operator OP(const Rhs& y, const Lhs& x)                         \
+      requires(!std::same_as<Lhs, Rhs> && std::is_constructible_v<Lhs, Rhs>)   \
+    {                                                                          \
       Lhs result(y);                                                           \
       result OP## = x;                                                         \
       return result;                                                           \
