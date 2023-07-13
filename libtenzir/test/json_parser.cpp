@@ -494,7 +494,7 @@ TEST(warn for malformed line and parse the next proper line in ndjson parser)
 )";
   auto sut = create_sut(make_chunk_generator({malformed_json, proper_json}),
                         mock, "--ndjson");
-  auto output_slices = std::vector<vast::table_slice>{};
+  auto output_slices = std::vector<tenzir::table_slice>{};
   for (auto slice : sut) {
     if (slice.rows() > 0)
       output_slices.push_back(std::move(slice));
