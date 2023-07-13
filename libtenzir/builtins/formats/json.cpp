@@ -114,6 +114,9 @@ struct parser_state {
   std::string last_used_schema_name{};
   // Table slice builder used when the schema is not known.
   adaptive_table_slice_builder unknown_schema_builder{};
+  // Used to communicate a need for a co_return in the operator coroutine from
+  // the ndjson parser/default parser coroutine.
+  bool abort_requested = false;
 };
 
 template <class FieldValidator>
@@ -512,7 +515,11 @@ public:
     // After parsing one JSON object it is expected for the result to be at
     // the end. If it's otherwise then it means that a line contains more than
     // one object in which case we don't add any data and emit a warning.
-    if (not doc.at_end()) {
+    // It is also possible for a parsing failure to occurr in doc_parser. the
+    // is_alive() call ensures that the first object was parsed without errors.
+    // Calling at_end() when is_alive() returns false is unsafe and resulted in
+    // crashes.
+    if (doc.is_alive() and not doc.at_end()) {
       row.cancel();
       this->ctrl_.warn(caf::make_error(
         ec::parse_error, fmt::format("more than one JSON object in a "
@@ -552,10 +559,11 @@ public:
       // No need to check after each operation.
       auto doc = (*doc_it).get_value();
       if (auto err = doc.error()) {
-        this->ctrl_.warn(caf::make_error(
+        state.abort_requested = true;
+        this->ctrl_.abort(caf::make_error(
           ec::parse_error, fmt::format("skips invalid JSON '{}' : {}", view,
                                        error_message(err))));
-        continue;
+        co_return;
       }
       auto [action, slice]
         = this->handle_selector(*doc_it, doc_it.source(), state);
@@ -573,22 +581,20 @@ public:
       if (auto slice = this->handle_max_rows(state))
         co_yield *slice;
     }
-    handle_truncated_bytes();
+    handle_truncated_bytes(state);
   }
 
 private:
-  auto handle_truncated_bytes() -> void {
+  auto handle_truncated_bytes(parser_state& state) -> void {
     auto truncated_bytes = stream_.truncated_bytes();
     if (truncated_bytes == 0) {
       buffer_.reset();
       return;
     }
-    // The branch below can ocurr when we have malformed JSON that
-    // triggers some UB in the simdjson parser. The simdjson parser is supposed
-    // to be used with well formed JSON or truncated JSON. In this case we don't
-    // know how to recover. It might be possible to use different parser or our
-    // custom logic to try recover as much data as possible.
+    // Likely not needed, but should be harmless. Needs additional investigation
+    // in the future.
     if (truncated_bytes > buffer_.view().size()) {
+      state.abort_requested = true;
       this->ctrl_.abort(caf::make_error(
         ec::parse_error, fmt::format("detected malformed JSON and "
                                      "aborts parsing: '{}'",
@@ -625,6 +631,9 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
     }
     for (auto slice : parser_impl.parse(*chnk, state)) {
       co_yield unflatten_if_needed(separator, std::move(slice));
+    }
+    if (state.abort_requested) {
+      co_return;
     }
   }
   if (auto slice

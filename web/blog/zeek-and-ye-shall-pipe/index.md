@@ -3,6 +3,7 @@ title: Zeek and Ye Shall Pipe
 authors: mavam
 date: 2023-07-13
 tags: [zeek, logs, json, pipelines]
+comments: true
 ---
 
 # Zeek and Ye Shall Pipe

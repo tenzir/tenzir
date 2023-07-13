@@ -248,19 +248,19 @@ TEST(different schemas in each event are combined into one) {
 }
 
 TEST(inproperly formatted json in all input chunks results in 0 slices) {
-  auto issues_warnings = 0u;
-  auto mock = operator_control_plane_mock{[&issues_warnings](auto&&) {
-    ++issues_warnings;
-  }};
+  auto abort_issued = false;
+  auto mock
+    = operator_control_plane_mock{std::function<void()>{[&abort_issued] {
+        abort_issued = true;
+      }}};
   auto json = R"({f3iujo5u3};fd/nha":1234)";
   auto sut = create_sut(make_chunk_generator({json, json, json}), mock);
   auto output_slices = std::vector<tenzir::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
+  CHECK(abort_issued);
   CHECK(output_slices.empty());
-  // At least warn for each chunk.
-  CHECK(issues_warnings >= 3u);
 }
 
 // This test stopped working after we started to ignore fields that can't be
@@ -290,15 +290,14 @@ TEST(inproperly formatted json in all input chunks results in 0 slices) {
 // }
 
 TEST(properly formatted json followed by inproperly formatted one and ending
-       with a proper one in multiple chunks) {
+       with a proper one in multiple chunks results in 0 slices due to abort) {
   constexpr auto proper_json = std::string_view{R"({"123":"123"})"};
   constexpr auto not_a_json = std::string_view{"sfgsdger?}u"};
-  auto warn_issued = false;
-  auto mock = operator_control_plane_mock{[&warn_issued](auto&&) {
-    // don't count how many times it was issued. It is sort of tested in other
-    // places.
-    warn_issued = true;
-  }};
+  auto abort_issued = false;
+  auto mock
+    = operator_control_plane_mock{std::function<void()>{[&abort_issued] {
+        abort_issued = true;
+      }}};
   auto sut = create_sut(
     make_chunk_generator({proper_json.substr(0, 2), proper_json.substr(2, 2),
                           proper_json.substr(4), not_a_json.substr(0, 2),
@@ -308,11 +307,8 @@ TEST(properly formatted json followed by inproperly formatted one and ending
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
-  REQUIRE_EQUAL(output_slices.size(), 1u);
-  REQUIRE_EQUAL(output_slices.front().columns(), 1u);
-  CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), "123");
-  CHECK_EQUAL(materialize(output_slices.front().at(1u, 0u)), "123");
-  CHECK(warn_issued);
+  CHECK(abort_issued);
+  CHECK(output_slices.empty());
 }
 
 TEST(split results into two slices when input chunks has more events than a
@@ -443,7 +439,7 @@ TEST(no output slices for ndjson parser with a json that has two json objects in
   CHECK(issued_warnings >= 1u);
 }
 
-TEST(single output slices for ndjson parser with an input that has a nested object in one line)
+TEST(single output slice for ndjson parser with an input that has a nested object in one line)
 {
   auto issued_warnings = 0u;
   auto mock = operator_control_plane_mock{[&issued_warnings](auto&&) {
@@ -484,6 +480,31 @@ TEST(ndjson parser with input split over multiple chunks) {
   REQUIRE_EQUAL(output_slices.front().columns(), 2u);
   CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), "baz");
   CHECK_EQUAL(materialize(output_slices.front().at(0u, 1u)), int64_t{5});
+}
+
+TEST(warn for malformed line and parse the next proper line in ndjson parser)
+{
+  auto issued_warnings = 0u;
+  auto mock = operator_control_plane_mock{[&issued_warnings](auto&&) {
+    ++issued_warnings;
+  }};
+  auto malformed_json = R"({"a" : "
+)";
+  auto proper_json = R"({"a" : 25}
+)";
+  auto sut = create_sut(make_chunk_generator({malformed_json, proper_json}),
+                        mock, "--ndjson");
+  auto output_slices = std::vector<vast::table_slice>{};
+  for (auto slice : sut) {
+    if (slice.rows() > 0)
+      output_slices.push_back(std::move(slice));
+  }
+  REQUIRE_EQUAL(output_slices.size(), 1u);
+  // Warn for first line
+  CHECK(issued_warnings >= 1u);
+  CHECK_EQUAL(output_slices.front().rows(), 1u);
+  CHECK_EQUAL(output_slices.front().columns(), 1u);
+  CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), int64_t{25});
 }
 
 FIXTURE_SCOPE_END()

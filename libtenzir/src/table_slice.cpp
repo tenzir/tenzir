@@ -1258,10 +1258,9 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
       = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
     if (field_name.starts_with(nested_field_separator)
         or field_name.ends_with(nested_field_separator)) {
-      TENZIR_WARN("retaining original field {} during unflattening: "
-                  "encountered "
-                  "name with separator at beginning/end",
-                  field_name);
+      TENZIR_DEBUG("retaining original field {} during unflattening: "
+                   "encountered name with separator at beginning/end",
+                   field_name);
       continue;
     }
     auto separator_count
@@ -1298,10 +1297,10 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
             field, slice_array->GetFieldByName(std::string{field})};
           original_field_name_to_new_field_map[field]
             = std::addressof(unflattened_field_map[field]);
-          TENZIR_WARN("retaining original field {} during unflattening: "
-                      "encountered potential value collision with already "
-                      "unflattened field {}",
-                      field, prefix);
+          TENZIR_DEBUG("retaining original field {} during unflattening: "
+                       "encountered potential value collision with already "
+                       "unflattened field {}",
+                       field, prefix);
           continue;
         }
       }

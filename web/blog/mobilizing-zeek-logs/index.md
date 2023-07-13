@@ -3,6 +3,7 @@ title: Mobilizing Zeek Logs
 authors: mavam
 date: 2023-07-06
 tags: [tenzir, zeek, logs, json, kafka]
+comments: true
 ---
 
 # Mobilizing Zeek Logs
