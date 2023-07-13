@@ -3,21 +3,21 @@
   pkgs,
   self,
 }: {
-  vast-vm-systemd =
+  tenzir-vm-systemd =
     makeTest
     {
-      name = "vast-systemd";
+      name = "tenzir-systemd";
       machine = {
         config,
         pkgs,
         ...
       }: {
         environment.systemPackages = with pkgs; [
-          pkgs.vast
+          pkgs.tenzir
         ];
 
         imports = [
-          self.nixosModules.vast
+          self.nixosModules.tenzir
         ];
 
         virtualisation = {
@@ -25,23 +25,22 @@
           cores = 4;
         };
 
-        services.vast = {
+        services.tenzir = {
           enable = true;
-          # plugins fails on Non-Static build Vast
-          package = pkgs.vast;
+          package = pkgs.tenzir;
           settings = {
-            vast = {
+            tenzir = {
               endpoint = "127.0.0.1:5158";
             };
           };
-          # extraConfigFile = ./vast.yaml;
+          # extraConfigFile = ./tenzir.yaml;
         };
       };
       testScript = ''
         start_all()
         machine.wait_for_unit("network-online.target")
-        machine.wait_for_unit("vast.service")
-        print(machine.succeed("systemctl status vast.service"))
+        machine.wait_for_unit("tenzir.service")
+        print(machine.succeed("systemctl status tenzir.service"))
         machine.wait_for_open_port(5158)
       '';
     }
