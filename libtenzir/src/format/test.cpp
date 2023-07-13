@@ -221,7 +221,7 @@ struct randomizer {
 
 std::string_view builtin_module = R"__(
   type test.full = record{
-    n: list<int>,
+    n: list<int64>,
     b: bool #default="uniform(0,1)",
     i: int64 #default="uniform(-5158,1337)",
     c: uint64 #default="pareto(0,1)",

@@ -296,7 +296,7 @@ TEST(zeek reader - schema enrichment) {
 
 TEST(zeek reader - custom schema) {
   std::string custom_schema = R"__(
-    type port = count
+    type port = uint64
     type timestamp = time
     type zeek.conn = record{
       ts: timestamp #test,

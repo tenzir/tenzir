@@ -29,7 +29,7 @@ using namespace std::string_literals;
 
 TEST(offset finding) {
   std::string str = R"__(
-    type a = int
+    type a = int64
     type inner = record{ x: int64, y: double }
     type middle = record{ a: int64, b: inner }
     type outer = record{ a: middle, b: record { y: string }, c: int64 }
@@ -59,12 +59,12 @@ TEST(offset finding) {
 
 TEST(combining) {
   auto x = unbox(to<module>(R"__(
-    type b = real
-    type int_custom = int
+    type b = double
+    type int_custom = int64
     type a = int_custom
   )__"));
   auto y = unbox(to<module>(R"__(
-    type c = addr
+    type c = ip
     type d = string
   )__"));
   auto z = module::combine(x, y);
@@ -78,13 +78,13 @@ TEST(combining) {
 
 TEST(merging) {
   std::string str = R"__(
-    type a = int
+    type a = int64
     type inner = record{ x: int64, y: double }
   )__";
   auto s1 = to<module>(str);
   REQUIRE(s1);
-  str = "type a = int\n" // Same type allowed.
-        "type b = int\n";
+  str = "type a = int64\n" // Same type allowed.
+        "type b = int64\n";
   auto s2 = to<module>(str);
   REQUIRE(s2);
   auto merged = module::merge(*s1, *s2);
@@ -120,7 +120,7 @@ TEST(serialization) {
 }
 
 TEST(parseable - simple sequential) {
-  auto str = "type a = int type b = string type c = a"s;
+  auto str = "type a = int64 type b = string type c = a"s;
   module mod;
   CHECK(parsers::module(str, mod));
   CHECK(mod.find("a"));
@@ -131,7 +131,7 @@ TEST(parseable - simple sequential) {
 TEST(parseable - toplevel comments) {
   std::string_view str = R"__(
     // A comment at the beginning.
-    type foo = int
+    type foo = int64
     // A comment a the end of the schema.
   )__";
   module mod;
@@ -145,7 +145,7 @@ TEST(parseable - inline comments) {
       ts: time,         // much
       uid: string       // more
     }                   // detail,
-    type bar = int      // jeez!
+    type bar = int64    // jeez!
   )__";
   module mod;
   CHECK(parsers::module(str, mod));
@@ -155,7 +155,7 @@ TEST(parseable - inline comments) {
 
 TEST(module : zeek - style) {
   std::string str = R"__(
-    type port = count
+    type port = uint64
     type zeek.ssl = record{
       ts: time,
       uid: string,
@@ -186,7 +186,7 @@ TEST(module : zeek - style) {
 
 TEST(schema : aliases) {
   auto str = R"__(
-               type foo = addr
+               type foo = ip
                type bar = foo
                type baz = bar
                type x = baz
@@ -204,14 +204,14 @@ TEST(schema : aliases) {
 TEST(parseable - basic types global) {
   auto str = R"__(
     type t1 = bool
-    type t2 = int
-    type t3 = count
-    type t4 = real
+    type t2 = int64
+    type t3 = uint64
+    type t4 = double
     type t5 = duration
     type t6 = time
     type t7 = string
     type t8 = string
-    type t9 = addr
+    type t9 = ip
     type t10 = subnet
     type foo = record{
       a1: t1,
@@ -295,7 +295,7 @@ TEST(parseable - out of order definitions) {
     type bar = record{
       x: foo
     }
-    type foo = int
+    type foo = int64
   )__"sv;
   module mod;
   CHECK(parsers::module(str, mod));
@@ -322,7 +322,7 @@ TEST(parseable - with context) {
   {
     auto local = symbol_map{};
     auto p = symbol_map_parser{};
-    CHECK(p("type foo = count", local));
+    CHECK(p("type foo = uint64", local));
     global = std::move(local);
   }
   {
@@ -352,7 +352,7 @@ TEST(parseable - with context) {
   {
     MESSAGE("Override definition in global symbol table - before use");
     auto str = R"__(
-      type foo = int
+      type foo = int64
       type bar = record{
         x: record{
           y: foo
@@ -382,7 +382,7 @@ TEST(parseable - with context) {
           y: foo
         }
       }
-      type foo = int
+      type foo = int64
     )__"sv;
     auto sm = unbox(to<symbol_map>(str));
     auto r = symbol_resolver{global, sm};
@@ -402,13 +402,13 @@ TEST(parseable - with context) {
   {
     MESSAGE("Duplicate definition error");
     auto str = R"__(
-      type foo = real
+      type foo = double
       type bar = record{
         x: record{
           y: foo
         }
       }
-      type foo = int
+      type foo = int64
     )__"sv;
     auto p = symbol_map_parser{};
     symbol_map sm;
@@ -418,8 +418,8 @@ TEST(parseable - with context) {
     MESSAGE("Duplicate definition error - re-entry");
     auto p = symbol_map_parser{};
     symbol_map sm;
-    CHECK(p("type foo = real", sm));
-    CHECK(!p("type foo = int", sm));
+    CHECK(p("type foo = double", sm));
+    CHECK(!p("type foo = int64", sm));
   }
   {
     MESSAGE("Arithmetic - basic addition");

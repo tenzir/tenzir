@@ -38,37 +38,25 @@ auto parse(std::string_view repr, const record& config,
     }
     // 2a. find plugin using operator name
     const auto* plugin = plugins::find<operator_parser_plugin>(operator_name);
-    // 2b. find alias definition in `tenzir.operators` (and `tenzir.operators`)
-    auto new_config_prefix = "tenzir.operators";
-    auto old_config_prefix = "tenzir.pipelines";
-    auto definition = static_cast<const std::string*>(nullptr);
-    auto used_config_prefix = std::string{};
+    // 2b. find alias definition in `tenzir.operators`
+    const auto* definition = static_cast<const std::string*>(nullptr);
     auto used_config_key = std::string{};
-    for (auto prefix : {new_config_prefix, old_config_prefix}) {
-      auto key = fmt::format("{}.{}", prefix, operator_name);
-      auto result = try_get_only<std::string>(config, key);
-      if (not result) {
-        return std::move(result.error());
-      }
-      if (*result != nullptr) {
-        if (prefix == old_config_prefix) {
-          TENZIR_WARN("configuring operator aliases with `{}` is deprecated, "
-                      "use "
-                      "`{}` instead",
-                      old_config_prefix, new_config_prefix);
-        }
-        definition = *result;
-        used_config_prefix = prefix;
-        used_config_key = key;
-        break;
-      }
+    auto key = fmt::format("tenzir.operators.{}", operator_name);
+    auto result = try_get_only<std::string>(config, key);
+    if (not result) {
+      return std::move(result.error());
+    }
+    if (*result != nullptr) {
+      definition = *result;
+      used_config_key = key;
+      break;
     }
     if (plugin && definition) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("the operator {} is defined by a "
                                          "plugin, but also "
-                                         "by the `{}` config",
-                                         operator_name, used_config_prefix));
+                                         "by the `tenzir.operators` config",
+                                         operator_name));
     }
     if (plugin) {
       // 3a. ask the plugin to parse itself from the remainder

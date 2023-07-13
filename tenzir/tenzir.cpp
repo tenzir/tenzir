@@ -153,12 +153,6 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
-  // Warn if tenzir.pipeline-triggers are defined, as the functionality went
-  // away alongside the old pipeline executor.
-  if (caf::get_if<caf::settings>(&cfg, "tenzir.pipeline-triggers")) {
-    TENZIR_WARN("the 'tenzir.pipeline-triggers' option is no longer functional"
-                "use inline import and export pipelines instead");
-  }
   // Set up the modules singleton.
   auto module = load_module(cfg);
   if (not module) {
@@ -174,27 +168,22 @@ int main(int argc, char** argv) {
   // Set up pipeline aliases.
   using namespace std::literals;
   auto aliases = std::unordered_map<std::string, std::string>{};
-  for (auto prefix : {"tenzir.operators"sv, "tenzir.pipelines"sv}) {
-    if (auto const* settings = caf::get_if<caf::settings>(&cfg, prefix)) {
-      if (prefix == "tenzir.pipelines") {
-        TENZIR_WARN("the config section `tenzir.pipelines` is deprecated, use "
-                    "`tenzir.operators` instead");
-      }
-      auto r = to<record>(*settings);
-      if (!r) {
-        TENZIR_ERROR("could not load `{}`: invalid record", prefix);
+  if (auto const* settings
+      = caf::get_if<caf::settings>(&cfg, "tenzir.operators")) {
+    auto r = to<record>(*settings);
+    if (!r) {
+      TENZIR_ERROR("could not load `tenzir.operators`: invalid record");
+      return EXIT_FAILURE;
+    }
+    for (auto&& [name, value] : *r) {
+      auto* definition = caf::get_if<std::string>(&value);
+      if (!definition) {
+        TENZIR_ERROR("could not load `tenzir.operators`: alias `{}` does not "
+                     "resolve to a string",
+                     name);
         return EXIT_FAILURE;
       }
-      for (auto&& [name, value] : *r) {
-        auto* definition = caf::get_if<std::string>(&value);
-        if (!definition) {
-          TENZIR_ERROR("could not load `{}`: alias `{}` does not "
-                       "resolve to a string",
-                       prefix, name);
-          return EXIT_FAILURE;
-        }
-        aliases.emplace(std::move(name), *definition);
-      }
+      aliases.emplace(std::move(name), *definition);
     }
   }
   tql::set_operator_aliases(std::move(aliases));
