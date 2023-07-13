@@ -162,11 +162,11 @@ point of data from a tool to the Tenzir process. You can consider `shell` your
 escape hatch to reach deeper into a specific Tenzir node, as if you had a native
 shell.
 
-:::info Unsafe operators
+:::info Unsafe operators in Nodes
 Naturally, we must add that this is also a security risk and can lead to
 arbitrary shell access. This is why the `shell` operator and a few other ones
-with far-reaching side effects are disabled by default. If you are aware of the
-implications, you can remove this restriction by setting
+with far-reaching side effects are disabled by default *when running in a node*.
+If you are aware of the implications, you can remove this restriction by setting
 `tenzir.allow-unsafe-pipelines: true` in the `tenzir.yaml` of the respective
 node.
 :::
