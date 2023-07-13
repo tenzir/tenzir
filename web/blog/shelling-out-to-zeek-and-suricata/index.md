@@ -56,9 +56,8 @@ their output more easily? This is where Tenzir comes into play—easy
 [pipelines](/docs/language/pipelines) for security teams to acquire,
 [reshape](/docs/user-guides/get-started), and route event data.
 
-For our use case we look at the [`shell`](/docs/operators/shell) operator in
-more detail: it lifts any Unix command into a pipeline. Here are two examples
-that rely on our two shell scripts:
+Here are two examples that count the number of unique source IP addresses per
+destination IP address, on both Zeek and Suricata data:
 
 ```bash
 # Zeek
@@ -75,13 +74,11 @@ zcat pcap.gz | suricatify | tenzir \
    | sort n desc'
 ```
 
-The two aggregations actually do the same thing: count the number of unique
-source IP addresses per destination IP address.
-
 It's a bit unwiedly to write such a command line that requires an external shell
 script to work. This is where [user-defined operators](/operators/user-defined)
-come into play. You can write a custom `zeek` and `suricata` operator and ditch
-the shell script:
+come into play. In combination with the [`shell`](/docs/operators/shell)
+operator in more detail, you can write a custom `zeek` and `suricata` operator
+and ditch the shell script:
 
 ```yaml title="tenzir.yaml"
 tenzir:
