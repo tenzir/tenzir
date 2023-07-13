@@ -11,7 +11,7 @@ export default function GiscusComponent() {
       repoId="MDEwOlJlcG9zaXRvcnk5MzIzMTQ"
       category="Blog"
       categoryId="DIC_kwDOAA452s4CX0IU"
-      mapping="url"
+      mapping="title"
       term="Welcome to Tenzir GitHub Discussions!"
       strict="0"
       reactionsEnabled="1"
