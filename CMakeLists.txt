@@ -880,12 +880,12 @@ if (VAST_ENABLE_CORELIGHT_CAT)
     COMPONENT Runtime)
 endif ()
 
-option(VAST_ENABLE_VAST_DF_PERCENT "Install vast-df-percent.sh with VAST" ON)
+option(VAST_ENABLE_VAST_DF_PERCENT "Install tenzir-df-percent.sh with VAST" ON)
 add_feature_info("VAST_ENABLE_VAST_DF_PERCENT" VAST_ENABLE_VAST_DF_PERCENT
-                 "install vast-df-percent.sh with VAST.")
+                 "install tenzir-df-percent.sh with VAST.")
 if (VAST_ENABLE_VAST_DF_PERCENT)
   install(
-    FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vast-df-percent.sh"
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/tenzir-df-percent.sh"
     # These should be inherited from the source but they
     # get lost in CPack, so we set them explicitly.
     PERMISSIONS

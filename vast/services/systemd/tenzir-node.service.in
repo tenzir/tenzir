@@ -24,7 +24,7 @@ AmbientCapabilities=
 RestrictSUIDSGID=yes
 
 # system access
-ExecPaths=@CMAKE_INSTALL_FULL_LIBEXECDIR@/vast-df-percent.sh
+ExecPaths=@CMAKE_INSTALL_FULL_LIBEXECDIR@/tenzir-df-percent.sh
 ProtectSystem=strict
 ReadWritePaths=/var/lib/tenzir
 ReadWritePaths=/var/lib/vast
