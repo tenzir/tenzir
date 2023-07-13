@@ -47,7 +47,6 @@
 #include "vast/partition_transformer.hpp"
 #include "vast/passive_partition.hpp"
 #include "vast/report.hpp"
-#include "vast/segment.hpp"
 #include "vast/shutdown.hpp"
 #include "vast/status.hpp"
 #include "vast/table_slice.hpp"
@@ -540,65 +539,6 @@ caf::error index_state::load_from_disk() {
     if (error)
       VAST_ERROR("{} failed to load partition {}: {}", *self, partition_uuid,
                  error);
-  }
-  // Reimport oversized partitions to rescue the data.
-  // This loop is an attempt to recover from a critical issue that would
-  // lead to the creation of corrupted partition files with VAST versions
-  // before 2.3 if too many events were inserted into a single partition.
-  // (although it was unlikely to happen with default settings).
-  for (const auto& id : oversized_partitions) {
-    VAST_INFO("{} recovers corrupted partition {}", *self, id);
-    auto store_id = std::string{store_actor_plugin->name()};
-    // For this recovery we don't use the 'markers' mechanism
-    // and store the output directly in the index directory.
-    auto direct_store_path = dir.string() + "/{:l}";
-    auto direct_synopsis_path = dir.string() + "/{:l}.mdx";
-    auto transformer
-      = self->spawn(partition_transformer, store_id, synopsis_opts, index_opts,
-                    accountant, catalog, filesystem, pipeline{},
-                    direct_store_path, direct_synopsis_path);
-    auto index = static_cast<index_actor>(self);
-    auto store_path = dir / ".." / "archive" / fmt::format("{:u}.store", id);
-    auto part_path = dir / to_string(id);
-    auto chk = chunk::mmap(store_path);
-    if (!chk) {
-      VAST_WARN("{} failed to recover data from {}: {}\n"
-                "You can try to manually recover the data with\n"
-                "$ tenzir 'from {} | import'",
-                *self, store_path, chk.error(), store_path);
-      continue;
-    }
-    auto seg = segment::make(std::move(*chk));
-    if (!seg) {
-      VAST_WARN("{} failed to construct a segment from  {}: {}", *self,
-                store_path, seg.error());
-      continue;
-    }
-    std::error_code err{};
-    if (!std::filesystem::remove(store_path, err))
-      VAST_WARN("{} failed to remove store file {} after recovery: {}", *self,
-                store_path, err);
-    if (!std::filesystem::remove(part_path, err))
-      VAST_WARN("{} failed to remove partition file {} after recovery: {}",
-                *self, part_path, err);
-    for (auto slice : *seg)
-      self->send(transformer, std::move(slice));
-    self->send(transformer, atom::done_v);
-    caf::scoped_actor blocking{self->system()};
-    blocking->request(transformer, caf::infinite, atom::persist_v)
-      .receive(
-        [&synopses, this](std::vector<partition_synopsis_pair>& result) {
-          VAST_INFO("recovered {} corrupted partitions on startup",
-                    result.size());
-          for (auto&& x : std::exchange(result, {})) {
-            VAST_VERBOSE("adding newly created partition {}", x.uuid);
-            persisted_partitions.emplace(x.uuid);
-            synopses->emplace(x.uuid, std::move(x.synopsis));
-          }
-        },
-        [](const caf::error& e) {
-          VAST_WARN("error while recovering partition: {}", e);
-        });
   }
   //  Recommend the user to run 'vast rebuild' if any partition syopses are
   //  outdated. We need to nudge them a bit so we can drop support for older

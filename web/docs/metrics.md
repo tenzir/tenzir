@@ -13,7 +13,7 @@ metadata:
 |🪪|`issuer`|A human-readable identifier of the query issuer.|
 |💽|`partition-type`|One of "active" or "passive".|
 |#️⃣|`partition-version`|The internal partition version.|
-|💾|`store-type`|One of "parquet", "feather" or "segment-store".|
+|💾|`store-type`|One of "parquet" or "feather".|
 |🗂️|`schema`|The schema name.|
 
 For all keys that show throughput rates in #events/second, e.g.,
