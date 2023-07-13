@@ -55,6 +55,11 @@ inline auto no_style() -> json_style {
 }
 
 inline auto default_style() -> json_style {
+  // See https://no-color.org.
+  if (const auto* no_color = detail::getenv("NO_COLOR");
+      no_color != nullptr and no_color[0] != '\0') {
+    return no_style();
+  }
   // TODO: Let the saver detect a default style, depending on
   // whether we're outputting data in a TTY or not.
   return no_style();
@@ -66,7 +71,7 @@ struct json_printer : printer_base<json_printer> {
     uint8_t indentation = 2;
 
     /// Colorize the output like `jq`.
-    json_style style = no_style();
+    json_style style = default_style();
 
     /// Print NDJSON rather than JSON.
     bool oneline = false;

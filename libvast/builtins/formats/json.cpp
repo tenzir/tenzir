@@ -800,7 +800,7 @@ public:
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     const auto compact = !!args_.compact_output;
     auto style = default_style();
-    if (detail::getenv("NO_COLOR") || args_.monochrome_output)
+    if (args_.monochrome_output)
       style = no_style();
     else if (args_.color_output)
       style = jq_style();
