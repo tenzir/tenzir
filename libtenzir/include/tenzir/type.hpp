@@ -1865,25 +1865,25 @@ struct sum_type_access<arrow::ArrayBuilder> final {
     return nullptr;
   }
 
-  template <class Result, class Visitor, class... Args>
-  static auto apply(const arrow::ArrayBuilder& x, Visitor&& v, Args&&... xs)
-    -> Result {
+  template <class Result, class Visitor, class... Args, class Builder>
+    requires(std::same_as<std::remove_cv_t<Builder>, arrow::ArrayBuilder>)
+  static auto apply(Builder& x, Visitor&& v, Args&&... xs) -> Result {
     TENZIR_ASSERT(x.type());
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::ArrayBuilder& x, Visitor&& v, Args&&... xs) -> Result {
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{+[](Builder& x, Visitor&& v, Args&&... xs) -> Result {
           auto xs_as_tuple = std::forward_as_tuple(xs...);
           auto indices = detail::get_indices(xs_as_tuple);
           return detail::apply_args_suffxied(
             std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
             get(x, sum_type_token<Ts, Indices>{}));
         }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
     TENZIR_ASSERT(dispatch);
