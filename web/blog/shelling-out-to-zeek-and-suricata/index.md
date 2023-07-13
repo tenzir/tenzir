@@ -53,8 +53,8 @@ Let's break this down:
 
 Now that we have both Zeek and Suricata at our fingertips, how can we work with
 their output more easily? This is where Tenzir comes into play—easy
-[pipelines](/docs/language/pipelines) for security teams to acquire,
-[reshape](/docs/user-guides/get-started), and route event data.
+[pipelines](/language/pipelines) for security teams to acquire,
+[reshape](/user-guides/get-started), and route event data.
 
 Here are two examples that count the number of unique source IP addresses per
 destination IP address, on both Zeek and Suricata data:
@@ -76,7 +76,7 @@ zcat pcap.gz | suricatify | tenzir \
 
 It's a bit unwiedly to write such a command line that requires an external shell
 script to work. This is where [user-defined operators](/operators/user-defined)
-come into play. In combination with the [`shell`](/docs/operators/shell)
+come into play. In combination with the [`shell`](/operators/shell)
 operator in more detail, you can write a custom `zeek` and `suricata` operator
 and ditch the shell script:
 
@@ -119,22 +119,24 @@ existing ones.
 
 ## How does it work?
 
-Under the hood, the `shell` operator spawns `zeek` or `suricata` as child
-process. The operator then copies the bytes from at stdin of the `tenzir`
-process to the child's stdin using a Unix pipe (and in reverse for stdout).
-
-Compare this to the "standard" approach:
+First, let's take a look at the standard approach where one process pipes the
+output into the next:
 
 ![Piping Zeek to Tenzir](zeek-to-tenzir-pipe.excalidraw.svg)
 
-Using `shell`, we have this scenario:
+When using the `shell` operator, the `tenzir` process spawns `zeek` or
+`suricata` as child process. The operator then copies the bytes from stdin of
+the `tenzir` process to the child's stdin using a Unix pipe (and in reverse for
+stdout):
 
 ![Shelling out to Zeek](zeek-to-tenzir-shell.excalidraw.svg)
 
-The `shell` operator is bytes-to-bytes transformation. This means it can only
-interact with other operators that also work on bytes. In the above examples, we
-used the shell pipe to connect stdin and stdout of two processes. We can also
-use Tenzir's native pipe with the [`file`](/docs/connectors/file) loader:
+In the above example, `shell` acts as a *source* operator, i.e., it does not
+consume input and only produces output. The `shell` operator can also act as
+*transformation*, i.e., additionally accept input. This makes it possible to use
+it more flexibly in combination with other operators, e.g., the
+[`load`](/operators/sources/load) operator emitting bytes from a
+[loader](/connectors):
 
 ```
 load file trace.pcap
@@ -143,8 +145,8 @@ load file trace.pcap
 | write json
 ```
 
-Got a PCAP trace via Kafka? Just exchange the `file` loader with
-[`kafka`](/docs/connectors/kafka):
+Got a PCAP trace via Kafka? Just exchange the `file` loader with the
+[`kafka`](/connectors/kafka) loader:
 
 ```
 load kafka -t artifact
