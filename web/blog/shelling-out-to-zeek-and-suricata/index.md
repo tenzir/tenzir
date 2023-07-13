@@ -9,8 +9,10 @@ As an incident responder, threat hunter, or detection engineer, getting quickly
 to your analytics is key for productivity. For network-based visibility and
 detection, [Zeek](https://zeek.org) and [Suricata](https://suricata.io) are the
 bedrock for many security teams. But operationalizing these tools can take a
-good chunk of time. So we asked ourselves: **how can we make it super easy
-to work with Zeek and Suricata logs**?
+good chunk of time.
+
+So we asked ourselves: **How can we make it super easy to work with Zeek and
+Suricata logs?**
 
 ![Shell Operator](shell-operator.excalidraw.svg)
 
@@ -18,9 +20,9 @@ to work with Zeek and Suricata logs**?
 
 ## Purring like a Suricat
 
-In our [previous blog](/blog/zeek-and-ye-shall-pipe/) we adapted Zeek to behave
-like a good ol' Unix tool, taking input via stdin and producing output via
-stdout. Turns out you can do the same fudgery with Suricata:[^1]
+In our [previous blog post](/blog/zeek-and-ye-shall-pipe/) we adapted Zeek to
+behave like a good ol' Unix tool, taking input via stdin and producing output
+via stdout. Turns out you can do the same fudgery with Suricata:[^1]
 
 [^1]: Suricata outputs [EVE
 JSON](https://suricata.readthedocs.io/en/latest/output/eve/eve-json-output.html)
@@ -44,31 +46,31 @@ Let's break this down:
   `eve-log.filename`. Setting `/dev/stdout` as filename makes Suricata write to
   stdout.
 - We must set `logging.outputs.0.console.enabled` to `no` because Suricata
-  doesn't write startup log messages on stderr. Since they are no valid JSON, we
+  writes startup log messages to stdout. Since they are not valid JSON, we
   would otherwise create an invalid JSON output stream.
 
 ## User-defined Operators
 
 Now that we have both Zeek and Suricata at our fingertips, how can we work with
-their output more easily? This is where Tenzir comes into play-easy
+their output more easily? This is where Tenzir comes into play—easy
 [pipelines](/docs/language/pipelines) for security teams to acquire,
 [reshape](/docs/user-guides/get-started), and route event data.
 
 For our use case we look at the [`shell`](/docs/operators/shell) operator in
-more detail: it lifts any Unix command line into a pipeline. Here are two
-examples that rely on our two shell scripts:
+more detail: it lifts any Unix command into a pipeline. Here are two examples
+that rely on our two shell scripts:
 
 ```bash
 # Zeek
 zcat pcap.gz | zeekify | tenzir \
   'read zeek-json
-   | where #type == "zeek.conn"
+   | where #schema == "zeek.conn"
    | summarize n=count_distinct(id.orig_h) by id.resp_h
    | sort n desc'
 # Suricata
 zcat pcap.gz | suricatify | tenzir \
   'read suricata
-   | where #type == "suricata.flow"
+   | where #schema == "suricata.flow"
    | summarize n=count_distinct(src_ip) by dst_ip
    | sort n desc'
 ```
@@ -77,7 +79,7 @@ The two aggregations actually do the same thing: count the number of unique
 source IP addresses per destination IP address.
 
 It's a bit unwiedly to write such a command line that requires an external shell
-script to work. This where [user-defined operators](/operators/user-defined)
+script to work. This is where [user-defined operators](/operators/user-defined)
 come into play. You can write a custom `zeek` and `suricata` operator and ditch
 the shell script:
 
@@ -101,14 +103,14 @@ The difference stands out when you look now at the pipeline definition:
 
 ```text title=Zeek
 zeek
-| where #type == "zeek.conn"
+| where #schema == "zeek.conn"
 | summarize n=count_distinct(id.orig_h) by id.resp_h
 | sort n desc
 ```
 
 ```text bash title=Suricata
 suricata
-| where #type == "suricata.flow"
+| where #schema == "suricata.flow"
 | summarize n=count_distinct(src_ip) by dst_ip
 | sort n desc
 ```
