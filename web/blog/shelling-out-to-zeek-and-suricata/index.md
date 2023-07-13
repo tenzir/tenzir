@@ -119,10 +119,9 @@ existing ones.
 
 ## How does it work?
 
-Under the hood, the `shell` operator forks the `tenzir` process and spawns
-`zeek` or `suricata` as child process. The operator then rewires stdin and
-stdout of the `tenzir` process such their byte streams get routed through stdin
-and stdout of the forked child.
+Under the hood, the `shell` operator spawns `zeek` or `suricata` as child
+process. The operator then copies the bytes from at stdin of the `tenzir`
+process to the child's stdin using a Unix pipe (and in reverse for stdout).
 
 Compare this to the "standard" approach:
 
