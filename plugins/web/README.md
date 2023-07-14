@@ -7,7 +7,7 @@ For detailed usage instructions of the REST API, please consult the
 [documentation][rest-api]. The frontend has its own README in the [ui](ui)
 subdirectory.
 
-[rest-api]: https://tenzir.io/docs/use/integrate/rest-api
+[rest-api]: https://docs.tenzir.com/rest-api
 
 ## Usage
 

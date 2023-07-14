@@ -13,7 +13,7 @@ The analyzer takes following input datatype:
 ## Requirements for the Non-Dockerized Analyzer
 - Tenzir binary should be available on Cortex host. We are providing example
   [Cortex Dockerfile](/thehive/cortex/Dockerfile). Please refer to [Tenzir
-  Documentation](tenzir.io) for instructions on manual installation.
+  Documentation](docs.tenzir.com) for instructions on manual installation.
 - Install [analyzer dependencies](/thehive/analyzers/Tenzir/requirements.txt) on
   the host by `pip3 install -r requirements.txt`
 - Tenzir server address should be provided as a parameter in Cortex

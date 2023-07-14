@@ -45,7 +45,7 @@ The app performs both a historical and a continuous query on Suricata alerts.
 > away concepts such as alerts. This will be enabled in particular by our
 > current work on [pipelines][pipeline-page].
 
-[vision-page]: https://tenzir.io/docs/about/vision
+[vision-page]: https://docs.tenzir.com/vision
 [pipeline-page]: https://github.com/tenzir/tenzir/pull/2577
 
 ## Configurations

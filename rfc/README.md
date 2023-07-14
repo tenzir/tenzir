@@ -38,10 +38,11 @@ The workflow to add a new RFC works as follows:
 
 2. Write the proposal in [GitHub Flavored Markdown](https://github.github.com/gfm/).
 
-3. [Open a pull request][tenzir-prs] and add the `rfp` label.
+3. [Open a pull request][tenzir-prs] and add the `rfc` label.
 
-4. Share the pull request in the [Community Slack](http://slack.tenzir.com) and
-   other stake holders that may provide valuable feedback.
+4. Share the pull request in the [Community
+   Discord](https://docs.tenzir.com/discord) and other stake holders that may
+   provide valuable feedback.
 
 5. Actively drive the discussion forward and point out the expected date of
    closure to keep a healthy engagement. Aim for resolving all outstanding

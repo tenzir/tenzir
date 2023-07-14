@@ -36,7 +36,7 @@
         "registration_required": false,
         "subscription_required": false,
         "free_subscription": true,
-        "service_homepage": "https://www.tenzir.io",
+        "service_homepage": "https://docs.tenzir.com",
         "service_logo": {
             "path": "",
             "caption": ""

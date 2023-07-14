@@ -69,8 +69,8 @@ class plugin final : public virtual operator_plugin<flatten_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser
-      = argument_parser{"flatten", "https://tenzir.io/next/"
-                                   "operators/transformations/flatten"};
+      = argument_parser{"flatten", "https://docs.tenzir.com/next/operators/"
+                                   "transformations/flatten"};
     auto sep = std::optional<located<std::string>>{};
     parser.add(sep, "<separator>");
     parser.parse(p);

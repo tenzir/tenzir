@@ -171,7 +171,7 @@ compaction][mutate-at-rest] uses a pre-defined disk quota as trigger to apply
 pipelines to a subset of to-be-transformed data. After Tenzir applies the
 pipeline, Tenzir optionally removes the original data in an atomic fashion.
 
-[mutate-at-rest]: https://tenzir.io/docs/use-tenzir/transform#modify-data-at-rest
+[mutate-at-rest]: https://docs.tenzir.com/VAST%20v3.0/use/transform#modify-data-at-rest
 
 Modeled after the `compaction` plugin, we may consider exposing a mutable
 pipeline interface through a dedicated `mutate` command. In the

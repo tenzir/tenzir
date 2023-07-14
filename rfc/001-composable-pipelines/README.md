@@ -21,10 +21,10 @@ that *everything is a pipeline* and build a composable UX around this concept.
 ## Problem Statement
 
 Pipelines offer flexible data reshaping at [predefined customization
-points](https://tenzir.io/docs/use/transform). For example, they can be
-triggered for specific events on import/export, or invoked by compaction.
-However, it is impossible to run pipelines in an ad-hoc manner, for example as
-a post-processing step after a query or for an ad-hoc ingest of a data set.
+points](https://docs.tenzir.com/VAST%20v3.0/use/transform). For example, they
+can be triggered for specific events on import/export, or invoked by compaction.
+However, it is impossible to run pipelines in an ad-hoc manner, for example as a
+post-processing step after a query or for an ad-hoc ingest of a data set.
 
 This RFC proposes dynamic pipelines that do not require static definition in
 a configuration file, but rather allow users to specify them as an extension to

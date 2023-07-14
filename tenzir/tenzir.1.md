@@ -23,7 +23,7 @@ executable serves both as client and server.
 # USAGE
 
 The usage examples in this manpage only scratch the surface. Please consult the
-official documentation at https://tenzir.io/docs for a comprehensive user guide.
+official documentation at https://docs.tenzir.com for a comprehensive user guide.
 
 You get short usage instructions for every `tenzir` command by adding the `help`
 sub-command or providing the option `--help` (which has the shorthand `-h`):
@@ -63,7 +63,7 @@ tenzir export json '6.6.6.6 || (dst_port < 1024 && proto == "UDP")'
 
 ## Next steps
 
-To learn more about using Tenzir, continue over at https://tenzir.io/docs/use.
+To learn more about using Tenzir, continue over at https://docs.tenzir.com/get-started.
 
 # ISSUES
 

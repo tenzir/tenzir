@@ -13,7 +13,7 @@ project(
   VERSION
     ${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}.${TENZIR_VERSION_TWEAK}
   DESCRIPTION "Visibility Across Space and Time"
-  HOMEPAGE_URL "https://tenzir.io"
+  HOMEPAGE_URL "https://tenzir.com"
   LANGUAGES C CXX)
 
 set(TENZIR_EDITION_NAME
