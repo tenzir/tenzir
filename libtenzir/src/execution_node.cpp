@@ -43,6 +43,9 @@ struct defaults {
   // TODO: Setting this to a higher value than 1 breaks request/await for
   // operators.
   inline static constexpr int max_advances_per_run = 1;
+
+  inline static constexpr auto metrics_interval
+    = std::chrono::milliseconds{1000};
 };
 
 template <>
@@ -341,6 +344,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto time_starting_guard = make_timer_guard(current_metrics.time_scheduled,
                                                 current_metrics.time_starting);
     TENZIR_DEBUG("{} received start request for `{}`", *self, op->to_string());
+    detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
+      ctrl->emit(current_metrics);
+    });
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
                              fmt::format("{} was already started", *self));
