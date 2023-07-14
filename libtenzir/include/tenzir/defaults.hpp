@@ -163,27 +163,30 @@ inline constexpr const size_t rotate_files = 3;
 
 } // namespace logger
 
-// -- constants for the various builtin REST endpoints -------------------------
-namespace rest {
+// -- constants for the builtin REST endpoints -------------------------
+namespace api {
 
-/// Settings related to the `/query` endpoint.
-namespace query {
+/// The maximum response size for one request.
+inline constexpr size_t max_response_size = size_t{124} * 1'024; // 124 KiB
 
-/// The maximum number of results
-inline constexpr const size_t limit = 50;
+namespace serve {
 
-/// Whether to flatten nested fields.
-inline constexpr const bool flatten = false;
+/// The duration for which old results are kept after being fetched.
+inline constexpr std::chrono::seconds retention_time = std::chrono::minutes{1};
 
-/// Whether to render durations as numbers.
-inline constexpr const bool numeric_durations = false;
+/// Number of events returned.
+inline constexpr uint64_t max_events = 64;
 
-/// Whether to omit null fields.
-inline constexpr const bool omit_nulls = false;
+/// The amount of time to wait for additional events.
+inline constexpr std::chrono::milliseconds timeout
+  = std::chrono::milliseconds{100};
 
-} // namespace query
+/// The maximum timeout that can be requested by the client.
+inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{5};
 
-} // namespace rest
+} // namespace serve
+
+} // namespace api
 
 // -- constants for the entire system ------------------------------------------
 
