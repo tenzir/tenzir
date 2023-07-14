@@ -9,10 +9,8 @@
 #include "explore/components.hpp"
 #include "explore/ui_state.hpp"
 
-#include <vast/concept/parseable/vast/option_set.hpp>
-#include <vast/concept/parseable/vast/pipeline.hpp>
+#include <vast/argument_parser.hpp>
 #include <vast/data.hpp>
-#include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
@@ -27,45 +25,46 @@ namespace vast::plugins::explore {
 namespace {
 
 /// The configuration for the `explore` operator.
-struct configuration {
-  int width = 0;
-  int height = 0;
-  bool fullscreen = false;
+struct plugin_args {
+  std::optional<located<int>> width;
+  std::optional<located<int>> height;
+  std::optional<location> fullscreen;
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, configuration& x) {
-    return detail::apply_all(f, x.width, x.height, x.fullscreen);
-  }
-
-  static inline auto schema() noexcept -> const record_type& {
-    static auto result = record_type{
-      {"height", int64_type{}},
-      {"width", int64_type{}},
-      {"fullscreen", bool_type{}},
-    };
-    return result;
+  friend auto inspect(auto& f, plugin_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("plugin_args")
+      .fields(f.field("width", x.width), f.field("height", x.height),
+              f.field("fullscreen", x.fullscreen));
   }
 };
 
 /// Construct an FTXUI screen from the operator configuration.
-auto make_screen(const configuration& config) -> ftxui::ScreenInteractive {
+auto make_screen(const plugin_args& args) -> ftxui::ScreenInteractive {
   using namespace ftxui;
-  if (config.width > 0 && config.height > 0)
-    return ScreenInteractive::FixedSize(config.width, config.height);
-  if (config.fullscreen)
+  VAST_ASSERT((args.width && args.height) || (!args.width && !args.height));
+  VAST_ASSERT(args.width && args.width->inner > 0 && args.height->inner > 0);
+  if (args.width || args.height)
+    return ScreenInteractive::FixedSize(args.width->inner, args.height->inner);
+  if (args.fullscreen)
     return ScreenInteractive::Fullscreen();
   return ScreenInteractive::FitComponent();
 }
 
 class explore_operator final : public crtp_operator<explore_operator> {
 public:
-  explicit explore_operator(configuration config) : config_{std::move(config)} {
+  explore_operator() = default;
+
+  explicit explore_operator(plugin_args args) : args_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "explore";
   }
 
   auto operator()(generator<table_slice> input) const
     -> generator<std::monostate> {
     using namespace ftxui;
-    auto screen = make_screen(config_);
+    auto screen = make_screen(args_);
     ui_state state;
     // Ban UI main loop into dedicated thread.
     auto thread = std::thread([&] {
@@ -92,74 +91,39 @@ public:
     thread.join();
   }
 
-  auto to_string() const -> std::string override {
-    // TODO: print configuration as well.
-    return fmt::format("explore");
+  friend auto inspect(auto& f, explore_operator& x) -> bool {
+    (void)f, (void)x;
+    return true;
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
   }
 
 private:
-  configuration config_;
+  plugin_args args_;
 };
 
-class plugin final : public virtual operator_plugin {
+class plugin final : public virtual operator_plugin<explore_operator> {
 public:
-  // plugin API
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return {};
-  }
-
-  [[nodiscard]] auto name() const -> std::string override {
-    return "explore";
-  };
-
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    using parsers::optional_ws_or_comment, parsers::required_ws_or_comment,
-      parsers::end_of_pipeline_operator, parsers::str;
-    const auto* f = pipeline.begin();
-    const auto* const l = pipeline.end();
-    // Parse options first.
-    const auto options = option_set_parser{
-      {{"fullscreen", 'f'}, {"width", 'w'}, {"height", 'h'}}};
-    const auto option_parser = optional_ws_or_comment >> ~options;
-    auto parsed_options = std::unordered_map<std::string, data>{};
-    if (!option_parser(f, l, parsed_options)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse {} operator options: '{}'",
-                                    name(), pipeline)),
-      };
-    }
-    // Assign parsed options to configuration.
-    auto config = configuration();
-    for (const auto& [key, value] : parsed_options) {
-      if (key == "w" || key == "width") {
-        if (auto integer = caf::get_if<uint64_t>(&value))
-          config.width = detail::narrow_cast<int>(*integer);
-      } else if (key == "h" || key == "height") {
-        if (auto integer = caf::get_if<uint64_t>(&value))
-          config.width = detail::narrow_cast<int>(*integer);
-      } else if (key == "f" || key == "fullscreen") {
-        config.fullscreen = true;
-      }
-    }
-    // Parse positional arguments.
-    const auto p = optional_ws_or_comment >> end_of_pipeline_operator;
-    if (!p(f, l, unused)) {
-      return {
-        std::string_view{f, l},
-        caf::make_error(ec::syntax_error,
-                        fmt::format("failed to parse {} operator: '{}'", name(),
-                                    pipeline)),
-      };
-    }
-    return {
-      std::string_view{f, l},
-      std::make_unique<explore_operator>(std::move(config)),
-    };
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser
+      = argument_parser{"explore", fmt::format("https://docs.tenzir.com/docs/"
+                                               "connectors/sinks/explore")};
+    auto args = plugin_args{};
+    parser.add("-f,--fullscreen", args.fullscreen);
+    parser.add("-w,--width", args.width, "<int>");
+    parser.add("-h,--height", args.height, "<int>");
+    parser.parse(p);
+    if (args.width && !args.height)
+      diagnostic::error("--width requires also setting --height")
+        .primary(args.width->source)
+        .throw_();
+    else if (args.height && !args.width)
+      diagnostic::error("--height requires also setting --width")
+        .primary(args.width->source)
+        .throw_();
+    return std::make_unique<explore_operator>(std::move(args));
   }
 };
 
