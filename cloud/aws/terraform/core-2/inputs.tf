@@ -39,10 +39,10 @@ locals {
   id_raw = "${module.env.module_name}-${module.env.stage}-${var.region_name}"
   id     = substr(md5(local.id_raw), 0, 6)
   # this namespace will be specific to this region
-  service_discov_domain = "${local.id}.tenzir.local"
-  tenzir_server_name      = "tenzir-server"
-  tenzir_port             = 5158
-  tenzir_server_hostname  = "${local.tenzir_server_name}.${local.service_discov_domain}:${local.tenzir_port}"
+  service_discov_domain  = "${local.id}.tenzir.local"
+  tenzir_server_name     = "tenzir-server"
+  tenzir_port            = 5158
+  tenzir_server_hostname = "${local.tenzir_server_name}.${local.service_discov_domain}:${local.tenzir_port}"
 
 }
 
