@@ -166,7 +166,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     // record batch.
     const auto& metadata = *read_result->batch->schema()->metadata();
     if (metadata.FindKey("TENZIR:name:0") == -1
-        && metadata.FindKey("Tenzir:name:0") == -1) {
+        && metadata.FindKey("VAST:name:0") == -1) {
       TENZIR_WARN("{} skips record batch with {} rows: metadata is "
                   "incomaptible with Tenzir",
                   detail::pretty_type_name(*this),

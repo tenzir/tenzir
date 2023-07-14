@@ -236,7 +236,7 @@ type enrich_type_with_arrow_metadata(class type type,
   auto names_and_attributes = std::vector<
     std::pair<std::string, std::vector<std::pair<std::string, std::string>>>>{};
   using namespace parser_literals;
-  auto prefix_parser = "Tenzir:"_p | "TENZIR:";
+  auto prefix_parser = "VAST:"_p | "TENZIR:";
   auto name_parser = prefix_parser >> "name:" >> parsers::u32 >> parsers::eoi;
   auto attribute_parser
     = prefix_parser >> "attributes:" >> parsers::u32 >> parsers::eoi;
@@ -1903,7 +1903,7 @@ std::string ip_type::arrow_type::extension_name() const {
 bool ip_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
   return other.extension_name() == name
-         || other.extension_name() == "tenzir.address";
+         || other.extension_name() == "vast.address";
 }
 
 std::shared_ptr<arrow::Array>
@@ -1914,7 +1914,7 @@ ip_type::arrow_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
 arrow::Result<std::shared_ptr<arrow::DataType>>
 ip_type::arrow_type::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
                                  const std::string& serialized) const {
-  if (serialized != name && serialized != "tenzir.address")
+  if (serialized != name && serialized != "vast.address")
     return arrow::Status::Invalid("type identifier does not match");
   if (!storage_type->Equals(storage_type_))
     return arrow::Status::Invalid("storage type does not match");
@@ -2015,7 +2015,7 @@ std::string subnet_type::arrow_type::extension_name() const {
 bool subnet_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
   return other.extension_name() == name
-         || other.extension_name() == "tenzir.subnet";
+         || other.extension_name() == "vast.subnet";
 }
 
 std::shared_ptr<arrow::Array> subnet_type::arrow_type::MakeArray(
@@ -2027,7 +2027,7 @@ arrow::Result<std::shared_ptr<arrow::DataType>>
 subnet_type::arrow_type::Deserialize(
   std::shared_ptr<arrow::DataType> storage_type,
   const std::string& serialized) const {
-  if (serialized != name && serialized != "tenzir.address")
+  if (serialized != name && serialized != "vast.subnet")
     return arrow::Status::Invalid("type identifier does not match");
   if (!storage_type->Equals(storage_type_))
     return arrow::Status::Invalid("storage type does not match");
@@ -2239,7 +2239,7 @@ std::string enumeration_type::arrow_type::extension_name() const {
 bool enumeration_type::arrow_type::ExtensionEquals(
   const arrow::ExtensionType& other) const {
   return (other.extension_name() == name
-          || other.extension_name() == "tenzir.enumeration")
+          || other.extension_name() == "vast.enumeration")
          && static_cast<const arrow_type&>(other).tenzir_type_ == tenzir_type_;
 }
 
