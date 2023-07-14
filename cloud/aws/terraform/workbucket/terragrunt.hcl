@@ -6,16 +6,16 @@ dependency "core_2" {
   config_path = "../core-2"
 
   mock_outputs = {
-    vast_lambda_role_name = "temporary-dummy-name"
+    tenzir_lambda_role_name = "temporary-dummy-name"
   }
 }
 
 locals {
-  region_name = get_env("VAST_AWS_REGION")
+  region_name = get_env("TENZIR_AWS_REGION")
 }
 
 
 inputs = {
   region_name           = local.region_name
-  vast_lambda_role_name = dependency.core_2.outputs.vast_lambda_role_name
+  tenzir_lambda_role_name = dependency.core_2.outputs.tenzir_lambda_role_name
 }

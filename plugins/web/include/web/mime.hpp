@@ -3,10 +3,10 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-// This file comes from a 3rd party and has been adapted to fit into the VAST
+// This file comes from a 3rd party and has been adapted to fit into the Tenzir
 // code base. Details about the original file:
 //
 // - Repository: https://github.com/Stiffstream/restinio
@@ -20,7 +20,7 @@
 
 #include <string_view>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 inline const char* content_type_by_file_extension(const std::string_view& ext) {
   // Function from Incomplete list of mime types from here:
@@ -155,4 +155,4 @@ inline const char* content_type_by_file_extension(const std::string_view& ext) {
   return "application/text";
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

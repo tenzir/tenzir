@@ -1,6 +1,6 @@
-Package: VAST
+Package: Tenzir
 Version: 0.0.1
-Description: VAST website
+Description: Tenzir website
 Imports:
     dplyr,
     ggplot2,

@@ -11,10 +11,10 @@ logging.getLogger(__name__).setLevel(logging.DEBUG)
 sqs = boto3.client("sqs", region_name=AWS_REGION)
 
 
-async def vast(*cmd):
-    """A very basic helper to run vast commands"""
+async def tenzir(*cmd):
+    """A very basic helper to run tenzir commands"""
     return await asyncio.create_subprocess_exec(
-        "vast",
+        "tenzir",
         *cmd,
         stdin=None,
         stdout=asyncio.subprocess.PIPE,
@@ -30,7 +30,7 @@ def check_code(proc, stderr):
 
 
 async def matcher_list():
-    proc = await vast("matcher", "list")
+    proc = await tenzir("matcher", "list")
     stdout, stderr = await proc.communicate()
     check_code(proc, stderr)
     matchers_nl = stdout.decode().strip()
@@ -44,7 +44,7 @@ async def matcher_list():
 
 async def matcher_attach(matchers):
     """Attach to matcher and forward events to SQS"""
-    proc = await vast("matcher", "attach", "json", matchers)
+    proc = await tenzir("matcher", "attach", "json", matchers)
     while not proc.stdout.at_eof():
         line = (await proc.stdout.readline()).decode()
         logging.debug(line)

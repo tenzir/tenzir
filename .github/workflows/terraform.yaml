@@ -9,9 +9,9 @@ on: workflow_dispatch
 #   priviledges to run Fargate tasks and Lambda functions.
 # - You need to choose an AWS region and a VPC within that region. These should
 #   be configured in the repository secrets as AWS_REGION and PEERED_VPC_ID.
-# - The VAST deployment creates a new VPC. Its ip range should not overlap an
+# - The Tenzir deployment creates a new VPC. Its ip range should not overlap an
 #   existing one in your account. Configure its CIDR in the repository secrets
-#   as VAST_CIDR (for example 172.30.0.0/16).
+#   as TENZIR_CIDR (for example 172.30.0.0/16).
 # - The CI run uses Terraform Cloud to store the state. In Github Action
 #   secrets, set TF_ORGANIZATION with your Terraform Cloud organizations name
 #   and TF_API_TOKEN with a Terraform Cloud API key (for instance a user token).
@@ -30,18 +30,18 @@ on: workflow_dispatch
 
 # Set these secrets to configure the CI run
 env:
-  VAST_PEERED_VPC_ID: "${{ secrets.VAST_PEERED_VPC_ID }}"
-  VAST_CIDR: "${{ secrets.VAST_CIDR }}"
-  VAST_AWS_REGION: "${{ secrets.VAST_AWS_REGION }}"
+  TENZIR_PEERED_VPC_ID: "${{ secrets.TENZIR_PEERED_VPC_ID }}"
+  TENZIR_CIDR: "${{ secrets.TENZIR_CIDR }}"
+  TENZIR_AWS_REGION: "${{ secrets.TENZIR_AWS_REGION }}"
   TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
   TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX  || 'gh-act-' }}"
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
-  VASTCLOUD_NO_PTY: 1
-  VASTCLOUD_TRACE: 1
+  TenzirCLOUD_NO_PTY: 1
+  TenzirCLOUD_TRACE: 1
 
-concurrency: vast_aws_integration_tests
+concurrency: tenzir_aws_integration_tests
 
 jobs:
   determine-version:
@@ -62,7 +62,7 @@ jobs:
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
 
-  vastcloud-cli:
+  tenzircloud-cli:
     name: Build and cache CLI
     runs-on: ubuntu-20.04
     outputs:
@@ -82,20 +82,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build CLI image
-        run: ./vast-cloud
+        run: ./tenzir-cloud
       - name: Push CLI image to cache
         id: push-cli-img
         run: |
-          CLI_IMAGE="ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
-          docker tag tenzir/vast-cloud-cli:latest "$CLI_IMAGE"
+          CLI_IMAGE="ghcr.io/tenzir/tenzir-cloud-cli:$(git rev-parse --short HEAD)"
+          docker tag tenzir/tenzir-cloud-cli:latest "$CLI_IMAGE"
           docker push "$CLI_IMAGE"
           echo "cached-img=${CLI_IMAGE}" >> $GITHUB_OUTPUT
 
 
-  vastcloud-local-init:
+  tenzircloud-local-init:
     needs:
-      - vastcloud-cli
-    name: VAST Terraform init with local backend
+      - tenzircloud-cli
+    name: Tenzir Terraform init with local backend
     runs-on: ubuntu-20.04
     defaults:
       run:
@@ -109,27 +109,27 @@ jobs:
           fetch-depth: 0
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
+          docker pull "${{ needs.tenzircloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.tenzircloud-cli.outputs.cached-img }}" tenzir/tenzir-cloud-cli:latest
       - name: Init on empty state
-        run: ./vast-cloud init
+        run: ./tenzir-cloud init
       - name: Init clean
-        run: ./vast-cloud init --clean
+        run: ./tenzir-cloud init --clean
 
-  cloudvast-deploy:
+  cloudtenzir-deploy:
     needs:
       - determine-version
-      - vastcloud-cli
-    name: Deploy VAST on AWS
+      - tenzircloud-cli
+    name: Deploy Tenzir on AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,tfcloud,misp"
+      TENZIR_CLOUD_PLUGINS: "workbucket,tfcloud,misp"
       # Run on the latest release to avoid glitches from unstable versions
-      VAST_VERSION: ${{ needs.determine-version.outputs.release-version }}
+      TENZIR_VERSION: ${{ needs.determine-version.outputs.release-version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -137,10 +137,10 @@ jobs:
           fetch-depth: 0
       - name: Secret hashes
         run: |
-          echo -n $VAST_VERSION
-          echo -n $VAST_PEERED_VPC_ID | md5sum
-          echo -n $VAST_CIDR | md5sum
-          echo -n $VAST_AWS_REGION | md5sum
+          echo -n $TENZIR_VERSION
+          echo -n $TENZIR_PEERED_VPC_ID | md5sum
+          echo -n $TENZIR_CIDR | md5sum
+          echo -n $TENZIR_AWS_REGION | md5sum
           echo -n $TF_ORGANIZATION | md5sum
           echo -n $TF_WORKSPACE_PREFIX | md5sum
           echo -n $TF_API_TOKEN | md5sum
@@ -148,25 +148,25 @@ jobs:
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
+          docker pull "${{ needs.tenzircloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.tenzircloud-cli.outputs.cached-img }}" tenzir/tenzir-cloud-cli:latest
       - name: Configure Terraform Cloud
-        run: ./vast-cloud tfcloud.config --auto
+        run: ./tenzir-cloud tfcloud.config --auto
       - name: Deploy
-        run: ./vast-cloud deploy --auto-approve
+        run: ./tenzir-cloud deploy --auto-approve
 
-  cloudvast-playbook:
+  cloudtenzir-playbook:
     needs:
-      - vastcloud-cli
-      - cloudvast-deploy
-    name: Run VAST test playbook on AWS
+      - tenzircloud-cli
+      - cloudtenzir-deploy
+    name: Run Tenzir test playbook on AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,tests,misp"
+      TENZIR_CLOUD_PLUGINS: "workbucket,tests,misp"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -174,24 +174,24 @@ jobs:
           fetch-depth: 0
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
+          docker pull "${{ needs.tenzircloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.tenzircloud-cli.outputs.cached-img }}" tenzir/tenzir-cloud-cli:latest
       - name: Init
-        run: ./vast-cloud init
+        run: ./tenzir-cloud init
       - name: Run test playbook
-        run: ./vast-cloud tests.run
+        run: ./tenzir-cloud tests.run
       - name: Init clean
-        run: ./vast-cloud init --clean
+        run: ./tenzir-cloud init --clean
       - name: Deploy step (noop)
-        run: ./vast-cloud deploy --step=workbucket --auto-approve
+        run: ./tenzir-cloud deploy --step=workbucket --auto-approve
       - name: Run test playbook after init
-        run: ./vast-cloud tests.run
+        run: ./tenzir-cloud tests.run
 
 
-  cloudvast-flowlogs:
+  cloudtenzir-flowlogs:
     needs:
-      - vastcloud-cli
-      - cloudvast-deploy
+      - tenzircloud-cli
+      - cloudtenzir-deploy
     name: Deploy Flowlogs datasource
     runs-on: ubuntu-20.04
     defaults:
@@ -199,7 +199,7 @@ jobs:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "tfcloud,workbucket,flowlogs"
+      TENZIR_CLOUD_PLUGINS: "tfcloud,workbucket,flowlogs"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -207,30 +207,30 @@ jobs:
           fetch-depth: 0
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
+          docker pull "${{ needs.tenzircloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.tenzircloud-cli.outputs.cached-img }}" tenzir/tenzir-cloud-cli:latest
       - name: Preset source bucket env
         run: |
-          echo "VAST_FLOWLOGS_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
-          echo "VAST_FLOWLOGS_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
+          echo "TENZIR_FLOWLOGS_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
+          echo "TENZIR_FLOWLOGS_BUCKET_REGION=$TENZIR_AWS_REGION" >> $GITHUB_ENV
       - name: Init
-        run: ./vast-cloud init
+        run: ./tenzir-cloud init
       - name: Replace actual source bucket name env
         run: |
-          ACTUAL_BUCKET=$(./vast-cloud workbucket.name)
-          echo "VAST_FLOWLOGS_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
+          ACTUAL_BUCKET=$(./tenzir-cloud workbucket.name)
+          echo "TENZIR_FLOWLOGS_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
-        run: ./vast-cloud tfcloud.config --auto
+        run: ./tenzir-cloud tfcloud.config --auto
       - name: Deploy flowlogs
-        run: ./vast-cloud deploy -a -s flowlogs
+        run: ./tenzir-cloud deploy -a -s flowlogs
       - name: Destroy flowlogs
         if: always()
-        run: ./vast-cloud destroy -a -s flowlogs
+        run: ./tenzir-cloud destroy -a -s flowlogs
 
-  cloudvast-cloudtrail:
+  cloudtenzir-cloudtrail:
     needs:
-      - vastcloud-cli
-      - cloudvast-deploy
+      - tenzircloud-cli
+      - cloudtenzir-deploy
     name: Deploy Cloudtrail datasource
     runs-on: ubuntu-20.04
     defaults:
@@ -238,7 +238,7 @@ jobs:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "tfcloud,workbucket,cloudtrail"
+      TENZIR_CLOUD_PLUGINS: "tfcloud,workbucket,cloudtrail"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -246,41 +246,41 @@ jobs:
           fetch-depth: 0
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
+          docker pull "${{ needs.tenzircloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.tenzircloud-cli.outputs.cached-img }}" tenzir/tenzir-cloud-cli:latest
       - name: Preset source bucket env
         run: |
-          echo "VAST_CLOUDTRAIL_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
-          echo "VAST_CLOUDTRAIL_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
+          echo "TENZIR_CLOUDTRAIL_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
+          echo "TENZIR_CLOUDTRAIL_BUCKET_REGION=$TENZIR_AWS_REGION" >> $GITHUB_ENV
       - name: Init
-        run: ./vast-cloud init
+        run: ./tenzir-cloud init
       - name: Replace actual source bucket name env
         run: |
-          ACTUAL_BUCKET=$(./vast-cloud workbucket.name)
-          echo "VAST_CLOUDTRAIL_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
+          ACTUAL_BUCKET=$(./tenzir-cloud workbucket.name)
+          echo "TENZIR_CLOUDTRAIL_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
-        run: ./vast-cloud tfcloud.config --auto
+        run: ./tenzir-cloud tfcloud.config --auto
       - name: Deploy cloudtrail
-        run: ./vast-cloud deploy -a -s cloudtrail
+        run: ./tenzir-cloud deploy -a -s cloudtrail
       - name: Destroy cloudtrail
         if: always()
-        run: ./vast-cloud destroy -a -s cloudtrail
+        run: ./tenzir-cloud destroy -a -s cloudtrail
 
-  cloudvast-destroy:
+  cloudtenzir-destroy:
     needs:
-      - vastcloud-cli
-      - cloudvast-playbook
-      - cloudvast-flowlogs
-      - cloudvast-cloudtrail
+      - tenzircloud-cli
+      - cloudtenzir-playbook
+      - cloudtenzir-flowlogs
+      - cloudtenzir-cloudtrail
     if: ${{ always() }}
-    name: Destroy VAST stack from AWS
+    name: Destroy Tenzir stack from AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,misp"
+      TENZIR_CLOUD_PLUGINS: "workbucket,misp"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -288,16 +288,16 @@ jobs:
           fetch-depth: 0
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
+          docker pull "${{ needs.tenzircloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.tenzircloud-cli.outputs.cached-img }}" tenzir/tenzir-cloud-cli:latest
       - name: Destroy
         continue-on-error: true
         id: destroy
-        run: ./vast-cloud destroy --auto-approve
+        run: ./tenzir-cloud destroy --auto-approve
       - name: Retry destroy
         if: steps.destroy.outcome=='failure'
         run: |
           echo "Destroy sometimes fails for an unexplained reason."
           echo "Retrying after a few minutes usually works."
           sleep 300
-          ./vast-cloud destroy --auto-approve
+          ./tenzir-cloud destroy --auto-approve

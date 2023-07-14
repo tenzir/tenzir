@@ -29,7 +29,7 @@ Checks: >
   -readability-uppercase-literal-suffix,
   -dummy-must-be-last-entry-without-trailing-comma
 WarningsAsErrors:      ''
-HeaderFilterRegex:     '/vast/'
+HeaderFilterRegex:     '/tenzir/'
 AnalyzeTemporaryDtors: false
 CheckOptions:
   - key:             readability-implicit-bool-conversion.AllowPointerConditions

@@ -103,7 +103,7 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
 resource "aws_security_group" "service" {
   name        = "${module.env.module_name}-${local.name}-${module.env.stage}"
   description = "Allow local access"
-  vpc_id      = var.vast_vpc_id
+  vpc_id      = var.tenzir_vpc_id
 
   # SSH tunnel
   ingress {

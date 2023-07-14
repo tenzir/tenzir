@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "vast-notebooks"
+name = "tenzir-notebooks"
 version = "0.1.0"
-description = "Example VAST notebooks"
+description = "Example Tenzir notebooks"
 authors = ["Tenzir <engineering@tenzir.com>"]
 license = "BSD-3-Clause"
 

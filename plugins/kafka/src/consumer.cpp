@@ -3,17 +3,17 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "kafka/consumer.hpp"
 
-#include <vast/detail/narrow.hpp>
-#include <vast/error.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/error.hpp>
 
 #include <fmt/format.h>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 auto consumer::make(configuration config) -> caf::expected<consumer> {
   consumer result;
@@ -56,4 +56,4 @@ auto consumer::consume(std::chrono::milliseconds timeout)
   return result;
 }
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

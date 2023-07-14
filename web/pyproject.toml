@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "vast-website"
+name = "tenzir-website"
 version = "0.1.0"
-description = "VAST website"
+description = "Tenzir website"
 authors = ["Tenzir <engineering@tenzir.com>"]
 license = "BSD-3-Clause"
 

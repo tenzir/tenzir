@@ -3,12 +3,12 @@
 > **Warning** The MISP integration is considered experimental and subject to
 > change without notice.
 
-This directory contains the scripts to run MISP as part of the VAST Docker
+This directory contains the scripts to run MISP as part of the Tenzir Docker
 compose stack.
 
 ## Standalone
 
-To run the MISP without any integration with VAST:
+To run the MISP without any integration with Tenzir:
 ```
 cd docker/compose/
 docker compose -f misp.yaml up

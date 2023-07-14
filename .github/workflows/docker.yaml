@@ -35,7 +35,7 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
-          git submodule update --init --recursive libvast
+          git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
       - name: Configure
         id: cfg
@@ -77,12 +77,12 @@ jobs:
           BUILDX_GIT_LABELS: full
           CACHE_TAG: ghcr.io/tenzir/tenzir:build-cache
         run: |
-          cmake_version_args="-DVAST_VERSION_TAG:STRING=${{ fromJSON(inputs.config).version }}"
+          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${{ fromJSON(inputs.config).version }}"
           echo "::info Building the Developer Edition Image"
           docker buildx build . \
             -t "tenzir/tenzir-de:latest" --target "tenzir-de" \
             --load --platform linux/amd64 \
-            --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}" \
+            --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
             --cache-from "type=registry,ref=${CACHE_TAG}" \
             --cache-to "type=registry,mode=max,ref=${CACHE_TAG}"
           jq -r '.editions[] | [.name, .target] | join (" ")' <<< '${{ inputs.config }}' | while read -r name target; do
@@ -92,7 +92,7 @@ jobs:
             docker buildx build . \
               -t "tenzir/${name}:latest" --target "${target}" \
               --load --platform linux/amd64 \
-              --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}"
+              --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}"
           done
       - name: Login to Docker Hub
         if: steps.cfg.outputs.needs-docker-hub

@@ -1,8 +1,8 @@
-"""[VAST Pro] Deploy a matcher client task and attach to the stream of matched events"""
+"""[Tenzir Pro] Deploy a matcher client task and attach to the stream of matched events"""
 
 from typing import Tuple
 from common import FargateService, aws, terraform_output
-from vast_invoke import Context, task
+from tenzir_invoke import Context, task
 
 
 def service_outputs(c: Context) -> Tuple[str, str, str]:

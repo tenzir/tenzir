@@ -24,12 +24,12 @@ AmbientCapabilities=
 RestrictSUIDSGID=yes
 
 # system access
-ExecPaths=/opt/tenzir/libexec/vast-df-percent.sh
+ExecPaths=/opt/tenzir/libexec/tenzir-df-percent.sh
 ProtectSystem=strict
 ReadWritePaths=/var/lib/tenzir
-ReadWritePaths=/var/lib/vast
+ReadWritePaths=/var/lib/tenzir
 ReadWritePaths=/var/log/tenzir
-ReadWritePaths=/var/log/vast
+ReadWritePaths=/var/log/tenzir
 PrivateTmp=no
 # Allow read access to the home directory of the user so config files can be
 # read. In theory the config directory may be outside of the home directory, but

@@ -1,13 +1,13 @@
-config-file: vast.yaml
+config-file: tenzir.yaml
 
 fixtures:
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', '--commands="web server --mode=dev --port=42025"'],
-                    work_dir, name='node', port=VAST_PORT,
+                    ['-e', f'127.0.0.1:{TENZIR_PORT}', '-i', 'node', 'start', '--commands="web server --mode=dev --port=42025"'],
+                    work_dir, name='node', port=TENZIR_PORT,
                     config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{TENZIR_PORT}']
 
     exit: | # python
       node.stop()
@@ -15,10 +15,10 @@ fixtures:
   AuthenticatedServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', '--commands="web server --mode=upstream --port=42025"'],
-                    work_dir, name='node', port=VAST_PORT,
+                    ['-e', f'127.0.0.1:{TENZIR_PORT}', '-i', 'node', 'start', '--commands="web server --mode=upstream --port=42025"'],
+                    work_dir, name='node', port=TENZIR_PORT,
                     config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{TENZIR_PORT}']
 
     exit: | # python
       node.stop()
@@ -26,10 +26,10 @@ fixtures:
   TlsServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', f'--commands="web server --mode=server --certfile={SET_DIR}/data/server.pem --keyfile={SET_DIR}/data/server.key --port=42025"'],
-                    work_dir, name='node', port=VAST_PORT,
+                    ['-e', f'127.0.0.1:{TENZIR_PORT}', '-i', 'node', 'start', f'--commands="web server --mode=server --certfile={SET_DIR}/data/server.pem --keyfile={SET_DIR}/data/server.key --port=42025"'],
+                    work_dir, name='node', port=TENZIR_PORT,
                     config_file=self.config_file)
-      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{TENZIR_PORT}']
 
     exit: | # python
       node.stop()
@@ -43,11 +43,11 @@ tests:
         input: data/conn.log.gz
       - command: flush
       - command: curl -XPOST http://127.0.0.1:42025/api/v0/status
-        prepend_vast: false
+        prepend_tenzir: false
         transformation: jq '.catalog | del(.schemas."zeek.conn"."import-time")'
       # Invalid parameter
       - command: curl -XPOST http://127.0.0.1:42025/api/v0/status?verbosity=!~asdf
-        prepend_vast: false
+        prepend_tenzir: false
         transformation: jq
   Authenticated Endpoints:
     tags: [rest, authentication]
@@ -57,13 +57,13 @@ tests:
         input: data/conn.log.gz
       - command: flush
       - command: curl -XPOST http://127.0.0.1:42025/api/v0/status
-        prepend_vast: false
+        prepend_tenzir: false
         transformation: jq
       - command: web generate-token
-        transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
+        transformation: 'xargs printf "X-Tenzir-Token: %s\n" > token.txt'
       - command: curl -H @token.txt -XPOST http://127.0.0.1:42025/api/v0/status
         transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
-        prepend_vast: false
+        prepend_tenzir: false
   TLS Endpoints:
     tags: [rest, tls]
     fixture: TlsServerTester
@@ -72,23 +72,23 @@ tests:
         input: data/conn.log.gz
       - command: flush
       - command: curl -XPOST http://127.0.0.1:42025/api/v0/status
-        prepend_vast: false
+        prepend_tenzir: false
         expected_result: error
       # Explicitly trust the self-signed server certificate with `--cacert`
       - command: curl --cacert @./data/client.pem -XPOST https://127.0.0.1:42025/api/v0/status
-        prepend_vast: false
+        prepend_tenzir: false
         transformation: jq
       - command: web generate-token
-        transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
+        transformation: 'xargs printf "X-Tenzir-Token: %s\n" > token.txt'
       - command: curl -H @token.txt --cacert @./data/client.pem -XPOST  https://127.0.0.1:42025/api/v0/status
         transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
-        prepend_vast: false
+        prepend_tenzir: false
   Serve Endpoint:
     tags: [rest, serve]
     fixture: ServerTester
     steps:
       - command: "@./scripts/serve.sh"
-        prepend_vast: false
+        prepend_tenzir: false
   Serve Errors:
     tags: [rest, serve]
     fixture: ServerTester
@@ -97,6 +97,6 @@ tests:
         input: data/conn.log.gz
       - command: flush
       - command: curl -XPOST http://127.0.0.1:42025/api/v0/serve
-        prepend_vast: false
+        prepend_tenzir: false
       - command: curl -XPOST http://127.0.0.1:42025/api/v0/serve?serve_id=foo&timeout=10m
-        prepend_vast: false
+        prepend_tenzir: false

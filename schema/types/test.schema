@@ -1,4 +1,4 @@
-// A test record that generates random data for all types in VAST's data model.
+// A test record that generates random data for all types in Tenzir's data model.
 type test.full = record{
  b: bool #default="uniform(0,1)",
  i: int64 #default="uniform(-42000,1337)",

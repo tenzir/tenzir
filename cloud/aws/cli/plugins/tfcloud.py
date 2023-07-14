@@ -1,6 +1,6 @@
 """Configure the Terraform Cloud account used as Terraform state backend"""
 
-from vast_invoke import task
+from tenzir_invoke import task
 import dynaconf
 import requests
 from common import conf, list_modules, tf_version
@@ -74,7 +74,7 @@ class Client:
                         "terraform-version": tf_version,
                         "working-directory": f"{tf_work_dir}/{mod}",
                         "execution-mode": "remote",
-                        "tag-names": ["vast"],
+                        "tag-names": ["tenzir"],
                     },
                     "type": "workspaces",
                 }

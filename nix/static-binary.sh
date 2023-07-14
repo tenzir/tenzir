@@ -61,7 +61,7 @@ done
 plugin_version() {
   local plugin="$1"
   local name="${plugin##*/}"
-  local key="VAST_PLUGIN_${name^^}_REVISION"
+  local key="TENZIR_PLUGIN_${name^^}_REVISION"
   local value="g$(git -C "${plugin}" rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "${plugin}")"
   echo "-D${key}=${value}"
 }

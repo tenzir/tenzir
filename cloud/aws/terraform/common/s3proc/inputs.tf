@@ -10,13 +10,13 @@ variable "source_bucket_name" {
 variable "source_bucket_region" {
 }
 
-variable "vast_lambda_name" {
+variable "tenzir_lambda_name" {
 }
 
-variable "vast_lambda_arn" {
+variable "tenzir_lambda_arn" {
 }
 
-variable "vast_lambda_role_name" {
+variable "tenzir_lambda_role_name" {
 }
 
 variable "import_cmd" {

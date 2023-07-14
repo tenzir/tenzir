@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 /// Wraps a `RdKafka::Consumer` in a friendly interface.
 class consumer {
@@ -41,4 +41,4 @@ private:
   std::shared_ptr<RdKafka::KafkaConsumer> consumer_{};
 };
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

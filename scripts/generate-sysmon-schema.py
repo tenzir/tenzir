@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 """
-Creates a sysmon schema for VAST.
+Creates a sysmon schema for Tenzir.
 
 Requirements:
     - pyyaml
@@ -83,7 +83,7 @@ def format_description(data):
 
 
 def legacy_map_type(name, field_name):
-    """Maps a Sysmon event type to VAST type."""
+    """Maps a Sysmon event type to Tenzir type."""
     if name == "string":
         return "string"
     elif name == "integer":
@@ -130,7 +130,7 @@ def generate_event_types():
                 data = yaml.safe_load(f)
                 if data["event_code"] == "255":
                     # TODO: ErrorReport is an empty event, which is not
-                    # something that VAST currently supports.
+                    # something that Tenzir currently supports.
                     continue
                 yield format_event_type(data)
 
