@@ -384,41 +384,39 @@ make_application(std::string_view path) {
       },
     };
   }
-  if (name == "tenzir") {
-    fmt::print(stderr, fmt::emphasis::bold,
-               "\nTenzir is now called Tenzir.\n\n");
+  if (name == "vast") {
+    fmt::print(stderr, fmt::emphasis::bold, "\nVAST is now called Tenzir.\n\n");
     fmt::print(stderr, "For more information, see the announcement at ");
     fmt::print(stderr, fmt::emphasis::underline,
-               "https://docs.tenzir.com/blog/tenzir-to-tenzir");
+               "https://docs.tenzir.com/blog/vast-to-tenzir");
     fmt::print(stderr, ".\n\ntl;dr:\n- Use ");
     fmt::print(stderr, fmt::emphasis::bold, "tenzir-node");
     fmt::print(stderr, " instead of ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzir start");
+    fmt::print(stderr, fmt::emphasis::bold, "vast start");
     fmt::print(stderr, "\n- Use ");
     fmt::print(stderr, fmt::emphasis::bold, "tenzir");
     fmt::print(stderr, " instead of ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzir exec");
+    fmt::print(stderr, fmt::emphasis::bold, "vast exec");
     fmt::print(stderr, "\n- Use ");
     fmt::print(stderr, fmt::emphasis::bold, "tenzir-ctl");
     fmt::print(stderr,
                " for all other commands\n- Move your configuration from ");
-    fmt::print(stderr, fmt::emphasis::bold, "<prefix>/etc/tenzir/tenzir.yaml");
+    fmt::print(stderr, fmt::emphasis::bold, "<prefix>/etc/vast/vast.yaml");
     fmt::print(stderr, " to ");
     fmt::print(stderr, fmt::emphasis::bold, "<prefix>/etc/tenzir/tenzir.yaml");
     fmt::print(stderr, "\n- Move your configuration from ");
-    fmt::print(stderr, fmt::emphasis::bold,
-               "$XDG_CONFIG_HOME/tenzir/tenzir.yaml");
+    fmt::print(stderr, fmt::emphasis::bold, "$XDG_CONFIG_HOME/vast/vast.yaml");
     fmt::print(stderr, " to ");
     fmt::print(stderr, fmt::emphasis::bold,
                "$XDG_CONFIG_HOME/tenzir/tenzir.yaml");
     fmt::print(stderr, "\n- In your configuration, replace ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzir:");
+    fmt::print(stderr, fmt::emphasis::bold, "vast:");
     fmt::print(stderr, " with ");
     fmt::print(stderr, fmt::emphasis::bold, "tenzir:");
     fmt::print(stderr, "\n- Prefix environment variables with ");
     fmt::print(stderr, fmt::emphasis::bold, "TENZIR_");
     fmt::print(stderr, " instead of ");
-    fmt::print(stderr, fmt::emphasis::bold, "TENZIR_");
+    fmt::print(stderr, fmt::emphasis::bold, "VAST_");
     fmt::print(stderr, "\n\n");
   }
   auto root = make_root_command(name);
