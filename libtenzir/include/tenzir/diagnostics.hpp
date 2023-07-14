@@ -37,6 +37,8 @@ public:
 
   virtual void emit(diagnostic d) = 0;
 
+  virtual void emit(exec_node_metrics m) = 0;
+
   virtual auto has_seen_error() const -> bool = 0;
 };
 
@@ -192,8 +194,8 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto
-  note(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
+  auto note(fmt::format_string<Ts...> str,
+            Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).note(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
@@ -206,8 +208,8 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto
-  docs(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
+  auto docs(fmt::format_string<Ts...> str,
+            Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).docs(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
@@ -220,8 +222,8 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto
-  usage(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
+  auto usage(fmt::format_string<Ts...> str,
+             Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).usage(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
@@ -234,8 +236,8 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto
-  hint(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
+  auto hint(fmt::format_string<Ts...> str,
+            Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).hint(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
@@ -275,6 +277,10 @@ public:
     has_seen_error_ |= diag.severity == severity::error;
   }
 
+  void emit(exec_node_metrics) override {
+    die();
+  }
+
   auto has_seen_error() const -> bool override {
     return has_seen_error_;
   }
@@ -288,6 +294,10 @@ public:
   void emit(diagnostic diag) override {
     has_seen_error_ |= diag.severity == severity::error;
     result.push_back(std::move(diag));
+  }
+
+  void emit(exec_node_metrics) override {
+    die();
   }
 
   auto has_seen_error() const -> bool override {

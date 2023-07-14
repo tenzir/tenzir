@@ -42,7 +42,7 @@ public:
     TENZIR_WARN("{}", error);
   }
 
-  auto emit(table_slice) noexcept -> void override {
+  auto emit(exec_node_metrics) noexcept -> void override {
     die("not implemented");
   }
 
@@ -60,6 +60,10 @@ public:
       void emit(diagnostic d) override {
         TENZIR_WARN("got diagnostic: {}", d);
         error_ |= d.severity == severity::error;
+      }
+
+      void emit(exec_node_metrics) override {
+        die();
       }
 
       auto has_seen_error() const -> bool override {

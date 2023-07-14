@@ -113,6 +113,14 @@ public:
     }
   }
 
+  void emit(exec_node_metrics m) override {
+    self_->request(metric_handler_, caf::infinite, m)
+      .then([]() {},
+            [](caf::error& e) {
+              VAST_WARN("failed to send metrics: {}", e);
+            });
+  }
+
   auto has_seen_error() const -> bool override {
     return has_seen_error_;
   }
@@ -166,8 +174,8 @@ public:
     }
   }
 
-  auto emit(table_slice) noexcept -> void override {
-    die("not implemented");
+  auto emit(exec_node_metrics m) noexcept -> void override {
+    diagnostics().emit(m);
   }
 
   auto schemas() const noexcept -> const std::vector<type>& override {

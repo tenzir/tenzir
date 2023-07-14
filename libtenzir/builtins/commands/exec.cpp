@@ -201,6 +201,10 @@ public:
     inner_.emit(std::move(d));
   }
 
+  void emit(exec_node_metrics m) override {
+    inner_.emit(m);
+  }
+
   auto has_seen_error() const -> bool override {
     return inner_.has_seen_error();
   }

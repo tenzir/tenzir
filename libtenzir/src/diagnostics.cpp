@@ -106,6 +106,10 @@ public:
     }
   }
 
+  void emit(exec_node_metrics) override {
+    die();
+  }
+
   auto has_seen_error() const -> bool override {
     return error_;
   }
