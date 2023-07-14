@@ -13,6 +13,7 @@
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metrics.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/si_literals.hpp"
@@ -96,8 +97,11 @@ class exec_node_diagnostic_handler final : public diagnostic_handler {
 public:
   exec_node_diagnostic_handler(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler)
-    : self_{self}, diagnostic_handler_{std::move(diagnostic_handler)} {
+    receiver_actor<diagnostic> diagnostic_handler,
+    receiver_actor<exec_node_metrics> metric_handler)
+    : self_{self},
+      diagnostic_handler_{std::move(diagnostic_handler)},
+      metric_handler_{std::move(metric_handler)} {
   }
 
   void emit(diagnostic d) override {
@@ -128,6 +132,7 @@ public:
 private:
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self_ = {};
   receiver_actor<diagnostic> diagnostic_handler_ = {};
+  receiver_actor<exec_node_metrics> metric_handler_ = {};
   bool has_seen_error_ = {};
 };
 
@@ -136,11 +141,12 @@ class exec_node_control_plane final : public operator_control_plane {
 public:
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler)
+    receiver_actor<diagnostic> diagnostic_handler,
+    receiver_actor<exec_node_metrics> metrics_handler)
     : state_{self->state},
       diagnostic_handler_{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
-          self, std::move(diagnostic_handler))} {
+          self, std::move(diagnostic_handler), std::move(metrics_handler))} {
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
@@ -752,6 +758,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       }
       TENZIR_VERBOSE("{} is done", op);
       print_metrics();
+      ctrl->emit(current_metrics);
       self->quit();
       return;
     }
@@ -911,13 +918,14 @@ auto exec_node(
 
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
-                     receiver_actor<diagnostic> diagnostic_handler)
+                     receiver_actor<diagnostic> diagnostics_handler,
+                     receiver_actor<exec_node_metrics> metrics_handler)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
   TENZIR_ASSERT(node != nullptr
                 or not(op->location() == operator_location::remote));
-  TENZIR_ASSERT(diagnostic_handler != nullptr);
+  TENZIR_ASSERT(diagnostics_handler != nullptr);
   auto output_type = op->infer_type(input_type);
   if (not output_type) {
     return caf::make_error(ec::logic_error,
@@ -934,10 +942,9 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       if constexpr (std::is_void_v<Input> and std::is_void_v<Output>) {
         die("unimplemented");
       } else {
-        auto result
-          = self->spawn<SpawnOptions>(exec_node<input_type, output_type>,
-                                      std::move(op), std::move(node),
-                                      std::move(diagnostic_handler));
+        auto result = self->spawn<SpawnOptions>(
+          exec_node<input_type, output_type>, std::move(op), std::move(node),
+          std::move(diagnostics_handler), std::move(metrics_handler));
         return result;
       }
     };

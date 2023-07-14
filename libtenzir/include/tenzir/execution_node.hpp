@@ -49,7 +49,8 @@ namespace tenzir {
 /// @pre diagnostics_handler != nullptr
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
-                     receiver_actor<diagnostic> diagnostics_handler)
+                     receiver_actor<diagnostic> diagnostics_handler,
+                     receiver_actor<exec_node_metrics> metrics_handler)
   -> caf::expected<std::pair<exec_node_actor, operator_type>>;
 
 } // namespace tenzir

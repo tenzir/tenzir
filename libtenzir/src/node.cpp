@@ -37,6 +37,7 @@
 #include "tenzir/format/test.hpp"
 #include "tenzir/format/zeek.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/metrics.hpp"
 #include "tenzir/node.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
@@ -678,7 +679,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       return std::move(caf::get<record>(result));
     },
     [self](atom::spawn, operator_box& box, operator_type input_type,
-           const receiver_actor<diagnostic>& diagnostic_handler)
+           const receiver_actor<diagnostic>& diagnostic_handler,
+           const receiver_actor<exec_node_metrics>& metrics_handler)
       -> caf::result<exec_node_actor> {
       auto op = std::move(box).unwrap();
       if (op->location() == operator_location::local) {
@@ -688,9 +690,9 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                                            *self, op));
       }
       auto description = op->to_string();
-      auto spawn_result
-        = spawn_exec_node(self, std::move(op), input_type,
-                          static_cast<node_actor>(self), diagnostic_handler);
+      auto spawn_result = spawn_exec_node(self, std::move(op), input_type,
+                                          static_cast<node_actor>(self),
+                                          diagnostic_handler, metrics_handler);
       if (not spawn_result) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} failed to spawn execution node "

@@ -14,6 +14,7 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/execution_node.hpp"
+#include "tenzir/metrics.hpp"
 #include "tenzir/pipeline.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -30,6 +31,18 @@
 #include <iterator>
 
 namespace tenzir {
+
+struct diagnostic_manager_state {
+  std::vector<exec_node_metrics> metrics;
+};
+
+auto metrics_manager(
+  receiver_actor<exec_node_metrics>::stateful_pointer<diagnostic_manager_state>
+    self) -> receiver_actor<exec_node_metrics>::behavior_type {
+  return [self](exec_node_metrics m) -> void {
+    self->state.metrics.emplace_back(m);
+  };
+}
 
 void pipeline_executor_state::start_nodes_if_all_spawned() {
   auto untyped_exec_nodes = std::vector<caf::actor>{};
@@ -100,7 +113,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       exec_nodes.emplace_back();
       self
         ->request(node, caf::infinite, atom::spawn_v,
-                  operator_box{std::move(op)}, input_type, diagnostics)
+                  operator_box{std::move(op)}, input_type, diagnostics, metrics)
         .then(
           [=, this](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
@@ -120,8 +133,8 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       input_type = *output_type;
     } else {
       TENZIR_DEBUG("{} spawns {} locally", *self, description);
-      auto spawn_result
-        = spawn_exec_node(self, std::move(op), input_type, node, diagnostics);
+      auto spawn_result = spawn_exec_node(self, std::move(op), input_type, node,
+                                          diagnostics, metrics);
       if (not spawn_result) {
         abort_start(add_context(spawn_result.error(),
                                 "{} failed to spawn execution node", *self));
@@ -227,7 +240,8 @@ auto pipeline_executor_state::start() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, receiver_actor<diagnostic> diagnostics, node_actor node)
+  pipeline pipe, receiver_actor<diagnostic> diagnostics,
+  receiver_actor<exec_node_metrics> metrics, node_actor node)
   -> pipeline_executor_actor::behavior_type {
   TENZIR_DEBUG("{} was created", *self);
   self->state.self = self;
@@ -267,6 +281,7 @@ auto pipeline_executor(
   });
   self->state.pipe = std::move(pipe);
   self->state.diagnostics = std::move(diagnostics);
+  self->state.metrics = self->spawn(metrics_manager);
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "tenzir.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);

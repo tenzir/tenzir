@@ -13,11 +13,14 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metrics.hpp"
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
 
 #include <filesystem>
+
+#include "metrics.hpp"
 
 #define TENZIR_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(tenzir_actors, type)
 
@@ -439,7 +442,8 @@ using node_actor = typed_actor_fwd<
   auto(atom::config)->caf::result<record>,
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
-  auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>)
+  auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
+       receiver_actor<exec_node_metrics>)
     ->caf::result<exec_node_actor>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.
@@ -491,12 +495,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
+  TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::exec_node_metrics>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
   TENZIR_ADD_TYPE_ID((tenzir::stream_sink_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID(
     (tenzir::stream_sink_actor<tenzir::table_slice, std::string>))
-
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 
 // Used in the interface of the catalog actor.

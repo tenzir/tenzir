@@ -4,6 +4,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metrics.hpp"
 #include "tenzir/pipeline.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -28,6 +29,8 @@ struct pipeline_executor_state {
   // nodes.
   receiver_actor<diagnostic> diagnostics = {};
 
+  receiver_actor<exec_node_metrics> metrics = {};
+
   /// Flag for allowing unsafe pipelines.
   bool allow_unsafe_pipelines = {};
 
@@ -46,7 +49,8 @@ struct pipeline_executor_state {
 /// Start a pipeline executor for a given pipeline.
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, receiver_actor<diagnostic> diagnostics, node_actor node)
+  pipeline pipe, receiver_actor<diagnostic> diagnostics,
+  receiver_actor<exec_node_metrics> metrics, node_actor node)
   -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir
