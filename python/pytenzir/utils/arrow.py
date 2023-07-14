@@ -171,7 +171,7 @@ def py_dict_to_arrow_dict(dict: dict[str, int]) -> pa.StringArray:
     - Values should be greater or equal to 0.
     - Non-consecutive values will interpolated with null."""
     dictionary_py: list[Optional[str]] = [None] * (max(dict.values()) + 1)
-    for (value, idx) in dict.items():
+    for value, idx in dict.items():
         assert idx >= 0, f"Dictionary indices should be >=0, got {idx}"
         dictionary_py[idx] = value
     return pa.array(dictionary_py, pa.string())

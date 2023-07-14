@@ -1,10 +1,10 @@
 import asyncio
 import json
+import secrets
 import time
 from abc import ABC
 from enum import Enum, auto
 from typing import AsyncIterable
-import secrets
 
 import pyarrow as pa
 import pytenzir.utils.arrow
@@ -101,7 +101,7 @@ class Tenzir:
         mode: ExportMode = ExportMode.HISTORICAL,
         limit: int = 100,
     ) -> AsyncIterable[TableSlice]:
-        """Executes a Tenzir and receives results as Arrow Tables."""
+        """Executes a query and receives results as Arrow Tables."""
         if limit == 0:
             return
         cmd = self.cli.export(**Tenzir._export_args(mode, limit))
@@ -146,9 +146,9 @@ class Tenzir:
                 raise e
 
     async def status(self, timeout=0, retry_delay=0.5, **kwargs) -> dict:
-        """Executes the `tenzir status` command and return the response string.
+        """Executes the `tenzir-ctl status` command and return the response string.
 
-        If `timeout` is greater than 0, the invocation of `tenzir status` will be
+        If `timeout` is greater than 0, the invocation of `tenzir-ctl status` will be
         retried every `retry_delay` seconds for at most `timeout` seconds.
 
         Examples: `status()`, `status(timeout=30, detailed=True)`.
@@ -165,19 +165,19 @@ class Tenzir:
             else:
                 duration = time.time() - start
                 if duration > timeout:
-                    msg = f"Tenzir status failed with code {proc.returncode}"
+                    msg = f"tenzir-ctl status failed with code {proc.returncode}"
                     raise Exception(msg)
                 await asyncio.sleep(retry_delay)
 
     async def count(self, *args, **kwargs) -> int:
         """
-        Executes the Tenzir count command and return the response number.
+        Executes the Tenzir-ctl count command and return the response number.
         Examples: `count()`, `count("#schema == /suricata.alert/", estimate=True)`.
         """
         proc = await self.cli.count(*args, **kwargs).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
         if proc.returncode != 0:
-            msg = f"Tenzir count failed with code {proc.returncode}"
+            msg = f"tenzir-ctl count failed with code {proc.returncode}"
             raise Exception(msg)
         return int(stdout.decode("utf-8"))

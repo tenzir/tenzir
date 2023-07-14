@@ -47,7 +47,7 @@ async def collect_pyarrow(
         # thing to determine uniqueness.
         batches[batch.schema.to_string()].append(batch)
     result = defaultdict(list)
-    for (_, batches) in batches.items():
+    for _, batches in batches.items():
         table = pa.Table.from_batches(batches)
         name = pytenzir.utils.arrow.name(table.schema)
         result[name].append(table)

@@ -18,8 +18,8 @@ classifiers = [
     "Topic :: Software Development :: Object Brokering",
     "Topic :: System :: Distributed Computing",
 ]
-homepage = "https://tenzir.io"
-documentation = "https://tenzir.io/docs"
+homepage = "https://tenzir.com"
+documentation = "https://tenzir.com/docs"
 repository = "https://github.com/tenzir/tenzir"
 
 [tool.poetry.dependencies]

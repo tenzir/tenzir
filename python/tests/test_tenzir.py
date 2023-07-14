@@ -24,7 +24,7 @@ async def endpoint():
     if os.path.isdir(test_db_dir):
         shutil.rmtree(test_db_dir)
     proc = await asyncio.create_subprocess_exec(
-        "tenzir",
+        "tenzir-ctl",
         "-e",
         ":0",
         "-d",
@@ -46,21 +46,21 @@ async def endpoint():
 
 async def tenzir_import(endpoint, expression: list[str]):
     # import
-    logger.debug(f"> tenzir -e {endpoint} import --blocking {' '.join(expression)}")
+    logger.debug(f"> tenzir-ctl -e {endpoint} import --blocking {' '.join(expression)}")
     import_proc = await asyncio.create_subprocess_exec(
-        "tenzir", "-e", endpoint, "import", "--blocking", *expression, stderr=PIPE
+        "tenzir-ctl", "-e", endpoint, "import", "--blocking", *expression, stderr=PIPE
     )
     (_, import_err) = await asyncio.wait_for(import_proc.communicate(), 3)
     assert import_proc.returncode == 0
-    logger.debug(f"tenzir import stderr:\n{import_err.decode()}")
+    logger.debug(f"tenzir-ctl import stderr:\n{import_err.decode()}")
     # flush
-    logger.debug(f"> tenzir -e {endpoint} flush")
+    logger.debug(f"> tenzir-ctl -e {endpoint} flush")
     flush_proc = await asyncio.create_subprocess_exec(
-        "tenzir", "-e", endpoint, "flush", stderr=PIPE
+        "tenzir-ctl", "-e", endpoint, "flush", stderr=PIPE
     )
     (_, flush_err) = await asyncio.wait_for(flush_proc.communicate(), 3)
     assert flush_proc.returncode == 0
-    logger.debug(f"tenzir flush stderr:\n{flush_err.decode()}")
+    logger.debug(f"tenzir-ctl flush stderr:\n{flush_err.decode()}")
 
 
 def integration_data(path):
