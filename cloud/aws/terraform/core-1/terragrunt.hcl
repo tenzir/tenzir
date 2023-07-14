@@ -3,5 +3,5 @@ include "root" {
 }
 
 inputs = {
-  region_name = get_env("VAST_AWS_REGION")
+  region_name = get_env("TENZIR_AWS_REGION")
 }

@@ -3,13 +3,13 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
 
-#include <vast/fwd.hpp>
-#include <vast/type.hpp>
+#include <tenzir/fwd.hpp>
+#include <tenzir/type.hpp>
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
@@ -18,7 +18,7 @@
 #include <memory>
 #include <string>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 /// Wraps a global Kafka configuration.
 class configuration {
@@ -63,4 +63,4 @@ private:
   std::shared_ptr<rebalancer> rebalance_callback_;
 };
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

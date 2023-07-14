@@ -32,7 +32,7 @@ IncludeCategories:
     Priority:        1
   - Regex:           '^"[[:alnum:]_.]+/'
     Priority:        2
-  - Regex:           '^<vast/'
+  - Regex:           '^<tenzir/'
     Priority:        3
   - Regex:           '^<[[:alnum:]_.]+/'
     Priority:        4

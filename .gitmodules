@@ -1,5 +1,5 @@
-[submodule "libvast/aux/fast_float"]
-	path = libvast/aux/fast_float
+[submodule "libtenzir/aux/fast_float"]
+	path = libtenzir/aux/fast_float
 	url = https://github.com/fastfloat/fast_float
 [submodule "plugins/web/aux/restinio"]
 	path = plugins/web/aux/restinio
@@ -10,9 +10,9 @@
 [submodule "contrib/tenzir-plugins"]
 	path = contrib/tenzir-plugins
 	url = git@github.com:tenzir/tenzir-plugins
-[submodule "libvast/aux/simdjson"]
-	path = libvast/aux/simdjson
+[submodule "libtenzir/aux/simdjson"]
+	path = libtenzir/aux/simdjson
 	url = https://github.com/simdjson/simdjson
-[submodule "libvast/aux/caf"]
-	path = libvast/aux/caf
+[submodule "libtenzir/aux/caf"]
+	path = libtenzir/aux/caf
 	url = https://github.com/tenzir/actor-framework

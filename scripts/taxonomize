@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 """
-Generates VAST taxonomy declarations from CIMs of other tools.
+Generates Tenzir taxonomy declarations from CIMs of other tools.
 
 Usage:
 
@@ -45,7 +45,7 @@ yaml.add_representer(folded_str, represent_folded_str)
 # ---------------------------------------------------------------------------
 
 def yamlify(input, width=72):
-    """Renders input as YAML suitable for a VAST taxonomy."""
+    """Renders input as YAML suitable for a Tenzir taxonomy."""
     return yaml.dump(input, sort_keys=False, width=width)
 
 def make_concept(prefix, name, description=None):

@@ -1,4 +1,4 @@
-# The default provider manages VAST resources and other monitoring appliances
+# The default provider manages Tenzir resources and other monitoring appliances
 provider "aws" {
   region = var.region_name
   default_tags {

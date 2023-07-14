@@ -1,6 +1,6 @@
-# Parquet Plugin for VAST
+# Parquet Plugin for Tenzir
 
-The Parquet plugin enables VAST to store its data in
+The Parquet plugin enables Tenzir to store its data in
 [Apache Parquet](https://parquet.apache.org/) format.
 Parquet is a columnar file format that is optimized for efficient data storage
 and retrieval, and is widely used in the data science and engineering
@@ -16,7 +16,7 @@ currently consists of two columns:
 | import_time   | timestamp[ns] | event import time |
 | event         | struct        | actual event data |
 
-VAST is using Apache Arrow under the hood, and the Arrow schema is stored
+Tenzir is using Apache Arrow under the hood, and the Arrow schema is stored
 in serialized form as part of the parquet metdata under the key `ARROW:schema`.
 The Arrow documentation section about [parquet](https://arrow.apache.org/docs/dev/cpp/parquet.html)
 discusses the mapping of types between Arrow and Parquet.
@@ -27,12 +27,12 @@ discusses the mapping of types between Arrow and Parquet.
 
 Apache parquet implementation produces one record batch of data per
 [row group](https://parquet.apache.org/docs/concepts/), which is converted into
-a _table slice_, the smallest unit of data used in VAST internally. For storage
+a _table slice_, the smallest unit of data used in Tenzir internally. For storage
 efficiency, row groups are typically larger than table slices created during
 import, which are smaller to increase data recency and immediate availability.
 The `import_time`, stored and associated per table slice, is not correctly
 maintained in the larger table slice that spans multiple input slices.
-VAST uses the largest of the available import times.
+Tenzir uses the largest of the available import times.
 Note that the information is properly stored for each event inside the parquet
 file, and we plan to fix that deficiency in an upcoming release.
 

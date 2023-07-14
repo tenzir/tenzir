@@ -1,4 +1,4 @@
-# The default provider manages VAST resources and other monitoring appliances
+# The default provider manages Tenzir resources and other monitoring appliances
 provider "aws" {
   region = var.region_name
   default_tags {
@@ -10,7 +10,7 @@ provider "aws" {
   }
 }
 
-resource "aws_ecr_repository" "vast" {
+resource "aws_ecr_repository" "tenzir" {
   name                 = "${module.env.module_name}-${module.env.stage}"
   image_tag_mutability = "MUTABLE"
 

@@ -1,9 +1,9 @@
-output "vast_task_family" {
-  value = module.vast_server.task_family
+output "tenzir_task_family" {
+  value = module.tenzir_server.task_family
 }
 
-output "vast_server_service_name" {
-  value = module.vast_server.service_name
+output "tenzir_server_service_name" {
+  value = module.tenzir_server.service_name
 }
 
 output "fargate_cluster_name" {
@@ -14,11 +14,11 @@ output "fargate_task_execution_role_arn" {
   value = aws_iam_role.fargate_task_execution_role.arn
 }
 
-output "vast_vpc_id" {
+output "tenzir_vpc_id" {
   value = module.network.new_vpc_id
 }
 
-output "vast_subnet_id" {
+output "tenzir_subnet_id" {
   value = module.network.private_subnet_id
 }
 
@@ -26,8 +26,8 @@ output "public_subnet_id" {
   value = module.network.public_subnet_id
 }
 
-output "vast_client_security_group_id" {
-  value = aws_security_group.vast_client.id
+output "tenzir_client_security_group_id" {
+  value = aws_security_group.tenzir_client.id
 }
 
 output "efs_client_security_group_id" {
@@ -46,22 +46,22 @@ output "service_discov_domain" {
   value = local.service_discov_domain
 }
 
-output "vast_lambda_name" {
-  value = module.vast_client.lambda_name
+output "tenzir_lambda_name" {
+  value = module.tenzir_client.lambda_name
 }
 
-output "vast_lambda_arn" {
-  value = module.vast_client.lambda_arn
+output "tenzir_lambda_arn" {
+  value = module.tenzir_client.lambda_arn
 }
 
-output "vast_lambda_role_name" {
-  value = module.vast_client.lambda_role_name
+output "tenzir_lambda_role_name" {
+  value = module.tenzir_client.lambda_role_name
 }
 
-output "vast_server_hostname" {
-  value = local.vast_server_hostname
+output "tenzir_server_hostname" {
+  value = local.tenzir_server_hostname
 }
 
 output "efs_id" {
-  value = var.vast_storage_type == "EFS" ? module.efs[0].file_system_id : ""
+  value = var.tenzir_storage_type == "EFS" ? module.efs[0].file_system_id : ""
 }

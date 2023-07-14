@@ -10,11 +10,11 @@ Their naming follows the structure `{integration}.{feature}.yaml`:
 - `feature`:
   - if unspecified, the file is expected to contain the base configuration of
     the integration (it can usually work in standalone mode)
-  - if `vast` is specified (e.g `quarto.vast.yaml`), the file should contain the
-    configurations to interact with the `vast` service (e.g networking)
+  - if `tenzir` is specified (e.g `quarto.tenzir.yaml`), the file should contain the
+    configurations to interact with the `tenzir` service (e.g networking)
   - otherwise a keyword indicating what is being enabled in the `integration` on
-    top of the base configuration (e.g `vast.volume.yaml` configures volumes for
-    the `vast` service to provide persistence)
+    top of the base configuration (e.g `tenzir.volume.yaml` configures volumes for
+    the `tenzir` service to provide persistence)
 
 ## The environment files
 

@@ -1,8 +1,8 @@
-ARG VAST_VERSION
-ARG VAST_IMAGE
+ARG TENZIR_VERSION
+ARG TENZIR_IMAGE
 ARG BOTO3_VERSION=1.24.50
 
-FROM $VAST_IMAGE:$VAST_VERSION AS build
+FROM $TENZIR_IMAGE:$TENZIR_VERSION AS build
 
 ARG BOTO3_VERSION
 
@@ -14,14 +14,14 @@ RUN apt-get update && \
 
 
 
-FROM $VAST_IMAGE:$VAST_VERSION AS production
+FROM $TENZIR_IMAGE:$TENZIR_VERSION AS production
 
-USER vast:vast
+USER tenzir:tenzir
 
 COPY --from=build /dependencies/ ./
 
 COPY scripts/matcher-client.py .
-COPY schema/ /opt/tenzir/vast/etc/vast/schema/
-COPY configs/vast/fargate.yaml /opt/tenzir/vast/etc/vast/vast.yaml
+COPY schema/ /opt/tenzir/tenzir/etc/tenzir/schema/
+COPY configs/tenzir/fargate.yaml /opt/tenzir/tenzir/etc/tenzir/tenzir.yaml
 
 ENTRYPOINT [ "/usr/bin/python3.9", "matcher-client.py" ]

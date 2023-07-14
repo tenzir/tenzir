@@ -1,6 +1,6 @@
 [tool.poetry]
-name = "pyvast"
-version = "4.0.0-rc7"
+name = "pytenzir"
+version = "4.0.0-rc8"
 description = "A security telemetry engine for detection and response"
 authors = ["Tenzir <engineering@tenzir.com>"]
 maintainers = ["Tenzir <engineering@tenzir.com>"]
@@ -18,9 +18,9 @@ classifiers = [
     "Topic :: Software Development :: Object Brokering",
     "Topic :: System :: Distributed Computing",
 ]
-homepage = "https://vast.io"
-documentation = "https://vast.io/docs"
-repository = "https://github.com/tenzir/vast"
+homepage = "https://tenzir.com"
+documentation = "https://tenzir.com/docs"
+repository = "https://github.com/tenzir/tenzir"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -42,8 +42,8 @@ asyncio_mode = "auto" # required for async fixtures
 thehive = ["aiohttp"]
 
 [tool.poetry.scripts]
-app-thehive-run = { callable = "pyvast.apps.thehive:run", extras = ["thehive"] }
-app-thehive-count-alerts = { callable = "pyvast.apps.thehive:count_alerts", extras = ["thehive"] }
+app-thehive-run = { callable = "pytenzir.apps.thehive:run", extras = ["thehive"] }
+app-thehive-count-alerts = { callable = "pytenzir.apps.thehive:count_alerts", extras = ["thehive"] }
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

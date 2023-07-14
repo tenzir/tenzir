@@ -1,13 +1,13 @@
 # Request for Comments (RFC)
 
-We cultivate an open RFC process around evolutionary topics relating to VAST.
+We cultivate an open RFC process around evolutionary topics relating to Tenzir.
 The objective is to encourage participation of the community in the process.
 
-For this reason, we include RFCs in the VAST repository in the top-level
+For this reason, we include RFCs in the Tenzir repository in the top-level
 [rfc][rfc-dir] directory. Engaging with an open RFC centers around the
 discussion in pull requests, which we describe below.
 
-[rfc-dir]: https://github.com/tenzir/vast/tree/main/rfc
+[rfc-dir]: https://github.com/tenzir/tenzir/tree/main/rfc
 
 For all RFCs, we aim for an acceptance period of **30 days**.
 
@@ -21,9 +21,9 @@ Here are the direct links to open, closed, or all RFC pull requests:
 - [Closed RFCs][closed-rfcs]
 - [All RFCs][all-rfcs]
 
-[all-rfcs]: https://github.com/tenzir/vast/pulls?q=is%3Apr+label%3Arfc
-[open-rfcs]: https://github.com/tenzir/vast/pulls?q=is%3Apr+is%3Aopen+label%3Arfc
-[closed-rfcs]: https://github.com/tenzir/vast/pulls?q=is%3Apr+label%3Arfc+is%3Aclosed
+[all-rfcs]: https://github.com/tenzir/tenzir/pulls?q=is%3Apr+label%3Arfc
+[open-rfcs]: https://github.com/tenzir/tenzir/pulls?q=is%3Apr+is%3Aopen+label%3Arfc
+[closed-rfcs]: https://github.com/tenzir/tenzir/pulls?q=is%3Apr+label%3Arfc+is%3Aclosed
 
 ## Add a new RFC
 
@@ -38,10 +38,11 @@ The workflow to add a new RFC works as follows:
 
 2. Write the proposal in [GitHub Flavored Markdown](https://github.github.com/gfm/).
 
-3. [Open a pull request][vast-prs] and add the `rfp` label.
+3. [Open a pull request][tenzir-prs] and add the `rfc` label.
 
-4. Share the pull request in the [Community Slack](http://slack.tenzir.com) and
-   other stake holders that may provide valuable feedback.
+4. Share the pull request in the [Community
+   Discord](https://docs.tenzir.com/discord) and other stake holders that may
+   provide valuable feedback.
 
 5. Actively drive the discussion forward and point out the expected date of
    closure to keep a healthy engagement. Aim for resolving all outstanding
@@ -53,4 +54,4 @@ The workflow to add a new RFC works as follows:
 In you need to re-open the discussion after a pull request has been merged,
 create a follow-up pull request with the proposed changes.
 
-[vast-prs]: https://github.com/tenzir/vast/pulls
+[tenzir-prs]: https://github.com/tenzir/tenzir/pulls

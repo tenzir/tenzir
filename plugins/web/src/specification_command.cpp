@@ -3,18 +3,18 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "web/server_command.hpp"
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 auto openapi_record() -> record {
   auto paths = record{};
   for (auto const* plugin : plugins::get<rest_endpoint_plugin>()) {
     auto spec = plugin->openapi_specification();
-    VAST_ASSERT_CHEAP(caf::holds_alternative<record>(spec));
+    TENZIR_ASSERT_CHEAP(caf::holds_alternative<record>(spec));
     for (auto& [key, value] : caf::get<record>(spec))
       paths.emplace(key, value);
   }
@@ -117,23 +117,23 @@ PipelineInfo:
     diagnostics:
       $ref: '#/components/schemas/Diagnostics'
   )_");
-  VAST_ASSERT_CHEAP(schemas);
+  TENZIR_ASSERT_CHEAP(schemas);
   // clang-format off
   auto openapi = record{
     {"openapi", "3.0.0"},
     {"info",
      record{
-       {"title", "VAST Rest API"},
+       {"title", "Tenzir Rest API"},
        {"version", "\"0.1\""},
        {"description", R"_(
-This API can be used to interact with a VAST Node in a RESTful manner.
+This API can be used to interact with a Tenzir Node in a RESTful manner.
 
 All API requests must be authenticated with a valid token, which must be
-supplied in the `X-VAST-Token` request header. The token can be generated
-on the command-line using the `vast rest generate-token` command.)_"},
+supplied in the `X-Tenzir-Token` request header. The token can be generated
+on the command-line using the `tenzir rest generate-token` command.)_"},
      }},
     {"servers", list{{
-      record{{"url", "https://vast.example.com/api/v0"}},
+      record{{"url", "https://tenzir.example.com/api/v0"}},
     }}},
     {"security", list {{
       record {{"VastToken", list{}}},
@@ -144,7 +144,7 @@ on the command-line using the `vast rest generate-token` command.)_"},
         record{{"VastToken", record {
             {"type", "apiKey"},
             {"in", "header"},
-            {"name", "X-VAST-Token"}
+            {"name", "X-Tenzir-Token"}
         }}}},
     }},
     {"paths", std::move(paths)},
@@ -156,22 +156,22 @@ on the command-line using the `vast rest generate-token` command.)_"},
 std::string generate_openapi_json() noexcept {
   auto record = openapi_record();
   auto json = to_json(record);
-  VAST_ASSERT_CHEAP(json);
+  TENZIR_ASSERT_CHEAP(json);
   return *json;
 }
 
 std::string generate_openapi_yaml() noexcept {
   auto record = openapi_record();
   auto yaml = to_yaml(record);
-  VAST_ASSERT_CHEAP(yaml);
+  TENZIR_ASSERT_CHEAP(yaml);
   return *yaml;
 }
 
-auto specification_command(const vast::invocation&, caf::actor_system&)
+auto specification_command(const tenzir::invocation&, caf::actor_system&)
   -> caf::message {
   auto yaml = generate_openapi_yaml();
   fmt::print("---\n{}\n", yaml);
   return {};
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

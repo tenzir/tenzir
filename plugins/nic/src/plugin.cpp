@@ -3,17 +3,17 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/argument_parser.hpp>
-#include <vast/chunk.hpp>
-#include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/data.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
-#include <vast/pcap.hpp>
-#include <vast/plugin.hpp>
+#include <tenzir/argument_parser.hpp>
+#include <tenzir/chunk.hpp>
+#include <tenzir/concept/printable/tenzir/data.hpp>
+#include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/pcap.hpp>
+#include <tenzir/plugin.hpp>
 
 #include <pcap/pcap.h>
 
@@ -21,7 +21,7 @@
 
 using namespace std::chrono_literals;
 
-namespace vast::plugins::nic {
+namespace tenzir::plugins::nic {
 
 namespace {
 
@@ -46,10 +46,10 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    VAST_ASSERT(!args_.iface.inner.empty());
+    TENZIR_ASSERT(!args_.iface.inner.empty());
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
-    VAST_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
-               snaplen);
+    TENZIR_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
+                 snaplen);
     auto make = [](auto& ctrl, auto iface,
                    auto snaplen) mutable -> generator<chunk_ptr> {
       auto put_iface_in_promiscuous_mode = 1;
@@ -86,9 +86,9 @@ public:
         const auto now = std::chrono::steady_clock::now();
         if (num_buffered_packets >= defaults::import::table_slice_size
             or last_finish + defaults::import::batch_timeout < now) {
-          VAST_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
-                     vast::data{now - last_finish}, num_buffered_packets,
-                     buffer.size());
+          TENZIR_DEBUG("yielding buffer after {} with {} packets ({} bytes)",
+                       tenzir::data{now - last_finish}, num_buffered_packets,
+                       buffer.size());
           last_finish = now;
           co_yield chunk::make(std::exchange(buffer, {}));
           // Reduce number of small allocations based on what we've seen
@@ -108,7 +108,7 @@ public:
           continue;
         }
         if (r == -2) {
-          VAST_DEBUG("reached end of trace with {} packets", num_packets);
+          TENZIR_DEBUG("reached end of trace with {} packets", num_packets);
           break;
         }
         if (r == PCAP_ERROR) {
@@ -123,7 +123,7 @@ public:
         // allowing users to use the `pcap` format to parse the byte stream.
         if (num_packets == 0) {
           auto linktype = pcap_datalink(pcap.get());
-          VAST_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
+          TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
           auto header = pcap::file_header{
 #ifdef PCAP_TSTAMP_PRECISION_NANO
             .magic_number = pcap::magic_number_2,
@@ -220,6 +220,6 @@ private:
 
 } // namespace
 
-} // namespace vast::plugins::nic
+} // namespace tenzir::plugins::nic
 
-VAST_REGISTER_PLUGIN(vast::plugins::nic::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::nic::plugin)

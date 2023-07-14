@@ -11,12 +11,10 @@ project(
 # line manually so plugins can be linked against an installed Tenzir.
 include(CTest)
 
-find_package(VAST REQUIRED)
-VASTRegisterPlugin(
-  TARGET nic
-  ENTRYPOINT src/plugin.cpp
-  #TEST_SOURCES tests.cpp
-  )
+find_package(Tenzir REQUIRED)
+TenzirRegisterPlugin(
+  TARGET nic ENTRYPOINT src/plugin.cpp #TEST_SOURCES tests.cpp
+)
 
 # Link nic plugin against libpcap.
 find_package(PkgConfig REQUIRED QUIET)

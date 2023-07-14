@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -19,7 +19,7 @@
 namespace asio = restinio::asio_ns;
 #endif
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 using router_t = restinio::router::express_router_t<>;
 
@@ -47,4 +47,4 @@ using server_t
 server_t make_server(server_config config, std::unique_ptr<router_t> router,
                      restinio::io_context_holder_t io_context);
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

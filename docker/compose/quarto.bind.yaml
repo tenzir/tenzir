@@ -3,7 +3,7 @@ services:
   quarto:
     volumes:
       - ../..:/mnt/host
-      - quarto:/home/vast/.cache
+      - quarto:/home/tenzir/.cache
     environment:
       - HOST_UID
       - HOST_GID

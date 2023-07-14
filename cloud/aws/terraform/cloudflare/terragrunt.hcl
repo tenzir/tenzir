@@ -8,19 +8,19 @@ dependency "core_2" {
   mock_outputs = {
     fargate_task_execution_role_arn   = "arn:aws:iam:::role/temporary-dummy-arn"
     fargate_cluster_name              = "dummy_name"
-    vast_vpc_id                       = "dummy_id"
-    vast_subnet_id                    = "dummy_id"
+    tenzir_vpc_id                       = "dummy_id"
+    tenzir_subnet_id                    = "dummy_id"
     http_app_client_security_group_id = "dummy_id"
   }
 }
 
 locals {
-  region_name                  = get_env("VAST_AWS_REGION")
-  cloudflare_account_id        = get_env("VAST_CLOUDFLARE_ACCOUNT_ID", "dummy_id")
-  cloudflare_api_token         = get_env("VAST_CLOUDFLARE_API_TOKEN", "dummy_token")
-  cloudflare_zone              = get_env("VAST_CLOUDFLARE_ZONE", "dummy.zone")
-  cloudflare_target_count      = length(split(",", get_env("VAST_CLOUDFLARE_EXPOSE", "dummy.url")))
-  cloudflare_authorized_emails = split(",", get_env("VAST_CLOUDFLARE_AUTHORIZED_EMAILS", "dummy@dummy.dummy"))
+  region_name                  = get_env("TENZIR_AWS_REGION")
+  cloudflare_account_id        = get_env("TENZIR_CLOUDFLARE_ACCOUNT_ID", "dummy_id")
+  cloudflare_api_token         = get_env("TENZIR_CLOUDFLARE_API_TOKEN", "dummy_token")
+  cloudflare_zone              = get_env("TENZIR_CLOUDFLARE_ZONE", "dummy.zone")
+  cloudflare_target_count      = length(split(",", get_env("TENZIR_CLOUDFLARE_EXPOSE", "dummy.url")))
+  cloudflare_authorized_emails = split(",", get_env("TENZIR_CLOUDFLARE_AUTHORIZED_EMAILS", "dummy@dummy.dummy"))
 }
 
 inputs = {
@@ -33,6 +33,6 @@ inputs = {
   http_app_client_security_group_id = dependency.core_2.outputs.http_app_client_security_group_id
   fargate_task_execution_role_arn   = dependency.core_2.outputs.fargate_task_execution_role_arn
   fargate_cluster_name              = dependency.core_2.outputs.fargate_cluster_name
-  vast_vpc_id                       = dependency.core_2.outputs.vast_vpc_id
-  subnet_id                         = dependency.core_2.outputs.vast_subnet_id
+  tenzir_vpc_id                       = dependency.core_2.outputs.tenzir_vpc_id
+  subnet_id                         = dependency.core_2.outputs.tenzir_subnet_id
 }

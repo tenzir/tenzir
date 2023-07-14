@@ -13,30 +13,30 @@ To enable in Splunk perform de following tasks:
 1- Copy this script to [SPLUNKHOME]/etc/searchscripts/
 2- Edit [SPLUNKHOME]/etc/system/local/commands.conf and add these lines:
   
-   [vast]
+   [tenzir]
    filename = splunk-search.py
    generating = true
    supports_multivalues = true
    streaming = true
   
-   [vaststats]
+   [tenzirstats]
    filename = splunk-search.py
    generating = true
    supports_multivalues = true
   
 3- Restart Splunk
   
-In splunk Search, perform queries using vast or vaststats commands.
-(vast returns results as events. vaststats returns results as stats)
+In splunk Search, perform queries using tenzir or tenzirstats commands.
+(tenzir returns results as events. tenzirstats returns results as stats)
   
 Example queries:
 ---------------
--       | vast ":ip==10.0.0.53" -r
--       | vast "&type == 'zeek::intel'" -sr
--       | vaststats "'Evil' in :string"
--       | vaststats "&time < now" -e 5000 -n 127.0.0.1:5158
+-       | tenzir ":ip==10.0.0.53" -r
+-       | tenzir "&type == 'zeek::intel'" -sr
+-       | tenzirstats "'Evil' in :string"
+-       | tenzirstats "&time < now" -e 5000 -n 127.0.0.1:5158
   
-Note: Splunk "eats" double quotes when parsing input, so the VAST query
+Note: Splunk "eats" double quotes when parsing input, so the Tenzir query
 requires replacing double with single quotes and vice versa.
   
 CAVEATS:
@@ -45,7 +45,7 @@ CAVEATS:
   Results from other sources other than the first will be discarted.
   Also, stream mode will not split multivalue fields in Splunk.
 - Limits in the Splunk GUI may limit the number of displayed rows.
-  Use the stats mode (by using the vast2 command) to avoid these limits.
+  Use the stats mode (by using the tenzir2 command) to avoid these limits.
 
 """
 
@@ -141,7 +141,7 @@ def printHelp(parser):
     out.close()
     writer = csv.writer(sys.stdout)
     writer.writerow([str_out, getEncodedMV(\
-      str_out.replace("splunk-search.py [","|vast [").replace("  ","..")\
+      str_out.replace("splunk-search.py [","|tenzir [").replace("  ","..")\
       .split("\n"))])
     print("-,-")
     sys.exit(0)
@@ -151,14 +151,14 @@ def printHelp(parser):
 
 opt, remainder = parser.parse_args()
 if len(remainder) == 1:
-  # Splunk eats double quotes when parsing input, so the VAST query requires
+  # Splunk eats double quotes when parsing input, so the Tenzir query requires
   # preprocessing: replace double with single quotes and vice versa.
   query = remainder[0].replace("'",'"')
   if opt.node == '':
-    full_cmd = ['/usr/local/bin/vast', 'export', 'csv', '-h', '-e', 
+    full_cmd = ['/usr/local/bin/tenzir', 'export', 'csv', '-h', '-e', 
                 str(opt.limit), query]
   else:
-    full_cmd = ['/usr/local/bin/vast', '-e', str(opt.node), 'export', 'csv', 
+    full_cmd = ['/usr/local/bin/tenzir', '-e', str(opt.node), 'export', 'csv', 
                 '-h', '-e', str(opt.limit), query]
 else:
   printHelp(parser)

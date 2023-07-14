@@ -3,16 +3,16 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/data.hpp>
-#include <vast/detail/inspection_common.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
-#include <vast/node.hpp>
-#include <vast/plugin.hpp>
-#include <vast/table_slice.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/detail/inspection_common.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/node.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/table_slice.hpp>
 
 #include <caf/actor_cast.hpp>
 #include <caf/actor_system_config.hpp>
@@ -23,7 +23,7 @@
 
 #include <iostream>
 
-namespace vast::plugins {
+namespace tenzir::plugins {
 
 /// The EXAMPLE actor interface.
 using example_actor = caf::typed_actor<
@@ -35,23 +35,23 @@ using example_actor = caf::typed_actor<
 /// The state of the EXAMPLE actor.
 struct example_actor_state;
 
-} // namespace vast::plugins
+} // namespace tenzir::plugins
 
 // Assign type IDs to types that we intend to use with CAF's messaging system.
 // Every type that is either implicitly or explicitly wrapped in a caf::message,
 // e.g., because it is part of an actor's messaging interface, must have a
 // unique type ID assigned. Only the declaration of types must be available when
 // defining the type ID block. Their definition must only be available in the
-// translation unit that contains VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK.
+// translation unit that contains TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK.
 // NOTE: For plugins to be used at the same time, their type ID ranges must not
 // have overlap. The selected value of 1000 is just one possible starting value.
 // Please use a unique range for your plugins.
-CAF_BEGIN_TYPE_ID_BLOCK(vast_example_plugin, 1000)
-  CAF_ADD_TYPE_ID(vast_example_plugin, (vast::plugins::example_actor))
-  CAF_ADD_TYPE_ID(vast_example_plugin, (vast::plugins::example_actor_state))
-CAF_END_TYPE_ID_BLOCK(vast_example_plugin)
+CAF_BEGIN_TYPE_ID_BLOCK(tenzir_example_plugin, 1000)
+  CAF_ADD_TYPE_ID(tenzir_example_plugin, (tenzir::plugins::example_actor))
+  CAF_ADD_TYPE_ID(tenzir_example_plugin, (tenzir::plugins::example_actor_state))
+CAF_END_TYPE_ID_BLOCK(tenzir_example_plugin)
 
-namespace vast::plugins {
+namespace tenzir::plugins {
 
 struct example_actor_state {
   uint64_t max_events = std::numeric_limits<uint64_t>::max();
@@ -71,11 +71,11 @@ example_actor::behavior_type
 example(example_actor::stateful_pointer<example_actor_state> self) {
   return {
     [self](atom::config, record config) {
-      VAST_TRACE_SCOPE("{} sets configuration {}", *self, config);
+      TENZIR_TRACE_SCOPE("{} sets configuration {}", *self, config);
       for (auto& [key, value] : config) {
         if (key == "max-events") {
           if (auto max_events = caf::get_if<uint64_t>(&value)) {
-            VAST_VERBOSE("{} sets max-events to {}", *self, *max_events);
+            TENZIR_VERBOSE("{} sets max-events to {}", *self, *max_events);
             self->state.max_events = *max_events;
           }
         }
@@ -83,12 +83,12 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_TRACE_SCOPE("{} hooks into stream {}", *self, in);
+      TENZIR_TRACE_SCOPE("{} hooks into stream {}", *self, in);
       return caf::attach_stream_sink(
                self, in,
                // Initialization hook for CAF stream.
                [=](uint64_t& counter) { // reset state
-                 VAST_VERBOSE("{} initialized stream", *self);
+                 TENZIR_VERBOSE("{} initialized stream", *self);
                  counter = 0;
                },
                // Process one stream element at a time.
@@ -100,8 +100,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
                  // Accumulate the rows in our table slices.
                  counter += slice.rows();
                  if (counter >= self->state.max_events) {
-                   VAST_INFO("{} terminates stream after {} events", *self,
-                             counter);
+                   TENZIR_INFO("{} terminates stream after {} events", *self,
+                               counter);
                    self->state.done = true;
                    self->quit();
                  }
@@ -109,8 +109,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
                // Teardown hook for CAF stream.
                [=](uint64_t&, const caf::error& err) {
                  if (err && err != caf::exit_reason::user_shutdown) {
-                   VAST_ERROR("{} finished stream with error: {}", *self,
-                              render(err));
+                   TENZIR_ERROR("{} finished stream with error: {}", *self,
+                                render(err));
                    return;
                  }
                })
@@ -142,8 +142,8 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param plugin_config The relevant subsection of the configuration.
-  /// @param global_config The entire VAST configuration for potential access to
-  /// global options.
+  /// @param global_config The entire Tenzir configuration for potential access
+  /// to global options.
   caf::error initialize(const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
     config_ = plugin_config;
@@ -189,12 +189,12 @@ private:
   record config_ = {};
 };
 
-} // namespace vast::plugins
+} // namespace tenzir::plugins
 
 // Register the example_plugin with version 0.1.0-0.
-VAST_REGISTER_PLUGIN(vast::plugins::example_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::example_plugin)
 
-// Register the type IDs in our type ID block with VAST. This can be omitted
+// Register the type IDs in our type ID block with Tenzir. This can be omitted
 // when not adding additional type IDs. The macro supports up to two type ID
 // blocks.
-VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_example_plugin)
+TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK(tenzir_example_plugin)
