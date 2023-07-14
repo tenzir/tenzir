@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/config.hpp" // IWYU pragma: export
+#include "tenzir/metrics.hpp"
 #include "tenzir/tag.hpp"
 #include "tenzir/tql/fwd.hpp"
 
@@ -194,6 +195,7 @@ struct data_extractor;
 struct data_point;
 struct diagnostic;
 struct disjunction;
+struct exec_node_metrics;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
@@ -393,12 +395,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::conjunction))
   TENZIR_ADD_TYPE_ID((tenzir::count_query_context))
   TENZIR_ADD_TYPE_ID((tenzir::curried_predicate))
-  TENZIR_ADD_TYPE_ID((tenzir::data))
   TENZIR_ADD_TYPE_ID((tenzir::data_extractor))
   TENZIR_ADD_TYPE_ID((tenzir::diagnostic))
   TENZIR_ADD_TYPE_ID((tenzir::disjunction))
   TENZIR_ADD_TYPE_ID((tenzir::ec))
   TENZIR_ADD_TYPE_ID((tenzir::ewah_bitmap))
+  TENZIR_ADD_TYPE_ID((tenzir::exec_node_metrics))
   TENZIR_ADD_TYPE_ID((tenzir::expression))
   TENZIR_ADD_TYPE_ID((tenzir::extract_query_context))
   TENZIR_ADD_TYPE_ID((tenzir::field_extractor))
@@ -434,12 +436,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::type_set))
   TENZIR_ADD_TYPE_ID((tenzir::uuid))
   TENZIR_ADD_TYPE_ID((tenzir::wah_bitmap))
-
-  TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((tenzir::tag<tenzir::chunk_ptr>))
-
-  // TODO: Make list, record, and map concrete typs to we don't need to do
-  // these kinda things. See tenzir/aliases.hpp for their definitions.
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::data>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<std::string, tenzir::data>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<tenzir::data, tenzir::data>))
