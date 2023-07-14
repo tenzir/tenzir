@@ -106,7 +106,7 @@ public:
     }
   }
 
-  void emit(exec_node_metrics) override {
+  void emit(pipeline_op_metrics) override {
     die();
   }
 

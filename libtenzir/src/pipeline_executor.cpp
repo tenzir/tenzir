@@ -33,15 +33,15 @@
 namespace tenzir {
 
 struct diagnostic_manager_state {
-  std::vector<exec_node_metrics> metrics;
+  std::vector<pipeline_op_metrics> metrics;
 };
 
 auto metrics_manager(
-  receiver_actor<exec_node_metrics>::stateful_pointer<diagnostic_manager_state>
-    self) -> receiver_actor<exec_node_metrics>::behavior_type {
-  return [self](exec_node_metrics m) -> void {
+  receiver_actor<pipeline_op_metrics>::stateful_pointer<diagnostic_manager_state>
+    self) -> receiver_actor<pipeline_op_metrics>::behavior_type {
+  return {[self](pipeline_op_metrics m) -> void {
     self->state.metrics.emplace_back(m);
-  };
+  }};
 }
 
 void pipeline_executor_state::start_nodes_if_all_spawned() {
@@ -241,7 +241,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  receiver_actor<exec_node_metrics> metrics, node_actor node)
+  receiver_actor<pipeline_op_metrics> metrics, node_actor node)
   -> pipeline_executor_actor::behavior_type {
   TENZIR_DEBUG("{} was created", *self);
   self->state.self = self;

@@ -680,7 +680,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     },
     [self](atom::spawn, operator_box& box, operator_type input_type,
            const receiver_actor<diagnostic>& diagnostic_handler,
-           const receiver_actor<exec_node_metrics>& metrics_handler)
+           const receiver_actor<pipeline_op_metrics>& metrics_handler)
       -> caf::result<exec_node_actor> {
       auto op = std::move(box).unwrap();
       if (op->location() == operator_location::local) {

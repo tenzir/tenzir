@@ -43,7 +43,7 @@ struct operator_control_plane {
   virtual auto warn(caf::error warning) noexcept -> void = 0;
 
   /// Emit events to the executor's side-channel, e.g., metrics.
-  virtual auto emit(exec_node_metrics metrics) noexcept -> void = 0;
+  virtual auto emit(pipeline_op_metrics metrics) noexcept -> void = 0;
 
   /// Access available schemas.
   [[nodiscard]] virtual auto schemas() const noexcept

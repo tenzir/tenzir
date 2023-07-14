@@ -98,7 +98,7 @@ public:
   exec_node_diagnostic_handler(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
     receiver_actor<diagnostic> diagnostic_handler,
-    receiver_actor<exec_node_metrics> metric_handler)
+    receiver_actor<pipeline_op_metrics> metric_handler)
     : self_{self},
       diagnostic_handler_{std::move(diagnostic_handler)},
       metric_handler_{std::move(metric_handler)} {
@@ -117,7 +117,7 @@ public:
     }
   }
 
-  void emit(exec_node_metrics m) override {
+  void emit(pipeline_op_metrics m) override {
     self_->request(metric_handler_, caf::infinite, m)
       .then([]() {},
             [](caf::error& e) {
@@ -132,7 +132,7 @@ public:
 private:
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self_ = {};
   receiver_actor<diagnostic> diagnostic_handler_ = {};
-  receiver_actor<exec_node_metrics> metric_handler_ = {};
+  receiver_actor<pipeline_op_metrics> metric_handler_ = {};
   bool has_seen_error_ = {};
 };
 
@@ -142,7 +142,7 @@ public:
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
     receiver_actor<diagnostic> diagnostic_handler,
-    receiver_actor<exec_node_metrics> metrics_handler)
+    receiver_actor<pipeline_op_metrics> metrics_handler)
     : state_{self->state},
       diagnostic_handler_{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
@@ -180,7 +180,7 @@ public:
     }
   }
 
-  auto emit(exec_node_metrics m) noexcept -> void override {
+  auto emit(pipeline_op_metrics m) noexcept -> void override {
     diagnostics().emit(m);
   }
 
@@ -317,9 +317,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
 
   // Metrics that track the total number of inbound and outbound elements that
   // passed through this operator.
-  std::chrono::steady_clock::time_point start_time
-    = std::chrono::steady_clock::now();
-  exec_node_metrics current_metrics{};
+
+  pipeline_op_metrics current_metrics{};
 
   // Indicates whether the operator has stalled, i.e., the generator should not
   // be advanced.
@@ -657,7 +656,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
 
   auto print_metrics() -> void {
     const auto elapsed = std::chrono::duration_cast<duration>(
-      std::chrono::steady_clock::now() - start_time);
+      std::chrono::steady_clock::now() - current_metrics.start_time);
     auto percentage = [](auto num, auto den) {
       return std::chrono::duration<double, std::chrono::seconds::period>(num)
                .count()
@@ -861,7 +860,7 @@ auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, node_actor node,
   receiver_actor<diagnostic> diagnostic_handler,
-  receiver_actor<exec_node_metrics> metrics_handler)
+  receiver_actor<pipeline_op_metrics> metrics_handler)
   -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
@@ -919,7 +918,7 @@ auto exec_node(
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
-                     receiver_actor<exec_node_metrics> metrics_handler)
+                     receiver_actor<pipeline_op_metrics> metrics_handler)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);

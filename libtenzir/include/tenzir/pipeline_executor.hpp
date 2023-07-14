@@ -29,7 +29,7 @@ struct pipeline_executor_state {
   // nodes.
   receiver_actor<diagnostic> diagnostics = {};
 
-  receiver_actor<exec_node_metrics> metrics = {};
+  receiver_actor<pipeline_op_metrics> metrics = {};
 
   /// Flag for allowing unsafe pipelines.
   bool allow_unsafe_pipelines = {};
@@ -50,7 +50,7 @@ struct pipeline_executor_state {
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  receiver_actor<exec_node_metrics> metrics, node_actor node)
+  receiver_actor<pipeline_op_metrics> metrics, node_actor node)
   -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir

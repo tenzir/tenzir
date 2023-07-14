@@ -42,7 +42,7 @@ public:
     TENZIR_WARN("{}", error);
   }
 
-  auto emit(exec_node_metrics) noexcept -> void override {
+  auto emit(pipeline_op_metrics) noexcept -> void override {
     die("not implemented");
   }
 
@@ -62,7 +62,7 @@ public:
         error_ |= d.severity == severity::error;
       }
 
-      void emit(exec_node_metrics) override {
+      void emit(pipeline_op_metrics) override {
         die();
       }
 
