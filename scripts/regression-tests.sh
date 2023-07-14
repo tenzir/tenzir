@@ -9,42 +9,34 @@ set -euxo pipefail
 
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)"
 
-TENZIR_RUN_FLAGS="-d --pull=always --rm --name tenzir-regression -e TENZIR_CONSOLE_VERBOSITY=verbose -v tenzir-regression:/var/lib/tenzir/"
+TENZIR_RUN_FLAGS="-d --pull=always --rm --name tenzir-regression --entrypoint=tenzir-node -e TENZIR_CONSOLE_VERBOSITY=verbose -v tenzir-regression:/var/lib/tenzir/"
 
 # Pull the old version to create a database.
 docker run \
   $TENZIR_RUN_FLAGS \
-  docker.io/tenzir/tenzir:$OLD_VERSION \
-  start
+  docker.io/tenzir/tenzir:$OLD_VERSION
 
 sleep 3
 
 docker exec -i tenzir-regression \
-  tenzir import --blocking suricata \
+  tenzir 'read suricata | import' \
   < tenzir/integration/data/suricata/eve.json
 
 docker exec tenzir-regression \
-  tenzir flush
-
-docker exec tenzir-regression \
-  tenzir export json 'where #schema == "suricata.alert"' \
+  tenzir 'export | where #schema == "suricata.alert" | write json' \
   > old.json
 
 docker rm -f tenzir-regression
 
-# Change the volume mount point since the default database location changed from
-# /var/lib/tenzir to /var/lib/tenzir.
-TENZIR_RUN_FLAGS="-d --pull=always --rm --name tenzir-regression -e TENZIR_CONSOLE_VERBOSITY=verbose -v tenzir-regression:/var/lib/tenzir/"
-
 # Pull the new version to verify database compatibility.
 docker run \
   $TENZIR_RUN_FLAGS \
-  ghcr.io/tenzir/tenzir-node:$NEW_VERSION
+  ghcr.io/tenzir/tenzir:$NEW_VERSION
 
 sleep 3
 
 docker exec tenzir-regression \
-  tenzir export json 'where #schema == "suricata.alert"' \
+  tenzir 'export | where #schema == "suricata.alert" | write json' \
   > new.json
 
 docker rm -f tenzir-regression
