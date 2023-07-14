@@ -12,6 +12,7 @@
 #include "tenzir/concept/printable/core/printer.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/view.hpp"
 
@@ -56,8 +57,7 @@ inline auto no_style() -> json_style {
 
 inline auto default_style() -> json_style {
   // See https://no-color.org.
-  if (const auto* no_color = detail::getenv("NO_COLOR");
-      no_color != nullptr and no_color[0] != '\0') {
+  if (detail::getenv("NO_COLOR").value_or(std::string_view{}).empty()) {
     return no_style();
   }
   // TODO: Let the saver detect a default style, depending on

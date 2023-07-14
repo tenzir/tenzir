@@ -9,8 +9,8 @@
 #include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/concept/parseable/vast/data.hpp>
-#include <tenzir/concept/printable/vast/json.hpp>
+#include <tenzir/concept/parseable/tenzir/data.hpp>
+#include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config_options.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>

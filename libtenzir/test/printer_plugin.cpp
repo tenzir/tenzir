@@ -488,7 +488,6 @@ TEST(json printer - suricata netflow) {
 )"};
   auto chunks
     = collect_chunks(std::move(slice_generator), std::move(current_printer));
-  VAST_WARN("WTF");
   REQUIRE_EQUAL(chunks.size(), size_t{1});
   auto str_chunk = chunk::copy(str);
   REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
