@@ -63,9 +63,85 @@ auto Help() -> Component {
   });
 }
 
+enum class alignment { left, center, right };
+
+auto colorize(auto& make, view<data> value, const struct theme& theme) {
+  auto factory = detail::overload{
+    [&](const auto& x) {
+      return make(x, alignment::left, theme.palette.color0);
+    },
+    [&](caf::none_t) {
+      return make("∅", alignment::center, theme.palette.subtle);
+    },
+    [&](view<bool> x) {
+      return make(x, alignment::left, theme.palette.number);
+    },
+    [&](view<int64_t> x) {
+      return make(x, alignment::right, theme.palette.number);
+    },
+    [&](view<uint64_t> x) {
+      return make(x, alignment::right, theme.palette.number);
+    },
+    [&](view<double> x) {
+      return make(x, alignment::right, theme.palette.number);
+    },
+    [&](view<duration> x) {
+      return make(x, alignment::right, theme.palette.operator_);
+    },
+    [&](view<time> x) {
+      return make(x, alignment::left, theme.palette.operator_);
+    },
+    [&](view<std::string> x) {
+      return make(x, alignment::left, theme.palette.string);
+    },
+    [&](view<pattern> x) {
+      return make(x, alignment::left, theme.palette.string);
+    },
+    [&](view<ip> x) {
+      return make(x, alignment::left, theme.palette.type);
+    },
+    [&](view<subnet> x) {
+      return make(x, alignment::left, theme.palette.type);
+    },
+  };
+  return caf::visit(factory, value);
+}
+
+auto align_element(alignment align, Element element) {
+  switch (align) {
+    case alignment::left:
+      return element;
+    case alignment::center:
+      return hbox({filler(), std::move(element), filler()});
+    case alignment::right:
+      return hbox({std::move(element), filler()});
+  }
+}
+
+auto StaticCell(view<data> value, const struct theme& theme) -> Element {
+  auto make = [&](const auto& x, alignment align, auto data_color) {
+    auto element = text(to_string(x)) | color(data_color);
+    return align_element(align, std::move(element));
+  };
+  return colorize(make, value, theme);
+}
+
+/// A cell in the table body.
+auto InteractiveCell(view<data> value, const struct theme& theme) -> Component {
+  auto make = [&](const auto& x, alignment align, auto data_color) {
+    auto focus_color = theme.focus_color();
+    return Renderer([=, txt = text(to_string(x)),
+                     normal_color = color(data_color)](bool focused) {
+      auto element = focused ? txt | focus | focus_color : txt | normal_color;
+      return align_element(align, std::move(element));
+    });
+  };
+  return colorize(make, value, theme);
+}
+
 /// A table header component.
-auto LeafHeader(std::string top, std::string bottom, int height,
-                const struct theme& theme) -> Component {
+auto LeafColumnHeader(std::string top, std::string bottom, int height,
+                      const struct theme& theme) -> Component {
   return Renderer([height, &theme, top_text = std::move(top),
                    bottom_text = std::move(bottom)](bool focused) mutable {
     auto header = text(top_text) | bold | center;
@@ -79,66 +155,6 @@ auto LeafHeader(std::string top, std::string bottom, int height,
                    | size(HEIGHT, EQUAL, height);
     return element;
   });
-}
-
-/// A cell in the table body.
-auto Cell(view<data> v, const struct theme& theme) -> Component {
-  enum alignment { left, center, right };
-  auto make_cell = [&](const auto& x, alignment align, auto data_color) {
-    auto focus_color = theme.focus_color();
-    return Renderer([=, element = text(to_string(x)),
-                     normal_color = color(data_color)](bool focused) {
-      auto value
-        = focused ? element | focus | focus_color : element | normal_color;
-      switch (align) {
-        case left:
-          return value;
-        case center:
-          return hbox({filler(), std::move(value), filler()});
-        case right:
-          return hbox({std::move(value), filler()});
-      }
-    });
-  };
-  auto f = detail::overload{
-    [&](const auto& x) {
-      return make_cell(x, left, theme.palette.color0);
-    },
-    [&](caf::none_t) {
-      return make_cell("∅", center, theme.palette.subtle);
-    },
-    [&](view<bool> x) {
-      return make_cell(x, left, theme.palette.number);
-    },
-    [&](view<int64_t> x) {
-      return make_cell(x, right, theme.palette.number);
-    },
-    [&](view<uint64_t> x) {
-      return make_cell(x, right, theme.palette.number);
-    },
-    [&](view<double> x) {
-      return make_cell(x, right, theme.palette.number);
-    },
-    [&](view<duration> x) {
-      return make_cell(x, right, theme.palette.operator_);
-    },
-    [&](view<time> x) {
-      return make_cell(x, left, theme.palette.operator_);
-    },
-    [&](view<std::string> x) {
-      return make_cell(x, left, theme.palette.string);
-    },
-    [&](view<pattern> x) {
-      return make_cell(x, left, theme.palette.string);
-    },
-    [&](view<ip> x) {
-      return make_cell(x, left, theme.palette.type);
-    },
-    [&](view<subnet> x) {
-      return make_cell(x, left, theme.palette.type);
-    },
-  };
-  return caf::visit(f, v);
 }
 
 /// A leaf column consisting of header and body.
@@ -156,8 +172,8 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
       auto field = record.field(index_);
       auto height = detail::narrow_cast<int>((depth - index_.size() + 1) * 2);
       auto header
-        = LeafHeader(std::string{field.name}, fmt::to_string(field.type),
-                     height, state_->theme);
+        = LeafColumnHeader(std::string{field.name}, fmt::to_string(field.type),
+                           height, state_->theme);
       auto container = Container::Vertical({});
       container->Add(header);
       container->Add(component(state_->theme.separator()));
@@ -171,8 +187,19 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
       for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i) {
         const auto& slice = table_->slices[i];
         auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
-        for (size_t row = 0; row < slice.rows(); ++row)
-          body_->Add(Cell(slice.at(row, col), state_->theme));
+        // TODO: make the component configurable with respect to static vs.
+        // dynamic behavior. Uncommenting the cell.
+        // for (size_t row = 0; row < slice.rows(); ++row) {
+        //  auto cell = InteractiveCell(slice.at(row, col), state_->theme);
+        //  body_->Add(cell);
+        //}
+        Elements body;
+        body.reserve(slice.rows());
+        for (size_t row = 0; row < slice.rows(); ++row) {
+          auto cell = StaticCell(slice.at(row, col), state_->theme);
+          body.push_back(std::move(cell));
+        }
+        body_->Add(component(vbox(std::move(body))));
       }
       num_slices_rendered_ = table_->slices.size();
       return ComponentBase::Render();
@@ -189,7 +216,8 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
 }
 
 /// A single-row focusable cell in the table header.
-auto RecordHeader(std::string top, const struct theme& theme) -> Component {
+auto RecordColumnHeader(std::string top, const struct theme& theme)
+  -> Component {
   return Renderer([top_text = std::move(top),
                    top_color = color(theme.palette.text),
                    focus_color = theme.focus_color()](bool focused) mutable {
@@ -207,7 +235,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
       : state_{state} {
       VAST_ASSERT(!columns.empty());
       if (!name.empty()) {
-        header_ = RecordHeader(std::move(name), state_->theme);
+        header_ = RecordColumnHeader(std::move(name), state_->theme);
         header_ |= Catch<catch_policy::child>([=](Event event) {
           if (event == Event::Character('c')
               || event == Event::Character(' ')) {
@@ -271,7 +299,8 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
   return Make<Impl>(state, std::move(columns), std::move(name));
 }
 
-auto make_column(ui_state* state, const type& schema, offset index = {})
+/// A table that represents values of events in a column-oriented fashion.
+auto VerticalTable(ui_state* state, const type& schema, offset index = {})
   -> Component {
   auto parent = schema;
   auto top_level = index.empty();
@@ -279,12 +308,10 @@ auto make_column(ui_state* state, const type& schema, offset index = {})
     parent = caf::get<record_type>(schema).field(index).type;
   auto f = detail::overload{
     [&](const auto&) {
-      VAST_ASSERT(top_level);
       return LeafColumn(state, schema, index);
     },
     [&](const list_type&) {
       // TODO
-      VAST_ASSERT(top_level);
       return LeafColumn(state, schema, index);
     },
     [&](const record_type& record) {
@@ -295,7 +322,7 @@ auto make_column(ui_state* state, const type& schema, offset index = {})
       index.push_back(0);
       columns.reserve(record.num_fields());
       for (size_t i = 0; i < record.num_fields(); ++i) {
-        columns.push_back(make_column(state, schema, index));
+        columns.push_back(VerticalTable(state, schema, index));
         ++index.back();
       }
       return RecordColumn(state, std::move(columns), std::move(record_name));
@@ -303,6 +330,76 @@ auto make_column(ui_state* state, const type& schema, offset index = {})
   };
   return caf::visit(f, parent);
 }
+
+auto FieldHeader(std::string top, std::string bottom, const struct theme& theme)
+  -> Component {
+  return Renderer([&theme, top_text = std::move(top),
+                   bottom_text = std::move(bottom)](bool focused) mutable {
+    auto header = text(top_text) | bold | center;
+    header |= focused ? focus | theme.focus_color() : color(theme.palette.text);
+    return vbox({
+             std::move(header),
+             text(bottom_text) | center | color(theme.palette.comment),
+           })
+           | vcenter;
+  });
+}
+
+auto HeaderCell(std::string_view name, const type& type,
+                const struct theme& theme) -> Component {
+  // TODO
+  return {};
+}
+
+auto HeaderCell(std::string_view name, Components fields,
+                const struct theme& theme) -> Component {
+  // TODO
+  return {};
+}
+
+auto TableHeader(ui_state* state, const type& schema, offset index = {})
+  -> Component {
+  auto field = record_type::field_view{};
+  if (index.empty())
+    field.type = schema;
+  else
+    field = caf::get<record_type>(schema).field(index);
+  auto f = detail::overload{
+    [&](const auto&) {
+      VAST_ASSERT(!index.empty());
+      return HeaderCell(field.name, field.type, state->theme);
+    },
+    [&](const list_type&) {
+      VAST_ASSERT(!index.empty());
+      return HeaderCell(field.name, field.type, state->theme);
+    },
+    [&](const record_type& record) {
+      auto fields = Container::Horizontal({});
+      index.push_back(0);
+      auto first = true;
+      for (size_t i = 0; i < record.num_fields(); ++i) {
+        if (first)
+          first = false;
+        else
+          fields->Add(component(state->theme.separator()));
+        fields->Add(TableHeader(state, schema, index));
+        ++index.back();
+      }
+      return Container::Vertical({
+        HeaderCell(field.name, field.type, state->theme),
+        component(state->theme.separator()),
+        std::move(fields),
+      });
+    },
+  };
+  return caf::visit(f, field.type);
+}
+
+/// Generates a row-wise table component.
+/// A table that represents values of events in a row-oriented fashion.
+// auto HorizontalTable(ui_state* state, const type& schema) -> Component {
+//   return {};
+// }
 
 auto Explorer(ui_state* state) -> Component {
   class Impl : public ComponentBase {
@@ -352,7 +449,7 @@ auto Explorer(ui_state* state) -> Component {
         if (!schema_cache_.contains(type)) {
           schema_cache_.insert(type);
           schema_names_.emplace_back(type.name());
-          tab_->Add(enframe(make_column(state_, type)));
+          tab_->Add(enframe(VerticalTable(state_, type)));
           auto fingerprint = type.make_fingerprint();
           // One extra character for the separator.
           auto width = type.name().size() + fingerprint.size() + 1;
