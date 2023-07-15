@@ -14,6 +14,7 @@
 #include <tenzir/config_options.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/env.hpp>
 #include <tenzir/detail/padded_buffer.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -656,7 +657,7 @@ auto parse_selector(std::string_view x, location source) -> selector {
   return selector{std::move(prefix), std::string{split[0]}};
 }
 
-struct config {
+struct parser_args {
   std::optional<struct selector> selector;
   std::optional<located<std::string>> schema;
   std::string unnest_separator;
@@ -664,25 +665,26 @@ struct config {
   bool use_ndjson_mode = false;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, config& x) -> bool {
-    return f.object(x).pretty_name("config").fields(
-      f.field("selector", x.selector), f.field("schema", x.schema),
-      f.field("unnest_separator", x.unnest_separator),
-      f.field("no_infer", x.no_infer),
-      f.field("use_ndjson_mode", x.use_ndjson_mode));
+  friend auto inspect(Inspector& f, parser_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("parser_args")
+      .fields(f.field("selector", x.selector), f.field("schema", x.schema),
+              f.field("unnest_separator", x.unnest_separator),
+              f.field("no_infer", x.no_infer),
+              f.field("use_ndjson_mode", x.use_ndjson_mode));
   }
 };
 
-auto add_common_options_to_parser(argument_parser& parser, config& cfg)
+auto add_common_options_to_parser(argument_parser& parser, parser_args& args)
   -> void {
-  parser.add("--no-infer", cfg.no_infer);
+  parser.add("--no-infer", args.no_infer);
 }
 
 class json_parser final : public plugin_parser {
 public:
   json_parser() = default;
 
-  explicit json_parser(config cfg) : cfg_{std::move(cfg)} {
+  explicit json_parser(parser_args args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -698,8 +700,8 @@ public:
     auto no_validation_validator = [](const detail::field_guard&) {
       return true;
     };
-    if ((cfg_.selector.has_value() or cfg_.schema.has_value())
-        and cfg_.no_infer) {
+    if ((args_.selector.has_value() or args_.schema.has_value())
+        and args_.no_infer) {
       return instantiate_impl(std::move(input), ctrl,
                               std::move(strict_validator));
     }
@@ -708,7 +710,7 @@ public:
   }
 
   friend auto inspect(auto& f, json_parser& x) -> bool {
-    return f.apply(x.cfg_);
+    return f.apply(x.args_);
   }
 
 private:
@@ -718,22 +720,22 @@ private:
                    FieldValidator field_validator) const
     -> std::optional<generator<table_slice>> {
     auto schemas
-      = get_schemas(cfg_.schema.has_value() or cfg_.selector.has_value(), ctrl,
-                    not cfg_.unnest_separator.empty());
+      = get_schemas(args_.schema.has_value() or args_.selector.has_value(),
+                    ctrl, not args_.unnest_separator.empty());
     auto schema = std::optional<type>{};
-    if (cfg_.schema) {
+    if (args_.schema) {
       const auto found
         = std::find_if(schemas.begin(), schemas.end(), [&](const type& schema) {
             for (const auto& name : schema.names()) {
-              if (name == cfg_.schema->inner) {
+              if (name == args_.schema->inner) {
                 return true;
               }
             }
             return false;
           });
       if (found == schemas.end()) {
-        diagnostic::error("failed to find schema `{}`", cfg_.schema->inner)
-          .primary(cfg_.schema->source)
+        diagnostic::error("failed to find schema `{}`", args_.schema->inner)
+          .primary(args_.schema->source)
           // TODO: Refer to the show operator once we have that.
           .note("use `tenzir-ctl show schemas` to show all available schemas")
           .emit(ctrl.diagnostics());
@@ -741,39 +743,62 @@ private:
       }
       schema = *found;
     }
-    if (cfg_.use_ndjson_mode) {
+    if (args_.use_ndjson_mode) {
       return make_parser(to_padded_lines(std::move(input)),
-                         cfg_.unnest_separator, cfg_.selector.has_value(),
-                         schema, not cfg_.no_infer,
+                         args_.unnest_separator, args_.selector.has_value(),
+                         schema, not args_.no_infer,
                          ndjson_parser<FieldValidator>{
                            ctrl,
-                           cfg_.selector,
+                           args_.selector,
                            schema,
                            std::move(schemas),
                            std::move(field_validator),
-                           not cfg_.no_infer,
+                           not args_.no_infer,
                          });
     }
-    return make_parser(std::move(input), cfg_.unnest_separator,
-                       cfg_.selector.has_value(), schema, not cfg_.no_infer,
+    return make_parser(std::move(input), args_.unnest_separator,
+                       args_.selector.has_value(), schema, not args_.no_infer,
                        default_parser<FieldValidator>{
                          ctrl,
-                         cfg_.selector,
+                         args_.selector,
                          schema,
                          std::move(schemas),
                          std::move(field_validator),
-                         not cfg_.no_infer,
+                         not args_.no_infer,
                        });
   }
 
-  config cfg_;
+  parser_args args_;
+};
+
+struct printer_args {
+  std::optional<location> compact_output;
+  std::optional<location> color_output;
+  std::optional<location> monochrome_output;
+  std::optional<location> omit_empty;
+  std::optional<location> omit_nulls;
+  std::optional<location> omit_empty_objects;
+  std::optional<location> omit_empty_lists;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, printer_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("printer_args")
+      .fields(f.field("compact_output", x.compact_output),
+              f.field("color_output", x.color_output),
+              f.field("monochrome_output", x.monochrome_output),
+              f.field("omit_empty", x.omit_empty),
+              f.field("omit_nulls", x.omit_nulls),
+              f.field("omit_empty_objects", x.omit_empty_objects),
+              f.field("omit_empty_lists", x.omit_empty_lists));
+  }
 };
 
 class json_printer final : public plugin_printer {
 public:
   json_printer() = default;
 
-  explicit json_printer(bool pretty) : pretty_{pretty} {
+  explicit json_printer(printer_args args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -782,15 +807,32 @@ public:
 
   auto instantiate(type, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
+    const auto compact = !!args_.compact_output;
+    auto style = default_style();
+    if (args_.monochrome_output)
+      style = no_style();
+    else if (args_.color_output)
+      style = jq_style();
+    const auto omit_nulls
+      = args_.omit_nulls.has_value() or args_.omit_empty.has_value();
+    const auto omit_empty_objects
+      = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
+    const auto omit_empty_lists
+      = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
     return printer_instance::make(
-      [pretty = pretty_](table_slice slice) -> generator<chunk_ptr> {
+      [compact, style, omit_nulls, omit_empty_objects,
+       omit_empty_lists](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
         }
-        // JSON printer should output NDJSON, see:
-        // https://github.com/ndjson/ndjson-spec
-        auto printer = tenzir::json_printer{{.oneline = not pretty}};
+        auto printer = tenzir::json_printer{{
+          .style = style,
+          .oneline = compact,
+          .omit_nulls = omit_nulls,
+          .omit_empty_records = omit_empty_objects,
+          .omit_empty_lists = omit_empty_lists,
+        }};
         // TODO: Since this printer is per-schema we can write an optimized
         // version of it that gets the schema ahead of time and only expects
         // data corresponding to exactly that schema.
@@ -816,11 +858,11 @@ public:
   };
 
   friend auto inspect(auto& f, json_printer& x) -> bool {
-    return f.apply(x.pretty_);
+    return f.apply(x.args_);
   }
 
 private:
-  bool pretty_;
+  printer_args args_;
 };
 
 class plugin final : public virtual parser_plugin<json_parser>,
@@ -832,35 +874,42 @@ public:
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto cfg = config{};
+    auto args = parser_args{};
     auto selector = std::optional<located<std::string>>{};
     auto parser
       = argument_parser{"json", "https://docs.tenzir.com/next/formats/json"};
     parser.add("--selector", selector, "<selector>");
-    parser.add("--schema", cfg.schema, "<schema>");
-    parser.add("--unnest-separator", cfg.unnest_separator, "<separator>");
-    add_common_options_to_parser(parser, cfg);
-    parser.add("--ndjson", cfg.use_ndjson_mode);
+    parser.add("--schema", args.schema, "<schema>");
+    parser.add("--unnest-separator", args.unnest_separator, "<separator>");
+    add_common_options_to_parser(parser, args);
+    parser.add("--ndjson", args.use_ndjson_mode);
     parser.parse(p);
-    if (cfg.schema and selector) {
+    if (args.schema and selector) {
       diagnostic::error("cannot use both `--selector` and `--schema`")
-        .primary(cfg.schema->source)
+        .primary(args.schema->source)
         .primary(selector->source)
         .throw_();
     } else if (selector) {
-      cfg.selector = parse_selector(selector->inner, selector->source);
+      args.selector = parse_selector(selector->inner, selector->source);
     }
-    return std::make_unique<json_parser>(std::move(cfg));
+    return std::make_unique<json_parser>(std::move(args));
   }
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    auto pretty = false;
+    auto args = printer_args{};
     auto parser
       = argument_parser{"json", "https://docs.tenzir.com/next/formats/json"};
-    parser.add("--pretty", pretty);
+    // We try to follow 'jq' option naming.
+    parser.add("-c,--compact-output", args.compact_output);
+    parser.add("-C,--color-output", args.color_output);
+    parser.add("-M,--monochrome-output", args.color_output);
+    parser.add("--omit-empty", args.omit_empty);
+    parser.add("--omit-nulls", args.omit_nulls);
+    parser.add("--omit-empty-objects", args.omit_empty_objects);
+    parser.add("--omit-empty-lists", args.omit_empty_lists);
     parser.parse(p);
-    return std::make_unique<json_printer>(pretty);
+    return std::make_unique<json_printer>(std::move(args));
   }
 };
 
@@ -876,13 +925,13 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/next/formats/{}", name())};
-    auto cfg = config{};
-    add_common_options_to_parser(parser, cfg);
+    auto args = parser_args{};
+    add_common_options_to_parser(parser, args);
     parser.parse(p);
-    cfg.use_ndjson_mode = true;
-    cfg.selector = parse_selector(Selector.str(), location::unknown);
-    cfg.unnest_separator = Separator.str();
-    return std::make_unique<json_parser>(std::move(cfg));
+    args.use_ndjson_mode = true;
+    args.selector = parse_selector(Selector.str(), location::unknown);
+    args.unnest_separator = Separator.str();
+    return std::make_unique<json_parser>(std::move(args));
   }
 };
 

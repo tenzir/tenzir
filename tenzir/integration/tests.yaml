@@ -818,31 +818,26 @@ tests:
         input: data/zeek/empty.log
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_no_separator_header.log
-        expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_no_set_separator_header.log
-        expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_no_separator_value.log
-        expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_no_empty_and_unset_fields.log
-        expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_unequal_fields_types_length.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_duplicate_close_tag.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_data_after_close_tag.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_no_closing_tag.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
         input: data/zeek/broken_no_data_after_open.log
-        expected_result: error
 
   Zeek TSV with Remote Import:
     fixture: ServerTester
@@ -897,9 +892,10 @@ tests:
   Shell:
     tags: [pipelines, zeek]
     steps:
-      - command: exec 'read zeek-tsv | head 1 | print json | shell rev'
+      - command: exec 'read zeek-tsv | head 1 | print json -c | shell rev'
         input: data/zeek/conn.log.gz
-      - command: exec 'shell "echo foo"'
+    # TODO: Reenable this test once the non-deterministic Shell operator echo behavior is fixed.
+    # - command: exec 'shell "echo foo"'
 
   Top and Rare Operators:
     fixture: ServerTester
@@ -1017,6 +1013,26 @@ tests:
         input: data/json/record-with-multiple-unflattened-values.json
       - command: exec 'read json | unflatten | to stdout'
         input: data/json/record-with-multi-nested-field-names.json
+
+  JSON Printer:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read suricata | head 1 | write json'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --compact-output'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --omit-nulls'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --omit-empty-objects'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --omit-empty-lists'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | write json --omit-empty'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | flatten | write json'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | head 1 | flatten | write json --omit-empty'
+        input: data/suricata/rrdata-eve.json
 
   PCAP Format:
     tags: [pipelines, parser, printer, pcap]

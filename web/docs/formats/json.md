@@ -14,8 +14,8 @@ json [--schema=<schema>] [--selector=<field[:prefix]>] [--unnest-separator=<stri
 Printer:
 
 ```
-json [--pretty] [--omit-nulls] [--omit-empty-records] [--omit-empty-lists]
-     [--omit-empty]
+json [-c|--compact-output] [-C|--color-output] [-M|--monochrome-output] 
+     [--omit-nulls] [--omit-empty-objects] [--omit-empty-lists] [--omit-empty]
 ```
 
 ## Description
@@ -98,14 +98,34 @@ Popular examples of NDJSON include the Suricat Eve JSON and the Zeek Streaming
 JSON formats. Tenzir supports [`suricata`][suricata.md] and
 [`zeek-json`][zeek-json.md] parsers out of the box that utilize this mechanism.
 
-### `--pretty` (Printer)
+### `--c|--compact-output` (Printer)
 
-Tenzir defaults to line-delimited JSON output (JSONL or NDJSON). The `--pretty`
-flag switches to a tree-structured representation.
+Switch to line-delimited JSON output (JSONL/NDJSON).
+
+### `--C|--color-output` (Printer)
+
+Colorize the output.
+
+The option enables colorizing the output similar to `jq` by emitting terminal
+escape sequences that represent colors.
+
+Unlike `jq`, coloring is currently opt-in. In the future, we will perform TTY
+detection and colorize the output when write to stdout.
+
+Tenzir honors the [`NO_COLOR`](https://no-color.org/) environment variable and
+won't colorize the output when the variable is present.
+
+### `--M|--monochrome-output` (Printer)
+
+Disables colored output.
+
+This is currently the default. In the future, we will perform TTY detection and
+colorize the output when write to stdout. Use this option today if you want to
+avoid an implicit upgrade to colors in the future.
 
 ### `--omit-nulls` (Printer)
 
-Strips `null` fields from the input.
+Strips `null` fields from the output.
 
 Example:
 
@@ -131,9 +151,9 @@ With `--omit-nulls`, this example becomes:
 }
 ```
 
-### `--omit-empty-records` (Printer)
+### `--omit-empty-objects` (Printer)
 
-Strips empty records from the input.
+Strips empty objects from the output.
 
 Example:
 
@@ -147,7 +167,7 @@ Example:
 }
 ```
 
-With `--omit-empty-records`, this example becomes:
+With `--omit-empty-objects`, this example becomes:
 
 ```json
 {
@@ -157,7 +177,7 @@ With `--omit-empty-records`, this example becomes:
 
 ### `--omit-empty-lists` (Printer)
 
-Strips empty lists from the input.
+Strips empty lists from the output.
 
 Example:
 
@@ -192,14 +212,14 @@ Read JSON from stdin, either NDJSON or tree-structured:
 read json
 ```
 
-Write compact JSON without empty fields to a file:
+Write JSON without empty fields to a file:
 
 ```
 write json --omit-empty to file /tmp/result.json
 ```
 
-Pretty-print JSON in tree-structured form to stdout:
+Print NDJSON to stdout:
 
 ```
-write json --pretty
+write json -c
 ```
