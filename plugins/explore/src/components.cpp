@@ -127,17 +127,18 @@ auto StaticCell(view<data> value, const struct theme& theme) -> Element {
 }
 
 /// A cell in the table body.
-auto InteractiveCell(view<data> value, const struct theme& theme) -> Component {
-  auto make = [&](const auto& x, alignment align, auto data_color) {
-    auto focus_color = theme.focus_color();
-    return Renderer([=, txt = text(to_string(x)),
-                     normal_color = color(data_color)](bool focused) {
-      auto element = focused ? txt | focus | focus_color : txt | normal_color;
-      return align_element(align, std::move(element));
-    });
-  };
-  return colorize(make, value, theme);
-}
+// auto InteractiveCell(view<data> value, const struct theme& theme) ->
+// Component {
+//   auto make = [&](const auto& x, alignment align, auto data_color) {
+//     auto focus_color = theme.focus_color();
+//     return Renderer([=, txt = text(to_string(x)),
+//                      normal_color = color(data_color)](bool focused) {
+//       auto element = focused ? txt | focus | focus_color : txt |
+//       normal_color; return align_element(align, std::move(element));
+//     });
+//   };
+//   return colorize(make, value, theme);
+// }
 
 /// A table header component.
 auto LeafColumnHeader(std::string top, std::string bottom, int height,
@@ -311,7 +312,7 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
       return LeafColumn(state, schema, index);
     },
     [&](const list_type&) {
-      // TODO
+      // TODO: support lists natively.
       return LeafColumn(state, schema, index);
     },
     [&](const record_type& record) {
@@ -331,70 +332,69 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
   return caf::visit(f, parent);
 }
 
-auto FieldHeader(std::string top, std::string bottom, const struct theme& theme)
-  -> Component {
-  return Renderer([&theme, top_text = std::move(top),
-                   bottom_text = std::move(bottom)](bool focused) mutable {
-    auto header = text(top_text) | bold | center;
-    header |= focused ? focus | theme.focus_color() : color(theme.palette.text);
-    return vbox({
-             std::move(header),
-             text(bottom_text) | center | color(theme.palette.comment),
-           })
-           | vcenter;
-  });
-}
-
-auto HeaderCell(std::string_view name, const type& type,
-                const struct theme& theme) -> Component {
-  // TODO
-  return {};
-}
-
-auto HeaderCell(std::string_view name, Components fields,
-                const struct theme& theme) -> Component {
-  // TODO
-  return {};
-}
-
-auto TableHeader(ui_state* state, const type& schema, offset index = {})
-  -> Component {
-  auto field = record_type::field_view{};
-  if (index.empty())
-    field.type = schema;
-  else
-    field = caf::get<record_type>(schema).field(index);
-  auto f = detail::overload{
-    [&](const auto&) {
-      VAST_ASSERT(!index.empty());
-      return HeaderCell(field.name, field.type, state->theme);
-    },
-    [&](const list_type&) {
-      VAST_ASSERT(!index.empty());
-      return HeaderCell(field.name, field.type, state->theme);
-    },
-    [&](const record_type& record) {
-      auto fields = Container::Horizontal({});
-      index.push_back(0);
-      auto first = true;
-      for (size_t i = 0; i < record.num_fields(); ++i) {
-        if (first)
-          first = false;
-        else
-          fields->Add(component(state->theme.separator()));
-        fields->Add(TableHeader(state, schema, index));
-        ++index.back();
-      }
-      return Container::Vertical({
-        HeaderCell(field.name, field.type, state->theme),
-        component(state->theme.separator()),
-        std::move(fields),
-      });
-    },
-  };
-  return caf::visit(f, field.type);
-}
-
+// auto FieldHeader(std::string top, std::string bottom, const struct theme&
+// theme)
+//   -> Component {
+//   return Renderer([&theme, top_text = std::move(top),
+//                    bottom_text = std::move(bottom)](bool focused) mutable {
+//     auto header = text(top_text) | bold | center;
+//     header |= focused ? focus | theme.focus_color() :
+//     color(theme.palette.text); return vbox({
+//              std::move(header),
+//              text(bottom_text) | center | color(theme.palette.comment),
+//            })
+//            | vcenter;
+//   });
+// }
+//
+// auto HeaderCell(std::string_view name, const type& type,
+//                 const struct theme& theme) -> Component {
+//   return {};
+// }
+//
+// auto HeaderCell(std::string_view name, Components fields,
+//                 const struct theme& theme) -> Component {
+//   return {};
+// }
+//
+// auto TableHeader(ui_state* state, const type& schema, offset index = {})
+//  -> Component {
+//  auto field = record_type::field_view{};
+//  if (index.empty())
+//    field.type = schema;
+//  else
+//    field = caf::get<record_type>(schema).field(index);
+//  auto f = detail::overload{
+//    [&](const auto&) {
+//      VAST_ASSERT(!index.empty());
+//      return HeaderCell(field.name, field.type, state->theme);
+//    },
+//    [&](const list_type&) {
+//      VAST_ASSERT(!index.empty());
+//      return HeaderCell(field.name, field.type, state->theme);
+//    },
+//    [&](const record_type& record) {
+//      auto fields = Container::Horizontal({});
+//      index.push_back(0);
+//      auto first = true;
+//      for (size_t i = 0; i < record.num_fields(); ++i) {
+//        if (first)
+//          first = false;
+//        else
+//          fields->Add(component(state->theme.separator()));
+//        fields->Add(TableHeader(state, schema, index));
+//        ++index.back();
+//      }
+//      return Container::Vertical({
+//        HeaderCell(field.name, field.type, state->theme),
+//        component(state->theme.separator()),
+//        std::move(fields),
+//      });
+//    },
+//  };
+//  return caf::visit(f, field.type);
+//}
+//
 /// Generates a row-wise table component.
 /// A table that represents values of events in a row-oriented fashion.
 // auto HorizontalTable(ui_state* state, const type& schema) -> Component {
