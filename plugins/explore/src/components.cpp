@@ -401,59 +401,32 @@ auto TableHeader(ui_state* state, const type& schema, offset index = {})
 //   return {};
 // }
 
-auto Explorer(ui_state* state) -> Component {
+auto Navigator(ui_state* state, int* index) -> Component {
   class Impl : public ComponentBase {
   public:
-    Impl(ui_state* state) : state_{state} {
-      // Construct menu.
-      auto menu_style = state_->theme.menu_option(Direction::Down);
-      menu_ = Menu(&schema_names_, &index_, std::move(menu_style));
-      // Construct navigator.
-      auto loading = Renderer([] {
-        return Vee() | center | flex;
-      });
-      tab_ = Container::Tab({loading}, &index_); // to be filled
+    Impl(ui_state* state, int* index) : state_{state}, index_{index} {
+      fingerprints_ = Container::Vertical({});
+      fingerprints_->DetachAllChildren();
+      menu_ = Menu(&schema_names_, index_,
+                   state_->theme.menu_option(Direction::Down));
       auto navigator = Container::Horizontal({
         Container::Vertical({menu_, component(filler())}),
         component(text(" ")),
         fingerprints_,
       });
-      // Construct full page.
-      auto split = ResizableSplit({
-        .main = std::move(navigator),
-        .back = tab_,
-        .direction = Direction::Left,
-        .main_size = &menu_width_,
-        .separator_func =
-          [&] {
-            return state_->theme.separator();
-          },
-      });
-      Add(std::move(split));
+      Add(std::move(navigator));
     }
 
     auto Render() -> Element override {
       auto num_schemas = state_->tables.size();
       if (schema_cache_.size() == num_schemas)
         return ComponentBase::Render();
-      // Once we get a new schema, we must add it to the navigator.
-      VAST_ASSERT(schema_cache_.size() < num_schemas);
-      if (schema_cache_.empty()) {
-        // When we enter here for the first time, clear the boilerplate in our
-        // components.
-        tab_->DetachAllChildren();
-        fingerprints_->DetachAllChildren();
-      }
       // Assemble new tables and update components.
       for (const auto& [type, table] : state_->tables) {
         if (!schema_cache_.contains(type)) {
           schema_cache_.insert(type);
           schema_names_.emplace_back(type.name());
-          tab_->Add(enframe(VerticalTable(state_, type)));
           auto fingerprint = type.make_fingerprint();
-          // One extra character for the separator.
-          auto width = type.name().size() + fingerprint.size() + 1;
-          menu_width_ = std::max(menu_width_, detail::narrow_cast<int>(width));
           auto element = text(std::move(fingerprint))
                          | color(state_->theme.palette.subtle);
           fingerprints_->Add(component(std::move(element)));
@@ -463,10 +436,6 @@ auto Explorer(ui_state* state) -> Component {
       VAST_ASSERT(num_schemas == schema_cache_.size());
       VAST_ASSERT(num_schemas == schema_names_.size());
       VAST_ASSERT(num_schemas == fingerprints_->ChildCount());
-      VAST_ASSERT(num_schemas == tab_->ChildCount());
-      // Only show the navigator when we have more than one schema.
-      if (num_schemas == 1)
-        menu_width_ = 0;
       return ComponentBase::Render();
     }
 
@@ -485,11 +454,8 @@ auto Explorer(ui_state* state) -> Component {
   private:
     ui_state* state_;
 
-    /// The width of the navigation split.
-    int menu_width_ = 0;
-
     /// The currently selected schema.
-    int index_ = 0;
+    int* index_ = nullptr;
 
     /// The menu items for the navigator. In sync with the tab.
     std::vector<std::string> schema_names_;
@@ -498,13 +464,72 @@ auto Explorer(ui_state* state) -> Component {
     Component menu_;
 
     /// The navigator component that shows the fingerprints.
-    Component fingerprints_ = Container::Vertical({});
+    Component fingerprints_;
+
+    /// The tables by schema.
+    std::unordered_set<type> schema_cache_;
+  };
+  return Make<Impl>(state, index);
+}
+
+auto Explorer(ui_state* state) -> Component {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state) : state_{state} {
+      auto navigator = Navigator(state, &index_);
+      tab_ = Container::Tab({}, &index_); // to be filled
+      // Construct full page.
+      auto split = ResizableSplit({
+        .main = std::move(navigator),
+        .back = tab_,
+        .direction = Direction::Left,
+        .main_size = &navigator_width_,
+        .separator_func =
+          [&] {
+            return state_->theme.separator();
+          },
+      });
+      Add(std::move(split));
+    }
+
+    auto Render() -> Element override {
+      auto num_tables = state_->tables.size();
+      if (tables_.size() == num_tables)
+        return ComponentBase::Render();
+      if (tables_.empty())
+        tab_->DetachAllChildren();
+      for (const auto& [type, table] : state_->tables) {
+        if (!tables_.contains(type)) {
+          auto component = enframe(VerticalTable(state_, type));
+          tables_.emplace(type, component);
+          tab_->Add(component);
+          navigator_width_ = std::max(
+            navigator_width_, detail::narrow_cast<int>(type.name().size()));
+        }
+      }
+      VAST_ASSERT(num_tables == state_->tables.size());
+      VAST_ASSERT(num_tables == tables_.size());
+      VAST_ASSERT(num_tables == tab_->ChildCount());
+      // Only show the navigator when we have more than one schema.
+      if (num_tables == 1)
+        navigator_width_ = 0;
+      return ComponentBase::Render();
+    }
+
+  private:
+    ui_state* state_;
+
+    /// The width of the navigation split.
+    int navigator_width_ = 0;
+
+    /// The currently selected schema.
+    int index_ = 0;
 
     /// The tab component containing all table viewers. In sync with schemas.
     Component tab_;
 
     /// The tables by schema.
-    std::unordered_set<type> schema_cache_;
+    std::unordered_map<type, Component> tables_;
   };
   return Make<Impl>(state);
 }
