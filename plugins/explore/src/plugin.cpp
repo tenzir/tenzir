@@ -44,7 +44,7 @@ struct plugin_args {
 auto make_screen(const plugin_args& args) -> ftxui::ScreenInteractive {
   using namespace ftxui;
   TENZIR_ASSERT((args.width && args.height) || (!args.width && !args.height));
-  TENZIR_ASSERT(args.width && args.width->inner > 0 && args.height->inner > 0);
+  TENZIR_ASSERT(!args.width || (args.width->inner > 0 && args.height->inner > 0));
   if (args.width && args.height)
     return ScreenInteractive::FixedSize(args.width->inner, args.height->inner);
   if (args.fullscreen)
