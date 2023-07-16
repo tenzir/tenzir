@@ -55,28 +55,26 @@ auto enframe(Component component) -> Component {
 
 /// A double-row focusable cell in the table header.
 auto Help() -> Component {
-  return Renderer([] {
-    auto table = Table({
-      {" Key ", " Alias ", " Description "},
-      {"k", "↑", "move focus one window up"},
-      {"j", "↓", "move focus one window down"},
-      {"h", "←", "move focus one window to the left"},
-      {"l", "→", "move focus one window to the right"},
-      {"K", "p", "move up in schema navigator"},
-      {"J", "n", "move down in schema navigator"},
-      {"?", "", "show this help"},
-      {"q", "", "quit the UI"},
-    });
-    table.SelectAll().Border(ROUNDED);
-    // Set the table header apart from the rest
-    table.SelectRow(0).Decorate(bold);
-    table.SelectRow(0).SeparatorHorizontal(ROUNDED);
-    table.SelectRow(0).Border(ROUNDED);
-    // Align center the first column.
-    table.SelectColumn(0).DecorateCells(center);
-    table.SelectColumn(1).DecorateCells(center);
-    return table.Render();
+  auto table = Table({
+    {" Key ", " Alias ", " Description "},
+    {"k", "↑", "move focus one window up"},
+    {"j", "↓", "move focus one window down"},
+    {"h", "←", "move focus one window to the left"},
+    {"l", "→", "move focus one window to the right"},
+    {"K", "p", "move up in schema navigator"},
+    {"J", "n", "move down in schema navigator"},
+    {"?", "", "show this help"},
+    {"q", "", "quit the UI"},
   });
+  table.SelectAll().Border(ROUNDED);
+  // Set the table header apart from the rest
+  table.SelectRow(0).Decorate(bold);
+  table.SelectRow(0).SeparatorHorizontal(ROUNDED);
+  table.SelectRow(0).Border(ROUNDED);
+  // Align center the first column.
+  table.SelectColumn(0).DecorateCells(center);
+  table.SelectColumn(1).DecorateCells(center);
+  return lift(table.Render());
 }
 
 enum class alignment { left, center, right };
