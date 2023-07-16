@@ -6,17 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/parser_interface.hpp"
-#include "tenzir/tql/parser.hpp"
-
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
-#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/element_type.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql/parser.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/type.h>
@@ -54,16 +52,16 @@ namespace {
     .throw_();
 }
 
-struct print_and_save_state {
+struct write_and_save_state {
   std::unique_ptr<printer_instance> printer;
   std::function<void(chunk_ptr)> saver;
 };
 
-class print_operator final : public crtp_operator<print_operator> {
+class write_operator final : public crtp_operator<write_operator> {
 public:
-  print_operator() = default;
+  write_operator() = default;
 
-  print_operator(std::unique_ptr<plugin_printer> printer) noexcept
+  write_operator(std::unique_ptr<plugin_printer> printer) noexcept
     : printer_{std::move(printer)} {
   }
 
@@ -119,10 +117,10 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "print";
+    return "write";
   }
 
-  friend auto inspect(auto& f, print_operator& x) -> bool {
+  friend auto inspect(auto& f, write_operator& x) -> bool {
     return plugin_inspect(f, x.printer_);
   }
 
@@ -142,11 +140,11 @@ private:
   std::unique_ptr<plugin_printer> printer_;
 };
 
-class print_plugin final : public virtual operator_plugin<print_operator> {
+class write_plugin final : public virtual operator_plugin<write_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto usage = "print <printer> <args>...";
-    auto docs = "https://docs.tenzir.com/next/operators/transformations/print";
+    auto usage = "write <printer> <args>...";
+    auto docs = "https://docs.tenzir.com/next/operators/transformations/write";
     auto name = p.accept_shell_arg();
     if (!name) {
       diagnostic::error("expected printer name")
@@ -161,7 +159,7 @@ public:
     }
     auto printer = plugin->parse_printer(p);
     TENZIR_DIAG_ASSERT(printer);
-    return std::make_unique<print_operator>(std::move(printer));
+    return std::make_unique<write_operator>(std::move(printer));
   }
 };
 
@@ -246,13 +244,13 @@ public:
 };
 
 /// The operator for printing and saving data without joining.
-class print_and_save_operator final
-  : public schematic_operator<print_and_save_operator, print_and_save_state,
+class write_and_save_operator final
+  : public schematic_operator<write_and_save_operator, write_and_save_state,
                               std::monostate> {
 public:
-  print_and_save_operator() = default;
+  write_and_save_operator() = default;
 
-  explicit print_and_save_operator(std::unique_ptr<plugin_printer> printer,
+  explicit write_and_save_operator(std::unique_ptr<plugin_printer> printer,
                                    std::unique_ptr<plugin_saver> saver) noexcept
     : printer_{std::move(printer)}, saver_{std::move(saver)} {
   }
@@ -268,7 +266,7 @@ public:
     if (not s) {
       return std::move(s.error());
     }
-    return print_and_save_state{
+    return write_and_save_state{
       .printer = std::move(*p),
       .saver = std::move(*s),
     };
@@ -291,10 +289,10 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "<print_and_save>";
+    return "<write_and_save>";
   }
 
-  friend auto inspect(auto& f, print_and_save_operator& x) -> bool {
+  friend auto inspect(auto& f, write_and_save_operator& x) -> bool {
     return plugin_inspect(f, x.printer_) && plugin_inspect(f, x.saver_);
   }
 
@@ -313,80 +311,6 @@ protected:
 private:
   std::unique_ptr<plugin_printer> printer_;
   std::unique_ptr<plugin_saver> saver_;
-};
-
-auto make_stdout_saver() -> std::unique_ptr<plugin_saver> {
-  auto diag = null_diagnostic_handler{};
-  auto plugin = plugins::find<saver_parser_plugin>("file");
-  TENZIR_DIAG_ASSERT(plugin);
-  auto parser = tql::make_parser_interface("-", diag);
-  auto saver = plugin->parse_saver(*parser);
-  TENZIR_DIAG_ASSERT(saver);
-  return saver;
-}
-
-class write_plugin final : public virtual operator_parser_plugin {
-public:
-  auto name() const -> std::string override {
-    return "write";
-  };
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto usage = "write <printer> <args>... [to <saver> <args>...]";
-    auto docs = "https://docs.tenzir.com/next/operators/sinks/write";
-    auto l_name = p.accept_shell_arg();
-    if (!l_name) {
-      diagnostic::error("expected printer name")
-        .primary(p.current_span())
-        .usage(usage)
-        .docs(docs)
-        .throw_();
-    }
-    auto l_plugin = plugins::find<printer_parser_plugin>(l_name->inner);
-    if (!l_plugin) {
-      throw_printer_not_found(*l_name);
-    }
-    auto q = until_keyword_parser{"to", p};
-    auto printer = l_plugin->parse_printer(q);
-    TENZIR_DIAG_ASSERT(printer);
-    TENZIR_DIAG_ASSERT(q.at_end());
-    auto saver = std::unique_ptr<plugin_saver>{};
-    if (p.at_end()) {
-      saver = make_stdout_saver();
-    } else {
-      auto read = p.accept_identifier();
-      TENZIR_DIAG_ASSERT(read && read->name == "to");
-      auto p_name = p.accept_shell_arg();
-      if (!p_name) {
-        diagnostic::error("expected saver name")
-          .primary(p.current_span())
-          .note(usage)
-          .docs(docs)
-          .throw_();
-      }
-      auto p_plugin = plugins::find<saver_parser_plugin>(p_name->inner);
-      if (!p_plugin) {
-        throw_saver_not_found(*p_name);
-      }
-      saver = p_plugin->parse_saver(p);
-      TENZIR_DIAG_ASSERT(saver);
-    }
-    // If the saver does not want to join different schemas, we cannot use a
-    // single `print_operator` here, because its output would be joined. Thus,
-    // we use `print_and_save_operator`, which does printing and saving in one
-    // go. Note that it could be that `printer->allows_joining()` returns false,
-    // but `saver->is_joining()` is true. The implementation of `print_operator`
-    // contains the necessary check that it is only passed one single schema in
-    // that case, and it otherwise aborts the execution.
-    if (not saver->is_joining()) {
-      return std::make_unique<print_and_save_operator>(std::move(printer),
-                                                       std::move(saver));
-    }
-    auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::make_unique<print_operator>(std::move(printer)));
-    ops.push_back(std::make_unique<save_operator>(std::move(saver)));
-    return std::make_unique<pipeline>(std::move(ops));
-  }
 };
 
 /// @throws `diagnostic`
@@ -452,33 +376,32 @@ public:
       TENZIR_DIAG_ASSERT(printer);
     }
     // If the saver does not want to join different schemas, we cannot use a
-    // single `print_operator` here, because its output would be joined. Thus,
-    // we use `print_and_save_operator`, which does printing and saving in one
+    // single `write_operator` here, because its output would be joined. Thus,
+    // we use `write_and_save_operator`, which does printing and saving in one
     // go. Note that it could be that `printer->allows_joining()` returns false,
-    // but `saver->is_joining()` is true. The implementation of `print_operator`
+    // but `saver->is_joining()` is true. The implementation of `write_operator`
     // contains the necessary check that it is only passed one single schema in
     // that case, and it otherwise aborts the execution.
     if (not saver->is_joining()) {
-      return std::make_unique<print_and_save_operator>(std::move(printer),
+      return std::make_unique<write_and_save_operator>(std::move(printer),
                                                        std::move(saver));
     }
     auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::make_unique<print_operator>(std::move(printer)));
+    ops.push_back(std::make_unique<write_operator>(std::move(printer)));
     ops.push_back(std::make_unique<save_operator>(std::move(saver)));
     return std::make_unique<pipeline>(std::move(ops));
   }
 };
 
-using print_and_save_plugin
-  = operator_inspection_plugin<print_and_save_operator>;
+using write_and_save_plugin
+  = operator_inspection_plugin<write_and_save_operator>;
 
 } // namespace
 
 } // namespace tenzir::plugins::write_to_print_save
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::write_to_print_save::write_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::write_to_print_save::to_plugin)
 TENZIR_REGISTER_PLUGIN(
-  tenzir::plugins::write_to_print_save::print_and_save_plugin)
+  tenzir::plugins::write_to_print_save::write_and_save_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::write_to_print_save::save_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::write_to_print_save::print_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::write_to_print_save::write_plugin)

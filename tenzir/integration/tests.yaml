@@ -703,49 +703,49 @@ tests:
     tags: [pipelines]
     steps:
       # - is an alternative form of stdin and stdout
-      - command: exec 'from stdin read json | write json to stdout'
+      - command: exec 'from stdin read json | write json | save stdout'
         input: data/json/sip.log.json.gz
-      - command: exec 'from file - read json | write json to stdout'
+      - command: exec 'from file - read json | to stdout write json'
         input: data/json/sip.log.json.gz
       # stdin and stdout are the defaults
       - command: exec 'read json | write json'
         input: data/json/files.log.json.gz
       # - is an alternative form of stdin and stdout
-      - command: exec 'from - read json | write json to -'
+      - command: exec 'from - read json | to - write json '
         input: data/json/irc.log.json.gz
-      - command: exec 'from file - read json | write json to -'
+      - command: exec 'from file - read json | to - write json'
         input: data/json/irc.log.json.gz
 
   Read from JSON File:
     tags: [pipelines]
     steps:
-      - command: exec 'from file @./data/json/record-in-list.json read json | write json to stdout'
+      - command: exec 'from file @./data/json/record-in-list.json read json | write json'
 
   Type mismatch in a column:
     tags: [pipelines]
     steps:
-      - command: exec 'from file @./data/json/type-mismatch.json read json | write json to stdout'
+      - command: exec 'from file @./data/json/type-mismatch.json read json | write json'
 
   Use schema time unit when converting from a double to a duration:
     tags: [pipelines]
     steps:
-      - command: exec 'from file @./data/json/double-to-duration-cast.json read json --selector=schema:argus | select SIntPkt | write json to stdout'
+      - command: exec 'from file @./data/json/double-to-duration-cast.json read json --selector=schema:argus | select SIntPkt | write json'
 
   Read from suricata file:
     tags: [pipelines]
     steps:
-      - command: exec 'from file @./data/suricata/eve.json read suricata | write json to stdout'
-      - command: exec 'from file @./data/suricata/eve.json read json --schema=suricata.alert --no-infer | write json to stdout'
+      - command: exec 'from file @./data/suricata/eve.json read suricata | write json'
+      - command: exec 'from file @./data/suricata/eve.json read json --schema=suricata.alert --no-infer | write json'
 
   Skip columns that are not in the schema for suricata input with no-infer option:
     tags: [pipelines]
     steps:
-      - command: exec 'from file @./data/suricata/dns-with-no-schema-column.json read suricata --no-infer | select custom_field | write json to stdout'
+      - command: exec 'from file @./data/suricata/dns-with-no-schema-column.json read suricata --no-infer | select custom_field | write json'
 
   Read from zeek json file:
     tags: [pipelines]
     steps:
-      - command: exec 'from file @./data/zeek/zeek.json read zeek-json | write json to stdout'
+      - command: exec 'from file @./data/zeek/zeek.json read zeek-json | write json'
 
   Schema ID Extractor:
     tags: [pipelines, cef]
@@ -776,67 +776,67 @@ tests:
   Empty Record in Pipeline:
     tags: [pipelines]
     steps:
-      - command: exec 'from - read json| write json to stdout'
+      - command: exec 'from - read json| write json'
         input: data/json/empty-record.json
-      - command: exec 'from - read json | write csv to stdout'
+      - command: exec 'from - read json | write csv'
         input: data/json/empty-record.json
-      - command: exec 'from - read json | write xsv " " ; NULL to stdout'
+      - command: exec 'from - read json | write xsv " " ; NULL'
         input: data/json/empty-record.json
 
   Repeat:
     tags: [pipelines, repeat]
     steps:
-      - command: exec 'load file - | parse cef | write json'
+      - command: exec 'load file - | read cef | write json'
         input: data/cef/forcepoint.log
-      - command: exec 'load file - | repeat 5 | parse cef | write json'
+      - command: exec 'load file - | repeat 5 | read cef | write json'
         input: data/cef/forcepoint.log
-      - command: exec 'load file - | parse cef | repeat 5 | write json'
+      - command: exec 'load file - | read cef | repeat 5 | write json'
         input: data/cef/forcepoint.log
-      - command: exec 'load file - | parse cef | measure | summarize sum(events) by schema | write json'
+      - command: exec 'load file - | read cef | measure | summarize sum(events) by schema | write json'
         input: data/cef/forcepoint.log
-      - command: exec 'load file - | repeat 5 | parse cef | measure | summarize sum(events) by schema | write json'
+      - command: exec 'load file - | repeat 5 | read cef | measure | summarize sum(events) by schema | write json'
         input: data/cef/forcepoint.log
-      - command: exec 'load file - | parse cef | repeat 5 | measure | summarize sum(events) by schema | write json'
+      - command: exec 'load file - | read cef | repeat 5 | measure | summarize sum(events) by schema | write json'
         input: data/cef/forcepoint.log
 
   Zeek TSV Pipeline Format:
     tags: [pipelines, zeek]
     steps:
-      - command: exec 'from stdin read zeek-tsv | write json to stdout'
+      - command: exec 'from stdin read zeek-tsv | write json'
         input: data/zeek/merge.log
-      - command: exec 'from stdin read zeek-tsv | write json to stdout'
+      - command: exec 'from stdin read zeek-tsv | write json'
         input: data/zeek/merge_with_whitespace_separation.log
-      - command: exec 'from stdin read zeek-tsv | head 300 | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | head 300 | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/dns.log.gz
-      - command: exec 'from stdin read zeek-tsv | head 300 | write csv to stdout'
+      - command: exec 'from stdin read zeek-tsv | head 300 | write csv'
         input: data/zeek/dns.log.gz
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags --set-separator ";" --empty-field "empty" --unset-field "NULLVAL" to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags --set-separator ";" --empty-field "empty" --unset-field "NULLVAL"'
         input: data/zeek/whitespace_start.log
-      - command: exec 'from stdin read json | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read json | write zeek-tsv --disable-timestamp-tags'
         input: data/json/snmp.log.json.gz
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/empty.log
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_no_separator_header.log
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_no_set_separator_header.log
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_no_separator_value.log
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_no_empty_and_unset_fields.log
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_unequal_fields_types_length.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_duplicate_close_tag.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_data_after_close_tag.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_no_closing_tag.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags to stdout'
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_no_data_after_open.log
 
   Zeek TSV with Remote Import:
@@ -892,7 +892,7 @@ tests:
   Shell:
     tags: [pipelines, zeek]
     steps:
-      - command: exec 'read zeek-tsv | head 1 | print json -c | shell rev'
+      - command: exec 'read zeek-tsv | head 1 | write json -c | shell rev'
         input: data/zeek/conn.log.gz
     # TODO: Reenable this test once the non-deterministic Shell operator echo behavior is fixed.
     # - command: exec 'shell "echo foo"'
@@ -999,11 +999,11 @@ tests:
         input: data/json/records-in-nested-lists.json
       - command: exec 'read json | unflatten | to stdout'
         input: data/json/records-in-nested-record-lists.json
-      - command: exec 'read json | flatten | unflatten | write json to stdout'
+      - command: exec 'read json | flatten | unflatten | write json'
         input: data/json/record-in-list.json
-      - command: exec 'read json | flatten | unflatten | write json to stdout'
+      - command: exec 'read json | flatten | unflatten | write json'
         input: data/json/nested-object.json
-      - command: exec 'read json | flatten | unflatten | write json to stdout'
+      - command: exec 'read json | flatten | unflatten | write json'
         input: data/json/nested-structure.json
       - command: exec 'read zeek-tsv | tail 10 | flatten | unflatten | to stdout'
         input: data/zeek/dns.log.gz
