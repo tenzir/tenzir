@@ -19,12 +19,7 @@
 namespace vast::plugins::explore {
 
 /// Lifts an FTXUI element into a component.
-template <class T>
-auto component(T x) -> ftxui::Component {
-  return ftxui::Renderer([x = std::move(x)]() {
-    return x;
-  });
-}
+auto component(ftxui::Element x) -> ftxui::Component;
 
 // We are adding a "deep" event catching helper here becase we are facing the
 // same issue of a parent component masking the events from its children as

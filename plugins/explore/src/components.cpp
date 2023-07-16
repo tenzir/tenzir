@@ -28,6 +28,22 @@ namespace vast::plugins::explore {
 
 using namespace ftxui;
 
+auto lift(Element e) -> Component {
+  class Impl : public ComponentBase {
+  public:
+    explicit Impl(Element e) : element_{std::move(e)} {
+    }
+
+    auto Render() -> Element final {
+      return element_;
+    }
+
+  private:
+    Element element_;
+  };
+  return Make<Impl>(std::move(e));
+}
+
 namespace {
 
 /// Makes a component a vertically scrollable in a frame.
@@ -177,7 +193,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
                            height, state_->theme);
       auto container = Container::Vertical({});
       container->Add(header);
-      container->Add(component(state_->theme.separator()));
+      container->Add(lift(state_->theme.separator()));
       container->Add(body_);
       Add(container);
     }
@@ -200,7 +216,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
           auto cell = StaticCell(slice.at(row, col), state_->theme);
           body.push_back(std::move(cell));
         }
-        body_->Add(component(vbox(std::move(body))));
+        body_->Add(lift(vbox(std::move(body))));
       }
       num_slices_rendered_ = table_->slices.size();
       return ComponentBase::Render();
@@ -255,13 +271,13 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
         if (first)
           first = false;
         else
-          body_->Add(component(state_->theme.separator()));
+          body_->Add(lift(state_->theme.separator()));
         body_->Add(std::move(column));
       }
       auto result = Container::Vertical({});
       if (header_) {
         result->Add(header_);
-        result->Add(component(state_->theme.separator()));
+        result->Add(lift(state_->theme.separator()));
       }
       result->Add(body_);
       Add(result);
@@ -273,7 +289,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
         return;
       auto result = Container::Vertical({
         header_,
-        component(state_->theme.separator()),
+        lift(state_->theme.separator()),
         body_,
       });
       DetachAllChildren();
@@ -285,8 +301,8 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
         return;
       auto result = Container::Vertical({
         header_,
-        component(state_->theme.separator()),
-        component(text("...") | center),
+        lift(state_->theme.separator()),
+        lift(text("...") | center),
       });
       DetachAllChildren();
       Add(result);
@@ -381,13 +397,13 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
 //        if (first)
 //          first = false;
 //        else
-//          fields->Add(component(state->theme.separator()));
+//          fields->Add(lift(state->theme.separator()));
 //        fields->Add(TableHeader(state, schema, index));
 //        ++index.back();
 //      }
 //      return Container::Vertical({
 //        HeaderCell(field.name, field.type, state->theme),
-//        component(state->theme.separator()),
+//        lift(state->theme.separator()),
 //        std::move(fields),
 //      });
 //    },
@@ -410,8 +426,8 @@ auto Navigator(ui_state* state, int* index) -> Component {
       menu_ = Menu(&schema_names_, index_,
                    state_->theme.menu_option(Direction::Down));
       auto navigator = Container::Horizontal({
-        Container::Vertical({menu_, component(filler())}),
-        component(text(" ")),
+        Container::Vertical({menu_, lift(filler())}),
+        lift(text(" ")),
         fingerprints_,
       });
       Add(std::move(navigator));
@@ -429,7 +445,7 @@ auto Navigator(ui_state* state, int* index) -> Component {
           auto fingerprint = type.make_fingerprint();
           auto element = text(std::move(fingerprint))
                          | color(state_->theme.palette.subtle);
-          fingerprints_->Add(component(std::move(element)));
+          fingerprints_->Add(lift(std::move(element)));
         }
       }
       VAST_ASSERT(num_schemas == state_->tables.size());
