@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The TEnzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "explore/components.hpp"
@@ -11,12 +11,12 @@
 #include "explore/elements.hpp"
 #include "explore/ui_state.hpp"
 
-#include <vast/collect.hpp>
-#include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/data.hpp>
-#include <vast/detail/narrow.hpp>
-#include <vast/table_slice.hpp>
-#include <vast/table_slice_column.hpp>
+#include <tenzir/collect.hpp>
+#include <tenzir/concept/printable/tenzir/data.hpp>
+#include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/table_slice.hpp>
+#include <tenzir/table_slice_column.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -24,7 +24,7 @@
 
 #include <unordered_set>
 
-namespace vast::plugins::explore {
+namespace tenzir::plugins::explore {
 
 using namespace ftxui;
 
@@ -179,8 +179,8 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
   public:
     Impl(ui_state* state, const type& schema, offset index)
       : state_{state}, table_{state->tables[schema]}, index_{std::move(index)} {
-      VAST_ASSERT(table_ != nullptr);
-      VAST_ASSERT(!table_->slices.empty());
+      TENZIR_ASSERT(table_ != nullptr);
+      TENZIR_ASSERT(!table_->slices.empty());
       const auto& record
         = caf::get<record_type>(table_->slices.front().schema());
       auto depth = record.depth();
@@ -201,8 +201,8 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
         return ComponentBase::Render();
       for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i) {
         const auto& slice = table_->slices[i];
-        VAST_DEBUG("rendering [{},{}) of schema '{}'", i,
-                   i + table_->slices.size(), slice.schema().name());
+        TENZIR_DEBUG("rendering [{},{}) of schema '{}'", i,
+                     i + table_->slices.size(), slice.schema().name());
         auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
         // TODO: make the component configurable with respect to static vs.
         // dynamic behavior. Uncommenting the cell.
@@ -250,7 +250,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
   public:
     Impl(ui_state* state, Components columns, std::string name)
       : state_{state} {
-      VAST_ASSERT(!columns.empty());
+      TENZIR_ASSERT(!columns.empty());
       if (!name.empty()) {
         header_ = RecordColumnHeader(std::move(name), state_->theme);
         header_ |= Catch<catch_policy::child>([=](Event event) {
@@ -382,11 +382,11 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
 //    field = caf::get<record_type>(schema).field(index);
 //  auto f = detail::overload{
 //    [&](const auto&) {
-//      VAST_ASSERT(!index.empty());
+//      TENZIR_ASSERT(!index.empty());
 //      return HeaderCell(field.name, field.type, state->theme);
 //    },
 //    [&](const list_type&) {
-//      VAST_ASSERT(!index.empty());
+//      TENZIR_ASSERT(!index.empty());
 //      return HeaderCell(field.name, field.type, state->theme);
 //    },
 //    [&](const record_type& record) {
@@ -458,10 +458,10 @@ auto Navigator(ui_state* state, int* index, int* width) -> Component {
           fingerprints_->Add(lift(std::move(element)));
         }
       }
-      VAST_ASSERT(num_schemas == state_->tables.size());
-      VAST_ASSERT(num_schemas == schema_cache_.size());
-      VAST_ASSERT(num_schemas == schema_names_.size());
-      VAST_ASSERT(num_schemas == fingerprints_->ChildCount());
+      TENZIR_ASSERT(num_schemas == state_->tables.size());
+      TENZIR_ASSERT(num_schemas == schema_cache_.size());
+      TENZIR_ASSERT(num_schemas == schema_names_.size());
+      TENZIR_ASSERT(num_schemas == fingerprints_->ChildCount());
       return ComponentBase::Render();
     }
 
@@ -546,9 +546,9 @@ auto Explorer(ui_state* state) -> Component {
           tab_->Add(component);
         }
       }
-      VAST_ASSERT(num_tables == state_->tables.size());
-      VAST_ASSERT(num_tables == tables_.size());
-      VAST_ASSERT(num_tables == tab_->ChildCount());
+      TENZIR_ASSERT(num_tables == state_->tables.size());
+      TENZIR_ASSERT(num_tables == tables_.size());
+      TENZIR_ASSERT(num_tables == tab_->ChildCount());
       // Only show the navigator when we have more than one schema.
       if (num_tables == 1)
         navigator_width_ = 0;
@@ -616,4 +616,4 @@ auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
   return Make<Impl>(screen, state);
 };
 
-} // namespace vast::plugins::explore
+} // namespace tenzir::plugins::explore

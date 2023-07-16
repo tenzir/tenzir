@@ -3,24 +3,24 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "explore/components.hpp"
 #include "explore/ui_state.hpp"
 
-#include <vast/argument_parser.hpp>
-#include <vast/data.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
-#include <vast/plugin.hpp>
-#include <vast/table_slice.hpp>
+#include <tenzir/argument_parser.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/table_slice.hpp>
 
 #include <ftxui/component/screen_interactive.hpp>
 
 #include <thread>
 
-namespace vast::plugins::explore {
+namespace tenzir::plugins::explore {
 
 namespace {
 
@@ -43,8 +43,8 @@ struct plugin_args {
 /// Construct an FTXUI screen from the operator configuration.
 auto make_screen(const plugin_args& args) -> ftxui::ScreenInteractive {
   using namespace ftxui;
-  VAST_ASSERT((args.width && args.height) || (!args.width && !args.height));
-  VAST_ASSERT(args.width && args.width->inner > 0 && args.height->inner > 0);
+  TENZIR_ASSERT((args.width && args.height) || (!args.width && !args.height));
+  TENZIR_ASSERT(args.width && args.width->inner > 0 && args.height->inner > 0);
   if (args.width && args.height)
     return ScreenInteractive::FixedSize(args.width->inner, args.height->inner);
   if (args.fullscreen)
@@ -150,6 +150,6 @@ public:
 
 } // namespace
 
-} // namespace vast::plugins::explore
+} // namespace tenzir::plugins::explore
 
-VAST_REGISTER_PLUGIN(vast::plugins::explore::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::explore::plugin)

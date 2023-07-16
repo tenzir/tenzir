@@ -2665,9 +2665,9 @@ size_t record_type::depth() const noexcept {
     table().type_as_record_type()};
   while (!index.empty()) {
     const auto* record = history.back();
-    VAST_ASSERT(record);
+    TENZIR_ASSERT(record);
     const auto* fields = record->fields();
-    VAST_ASSERT(fields);
+    TENZIR_ASSERT(fields);
     // This is our exit condition: If we arrived at the end of a record, we need
     // to step out one layer. We must also reset the target key at this point.
     if (index.back() >= fields->size()) {
@@ -2678,9 +2678,9 @@ size_t record_type::depth() const noexcept {
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
-    VAST_ASSERT(field);
+    TENZIR_ASSERT(field);
     const auto* field_type = resolve_transparent(field->type_nested_root());
-    VAST_ASSERT(field_type);
+    TENZIR_ASSERT(field_type);
     switch (field_type->type_type()) {
       case fbs::type::Type::pattern_type:
         __builtin_unreachable();

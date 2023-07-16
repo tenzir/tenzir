@@ -3,22 +3,22 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
 
 #include "explore/theme.hpp"
 
-#include <vast/table_slice.hpp>
-#include <vast/type.hpp>
+#include <tenzir/table_slice.hpp>
+#include <tenzir/type.hpp>
 
 #include <map>
 #include <memory>
 #include <unordered_map>
 #include <vector>
 
-namespace vast::plugins::explore {
+namespace tenzir::plugins::explore {
 
 struct table_state;
 using table_state_ptr = std::shared_ptr<table_state>;
@@ -44,4 +44,4 @@ struct ui_state {
   auto add(table_slice slice) -> void;
 };
 
-} // namespace vast::plugins::explore
+} // namespace tenzir::plugins::explore

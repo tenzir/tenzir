@@ -3,14 +3,14 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "explore/elements.hpp"
 
-#include <vast/detail/string.hpp>
+#include <tenzir/detail/string.hpp>
 
-namespace vast::plugins::explore {
+namespace tenzir::plugins::explore {
 
 using namespace ftxui;
 
@@ -37,4 +37,4 @@ auto logo() -> Element {
   return vbox(elements);
 }
 
-} // namespace vast::plugins::explore
+} // namespace tenzir::plugins::explore

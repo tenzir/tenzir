@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -13,7 +13,7 @@
 #include <ftxui/dom/table.hpp>
 #include <ftxui/screen/color.hpp>
 
-namespace vast::plugins::explore {
+namespace tenzir::plugins::explore {
 
 /// The theme colors.
 struct palette {
@@ -91,4 +91,4 @@ auto mocha() -> theme;
 /// The default theme if the user doesn't adjust one.
 const theme default_theme = mocha();
 
-} // namespace vast::plugins::explore
+} // namespace tenzir::plugins::explore

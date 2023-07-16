@@ -3,20 +3,20 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
 
 #include "explore/ui_state.hpp"
 
-#include <vast/fwd.hpp>
-#include <vast/view.hpp>
+#include <tenzir/fwd.hpp>
+#include <tenzir/view.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/dom/elements.hpp>
 
-namespace vast::plugins::explore {
+namespace tenzir::plugins::explore {
 
 /// Lifts an FTXUI element into a component.
 auto lift(ftxui::Element e) -> ftxui::Component;
@@ -76,4 +76,4 @@ auto Catch(std::function<bool(ftxui::Event)> on_event)
 auto MainWindow(ftxui::ScreenInteractive* screen, ui_state* state)
   -> ftxui::Component;
 
-} // namespace vast::plugins::explore
+} // namespace tenzir::plugins::explore

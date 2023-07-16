@@ -3,14 +3,14 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "explore/theme.hpp"
 
-#include <vast/detail/overload.hpp>
+#include <tenzir/detail/overload.hpp>
 
-namespace vast::plugins::explore {
+namespace tenzir::plugins::explore {
 
 using namespace ftxui;
 using namespace ftxui::literals;
@@ -173,4 +173,4 @@ auto mocha() -> theme {
   return result;
 }
 
-} // namespace vast::plugins::explore
+} // namespace tenzir::plugins::explore
