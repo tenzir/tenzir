@@ -12,7 +12,7 @@
 
 namespace vast::plugins::explore {
 
-/// Renders the VAST logo.
-ftxui::Element Vee();
+/// Renders the Tenzir logo.
+auto logo() -> ftxui::Element;
 
 } // namespace vast::plugins::explore

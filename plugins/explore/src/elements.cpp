@@ -8,36 +8,32 @@
 
 #include "explore/elements.hpp"
 
+#include <vast/detail/string.hpp>
+
 namespace vast::plugins::explore {
 
 using namespace ftxui;
 
-auto Vee() -> Element {
+auto logo() -> Element {
+  const auto *logo = R"__(
+     @@@@@@@@@@@@@@@@@@@@    &@@@@@@@@@@@@@@@@@@@
+    @@@@@@@@@@@@@@@@@@@@    @@@@@@@@@@@@@@@@@@@@
+   @@@@@@@@@@@@@@@@@@@@    @@@@@@@@@@@@@@@@@@@@
+  @@@@@@@@@@@@@@@@@@@@    @@@@@@@@@@@@@@@@@@@@
+            @@@@@@@@@    @@@@@@@@@
+           @@@@@@@@@    @@@@@@@@@
+          @@@@@@@@@    @@@@@@@@@
+         @@@@@@@@@
+        @@@@@@@@@@@@@@@@@@@@@@
+       @@@@@@@@@@@@@@@@@@@@@@
+      @@@@@@@@@@@@@@@@@@@@@@
+     @@@@@@@@@@@@@@@@@@@@@@
+    )__";
+  auto split = detail::split(logo, "\n");
   Elements elements;
-  auto line = [&](auto... xs) {
-    elements.emplace_back(hbox(xs...));
-  };
-  auto c1 = [](auto x) {
-    return text(x) | color(Color::Blue);
-  };
-  auto c2 = [](auto x) {
-    return text(x) | color(Color::Cyan);
-  };
-  line(c1("////////////    "), c2("*************************"));
-  line(c1(" ////////////    "), c2("*********************** "));
-  line(c1("  ////////////    "), c2("*********************  "));
-  line(c1("   ////////////    "), c2("*******************   "));
-  line(c1("    ////////////    "), c2("*****************    "));
-  line(c1("     ////////////         "), c2("**********     "));
-  line(c1("      ////////////       "), c2("**********      "));
-  line(c1("       ////////////     "), c2("**********       "));
-  line(c1("        ////////////    "), c2("*********        "));
-  line(c1("         ////////////    "), c2("*******         "));
-  line(c1("          ////////////    "), c2("*****          "));
-  line(c1("           ////////////    "), c2("***           "));
-  line(c1("            ////////////    "), c2("*            "));
-  line(c1("             ////////////                 "));
-  line(c1("              ////////////                "));
+  elements.reserve(split.size());
+  for (const auto& line : split)
+    elements.push_back(text(std::string{line}));
   return vbox(elements);
 }
 

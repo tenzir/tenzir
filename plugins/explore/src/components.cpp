@@ -493,7 +493,7 @@ auto Explorer(ui_state* state) -> Component {
   public:
     Impl(ui_state* state) : state_{state} {
       auto navigator = Navigator(state, &index_);
-      tab_ = Container::Tab({}, &index_); // to be filled
+      tab_ = Container::Tab({lift(logo())}, &index_); // to be filled
       // Construct full page.
       auto split = ResizableSplit({
         .main = std::move(navigator),
