@@ -29,12 +29,14 @@ struct plugin_args {
   std::optional<located<int>> width;
   std::optional<located<int>> height;
   std::optional<location> fullscreen;
+  std::optional<located<std::string>> navigator;
 
   friend auto inspect(auto& f, plugin_args& x) -> bool {
     return f.object(x)
       .pretty_name("plugin_args")
       .fields(f.field("width", x.width), f.field("height", x.height),
-              f.field("fullscreen", x.fullscreen));
+              f.field("fullscreen", x.fullscreen),
+              f.field("navigator", x.navigator));
   }
 };
 
@@ -66,6 +68,16 @@ public:
     using namespace ftxui;
     auto screen = make_screen(args_);
     ui_state state;
+    if (args_.navigator) {
+      if (args_.navigator->inner == "left")
+        state.navigator_position = ftxui::Direction::Left;
+      else if (args_.navigator->inner == "right")
+        state.navigator_position = ftxui::Direction::Right;
+      else if (args_.navigator->inner == "top")
+        state.navigator_position = ftxui::Direction::Up;
+      else if (args_.navigator->inner == "bottom")
+        state.navigator_position = ftxui::Direction::Down;
+    }
     // Ban UI main loop into dedicated thread.
     auto thread = std::thread([&] {
       auto main = MainWindow(&screen, &state);
@@ -114,6 +126,7 @@ public:
     parser.add("-f,--fullscreen", args.fullscreen);
     parser.add("-w,--width", args.width, "<int>");
     parser.add("-h,--height", args.height, "<int>");
+    parser.add("-n,--navigator", args.navigator, "<string>");
     parser.parse(p);
     if (args.width && !args.height)
       diagnostic::error("--width requires also setting --height")
@@ -123,6 +136,14 @@ public:
       diagnostic::error("--height requires also setting --width")
         .primary(args.width->source)
         .throw_();
+    if (args.navigator) {
+      const auto& x = args.navigator->inner;
+      if (!(x == "left" || x == "right" || x == "top" || x == "bottom"))
+        diagnostic::error("invalid --navigator value")
+          .primary(args.navigator->source)
+          .note("must be one of 'left|right|top|bottom'")
+          .throw_();
+    }
     return std::make_unique<explore_operator>(std::move(args));
   }
 };

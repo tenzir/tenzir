@@ -37,6 +37,9 @@ struct ui_state {
   /// Defines styling and colors.
   struct theme theme = default_theme;
 
+  /// The position of the navigator.
+  ftxui::Direction navigator_position = ftxui::Direction::Up;
+
   /// Updates the UI state when a new slice of data arrives.
   auto add(table_slice slice) -> void;
 };

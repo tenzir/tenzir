@@ -47,13 +47,13 @@ auto lift(Element e) -> Component {
 namespace {
 
 /// Makes a component a vertically scrollable in a frame.
-auto enframe(Component component) -> Component {
+auto enframe(const Component& component) -> Component {
   return Renderer(component, [component] {
     return component->Render() | frame;
   });
 }
 
-/// A double-row focusable cell in the table header.
+/// A table showing user help and keyboard shortcuts.
 auto Help() -> Component {
   auto table = Table({
     {" Key ", " Alias ", " Description "},
@@ -201,6 +201,8 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
         return ComponentBase::Render();
       for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i) {
         const auto& slice = table_->slices[i];
+        VAST_DEBUG("rebuilding [{},{}) of schema '{}'", i,
+                   i + table_->slices.size(), slice.schema().name());
         auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
         // TODO: make the component configurable with respect to static vs.
         // dynamic behavior. Uncommenting the cell.
@@ -415,20 +417,27 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
 //   return {};
 // }
 
-auto Navigator(ui_state* state, int* index) -> Component {
+auto Navigator(ui_state* state, int* index, int* width) -> Component {
   class Impl : public ComponentBase {
   public:
-    Impl(ui_state* state, int* index) : state_{state}, index_{index} {
+    Impl(ui_state* state, int* index, int* width)
+      : state_{state}, index_{index}, width_{width} {
       fingerprints_ = Container::Vertical({});
       fingerprints_->DetachAllChildren();
-      menu_ = Menu(&schema_names_, index_,
-                   state_->theme.menu_option(Direction::Down));
-      auto navigator = Container::Horizontal({
-        Container::Vertical({menu_, lift(filler())}),
-        lift(text(" ")),
-        fingerprints_,
-      });
-      Add(std::move(navigator));
+      if (state->navigator_position == Direction::Left
+          || state->navigator_position == Direction::Right) {
+        menu_ = Menu(&schema_names_, index_,
+                     state_->theme.menu_option(Direction::Down));
+        Add(Container::Horizontal({
+          Container::Vertical({menu_, lift(filler())}),
+          lift(text(" ")),
+          fingerprints_,
+        }));
+      } else {
+        menu_ = Menu(&schema_names_, index_,
+                     state_->theme.menu_option(Direction::Left));
+        Add(menu_);
+      }
     }
 
     auto Render() -> Element override {
@@ -441,6 +450,9 @@ auto Navigator(ui_state* state, int* index) -> Component {
           schema_cache_.insert(type);
           schema_names_.emplace_back(type.name());
           auto fingerprint = type.make_fingerprint();
+          // One extra character for the separator.
+          auto width = type.name().size() + fingerprint.size() + 1;
+          *width_ = std::max(*width_, detail::narrow_cast<int>(width));
           auto element = text(std::move(fingerprint))
                          | color(state_->theme.palette.subtle);
           fingerprints_->Add(lift(std::move(element)));
@@ -471,6 +483,9 @@ auto Navigator(ui_state* state, int* index) -> Component {
     /// The currently selected schema.
     int* index_ = nullptr;
 
+    /// The width of the menu (iff horizontal).
+    int* width_ = nullptr;
+
     /// The menu items for the navigator. In sync with the tab.
     std::vector<std::string> schema_names_;
 
@@ -483,27 +498,37 @@ auto Navigator(ui_state* state, int* index) -> Component {
     /// The tables by schema.
     std::unordered_set<type> schema_cache_;
   };
-  return Make<Impl>(state, index);
+  return Make<Impl>(state, index, width);
 }
 
 auto Explorer(ui_state* state) -> Component {
   class Impl : public ComponentBase {
   public:
     Impl(ui_state* state) : state_{state} {
-      auto navigator = Navigator(state, &index_);
       tab_ = Container::Tab({lift(logo())}, &index_); // to be filled
-      // Construct full page.
-      auto split = ResizableSplit({
-        .main = std::move(navigator),
-        .back = tab_,
-        .direction = Direction::Left,
-        .main_size = &navigator_width_,
-        .separator_func =
-          [&] {
-            return state_->theme.separator();
-          },
-      });
-      Add(std::move(split));
+      if (state_->navigator_position == Direction::Left
+          || state_->navigator_position == Direction::Right) {
+        Add(ResizableSplit({
+          .main = Navigator(state, &index_, &navigator_width_),
+          .back = tab_,
+          .direction = state_->navigator_position,
+          .main_size = &navigator_width_,
+          .separator_func =
+            [&] {
+              return state_->theme.separator();
+            },
+        }));
+      } else if (state_->navigator_position == Direction::Up) {
+        Add(Container::Vertical({
+          Navigator(state, &index_, &navigator_width_),
+          tab_,
+        }));
+      } else if (state_->navigator_position == Direction::Down) {
+        Add(Container::Vertical({
+          tab_,
+          Navigator(state, &index_, &navigator_width_),
+        }));
+      }
     }
 
     auto Render() -> Element override {
@@ -517,8 +542,6 @@ auto Explorer(ui_state* state) -> Component {
           auto component = enframe(VerticalTable(state_, type));
           tables_.emplace(type, component);
           tab_->Add(component);
-          navigator_width_ = std::max(
-            navigator_width_, detail::narrow_cast<int>(type.name().size()));
         }
       }
       VAST_ASSERT(num_tables == state_->tables.size());
@@ -533,7 +556,7 @@ auto Explorer(ui_state* state) -> Component {
   private:
     ui_state* state_;
 
-    /// The width of the navigation split.
+    /// The width of the navigation split (iff horizontal).
     int navigator_width_ = 0;
 
     /// The currently selected schema.
