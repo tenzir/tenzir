@@ -201,7 +201,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
         return ComponentBase::Render();
       for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i) {
         const auto& slice = table_->slices[i];
-        VAST_DEBUG("rebuilding [{},{}) of schema '{}'", i,
+        VAST_DEBUG("rendering [{},{}) of schema '{}'", i,
                    i + table_->slices.size(), slice.schema().name());
         auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
         // TODO: make the component configurable with respect to static vs.
@@ -505,38 +505,40 @@ auto Explorer(ui_state* state) -> Component {
   class Impl : public ComponentBase {
   public:
     Impl(ui_state* state) : state_{state} {
-      tab_ = Container::Tab({lift(logo())}, &index_); // to be filled
-      if (state_->navigator_position == Direction::Left
-          || state_->navigator_position == Direction::Right) {
-        Add(ResizableSplit({
-          .main = Navigator(state, &index_, &navigator_width_),
-          .back = tab_,
-          .direction = state_->navigator_position,
-          .main_size = &navigator_width_,
-          .separator_func =
-            [&] {
-              return state_->theme.separator();
-            },
-        }));
-      } else if (state_->navigator_position == Direction::Up) {
-        Add(Container::Vertical({
-          Navigator(state, &index_, &navigator_width_),
-          tab_,
-        }));
-      } else if (state_->navigator_position == Direction::Down) {
-        Add(Container::Vertical({
-          tab_,
-          Navigator(state, &index_, &navigator_width_),
-        }));
-      }
+      tab_ = Container::Tab({}, &index_); // to be filled
+      Add(lift(logo()));
     }
 
     auto Render() -> Element override {
       auto num_tables = state_->tables.size();
       if (tables_.size() == num_tables)
         return ComponentBase::Render();
-      if (tables_.empty())
-        tab_->DetachAllChildren();
+      if (tables_.empty()) {
+        DetachAllChildren();
+        if (state_->navigator_position == Direction::Left
+            || state_->navigator_position == Direction::Right) {
+          Add(ResizableSplit({
+            .main = Navigator(state_, &index_, &navigator_width_),
+            .back = tab_,
+            .direction = state_->navigator_position,
+            .main_size = &navigator_width_,
+            .separator_func =
+              [&] {
+                return state_->theme.separator();
+              },
+          }));
+        } else if (state_->navigator_position == Direction::Up) {
+          Add(Container::Vertical({
+            Navigator(state_, &index_, &navigator_width_),
+            tab_,
+          }));
+        } else if (state_->navigator_position == Direction::Down) {
+          Add(Container::Vertical({
+            tab_,
+            Navigator(state_, &index_, &navigator_width_),
+          }));
+        }
+      }
       for (const auto& [type, table] : state_->tables) {
         if (!tables_.contains(type)) {
           auto component = enframe(VerticalTable(state_, type));
