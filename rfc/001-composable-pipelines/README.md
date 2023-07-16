@@ -11,20 +11,20 @@
   - [Rémi Dettai](https://github.com/rdettai)
   - [Thomas Peiselt](https://github.com/dispanser)
   - [Tobias Mayer](https://github.com/tobim)
-- **Discussion**: [PR #2511](https://github.com/tenzir/vast/pull/2511)
+- **Discussion**: [PR #2511](https://github.com/tenzir/tenzir/pull/2511)
 
 ## Overview
 
-This proposal ideates a new UX around VAST's pipelines. The fundamental idea is
+This proposal ideates a new UX around Tenzir's pipelines. The fundamental idea is
 that *everything is a pipeline* and build a composable UX around this concept.
 
 ## Problem Statement
 
 Pipelines offer flexible data reshaping at [predefined customization
-points](https://vast.io/docs/use/transform). For example, they can be
-triggered for specific events on import/export, or invoked by compaction.
-However, it is impossible to run pipelines in an ad-hoc manner, for example as
-a post-processing step after a query or for an ad-hoc ingest of a data set.
+points](https://docs.tenzir.com/VAST%20v3.0/use/transform). For example, they
+can be triggered for specific events on import/export, or invoked by compaction.
+However, it is impossible to run pipelines in an ad-hoc manner, for example as a
+post-processing step after a query or for an ad-hoc ingest of a data set.
 
 This RFC proposes dynamic pipelines that do not require static definition in
 a configuration file, but rather allow users to specify them as an extension to
@@ -35,7 +35,7 @@ the expression language.
 Assume for a moment everything is a pipeline operator. Then we may write:
 
  ```bash
-vast 'load s3://aws json |
+tenzir 'load s3://aws json |
       summarize count(dst) group-by src |
       store parquet /path/to/directory'
 ```
@@ -43,7 +43,7 @@ vast 'load s3://aws json |
 The UX would translate seamlessly to other languages, e.g., Python:
 
 ```python
-import vast as v
+import tenzir as v
 await v.load_json("s3://aws")
        .group_by("src") # could also be merged with summarize()
        .summarize(v.count("dst"))
@@ -163,12 +163,12 @@ proposal:
 
 | Old Syntax                               | New Syntax
 | ---------------------------------------- | -------------------------------------------
-| `vast infer`                             | `vast exec 'load CARRIER [FORMAT] | infer"`
-| `vast import FORMAT EXPR`                | `vast import FORMAT 'EXPR | op1 .. | op2 ..'`
-| `vast export FORMAT EXPR`                | `vast export FORMAT 'EXPR | op1 .. | op2 ..'`
-| `vast count [args] EXPR`                 | `vast export FORMAT 'EXPR | count [args]'`
-| `vast pivot --format=FORMAT [args] EXPR` | `vast export FORMAT 'EXPR | pivot [args]'`
-| `vast explore [args] EXPR`               | `vast export 'EXPR | explore [-A] [...]'`
+| `tenzir infer`                             | `tenzir exec 'load CARRIER [FORMAT] | infer"`
+| `tenzir import FORMAT EXPR`                | `tenzir import FORMAT 'EXPR | op1 .. | op2 ..'`
+| `tenzir export FORMAT EXPR`                | `tenzir export FORMAT 'EXPR | op1 .. | op2 ..'`
+| `tenzir count [args] EXPR`                 | `tenzir export FORMAT 'EXPR | count [args]'`
+| `tenzir pivot --format=FORMAT [args] EXPR` | `tenzir export FORMAT 'EXPR | pivot [args]'`
+| `tenzir explore [args] EXPR`               | `tenzir export 'EXPR | explore [-A] [...]'`
 
 In essence, we keep `import` and `export` and incrementally enhance the
 expressiveness, by making it possible to append a pipeline after an expression.
@@ -200,7 +200,7 @@ Given the new `exec` command, we can start processing data in situ. For example,
 we can directly compute insights over telemetry:
 
 ```bash
-vast exec 'load - zeek |
+tenzir exec 'load - zeek |
            summarize sum(orig_bytes), sum(resp_bytes) group-by id.orig_h, id.resp_h |
            sort |
            head -n 10 |
@@ -218,9 +218,9 @@ follows:
 5. Write data as JSON to stdout (`store`)
 
 Local pipeline execution opens the door for a lot of new modes of operations,
-because a VAST server node is no longer required.
+because a Tenzir server node is no longer required.
 
-**This makes VAST a swiss army knife for security data.**
+**This makes Tenzir a swiss army knife for security data.**
 
 ### Case Study: Matcher
 
@@ -238,7 +238,7 @@ Let's assume that the following new pipeline operators:
 Now consider the use case of constructing a matcher from CSV data:
 
 ```bash
-vast exec 'load file:///tmp/blacklist csv |
+tenzir exec 'load file:///tmp/blacklist csv |
            build --extract=net.src.ip' > matcher.flatbuf
 ```
 
@@ -246,7 +246,7 @@ After having constructed a matcher, we can now use it in a pipeline for
 matching:
 
 ```bash
-vast exec 'load kafka -t /zeek/conn zeek |
+tenzir exec 'load kafka -t /zeek/conn zeek |
            match --state matcher.flatbuf --on id.orig_h,id.resp_h
 ```
 
@@ -265,7 +265,7 @@ The following aspects require attention during the implementation:
 - **Asynchronous Execution**: pipelines fundamentally support asynchronous
   execution by sequentializing dataflow within an operator, and parallelizing it
   across operators. Conceptually, this is very similar to the actor model
-  architecture VAST exhibits, with operators mapping to actors.
+  architecture Tenzir exhibits, with operators mapping to actors.
 
   In the implementation, we may want to consider actors part of the solution,
   but will at first propose an independent architecture that consists of logical
@@ -347,18 +347,18 @@ We considered the following ideas that we do not want to pursue further.
 We may consider pipelines only in the context of executing queries at the
 server. After all, this is where we are going to implement them first. However,
 this limits us unnecessarily, given that pipeline can already be deployed at
-various points in VAST today. We must consider them as general building block
+various points in Tenzir today. We must consider them as general building block
 that is easy to instantiate in various contexts.
 
 ### Commands are pipeline operators
 
-To illustrate the composability of pipelines, we could make every VAST command
+To illustrate the composability of pipelines, we could make every Tenzir command
 an operator:
 
 ```bash
-vast load s3://aws json |
-  vast 'summarize count(dst) group-by src' |
-  vast store /path/to/file feather
+tenzir load s3://aws json |
+  tenzir 'summarize count(dst) group-by src' |
+  tenzir store /path/to/file feather
 ```
 
 As there is no clear underlying use case outside of testing and debugging, we

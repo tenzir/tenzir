@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -12,12 +12,12 @@
 
 #include "web/fbs/server_state.hpp"
 
-#include <vast/actors.hpp>
-#include <vast/flatbuffer.hpp>
+#include <tenzir/actors.hpp>
+#include <tenzir/flatbuffer.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 struct token_description {
   std::string name;
@@ -61,4 +61,4 @@ authenticator_actor::behavior_type
 authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
               filesystem_actor fs);
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

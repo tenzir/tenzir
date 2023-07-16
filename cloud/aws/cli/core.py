@@ -1,5 +1,5 @@
 from typing import Tuple
-from vast_invoke import Context, pty_task, task, Exit
+from tenzir_invoke import Context, pty_task, task, Exit
 import dynaconf
 import time
 import base64
@@ -34,11 +34,11 @@ TF_BACKEND_VALIDATORS = [
 VALIDATORS = [
     *TF_BACKEND_VALIDATORS,
     AWS_REGION_VALIDATOR,
-    dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
-    dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
-    dynaconf.Validator("VAST_IMAGE", default="tenzir/vast"),
-    dynaconf.Validator("VAST_VERSION", default="latest"),
-    dynaconf.Validator("VAST_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]),
+    dynaconf.Validator("TENZIR_CIDR", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_PEERED_VPC_ID", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_IMAGE", default="tenzir/tenzir"),
+    dynaconf.Validator("TENZIR_VERSION", default="latest"),
+    dynaconf.Validator("TENZIR_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]),
 ]
 
 
@@ -130,7 +130,7 @@ def deploy(c, step="", auto_approve=False):
 )
 def current_image(c, service):
     """Get the current Lambda image URI. In case of failure, returns the error message instead of the URI."""
-    repo_arn = terraform_output(c, "core-1", f"vast_repository_arn")
+    repo_arn = terraform_output(c, "core-1", f"tenzir_repository_arn")
     try:
         tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
     except Exception as e:
@@ -144,10 +144,10 @@ def current_image(c, service):
 
 @task
 def build_images(c, step):
-    """Build the provided VAST based Dockerfile using the configured base image
+    """Build the provided Tenzir based Dockerfile using the configured base image
     and version"""
-    if conf(VALIDATORS)["VAST_VERSION"] == "build":
-        c.run(f"docker build -t $VAST_IMAGE:build {REPOROOT}")
+    if conf(VALIDATORS)["TENZIR_VERSION"] == "build":
+        c.run(f"docker build -t $TENZIR_IMAGE:build {REPOROOT}")
     c.run(f"{docker_compose(step)} build")
 
 
@@ -156,8 +156,8 @@ def deploy_image(c, service, tag):
     ## We are using the repository tags as a key value store to flag
     ## the current image of each service. This allows a controlled
     ## version rollout in the downstream infra (lambda or fargate)
-    image_url = terraform_output(c, "core-1", f"vast_repository_url")
-    repo_arn = terraform_output(c, "core-1", f"vast_repository_arn")
+    image_url = terraform_output(c, "core-1", f"tenzir_repository_url")
+    repo_arn = terraform_output(c, "core-1", f"tenzir_repository_arn")
     # get the digest of the current image
     try:
         current_img = current_image(c, service)
@@ -211,8 +211,8 @@ def print_image_vars(c, step):
 
 def service_outputs(c: Context) -> Tuple[str, str, str]:
     cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    family = terraform_output(c, "core-2", "vast_task_family")
-    service_name = terraform_output(c, "core-2", "vast_server_service_name")
+    family = terraform_output(c, "core-2", "tenzir_task_family")
+    service_name = terraform_output(c, "core-2", "tenzir_server_service_name")
     return (cluster, service_name, family)
 
 

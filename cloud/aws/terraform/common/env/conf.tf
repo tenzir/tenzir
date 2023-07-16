@@ -4,5 +4,5 @@ output "stage" {
 }
 
 output "module_name" {
-  value = "vast-cloud"
+  value = "tenzir-cloud"
 }

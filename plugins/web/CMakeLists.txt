@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18...3.24 FATAL_ERROR)
 
 project(
   web
-  DESCRIPTION "Web plugin for VAST"
+  DESCRIPTION "Web plugin for Tenzir"
   LANGUAGES CXX)
 
 include(FeatureSummary)
@@ -15,9 +15,9 @@ file(GLOB_RECURSE web_sources CONFIGURE_DEPENDS
 file(GLOB_RECURSE web_tests CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
 
-find_package(VAST REQUIRED)
+find_package(Tenzir REQUIRED)
 
-VASTRegisterPlugin(
+TenzirRegisterPlugin(
   TARGET web
   ENTRYPOINT src/plugin.cpp
   SOURCES ${web_sources}
@@ -26,13 +26,13 @@ VASTRegisterPlugin(
 
 find_package(OpenSSL REQUIRED)
 
-option(VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
+option(TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
        "Always use the bundled and patched restinio" ON)
 add_feature_info(
-  "VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO"
-  VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
+  "TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO"
+  TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
   "always use the bundled and patched restinio.")
-if (NOT VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO)
+if (NOT TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO)
   find_package(fmt REQUIRED)
   find_package(restinio REQUIRED)
   # OpenSSL link is missing from restinio.
@@ -50,7 +50,7 @@ target_link_libraries(web PRIVATE restinio::restinio)
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/fbs/*.fbs")
 
-VASTCompileFlatBuffers(
+TenzirCompileFlatBuffers(
   TARGET web-fbs
   SCHEMAS ${flatbuffers_schemas}
   INCLUDE_DIRECTORY "web/fbs")

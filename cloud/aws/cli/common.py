@@ -2,7 +2,7 @@ from functools import cache
 import sys
 from typing import Dict, List, Set
 from flags import TRACE
-from vast_invoke import Context, Exit, Failure
+from tenzir_invoke import Context, Exit, Failure
 import dynaconf
 import json
 import re
@@ -21,7 +21,7 @@ def s3_regions():
 
 
 AWS_REGION_VALIDATOR = dynaconf.Validator(
-    "VAST_AWS_REGION", must_exist=True, is_in=s3_regions()
+    "TENZIR_AWS_REGION", must_exist=True, is_in=s3_regions()
 )
 
 EXIT_CODE_TASK_NOT_RUNNING = 8
@@ -37,7 +37,7 @@ HOSTROOT = "/host"
 
 def conf(validators=[]) -> dict:
     """Load variables from both the environment and the .env file if:
-    - their key is prefixed with either VAST_, TF_ or AWS_"""
+    - their key is prefixed with either TENZIR_, TF_ or AWS_"""
     dc = dynaconf.Dynaconf(
         load_dotenv=True,
         envvar_prefix=False,
@@ -46,7 +46,7 @@ def conf(validators=[]) -> dict:
     return {
         k: v
         for (k, v) in dc.as_dict().items()
-        if k.startswith(("VAST_", "TF_", "AWS_"))
+        if k.startswith(("TENZIR_", "TF_", "AWS_"))
     }
 
 
@@ -69,8 +69,8 @@ def list_modules(c: Context) -> List[str]:
 
 def active_plugins() -> Set[str]:
     """Cloud CLI plugins activated"""
-    plugin_var = conf([dynaconf.Validator("VAST_CLOUD_PLUGINS", default="")])[
-        "VAST_CLOUD_PLUGINS"
+    plugin_var = conf([dynaconf.Validator("TENZIR_CLOUD_PLUGINS", default="")])[
+        "TENZIR_CLOUD_PLUGINS"
     ]
     plugin_set = {plugin.strip() for plugin in plugin_var.split(",")}
     plugin_set.discard("")
@@ -116,7 +116,7 @@ def terraform_output(c: Context, step, key) -> str:
 
 
 def AWS_REGION():
-    return conf(AWS_REGION_VALIDATOR)["VAST_AWS_REGION"]
+    return conf(AWS_REGION_VALIDATOR)["TENZIR_AWS_REGION"]
 
 
 def aws(service, resource=False):
@@ -205,12 +205,12 @@ class FargateService:
             task_res = aws("ecs").list_tasks(
                 family=self.task_family, cluster=self.cluster
             )
-            nb_vast_tasks = len(task_res["taskArns"])
-            if nb_vast_tasks == 1:
+            nb_tenzir_tasks = len(task_res["taskArns"])
+            if nb_tenzir_tasks == 1:
                 task_id = task_res["taskArns"][0].split("/")[-1]
                 return task_id
-            if nb_vast_tasks > 1:
-                raise Exit(f"{nb_vast_tasks} tasks running", 1)
+            if nb_tenzir_tasks > 1:
+                raise Exit(f"{nb_tenzir_tasks} tasks running", 1)
             if max_wait_time_sec == 0:
                 raise Exit(f"No task running", EXIT_CODE_TASK_NOT_RUNNING)
             if time.time() - start_time > max_wait_time_sec:
@@ -226,8 +226,8 @@ class FargateService:
         """Get the status of the service and the associated task"""
         # describe task
         task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
-        nb_vast_tasks = len(task_res["taskArns"])
-        if nb_vast_tasks == 1:
+        nb_tenzir_tasks = len(task_res["taskArns"])
+        if nb_tenzir_tasks == 1:
             task_status = self._task_desc(task_res["taskArns"][0])["lastStatus"]
         # describe service
         srv_res = aws("ecs").describe_services(
@@ -236,17 +236,17 @@ class FargateService:
         desired_tasks = srv_res["services"][0]["desiredCount"]
 
         # state machine
-        if nb_vast_tasks > 1:
-            return f"Unexpected number of tasks: {nb_vast_tasks}"
-        if desired_tasks == 1 and nb_vast_tasks == 1 and task_status == "RUNNING":
+        if nb_tenzir_tasks > 1:
+            return f"Unexpected number of tasks: {nb_tenzir_tasks}"
+        if desired_tasks == 1 and nb_tenzir_tasks == 1 and task_status == "RUNNING":
             return "Service running"
         if desired_tasks == 1:
-            if nb_vast_tasks == 0:
+            if nb_tenzir_tasks == 0:
                 task_status = "no task running"
             else:
                 task_status = f"task status: {task_status}"
             return f"Service starting... ({task_status})"
-        if desired_tasks == 0 and nb_vast_tasks == 1:
+        if desired_tasks == 0 and nb_tenzir_tasks == 1:
             return f"Service stopping... (task status: {task_status})"
         if desired_tasks == 0:
             return "Service stopped"
@@ -254,11 +254,11 @@ class FargateService:
     def describe_task(self):
         """Describe the running tasks, erroring out if there is not exactly one task"""
         task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
-        nb_vast_tasks = len(task_res["taskArns"])
-        if nb_vast_tasks == 0:
+        nb_tenzir_tasks = len(task_res["taskArns"])
+        if nb_tenzir_tasks == 0:
             raise Exit("No task running")
-        if nb_vast_tasks > 1:
-            raise Exit("{nb_vast_tasks} tasks running")
+        if nb_tenzir_tasks > 1:
+            raise Exit("{nb_tenzir_tasks} tasks running")
         else:
             desc = self._task_desc(task_res["taskArns"][0])
             return desc

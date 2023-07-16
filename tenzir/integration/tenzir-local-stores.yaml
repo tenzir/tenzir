@@ -1,0 +1,3 @@
+tenzir:
+  store-backend: feather
+  plugins: []

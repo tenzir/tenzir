@@ -1,0 +1,165 @@
+#pragma once
+
+#include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
+
+#cmakedefine01 TENZIR_ENABLE_ASAN
+#cmakedefine01 TENZIR_ENABLE_ASSERTIONS
+#cmakedefine01 TENZIR_ENABLE_ASSERTIONS_CHEAP
+#cmakedefine01 TENZIR_ENABLE_BACKTRACE
+#cmakedefine01 TENZIR_ENABLE_BUILDID
+#cmakedefine01 TENZIR_ENABLE_BUNDLED_CAF
+#cmakedefine01 TENZIR_ENABLE_DEVELOPER_MODE
+#cmakedefine01 TENZIR_ENABLE_EXCEPTIONS
+#cmakedefine01 TENZIR_ENABLE_JEMALLOC
+#cmakedefine01 TENZIR_ENABLE_JOURNALD_LOGGING
+#cmakedefine01 TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
+#cmakedefine01 TENZIR_ENABLE_SDT
+#cmakedefine01 TENZIR_ENABLE_STATIC_EXECUTABLE
+#cmakedefine01 TENZIR_ENABLE_UBSAN
+#cmakedefine01 TENZIR_ENABLE_UNIT_TESTS
+#cmakedefine01 TENZIR_ENABLE_LIBUNWIND
+#cmakedefine01 TENZIR_ENABLE_LIBBACKTRACE
+#cmakedefine01 TENZIR_ENABLE_LIBEXECINFO
+
+namespace tenzir::version {
+
+/// Contains the full version string.
+extern const char* version;
+
+/// The individual version components.
+extern const char* major;
+extern const char* minor;
+extern const char* patch;
+extern const char* tweak;
+
+/// The version number of the Tenzir partition format. Bump this whenever making
+/// changes that require partitions to be rebuilt.
+extern const uint64_t current_partition_version;
+
+/// Determines the supported Tenzir version range as [introduced, end_of_life] for
+/// a given partition version. The partition_version is still supported if
+/// end_of_life is not set.
+struct supported_versions {
+  std::string_view introduced;
+  std::optional<std::string_view> end_of_life;
+};
+
+/// Returns the supported Tenzir version range for the given partition version.
+supported_versions
+support_for_partition_version(uint64_t partition_version) noexcept;
+
+namespace build {
+
+/// The CMake build type used to build Tenzir.
+extern const char* type;
+
+/// Contains a hash of Tenzir's build tree.
+extern const char* tree_hash;
+
+/// Whether assertions, ASan, and UBSan are enabled respectively.
+extern bool has_assertions;
+extern bool has_address_sanitizer;
+extern bool has_undefined_behavior_sanitizer;
+
+} // namespace build
+
+} // namespace tenzir::version
+
+#include <caf/config.hpp>
+
+#define TENZIR_LOG_LEVEL_QUIET CAF_LOG_LEVEL_QUIET
+#define TENZIR_LOG_LEVEL_CRITICAL 1
+#define TENZIR_LOG_LEVEL_ERROR CAF_LOG_LEVEL_ERROR
+#define TENZIR_LOG_LEVEL_WARNING CAF_LOG_LEVEL_WARNING
+#define TENZIR_LOG_LEVEL_INFO CAF_LOG_LEVEL_INFO
+#define TENZIR_LOG_LEVEL_VERBOSE 11
+#define TENZIR_LOG_LEVEL_DEBUG CAF_LOG_LEVEL_DEBUG
+#define TENZIR_LOG_LEVEL_TRACE CAF_LOG_LEVEL_TRACE
+
+// clang-format off
+// clang-format tries to seperate the @ with a space, hence we disable it here.
+#define TENZIR_LOG_LEVEL TENZIR_LOG_LEVEL_@TENZIR_LOG_LEVEL@
+// clang-format on
+
+// TODO: Move everything below to a more appropriate place.
+
+#if defined(CAF_CLANG)
+#  define TENZIR_CLANG 1
+#else
+#  define TENZIR_CLANG 0
+#endif
+
+#if defined(CAF_GCC)
+#  define TENZIR_GCC 1
+#else
+#  define TENZIR_GCC 0
+#endif
+
+#if TENZIR_CLANG
+#  define TENZIR_DIAGNOSTIC_PUSH _Pragma("clang diagnostic push")
+#  define TENZIR_DIAGNOSTIC_POP _Pragma("clang diagnostic pop")
+#  define TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED                                    \
+    _Pragma("clang diagnostic ignored \"-Wdeprecated\"")
+#  define TENZIR_DIAGNOSTIC_IGNORE_VLA_EXTENSION                                 \
+    _Pragma("clang diagnostic ignored \"-Wvla-extension\"")                    \
+      _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
+#  define TENZIR_DIAGNOSTIC_IGNORE_ADDRESS             /* nop */
+#  define TENZIR_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED /* nop */
+#  define TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                         \
+    _Pragma("clang diagnostic ignored \"-Wunused-const-variable\"")
+#elif TENZIR_GCC
+#  define TENZIR_DIAGNOSTIC_PUSH _Pragma("GCC diagnostic push")
+#  define TENZIR_DIAGNOSTIC_POP _Pragma("GCC diagnostic pop")
+#  define TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED                                    \
+    _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"")
+#  define TENZIR_DIAGNOSTIC_IGNORE_VLA_EXTENSION                                 \
+    _Pragma("GCC diagnostic ignored \"-Wvla\"")
+#  define TENZIR_DIAGNOSTIC_IGNORE_ADDRESS                                       \
+    _Pragma("GCC diagnostic ignored \"-Waddress\"")
+#  define TENZIR_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED                           \
+    _Pragma("GCC diagnostic ignored \"-Wmaybe-uninitialized\"")
+#  define TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                         \
+    _Pragma("GCC diagnostic ignored \"-Wunused-const-variable\"")
+#endif
+
+#ifdef CAF_BSD
+#  define TENZIR_BSD 1
+#else
+#  define TENZIR_BSD 0
+#endif
+#ifdef CAF_LINUX
+#  define TENZIR_LINUX 1
+#else
+#  define TENZIR_LINUX 0
+#endif
+#ifdef CAF_MACOS
+#  define TENZIR_MACOS 1
+#else
+#  define TENZIR_MACOS 0
+#endif
+#ifdef CAF_WINDOWS
+#  define TENZIR_WINDOWS 1
+#else
+#  define TENZIR_WINDOWS 0
+#endif
+#if !(TENZIR_BSD || TENZIR_LINUX || TENZIR_MACOS || TENZIR_WINDOWS)
+#  error platform not supported
+#endif
+#ifdef CAF_POSIX
+#  define TENZIR_POSIX 1
+#else
+#  define TENZIR_POSIX 0
+#endif
+
+#if (defined __cpp_consteval) && __cpp_consteval >= 201811
+#  define TENZIR_CONSTEVAL consteval
+#else
+#  define TENZIR_CONSTEVAL
+#endif
+
+#if !__SIZEOF_INT128__
+#  error Tenzir requires support for __int128.
+#endif

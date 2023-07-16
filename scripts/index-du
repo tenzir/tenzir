@@ -11,7 +11,7 @@ if command -v gfind >/dev/null 2>&1; then
 fi
 
 usage() {
-  printf "usage: %s <path/to/vast.db>\n" $(basename $0)
+  printf "usage: %s <path/to/tenzir.db>\n" $(basename $0)
 }
 
 if [ "$#" -ne 1 ]; then

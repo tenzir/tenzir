@@ -1,2 +1,0 @@
-error: !! syntax_error: zeek-tsv parser failed: Missing #close
- = note: from `parse "zeek-tsv"`

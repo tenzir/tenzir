@@ -9,46 +9,38 @@ set -euxo pipefail
 
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)"
 
-VAST_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e VAST_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/vast/"
+TENZIR_RUN_FLAGS="-d --pull=always --rm --name tenzir-regression --entrypoint=tenzir-node -e TENZIR_CONSOLE_VERBOSITY=verbose -v tenzir-regression:/var/lib/tenzir/"
 
 # Pull the old version to create a database.
 docker run \
-  $VAST_RUN_FLAGS \
-  docker.io/tenzir/vast:$OLD_VERSION \
-  start
+  $TENZIR_RUN_FLAGS \
+  docker.io/tenzir/tenzir:$OLD_VERSION
 
 sleep 3
 
-docker exec -i vast-regression \
-  vast import --blocking suricata \
-  < vast/integration/data/suricata/eve.json
+docker exec -i tenzir-regression \
+  tenzir 'read suricata | import' \
+  < tenzir/integration/data/suricata/eve.json
 
-docker exec vast-regression \
-  vast flush
-
-docker exec vast-regression \
-  vast export json 'where #schema == "suricata.alert"' \
+docker exec tenzir-regression \
+  tenzir 'export | where #schema == "suricata.alert" | write json' \
   > old.json
 
-docker rm -f vast-regression
-
-# Change the volume mount point since the default database location changed from
-# /var/lib/vast to /var/lib/tenzir.
-VAST_RUN_FLAGS="-d --pull=always --rm --name vast-regression -e VAST_CONSOLE_VERBOSITY=verbose -v vast-regression:/var/lib/tenzir/"
+docker rm -f tenzir-regression
 
 # Pull the new version to verify database compatibility.
 docker run \
-  $VAST_RUN_FLAGS \
-  ghcr.io/tenzir/tenzir-node:$NEW_VERSION
+  $TENZIR_RUN_FLAGS \
+  ghcr.io/tenzir/tenzir:$NEW_VERSION
 
 sleep 3
 
-docker exec vast-regression \
-  vast export json 'where #schema == "suricata.alert"' \
+docker exec tenzir-regression \
+  tenzir 'export | where #schema == "suricata.alert" | write json' \
   > new.json
 
-docker rm -f vast-regression
-docker volume rm vast-regression
+docker rm -f tenzir-regression
+docker volume rm tenzir-regression
 
 # Compare old and new
 diff old.json new.json

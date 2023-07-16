@@ -1,9 +1,9 @@
 ---
 openapi: 3.0.0
 info:
-  title: VAST Rest API
+  title: Tenzir Rest API
   version: "\"0.1\""
-  description: "\nThis API can be used to interact with a VAST Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be\nsupplied in the `X-VAST-Token` request header. The token can be generated\non the command-line using the `vast rest generate-token` command."
+  description: "\nThis API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be\nsupplied in the `X-Tenzir-Token` request header. The token can be generated\non the command-line using the `vast rest generate-token` command."
 servers:
   - url: https://vast.example.com/api/v0
 security:
@@ -116,7 +116,7 @@ components:
     VastToken:
       type: apiKey
       in: header
-      name: X-VAST-Token
+      name: X-Tenzir-Token
 paths:
   /pipeline/create:
     post:
@@ -157,7 +157,7 @@ paths:
                 restart_with_node:
                   type: boolean
                   default: false
-                  description: Check if the pipeline should be restarted when the VAST Node is restarted.\nThis parameter must be false if the 'hidden' parameter is true.
+                  description: Check if the pipeline should be restarted when the Tenzir Node is restarted.\nThis parameter must be false if the 'hidden' parameter is true.
                   example: false
       responses:
         200:
@@ -366,7 +366,7 @@ paths:
                   example: zeek-monitoring-pipeline
                 restart_with_node:
                   type: boolean
-                  description: Flag that specifies whether the pipeline should be restarted when the VAST Node is restarted.
+                  description: Flag that specifies whether the pipeline should be restarted when the Tenzir Node is restarted.
       responses:
         200:
           description: Success.
@@ -527,6 +527,6 @@ paths:
                   num-partitions: 7092
                   memory-usage: 52781901584
                 version:
-                  VAST: v2.3.0-rc3-32-g8529a6c43f
+                  Tenzir: v2.3.0-rc3-32-g8529a6c43f
         401:
           description: Not authenticated.

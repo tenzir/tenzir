@@ -3,32 +3,32 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "web/configuration.hpp"
 
-#include <vast/concept/convertible/data.hpp>
-#include <vast/concept/parseable/to.hpp>
-#include <vast/concept/parseable/vast/data.hpp>
-#include <vast/concept/parseable/vast/expression.hpp>
-#include <vast/plugin.hpp>
-#include <vast/test/test.hpp>
-#include <vast/validate.hpp>
+#include <tenzir/concept/convertible/data.hpp>
+#include <tenzir/concept/parseable/tenzir/data.hpp>
+#include <tenzir/concept/parseable/tenzir/expression.hpp>
+#include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/test/test.hpp>
+#include <tenzir/validate.hpp>
 
 namespace {
 
 // TODO: Build a test that uses convert() to go form `caf::settings`
-// to `vast::record`, to make the logic closer to what's actually
+// to `tenzir::record`, to make the logic closer to what's actually
 // used in the plugin code.
 
-vast::record extract_config(const std::string& config) {
-  auto data = vast::from_yaml(config);
+tenzir::record extract_config(const std::string& config) {
+  auto data = tenzir::from_yaml(config);
   REQUIRE_NOERROR(data);
-  REQUIRE(caf::holds_alternative<vast::record>(*data));
-  auto inner = caf::get<vast::record>(*data).at("web");
-  REQUIRE(caf::holds_alternative<vast::record>(inner));
-  return caf::get<vast::record>(inner);
+  REQUIRE(caf::holds_alternative<tenzir::record>(*data));
+  auto inner = caf::get<tenzir::record>(*data).at("web");
+  REQUIRE(caf::holds_alternative<tenzir::record>(inner));
+  return caf::get<tenzir::record>(inner);
 }
 
 } // namespace
@@ -40,10 +40,10 @@ web:
   port: +8000
   mode: dev
   )_");
-  auto config = vast::plugins::web::configuration{};
-  VAST_INFO("{}", record);
-  CHECK_EQUAL(validate(record, vast::plugins::web::configuration::schema(),
-                       vast::validate::strict),
+  auto config = tenzir::plugins::web::configuration{};
+  TENZIR_INFO("{}", record);
+  CHECK_EQUAL(validate(record, tenzir::plugins::web::configuration::schema(),
+                       tenzir::validate::strict),
               caf::error{});
   REQUIRE_EQUAL(convert(record, config), caf::error{});
   CHECK_EQUAL(config.bind_address, "localhost");
@@ -64,7 +64,7 @@ web:
   port: 8000
   mode: dev
   )_");
-  auto invalid_config = vast::plugins::web::configuration{};
+  auto invalid_config = tenzir::plugins::web::configuration{};
   CHECK_ERROR(convert(invalid_data, invalid_config));
   auto invalid_data2 = extract_config(R"_(
 web:
@@ -73,7 +73,7 @@ web:
   bind: 127.0.0.1
   port: 8000
   )_");
-  auto invalid_config2 = vast::plugins::web::configuration{};
+  auto invalid_config2 = tenzir::plugins::web::configuration{};
   CHECK_ERROR(convert(invalid_data2, invalid_config2));
 }
 
@@ -86,9 +86,9 @@ web:
   certfile: server.pem
   keyfile: server.key
   )_");
-  auto config = vast::plugins::web::configuration{};
-  CHECK_EQUAL(validate(data, vast::plugins::web::configuration::schema(),
-                       vast::validate::strict),
+  auto config = tenzir::plugins::web::configuration{};
+  CHECK_EQUAL(validate(data, tenzir::plugins::web::configuration::schema(),
+                       tenzir::validate::strict),
               caf::error{});
   REQUIRE_EQUAL(convert(data, config), caf::error{});
   CHECK_EQUAL(config.bind_address, "localhost");
@@ -104,6 +104,6 @@ web:
   certfile: server.pem
   # Missing 'keyfile'
   )_");
-  auto invalid_config = vast::plugins::web::configuration{};
+  auto invalid_config = tenzir::plugins::web::configuration{};
   CHECK_ERROR(convert(invalid_data, invalid_config));
 }

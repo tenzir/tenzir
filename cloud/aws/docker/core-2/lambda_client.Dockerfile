@@ -1,9 +1,9 @@
-ARG VAST_VERSION
-ARG VAST_IMAGE
+ARG TENZIR_VERSION
+ARG TENZIR_IMAGE
 ARG AWS_CLI_VERSION=2.4.20
 ARG AWSLAMBDARIC_VERSION=2.0.1
 
-FROM $VAST_IMAGE:$VAST_VERSION AS common_base
+FROM $TENZIR_IMAGE:$TENZIR_VERSION AS common_base
 
 USER root
 
@@ -14,7 +14,7 @@ RUN apt-get update && \
 
 # The first objective here is to install the AWS Lambda Runtime Interface client that allows
 # the image to be used from within lambda. Additionally, we can install any tooling that comes
-# handy to interact with VAST (AWS CLI,...)
+# handy to interact with Tenzir (AWS CLI,...)
 FROM common_base AS build
 
 ARG AWS_CLI_VERSION
@@ -39,11 +39,11 @@ RUN ln -s $PWD/aws-cli/v2/current/dist/aws /usr/local/bin/aws && \
     apt-get -y --no-install-recommends install jq && \
     rm -rf /var/lib/apt/lists/*
 
-USER vast:vast
+USER tenzir:tenzir
 
 COPY scripts/lambda-handler.py .
-COPY schema/ /opt/tenzir/vast/etc/vast/schema/
-COPY configs/vast/lambda.yaml /opt/tenzir/vast/etc/vast/vast.yaml
+COPY schema/ /opt/tenzir/tenzir/etc/tenzir/schema/
+COPY configs/tenzir/lambda.yaml /opt/tenzir/tenzir/etc/tenzir/tenzir.yaml
 
 ENTRYPOINT [ "/usr/bin/python3.9", "-m", "awslambdaric" ]
 CMD [ "lambda-handler.handler" ]

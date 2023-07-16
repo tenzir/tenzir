@@ -7,7 +7,7 @@
   - [First Last](https://github.com/username)
 - **Contributors**:
   - [First Last](https://github.com/username)
-- **Discussion**: [PR #2511](https://github.com/tenzir/vast/pull/2511)
+- **Discussion**: [PR #2511](https://github.com/tenzir/tenzir/pull/2511)
 
 ## Overview
 

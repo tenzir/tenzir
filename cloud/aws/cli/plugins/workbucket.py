@@ -1,6 +1,6 @@
 """Instantiate a bucket to persist larger data objects"""
 
-from vast_invoke import task
+from tenzir_invoke import task
 from common import (
     AWS_REGION,
     check_absolute,

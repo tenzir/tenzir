@@ -61,5 +61,5 @@ update-source() {
 
 # CAF isn't tagged properly, so we pass in the version explictly to get a
 # correct derivation output path.
-update-source caf "libvast/aux/caf" "0.18.7"
-update-source fast_float "libvast/aux/fast_float"
+update-source caf "libtenzir/aux/caf" "0.18.7"
+update-source fast_float "libtenzir/aux/fast_float"

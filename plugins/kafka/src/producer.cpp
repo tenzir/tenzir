@@ -3,18 +3,18 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "kafka/producer.hpp"
 
-#include <vast/detail/narrow.hpp>
-#include <vast/error.hpp>
-#include <vast/logger.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
 
 #include <fmt/format.h>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 auto producer::make(configuration config) -> caf::expected<producer> {
   producer result;
@@ -81,7 +81,7 @@ auto producer::produce(std::string topic, std::span<const std::byte> bytes,
         // The internal queue is limited by the configuration property
         // queue.buffering.max.messages and queue.buffering.max.kbytes
         auto ms = 1000;
-        VAST_WARN("queue full, retrying in {}ms", ms);
+        TENZIR_WARN("queue full, retrying in {}ms", ms);
         producer_->poll(ms);
         break;
       }
@@ -115,4 +115,4 @@ auto producer::queue_size() const -> size_t {
   return static_cast<size_t>(producer_->outq_len());
 }
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

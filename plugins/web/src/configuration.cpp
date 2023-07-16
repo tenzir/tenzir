@@ -3,14 +3,14 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/detail/installdirs.hpp>
+#include <tenzir/detail/installdirs.hpp>
 
 #include <web/configuration.hpp>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 static caf::expected<enum configuration::server_mode>
 to_server_mode(const std::string& str) {
@@ -92,4 +92,4 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   return result;
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

@@ -1,6 +1,6 @@
 # Changelog
 
-This changelog documents all notable changes to the 'web' plugin for VAST.
+This changelog documents all notable changes to the 'web' plugin for Tenzir.
 
 ## v1.0.0
 
