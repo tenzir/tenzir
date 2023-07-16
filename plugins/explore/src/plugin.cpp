@@ -45,7 +45,7 @@ auto make_screen(const plugin_args& args) -> ftxui::ScreenInteractive {
   using namespace ftxui;
   VAST_ASSERT((args.width && args.height) || (!args.width && !args.height));
   VAST_ASSERT(args.width && args.width->inner > 0 && args.height->inner > 0);
-  if (args.width || args.height)
+  if (args.width && args.height)
     return ScreenInteractive::FixedSize(args.width->inner, args.height->inner);
   if (args.fullscreen)
     return ScreenInteractive::Fullscreen();
@@ -134,7 +134,7 @@ public:
         .throw_();
     else if (args.height && !args.width)
       diagnostic::error("--height requires also setting --width")
-        .primary(args.width->source)
+        .primary(args.height->source)
         .throw_();
     if (args.navigator) {
       const auto& x = args.navigator->inner;
