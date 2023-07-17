@@ -67,6 +67,10 @@ public:
     return false;
   }
 
+  auto has_terminal() const noexcept -> bool override {
+    return false;
+  }
+
 private:
   OnWarnCallable on_warn_;
   std::vector<type> schemas_;

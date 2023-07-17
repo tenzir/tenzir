@@ -76,6 +76,10 @@ public:
     return false;
   }
 
+  auto has_terminal() const noexcept -> bool override {
+    return false;
+  }
+
 private:
   caf::error error_{};
 };
