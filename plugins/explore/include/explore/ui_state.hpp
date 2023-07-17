@@ -40,6 +40,9 @@ struct ui_state {
   /// The position of the navigator.
   ftxui::Direction navigator_position = ftxui::Direction::Up;
 
+  /// Flag that controls whether to show the column types.
+  bool show_types = true;
+
   /// Updates the UI state when a new slice of data arrives.
   auto add(table_slice slice) -> void;
 };

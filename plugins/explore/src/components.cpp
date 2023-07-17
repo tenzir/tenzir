@@ -154,21 +154,42 @@ auto StaticCell(view<data> value, const struct theme& theme) -> Element {
 //   return colorize(make, value, theme);
 // }
 
-/// A table header component.
-auto LeafColumnHeader(std::string top, std::string bottom, int height,
+/// A single-row focusable cell in the table header.
+auto SingleColumnHeader(std::string top, int height, const struct theme& theme)
+  -> Component {
+  TENZIR_ASSERT(height >= 1);
+  return Renderer([height, &theme, top_text = std::move(top),
+                   top_color = color(theme.palette.text),
+                   focus_color = theme.focus_color()](bool focused) mutable {
+    auto header = text(top_text) | center;
+    header |= focused ? focus | theme.focus_color() : color(theme.palette.text);
+    return vbox({
+             filler(),
+             std::move(header),
+             filler(),
+           })
+           | size(HEIGHT, EQUAL, height)
+           | size(WIDTH, GREATER_THAN, 3);
+  });
+}
+
+/// A dual-row focusable cell in the table header.
+auto DualColumnHeader(std::string top, std::string bottom, int height,
                       const struct theme& theme) -> Component {
+  TENZIR_ASSERT(height >= 2);
   return Renderer([height, &theme, top_text = std::move(top),
                    bottom_text = std::move(bottom)](bool focused) mutable {
     auto header = text(top_text) | center;
     header |= focused ? focus | theme.focus_color() : color(theme.palette.text);
-    auto element = vbox({
-                     filler(),
-                     std::move(header),
-                     text(bottom_text) | center | color(theme.palette.muted),
-                     filler(),
-                   })
-                   | size(HEIGHT, EQUAL, height);
-    return element;
+    return vbox({
+             filler(),
+             std::move(header),
+             text(bottom_text) | center | color(theme.palette.muted),
+             filler(),
+           })
+           | size(HEIGHT, EQUAL, height)
+           | size(WIDTH, GREATER_THAN, 3)
+           ;
   });
 }
 
@@ -183,12 +204,24 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
       TENZIR_ASSERT(!table_->slices.empty());
       const auto& record
         = caf::get<record_type>(table_->slices.front().schema());
-      auto depth = record.depth();
+      auto schema_depth = record.depth();
+      auto current_depth = index_.size();
       auto field = record.field(index_);
-      auto height = detail::narrow_cast<int>((depth - index_.size() + 1) * 2);
-      auto header
-        = LeafColumnHeader(std::string{field.name}, fmt::to_string(field.type),
-                           height, state_->theme);
+      // Each intermediate record adds two lines: one for the field name and one
+      // for the subsequent separator. Only leaf fields have one line less due
+      // to the absent type.
+      constexpr auto field_height = 2;
+      auto height
+        = field_height
+          * detail::narrow_cast<int>(schema_depth - current_depth + 1);
+      if (!state->show_types)
+        height--;
+      auto header = state->show_types
+                      ? DualColumnHeader(std::string{field.name},
+                                         fmt::to_string(field.type), height,
+                                         state_->theme)
+                      : SingleColumnHeader(std::string{field.name}, height,
+                                           state_->theme);
       auto container = Container::Vertical({});
       container->Add(header);
       container->Add(lift(state_->theme.separator()));
@@ -232,17 +265,6 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
   return Make<Impl>(state, schema, index);
 }
 
-/// A single-row focusable cell in the table header.
-auto RecordColumnHeader(std::string top, const struct theme& theme)
-  -> Component {
-  return Renderer([top_text = std::move(top),
-                   top_color = color(theme.palette.text),
-                   focus_color = theme.focus_color()](bool focused) mutable {
-    auto header = text(top_text);
-    return focused ? header | focus | focus_color : header | top_color;
-  });
-}
-
 /// A collapsible column for an entire record.
 auto RecordColumn(ui_state* state, Components columns, std::string name = {})
   -> Component {
@@ -252,7 +274,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
       : state_{state} {
       TENZIR_ASSERT(!columns.empty());
       if (!name.empty()) {
-        header_ = RecordColumnHeader(std::move(name), state_->theme);
+        header_ = SingleColumnHeader(std::move(name), 1, state_->theme);
         header_ |= Catch<catch_policy::child>([=](Event event) {
           if (event == Event::Character('c')
               || event == Event::Character(' ')) {

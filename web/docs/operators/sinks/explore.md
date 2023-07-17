@@ -6,7 +6,7 @@ Renders pipeline data in a terminal user interface (TUI).
 
 ```
 explore [-f|--fullscreen <bool>] [-h|--height <int>] [-w|--width <int>]
-        [-n|--navigator <string>]
+        [-n|--navigator <string>] [-T|--no-types]
 ```
 
 ## Description
@@ -47,6 +47,10 @@ The position of the navigator pane. Must be one of `left`, `right`, `top`,
 
 Defaults to `top`.
 
+### `-T|--no-types`
+
+Do not show the type names in the header column.
+
 ## Example
 
 Show the pipeline results in a TUI:
@@ -67,8 +71,8 @@ Show the pipeline results a fixed window frame:
 explore -w 80 -h 20
 ```
 
-Put the navigator at the bottom
+Put the navigator at the bottom and display no types:
 
 ```bash
-explore --navigator bottom
+explore --navigator bottom --no-types
 ```

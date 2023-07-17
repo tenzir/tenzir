@@ -30,13 +30,15 @@ struct plugin_args {
   std::optional<located<int>> height;
   std::optional<location> fullscreen;
   std::optional<located<std::string>> navigator;
+  std::optional<location> no_types;
 
   friend auto inspect(auto& f, plugin_args& x) -> bool {
     return f.object(x)
       .pretty_name("plugin_args")
       .fields(f.field("width", x.width), f.field("height", x.height),
               f.field("fullscreen", x.fullscreen),
-              f.field("navigator", x.navigator));
+              f.field("navigator", x.navigator),
+              f.field("no_types", x.no_types));
   }
 };
 
@@ -44,7 +46,8 @@ struct plugin_args {
 auto make_screen(const plugin_args& args) -> ftxui::ScreenInteractive {
   using namespace ftxui;
   TENZIR_ASSERT((args.width && args.height) || (!args.width && !args.height));
-  TENZIR_ASSERT(!args.width || (args.width->inner > 0 && args.height->inner > 0));
+  TENZIR_ASSERT(!args.width
+                || (args.width->inner > 0 && args.height->inner > 0));
   if (args.width && args.height)
     return ScreenInteractive::FixedSize(args.width->inner, args.height->inner);
   if (args.fullscreen)
@@ -78,6 +81,8 @@ public:
       else if (args_.navigator->inner == "bottom")
         state.navigator_position = ftxui::Direction::Down;
     }
+    if (args_.no_types)
+      state.show_types = false;
     // Ban UI main loop into dedicated thread.
     auto thread = std::thread([&] {
       auto main = MainWindow(&screen, &state);
@@ -127,6 +132,7 @@ public:
     parser.add("-w,--width", args.width, "<int>");
     parser.add("-h,--height", args.height, "<int>");
     parser.add("-n,--navigator", args.navigator, "<string>");
+    parser.add("-T,--no-types", args.no_types);
     parser.parse(p);
     if (args.width && !args.height)
       diagnostic::error("--width requires also setting --height")
