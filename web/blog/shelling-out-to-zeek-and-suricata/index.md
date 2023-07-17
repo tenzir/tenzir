@@ -74,11 +74,11 @@ zcat pcap.gz | suricatify | tenzir \
    | sort n desc'
 ```
 
-It's a bit unwiedly to write such a command line that requires an external shell
+It's a bit unwieldy to write such a command line that requires an external shell
 script to work. This is where [user-defined operators](/operators/user-defined)
 come into play. In combination with the [`shell`](/operators/sources/shell)
-operator in more detail, you can write a custom `zeek` and `suricata` operator
-and ditch the shell script:
+operator, you can write a custom `zeek` and `suricata` operator and ditch the
+shell script:
 
 ```yaml title="tenzir.yaml"
 tenzir:
@@ -125,9 +125,9 @@ output into the next:
 ![Piping Zeek to Tenzir](zeek-to-tenzir-pipe.excalidraw.svg)
 
 When using the `shell` operator, the `tenzir` process spawns `zeek` or
-`suricata` as child process. The operator then copies the bytes from stdin of
-the `tenzir` process to the child's stdin using a Unix pipe (and in reverse for
-stdout):
+`suricata` as child process. The operator then forwards the bytes from stdin of
+the `tenzir` process to the child's stdin, and uses the child's stdout as input
+to the subsequent `parse` operator.
 
 ![Shelling out to Zeek](zeek-to-tenzir-shell.excalidraw.svg)
 
