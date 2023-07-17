@@ -163,6 +163,7 @@ struct xsv_printer_impl {
 auto parse_impl(generator<std::optional<std::string_view>> lines,
                 operator_control_plane& ctrl, char sep, std::string name)
   -> generator<table_slice> {
+  auto last_finish = std::chrono::steady_clock::now();
   // Parse header.
   auto it = lines.begin();
   auto header = std::optional<std::string_view>{};
@@ -219,8 +220,20 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   auto b = adaptive_table_slice_builder{};
   for (; it != lines.end(); ++it) {
     auto line = *it;
-    if (!line || line->empty()) {
+    const auto now = std::chrono::steady_clock::now();
+    if (b.rows()
+          >= detail::narrow_cast<int64_t>(defaults::import::table_slice_size)
+        or last_finish + std::chrono::seconds{1} < now) {
+      last_finish = now;
       co_yield b.finish();
+    }
+    if (not line) {
+      if (last_finish != now) {
+        co_yield {};
+      }
+      continue;
+    }
+    if (line->empty()) {
       continue;
     }
     auto row = b.push_row();
@@ -246,6 +259,9 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
         ctrl.warn(std::move(err));
       // TODO: Check what add() does with strings.
     }
+  }
+  if (b.rows() > 0) {
+    co_yield b.finish();
   }
 }
 

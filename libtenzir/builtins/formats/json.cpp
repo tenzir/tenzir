@@ -624,10 +624,25 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
   } else {
     state.last_used_builder = std::addressof(state.unknown_schema_builder);
   }
-  for (auto chnk : json_chunk_generator) {
-    if (not chnk or chnk->size() == 0u) {
+  auto last_finish = std::chrono::steady_clock::now();
+  for (const auto& chnk : json_chunk_generator) {
+    const auto now = std::chrono::steady_clock::now();
+    if ((state.last_used_builder
+         and state.last_used_builder->rows() >= detail::narrow_cast<int64_t>(
+               defaults::import::table_slice_size))
+        or last_finish + std::chrono::seconds{1} < now) {
+      last_finish = now;
       co_yield unflatten_if_needed(separator,
                                    handle_empty_chunk(state, try_find_schema));
+    }
+    if (not chnk) {
+      if (last_finish != now) {
+        co_yield unflatten_if_needed(
+          separator, handle_empty_chunk(state, try_find_schema));
+      }
+      continue;
+    }
+    if (chnk->size() == 0u) {
       continue;
     }
     for (auto slice : parser_impl.parse(*chnk, state)) {
@@ -638,8 +653,9 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
     }
   }
   if (auto slice
-      = finalize(state.last_used_builder, state.last_used_schema_name))
+      = finalize(state.last_used_builder, state.last_used_schema_name)) {
     co_yield unflatten_if_needed(separator, std::move(*slice));
+  }
 }
 
 auto parse_selector(std::string_view x, location source) -> selector {
