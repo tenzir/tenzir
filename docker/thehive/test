@@ -24,7 +24,7 @@ sleep 3
 
 # import an alert before starting the app
 docker compose run --rm --no-TTY tenzir import --blocking suricata \
-    < ../tenzir/integration/data/suricata/eve.json
+    < ../tenzir/functional-test/data/suricata/eve.json
 
 # add the app to the stack
 COMPOSE_FILE="$COMPOSE_FILE:compose/thehive.app.yaml"
@@ -36,9 +36,9 @@ docker compose run --rm --no-deps thehive-app app-thehive-count-alerts 2>&1 | \
     grep -q "alert_count=1"
 
 # import both a duplicate and a new alert
-cat ../tenzir/integration/data/suricata/eve.json | \
+cat ../tenzir/functional-test/data/suricata/eve.json | \
     docker compose run --rm --no-TTY tenzir import --blocking suricata
-cat ../tenzir/integration/data/suricata/eve.json | \
+cat ../tenzir/functional-test/data/suricata/eve.json | \
     sed -e 's/2011-08-12/2011-08-13/g' | \
     docker compose run --rm --no-TTY tenzir import --blocking suricata
 

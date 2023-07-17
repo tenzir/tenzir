@@ -30,7 +30,7 @@ os.environ[flags.TRACE_FLAG_VAR] = "1"
 
 def tenzir_import_suricata(c: Context):
     """Import Suricata data from the provided URL"""
-    url = "https://raw.githubusercontent.com/tenzir/tenzir/v1.0.0/tenzir/integration/data/suricata/eve.json"
+    url = "https://raw.githubusercontent.com/tenzir/tenzir/v1.0.0/tenzir/functional-test/data/suricata/eve.json"
     c.run(
         f"./tenzir-cloud tenzir.server-execute -c 'wget -O - -o /dev/null {url} | tenzir import suricata'"
     )
@@ -407,7 +407,7 @@ def run(c, case=[]):
 
 DATASETS = {
     "suricata": {
-        "path": f"{common.REPOROOT}/tenzir/integration/data/suricata/eve.json",
+        "path": f"{common.REPOROOT}/tenzir/functional-test/data/suricata/eve.json",
         "pipe": "cat",  # use cat for noop
         "import_cmd": "tenzir import suricata",
     },

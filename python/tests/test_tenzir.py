@@ -65,7 +65,7 @@ async def tenzir_import(endpoint, expression: list[str]):
 
 def integration_data(path):
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    return os.path.normpath(f"{dir_path}/../../tenzir/integration/data/{path}")
+    return os.path.normpath(f"{dir_path}/../../tenzir/functional-test/data/{path}")
 
 
 @pytest.mark.asyncio
