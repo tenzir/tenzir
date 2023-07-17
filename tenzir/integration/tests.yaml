@@ -187,30 +187,6 @@ tests:
       - command: status catalog
         transformation: jq -ec '.catalog."num-partitions"'
 
-  Server Zeek conn log:
-    tags: [server, import-export, zeek]
-    fixture: ServerTester
-    steps:
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: export ascii 'where resp_h == 192.168.1.104'
-      # import some more to make sure accounting data is in the system.
-      - command: import -b --batch-size=10 zeek
-        input: data/zeek/conn.log.gz
-      - command: import -b --batch-size=1000 zeek
-        input: data/zeek/conn.log.gz
-      - command: import -b --batch-size=100000 zeek
-        input: data/zeek/conn.log.gz
-      - command: import -b --batch-size=1 -n 242 zeek
-        input: data/zeek/conn.log.gz
-      - command: flush
-      - command: status --detailed
-        transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
-      - command: status --detailed
-        transformation: jq -ec 'del(.version) | del(.system."swap-space-usage") | del(.index.patitions.cached) | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
-      - command: status --detailed index importer
-        transformation: jq -ec 'del(.index.patitions.cached) | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
-
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
