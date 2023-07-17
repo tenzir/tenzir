@@ -867,10 +867,11 @@ auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, node_actor node,
   receiver_actor<diagnostic> diagnostic_handler,
-  receiver_actor<pipeline_op_metrics> metrics_handler)
+  receiver_actor<pipeline_op_metrics> metrics_handler, int index)
   -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
+  self->state.current_metrics.index = index;
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler), std::move(metrics_handler));
   // The node actor must be set when the operator is not a source.
@@ -925,7 +926,8 @@ auto exec_node(
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
-                     receiver_actor<pipeline_op_metrics> metrics_handler)
+                     receiver_actor<pipeline_op_metrics> metrics_handler,
+                     int index)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
@@ -950,7 +952,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       } else {
         auto result = self->spawn<SpawnOptions>(
           exec_node<input_type, output_type>, std::move(op), std::move(node),
-          std::move(diagnostics_handler), std::move(metrics_handler));
+          std::move(diagnostics_handler), std::move(metrics_handler), index);
         return result;
       }
     };

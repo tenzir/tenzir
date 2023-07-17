@@ -68,6 +68,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
   auto previous = exec_node_actor{};
   bool spawn_remote = false;
   // Spawn pipeline piece by piece.
+  auto op_index = 0;
   for (auto&& op : std::move(pipe).unwrap()) {
     // Only switch locations if necessary.
     if (spawn_remote and op->location() == operator_location::local) {
@@ -101,7 +102,8 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       exec_nodes.emplace_back();
       self
         ->request(node, caf::infinite, atom::spawn_v,
-                  operator_box{std::move(op)}, input_type, diagnostics, metrics)
+                  operator_box{std::move(op)}, input_type, diagnostics, metrics,
+                  op_index)
         .then(
           [=, this](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
@@ -122,7 +124,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
     } else {
       TENZIR_DEBUG("{} spawns {} locally", *self, description);
       auto spawn_result = spawn_exec_node(self, std::move(op), input_type, node,
-                                          diagnostics, metrics);
+                                          diagnostics, metrics, op_index);
       if (not spawn_result) {
         abort_start(add_context(spawn_result.error(),
                                 "{} failed to spawn execution node", *self));
@@ -134,6 +136,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       self->link_to(previous);
       exec_nodes.push_back(previous);
     }
+    ++op_index;
   }
   if (exec_nodes.empty()) {
     TENZIR_DEBUG("{} quits because of empty pipeline", *self);
