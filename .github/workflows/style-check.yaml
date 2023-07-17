@@ -1,5 +1,13 @@
 name: "Style Check"
-on: pull_request
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+  merge_group:
+    types:
+      - checks_requested
+
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:

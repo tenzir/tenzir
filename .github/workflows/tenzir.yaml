@@ -15,6 +15,9 @@ on:
     types:
       - opened
       - synchronize
+  merge_group:
+    types:
+      - checks_requested
   release:
     types:
       - published
@@ -28,7 +31,7 @@ concurrency:
   # it's running smoothly for all users.
   group: ${{ github.workflow }}-${{ github.ref }}
   # Cancel all in-progress runs of this action for the same pull request.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
 
 env:
   CCACHE_MAXSIZE: "5G"
