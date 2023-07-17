@@ -87,7 +87,7 @@ Read JSON from stdin via [`from`](../operators/sources/from.md) and convert
 it to CSV:
 
 ```
-from - read json | write csv to stdout
+from - read json | to stdout | write csv
 ```
 
 Read 1 MiB from a file `/tmp/data` and write the bytes another file `/tmp/1mb`,
