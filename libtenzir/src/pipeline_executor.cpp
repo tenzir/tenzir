@@ -120,8 +120,8 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       input_type = *output_type;
     } else {
       TENZIR_DEBUG("{} spawns {} locally", *self, description);
-      auto spawn_result
-        = spawn_exec_node(self, std::move(op), input_type, node, diagnostics);
+      auto spawn_result = spawn_exec_node(self, std::move(op), input_type, node,
+                                          diagnostics, has_terminal);
       if (not spawn_result) {
         abort_start(add_context(spawn_result.error(),
                                 "{} failed to spawn execution node", *self));
@@ -227,8 +227,8 @@ auto pipeline_executor_state::start() -> caf::result<void> {
 
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
-  pipeline pipe, receiver_actor<diagnostic> diagnostics, node_actor node)
-  -> pipeline_executor_actor::behavior_type {
+  pipeline pipe, receiver_actor<diagnostic> diagnostics, node_actor node,
+  bool has_terminal) -> pipeline_executor_actor::behavior_type {
   TENZIR_DEBUG("{} was created", *self);
   self->state.self = self;
   self->state.node = std::move(node);
@@ -270,6 +270,7 @@ auto pipeline_executor(
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "tenzir.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
+  self->state.has_terminal = has_terminal;
   return {
     [self](atom::start) -> caf::result<void> {
       return self->state.start();

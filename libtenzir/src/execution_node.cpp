@@ -127,11 +127,12 @@ class exec_node_control_plane final : public operator_control_plane {
 public:
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler)
+    receiver_actor<diagnostic> diagnostic_handler, bool has_terminal)
     : state_{self->state},
       diagnostic_handler_{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
-          self, std::move(diagnostic_handler))} {
+          self, std::move(diagnostic_handler))},
+      has_terminal_{has_terminal} {
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
@@ -183,10 +184,15 @@ public:
                        "tenzir.allow-unsafe-pipelines", false);
   }
 
+  auto has_terminal() const noexcept -> bool override {
+    return has_terminal_;
+  }
+
 private:
   exec_node_state<Input, Output>& state_;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler_
     = {};
+  bool has_terminal_;
 };
 
 auto size(const table_slice& slice) -> uint64_t {
@@ -820,12 +826,12 @@ template <class Input, class Output>
 auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, node_actor node,
-  receiver_actor<diagnostic> diagnostic_handler)
+  receiver_actor<diagnostic> diagnostic_handler, bool has_terminal)
   -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, std::move(diagnostic_handler));
+    self, std::move(diagnostic_handler), has_terminal);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->quit(caf::make_error(
@@ -874,7 +880,8 @@ auto exec_node(
 
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
-                     receiver_actor<diagnostic> diagnostic_handler)
+                     receiver_actor<diagnostic> diagnostic_handler,
+                     bool has_terminal)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
@@ -897,10 +904,9 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       if constexpr (std::is_void_v<Input> and std::is_void_v<Output>) {
         die("unimplemented");
       } else {
-        auto result
-          = self->spawn<SpawnOptions>(exec_node<input_type, output_type>,
-                                      std::move(op), std::move(node),
-                                      std::move(diagnostic_handler));
+        auto result = self->spawn<SpawnOptions>(
+          exec_node<input_type, output_type>, std::move(op), std::move(node),
+          std::move(diagnostic_handler), has_terminal);
         return result;
       }
     };

@@ -152,7 +152,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto self = caf::scoped_actor{sys};
     auto executor = self->spawn<caf::monitored>(
       pipeline_executor, std::move(p),
-      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
+      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{}, false);
     self->send(executor, atom::start_v);
     auto start_result = std::optional<caf::error>{};
     auto down_result = std::optional<caf::error>{};
