@@ -37,8 +37,6 @@ public:
 
   virtual void emit(diagnostic d) = 0;
 
-  virtual void emit(pipeline_op_metrics m) = 0;
-
   virtual auto has_seen_error() const -> bool = 0;
 };
 
@@ -277,10 +275,6 @@ public:
     has_seen_error_ |= diag.severity == severity::error;
   }
 
-  void emit(pipeline_op_metrics) override {
-    die();
-  }
-
   auto has_seen_error() const -> bool override {
     return has_seen_error_;
   }
@@ -294,10 +288,6 @@ public:
   void emit(diagnostic diag) override {
     has_seen_error_ |= diag.severity == severity::error;
     result.push_back(std::move(diag));
-  }
-
-  void emit(pipeline_op_metrics) override {
-    die();
   }
 
   auto has_seen_error() const -> bool override {

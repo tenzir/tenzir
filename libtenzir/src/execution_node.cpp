@@ -100,11 +100,8 @@ class exec_node_diagnostic_handler final : public diagnostic_handler {
 public:
   exec_node_diagnostic_handler(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler,
-    receiver_actor<pipeline_op_metrics> metric_handler)
-    : self_{self},
-      diagnostic_handler_{std::move(diagnostic_handler)},
-      metric_handler_{std::move(metric_handler)} {
+    receiver_actor<diagnostic> diagnostic_handler)
+    : self_{self}, diagnostic_handler_{std::move(diagnostic_handler)} {
   }
 
   void emit(diagnostic d) override {
@@ -120,14 +117,6 @@ public:
     }
   }
 
-  void emit(pipeline_op_metrics m) override {
-    self_->request(metric_handler_, caf::infinite, m)
-      .then([]() {},
-            [](caf::error& e) {
-              VAST_WARN("failed to send metrics: {}", e);
-            });
-  }
-
   auto has_seen_error() const -> bool override {
     return has_seen_error_;
   }
@@ -135,7 +124,6 @@ public:
 private:
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self_ = {};
   receiver_actor<diagnostic> diagnostic_handler_ = {};
-  receiver_actor<pipeline_op_metrics> metric_handler_ = {};
   bool has_seen_error_ = {};
 };
 
@@ -144,12 +132,11 @@ class exec_node_control_plane final : public operator_control_plane {
 public:
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler,
-    receiver_actor<pipeline_op_metrics> metrics_handler)
+    receiver_actor<diagnostic> diagnostic_handler)
     : state_{self->state},
       diagnostic_handler_{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
-          self, std::move(diagnostic_handler), std::move(metrics_handler))} {
+          self, std::move(diagnostic_handler))} {
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
@@ -183,8 +170,8 @@ public:
     }
   }
 
-  auto emit(pipeline_op_metrics m) noexcept -> void override {
-    diagnostics().emit(m);
+  auto emit(table_slice) noexcept -> void override {
+    die("not implemented");
   }
 
   auto schemas() const noexcept -> const std::vector<type>& override {
@@ -322,7 +309,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
   // passed through this operator.
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
-  pipeline_op_metrics current_metrics{};
+  pipeline_op_metrics current_metrics = {};
+
+  receiver_actor<pipeline_op_metrics> metrics_handler = {};
 
   // Indicates whether the operator has stalled, i.e., the generator should not
   // be advanced.
@@ -346,7 +335,11 @@ struct exec_node_state : inbound_state_mixin<Input>,
                                                 current_metrics.time_starting);
     TENZIR_DEBUG("{} received start request for `{}`", *self, op->to_string());
     detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
-      ctrl->emit(current_metrics);
+      self->request(metrics_handler, caf::infinite, current_metrics)
+        .then([]() {},
+              [](caf::error& e) {
+                VAST_WARN("failed to send metrics: {}", e);
+              });
     });
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
@@ -764,7 +757,14 @@ struct exec_node_state : inbound_state_mixin<Input>,
       }
       TENZIR_VERBOSE("{} is done", op);
       print_metrics();
-      ctrl->emit(current_metrics);
+      self->request(metrics_handler, caf::infinite, current_metrics)
+        .then([]() {},
+              [](caf::error& e) {
+                VAST_WARN("failed to send metrics: {}", e);
+              });
+
+      // ctrl->emit(current_metrics);
+
       self->quit();
       return;
     }
@@ -871,9 +871,10 @@ auto exec_node(
   -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
+  self->state.metrics_handler = std::move(metrics_handler);
   self->state.current_metrics.index = index;
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, std::move(diagnostic_handler), std::move(metrics_handler));
+    self, std::move(diagnostic_handler));
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->quit(caf::make_error(

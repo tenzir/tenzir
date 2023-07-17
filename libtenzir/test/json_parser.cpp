@@ -46,7 +46,7 @@ public:
     on_warn_(std::move(warning));
   }
 
-  auto emit(exec_node_metrics) noexcept -> void override {
+  auto emit(table_slice) noexcept -> void override {
     FAIL("Unexpected call to operator_control_plane::emit");
   }
 

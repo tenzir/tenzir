@@ -106,10 +106,6 @@ public:
     }
   }
 
-  void emit(pipeline_op_metrics) override {
-    die();
-  }
-
   auto has_seen_error() const -> bool override {
     return error_;
   }
