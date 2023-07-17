@@ -5,7 +5,8 @@ Renders pipeline data in a terminal user interface (TUI).
 ## Synopsis
 
 ```
-explore [-f|--fullscreen=<bool>] [-h|--height=<int>] [-w|--width=<int>]
+explore [-f|--fullscreen <bool>] [-h|--height <int>] [-w|--width <int>]
+        [-n|--navigator <string>]
 ```
 
 ## Description
@@ -27,17 +28,24 @@ library for functional terminal interfaces in C++.
 
 Renders the TUI in fullscreen mode, as opposed to fitting it into the terminal.
 
-### `-h|--height=<int>`
+### `-h|--height <int>`
 
 The height of the TUI. Only actionable when `-w|--width` is also present.
 
 Defaults to 0, which means automatic detection.
 
-### `-w|--width=<int>`
+### `-w|--width <int>`
 
 The width of the TUI. Only actionable when `-h|--height` is also present.
 
 Defaults to 0, which means automatic detection.
+
+### `-n|--navigator <string>`
+
+The position of the navigator pane. Must be one of `left`, `right`, `top`,
+`bottom`.
+
+Defaults to `top`.
 
 ## Example
 
@@ -47,14 +55,20 @@ Show the pipeline results in a TUI:
 explore
 ```
 
-Show the pipeline results in a TUI, in fullscreen mode:
+Show the pipeline results in fullscreen mode:
 
 ```bash
-explore -f true
+explore -f
 ```
 
-Show the pipeline results in a TUI, in a fixed window frame:
+Show the pipeline results a fixed window frame:
 
 ```bash
 explore -w 80 -h 20
+```
+
+Put the navigator at the bottom
+
+```bash
+explore --navigator bottom
 ```
