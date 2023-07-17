@@ -223,7 +223,7 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
     const auto now = std::chrono::steady_clock::now();
     if (b.rows()
           >= detail::narrow_cast<int64_t>(defaults::import::table_slice_size)
-        or last_finish + std::chrono::seconds{1} < now) {
+        or last_finish + defaults::import::batch_timeout < now) {
       last_finish = now;
       co_yield b.finish();
     }

@@ -630,7 +630,7 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
     if ((state.last_used_builder
          and state.last_used_builder->rows() >= detail::narrow_cast<int64_t>(
                defaults::import::table_slice_size))
-        or last_finish + std::chrono::seconds{1} < now) {
+        or last_finish + defaults::import::batch_timeout < now) {
       last_finish = now;
       co_yield unflatten_if_needed(separator,
                                    handle_empty_chunk(state, try_find_schema));
