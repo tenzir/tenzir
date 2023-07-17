@@ -33,7 +33,7 @@
         };
       };
     }
-    // flake-utils.lib.eachSystem ["x86_64-linux"] (
+    // flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin"] (
       system: let
         overlay = import ./nix/overlay.nix {inherit inputs versionShortOverride versionLongOverride;};
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [overlay];
