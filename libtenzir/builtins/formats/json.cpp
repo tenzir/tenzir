@@ -158,11 +158,19 @@ public:
 
 private:
   auto report_parse_err(auto& v, std::string description) -> void {
+    if (v.current_location().error()) {
+      ctrl_.warn(
+        caf::make_error(ec::parse_error,
+                        fmt::format("failed to parse {} in line '{}'",
+                                    std::move(description), parsed_document_)));
+      return;
+    }
+    const auto faulty_json_view = std::string_view{
+      v.current_location().value_unsafe(), parsed_document_.end()};
     ctrl_.warn(caf::make_error(
       ec::parse_error,
-      fmt::format("json parser failed to parse {} in line {} from '{}'",
-                  std::move(description), parsed_document_,
-                  v.current_location().value_unsafe())));
+      fmt::format("failed to parse {} in line '{}' at: '{}'",
+                  std::move(description), parsed_document_, faulty_json_view)));
   }
 
   auto parse_number(simdjson::ondemand::value val, auto& pusher) -> void {
