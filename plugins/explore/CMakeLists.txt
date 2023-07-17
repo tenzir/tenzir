@@ -35,8 +35,10 @@ if (NOT ftxui_FOUND)
       STATUS
         "Cannot find installed ftxui; falling back to bundled version")
   endif ()
+  unset(COMPILE_WARNING_AS_ERROR)
   set(CMAKE_CXX_STANDARD 20)
   add_subdirectory(aux/ftxui)
+  set(COMPILE_WARNING_AS_ERROR)
   unset(CMAKE_CXX_STANDARD)
   dependency_summary("ftxui" "${CMAKE_CURRENT_SOURCE_DIR}/aux/ftxui"
                      "Dependencies")
