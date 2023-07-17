@@ -472,12 +472,11 @@ function (TenzirRegisterPlugin)
     PRIVATE tenzir::internal)
 
   set(PLUGIN_OUTPUT_DIRECTORY
-      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins")
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/tenzir/plugins")
 
-  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
-    file(CREATE_LINK "${VAST_DIR}/share" "${CMAKE_BINARY_DIR}/share" SYMBOLIC)
-    string(TOUPPER "${VAST_CMAKE_BUILD_TYPE}" build_type_uppercase_)
-    get_target_property(TENZIR_BINARY vast::tenzir
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+    string(TOUPPER "${TENZIR_CMAKE_BUILD_TYPE}" build_type_uppercase_)
+    get_target_property(TENZIR_BINARY tenzir::tenzir
                         IMPORTED_LOCATION_${build_type_uppercase_})
     unset(build_type_uppercase_)
     message(STATUS "Found tenzir executable: ${TENZIR_BINARY}")
@@ -495,7 +494,7 @@ function (TenzirRegisterPlugin)
         FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                          GROUP_READ GROUP_WRITE GROUP_EXECUTE)")
     add_custom_target(
-      ${PLUGIN_TARGET}_wrapper ALL
+      ${PLUGIN_TARGET}-wrapper ALL
       COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
       COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir -P
               "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
@@ -503,7 +502,7 @@ function (TenzirRegisterPlugin)
               "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
       COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir-node -P
               "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
-      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=vast -P
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir -P
               "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
       COMMENT
         "Creating convenience binary wrappers in ${CMAKE_CURRENT_BINARY_DIR}/bin"
@@ -732,6 +731,34 @@ function (TenzirRegisterPlugin)
         "plugin/${PLUGIN_TARGET}/${test_name}"
         PROPERTIES FIXTURES_REQUIRED tenzir_${PLUGIN_TARGET}_unit_test_fixture)
     endforeach ()
+  endif ()
+
+  # Ensure that a target functional-test always exists, even if a plugin does not
+  # define functional tests.
+  if (NOT TARGET functional-test)
+    add_custom_target(functional-test)
+  endif ()
+
+  # Setup functional tests.
+  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests")
+    if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+      set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
+    else ()
+      file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
+      file(CREATE_LINK "${TENZIR_DIR}/share/tenzir/functional-test"
+           "${CMAKE_BINARY_DIR}/share/tenzir/functional-test" SYMBOLIC)
+      set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
+    endif ()
+    add_custom_target(
+      functional-test-${PLUGIN_TARGET}
+      COMMAND ${CMAKE_COMMAND} -E env PATH="${TENZIR_PATH}:${TENZIR_PATH}/../share/tenzir/functional-test/bats/bin:$ENV{PATH}" bats "-T"
+              "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
+      COMMENT "Executing ${PLUGIN_TARGET} functional tests..."
+      USES_TERMINAL)
+    unset(TENZIR_PATH)
+
+    add_dependencies(functional-test-${PLUGIN_TARGET} tenzir::tenzir)
+    add_dependencies(functional-test functional-test-${PLUGIN_TARGET})
   endif ()
 
   # Ensure that a target integration always exists, even if a plugin does not

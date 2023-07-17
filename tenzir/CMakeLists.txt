@@ -106,6 +106,43 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     COMPONENT Runtime)
 endif ()
 
+# -- functional tests ----------------------------------------------------------
+
+add_custom_target(functional-test)
+
+add_custom_target(
+  functional-test-core
+  COMMAND
+    ${CMAKE_COMMAND} -E env
+    PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:$ENV{PATH}:${CMAKE_CURRENT_SOURCE_DIR}/functional-test/bats/bin"
+    bats "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
+  COMMENT "Executing functional tests..."
+  USES_TERMINAL)
+
+add_dependencies(functional-test-core tenzir)
+add_dependencies(functional-test functional-test-core)
+
+# link the full
+add_custom_target(
+  link-functional-test
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+          "${CMAKE_BINARY_DIR}/share/tenzir"
+  COMMAND
+    ${CMAKE_COMMAND} -E create_symlink
+    "${CMAKE_CURRENT_SOURCE_DIR}/functional-test"
+    "${CMAKE_BINARY_DIR}/share/tenzir/functional-test"
+  COMMENT "Linking functional test directory")
+
+add_dependencies(tenzir link-functional-test)
+
+# We only install the tenzir extension library, users need to provide bats,
+# bats-common and bats-assert themselves when building plugins against an
+# install tree.
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/bats-tenzir"
+  COMPONENT Development
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/functional-test")
+
 # -- integration tests ---------------------------------------------------------
 
 # TODO: Hide integration test suite behind an option that is enabled by default.
