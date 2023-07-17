@@ -40,8 +40,11 @@ struct ui_state {
   /// The position of the navigator.
   ftxui::Direction navigator_position = ftxui::Direction::Up;
 
+  /// Hide the navigator if there is exactly one schema.
+  bool navigator_auto_hide = false;
+
   /// Flag that controls whether to show the column types.
-  bool show_types = true;
+  bool hide_types = false;
 
   /// Updates the UI state when a new slice of data arrives.
   auto add(table_slice slice) -> void;

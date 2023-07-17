@@ -168,8 +168,7 @@ auto SingleColumnHeader(std::string top, int height, const struct theme& theme)
              std::move(header),
              filler(),
            })
-           | size(HEIGHT, EQUAL, height)
-           | size(WIDTH, GREATER_THAN, 3);
+           | size(HEIGHT, EQUAL, height) | size(WIDTH, GREATER_THAN, 3);
   });
 }
 
@@ -187,9 +186,7 @@ auto DualColumnHeader(std::string top, std::string bottom, int height,
              text(bottom_text) | center | color(theme.palette.muted),
              filler(),
            })
-           | size(HEIGHT, EQUAL, height)
-           | size(WIDTH, GREATER_THAN, 3)
-           ;
+           | size(HEIGHT, EQUAL, height) | size(WIDTH, GREATER_THAN, 3);
   });
 }
 
@@ -214,14 +211,14 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
       auto height
         = field_height
           * detail::narrow_cast<int>(schema_depth - current_depth + 1);
-      if (!state->show_types)
+      if (state->hide_types)
         height--;
-      auto header = state->show_types
-                      ? DualColumnHeader(std::string{field.name},
+      auto header = state->hide_types
+                      ? SingleColumnHeader(std::string{field.name}, height,
+                                           state_->theme)
+                      : DualColumnHeader(std::string{field.name},
                                          fmt::to_string(field.type), height,
-                                         state_->theme)
-                      : SingleColumnHeader(std::string{field.name}, height,
-                                           state_->theme);
+                                         state_->theme);
       auto container = Container::Vertical({});
       container->Add(header);
       container->Add(lift(state_->theme.separator()));
@@ -534,7 +531,11 @@ auto Explorer(ui_state* state) -> Component {
       auto num_tables = state_->tables.size();
       if (tables_.size() == num_tables)
         return ComponentBase::Render();
-      if (tables_.empty()) {
+      if (state_->navigator_auto_hide && num_tables == 1) {
+        DetachAllChildren();
+        Add(tab_);
+      } else if ((state_->navigator_auto_hide && num_tables == 2)
+                 || tables_.empty()) {
         DetachAllChildren();
         if (state_->navigator_position == Direction::Left
             || state_->navigator_position == Direction::Right) {
@@ -572,9 +573,6 @@ auto Explorer(ui_state* state) -> Component {
       TENZIR_ASSERT(num_tables == state_->tables.size());
       TENZIR_ASSERT(num_tables == tables_.size());
       TENZIR_ASSERT(num_tables == tab_->ChildCount());
-      // Only show the navigator when we have more than one schema.
-      if (num_tables == 1)
-        navigator_width_ = 0;
       return ComponentBase::Render();
     }
 

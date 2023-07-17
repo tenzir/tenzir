@@ -6,7 +6,8 @@ Renders pipeline data in a terminal user interface (TUI).
 
 ```
 explore [-f|--fullscreen <bool>] [-h|--height <int>] [-w|--width <int>]
-        [-n|--navigator <string>] [-T|--no-types]
+        [-n|--navigator-position <string>] [-N|--navigator-auto-hide]
+        [-T|--hide-types]
 ```
 
 ## Description
@@ -40,14 +41,18 @@ The width of the TUI. Only actionable when `-h|--height` is also present.
 
 Defaults to 0, which means automatic detection.
 
-### `-n|--navigator <string>`
+### `-n|--navigator-position <string>`
 
 The position of the navigator pane. Must be one of `left`, `right`, `top`,
 `bottom`.
 
 Defaults to `top`.
 
-### `-T|--no-types`
+### `-N|--navigator-auto-hide`
+
+Disables the navigator pane when there is exactly *one* schema.
+
+### `-T|--hide-types`
 
 Do not show the type names in the header column.
 
@@ -71,8 +76,8 @@ Show the pipeline results a fixed window frame:
 explore -w 80 -h 20
 ```
 
-Put the navigator at the bottom and display no types:
+Put the navigator at the bottom and hide the column types:
 
 ```bash
-explore --navigator bottom --no-types
+explore --navigator-position bottom --hide-types
 ```

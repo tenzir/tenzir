@@ -29,16 +29,18 @@ struct plugin_args {
   std::optional<located<int>> width;
   std::optional<located<int>> height;
   std::optional<location> fullscreen;
-  std::optional<located<std::string>> navigator;
-  std::optional<location> no_types;
+  std::optional<located<std::string>> navigator_position;
+  std::optional<location> navigator_auto_hide;
+  std::optional<location> hide_types;
 
   friend auto inspect(auto& f, plugin_args& x) -> bool {
     return f.object(x)
       .pretty_name("plugin_args")
       .fields(f.field("width", x.width), f.field("height", x.height),
               f.field("fullscreen", x.fullscreen),
-              f.field("navigator", x.navigator),
-              f.field("no_types", x.no_types));
+              f.field("navigator_position", x.navigator_position),
+              f.field("navigator_auto_hide", x.navigator_auto_hide),
+              f.field("hide_types", x.hide_types));
   }
 };
 
@@ -71,18 +73,20 @@ public:
     using namespace ftxui;
     auto screen = make_screen(args_);
     ui_state state;
-    if (args_.navigator) {
-      if (args_.navigator->inner == "left")
+    if (args_.navigator_position) {
+      if (args_.navigator_position->inner == "left")
         state.navigator_position = ftxui::Direction::Left;
-      else if (args_.navigator->inner == "right")
+      else if (args_.navigator_position->inner == "right")
         state.navigator_position = ftxui::Direction::Right;
-      else if (args_.navigator->inner == "top")
+      else if (args_.navigator_position->inner == "top")
         state.navigator_position = ftxui::Direction::Up;
-      else if (args_.navigator->inner == "bottom")
+      else if (args_.navigator_position->inner == "bottom")
         state.navigator_position = ftxui::Direction::Down;
     }
-    if (args_.no_types)
-      state.show_types = false;
+    if (args_.navigator_auto_hide)
+      state.navigator_auto_hide = true;
+    if (args_.hide_types)
+      state.hide_types = true;
     // Ban UI main loop into dedicated thread.
     auto thread = std::thread([&] {
       auto main = MainWindow(&screen, &state);
@@ -131,8 +135,9 @@ public:
     parser.add("-f,--fullscreen", args.fullscreen);
     parser.add("-w,--width", args.width, "<int>");
     parser.add("-h,--height", args.height, "<int>");
-    parser.add("-n,--navigator", args.navigator, "<string>");
-    parser.add("-T,--no-types", args.no_types);
+    parser.add("-n,--navigator-position", args.navigator_position, "<string>");
+    parser.add("-N,--navigator", args.navigator_auto_hide);
+    parser.add("-T,--hide-types", args.hide_types);
     parser.parse(p);
     if (args.width && !args.height)
       diagnostic::error("--width requires also setting --height")
@@ -142,11 +147,11 @@ public:
       diagnostic::error("--height requires also setting --width")
         .primary(args.height->source)
         .throw_();
-    if (args.navigator) {
-      const auto& x = args.navigator->inner;
+    if (args.navigator_position) {
+      const auto& x = args.navigator_position->inner;
       if (!(x == "left" || x == "right" || x == "top" || x == "bottom"))
         diagnostic::error("invalid --navigator value")
-          .primary(args.navigator->source)
+          .primary(args.navigator_position->source)
           .note("must be one of 'left|right|top|bottom'")
           .throw_();
     }
