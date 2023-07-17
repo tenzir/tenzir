@@ -121,7 +121,7 @@ auto colorize(auto& make, view<data> value, const struct theme& theme) {
   return caf::visit(factory, value);
 }
 
-auto align_element(alignment align, Element element) {
+auto align_element(alignment align, Element element) -> Element {
   switch (align) {
     case alignment::left:
       return element;
@@ -130,6 +130,7 @@ auto align_element(alignment align, Element element) {
     case alignment::right:
       return hbox({std::move(element), filler()});
   }
+  __builtin_unreachable();
 }
 
 auto StaticCell(view<data> value, const struct theme& theme) -> Element {
@@ -272,7 +273,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
       TENZIR_ASSERT(!columns.empty());
       if (!name.empty()) {
         header_ = SingleColumnHeader(std::move(name), 1, state_->theme);
-        header_ |= Catch<catch_policy::child>([=](Event event) {
+        header_ |= Catch<catch_policy::child>([this](Event event) {
           if (event == Event::Character('c')
               || event == Event::Character(' ')) {
             if (collapsed_)
@@ -603,7 +604,7 @@ auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
       : screen_{screen}, state_{state} {
       auto main = Explorer(state_);
       main |= Modal(Help(), &show_help_);
-      main |= Catch<catch_policy::child>([=](Event event) {
+      main |= Catch<catch_policy::child>([this](Event event) {
         if (show_help_) {
           if (event == Event::Character('q') || event == Event::Escape) {
             show_help_ = false;
