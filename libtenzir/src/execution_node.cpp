@@ -320,7 +320,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
 
   // Metrics that track the total number of inbound and outbound elements that
   // passed through this operator.
-
+  std::chrono::steady_clock::time_point start_time
+    = std::chrono::steady_clock::now();
   pipeline_op_metrics current_metrics{};
 
   // Indicates whether the operator has stalled, i.e., the generator should not
@@ -662,7 +663,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
 
   auto print_metrics() -> void {
     const auto elapsed = std::chrono::duration_cast<duration>(
-      std::chrono::steady_clock::now() - current_metrics.start_time);
+      std::chrono::steady_clock::now() - start_time);
     auto percentage = [](auto num, auto den) {
       return std::chrono::duration<double, std::chrono::seconds::period>(num)
                .count()
