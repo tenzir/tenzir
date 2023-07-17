@@ -16,3 +16,12 @@
 [submodule "libtenzir/aux/caf"]
 	path = libtenzir/aux/caf
 	url = https://github.com/tenzir/actor-framework
+[submodule "tenzir/functional-test/bats"]
+	path = tenzir/functional-test/bats
+	url = https://github.com/bats-core/bats-core
+[submodule "tenzir/functional-test/bats-support"]
+	path = tenzir/functional-test/bats-support
+	url = https://github.com/bats-core/bats-support
+[submodule "tenzir/functional-test/bats-assert"]
+	path = tenzir/functional-test/bats-assert
+	url = https://github.com/bats-core/bats-assert
