@@ -32,18 +32,6 @@
 
 namespace tenzir {
 
-struct diagnostic_manager_state {
-  std::vector<pipeline_op_metrics> metrics;
-};
-
-auto metrics_manager(
-  receiver_actor<pipeline_op_metrics>::stateful_pointer<diagnostic_manager_state>
-    self) -> receiver_actor<pipeline_op_metrics>::behavior_type {
-  return {[self](pipeline_op_metrics m) -> void {
-    self->state.metrics.emplace_back(m);
-  }};
-}
-
 void pipeline_executor_state::start_nodes_if_all_spawned() {
   auto untyped_exec_nodes = std::vector<caf::actor>{};
   for (auto node : exec_nodes) {
@@ -281,7 +269,7 @@ auto pipeline_executor(
   });
   self->state.pipe = std::move(pipe);
   self->state.diagnostics = std::move(diagnostics);
-  self->state.metrics = self->spawn(metrics_manager);
+  self->state.metrics = std::move(metrics);
   self->state.allow_unsafe_pipelines
     = caf::get_or(self->system().config(), "tenzir.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);

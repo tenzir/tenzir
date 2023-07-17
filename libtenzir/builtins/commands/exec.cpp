@@ -29,6 +29,18 @@ struct exec_config {
   bool dump_diagnostics = false;
 };
 
+struct metrics_manager_state {
+  std::vector<pipeline_op_metrics> metrics;
+};
+
+auto metrics_manager(
+  receiver_actor<pipeline_op_metrics>::stateful_pointer<metrics_manager_state>
+    self) -> receiver_actor<pipeline_op_metrics>::behavior_type {
+  return {[self](pipeline_op_metrics m) -> void {
+    self->state.metrics.emplace_back(m);
+  }};
+}
+
 auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
   while (true) {
     if (auto out = pipe.infer_type<void>()) {
@@ -126,8 +138,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
       self->state.executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
         caf::actor_cast<receiver_actor<diagnostic>>(self),
-        caf::actor_cast<receiver_actor<pipeline_op_metrics>>(self),
-        node_actor{});
+        self->spawn(metrics_manager), node_actor{});
       self->request(self->state.executor, caf::infinite, atom::start_v)
         .then(
           []() {
