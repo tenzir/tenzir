@@ -213,12 +213,12 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
           * detail::narrow_cast<int>(schema_depth - current_depth + 1);
       if (state->hide_types)
         height--;
-      auto header = state->hide_types
-                      ? SingleColumnHeader(std::string{field.name}, height,
-                                           state_->theme)
-                      : DualColumnHeader(std::string{field.name},
-                                         fmt::to_string(field.type), height,
-                                         state_->theme);
+      auto header
+        = state->hide_types
+            ? SingleColumnHeader(std::string{field.name}, height, state_->theme)
+            : DualColumnHeader(std::string{field.name},
+                               fmt::to_string(field.type), height,
+                               state_->theme);
       auto container = Container::Vertical({});
       container->Add(header);
       container->Add(lift(state_->theme.separator()));
