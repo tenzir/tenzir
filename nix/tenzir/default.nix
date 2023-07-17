@@ -4,8 +4,8 @@
     lib,
     stdenv,
     callPackage,
-    pname ? "vast",
-    vast-source,
+    pname,
+    tenzir-source,
     cmake,
     cmake-format,
     poetry,
@@ -26,6 +26,7 @@
     jemalloc,
     libunwind,
     xxHash,
+    rdkafka,
     re2,
     dpkg,
     restinio,
@@ -36,7 +37,7 @@
     runCommand,
     makeWrapper,
     extraCmakeFlags ? [],
-    vast-integration-test-deps,
+    tenzir-integration-test-deps,
     disableTests ? true,
     pkgsBuildHost,
   }: let
@@ -44,7 +45,7 @@
 
     versionLongOverride' = lib.removePrefix "v" versionLongOverride;
     versionShortOverride' = lib.removePrefix "v" versionShortOverride;
-    versionFallback = (builtins.fromJSON (builtins.readFile ./../../version.json)).vast-version-fallback;
+    versionFallback = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version-fallback;
     versionLong =
       if (versionLongOverride != null)
       then versionLongOverride'
@@ -57,11 +58,10 @@
     extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
     bundledPlugins =
       [
-        "plugins/cef"
+        "plugins/explore"
+        "plugins/kafka"
+        "plugins/nic"
         "plugins/parquet"
-        "plugins/pcap"
-        "plugins/sigma"
-        "plugins/tui"
         "plugins/web"
       ]
       ++ extraPlugins';
@@ -69,7 +69,7 @@
     stdenv.mkDerivation ({
         inherit pname;
         version = versionLong;
-        src = vast-source;
+        src = tenzir-source;
 
         postUnpack = ''
           mkdir -p source/extra-plugins
@@ -96,6 +96,7 @@
           libpcap
           libunwind
           libyamlcpp
+          rdkafka
           re2
           restinio
         ];
@@ -173,7 +174,7 @@
         dontStrip = true;
 
         doInstallCheck = false;
-        installCheckInputs = vast-integration-test-deps;
+        installCheckInputs = tenzir-integration-test-deps;
         # TODO: Investigate why the disk monitor test fails in the build sandbox.
         installCheckPhase = ''
           python ../tenzir/integration/integration.py \
@@ -182,7 +183,7 @@
         '';
 
         passthru = rec {
-          plugins = callPackage ./plugins {vast = self;};
+          plugins = callPackage ./plugins {tenzir = self;};
           withPlugins = plugins': let
             actualPlugins = plugins' plugins;
           in
@@ -193,11 +194,11 @@
               }
             else let
               pluginDir = symlinkJoin {
-                name = "vast-plugin-dir";
+                name = "tenzir-plugin-dir";
                 paths = [actualPlugins];
               };
             in
-              runCommand "vast-with-plugins"
+              runCommand "tenzir-with-plugins"
               {
                 nativeBuildInputs = [makeWrapper];
               } ''
@@ -208,7 +209,7 @@
 
         meta = with lib; {
           description = "Visibility Across Space and Time";
-          homepage = "https://vast.io/";
+          homepage = "https://www.tenzir.com/";
           # Set mainProgram so that all editions work with `nix run`.
           mainProgram = "tenzir-ctl";
           license = licenses.bsd3;
@@ -231,7 +232,7 @@
             "-UCMAKE_INSTALL_LIBDIR"
             "-UCMAKE_INSTALL_LIBEXECDIR"
             "-UCMAKE_INSTALL_LOCALEDIR"
-            "-DCMAKE_INSTALL_PREFIX=/opt/vast"
+            "-DCMAKE_INSTALL_PREFIX=/opt/tenzir"
           )
           echo "cmake flags: $cmakeFlags ''${cmakeFlagsArray[@]}"
           cmake "$cmakeDir" $cmakeFlags "''${cmakeFlagsArray[@]}"
