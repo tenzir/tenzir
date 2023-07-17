@@ -10,6 +10,8 @@
 
 #include <tenzir/detail/overload.hpp>
 
+#include <ftxui/component/component.hpp>
+
 namespace tenzir::plugins::explore {
 
 using namespace ftxui;
@@ -125,12 +127,23 @@ auto default_palette() -> palette {
   return rose_pine_palette();
 }
 
-auto theme::menu_option(Direction direction) const -> MenuOption {
+auto theme::menu(std::vector<std::string>* entries, int* selected,
+                 ftxui::Direction direction) const -> ftxui::Component {
   using enum Direction;
-  MenuOption result;
-  result.direction = direction;
-  auto horizontal = direction == Left || direction == Right;
-  result.entries.transform = [=](const EntryState& entry) {
+  auto menu_direction = [](Direction x) {
+    switch (x) {
+      case Left:
+      case Right:
+        return Down;
+      case Up:
+      case Down:
+        return Left;
+    }
+  };
+  auto horizontal = direction == Up || direction == Down;
+  MenuOption option;
+  option.direction = menu_direction(direction);
+  option.entries.transform = [=](const EntryState& entry) {
     Element e = text(entry.label);
     if (horizontal)
       e |= center;
@@ -141,12 +154,8 @@ auto theme::menu_option(Direction direction) const -> MenuOption {
       e |= bgcolor(palette.highlight_high);
     return e;
   };
-  result.underline.enabled = horizontal;
-  result.underline.SetAnimation(std::chrono::milliseconds(0),
-                                animation::easing::Linear);
-  result.underline.color_inactive = palette.highlight_high;
-  result.underline.color_active = palette.highlight_high;
-  return result;
+  option.underline.enabled = false;
+  return Menu(entries, selected, option);
 }
 
 auto theme::border() const -> ftxui::Decorator {

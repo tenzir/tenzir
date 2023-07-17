@@ -424,18 +424,17 @@ auto Navigator(ui_state* state, int* index, int* width) -> Component {
       : state_{state}, index_{index}, width_{width} {
       fingerprints_ = Container::Vertical({});
       fingerprints_->DetachAllChildren();
-      if (state->navigator_position == Direction::Left
-          || state->navigator_position == Direction::Right) {
-        menu_ = Menu(&schema_names_, index_,
-                     state_->theme.menu_option(Direction::Down));
+      menu_
+        = state_->theme.menu(&schema_names_, index_, state->navigator_position);
+      auto horizontal = state->navigator_position == Direction::Left
+                        || state->navigator_position == Direction::Right;
+      if (horizontal) {
         Add(Container::Horizontal({
           Container::Vertical({menu_, lift(filler())}),
           lift(text(" ")),
           fingerprints_,
         }));
       } else {
-        menu_ = Menu(&schema_names_, index_,
-                     state_->theme.menu_option(Direction::Left));
         Add(menu_);
       }
     }
@@ -453,8 +452,8 @@ auto Navigator(ui_state* state, int* index, int* width) -> Component {
           // One extra character for the separator.
           auto width = type.name().size() + fingerprint.size() + 1;
           *width_ = std::max(*width_, detail::narrow_cast<int>(width));
-          auto element = text(std::move(fingerprint))
-                         | color(state_->theme.palette.muted);
+          auto element
+            = text(std::move(fingerprint)) | color(state_->theme.palette.muted);
           fingerprints_->Add(lift(std::move(element)));
         }
       }
@@ -530,11 +529,13 @@ auto Explorer(ui_state* state) -> Component {
         } else if (state_->navigator_position == Direction::Up) {
           Add(Container::Vertical({
             Navigator(state_, &index_, &navigator_width_),
+            lift(state_->theme.separator()),
             tab_,
           }));
         } else if (state_->navigator_position == Direction::Down) {
           Add(Container::Vertical({
             tab_,
+            lift(state_->theme.separator()),
             Navigator(state_, &index_, &navigator_width_),
           }));
         }

@@ -44,8 +44,9 @@ auto default_palette() -> palette;
 
 /// Application-wide color and style settings.
 struct theme {
-  /// A themed FTXUI menu option.
-  auto menu_option(ftxui::Direction direction) const -> ftxui::MenuOption;
+  /// A themed FTXUI menu at a given position.
+  auto menu(std::vector<std::string>* entries, int* selected,
+            ftxui::Direction direction) const -> ftxui::Component;
 
   /// A themed FTXUI border.
   auto border() const -> ftxui::Decorator;
