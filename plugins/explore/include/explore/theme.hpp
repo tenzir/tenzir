@@ -16,57 +16,31 @@
 namespace tenzir::plugins::explore {
 
 /// The theme colors.
+/// See https://rosepinetheme.com/palette/ for semantics.
 struct palette {
-  // General
-  ftxui::Color text;
-  ftxui::Color subtext;
-  ftxui::Color subsubtext;
+  // Backgrounds
+  ftxui::Color base;
+  ftxui::Color surface;
+  ftxui::Color overlay;
+  // Foregrounds
+  ftxui::Color muted;
   ftxui::Color subtle;
-  ftxui::Color link_normal;
-  ftxui::Color link_followed;
-  ftxui::Color link_hover;
-  ftxui::Color success;
-  ftxui::Color error;
-  ftxui::Color warning;
-  ftxui::Color info;
-  // Window
-  ftxui::Color cursor;
-  ftxui::Color cursor_text;
-  ftxui::Color border_active;
-  ftxui::Color border_inactive;
-  ftxui::Color border_bell;
+  ftxui::Color text;
   // Colors
-  ftxui::Color color0;
-  ftxui::Color color1;
-  ftxui::Color color2;
-  ftxui::Color color3;
-  ftxui::Color color4;
-  ftxui::Color color5;
-  ftxui::Color color6;
-  ftxui::Color color7;
-  ftxui::Color color8;
-  ftxui::Color color9;
-  ftxui::Color color10;
-  ftxui::Color color11;
-  ftxui::Color color12;
-  ftxui::Color color13;
-  ftxui::Color color14;
-  ftxui::Color color15;
-  ftxui::Color color16;
-  ftxui::Color color17;
-  // Language
-  ftxui::Color keyword;
-  ftxui::Color string;
-  ftxui::Color escape;
-  ftxui::Color comment;
-  ftxui::Color number;
-  ftxui::Color operator_;
-  ftxui::Color delimiter;
-  ftxui::Color function;
-  ftxui::Color parameter;
-  ftxui::Color builtin;
-  ftxui::Color type;
+  ftxui::Color love;
+  ftxui::Color gold;
+  ftxui::Color rose;
+  ftxui::Color pine;
+  ftxui::Color foam;
+  ftxui::Color iris;
+  // Highlights
+  ftxui::Color highlight_low;
+  ftxui::Color highlight_med;
+  ftxui::Color highlight_high;
 };
+
+/// Constructs the default palette.
+auto default_palette() -> palette;
 
 /// Application-wide color and style settings.
 struct theme {
@@ -82,13 +56,10 @@ struct theme {
   /// Returns a themed separator.
   auto separator() const -> ftxui::Element;
 
-  struct palette palette;
+  struct palette palette = default_palette();
 };
 
-/// Constructs the mocha scheme.
-auto mocha() -> theme;
-
-/// The default theme if the user doesn't adjust one.
-const theme default_theme = mocha();
+/// Constructs the default scheme.
+auto default_theme() -> theme;
 
 } // namespace tenzir::plugins::explore

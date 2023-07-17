@@ -17,9 +17,6 @@ using namespace ftxui::literals;
 
 namespace {
 
-/// A Catppuccin color palette. See the [style
-/// guide](https://github.com/catppuccin/catppuccin/blob/main/docs/style-guide.md)
-/// for guidance on how to map the colors to UI elements.
 namespace catppuccin::latte {
 
 const auto rosewater = 0xdc8a78_rgb;
@@ -82,7 +79,51 @@ const auto crust = 0x11111b_rgb;
 
 } // namespace catppuccin::mocha
 
+namespace rose_pine {
+
+const auto base = 0x191724_rgb;
+const auto surface = 0x1f1d2e_rgb;
+const auto overlay = 0x26233a_rgb;
+const auto muted = 0x6e6a86_rgb;
+const auto subtle = 0x908caa_rgb;
+const auto text = 0xe0def4_rgb;
+const auto love = 0xeb6f92_rgb;
+const auto gold = 0xf6c177_rgb;
+const auto rose = 0xebbcba_rgb;
+const auto pine = 0x31748f_rgb;
+const auto foam = 0x9ccfd8_rgb;
+const auto iris = 0xc4a7e7_rgb;
+const auto highlight_low = 0x21202e_rgb;
+const auto highlight_med = 0x403d52_rgb;
+const auto highlight_high = 0x524f67_rgb;
+
+} // namespace rose_pine
+
+auto rose_pine_palette() -> palette {
+  return {
+    .base = rose_pine::base,
+    .surface = rose_pine::base,
+    .overlay = rose_pine::overlay,
+    .muted = rose_pine::muted,
+    .subtle = rose_pine::subtle,
+    .text = rose_pine::text,
+    .love = rose_pine::love,
+    .gold = rose_pine::gold,
+    .rose = rose_pine::rose,
+    .pine = rose_pine::pine,
+    .foam = rose_pine::foam,
+    .iris = rose_pine::iris,
+    .highlight_low = rose_pine::highlight_low,
+    .highlight_med = rose_pine::highlight_med,
+    .highlight_high = rose_pine::highlight_high,
+  };
+}
+
 } // namespace
+
+auto default_palette() -> palette {
+  return rose_pine_palette();
+}
 
 auto theme::menu_option(Direction direction) const -> MenuOption {
   using enum Direction;
@@ -94,83 +135,34 @@ auto theme::menu_option(Direction direction) const -> MenuOption {
     if (horizontal)
       e |= center;
     e |= flex;
-    e |= bold;
+    if (!entry.active)
+      e |= color(palette.muted);
     if (entry.focused)
-      e |= focus_color();
-    if (entry.active)
-      e |= color(palette.link_hover);
+      e |= bgcolor(palette.highlight_high);
     return e;
   };
   result.underline.enabled = horizontal;
-  result.underline.SetAnimation(std::chrono::milliseconds(500),
+  result.underline.SetAnimation(std::chrono::milliseconds(0),
                                 animation::easing::Linear);
-  result.underline.color_inactive = palette.link_normal;
-  result.underline.color_active = palette.link_hover;
+  result.underline.color_inactive = palette.highlight_high;
+  result.underline.color_active = palette.highlight_high;
   return result;
 }
 
 auto theme::border() const -> ftxui::Decorator {
-  return borderStyled(ROUNDED, palette.border_inactive);
+  return borderStyled(ROUNDED, palette.highlight_high);
 }
 
 auto theme::focus_color() const -> ftxui::Decorator {
-  return color(palette.cursor_text) | bgcolor(palette.cursor);
+  return color(palette.text) | bgcolor(palette.highlight_high);
 }
 
 auto theme::separator() const -> ftxui::Element {
-  return ftxui::separator() | ftxui::color(palette.border_inactive);
+  return ftxui::separator() | ftxui::color(palette.highlight_high);
 }
 
-auto mocha() -> theme {
-  palette p;
-  p.text = catppuccin::mocha::text;
-  p.subtext = catppuccin::mocha::subtext0;
-  p.subsubtext = catppuccin::mocha::subtext1;
-  p.subtle = catppuccin::mocha::overlay1;
-  p.link_normal = catppuccin::mocha::blue;
-  p.link_followed = catppuccin::mocha::lavender;
-  p.link_hover = catppuccin::mocha::sky;
-  p.success = catppuccin::mocha::green;
-  p.error = catppuccin::mocha::red;
-  p.warning = catppuccin::mocha::yellow;
-  p.info = catppuccin::mocha::teal;
-  p.cursor = catppuccin::mocha::rosewater;
-  p.cursor_text = catppuccin::mocha::crust;
-  p.border_active = catppuccin::mocha::lavender;
-  p.border_inactive = catppuccin::mocha::overlay0;
-  p.border_bell = catppuccin::mocha::yellow;
-  p.color0 = catppuccin::mocha::surface1;
-  p.color1 = catppuccin::mocha::red;
-  p.color2 = catppuccin::mocha::green;
-  p.color3 = catppuccin::mocha::yellow;
-  p.color4 = catppuccin::mocha::blue;
-  p.color5 = catppuccin::mocha::pink;
-  p.color6 = catppuccin::mocha::teal;
-  p.color7 = catppuccin::mocha::subtext1;
-  p.color8 = catppuccin::mocha::surface2;
-  p.color9 = catppuccin::mocha::red;
-  p.color10 = catppuccin::mocha::green;
-  p.color11 = catppuccin::mocha::yellow;
-  p.color12 = catppuccin::mocha::blue;
-  p.color13 = catppuccin::mocha::pink;
-  p.color14 = catppuccin::mocha::teal;
-  p.color15 = catppuccin::mocha::subtext0;
-  p.color16 = catppuccin::mocha::peach;
-  p.color17 = catppuccin::mocha::rosewater;
-  p.keyword = catppuccin::mocha::mauve;
-  p.string = catppuccin::mocha::green;
-  p.escape = catppuccin::mocha::pink;
-  p.comment = catppuccin::mocha::overlay0;
-  p.number = catppuccin::mocha::peach;
-  p.operator_ = catppuccin::mocha::sky;
-  p.delimiter = catppuccin::mocha::overlay2;
-  p.function = catppuccin::mocha::blue;
-  p.parameter = catppuccin::mocha::maroon;
-  p.builtin = catppuccin::mocha::red;
-  p.type = catppuccin::mocha::yellow;
-  theme result;
-  result.palette = p;
-  return result;
+auto default_theme() -> theme {
+  return {};
 }
 
 } // namespace tenzir::plugins::explore

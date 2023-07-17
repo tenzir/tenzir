@@ -82,40 +82,40 @@ enum class alignment { left, center, right };
 auto colorize(auto& make, view<data> value, const struct theme& theme) {
   auto factory = detail::overload{
     [&](const auto& x) {
-      return make(x, alignment::left, theme.palette.color0);
+      return make(x, alignment::left, theme.palette.text);
     },
     [&](caf::none_t) {
-      return make("∅", alignment::center, theme.palette.subtle);
+      return make("∅", alignment::center, theme.palette.muted);
     },
     [&](view<bool> x) {
-      return make(x, alignment::left, theme.palette.number);
+      return make(x, alignment::left, theme.palette.rose);
     },
     [&](view<int64_t> x) {
-      return make(x, alignment::right, theme.palette.number);
+      return make(x, alignment::right, theme.palette.iris);
     },
     [&](view<uint64_t> x) {
-      return make(x, alignment::right, theme.palette.number);
+      return make(x, alignment::right, theme.palette.iris);
     },
     [&](view<double> x) {
-      return make(x, alignment::right, theme.palette.number);
+      return make(x, alignment::right, theme.palette.iris);
     },
     [&](view<duration> x) {
-      return make(x, alignment::right, theme.palette.operator_);
+      return make(x, alignment::right, theme.palette.pine);
     },
     [&](view<time> x) {
-      return make(x, alignment::left, theme.palette.operator_);
+      return make(x, alignment::left, theme.palette.pine);
     },
     [&](view<std::string> x) {
-      return make(x, alignment::left, theme.palette.string);
+      return make(x, alignment::left, theme.palette.gold);
     },
     [&](view<pattern> x) {
-      return make(x, alignment::left, theme.palette.string);
+      return make(x, alignment::left, theme.palette.gold);
     },
     [&](view<ip> x) {
-      return make(x, alignment::left, theme.palette.type);
+      return make(x, alignment::left, theme.palette.foam);
     },
     [&](view<subnet> x) {
-      return make(x, alignment::left, theme.palette.type);
+      return make(x, alignment::left, theme.palette.foam);
     },
   };
   return caf::visit(factory, value);
@@ -159,12 +159,12 @@ auto LeafColumnHeader(std::string top, std::string bottom, int height,
                       const struct theme& theme) -> Component {
   return Renderer([height, &theme, top_text = std::move(top),
                    bottom_text = std::move(bottom)](bool focused) mutable {
-    auto header = text(top_text) | bold | center;
+    auto header = text(top_text) | center;
     header |= focused ? focus | theme.focus_color() : color(theme.palette.text);
     auto element = vbox({
                      filler(),
                      std::move(header),
-                     text(bottom_text) | center | color(theme.palette.comment),
+                     text(bottom_text) | center | color(theme.palette.muted),
                      filler(),
                    })
                    | size(HEIGHT, EQUAL, height);
@@ -238,7 +238,7 @@ auto RecordColumnHeader(std::string top, const struct theme& theme)
   return Renderer([top_text = std::move(top),
                    top_color = color(theme.palette.text),
                    focus_color = theme.focus_color()](bool focused) mutable {
-    auto header = text(top_text) | bold;
+    auto header = text(top_text);
     return focused ? header | focus | focus_color : header | top_color;
   });
 }
@@ -353,7 +353,7 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
 //   -> Component {
 //   return Renderer([&theme, top_text = std::move(top),
 //                    bottom_text = std::move(bottom)](bool focused) mutable {
-//     auto header = text(top_text) | bold | center;
+//     auto header = text(top_text) | center;
 //     header |= focused ? focus | theme.focus_color() :
 //     color(theme.palette.text); return vbox({
 //              std::move(header),
@@ -454,7 +454,7 @@ auto Navigator(ui_state* state, int* index, int* width) -> Component {
           auto width = type.name().size() + fingerprint.size() + 1;
           *width_ = std::max(*width_, detail::narrow_cast<int>(width));
           auto element = text(std::move(fingerprint))
-                         | color(state_->theme.palette.subtle);
+                         | color(state_->theme.palette.muted);
           fingerprints_->Add(lift(std::move(element)));
         }
       }

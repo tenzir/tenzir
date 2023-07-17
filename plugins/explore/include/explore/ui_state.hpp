@@ -35,7 +35,7 @@ struct ui_state {
   std::unordered_map<type, table_state_ptr> tables;
 
   /// Defines styling and colors.
-  struct theme theme = default_theme;
+  struct theme theme = default_theme();
 
   /// The position of the navigator.
   ftxui::Direction navigator_position = ftxui::Direction::Up;
