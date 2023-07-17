@@ -105,6 +105,9 @@
             integration-test-shell = pkgs.mkShell {
               packages = pkgs.tenzir-de;
             };
+            functional-test-shell = pkgs.mkShell {
+              packages = pkgs.tenzir-functional-test-deps;
+            };
           }
           // {
             default = self.packages.${system}.tenzir-static;
