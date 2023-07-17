@@ -605,8 +605,8 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     = caf::get_or(self->system().config(), "vast.automatic-rebuild", size_t{1});
   if (self->state.automatic_rebuild > 0) {
     self->state.rebuild_interval
-      = caf::get_or(self->system().config(), "vast.active-partition-timeout",
-                    defaults::system::active_partition_timeout);
+      = caf::get_or(self->system().config(), "vast.rebuild-interval",
+                    defaults::system::rebuild_interval);
     self->state.schedule();
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {

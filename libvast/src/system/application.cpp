@@ -31,7 +31,9 @@ command::opts_builder add_index_opts(command::opts_builder ob) {
                                         "partition")
     .add<duration>("active-partition-timeout",
                    "timespan after which an active partition is "
-                   "forcibly flushed")
+                   "forcibly flushed (default: 5m)")
+    .add<duration>("rebuild-interval", "timespan after which an automatic "
+                                       "rebuild is triggered (default: 2h)")
     .add<int64_t>("max-resident-partitions", "maximum number of in-memory "
                                              "partitions")
     .add<int64_t>("max-taste-partitions", "maximum number of immediately "
