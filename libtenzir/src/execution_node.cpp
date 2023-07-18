@@ -373,10 +373,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
         this->signaled_demand = false;
         schedule_run();
         if (msg.reason) {
+          auto category
+            = msg.reason == ec::silent ? ec::silent : ec::unspecified;
           ctrl->abort(caf::make_error(
-            ec::unspecified, fmt::format("{} shuts down because of irregular "
-                                         "exit of previous operator: {}",
-                                         op, msg.reason)));
+            category, fmt::format("{} shuts down because of irregular "
+                                  "exit of previous operator: {}",
+                                  op, msg.reason)));
         }
       });
     }
