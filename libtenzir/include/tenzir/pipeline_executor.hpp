@@ -4,7 +4,6 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/metrics.hpp"
 #include "tenzir/pipeline.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -29,6 +28,8 @@ struct pipeline_executor_state {
   // nodes.
   receiver_actor<diagnostic> diagnostics = {};
 
+  // The diagnostic handler that receives metrics from all the execution
+  // nodes.
   receiver_actor<pipeline_op_metrics> metrics = {};
 
   /// Flag for allowing unsafe pipelines.

@@ -42,8 +42,7 @@ struct fixture {
       FAIL("no mock implementation available");
     }
 
-    auto emit([[maybe_unused]] pipeline_op_metrics metrics) noexcept
-      -> void override {
+    auto emit([[maybe_unused]] table_slice metrics) noexcept -> void override {
       FAIL("no mock implementation available");
     }
 

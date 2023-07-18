@@ -13,7 +13,6 @@
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/metrics.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/si_literals.hpp"
@@ -44,6 +43,8 @@ struct defaults {
   // operators.
   inline static constexpr int max_advances_per_run = 1;
 
+  /// Defines the time interval for sending metrics of the currently running
+  /// pipeline operator.
   inline static constexpr auto metrics_interval
     = std::chrono::milliseconds{1000};
 };
@@ -758,9 +759,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
               [](caf::error& e) {
                 VAST_WARN("failed to send metrics: {}", e);
               });
-
-      // ctrl->emit(current_metrics);
-
       self->quit();
       return;
     }

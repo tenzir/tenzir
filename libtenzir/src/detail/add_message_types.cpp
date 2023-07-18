@@ -25,7 +25,6 @@
 #include "tenzir/http_api.hpp"
 #include "tenzir/index.hpp"
 #include "tenzir/ip.hpp"
-#include "tenzir/metrics.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/operator.hpp"
 #include "tenzir/partition_synopsis.hpp"

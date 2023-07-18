@@ -192,8 +192,8 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto note(fmt::format_string<Ts...> str,
-            Ts&&... xs) && -> diagnostic_builder {
+  auto
+  note(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).note(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
@@ -206,8 +206,8 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto docs(fmt::format_string<Ts...> str,
-            Ts&&... xs) && -> diagnostic_builder {
+  auto
+  docs(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).docs(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
@@ -220,8 +220,8 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto usage(fmt::format_string<Ts...> str,
-             Ts&&... xs) && -> diagnostic_builder {
+  auto
+  usage(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).usage(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
@@ -234,8 +234,8 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto hint(fmt::format_string<Ts...> str,
-            Ts&&... xs) && -> diagnostic_builder {
+  auto
+  hint(fmt::format_string<Ts...> str, Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).hint(
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }

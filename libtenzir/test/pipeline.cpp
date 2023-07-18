@@ -152,7 +152,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto self = caf::scoped_actor{sys};
     auto executor = self->spawn<caf::monitored>(
       pipeline_executor, std::move(p),
-      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
+      caf::actor_cast<receiver_actor<diagnostic>>(self),
+      caf::actor_cast<receiver_actor<pipeline_op_metrics>>(self), node_actor{});
     self->send(executor, atom::start_v);
     auto start_result = std::optional<caf::error>{};
     auto down_result = std::optional<caf::error>{};
@@ -188,6 +189,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
         if (not diag_error and d.severity == severity::error) {
           diag_error = caf::make_error(ec::unspecified, fmt::to_string(d));
         }
+      },
+      [&](pipeline_op_metrics&) {
+        MESSAGE("received metrics");
+        // Do nothing with metrics locally for now.
       });
     MESSAGE("waiting for executor");
     self->wait_for(executor);

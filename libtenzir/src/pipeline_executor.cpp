@@ -14,7 +14,6 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/execution_node.hpp"
-#include "tenzir/metrics.hpp"
 #include "tenzir/pipeline.hpp"
 
 #include <caf/actor_system_config.hpp>

@@ -37,7 +37,6 @@
 #include "tenzir/format/test.hpp"
 #include "tenzir/format/zeek.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/metrics.hpp"
 #include "tenzir/node.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"

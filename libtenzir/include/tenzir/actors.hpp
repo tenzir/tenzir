@@ -10,23 +10,14 @@
 
 #include "tenzir/fwd.hpp"
 
-<<<<<<< HEAD:libtenzir/include/tenzir/actors.hpp
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/metrics.hpp"
-=======
-#include "vast/aliases.hpp"
-#include "vast/atoms.hpp"
-#include "vast/diagnostics.hpp"
->>>>>>> f9438b8a80 (Move metrics to pipeline.hpp):libvast/include/vast/actors.hpp
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
 
 #include <filesystem>
-
-#include "metrics.hpp"
 
 #define TENZIR_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(tenzir_actors, type)
 
@@ -507,6 +498,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::stream_sink_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID(
     (tenzir::stream_sink_actor<tenzir::table_slice, std::string>))
+
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 
 // Used in the interface of the catalog actor.

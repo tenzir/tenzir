@@ -154,9 +154,9 @@ struct inspector
   }
 };
 
+// Metrics that track the information about inbound and outbound elements that
+// pass through this operator.
 struct [[nodiscard]] pipeline_op_metrics {
-  // Metrics that track the total number of inbound and outbound elements that
-  // passed through this operator.
   size_t index = 0;
   caf::timespan time_starting = {};
   caf::timespan time_running = {};
