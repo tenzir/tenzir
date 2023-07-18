@@ -6,7 +6,6 @@ Consumes events by combining a [connector][connectors] and a [format][formats].
 
 ```
 to <connector> [write <format>]
-write <format> [to <connector>]
 ```
 
 ## Description
@@ -14,16 +13,15 @@ write <format> [to <connector>]
 The `to` operator consumes events at the end of a pipeline by bringing together
 a [connector][connectors] and a [format][formats].
 
-All connectors have a default format, which depends on the connector. Similarly,
-all formats have a default connector, which is `stdin` or `stdout`. This enables
-a shorter syntax, e.g., `write json` uses the`stdout` connector and `to stdout`
-the `json` format.
+All connectors have a default format, which depends on the connector. This enables
+a shorter syntax, e.g., `to stdout` uses the `json` format, while `to file foo.csv`
+uses the `csv` format.
 
 The `to` operator is a pipeline under the hood. For most cases, it is equal to
-`print <format> | save <connector>`. However, for some combinations of
+`write <format> | save <connector>`. However, for some combinations of
 connectors and formats the underlying pipeline is a bit more complex. We
-recommend always using `to` or [`write`](write.md) over
-[`print`](../transformations/print.md) and [`save`](save.md).
+recommend always using `to ... write ...` over the
+[`write`](../transformations/write.md) and [`save`](save.md) operators.
 
 ### `<connector>`
 
@@ -50,7 +48,7 @@ to stdout write csv
 Write events to the file `path/to/eve.json` formatted as JSON.
 
 ```
-write json to file path/to/eve.json
+to file path/to/eve.json | write json
 ```
 
 [connectors]: ../../connectors.md

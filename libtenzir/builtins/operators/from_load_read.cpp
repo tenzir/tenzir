@@ -64,19 +64,19 @@ private:
   std::unique_ptr<plugin_loader> loader_;
 };
 
-class parse_operator final : public crtp_operator<parse_operator> {
+class read_operator final : public crtp_operator<read_operator> {
 public:
-  parse_operator() = default;
+  read_operator() = default;
 
-  explicit parse_operator(std::unique_ptr<plugin_parser> parser)
+  explicit read_operator(std::unique_ptr<plugin_parser> parser)
     : parser_{std::move(parser)} {
   }
 
   auto name() const -> std::string override {
-    return "parse";
+    return "read";
   }
 
-  friend auto inspect(auto& f, parse_operator& x) -> bool {
+  friend auto inspect(auto& f, read_operator& x) -> bool {
     return plugin_inspect(f, x.parser_);
   }
 
@@ -194,70 +194,7 @@ public:
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<load_operator>(std::move(loader)));
-    ops.push_back(std::make_unique<class parse_operator>(std::move(parser)));
-    return std::make_unique<pipeline>(std::move(ops));
-  }
-};
-
-auto make_stdin_loader() -> std::unique_ptr<plugin_loader> {
-  auto diag = null_diagnostic_handler{};
-  auto plugin = plugins::find<loader_parser_plugin>("file");
-  TENZIR_DIAG_ASSERT(plugin);
-  auto parser = tql::make_parser_interface("-", diag);
-  auto loader = plugin->parse_loader(*parser);
-  TENZIR_DIAG_ASSERT(loader);
-  return loader;
-}
-
-class read_plugin final : public virtual operator_parser_plugin {
-public:
-  auto name() const -> std::string override {
-    return "read";
-  };
-
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto usage = "read <parser> <args>... [from <loader> <args>...]";
-    auto docs = "https://docs.tenzir.com/next/operators/sources/read";
-    auto p_name = p.accept_shell_arg();
-    if (!p_name) {
-      diagnostic::error("expected parser name")
-        .primary(p.current_span())
-        .usage(usage)
-        .docs(docs)
-        .throw_();
-    }
-    auto p_plugin = plugins::find<parser_parser_plugin>(p_name->inner);
-    if (!p_plugin) {
-      throw_parser_not_found(*p_name);
-    }
-    auto q = until_keyword_parser{"from", p};
-    auto parser = p_plugin->parse_parser(q);
-    TENZIR_DIAG_ASSERT(parser);
-    TENZIR_DIAG_ASSERT(q.at_end());
-    auto loader = std::unique_ptr<plugin_loader>{};
-    if (p.at_end()) {
-      loader = make_stdin_loader();
-    } else {
-      auto from = p.accept_identifier();
-      TENZIR_DIAG_ASSERT(from && from->name == "from");
-      auto l_name = p.accept_shell_arg();
-      if (!l_name) {
-        diagnostic::error("expected loader name")
-          .primary(p.current_span())
-          .note(usage)
-          .docs(docs)
-          .throw_();
-      }
-      auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner);
-      if (!l_plugin) {
-        throw_loader_not_found(*l_name);
-      }
-      loader = l_plugin->parse_loader(p);
-      TENZIR_DIAG_ASSERT(parser);
-    }
-    auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::make_unique<load_operator>(std::move(loader)));
-    ops.push_back(std::make_unique<class parse_operator>(std::move(parser)));
+    ops.push_back(std::make_unique<class read_operator>(std::move(parser)));
     return std::make_unique<pipeline>(std::move(ops));
   }
 };
@@ -285,11 +222,11 @@ public:
   }
 };
 
-class parse_plugin final : virtual public operator_plugin<parse_operator> {
+class read_plugin final : virtual public operator_plugin<read_operator> {
 public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto usage = "parse <parser> <args>...";
-    auto docs = "https://docs.tenzir.com/next/operators/transformations/parse";
+    auto usage = "read <parser> <args>...";
+    auto docs = "https://docs.tenzir.com/next/operators/transformations/read";
     auto name = p.accept_shell_arg();
     if (!name) {
       diagnostic::error("expected parser name")
@@ -304,7 +241,7 @@ public:
     }
     auto parser = plugin->parse_parser(p);
     TENZIR_DIAG_ASSERT(parser);
-    return std::make_unique<class parse_operator>(std::move(parser));
+    return std::make_unique<class read_operator>(std::move(parser));
   }
 };
 
@@ -312,6 +249,5 @@ public:
 } // namespace tenzir::plugins::from
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::read_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::parse_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::read_plugin)

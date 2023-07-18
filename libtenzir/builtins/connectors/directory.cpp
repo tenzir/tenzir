@@ -6,9 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/concept/parseable/tenzir/pipeline.hpp"
-
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
@@ -36,8 +35,8 @@ public:
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     if (!info) {
       return caf::make_error(ec::syntax_error,
-                             "cannot use directory saver "
-                             "outside of write ... to directory");
+                             "cannot use directory saver outside of `to "
+                             "directory write ...`");
     }
     auto dir_path = std::filesystem::path(path_);
     std::error_code ec{};

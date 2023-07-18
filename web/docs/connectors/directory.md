@@ -24,5 +24,5 @@ the saver creates a new directory, including potential intermediate directories.
 Write one JSON file per unique schema to `/tmp/dir`:
 
 ```
-write json to directory /tmp/dir
+to directory /tmp/dir write json
 ```

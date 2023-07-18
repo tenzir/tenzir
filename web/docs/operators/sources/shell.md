@@ -21,5 +21,5 @@ command's stdin.
 Show a live log from the `tenzir-node` service:
 
 ```
-shell "journalctl -u tenzir-node -f | parse json"
+shell "journalctl -u tenzir-node -f | read json"
 ```

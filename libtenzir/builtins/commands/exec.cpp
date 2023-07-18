@@ -30,58 +30,63 @@ struct exec_config {
 };
 
 auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
-  while (true) {
-    if (auto out = pipe.infer_type<void>()) {
-      if (out->is<void>()) {
-        break;
-      }
-      if (out->is<chunk_ptr>()) {
-        auto op = pipeline::internal_parse_as_operator("save file -");
-        if (not op) {
-          return caf::make_error(ec::logic_error,
-                                 fmt::format("failed to append implicit "
-                                             "'save file -': {}",
-                                             op.error()));
-        }
-        pipe.append(std::move(*op));
-        continue;
-      }
-      if (out->is<table_slice>()) {
-        auto op = pipeline::internal_parse_as_operator("write json");
-        if (not op) {
-          return caf::make_error(ec::logic_error,
-                                 fmt::format("failed to append implicit 'write "
-                                             "json': {}",
-                                             op.error()));
-        }
-        pipe.append(std::move(*op));
-        continue;
-      }
+  if (pipe.infer_type<void>()) {
+    // Don't add implicit source.
+  } else if (pipe.infer_type<chunk_ptr>()) {
+    auto op = pipeline::internal_parse_as_operator("load file -");
+    if (not op) {
       return caf::make_error(ec::logic_error,
-                             fmt::format("unhandled output element type"));
+                             fmt::format("failed to prepend implicit "
+                                         "'load file -': {}",
+                                         op.error()));
     }
-    if (auto out = pipe.infer_type<chunk_ptr>()) {
-      auto op = pipeline::internal_parse_as_operator("load file -");
-      if (not op) {
-        return caf::make_error(ec::logic_error,
-                               fmt::format("failed to prepend implicit "
-                                           "'load file -': {}",
-                                           op.error()));
-      }
-      pipe.prepend(std::move(*op));
-      continue;
+    pipe.prepend(std::move(*op));
+  } else if (pipe.infer_type<table_slice>()) {
+    auto op = pipeline::internal_parse_as_operator("from stdin read json");
+    if (not op) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("failed to prepend implicit "
+                                         "'from stdin read json': {}",
+                                         op.error()));
     }
-    if (auto out = pipe.infer_type<table_slice>()) {
-      auto op = pipeline::internal_parse_as_operator("read json");
-      if (not op) {
-        return caf::make_error(ec::logic_error,
-                               fmt::format("failed to prepend implicit "
-                                           "'read json': {}",
-                                           op.error()));
-      }
-      pipe.prepend(std::move(*op));
-      continue;
+    pipe.prepend(std::move(*op));
+  } else {
+    // Pipeline is ill-typed. We don't add implicit source or sink and continue,
+    // as this is handled further down the line.
+    return pipe;
+  }
+  auto out = pipe.infer_type<void>();
+  if (not out) {
+    return caf::make_error(ec::logic_error,
+                           fmt::format("expected pipeline to accept void here, "
+                                       "but: {}",
+                                       out.error()));
+  }
+  if (out->is<void>()) {
+    // Pipeline is already closed, nothing to do here.
+  } else if (out->is<chunk_ptr>()) {
+    auto op = pipeline::internal_parse_as_operator("save file -");
+    if (not op) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("failed to append implicit "
+                                         "'save file -': {}",
+                                         op.error()));
     }
+    pipe.append(std::move(*op));
+  } else if (out->is<table_slice>()) {
+    auto op = pipeline::internal_parse_as_operator("to stdout write json");
+    if (not op) {
+      return caf::make_error(ec::logic_error,
+                             fmt::format("failed to append implicit 'to stdout "
+                                         "write json': {}",
+                                         op.error()));
+    }
+    pipe.append(std::move(*op));
+  }
+  if (not pipe.is_closed()) {
+    return caf::make_error(ec::logic_error,
+                           fmt::format("expected pipeline to be closed after "
+                                       "adding implicit source and sink"));
   }
   return pipe;
 }
