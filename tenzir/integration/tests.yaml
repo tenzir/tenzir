@@ -73,7 +73,7 @@ tests:
         expected_result: error
       - command: exec --dump-ast "from file a/b/c.json"
       - command: exec --dump-ast "from file a/b/c.json read cef"
-      - command: exec --dump-ast "parse zeek-tsv"
+      - command: exec --dump-ast "read zeek-tsv"
       - command: exec --dump-ast "head 42"
       - command: exec --dump-ast "local remote local pass"
       - command: exec --dump-ast "where :ip == 1.2.3.4"
