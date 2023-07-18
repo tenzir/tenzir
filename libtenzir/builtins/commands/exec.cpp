@@ -116,7 +116,8 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   auto handler = self->spawn(
     [&](caf::stateful_actor<handler_state>* self) -> caf::behavior {
       self->set_down_handler([&, self](const caf::down_msg& msg) {
-        TENZIR_DEBUG("command received down: {}", msg.reason);
+        TENZIR_DEBUG("command received down message `{}` from {}", msg.reason,
+                     msg.source);
         if (msg.reason) {
           result = msg.reason;
         }
