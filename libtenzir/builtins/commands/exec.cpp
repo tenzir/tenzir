@@ -125,7 +125,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
       });
       self->state.executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
-        caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
+        caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{}, true);
       self->request(self->state.executor, caf::infinite, atom::start_v)
         .then(
           []() {

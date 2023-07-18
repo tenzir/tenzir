@@ -69,6 +69,10 @@ struct fixture {
     auto allow_unsafe_pipelines() const noexcept -> bool override {
       return false;
     }
+
+    auto has_terminal() const noexcept -> bool override {
+      return false;
+    }
   };
 
   auto make_loader(std::string_view name, std::string args)
