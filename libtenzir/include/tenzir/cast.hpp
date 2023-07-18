@@ -190,6 +190,38 @@ struct cast_helper<FromType, ToType> {
     else
       return caf::visit(f, from_type, to_type);
   }
+
+  static auto cast_value(const type& from_type, const data& data,
+                         const ToType& to_type) noexcept {
+    const auto f
+      = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
+          const ConcreteFromType& from_type,
+          const ConcreteToType& to_type) noexcept
+      -> caf::expected<type_to_data_t<ToType>> {
+      auto v = cast_helper<ConcreteFromType, ConcreteToType>::cast_value(
+        from_type, caf::get<type_to_data_t<ConcreteFromType>>(data), to_type);
+      if constexpr (concrete_type<ToType>) {
+        return v;
+      } else {
+        if constexpr (std::is_same_v<decltype(v), caf::expected<void>>) {
+          return std::move(v.error());
+        } else if constexpr (std::is_same_v<decltype(v),
+                                            type_to_data_t<ConcreteToType>>) {
+          return v;
+        } else {
+          if (not v)
+            return std::move(v.error());
+          return std::move(*v);
+        }
+      }
+    };
+    if constexpr (concrete_type<FromType>)
+      return caf::visit(f, detail::passthrough(from_type), to_type);
+    else if constexpr (concrete_type<ToType>)
+      return caf::visit(f, from_type, detail::passthrough(to_type));
+    else
+      return caf::visit(f, from_type, to_type);
+  }
 };
 
 template <basic_type Type>
@@ -260,6 +292,45 @@ struct cast_helper<list_type, list_type> {
              *offsets, *cast_values, arrow::default_memory_pool(),
              from_array->null_bitmap(), from_array->null_count())
       .ValueOrDie();
+  }
+
+  static auto cast_value(const list_type& from_type, const list& value,
+                         const list_type& to_type) noexcept
+    -> caf::expected<type_to_data_t<list_type>> {
+    if (from_type == to_type)
+      return value;
+    auto output = to_type.construct();
+    for (const auto& val : value) {
+      auto cast_val = cast_helper<type, type>::cast_value(
+        from_type.value_type(), val, to_type.value_type());
+      if (not cast_val) {
+        return std::move(cast_val.error());
+      }
+      output.push_back(std::move(*cast_val));
+    }
+    return output;
+  }
+};
+
+template <>
+struct cast_helper<map_type, map_type> {
+  static auto can_cast(const map_type&, const map_type&) noexcept
+    -> caf::expected<void> {
+    return caf::make_error(ec::convert_error,
+                           "cast not supported for map types");
+  }
+
+  static auto
+  cast(const map_type&, std::shared_ptr<type_to_arrow_array_t<map_type>>,
+       const map_type&) noexcept
+    -> std::shared_ptr<type_to_arrow_array_t<map_type>> {
+    die("map_type array cast not implemented");
+  }
+
+  static auto cast_value(const map_type&, const map&, const map_type&) noexcept
+    -> caf::expected<type_to_data_t<map_type>> {
+    return caf::make_error(ec::convert_error,
+                           "cast not supported for map types");
   }
 };
 
@@ -332,6 +403,53 @@ struct cast_helper<record_type, record_type> {
       }
       return type_to_arrow_array_t<record_type>::Make(children, fields)
         .ValueOrDie();
+    };
+    return impl(impl, to_type, "");
+  }
+
+  static auto cast_value(const record_type& from_type, const record& in,
+                         const record_type& to_type) noexcept
+    -> caf::expected<type_to_data_t<record_type>> {
+    if (from_type == to_type)
+      return in;
+    // NOLINTNEXTLINE
+    auto impl
+      = [&](const auto& impl, const record_type& to_type,
+            std::string_view key_prefix) noexcept -> caf::expected<record> {
+      auto ret = record{};
+      for (const auto& to_field : to_type.fields()) {
+        const auto key = key_prefix.empty()
+                           ? std::string{to_field.name}
+                           : fmt::format("{}.{}", key_prefix, to_field.name);
+        if (const auto* r = caf::get_if<record_type>(&to_field.type)) {
+          auto maybe_nested_record = impl(impl, *r, key);
+          if (not maybe_nested_record)
+            return std::move(maybe_nested_record.error());
+          ret[to_field.name] = std::move(*maybe_nested_record);
+          continue;
+        }
+        const auto index = from_type.resolve_key(key);
+        if (not index) {
+          // The field does not exist, so we insert a null.
+          ret[to_field.name] = caf::none;
+          continue;
+        }
+        // The field exists, so we can insert the cast column.
+        auto input_at_path = descend(std::addressof(in), key);
+        if (not input_at_path)
+          return std::move(input_at_path.error());
+        if (**input_at_path == caf::none) {
+          ret[to_field.name] = caf::none;
+          continue;
+        }
+        auto maybe_new_value = cast_helper<type, type>::cast_value(
+          from_type.field(*index).type, **input_at_path, to_field.type);
+        if (not maybe_new_value) {
+          return std::move(maybe_new_value.error());
+        }
+        ret[to_field.name] = std::move(*maybe_new_value);
+      }
+      return ret;
     };
     return impl(impl, to_type, "");
   }
@@ -699,6 +817,36 @@ struct cast_helper<double_type, enumeration_type> {
        const enumeration_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
     die("unimplemented");
+  }
+};
+
+template <>
+struct cast_helper<enumeration_type, enumeration_type> {
+  static auto
+  can_cast(const enumeration_type& from, const enumeration_type& to) noexcept
+    -> caf::expected<void> {
+    if (from == to)
+      return {};
+    return caf::make_error(ec::convert_error,
+                           fmt::format("unable to convert from {} to {} : "
+                                       "mismatching enumeration types",
+                                       from, to));
+  }
+
+  static auto cast_value(const enumeration_type& from, enumeration value,
+                         const enumeration_type& to) noexcept
+    -> caf::expected<enumeration> {
+    auto can = can_cast(from, to);
+    if (can)
+      return value;
+    return std::move(can.error());
+  }
+
+  static auto cast(const enumeration_type&,
+                   std::shared_ptr<type_to_arrow_array_t<enumeration_type>>,
+                   const enumeration_type&) noexcept
+    -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
+    die("enumeration to enumeration cast unimplemented");
   }
 };
 

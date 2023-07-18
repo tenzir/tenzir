@@ -610,6 +610,77 @@ TEST(positive double to duration) {
   CHECK_EQUAL(*out, std::chrono::seconds{120});
 }
 
+TEST(cast value type erased) {
+  auto type = tenzir::type{tenzir::int64_type{}};
+  auto out
+    = tenzir::cast_value(type, tenzir::data{int64_t{2}}, tenzir::string_type{});
+  REQUIRE(out);
+  CHECK_EQUAL(*out, "+2");
+}
+
+TEST(cast value type erased 2) {
+  auto type = tenzir::type{tenzir::ip_type{}};
+  auto out
+    = tenzir::cast_value(type,
+                         tenzir::data{tenzir::ip::v4(uint32_t{0x01'02'03'04})},
+                         tenzir::string_type{});
+  REQUIRE(out);
+  CHECK_EQUAL(*out, "1.2.3.4");
+}
+
+TEST(cast value type erased 3) {
+  auto type = tenzir::type{tenzir::ip_type{}};
+  auto out
+    = tenzir::cast_value(type,
+                         tenzir::data{tenzir::ip::v4(uint32_t{0x01'02'03'04})},
+                         tenzir::type{tenzir::string_type{}});
+  REQUIRE(out);
+  CHECK_EQUAL(*out, "1.2.3.4");
+}
+
+TEST(cast lists) {
+  auto in_type = tenzir::list_type{tenzir::ip_type{}};
+  auto out_type = tenzir::list_type{tenzir::string_type{}};
+  auto in_list = tenzir::list{tenzir::ip::v4(uint32_t{0x01'02'03'04}),
+                              tenzir::ip::v4(uint32_t{0x01'02'03'05})};
+  auto out = tenzir::cast_value(in_type, in_list, out_type);
+  REQUIRE(out);
+  CHECK_EQUAL(*out, (tenzir::list{"1.2.3.4", "1.2.3.5"}));
+}
+
+TEST(cast record success) {
+  auto in_type = tenzir::record_type{{"a", tenzir::ip_type{}}};
+  auto out_type = tenzir::record_type{{"a", tenzir::string_type{}}};
+  auto in_val = tenzir::record{{"a", tenzir::ip::v4(uint32_t{0x01'02'03'04})}};
+  auto out = tenzir::cast_value(in_type, in_val, out_type);
+  REQUIRE(out);
+  CHECK_EQUAL(*out, (tenzir::record{{"a", "1.2.3.4"}}));
+}
+
+TEST(cast record inserts nulls for fields that dont exist in the input) {
+  auto in_type = tenzir::record_type{{"a", tenzir::int64_type{}}};
+  auto out_type = tenzir::record_type{{"a", tenzir::string_type{}},
+                                      {"b", tenzir::int64_type{}}};
+  auto in_val = tenzir::record{{"a", int64_t{-10}}};
+  auto out = tenzir::cast_value(in_type, in_val, out_type);
+  REQUIRE(out);
+  CHECK_EQUAL(*out, (tenzir::record{{"a", "-10"}, {"b", caf::none}}));
+}
+
+TEST(cast lists of records) {
+  auto in_type
+    = tenzir::list_type{tenzir::record_type{{"a", tenzir::ip_type{}}}};
+  auto out_type
+    = tenzir::list_type{tenzir::record_type{{"a", tenzir::string_type{}}}};
+  auto in_list = tenzir::list{
+    tenzir::record{{"a", tenzir::ip::v4(uint32_t{0x01'02'03'04})}},
+    tenzir::record{{"a", tenzir::ip::v4(uint32_t{0x01'02'03'05})}}};
+  auto out = tenzir::cast_value(in_type, in_list, out_type);
+  REQUIRE(out);
+  CHECK_EQUAL(*out, (tenzir::list{tenzir::record{{"a", "1.2.3.4"}},
+                                  tenzir::record{{"a", "1.2.3.5"}}}));
+}
+
 FIXTURE_SCOPE_END()
 
 TEST(cast int64_t array to a string builder) {
