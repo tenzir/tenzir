@@ -676,37 +676,39 @@ struct exec_node_state : inbound_state_mixin<Input>,
       constexpr auto inbound_unit
         = std::is_same_v<Input, chunk_ptr> ? "B" : "events";
       const auto total = static_cast<double>(current_metrics.inbound_total);
-      TENZIR_VERBOSE(
-        "{} inbound {:.0f} {} in {} rate = {:.2f} {}/s avg batch size = {:.2f} "
-        "{}",
-        op->name(), total, inbound_unit, data{elapsed},
-        total
+      current_metrics.inbound_rate_per_second
+        = total
           / std::chrono::duration_cast<
               std::chrono::duration<double, std::chrono::seconds::period>>(
               elapsed)
-              .count(),
-        inbound_unit,
-        static_cast<double>(current_metrics.inbound_total)
-          / current_metrics.num_inbound_batches,
-        inbound_unit);
+              .count();
+      VAST_VERBOSE("{} inbound {:.0f} {} in {} rate = {:.2f} {}/s avg batch "
+                   "size = {:.2f} "
+                   "{}",
+                   op->name(), total, inbound_unit, data{elapsed},
+                   current_metrics.inbound_rate_per_second, inbound_unit,
+                   static_cast<double>(current_metrics.inbound_total)
+                     / current_metrics.num_inbound_batches,
+                   inbound_unit);
     }
     if constexpr (not std::is_same_v<Output, std::monostate>) {
       constexpr auto outbound_unit
         = std::is_same_v<Output, chunk_ptr> ? "B" : "events";
       const auto total = static_cast<double>(current_metrics.outbound_total);
-      TENZIR_VERBOSE(
-        "{} outbound {:.0f} {} in {} rate = {:.2f} {}/s avg batch size = "
-        "{:.2f} {}",
-        op->name(), total, outbound_unit, data{elapsed},
-        total
+      current_metrics.outbound_rate_per_second
+        = total
           / std::chrono::duration_cast<
               std::chrono::duration<double, std::chrono::seconds::period>>(
               elapsed)
-              .count(),
-        outbound_unit,
-        static_cast<double>(current_metrics.outbound_total)
-          / current_metrics.num_outbound_batches,
-        outbound_unit);
+              .count();
+      VAST_VERBOSE("{} outbound {:.0f} {} in {} rate = {:.2f} {}/s avg batch "
+                   "size = "
+                   "{:.2f} {}",
+                   op->name(), total, outbound_unit, data{elapsed},
+                   current_metrics.outbound_rate_per_second, outbound_unit,
+                   static_cast<double>(current_metrics.outbound_total)
+                     / current_metrics.num_outbound_batches,
+                   outbound_unit);
     }
   }
 

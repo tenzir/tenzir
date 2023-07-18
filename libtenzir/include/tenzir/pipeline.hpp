@@ -165,8 +165,10 @@ struct [[nodiscard]] pipeline_op_metrics {
   std::string out_unit = {};
   uint64_t inbound_total = {};
   uint64_t num_inbound_batches = {};
+  double inbound_rate_per_second = {};
   uint64_t outbound_total = {};
   uint64_t num_outbound_batches = {};
+  double outbound_rate_per_second = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, pipeline_op_metrics& x) -> bool {
@@ -179,8 +181,10 @@ struct [[nodiscard]] pipeline_op_metrics {
               f.field("in_unit", x.in_unit), f.field("out_unit", x.out_unit),
               f.field("inbound_total", x.inbound_total),
               f.field("num_inbound_batches", x.num_inbound_batches),
+              f.field("inbound_rate_per_second", x.inbound_rate_per_second),
               f.field("outbound_total", x.outbound_total),
-              f.field("num_outbound_batches", x.num_outbound_batches));
+              f.field("num_outbound_batches", x.num_outbound_batches),
+              f.field("outbound_rate_per_second", x.outbound_rate_per_second));
   }
 };
 
