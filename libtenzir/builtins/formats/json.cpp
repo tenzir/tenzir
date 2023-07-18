@@ -637,8 +637,7 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
     }
     if (not chnk) {
       if (last_finish != now) {
-        co_yield unflatten_if_needed(
-          separator, handle_empty_chunk(state, try_find_schema));
+        co_yield {};
       }
       continue;
     }
