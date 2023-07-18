@@ -815,13 +815,13 @@ test = ["black", "check-manifest", "flake8", "ipykernel", "ipython", "ipywidgets
 
 [[package]]
 name = "nbconvert"
-version = "7.6.0"
+version = "7.7.1"
 description = "Converting Jupyter Notebooks"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "nbconvert-7.6.0-py3-none-any.whl", hash = "sha256:5a445c6794b0791984bc5436608fe2c066cb43c83920c7bc91bde3b765e9a264"},
-    {file = "nbconvert-7.6.0.tar.gz", hash = "sha256:24fcf27efdef2b51d7f090cc5ce5a9b178766a55be513c4ebab08c91899ab550"},
+    {file = "nbconvert-7.7.1-py3-none-any.whl", hash = "sha256:c99158a98e2bd32c4877de425f008e149af28f4fffbcc8a898086dd83109c1de"},
+    {file = "nbconvert-7.7.1.tar.gz", hash = "sha256:b820b206bd16898d39198a732dac6fb7019e82a44a282f606d931b8113240295"},
 ]
 
 [package.dependencies]
@@ -847,8 +847,8 @@ docs = ["ipykernel", "ipython", "myst-parser", "nbsphinx (>=0.2.12)", "pydata-sp
 qtpdf = ["nbconvert[qtpng]"]
 qtpng = ["pyqtwebengine (>=5.15)"]
 serve = ["tornado (>=6.1)"]
-test = ["ipykernel", "ipywidgets (>=7)", "pre-commit", "pytest", "pytest-dependency"]
-webpdf = ["pyppeteer (>=1,<1.1)"]
+test = ["flaky", "ipykernel", "ipywidgets (>=7)", "pre-commit", "pytest", "pytest-dependency"]
+webpdf = ["playwright"]
 
 [[package]]
 name = "nbformat"
@@ -1546,4 +1546,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "c80ad22b7af2dc139b00b7da16f3abb3d972db49c13b937a1bc4c9b203d21c32"
+content-hash = "0046cfc601abe96e4ec2e9fc299084a6ac547aa47098dc320978a564df66866f"
