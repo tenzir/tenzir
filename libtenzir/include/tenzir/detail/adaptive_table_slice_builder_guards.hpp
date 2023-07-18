@@ -25,6 +25,9 @@ struct type_from_data
 template <class T>
 using type_from_data_t = typename type_from_data<T>::type;
 
+using parent_record_builder_provider
+  = std::function<concrete_series_builder<record_type>*()>;
+
 class field_guard;
 
 /// @brief A view of a list column created within adaptive_table_slice_builder.
@@ -181,8 +184,11 @@ private:
 class record_guard {
 public:
   record_guard(builder_provider builder_provider,
+               parent_record_builder_provider parent_record_builder_provider,
                arrow_length_type starting_fields_length)
     : builder_provider_{std::move(builder_provider)},
+      parent_record_builder_provider_{
+        std::move(parent_record_builder_provider)},
       starting_fields_length_{starting_fields_length} {
   }
 
@@ -193,6 +199,7 @@ public:
 
 private:
   builder_provider builder_provider_;
+  parent_record_builder_provider parent_record_builder_provider_;
   arrow_length_type starting_fields_length_ = 0u;
 };
 
@@ -201,8 +208,11 @@ private:
 class field_guard {
 public:
   field_guard(builder_provider builder_provider,
+              parent_record_builder_provider parent_record_builder_provider,
               arrow_length_type starting_fields_length)
     : builder_provider_{std::move(builder_provider)},
+      parent_record_builder_provider_{
+        std::move(parent_record_builder_provider)},
       starting_fields_length_{starting_fields_length} {
   }
 
@@ -242,6 +252,7 @@ public:
 
 private:
   builder_provider builder_provider_;
+  parent_record_builder_provider parent_record_builder_provider_;
   arrow_length_type starting_fields_length_ = 0u;
 };
 

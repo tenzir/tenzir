@@ -48,6 +48,9 @@ auto try_create_field_builder_for_fixed_builder(
   if (not fixed_builder)
     return {};
   return field_guard{fixed_builder->get_field_builder_provider(field_name),
+                     [] {
+                       return nullptr;
+                     },
                      starting_fields_length};
 }
 
@@ -62,6 +65,9 @@ auto record_guard::push_field(std::string_view name) -> field_guard {
     auto& record_builder = std::get<concrete_series_builder<record_type>>(b);
     return {record_builder.get_field_builder_provider(name,
                                                       starting_fields_length_),
+            [&record_builder] {
+              return std::addressof(record_builder);
+            },
             starting_fields_length_};
   }
   auto provider = [name, this]() -> series_builder& {
@@ -75,7 +81,12 @@ auto record_guard::push_field(std::string_view name) -> field_guard {
       .get_field_builder_provider(name, starting_fields_length_)
       .provide();
   };
-  return {{std::move(provider)}, starting_fields_length_};
+  return {{std::move(provider)},
+          [this] {
+            return std::get_if<concrete_series_builder<record_type>>(
+              std::addressof(builder_provider_.provide()));
+          },
+          starting_fields_length_};
 }
 
 auto list_guard::list_record_guard::push_field(std::string_view name)
@@ -92,6 +103,9 @@ auto list_guard::list_record_guard::push_field(std::string_view name)
       builder_provider_.provide());
     return field_guard{b.get_field_builder_provider(name,
                                                     list_fields_start_length),
+                       [&b] {
+                         return std::addressof(b);
+                       },
                        list_fields_start_length};
   }
   auto provider = [this, name]() -> series_builder& {
@@ -100,7 +114,12 @@ auto list_guard::list_record_guard::push_field(std::string_view name)
     return builder.get_field_builder_provider(name, list_fields_start_length)
       .provide();
   };
-  return field_guard{{std::move(provider)}, list_fields_start_length};
+  return field_guard{{std::move(provider)},
+                     [this] {
+                       return std::get_if<concrete_series_builder<record_type>>(
+                         &builder_provider_.provide());
+                     },
+                     list_fields_start_length};
 }
 
 list_guard::list_record_guard::~list_record_guard() noexcept {
@@ -184,7 +203,8 @@ auto field_guard::add(const data_view& view) -> caf::error {
 }
 
 auto field_guard::push_record() -> record_guard {
-  return {builder_provider_, starting_fields_length_};
+  return {builder_provider_, parent_record_builder_provider_,
+          starting_fields_length_};
 }
 
 auto field_guard::push_list() -> list_guard {
