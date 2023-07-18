@@ -8,10 +8,16 @@
 
 #pragma once
 
+<<<<<<< HEAD:libtenzir/include/tenzir/fwd.hpp
 #include "tenzir/config.hpp" // IWYU pragma: export
 #include "tenzir/metrics.hpp"
 #include "tenzir/tag.hpp"
 #include "tenzir/tql/fwd.hpp"
+=======
+#include "vast/config.hpp" // IWYU pragma: export
+#include "vast/tag.hpp"
+#include "vast/tql/fwd.hpp"
+>>>>>>> f9438b8a80 (Move metrics to pipeline.hpp):libvast/include/vast/fwd.hpp
 
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>

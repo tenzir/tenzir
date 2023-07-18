@@ -8,8 +8,13 @@
 
 #include "tenzir/diagnostics.hpp"
 
+<<<<<<< HEAD:libtenzir/src/diagnostics.cpp
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
+=======
+#include "vast/detail/string.hpp"
+#include "vast/logger.hpp"
+>>>>>>> f9438b8a80 (Move metrics to pipeline.hpp):libvast/src/diagnostics.cpp
 
 #include <fmt/color.h>
 

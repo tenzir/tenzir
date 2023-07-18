@@ -873,6 +873,8 @@ auto exec_node(
   self->state.op = std::move(op);
   self->state.metrics_handler = std::move(metrics_handler);
   self->state.current_metrics.index = index;
+  self->state.current_metrics.in_unit = operator_type_name<Input>();
+  self->state.current_metrics.out_unit = operator_type_name<Output>();
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler));
   // The node actor must be set when the operator is not a source.

@@ -10,10 +10,16 @@
 
 #include "tenzir/fwd.hpp"
 
+<<<<<<< HEAD:libtenzir/include/tenzir/actors.hpp
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/metrics.hpp"
+=======
+#include "vast/aliases.hpp"
+#include "vast/atoms.hpp"
+#include "vast/diagnostics.hpp"
+>>>>>>> f9438b8a80 (Move metrics to pipeline.hpp):libvast/include/vast/actors.hpp
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
