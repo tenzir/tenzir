@@ -323,24 +323,6 @@ TEST(split results into two slices when input chunks has more events than a
   CHECK_EQUAL(output_slices.front().rows(), defaults::import::table_slice_size);
 }
 
-TEST(empty chunk after parsing json formatted chunk causes the parser to yield
-       accumulated result) {
-  auto gen = []() -> generator<chunk_ptr> {
-    constexpr auto json = std::string_view{R"({"a": 5})"};
-    co_yield chunk::make(json.data(), json.size(),
-                         tenzir::chunk::deleter_type{});
-    co_yield chunk::make_empty();
-    co_return;
-  };
-  auto sut = create_sut(gen(), control_plane_mock);
-  auto output_slices = std::vector<tenzir::table_slice>{};
-  for (auto slice : sut) {
-    output_slices.push_back(std::move(slice));
-  }
-  REQUIRE_EQUAL(output_slices.size(), 1u);
-  CHECK_EQUAL(output_slices.front().rows(), 1u);
-}
-
 TEST(null in the input json results in the value being missing in the schema) {
   auto sut = create_sut(
     make_chunk_generator({R"({"a": 5, "b": null})", R"({"c": null})"}),
@@ -677,9 +659,8 @@ TEST(
   CHECK_EQUAL(materialize(output_slices.front().at(0u, 2u)), "some_str");
 }
 
-TEST(events with
-     : no schema->schema->no schema results in 3 table slices with different
-         schemas) {
+TEST(events with unknown schema->known schema->same unknown schema results
+       in 3 table slices with 2 different schemas) {
   const auto fixed_schema
     = type{"modulee.great_field", record_type{
                                     {"field_to_chose", string_type{}},
@@ -715,16 +696,20 @@ TEST(events with
   CHECK_EQUAL(materialize(output_slices.at(1).at(0u, 0u)), "great_field");
   CHECK_EQUAL(materialize(output_slices.at(1).at(0u, 1u)), int64_t{100});
 
-  CHECK_EQUAL(output_slices.at(2).schema(),
-              tenzir::type("modulee.no_schema_field",
-                           record_type{
-                             {"g", string_type{}},
-                             {"field_to_chose", string_type{}},
-                           }));
+  auto expected_schema = tenzir::type{
+    "modulee.no_schema_field",
+    record_type{
+      {"d", list_type{int64_type{}}},
+      {"field_to_chose", string_type{}},
+      {"g", string_type{}},
+    },
+  };
+  CHECK_EQUAL(output_slices.at(2).schema(), expected_schema);
   CHECK_EQUAL(output_slices.at(2).rows(), 1u);
-  CHECK_EQUAL(output_slices.at(2).columns(), 2u);
-  CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 0u)), "some_str");
+  CHECK_EQUAL(output_slices.at(2).columns(), 3u);
+  CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 0u)), caf::none);
   CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 1u)), "no_schema_field");
+  CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 2u)), "some_str");
 }
 
 FIXTURE_SCOPE_END()

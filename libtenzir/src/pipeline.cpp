@@ -262,23 +262,18 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     auto opt = op.optimize(current_filter, current_order);
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
-    } else {
-      if (current_filter != trivially_true_expression()) {
-        // TODO: We just want to create a `where {current}` operator. However,
-        // we currently only have the interface for parsing this from a string.
-        auto pipe
-          = tql::parse_internal(fmt::format("where {}", current_filter));
-        TENZIR_ASSERT(pipe);
-        auto ops = std::move(*pipe).unwrap();
-        TENZIR_ASSERT(ops.size() == 1);
-        result.push_back(std::move(ops[0]));
-        current_filter = trivially_true_expression();
-      }
+    } else if (current_filter != trivially_true_expression()) {
+      // TODO: We just want to create a `where {current}` operator. However,
+      // we currently only have the interface for parsing this from a string.
+      auto pipe = tql::parse_internal(fmt::format("where {}", current_filter));
+      TENZIR_ASSERT(pipe);
+      auto ops = std::move(*pipe).unwrap();
+      TENZIR_ASSERT(ops.size() == 1);
+      result.push_back(std::move(ops[0]));
+      current_filter = trivially_true_expression();
     }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));
-    } else {
-      result.push_back(op.copy());
     }
     current_order = opt.order;
   }

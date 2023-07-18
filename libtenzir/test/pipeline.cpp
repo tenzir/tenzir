@@ -95,7 +95,7 @@ struct command final : public crtp_operator<command> {
   }
 
   auto optimize(expression const& filter, event_order order) const
-    -> optimize_result {
+    -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -122,7 +122,7 @@ struct source final : public crtp_operator<source> {
   }
 
   auto optimize(expression const& filter, event_order order) const
-    -> optimize_result {
+    -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -156,7 +156,7 @@ struct sink final : public crtp_operator<sink> {
   }
 
   auto optimize(expression const& filter, event_order order) const
-    -> optimize_result {
+    -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -265,6 +265,12 @@ TEST(actor executor execution error) {
       ctrl.abort(caf::make_error(ec::unspecified));
       co_return;
     }
+
+    auto optimize(expression const& filter, event_order order) const
+      -> optimize_result override {
+      (void)filter, (void)order;
+      return do_not_optimize(*this);
+    }
   };
 
   auto ops = std::vector<operator_ptr>{};
@@ -290,6 +296,12 @@ TEST(actor executor instantiation error) {
     auto operator()(generator<table_slice>, operator_control_plane&) const
       -> caf::expected<generator<table_slice>> {
       return caf::make_error(ec::unspecified);
+    }
+
+    auto optimize(expression const& filter, event_order order) const
+      -> optimize_result override {
+      (void)filter, (void)order;
+      return do_not_optimize(*this);
     }
   };
 
