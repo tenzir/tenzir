@@ -88,12 +88,12 @@ tenzir:
             JSONStreaming::disable_default_logs=T
             JSONStreaming::enable_log_rotation=F
             json-streaming-logs"
-     | parse zeek-json
+     | read zeek-json
     suricata: >
      shell "suricata -r /dev/stdin
             --set outputs.1.eve-log.filename=/dev/stdout
             --set logging.outputs.0.console.enabled=no"
-     | parse suricata
+     | read suricata
 ```
 
 The difference stands out when you look now at the pipeline definition:
@@ -127,7 +127,7 @@ output into the next:
 When using the `shell` operator, the `tenzir` process spawns `zeek` or
 `suricata` as child process. The operator then forwards the bytes from stdin of
 the `tenzir` process to the child's stdin, and uses the child's stdout as input
-to the subsequent `parse` operator.
+to the subsequent [`read`](/operators/transformations/read) operator.
 
 ![Shelling out to Zeek](zeek-to-tenzir-shell.excalidraw.svg)
 
