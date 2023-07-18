@@ -119,7 +119,7 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)filter;
-    return optimize_result{std::nullopt, order, copy()};
+    return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, hash_operator& x) -> bool {

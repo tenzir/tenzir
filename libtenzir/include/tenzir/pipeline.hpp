@@ -168,24 +168,7 @@ auto inspect(auto& f, event_order& x) -> bool {
   return detail::inspect_enum_str(f, x, {"ordered", "schema", "unordered"});
 }
 
-/// The result of calling `operator_base::optimize(...)`.
-///
-/// @see operator_base::optimize
-struct optimize_result {
-  std::optional<expression> filter;
-  event_order order;
-  operator_ptr replacement;
-
-  optimize_result(std::optional<expression> filter, event_order order,
-                  operator_ptr replacement)
-    : filter{std::move(filter)},
-      order{order},
-      replacement{std::move(replacement)} {
-  }
-};
-
-/// Returns something that is valid for `op`, but probably not optimal.
-auto do_not_optimize(const operator_base& op) -> optimize_result;
+struct optimize_result;
 
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
@@ -227,13 +210,16 @@ public:
   /// description of the semantic guarantees that the operator implementation
   /// must uphold if this function returns something else.
   ///
+  /// # Implementation requirements
+  ///
   /// We say that two pipelines are equivalent if they have the same observable
   /// behavior. For open pipelines, this has to hold for all possible sources
   /// (including infinite ones) and sinks. We write `A <=> B` if two pipelines
   /// `A` and `B` are equivalent.
   ///
-  /// In the following, we assume that the operator is `events -> events`.
-  /// Furthermore, we define the following `events -> events` operators:
+  /// In the following, we assume that the operator is `events -> events`. The
+  /// other case is discussed afterwards. Furthermore, we define the following
+  /// `events -> events` operators:
   /// - `shuffle` randomizes the order of all events, no matter the schema.
   /// - `interleave` randomizes the order, preserving the order inside schemas.
   ///
@@ -277,6 +263,15 @@ public:
   /// as the pipeline would otherwise be ill-typed. Similarly, if the input type
   /// is not events, we must return `event_order::ordered` and either
   /// `std::nullopt` or `trivially_true_expression()`.
+  ///
+  /// # Example
+  ///
+  /// The `where expr` operator returns `opt.filter = expr && filter`,
+  /// `opt.order = order` and `opt.replacement == nullptr`. Thus we want to show
+  /// `where expr | where filter | sink <=> where expr && filter | OPT | sink`,
+  /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
+  /// resolves to `sink <=> interleave | pass | sink`, which follows from what
+  /// we may assume about `sink`.
   virtual auto optimize(expression const& filter, event_order order) const
     -> optimize_result
     = 0;
@@ -328,6 +323,32 @@ protected:
   virtual auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type>;
 };
+
+/// The result of calling `operator_base::optimize(...)`.
+///
+/// @see operator_base::optimize
+struct optimize_result {
+  std::optional<expression> filter;
+  event_order order;
+  operator_ptr replacement;
+
+  optimize_result(std::optional<expression> filter, event_order order,
+                  operator_ptr replacement)
+    : filter{std::move(filter)},
+      order{order},
+      replacement{std::move(replacement)} {
+  }
+
+  /// Always valid if the transformation performed by the operator does not
+  /// change based on the order in which the input events arrive in.
+  static auto order_invariant(const operator_base& op, event_order order)
+    -> optimize_result {
+    return optimize_result{std::nullopt, order, op.copy()};
+  }
+};
+
+/// Returns something that is valid for `op`, but probably not optimal.
+auto do_not_optimize(const operator_base& op) -> optimize_result;
 
 /// A pipeline is a sequence of pipeline operators.
 class pipeline final : public operator_base {

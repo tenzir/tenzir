@@ -126,7 +126,7 @@ public:
     -> optimize_result override {
     // Note: This can change the output of `measure`.
     (void)filter;
-    return optimize_result{std::nullopt, order, copy()};
+    return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, measure_operator& x) -> bool {

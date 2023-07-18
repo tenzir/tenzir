@@ -96,7 +96,7 @@ public:
     return optimize_result{
       std::nullopt,
       event_order::ordered,
-      std::make_unique<parse_operator>(std::move(parser_opt)),
+      std::make_unique<read_operator>(std::move(parser_opt)),
     };
   }
 
