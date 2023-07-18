@@ -73,8 +73,11 @@ auto record_guard::push_field(std::string_view name) -> field_guard {
   auto provider = [name, this]() -> series_builder& {
     auto& b = builder_provider_.provide();
     if (std::holds_alternative<unknown_type_builder>(b)) {
-      b = concrete_series_builder<record_type>();
+      b = {concrete_series_builder<record_type>(),
+           parent_record_builder_provider_()};
       b.add_up_to_n_nulls(starting_fields_length_);
+      std::get<concrete_series_builder<record_type>>(b).set_type_change_observer(
+        parent_record_builder_provider_());
     }
     auto& record_builder = std::get<concrete_series_builder<record_type>>(b);
     return record_builder
@@ -124,8 +127,12 @@ auto list_guard::list_record_guard::push_field(std::string_view name)
 
 list_guard::list_record_guard::~list_record_guard() noexcept {
   if (builder_provider_.is_builder_constructed()) {
-    if (not parent_.value_type)
-      parent_.propagate_type(builder_provider_.type());
+    if (not parent_.value_type) {
+      parent_.propagate_type_discovery(builder_provider_.type());
+    }
+    if (parent_.value_type != builder_provider_.type()) {
+      parent_.propagate_type_change(builder_provider_.type());
+    }
     std::visit(
       []<class Builder>(Builder& b) {
         if constexpr (std::is_base_of_v<record_series_builder_base, Builder>) {
@@ -157,10 +164,10 @@ auto list_guard::push_record() -> list_guard::list_record_guard {
   return {{std::move(provider)}, *this};
 }
 
-auto list_guard::propagate_type(type child_type) -> void {
+auto list_guard::propagate_type_discovery(type child_type) -> void {
   value_type = std::move(child_type);
   if (parent) {
-    parent->propagate_type(tenzir::type{list_type{value_type}});
+    parent->propagate_type_discovery(tenzir::type{list_type{value_type}});
     const auto s = get_root_list_builder()
                      .get_child_builder<type_to_arrow_builder_t<list_type>>(
                        tenzir::type{list_type{value_type}})
@@ -171,6 +178,13 @@ auto list_guard::propagate_type(type child_type) -> void {
     builder.create_builder(value_type);
     const auto s = builder.get_arrow_builder()->Append();
     TENZIR_ASSERT(s.ok());
+  }
+}
+
+auto list_guard::propagate_type_change(type child_type) -> void {
+  value_type = std::move(child_type);
+  if (parent) {
+    parent->propagate_type_change(type{list_type{value_type}});
   }
 }
 
@@ -221,7 +235,13 @@ auto field_guard::push_list() -> list_guard {
   auto provider = [this]() mutable -> series_builder& {
     auto& builder = builder_provider_.provide();
     if (std::holds_alternative<unknown_type_builder>(builder)) {
-      builder = concrete_series_builder<list_type>(starting_fields_length_);
+      auto parent_record = parent_record_builder_provider_();
+      builder = {concrete_series_builder<list_type>(starting_fields_length_),
+                 parent_record};
+      if (parent_record) {
+        std::get<concrete_series_builder<list_type>>(builder)
+          .set_record_type_change_observer(parent_record);
+      }
     }
     return builder;
   };

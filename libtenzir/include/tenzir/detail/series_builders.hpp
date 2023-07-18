@@ -185,10 +185,22 @@ protected:
   std::shared_ptr<arrow::StructBuilder> arrow_builder_;
 };
 
+struct common_type_cast_info {
+  type new_type_candidate;
+  data value_to_add_after_cast;
+  type type_of_value_to_add_after_cast;
+  concrete_series_builder<record_type>* cast_field_parent_record = nullptr;
+};
+
 template <>
 class concrete_series_builder<record_type> : public record_series_builder_base {
 public:
+  using type_change_observer
+    = std::variant<std::monostate, concrete_series_builder<record_type>*,
+                   concrete_series_builder<list_type>*>;
+
   using record_series_builder_base::record_series_builder_base;
+
   explicit concrete_series_builder(const record_type& type);
 
   auto get_field_builder_provider(std::string_view field,
@@ -197,6 +209,50 @@ public:
 
   auto get_arrow_builder() -> std::shared_ptr<arrow::StructBuilder>;
   auto type() const -> tenzir::type;
+
+  // Called when a field builder detected that it requires a common type cast in
+  // order to consume the new input. Returns an error when type change was
+  // unsuccessful.
+  auto on_field_type_change(series_builder& builder_that_needs_type_change,
+                            const tenzir::type& type_of_new_input,
+                            const data& new_input) -> caf::error;
+
+  // Adjusts the field builders to match the new_builder_type.
+  auto reset(tenzir::type chosen_type_of_changing_field,
+             const tenzir::type& new_builder_type) -> void;
+
+  // Sets an observer that will be responsible for handling a type change of the
+  // field builders.
+  auto set_type_change_observer(type_change_observer obs) -> void;
+
+  auto is_part_of_a_list() const -> bool;
+
+  // Called when the current record_builder is a value builder of some parent
+  // list_builder and the list field of this record requires a type change. The
+  // control of the type change will be shifted to the parent list_builder.
+  // Returns an error when type change was unsuccessful.
+  auto on_child_list_change(concrete_series_builder<list_type>* child,
+                            std::vector<common_type_cast_info> child_cast_infos)
+    -> caf::error;
+
+private:
+  auto on_child_record_type_change(
+    concrete_series_builder<record_type>& child,
+    std::vector<common_type_cast_info> child_cast_infos) -> caf::error;
+
+  auto get_cast_infos(
+    std::vector<std::pair<tenzir::type, data>> possible_new_field_types)
+    -> std::vector<common_type_cast_info>;
+
+  auto propagate_type_change_to_observer(
+    const std::vector<common_type_cast_info>& cast_infos) -> caf::error;
+
+  auto get_cast_infos(std::vector<common_type_cast_info> child_cast_infos,
+                      const series_builder& child_builder)
+    -> std::vector<common_type_cast_info>;
+
+  type_change_observer type_change_observer_;
+  series_builder* changing_builder_ = nullptr;
 };
 
 class fixed_fields_record_builder : public record_series_builder_base {
@@ -240,9 +296,36 @@ public:
   auto get_record_builder() -> series_builder&;
   auto remove_last_row() -> bool;
 
+  // Called by a child record value builders to report that they need a type
+  // change. The type change need of a child record also means that the whole
+  // list builder needs to change type.
+  // Returns an error when type change was unsuccessful.
+  auto on_record_type_change(std::vector<common_type_cast_info> cast_infos)
+    -> caf::error;
+
+  // Sets an observer that will be responsible for handling a type change of the
+  // builder.
+  auto
+  set_record_type_change_observer(concrete_series_builder<record_type>* obs)
+    -> void;
+
+  // Recreate the list builder and internal state to match the new_builder_type.
+  auto reset(tenzir::type chosen_type_of_changing_field,
+             const tenzir::type& new_builder_type) -> void;
+
+  // Changes list type to a type that is a common_type for the current list_type
+  // and the new_value_type.
+  // Returns a newly chosen type or an error when type change was unsuccessful.
+  auto change_type(tenzir::type list_value_type, tenzir::type new_value_type,
+                   data value_to_add) -> caf::expected<tenzir::type>;
+
 private:
   auto create_builder_impl(const tenzir::type& t)
     -> std::shared_ptr<arrow::ArrayBuilder>;
+
+  auto change_type_with_nested_list_parent(
+    const std::vector<std::pair<tenzir::type, data>>& common_type_candidates)
+    -> caf::expected<tenzir::type>;
 
   std::shared_ptr<type_to_arrow_builder_t<list_type>> builder_;
   detail::stable_map<tenzir::type, arrow::ArrayBuilder*> child_builders_;
@@ -250,6 +333,7 @@ private:
   arrow_length_type nulls_to_prepend_ = 0u;
   bool are_fields_fixed_ = false;
   tenzir::type type_;
+  concrete_series_builder<record_type>* record_type_change_observer_ = nullptr;
 };
 
 using series_builder_base = caf::detail::tl_apply_t<
@@ -261,9 +345,14 @@ using series_builder_base = caf::detail::tl_apply_t<
   std::variant>;
 
 struct series_builder : series_builder_base {
-  using variant::variant;
-
-  series_builder(const tenzir::type&, bool are_fields_fixed = false);
+  series_builder(series_builder_base base,
+                 concrete_series_builder<record_type>* parent_record)
+    : series_builder_base{std::move(base)},
+      field_type_change_handler_{parent_record} {
+  }
+  series_builder(const tenzir::type&,
+                 concrete_series_builder<record_type>* parent_record,
+                 bool are_fields_fixed = false);
 
   arrow_length_type length() const;
 
@@ -287,6 +376,10 @@ struct series_builder : series_builder_base {
 
   auto add_up_to_n_nulls(arrow_length_type max_null_count) -> void;
   auto remove_last_row() -> void;
+  // Tries to change the type of a builder to the new_type.
+  // Returns error on failure.
+  auto change_type(const tenzir::type& new_type, const arrow::Array& array)
+    -> caf::error;
 
 private:
   template <concrete_type ViewType>
@@ -340,81 +433,6 @@ private:
     }
   }
 
-  /// @brief Changes the type of the builder to one of the CommonTypes if all
-  /// the values in the array and value_to_add can be cast to it. The cast
-  /// values are a part of the new builder.
-  /// @tparam ...CommonTypes Types to which the array and the value_to_add
-  /// should be cast to. The first successful type is the new builder's type.
-  /// @tparam NewType Type of the newly added value.
-  /// @tparam CurrentType Current builder's type.
-  /// @param new_value_type Value_to_add type.
-  /// @param value_to_add A new value that is to be appended to the builder.
-  /// @param array All values of the builder.
-  /// @param curr_type Type of a builder.
-  /// @return An error if no common type can be found to contain all the builder
-  /// values and a value_to_add. In reality all casts should succeed when
-  /// string_type is considered and it is considered as a last resort.
-  template <concrete_type NewType, concrete_type CurrentType,
-            class... CommonTypes>
-  auto change_builder(const NewType& new_value_type, auto value_to_add,
-                      const std::shared_ptr<arrow::Array>& array,
-                      const CurrentType& curr_type, type_list<CommonTypes...>)
-    -> caf::error {
-    auto impl = [&]<class Type>(const Type& common_type) {
-      constexpr auto failure = true;
-      if constexpr (std::is_same_v<Type, NewType>) {
-        auto cast_builder = cast_to_builder(
-          curr_type,
-          static_cast<const type_to_arrow_array_t<CurrentType>&>(*array),
-          new_value_type);
-        if (not cast_builder)
-          return failure;
-        auto new_builder = concrete_series_builder<Type>(
-          tenzir::type{new_value_type}, std::move(*cast_builder));
-        new_builder.add(value_to_add);
-        *this = std::move(new_builder);
-      } else {
-        auto new_val = cast_value(new_value_type, value_to_add, common_type);
-        if (not new_val)
-          return failure;
-        auto cast_builder = cast_to_builder(
-          curr_type,
-          static_cast<const type_to_arrow_array_t<CurrentType>&>(*array),
-          common_type);
-        if (not cast_builder)
-          return failure;
-        auto new_builder = concrete_series_builder<Type>(
-          tenzir::type{common_type}, std::move(*cast_builder));
-        if constexpr (not std::is_same_v<caf::expected<void>, decltype(new_val)>)
-          new_builder.add(*new_val);
-        *this = std::move(new_builder);
-      }
-      return not failure;
-    };
-    auto failed = (impl(CommonTypes{}) && ...);
-    if (failed)
-      return caf::make_error(ec::convert_error,
-                             fmt::format("unable to add {}: no conversion "
-                                         "available",
-                                         data{materialize(value_to_add)}));
-    return caf::error{};
-  }
-
-  template <concrete_type NewType, concrete_type CurrentType>
-  auto change_type(const NewType& new_type, auto value_to_add,
-                   const CurrentType& current_type, auto array) -> caf::error {
-    // Remove current_type from common types and remove enumeration_type as it
-    // has no field informations to be cast into.
-    using common_types = caf::detail::tl_filter_not_type_t<
-      caf::detail::tl_filter_not_type_t<
-        detail::tl_common_types_t<typename supported_casts<CurrentType>::types,
-                                  typename supported_casts<NewType>::types>,
-        CurrentType>,
-      enumeration_type>;
-    return change_builder(new_type, value_to_add, array, current_type,
-                          common_types{});
-  }
-
   template <concrete_type Type>
   auto add_impl(auto view) -> caf::error {
     return std::visit(
@@ -428,28 +446,28 @@ private:
           auto new_builder = concrete_series_builder<Type>{};
           new_builder.add_up_to_n_nulls(nulls_to_prepend);
           new_builder.add(view);
-          *this = std::move(new_builder);
+          *this = {std::move(new_builder), field_type_change_handler_};
           return caf::error{};
         },
         [view, this]<class BuilderValueType>(
           concrete_series_builder<BuilderValueType>& builder) {
           if (auto maybe_err = can_cast(Type{}, BuilderValueType{});
               not maybe_err) {
-            if (can_change_builder_type_) {
-              return change_type(Type{}, view,
-                                 caf::get<BuilderValueType>(builder.type()),
-                                 builder.finish());
+            if (field_type_change_handler_) {
+              return field_type_change_handler_->on_field_type_change(
+                *this, tenzir::type{Type{}}, materialize(view));
             }
             return maybe_err.error();
           }
           auto err = cast_impl<BuilderValueType, Type>(builder, view);
-          if (not err)
+          if (not err) {
             return caf::error{};
-          if (err and not can_change_builder_type_)
+          }
+          if (not field_type_change_handler_) {
             return err;
-          return change_type(Type{}, view,
-                             caf::get<BuilderValueType>(builder.type()),
-                             builder.finish());
+          }
+          return field_type_change_handler_->on_field_type_change(
+            *this, tenzir::type{Type{}}, materialize(view));
         },
         [view](concrete_series_builder<record_type>&) {
           return caf::make_error(ec::convert_error,
@@ -479,7 +497,7 @@ private:
       *this);
   }
 
-  bool can_change_builder_type_ = true;
+  concrete_series_builder<record_type>* field_type_change_handler_ = nullptr;
 };
 
 } // namespace tenzir::detail

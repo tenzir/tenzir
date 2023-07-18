@@ -90,7 +90,8 @@ public:
   auto push_list() -> list_guard;
 
 private:
-  auto propagate_type(type child_type) -> void;
+  auto propagate_type_discovery(type child_type) -> void;
+  auto propagate_type_change(type child_type) -> void;
   auto get_root_list_builder() -> concrete_series_builder<tenzir::list_type>&;
 
   template <concrete_type Type>
@@ -132,7 +133,7 @@ private:
   template <concrete_type Type>
   auto add_impl(auto view) -> caf::error {
     if (not value_type)
-      propagate_type(tenzir::type{Type{}});
+      propagate_type_discovery(tenzir::type{Type{}});
     return caf::visit(
       detail::overload{
         [this, view](const Type& t) {
@@ -140,18 +141,26 @@ private:
           return caf::error{};
         },
         [view, this](const auto& t) {
-          if (auto castable = can_cast(Type{}, t); not castable)
-            return std::move(castable.error());
           auto cast_val = cast_value(Type{}, view, t);
-          if (not cast_val)
-            return std::move(cast_val.error());
-          // this is sometimes not used due to the if constexpr below.
-          // This is done to prevent compilation warning treated as an error.
-          (void)this;
-          if constexpr (not std::is_same_v<caf::expected<void>,
-                                           decltype(cast_val)>) {
-            append_value_to_builder(t, *cast_val);
+          if (cast_val) {
+            // "this" is sometimes not used due to the if constexpr below.
+            // It prevents compilation warning treated as an error.
+            (void)this;
+            // We don't handle caf::expected<void> here because the cast api
+            // only returns caf::expected<void> if the operation is not
+            // supported. The caf::expected<void> will fall into common_type
+            // casting case.
+            if constexpr (not std::is_same_v<caf::expected<void>,
+                                             decltype(cast_val)>) {
+              append_value_to_builder(t, *cast_val);
+              return caf::error{};
+            }
           }
+          auto new_type = get_root_list_builder().change_type(
+            type{t}, type{Type{}}, data{materialize(view)});
+          if (not new_type)
+            return std::move(new_type.error());
+          propagate_type_change(*new_type);
           return caf::error{};
         },
         [view](const list_type& t) -> caf::error {
