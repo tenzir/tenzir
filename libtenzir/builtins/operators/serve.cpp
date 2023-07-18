@@ -118,6 +118,10 @@ constexpr auto SPEC_V0 = R"_(
                   type: string
                   description: A token to access the next pipeline data batch, null if the pipeline is completed.
                   example: "340ce2j"
+                dropped:
+                  type: integer
+                  description: The number of events that were dropped by the serve endpoint. Hopefully 0 most of the time.
+                  example: 0
                 schemas:
                   type: array
                   items:
@@ -665,13 +669,13 @@ struct serve_handler_state {
         = printer.print(out_iter, schema.to_definition(/*expand*/ false));
       TENZIR_ASSERT_CHEAP(ok);
     }
-    out_iter = fmt::format_to(out_iter, "}}]}}{}", '\n');
+    out_iter = fmt::format_to(out_iter, R"(}}], "dropped": 0}}{})", '\n');
     if (result.size() > defaults::api::max_response_size) {
       TENZIR_WARN("serve-manager discards oversized response with {} events",
                   num_events);
       return fmt::format(
-        R"({{"next_continuation_token":"{}","events":[], "schemas": []}})",
-        next_continuation_token);
+        R"({{"next_continuation_token":"{}","events":[],"schemas":[],"dropped":{} }})",
+        next_continuation_token, num_events);
     }
     return result;
   }
