@@ -1070,26 +1070,30 @@ auto cast_value(const FromType& from_type, ValueType&& value,
 auto cast(table_slice from_slice, const type& to_schema) noexcept
   -> table_slice;
 
-template <class FromType, class ToType>
-  requires(not std::same_as<FromType, ToType>)
-static auto
-cast_to_builder(const FromType& from_type,
-                const std::shared_ptr<type_to_arrow_array_t<FromType>>& in,
-                const ToType& to_type) noexcept
+template <concrete_type FromType, concrete_type ToType>
+static auto cast_to_builder(const FromType& from_type,
+                            const type_to_arrow_array_t<FromType>& in,
+                            const ToType& to_type) noexcept
   -> caf::expected<std::shared_ptr<type_to_arrow_builder_t<ToType>>> {
   auto ret = to_type.make_arrow_builder(arrow::default_memory_pool());
-  for (const auto& v : values(from_type, *in)) {
+  for (const auto& v : values(from_type, in)) {
     if (not v) {
       auto status = ret->AppendNull();
       TENZIR_ASSERT(status.ok());
       continue;
     }
-    auto converted = cast_value(from_type, *v, to_type);
-    if (not converted)
-      return converted.error();
-    if constexpr (not std::is_same_v<decltype(converted), caf::expected<void>>) {
-      auto status = append_builder(to_type, *ret, *converted);
+    auto converted = cast_value(from_type, materialize(*v), to_type);
+    if constexpr (std::is_same_v<decltype(converted), type_to_data_t<ToType>>) {
+      auto status = append_builder(to_type, *ret, make_view(converted));
       TENZIR_ASSERT(status.ok());
+    } else {
+      if (not converted)
+        return converted.error();
+      if constexpr (not std::is_same_v<decltype(converted),
+                                       caf::expected<void>>) {
+        auto status = append_builder(to_type, *ret, make_view(*converted));
+        TENZIR_ASSERT(status.ok());
+      }
     }
   }
 

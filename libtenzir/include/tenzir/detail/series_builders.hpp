@@ -365,7 +365,7 @@ private:
       if constexpr (std::is_same_v<Type, NewType>) {
         auto cast_builder = cast_to_builder(
           curr_type,
-          std::static_pointer_cast<type_to_arrow_array_t<CurrentType>>(array),
+          static_cast<const type_to_arrow_array_t<CurrentType>&>(*array),
           new_value_type);
         if (not cast_builder)
           return failure;
@@ -379,7 +379,7 @@ private:
           return failure;
         auto cast_builder = cast_to_builder(
           curr_type,
-          std::static_pointer_cast<type_to_arrow_array_t<CurrentType>>(array),
+          static_cast<const type_to_arrow_array_t<CurrentType>&>(*array),
           common_type);
         if (not cast_builder)
           return failure;

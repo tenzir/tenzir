@@ -693,7 +693,7 @@ TEST(cast int64_t array to a string builder) {
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
       int_builder->Finish().ValueOrDie());
-  auto out = tenzir::cast_to_builder(tenzir::int64_type{}, array,
+  auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::string_type{});
   REQUIRE(out);
   auto arr = (*out)->Finish().ValueOrDie();
@@ -715,7 +715,7 @@ TEST(casting builder with no compatible types results in an error) {
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
       int_builder->Finish().ValueOrDie());
-  auto out = tenzir::cast_to_builder(tenzir::int64_type{}, array,
+  auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::list_type{tenzir::string_type{}});
   CHECK(not out);
 }
@@ -730,7 +730,7 @@ TEST(
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
       int_builder->Finish().ValueOrDie());
-  auto out = tenzir::cast_to_builder(tenzir::int64_type{}, array,
+  auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::uint64_type{});
   REQUIRE(out);
   auto arr = (*out)->Finish().ValueOrDie();
@@ -751,7 +751,7 @@ TEST(casting int64_t array to uint64_t builder fails due to negative value) {
   auto array
     = std::static_pointer_cast<tenzir::type_to_arrow_array_t<tenzir::int64_type>>(
       int_builder->Finish().ValueOrDie());
-  auto out = tenzir::cast_to_builder(tenzir::int64_type{}, array,
+  auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::uint64_type{});
   CHECK(not out);
 }
