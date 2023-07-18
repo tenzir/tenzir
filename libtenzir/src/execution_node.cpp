@@ -674,13 +674,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
                               current_metrics.time_scheduled));
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       constexpr auto inbound_unit
-        = std::is_same_v<Input, chunk_ptr> ? "MiB" : "events";
-      constexpr auto ratio
-        = std::is_same_v<Input, chunk_ptr> ? 1'048'576.0 : 1.0;
-      const auto total
-        = static_cast<double>(current_metrics.inbound_total) / ratio;
+        = std::is_same_v<Input, chunk_ptr> ? "B" : "events";
+      const auto total = static_cast<double>(current_metrics.inbound_total);
       TENZIR_VERBOSE(
-        "{} inbound {:.0f} {} in {} rate = {:.2g} {}/s avg batch size = {:.2f} "
+        "{} inbound {:.0f} {} in {} rate = {:.2f} {}/s avg batch size = {:.2f} "
         "{}",
         op->name(), total, inbound_unit, data{elapsed},
         total
@@ -695,13 +692,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
     }
     if constexpr (not std::is_same_v<Output, std::monostate>) {
       constexpr auto outbound_unit
-        = std::is_same_v<Output, chunk_ptr> ? "MiB" : "events";
-      constexpr auto ratio
-        = std::is_same_v<Output, chunk_ptr> ? 1'048'576.0 : 1.0;
-      const auto total
-        = static_cast<double>(current_metrics.outbound_total) / ratio;
+        = std::is_same_v<Output, chunk_ptr> ? "B" : "events";
+      const auto total = static_cast<double>(current_metrics.outbound_total);
       TENZIR_VERBOSE(
-        "{} outbound {:.0f} {} in {} rate = {:.2g} {}/s avg batch size = "
+        "{} outbound {:.0f} {} in {} rate = {:.2f} {}/s avg batch size = "
         "{:.2f} {}",
         op->name(), total, outbound_unit, data{elapsed},
         total
