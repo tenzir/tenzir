@@ -849,7 +849,7 @@ auto exec_node(
   }
   self->state.weak_node = node;
   self->attach_functor([name = self->state.op->name()] {
-    TENZIR_DEBUG("exec node for {} shuts down", name);
+    TENZIR_DEBUG("exec-node for {} shut down", name);
   });
   return {
     [self](atom::start,
