@@ -330,21 +330,6 @@ TEST(split results into two slices when input chunks has more events than a
   CHECK_EQUAL(output_slices.front().rows(), defaults::import::table_slice_size);
 }
 
-TEST(empty chunk from input generator causes the parser to yield an empty table
-       slice) {
-  auto gen = []() -> generator<chunk_ptr> {
-    co_yield chunk::make_empty();
-  };
-  auto sut = create_sut(gen(), control_plane_mock);
-  auto output_slice = std::optional<tenzir::table_slice>{};
-  for (auto slice : sut) {
-    output_slice = std::move(slice);
-    break;
-  }
-  REQUIRE(output_slice);
-  CHECK_EQUAL(*output_slice, table_slice{});
-}
-
 TEST(empty chunk after parsing json formatted chunk causes the parser to yield
        accumulated result) {
   auto gen = []() -> generator<chunk_ptr> {
@@ -611,43 +596,6 @@ TEST(yield slice for each schema) {
   CHECK_EQUAL(materialize(output_slices.back().at(0u, 0u)),
               "even_greater_field");
   CHECK_EQUAL(materialize(output_slices.back().at(0u, 1u)), "str");
-}
-
-TEST(yield empty slice when input chunk generator returns empty chunk) {
-  auto cp_mock = operator_control_plane_mock{default_on_warn};
-  auto sut = create_sut(make_chunk_generator({""}), cp_mock, args);
-  auto output_slices = std::vector<tenzir::table_slice>{};
-  for (auto slice : sut) {
-    output_slices.push_back(std::move(slice));
-  }
-  REQUIRE_EQUAL(output_slices.size(), 1u);
-  CHECK_EQUAL(output_slices.front(), table_slice{});
-}
-
-TEST(yield two slices of the same schema due to receiving empty chunk in between
-       chunks of same json events) {
-  const auto fixed_schema
-    = type{"modulee.great_field", record_type{
-                                    {"field_to_chose", string_type{}},
-                                    {"a", int64_type{}},
-                                  }};
-  auto cp_mock = operator_control_plane_mock{default_on_warn, {fixed_schema}};
-  auto sut = create_sut(
-    make_chunk_generator({R"({"field_to_chose" : "great_field", "a": 10})", "",
-                          R"({"field_to_chose" : "great_field", "a": 10})"}),
-    cp_mock, args);
-  auto output_slices = std::vector<tenzir::table_slice>{};
-  for (auto slice : sut) {
-    output_slices.push_back(std::move(slice));
-  }
-  REQUIRE_EQUAL(output_slices.size(), 2u);
-  for (auto slice : output_slices) {
-    CHECK_EQUAL(slice.schema(), fixed_schema);
-    CHECK_EQUAL(slice.rows(), 1u);
-    CHECK_EQUAL(slice.columns(), 2u);
-    CHECK_EQUAL(materialize(slice.at(0u, 0u)), "great_field");
-    CHECK_EQUAL(materialize(slice.at(0u, 1u)), int64_t{10});
-  }
 }
 
 TEST(

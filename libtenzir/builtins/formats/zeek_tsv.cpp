@@ -463,7 +463,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     // Yield at chunk boundaries.
     if (document.builder
         and (document.builder->rows() >= defaults::import::table_slice_size
-             or last_finish + std::chrono::seconds{1} < now)) {
+             or last_finish + defaults::import::batch_timeout < now)) {
       last_finish = now;
       co_yield cast(document.builder->finish(), document.target_schema);
     }
