@@ -439,6 +439,7 @@ struct cast_helper<record_type, record_type> {
         auto input_at_path = descend(std::addressof(in), key);
         if (not input_at_path)
           return std::move(input_at_path.error());
+        TENZIR_ASSERT(*input_at_path);
         if (**input_at_path == caf::none) {
           ret[to_field.name] = caf::none;
           continue;
