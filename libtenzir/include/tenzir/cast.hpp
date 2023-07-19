@@ -180,7 +180,10 @@ struct cast_helper<FromType, ToType> {
       return caf::visit(f, from_type, to_type);
   }
 
-  static auto cast_value(const type& from_type, const data& data,
+  template <class InputType>
+    requires(std::same_as<std::remove_cvref_t<InputType>, data>
+             or std::same_as<std::remove_cvref_t<InputType>, data_view>)
+  static auto cast_value(const type& from_type, const InputType& data,
                          const ToType& to_type) noexcept {
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
@@ -188,7 +191,7 @@ struct cast_helper<FromType, ToType> {
           const ConcreteToType& to_type) noexcept
       -> caf::expected<type_to_data_t<ToType>> {
       auto v = cast_helper<ConcreteFromType, ConcreteToType>::cast_value(
-        from_type, caf::get<type_to_data_t<ConcreteFromType>>(data), to_type);
+        from_type, get_underlying_data<ConcreteFromType>(data), to_type);
       if constexpr (concrete_type<ToType>) {
         return v;
       } else {
@@ -203,6 +206,17 @@ struct cast_helper<FromType, ToType> {
       return caf::visit(f, from_type, detail::passthrough(to_type));
     else
       return caf::visit(f, from_type, to_type);
+  }
+
+private:
+  template <concrete_type To>
+  static auto get_underlying_data(const data& d) {
+    return caf::get<type_to_data_t<To>>(d);
+  }
+
+  template <concrete_type To>
+  static auto get_underlying_data(const data_view& d) {
+    return caf::get<view<type_to_data_t<To>>>(d);
   }
 };
 
@@ -219,9 +233,18 @@ struct cast_helper<Type, Type> {
     return from_array;
   }
 
-  static auto cast_value(const Type&, auto&& value, const Type&) noexcept
+  static auto cast_value(const Type&, const type_to_data_t<Type>& value,
+                         const Type&) noexcept
     -> caf::expected<type_to_data_t<Type>> {
     return value;
+  }
+
+  static auto cast_value(const string_type&, std::string_view view,
+                         const string_type&) noexcept
+    -> caf::expected<type_to_data_t<Type>>
+    requires(std::same_as<string_type, Type>)
+  {
+    return materialize(view);
   }
 };
 
@@ -277,11 +300,16 @@ struct cast_helper<list_type, list_type> {
       .ValueOrDie();
   }
 
-  static auto cast_value(const list_type& from_type, const list& value,
+  template <class InputType>
+    requires(
+      std::same_as<std::remove_cvref_t<InputType>, type_to_data_t<list_type>>
+      or std::same_as<std::remove_cvref_t<InputType>,
+                      view<type_to_data_t<list_type>>>)
+  static auto cast_value(const list_type& from_type, const InputType& value,
                          const list_type& to_type) noexcept
     -> caf::expected<type_to_data_t<list_type>> {
     if (from_type == to_type)
-      return value;
+      return on_same_input_and_output_types(value);
     auto output = to_type.construct();
     output.reserve(value.size());
     for (const auto& val : value) {
@@ -293,6 +321,18 @@ struct cast_helper<list_type, list_type> {
       output.push_back(std::move(*cast_val));
     }
     return output;
+  }
+
+private:
+  static auto
+  on_same_input_and_output_types(const type_to_data_t<list_type>& in)
+    -> type_to_data_t<list_type> {
+    return in;
+  }
+
+  static auto on_same_input_and_output_types(view<type_to_data_t<list_type>> in)
+    -> type_to_data_t<list_type> {
+    return materialize(in);
   }
 };
 
@@ -312,6 +352,12 @@ struct cast_helper<map_type, map_type> {
   }
 
   static auto cast_value(const map_type&, const map&, const map_type&) noexcept
+    -> caf::expected<type_to_data_t<map_type>> {
+    return caf::make_error(ec::convert_error,
+                           "cast not supported for map types");
+  }
+
+  static auto cast_value(const map_type&, view<map>, const map_type&) noexcept
     -> caf::expected<type_to_data_t<map_type>> {
     return caf::make_error(ec::convert_error,
                            "cast not supported for map types");
@@ -391,16 +437,21 @@ struct cast_helper<record_type, record_type> {
     return impl(impl, to_type, "");
   }
 
-  static auto cast_value(const record_type& from_type, const record& in,
+  template <class InputType>
+    requires(
+      std::same_as<std::remove_cvref_t<InputType>, type_to_data_t<record_type>>
+      or std::same_as<std::remove_cvref_t<InputType>,
+                      view<type_to_data_t<record_type>>>)
+  static auto cast_value(const record_type& from_type, const InputType& in,
                          const record_type& to_type) noexcept
     -> caf::expected<type_to_data_t<record_type>> {
     if (from_type == to_type)
-      return in;
+      return on_same_input_and_output_types(in);
     // NOLINTNEXTLINE
     auto impl
       = [&](const auto& impl, const record_type& to_type,
             std::string_view key_prefix) noexcept -> caf::expected<record> {
-      auto ret = record{};
+      auto ret = type_to_data_t<record_type>{};
       for (const auto& to_field : to_type.fields()) {
         const auto key = key_prefix.empty()
                            ? std::string{to_field.name}
@@ -419,16 +470,15 @@ struct cast_helper<record_type, record_type> {
           continue;
         }
         // The field exists, so we can insert the cast column.
-        auto input_at_path = descend(std::addressof(in), key);
+        auto input_at_path = get_input_at_path(in, key);
         if (not input_at_path)
           return std::move(input_at_path.error());
-        TENZIR_ASSERT(*input_at_path);
-        if (**input_at_path == caf::none) {
+        if (caf::holds_alternative<view<caf::none_t>>(*input_at_path)) {
           ret[to_field.name] = caf::none;
           continue;
         }
         auto maybe_new_value = cast_helper<type, type>::cast_value(
-          from_type.field(*index).type, **input_at_path, to_field.type);
+          from_type.field(*index).type, *input_at_path, to_field.type);
         if (not maybe_new_value) {
           return std::move(maybe_new_value.error());
         }
@@ -437,6 +487,38 @@ struct cast_helper<record_type, record_type> {
       return ret;
     };
     return impl(impl, to_type, "");
+  }
+
+private:
+  static auto
+  on_same_input_and_output_types(const type_to_data_t<record_type>& in)
+    -> type_to_data_t<record_type> {
+    return in;
+  }
+
+  static auto
+  on_same_input_and_output_types(view<type_to_data_t<record_type>> in)
+    -> type_to_data_t<record_type> {
+    return materialize(in);
+  }
+
+  static auto
+  get_input_at_path(const type_to_data_t<record_type>& in, std::string_view key)
+    -> caf::expected<data_view> {
+    auto input_at_path = descend(std::addressof(in), key);
+    if (not input_at_path)
+      return std::move(input_at_path.error());
+    TENZIR_ASSERT(*input_at_path);
+    return make_view(**input_at_path);
+  }
+
+  static auto
+  get_input_at_path(view<type_to_data_t<record_type>> in, std::string_view key)
+    -> caf::expected<data_view> {
+    auto input_at_path = descend(in, key);
+    if (not input_at_path)
+      return std::move(input_at_path.error());
+    return *input_at_path;
   }
 };
 
@@ -846,9 +928,14 @@ struct cast_helper<FromType, string_type> {
   }
 
   static auto
-  cast_value(const FromType&, auto value, const string_type&) noexcept
+  cast_value(const FromType&, const auto& value, const string_type&) noexcept
     -> caf::expected<std::string> {
-    return fmt::format("{}", data{value});
+    if constexpr (std::same_as<view<type_to_data_t<FromType>>,
+                               std::remove_cvref_t<decltype(value)>>) {
+      return fmt::format("{}", data{materialize(value)});
+    } else {
+      return fmt::format("{}", data{value});
+    }
   }
 
   static auto cast_value(const enumeration_type& enum_type, enumeration value,
@@ -1072,7 +1159,7 @@ static auto cast_to_builder(const FromType& from_type,
       TENZIR_ASSERT(status.ok());
       continue;
     }
-    auto converted = cast_value(from_type, materialize(*v), to_type);
+    auto converted = cast_value(from_type, *v, to_type);
     if (not converted)
       return converted.error();
     auto status = append_builder(to_type, *ret, make_view(*converted));

@@ -374,7 +374,7 @@ TEST(time to string) {
 }
 
 TEST(string to string) {
-  constexpr auto in = "amazing_string!@#%Q@&*@";
+  constexpr auto in = std::string_view{"amazing_string!@#%Q@&*@"};
   auto out
     = tenzir::cast_value(tenzir::string_type{}, in, tenzir::string_type{});
   REQUIRE(out);

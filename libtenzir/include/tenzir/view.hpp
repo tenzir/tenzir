@@ -515,6 +515,12 @@ data_view to_canonical(const type& t, const data_view& x);
 /// @return A data view on the internal representation of the value.
 data_view to_internal(const type& t, const data_view& x);
 
+/// Tries to find the entry with the dot-sperated `path`. If one of the parents
+/// is not a record, but it does exist, an error is returned. Also returns
+/// an error if the path does not resolve.
+/// @pre `!path.empty()`
+auto descend(view<record> r, std::string_view path) -> caf::expected<data_view>;
+
 } // namespace tenzir
 
 namespace std {
