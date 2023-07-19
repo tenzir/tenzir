@@ -254,7 +254,7 @@ private:
       report_parse_err(val, "a string");
       return;
     }
-    auto str = val.get_string().value_unsafe();
+    auto str = maybe_str.value_unsafe();
     using namespace parser_literals;
     static constexpr auto parser
       = parsers::time | parsers::duration | parsers::net | parsers::ip;
