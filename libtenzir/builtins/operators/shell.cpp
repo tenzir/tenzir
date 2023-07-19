@@ -35,21 +35,43 @@ using namespace tenzir::binary_byte_literals;
 /// The block size when reading from the child's stdin.
 constexpr auto block_size = 16_KiB;
 
+enum class stdin_mode { none, inherit, pipe };
+
 /// Wraps the logic for interacting with a child's stdin and stdout.
 class child {
 public:
-  static auto make(std::string command) -> caf::expected<child> {
+  static auto make(std::string command, stdin_mode mode)
+    -> caf::expected<child> {
     auto result = child{std::move(command)};
     try {
       auto exit_handler = [](int exit, std::error_code ec) {
         TENZIR_DEBUG("child exited with code {}: {}", exit, ec.message());
       };
-      result.child_ = bp::child{
-        result.command_,
-        bp::std_out > result.stdout_,
-        bp::std_in < result.stdin_,
-        bp::on_exit(exit_handler),
-      };
+      switch (mode) {
+        case stdin_mode::none:
+          result.child_ = bp::child{
+            result.command_,
+            bp::std_out > result.stdout_,
+            bp::std_in < bp::close,
+            bp::on_exit(exit_handler),
+          };
+          break;
+        case stdin_mode::inherit:
+          result.child_ = bp::child{
+            result.command_,
+            bp::std_out > result.stdout_,
+            bp::on_exit(exit_handler),
+          };
+          break;
+        case stdin_mode::pipe:
+          result.child_ = bp::child{
+            result.command_,
+            bp::std_out > result.stdout_,
+            bp::std_in < result.stdin_,
+            bp::on_exit(exit_handler),
+          };
+          break;
+      }
     } catch (const bp::process_error& e) {
       return caf::make_error(ec::filesystem_error, e.what());
     }
@@ -113,13 +135,14 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto child = child::make(command_);
+    auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
+    auto child = child::make(command_, mode);
     if (!child) {
       ctrl.abort(child.error());
       co_return;
     }
-    // We yield once because reading below is blocking, but we want to directly
-    // signal that our initialization is complete.
+    // We yield once because reading below is blocking, but we want to
+    // directly signal that our initialization is complete.
     co_yield {};
     while (child->reading()) {
       std::vector<char> buffer(block_size);
@@ -138,14 +161,14 @@ public:
 
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto child = child::make(command_);
+    auto child = child::make(command_, stdin_mode::pipe);
     if (!child) {
       ctrl.abort(child.error());
       co_return;
     }
-    // Read from child in separate thread because coroutine-based async I/O is
-    // not (yet) feasible. The thread writes the chunks into a queue such that
-    // to this coroutine can yield them.
+    // Read from child in separate thread because coroutine-based async
+    // I/O is not (yet) feasible. The thread writes the chunks into a
+    // queue such that to this coroutine can yield them.
     std::queue<chunk_ptr> chunks;
     std::mutex chunks_mutex;
     auto thread = std::thread([&child, &chunks, &chunks_mutex] {
@@ -215,8 +238,8 @@ public:
   }
 
   auto location() const -> operator_location override {
-    // The user expectation is that shell executes relative to the currently
-    // executing process.
+    // The user expectation is that shell executes relative to the
+    // currently executing process.
     return operator_location::local;
   }
 

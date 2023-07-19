@@ -692,7 +692,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type,
                           static_cast<node_actor>(self), diagnostic_handler,
-                          metrics_handler, index);
+                          metrics_handler, index, false);
       if (not spawn_result) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} failed to spawn execution node "

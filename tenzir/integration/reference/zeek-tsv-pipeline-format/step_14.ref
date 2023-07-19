@@ -1,2 +1,2 @@
-error: !! logic_error: 'print "zeek-tsv", anonymous(null, null, null, true)' does not support heterogeneous outputs; cannot initialize for 'zeek-tsv' after 'zeek.conn'
- = note: from `print "zeek-tsv", anonymous(null, null, null, true)`
+error: !! logic_error: 'write "zeek-tsv", anonymous(null, null, null, true)' does not support heterogeneous outputs; cannot initialize for 'zeek-tsv' after 'zeek.conn'
+ = note: from `write "zeek-tsv", anonymous(null, null, null, true)`

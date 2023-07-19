@@ -35,6 +35,9 @@ struct pipeline_executor_state {
   /// Flag for allowing unsafe pipelines.
   bool allow_unsafe_pipelines = {};
 
+  /// True if the locally-run nodes shall have access to the terminal.
+  bool has_terminal = {};
+
   auto start() -> caf::result<void>;
 
   void start_nodes_if_all_spawned();
@@ -51,7 +54,7 @@ struct pipeline_executor_state {
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  receiver_actor<pipeline_op_metrics> metrics, node_actor node)
-  -> pipeline_executor_actor::behavior_type;
+  receiver_actor<pipeline_op_metrics> metrics, node_actor node,
+  bool has_terminal) -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir

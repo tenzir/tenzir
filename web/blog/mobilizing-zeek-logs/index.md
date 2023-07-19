@@ -221,7 +221,7 @@ leverage Tenzir's [`kafka`](/next/connectors/kafka) connector and write:
 cat *.log | tenzir '
   read zeek-tsv
   | extend _path=#schema
-  | write json to kafka -t zeek
+  | to kafka -t zeek write json
   '
 ```
 

@@ -68,12 +68,12 @@ Specifies the string that denotes an absent value.
 Read CSV from stdin:
 
 ```
-read csv from stdin
+from stdin read csv
 ```
 
 Write a multi-schema stream of events to a directory in TSV format, with one
 file per unique schema:
 
 ```
-write tsv to directory /tmp/result
+to directory /tmp/result write tsv
 ```

@@ -43,15 +43,15 @@ stdin/stdout for input/output as "native" operators that process raw bytes. For
 example, in this pipeline:
 
 ```
-print json | save stdout
+write json | save stdout
 ```
 
-The [`print`](../transformations/print.md) operator produces raw bytes and
+The [`write`](../transformations/write.md) operator produces raw bytes and
 [`save`](../sinks/save.md) accepts raw bytes. The `shell` operator therefore
 fits right in the middle:
 
 ```
-print json | shell "jq -C" | save stdout
+write json | shell "jq -C" | save stdout
 ```
 
 Using [user-defined operators](../user-defined.md), we can expose this
@@ -61,7 +61,7 @@ Using [user-defined operators](../user-defined.md), we can expose this
 tenzir:
   operators:
     jsonize: >
-      print json | shell "jq -C" | save stdout
+      write json | shell "jq -C" | save stdout
 ```
 
 Now you can use `jsonize` as a custom operator in a pipeline:
@@ -91,7 +91,7 @@ tenzir:
              JSONStreaming::disable_default_logs=T
              JSONStreaming::enable_log_rotation=F
              json-streaming-logs"
-      | parse zeek-json
+      | read zeek-json
 ```
 
 Processing a PCAP trace now is a matter of calling the `zeek` operator:
