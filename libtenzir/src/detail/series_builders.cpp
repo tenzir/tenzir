@@ -45,14 +45,9 @@ auto get_common_types_impl(const InputType& input_type, const data& new_input,
   auto ret = std::vector<std::pair<type, data>>{};
   auto push_type = [&](const auto& current_common_type) {
     const auto& actual_data = caf::get<type_to_data_t<InputType>>(new_input);
-    auto cast_val = cast_value(input_type, actual_data, current_common_type);
-    if constexpr (not is_caf_expected<decltype(cast_val)>) {
-      ret.push_back({type{current_common_type}, std::move(cast_val)});
-    } else if constexpr (not std::is_same_v<caf::expected<void>,
-                                            decltype(cast_val)>) {
-      if (cast_val) {
-        ret.push_back({type{current_common_type}, std::move(*cast_val)});
-      }
+    if (auto cast_val
+        = cast_value(input_type, actual_data, current_common_type)) {
+      ret.push_back({type{current_common_type}, std::move(*cast_val)});
     }
   };
   (push_type(CommonTypes{}), ...);

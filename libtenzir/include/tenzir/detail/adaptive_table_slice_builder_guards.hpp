@@ -143,18 +143,8 @@ private:
         [view, this](const auto& t) {
           auto cast_val = cast_value(Type{}, view, t);
           if (cast_val) {
-            // "this" is sometimes not used due to the if constexpr below.
-            // It prevents compilation warning treated as an error.
-            (void)this;
-            // We don't handle caf::expected<void> here because the cast api
-            // only returns caf::expected<void> if the operation is not
-            // supported. The caf::expected<void> will fall into common_type
-            // casting case.
-            if constexpr (not std::is_same_v<caf::expected<void>,
-                                             decltype(cast_val)>) {
-              append_value_to_builder(t, *cast_val);
-              return caf::error{};
-            }
+            append_value_to_builder(t, *cast_val);
+            return caf::error{};
           }
           auto new_type = get_root_list_builder().change_type(
             type{t}, type{Type{}}, data{materialize(view)});

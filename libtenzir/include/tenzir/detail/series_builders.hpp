@@ -388,15 +388,11 @@ private:
                    concrete_series_builder<duration_type>& builder, auto view) {
     auto unit = builder.type().attribute("unit").value_or("s");
     auto result = cast_value(view_type, view, duration_type{}, unit);
-    if constexpr (std::is_same_v<decltype(result), caf::expected<void>>) {
-      return std::move(result.error());
-    } else {
-      if (result) {
-        builder.add(*result);
-        return caf::error{};
-      }
+    if (not result) {
       return std::move(result.error());
     }
+    builder.add(*result);
+    return caf::error{};
   }
 
   auto
@@ -425,10 +421,7 @@ private:
       auto maybe_new_value = cast_value(ViewType{}, view, BuilderType{});
       if (not maybe_new_value)
         return std::move(maybe_new_value.error());
-      if constexpr (not std::is_same_v<decltype(maybe_new_value),
-                                       caf::expected<void>>) {
-        builder.add(*maybe_new_value);
-      }
+      builder.add(*maybe_new_value);
       return caf::error{};
     }
   }

@@ -110,20 +110,9 @@ struct cast_helper {
 
   static auto cast_value(const FromType& from_type, auto&&,
                          const ToType& to_type, auto&&...) noexcept
-    -> caf::expected<void> {
+    -> caf::expected<type_to_data_t<ToType>> {
     return caf::make_error(ec::convert_error,
                            fmt::format("cannot cast from '{}' to '{}': not "
-                                       "implemented",
-                                       from_type, to_type));
-  }
-
-  static auto
-  cast_to_builder(const FromType& from_type,
-                  const std::shared_ptr<type_to_arrow_array_t<FromType>>&,
-                  const ToType& to_type) noexcept -> caf::expected<void> {
-    return caf::make_error(ec::convert_error,
-                           fmt::format("cannot cast to builder from '{}' to "
-                                       "'{}': not "
                                        "implemented",
                                        from_type, to_type));
   }
@@ -203,16 +192,9 @@ struct cast_helper<FromType, ToType> {
       if constexpr (concrete_type<ToType>) {
         return v;
       } else {
-        if constexpr (std::is_same_v<decltype(v), caf::expected<void>>) {
+        if (not v)
           return std::move(v.error());
-        } else if constexpr (std::is_same_v<decltype(v),
-                                            type_to_data_t<ConcreteToType>>) {
-          return v;
-        } else {
-          if (not v)
-            return std::move(v.error());
-          return std::move(*v);
-        }
+        return std::move(*v);
       }
     };
     if constexpr (concrete_type<FromType>)
@@ -237,7 +219,8 @@ struct cast_helper<Type, Type> {
     return from_array;
   }
 
-  static auto cast_value(const Type&, auto&& value, const Type&) noexcept {
+  static auto cast_value(const Type&, auto&& value, const Type&) noexcept
+    -> caf::expected<type_to_data_t<Type>> {
     return value;
   }
 };
@@ -981,9 +964,12 @@ struct cast_helper<string_type, ToType> {
                            fmt::format("unable to convert {} into a list", in));
   }
 
-  static auto from_str(std::string_view, const map_type&)
-    -> caf::expected<void> {
-    die("trying to cast string_type to map_type. Map_type is deprecated");
+  static auto from_str(std::string_view in, const map_type&)
+    -> caf::expected<map> {
+    return caf::make_error(ec::convert_error,
+                           fmt::format("unable to convert {} into a map: "
+                                       "map_type is deprecated",
+                                       in));
   }
 
   static auto can_cast(const string_type&, const ToType&) noexcept
@@ -1087,18 +1073,10 @@ static auto cast_to_builder(const FromType& from_type,
       continue;
     }
     auto converted = cast_value(from_type, materialize(*v), to_type);
-    if constexpr (std::is_same_v<decltype(converted), type_to_data_t<ToType>>) {
-      auto status = append_builder(to_type, *ret, make_view(converted));
-      TENZIR_ASSERT(status.ok());
-    } else {
-      if (not converted)
-        return converted.error();
-      if constexpr (not std::is_same_v<decltype(converted),
-                                       caf::expected<void>>) {
-        auto status = append_builder(to_type, *ret, make_view(*converted));
-        TENZIR_ASSERT(status.ok());
-      }
-    }
+    if (not converted)
+      return converted.error();
+    auto status = append_builder(to_type, *ret, make_view(*converted));
+    TENZIR_ASSERT(status.ok());
   }
 
   return ret;
