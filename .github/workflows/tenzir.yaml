@@ -1,0 +1,1079 @@
+name: Tenzir
+on:
+  workflow_dispatch:
+    inputs:
+      upload-static-binary-to-github:
+        description: "Build the static binary packages and attach to the Workflow Run"
+        type: boolean
+        required: false
+        default: false
+  push:
+    branches:
+      - main
+      - v*
+  pull_request:
+    types:
+      - opened
+      - synchronize
+  merge_group:
+    types:
+      - checks_requested
+  release:
+    types:
+      - published
+
+# This section defines how the Tenzir action is enqueued.
+concurrency:
+  # Wait for in-progress runs of this action for the same branch to finish
+  # before starting, ensuring that a branch is only built once at a time. This
+  # has a double-purpose: It ensures that caches are always able to pick up work
+  # from previous builds of the same branch, and it rate-limits the CI to ensure
+  # it's running smoothly for all users.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel all in-progress runs of this action for the same pull request.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+
+env:
+  CCACHE_MAXSIZE: "5G"
+  GCP_WORKLOAD_IDP: projects/1057156539039/locations/global/workloadIdentityPools/gh-actions-pool/providers/gh-actions-provider
+  GCP_SERVICE_ACCOUNT: github-actions@crucial-kayak-261816.iam.gserviceaccount.com
+
+# TODO: cherry-pick permissions
+permissions:
+  actions: write
+  checks: write
+  contents: write
+  deployments: write
+  id-token: write
+  issues: write
+  discussions: write
+  packages: write
+  pages: write
+  pull-requests: write
+  repository-projects: write
+  security-events: write
+  statuses: write
+
+jobs:
+
+  configure:
+    name: Configure
+    runs-on: ubuntu-20.04
+    outputs:
+      version-matrix: ${{ steps.configure.outputs.version-matrix }}
+      build-version: ${{ steps.configure.outputs.build-version }}
+      build-version-short: ${{ steps.configure.outputs.build-version-short }}
+      before-sha: ${{ steps.configure.outputs.before-sha }}
+      before-version: ${{ steps.configure.outputs.before-version }}
+      release-version: ${{ steps.configure.outputs.release-version }}
+      head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
+      base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
+      cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
+      tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
+      run-changelog: ${{ steps.configure.outputs.run-changelog }}
+      run-docs: ${{ steps.configure.outputs.run-docs }}
+      run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
+      docker-config: ${{ steps.docker.outputs.docker-config }}
+      run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
+      run-tenzir-thehive-app: ${{ steps.configure.outputs.run-tenzir-thehive-app }}
+      run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
+      run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
+      run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
+      nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
+      run-tenzir: ${{ steps.configure.outputs.run-tenzir }}
+      run-tenzir-plugins: ${{ steps.configure.outputs.run-tenzir-plugins }}
+      run-python: ${{ steps.configure.outputs.run-python }}
+      run-python-package: ${{ steps.configure.outputs.run-python-package }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Fetch Tags
+        run: git fetch origin +refs/tags/*:refs/tags/*
+      - name: Inject Slug Variables
+        uses: rlespinasse/github-slug-action@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Configure GCloud Credentials
+        uses: google-github-actions/setup-gcloud@v1
+      - name: Configure
+        id: configure
+        run: |
+          # Create a matrix with Tenzir versions greater or equal than
+          # limit_version. If the version does not exist yet (e.g., because of
+          # an intentional break, only check latest).
+          limit_version=v4.0.0
+          if git rev-parse "${limit_version}" --; then
+            dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
+            dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
+            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}')
+            version_matrix="$(printf "$filtered_versions\nlatest\n" | jq -R | jq -sc 'map({version: .})')"
+          else
+            version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
+          fi
+          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
+          # Set a bunch of version numbers depending on how we triggered the PR
+          # so they're consistent between jobs.
+          build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
+          build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            before_sha="${{ github.event.before }}"
+          else
+            before_sha="$(git merge-base origin/main HEAD)"
+          fi
+          before_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "${before_sha}")"
+          release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
+          echo "build-version=${build_version}" >> $GITHUB_OUTPUT
+          echo "build-version-short=${build_version_short}" >> $GITHUB_OUTPUT
+          echo "before-sha=${before_sha}" >> $GITHUB_OUTPUT
+          echo "before-version=${before_version}" >> $GITHUB_OUTPUT
+          echo "release-version=${release_version}" >> $GITHUB_OUTPUT
+          # Inject the branch slugs for cache names.
+          echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
+          echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
+          # For pull requests we make it possible to cache all layers by setting
+          # a fixed TENZIR_BUILD_OPTIONS for within a given pull request. We
+          # accept the downaside that this means that Docker images created
+          # within pull request triggers of this job display the merge-base
+          # version.
+          # Since the Docker build does not have the Git context, we set
+          # version fallbacks manually here.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tenzir_tag="${before_version}"
+            tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
+          else
+            tenzir_tag="${build_version}"
+            tenzir_container_ref="${{ github.sha }}"
+          fi
+          echo "tenzir-container-ref=${tenzir_container_ref}" >> $GITHUB_OUTPUT
+          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${tenzir_tag}"
+          echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
+          #################################
+          ######## Decide what jobs to run.
+          #################################
+          # TODO: Split this into two steps:
+          # * Set version variables (above)
+          # * Enable Jobs (below)
+          echo "::notice Disable all others so we can selectivly enable again"
+          echo "run-changelog=false" >> $GITHUB_OUTPUT
+          echo "run-example-notebooks=false" >> $GITHUB_OUTPUT
+          echo "run-regression-tests=false" >> $GITHUB_OUTPUT
+          echo "run-python=false" >> $GITHUB_OUTPUT
+          echo "run-python-package=false" >> $GITHUB_OUTPUT
+          echo "run-docs=false" >> $GITHUB_OUTPUT
+          echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
+          echo "run-docker-compose=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir-thehive-app=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir=false" >> $GITHUB_OUTPUT
+          echo "run-tenzir-plugins=false" >> $GITHUB_OUTPUT
+          # A little helper to enable all checks.
+          shopt -s expand_aliases
+          alias run_all_checks=' \
+            echo "run-changelog=true" >> $GITHUB_OUTPUT; \
+            echo "run-example-notebooks=true" >> $GITHUB_OUTPUT; \
+            echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
+            echo "run-python=true" >> $GITHUB_OUTPUT; \
+            echo "run-docs=true" >> $GITHUB_OUTPUT; \
+            echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
+            echo "run-docker-compose=true" >> $GITHUB_OUTPUT; \
+            echo "run-tenzir-thehive-app=true" >> $GITHUB_OUTPUT
+            echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
+            echo "run-tenzir=true" >> $GITHUB_OUTPUT; \
+            echo "run-tenzir-plugins=true" >> $GITHUB_OUTPUT;'
+          # Run all if this is a release.
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            echo "::notice Enabling release jobs"
+            run_all_checks
+            # Publish pytenzir to Pypi.
+            echo "run-python-package=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Run all checks if this is a push to master or a tag.
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            echo "::notice Enabling push jobs"
+            run_all_checks
+            exit 0
+          fi
+          # Run only what is requested for a workflow dispatch.
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "::notice Enabling workflow dispatch jobs"
+            if [[ "${{ inputs.upload-static-binary-to-github }}" == "true" ]]; then
+              echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT
+            fi
+            exit 0
+          fi
+          # From here on we should be in a pull request.
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "::error Unexpected GitHub Event: $GITHUB_EVENT_NAME"
+            exit 1
+          fi
+          echo "::notice Enabling pull request jobs"
+          echo "::notice sourcing configure helpers"
+          source ./.github/workflows/configure_helpers.bash
+          # Run all checks if this file changed.
+          if is_changed .github/workflows/tenzir.yaml; then
+            run_all_checks
+            exit 0
+          fi
+          run_if_changed python "python/"
+          run_if_changed docs "web/" "python/"
+          run_if_changed changelog "changelog/" "web/" "python/"
+          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ tools/ tenzir/ tenzir.yaml.example version.json)
+          run_if_changed tenzir "${TENZIR_SOURCES[@]}"
+          run_if_changed_default tenzir-plugins $run_tenzir "plugins/" "contrib/tenzir-plugins/"
+          # The tenzir-plugins job downloads the Tenzir artifact from GCS, so we
+          # need to run the tenzir job in case it is missing.
+          if [[ ${run_tenzir_plugins} == "true" && ${run_tenzir} == "false" ]]; then
+            deb_package="$(echo "tenzir-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
+            mac_package="$(echo "tenzir-${before_version}-darwin-Release-Clang" | awk '{ print tolower($0) }')"
+            if ! gsutil -q stat gs://${{ vars.GCS_BUCKET }}/${deb_package}.tar.gz || \
+               ! gsutil -q stat gs://${{ vars.GCS_BUCKET }}/${mac_package}.tar.gz; then
+              echo "run-tenzir=true" >> $GITHUB_OUTPUT
+              run_tenzir=true
+            fi
+          fi
+          run_docker_compose="$(any ${run_tenzir} ${run_tenzir_plugins} ${run_python})"
+          run_if_changed_default docker-compose $run_docker_compose \
+            "docker/" "Dockerfile" ".dockerignore" \
+            ".github/workflows/docker.yaml" \
+            ".github/workflows/docker-config-base.json"
+          run_if_changed_default tenzir-thehive-app $run_docker_compose
+          run_docker_tenzir="$(any ${run_docker_compose} ${run_docs} ${run_python})"
+          run_if_changed_default docker-tenzir $run_docker_tenzir
+          run_if_changed_default regression-tests $run_docker_tenzir
+          run_if_changed tenzir-nix \
+            "${TENZIR_SOURCES[@]}" plugins/ contrib/tenzir-plugins/ flake.nix flake.lock nix/ \
+            ".github/workflows/nix.nu" \
+            ".github/workflows/nix.yaml" \
+            ".github/workflows/nix-config-base.json"
+      - name: Configure Docker
+        id: docker
+        if: steps.configure.outputs.run-docker-tenzir == 'true'
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tags=("${{ steps.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            tags=('main' "${{ github.sha }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+          else
+            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            exit 1
+          fi
+          docker_config="$(jq -c \
+            '."version" = $v | ."tags" = $ARGS.positional' \
+            .github/workflows/docker-config-base.json \
+            --arg v "${{ steps.configure.outputs.build-version-short }}" \
+            --args -- "${tags[@]}")"
+          # Clear push repos in case we're in a PR, but push the community
+          # edition to ghcr.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            docker_config="$(jq -c '(.editions[] | .registries) |= [] |
+              (.editions[] | select(.name == "tenzir" or .name == "tenzir-node") |
+              .registries) |= ["ghcr.io"]' \
+              <<< "${docker_config}")"
+          fi
+          echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
+          echo "::notice docker-config = ${docker_config}"
+      - name: Configure Nix
+        id: nix
+        if: steps.configure.outputs.run-tenzir-nix == 'true'
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            container_tags=("${{ steps.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            container_tags=('main' "${{ github.sha }}")
+            aliases=('main')
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            container_tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            aliases=('latest')
+          else
+            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            exit 1
+          fi
+          nix_config="$(jq -c \
+            '."container-tags" = $ARGS.positional' \
+            .github/workflows/nix-config-base.json \
+            --args -- "${container_tags[@]}")"
+          nix_config="$(jq -c \
+            '."aliases" = $ARGS.positional' \
+            --args -- "${aliases[@]}" \
+            <<< "${nix_config}")"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            nix_config="$(jq -c --arg git_tag "${GITHUB_REF#refs/tags/}" \
+              '."git-tag" = $git_tag' \
+              <<< "${nix_config}")"
+          fi
+          # Clear push repos in case we're in a PR, but push the developer
+          # edition to ghcr.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            nix_config="$(jq -c '(.editions[] | ."package-stores") |= [] |
+              (.editions[] | ."image-registries") |= [] |
+              (.editions[] | select(.name == "tenzir") | ."image-registries") |= ["ghcr.io"]' \
+              <<< "${nix_config}")"
+          fi
+          # Reshape the config so that each edition is in a dedicated config.
+          # This will be supplied as a matrix to the nix job.
+          # We do this because the static editions that we build here are
+          # independent derivations, meaning there is no sharing of build
+          # products.
+          nix_matrix="$(jq -c '.aliases as $aliases | ."container-tags" as $tags | ."git-tag" as $git_tag |
+            .targets = (.editions | map(. as $e |{}|
+              .editions = [$e] |
+              .aliases = $aliases |
+              ."container-tags" = $tags |
+              ."git-tag" = $git_tag)
+            ) | .targets | map({"name": .editions[0].name, "config": .})' \
+            <<< "${nix_config}")"
+          echo "nix-matrix=${nix_matrix}" >> "$GITHUB_OUTPUT"
+          echo "::notice nix-matrix = ${nix_matrix}"
+
+  policy-enforcement:
+    name: Policy Enforcement
+    needs:
+      - configure
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
+      - name: Require contrib/tenzir-plugins to be on a main branch commit
+        run: |
+          git submodule update --init contrib/tenzir-plugins
+          git -C contrib/tenzir-plugins fetch origin main
+          git -C contrib/tenzir-plugins merge-base --is-ancestor \
+            $(git -C contrib/tenzir-plugins rev-parse HEAD) \
+            $(git -C contrib/tenzir-plugins rev-parse origin/main)
+      - name: Install Nix
+        uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Verify Nix sources are synchronized
+        run: |
+          nix/update.sh
+          git diff --quiet --exit-code || {
+            echo "Some Nix source references are not aligned with the git submodules."
+            echo "Please run *nix/update.sh* or apply the following diff directly:"
+            git diff --exit-code
+          }
+
+  changelog:
+    name: Changelog
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-changelog == 'true' }}
+    runs-on: ubuntu-20.04
+    container: debian:bookworm-slim
+    steps:
+      - name: Install git
+        run: |
+          apt-get update
+          apt-get -y install git
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Install Dependencies
+        run: ./scripts/debian/install-dev-dependencies.sh
+      - name: Configure Build
+        env:
+          CC: gcc-12
+          CXX: g++-12
+        run: |
+          cmake -B build -DTENZIR_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
+      - name: Generate CHANGELOG.md
+        run: |
+          cmake --build build --target changelog
+      - name: Upload CHANGELOG.md
+        uses: actions/upload-artifact@v3
+        with:
+          name: CHANGELOG.md
+          path: build/CHANGELOG.md
+          if-no-files-found: error
+
+  docs:
+    needs:
+      - configure
+      - changelog
+      - docker-tenzir
+    if: ${{ needs.configure.outputs.run-docs == 'true' }}
+    name: Documentation
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Checkout dotgithub submodule
+        run: |
+          git submodule update --init web/.github
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download CHANGELOG.md
+        uses: actions/download-artifact@v3
+        with:
+          name: CHANGELOG.md
+      - name: Override Stub Changelog
+        run: |
+          cp -f CHANGELOG.md web/src/pages/changelog.md
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+          cache-dependency-path: web/yarn.lock
+          cache: yarn
+      - name: Install dependencies
+        working-directory: web
+        run: yarn install --frozen-lockfile
+      - name: Build website
+        working-directory: web
+        run: |
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
+          export TENZIR_CONTAINER_REGISTRY=ghcr.io
+          yarn build
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: web/build
+          cname: docs.tenzir.com
+          user_name: tenzir-bot
+          user_email: engineering@tenzir.com
+
+  docker-tenzir:
+    name: Docker
+    needs:
+      - configure
+    if: needs.configure.outputs.run-docker-tenzir == 'true'
+    uses: ./.github/workflows/docker.yaml
+    with:
+      config: ${{ needs.configure.outputs.docker-config }}
+    secrets: inherit
+
+  regression-tests:
+    needs:
+      - docker-tenzir
+      - configure
+    if: needs.configure.outputs.run-regression-tests == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        regression-tests: ${{ fromJson(needs.configure.outputs.version-matrix) }}
+    name: Regression Tests (${{ matrix.regression-tests.version }})
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Regression Tests
+        run: |
+          scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.tenzir-container-ref }}
+
+  docker-compose:
+    needs:
+      - docker-tenzir
+      - configure
+    if: ${{ needs.configure.outputs.run-docker-compose == 'true' }}
+    name: Docker Compose
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+      TENZIR_CONTAINER_REGISTRY: ghcr.io
+      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.tenzir-container-ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Tenzir Tests
+        run: |
+          docker/test
+
+  tenzir-thehive-app:
+    needs:
+      - docker-tenzir
+      - configure
+    if: ${{ needs.configure.outputs.run-tenzir-thehive-app == 'true' }}
+    name: Tenzir TheHive App
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+      TENZIR_CONTAINER_REGISTRY: ghcr.io
+      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.tenzir-container-ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Cortex Neuron & TheHive Tests
+        run: |
+          # TheHive likes to fail to start up, so for now the test is intentionally
+          # disabled.
+          docker/thehive/tenzir-cortex-neuron/tests/run service && docker/thehive/test ||
+            echo "::warning title=Tenzir TheHive App test failure::Test failed, check logs for details"
+
+  example-notebooks:
+    needs:
+      - docker-tenzir
+      - configure
+    if: ${{ needs.configure.outputs.run-example-notebooks == 'true' }}
+    name: Build Example Notebooks
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Notebooks
+        working-directory: examples/notebooks
+        run: |
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
+          export TENZIR_CONTAINER_REGISTRY=ghcr.io
+          make docker
+          # TODO: An assertion of the actual content of the output would be welcome
+          make docker TARGET=clean
+
+  tenzir-nix:
+    name: Nix (${{ matrix.config.name }})
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}
+    uses: ./.github/workflows/nix.yaml
+    strategy:
+      matrix:
+        config: ${{ fromJSON(needs.configure.outputs.nix-matrix) }}
+    with:
+      config: ${{ toJSON(matrix.config.config) }}
+    secrets: inherit
+
+  tenzir:
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
+    name: Tenzir (${{ matrix.tenzir.name }})
+    runs-on: ${{ matrix.tenzir.os }}
+    container: ${{ matrix.tenzir.container }}
+    strategy:
+      matrix:
+        tenzir:
+          - os: ubuntu-20.04
+            container: debian:bookworm-slim
+            name: Debian
+            compiler: GCC
+            cc: gcc-12
+            cxx: g++-12
+            dependencies-script-path: scripts/debian/install-dev-dependencies.sh
+            cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
+        # - os: macos-latest
+        #   container: null
+        #   name: macOS
+        #   compiler: Clang
+        #   cc: clang
+        #   cxx: clang++
+        #   dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
+        #   cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
+    env:
+      BUILD_DIR: build
+      CC: ${{ matrix.tenzir.cc }}
+      CXX: ${{ matrix.tenzir.cxx }}
+      CCACHE_ABSSTDERR: true
+      CCACHE_COMPRESS: true
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_DIR: "${{ github.workspace }}/.ccache"
+      CCACHE_HASH_DIR: true
+      CCACHE_SLOPPINESS: "file_macro,time_macros"
+      CCACHE_UNIFY: true
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      DEBIAN_FRONTEND: noninteractive
+      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - if: ${{ matrix.tenzir.name == 'Debian' }}
+        name: Install git
+        run: |
+          apt-get update
+          apt-get -y install git
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Publish Tenzir.spdx to GitHub Release
+        if: ${{ github.event_name == 'release' && matrix.tenzir.name == 'Debian' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: "Tenzir.spdx"
+          asset_name: "Tenzir.spdx"
+          asset_content_type: text/plain
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive libtenzir
+          git submodule update --init --recursive plugins
+      - name: Install Dependencies
+        run: ./${{ matrix.tenzir.dependencies-script-path }}
+      - name: Setup Python
+        if: ${{ matrix.tenzir.name == 'macOS' }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Configure Environment
+        run: |
+          PACKAGE_NAME="$(echo "tenzir-${{ needs.configure.outputs.build-version }}-$(uname -s)-Release-${{ matrix.tenzir.compiler }}" | awk '{ print tolower($0) }')"
+          PUBLISH_NAME="$(echo "tenzir-$(uname -s)-Release-${{ matrix.tenzir.compiler }}" | awk '{ print tolower($0) }')"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
+      - if: ${{ matrix.tenzir.name == 'macOS' }}
+        name: Setup Homebrew Clang
+        run: |
+          llvm_root="$(brew --prefix llvm)"
+          echo "${llvm_root}/bin" >> $GITHUB_PATH
+          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
+          echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
+      - name: Fetch ccache Cache
+        uses: pat-s/always-upload-cache@v3.0.11
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
+          restore-keys: |
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-main
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}
+      - name: Configure
+        run: |
+          python3 --version
+          python3 -m pip --version
+          "$CC" --version
+          "$CXX" --version
+          ccache --version
+          # Zero the cache statistics (but not the configuration options).
+          ccache --zero-stats
+          ccache --show-config
+          # Setting different values for CMAKE_INSTALL_PREFIX and
+          # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported and causes
+          # a warning. We accept this drawback because the package we generate
+          # here is built specifically as input for the plugin CI jobs and not
+          # suitable for general use.
+          cmake -B "$BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
+            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
+            -DCPACK_GENERATOR:STRING=TGZ \
+            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
+            -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
+            -DTENZIR_PLUGINS:STRING="plugins/web" \
+            ${{ needs.configure.outputs.cmake-version-args }} \
+            ${{ matrix.tenzir.cmake-extra-flags }}
+      - name: Compile All Targets
+        run: |
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
+      - name: Show ccache Statistics
+        run: |
+          # Print statistics counter IDs and corresponding values.
+          ccache --show-stats
+          # Print statistics about cache compression.
+          ccache --show-compression
+      - name: Run Unit Tests
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Install
+        run: |
+          cmake --install "$BUILD_DIR"
+      - name: Run Integration Tests
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Upload Integration Test Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: "tenzir-integration-test-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}"
+          path: "${{ env.BUILD_DIR }}/tenzir/tenzir-integration-test"
+          if-no-files-found: error
+      - name: Package
+        env:
+          DESTDIR: ${{ env.PWD }}
+        run: |
+          cmake --build "$BUILD_DIR" --target package
+      - name: Upload Artifact to GitHub
+        uses: actions/upload-artifact@v3
+        with:
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+          path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
+          if-no-files-found: error
+      - name: Authenticate to Google Cloud
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Configure GCloud Credentials
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        uses: google-github-actions/setup-gcloud@v1
+      - name: Upload Artifact to GCS
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        run: |
+          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ vars.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
+
+  tenzir-plugins:
+    needs:
+      - tenzir
+      - configure
+    if: >-
+      always() &&
+      needs.configure.outputs.run-tenzir-plugins == 'true' &&
+      !contains(join(needs.*.result, ','), 'failure') &&
+      !contains(join(needs.*.result, ','), 'cancelled')
+    runs-on: ${{ matrix.setup.os }}
+    container: ${{ matrix.setup.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        setup:
+          - os: ubuntu-20.04
+            name: Debian
+            container: debian:bookworm-slim
+            cc: gcc-12
+            cxx: g++-12
+            package-suffix: Release-GCC
+        # - os: macos-latest
+        #   name: macOS
+        #   cc: clang
+        #   cxx: clang++
+        #   package-suffix: Release-Clang
+        plugin:
+          - name: Example Analyzer
+            target: example-analyzer
+            path: examples/plugins/analyzer
+            debian-dependencies:
+          - name: Parquet
+            target: parquet
+            path: plugins/parquet
+          - name: NIC
+            target: nic
+            path: plugins/nic
+          - name: Compaction
+            target: compaction
+            path: contrib/tenzir-plugins/compaction
+          - name: Inventory
+            target: inventory
+            path: contrib/tenzir-plugins/inventory
+          - name: Matcher
+            target: matcher
+            path: contrib/tenzir-plugins/matcher
+          - name: Netflow
+            target: netflow
+            path: contrib/tenzir-plugins/netflow
+          # The pipeline manager integration tests require that the web
+          # plugin exists, which is why we're building the web plugin
+          # already in the main Tenzir job.
+          - name: Pipeline Manager
+            target: pipeline-manager
+            path: contrib/tenzir-plugins/pipeline_manager
+          - name: Platform
+            target: platform
+            path: contrib/tenzir-plugins/platform
+        exclude:
+          # Disable the Parquet plugin because trying
+          # to use it on the macOS CI runners crashes because of an illegal
+          # instruction as of Arrow 10.0.0.
+          - {setup: {os: macos-latest}, plugin: {name: Parquet}}
+          # Disable proprietary and example plugins on macOS to shorten CI turnaround.
+          # GitHub does not run more than 5 jobs in parallel on macOS.
+          - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
+          - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
+          - {setup: {os: macos-latest}, plugin: {name: Compaction}}
+          - {setup: {os: macos-latest}, plugin: {name: Fleet}}
+          - {setup: {os: macos-latest}, plugin: {name: Inventory}}
+          - {setup: {os: macos-latest}, plugin: {name: Matcher}}
+          - {setup: {os: macos-latest}, plugin: {name: Netflow}}
+          - {setup: {os: macos-latest}, plugin: {name: Pipeline Manager}}
+    env:
+      INSTALL_DIR: "${{ github.workspace }}/_install"
+      BUILD_DIR: "${{ github.workspace }}/_build"
+      PACKAGE_SUFFIX: ${{ matrix.setup.package-suffix }}
+      CC: ${{ matrix.setup.cc }}
+      CXX: ${{ matrix.setup.cxx }}
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      CTEST_OUTPUT_ON_FAILURE: YES
+      DEBIAN_FRONTEND: noninteractive
+      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    name: Tenzir Plugins (${{ matrix.plugin.name }}, ${{ matrix.setup.name }})
+    steps:
+      - name: Install git, curl, jq (Debian)
+        if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
+        run: |
+          apt-get update
+          apt-get -y install git curl jq
+      - name: Add GitHub to the SSH known hosts file
+        if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
+        # See https://github.com/webfactory/ssh-agent/issues/174#issuecomment-1486300082.
+        run: |
+          mkdir -p -m 0700 /root/.ssh
+          curl --silent https://api.github.com/meta \
+            | jq --raw-output '"github.com "+.ssh_keys[]' \
+            >> /root/.ssh/known_hosts
+          chmod 600 /root/.ssh/known_hosts
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Setup Python
+        if: ${{ matrix.setup.os == 'macos-latest' }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install Dependencies (macOS)
+        if: ${{ matrix.setup.os == 'macos-latest' }}
+        run: |
+          brew install \
+            ${{ join(matrix.setup.mac-dependencies, ' ') }} \
+            curl
+          ./scripts/macOS/install-dev-dependencies.sh
+          python3 -m pip install --upgrade pip
+      - name: Install Dependencies (Debian)
+        if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
+        run: |
+          apt-get -y install \
+            ${{ join(matrix.plugin.debian-dependencies, ' ') }} \
+            apt-transport-https \
+            curl
+          ./scripts/debian/install-dev-dependencies.sh
+      - name: Determine Tenzir Package Name
+        id: configure
+        run: |
+          build_version=${{ needs.configure.outputs.build-version }}
+          if ${{ needs.configure.outputs.run-tenzir == 'false' }}; then
+            build_version=${{ needs.configure.outputs.before-version }}
+          fi
+          PACKAGE_NAME="$(echo "tenzir-${build_version}-$(uname -s)-${PACKAGE_SUFFIX}" | awk '{ print tolower($0) }')"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+      - name: Download Tenzir artifact
+        if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+      - name: Authenticate to Google Cloud
+        if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Configure GCloud Credentials
+        if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
+        uses: google-github-actions/setup-gcloud@v1
+      - name: Download Tenzir
+        if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
+        run: |
+          gsutil cp "gs://${{ vars.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz" .
+      - name: Install Tenzir
+        run: |
+          mkdir "${INSTALL_DIR}"
+          tar -C "${INSTALL_DIR}" -xzvf "${PACKAGE_NAME}.tar.gz"
+          echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
+      - name: Setup Homebrew Clang
+        if: ${{ matrix.setup.os == 'macos-latest' }}
+        run: |
+          llvm_root="$(brew --prefix llvm)"
+          echo "${llvm_root}/bin" >> $GITHUB_PATH
+          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
+          echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
+      - name: Configure Build
+        env:
+          TENZIR_DIR: "${{ env.INSTALL_DIR }}"
+        run: |
+          python3 --version
+          python3 -m pip --version
+          cmake --version
+          cmake -S '${{ matrix.plugin.path }}' -B "$BUILD_DIR"
+      - name: Build
+        run: |
+          cmake --build "$BUILD_DIR" --target all --parallel
+      - name: Run Unit Tests
+        env:
+          CTEST_OUTPUT_ON_FAILURE: 1
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Run Integration Tests
+        id: integration_tests
+        # We intentionally run the plugin integration tests before
+        # installing, because that is a use-case we want to explicitly
+        # support for easier plugin development.
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Upload Integration Test Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: "tenzir-${{ matrix.plugin.target }}-integration-test"
+          path: "${{ env.BUILD_DIR }}/tenzir-${{ matrix.plugin.target }}-integration-test"
+          if-no-files-found: error
+      - name: Install
+        run: |
+          cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
+          echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
+
+  python:
+    needs:
+      - configure
+      - docker-tenzir
+    if: ${{ needs.configure.outputs.run-python == 'true' }}
+    name: Python
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python-version: ["3.10"]
+        os: [ubuntu-latest, macos-latest]
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup Poetry image
+        uses: abatilo/actions-poetry@v2.3.0
+        with:
+          poetry-version: 1.3.0
+      - name: Run poetry install
+        working-directory: python
+        run: |
+          poetry install
+      - name: Run unit tests
+        working-directory: python
+        run: |
+          poetry run pytest
+      - name: Run tests in Docker
+        working-directory: python
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
+          export TENZIR_CONTAINER_REGISTRY=ghcr.io
+          ./docker-poetry-run.sh pytest
+      - name: Build package
+        working-directory: python
+        run: |
+          poetry build
+
+  python-package:
+    needs:
+      - python
+      - configure
+    if: ${{ needs.configure.outputs.run-python-package == 'true' }}
+    name: Python Package
+    runs-on: ubuntu-20.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Setup Poetry image
+        uses: abatilo/actions-poetry@v2.3.0
+        with:
+          poetry-version: 1.3.0
+      - name: Configure PyPI
+        working-directory: python
+        run: |
+          poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
+      - name: Publish to PyPI
+        working-directory: python
+        run: |
+          poetry publish --build --no-interaction
+
+  pass-branch-protections:
+    needs:
+      - policy-enforcement
+      - configure
+      - changelog
+      - docker-tenzir
+      - docker-compose
+      - docs
+      - tenzir-thehive-app
+      - example-notebooks
+      - python
+      - python-package
+      - regression-tests
+      - tenzir
+      - tenzir-nix
+      - tenzir-plugins
+    if: always() && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    name: Pass Branch Protections
+    steps:
+      - name: Failure
+        if: contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')
+        run: |
+          # This check runs after any other job failed.
+          exit 1
+      - name: Success
+        run: |
+          # This check runs after all other jobs are done or skipped
+          exit 0

@@ -3,21 +3,21 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "kafka/configuration.hpp"
 
-#include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/data.hpp>
-#include <vast/data.hpp>
-#include <vast/detail/overload.hpp>
-#include <vast/die.hpp>
-#include <vast/error.hpp>
+#include <tenzir/concept/printable/tenzir/data.hpp>
+#include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/data.hpp>
+#include <tenzir/detail/overload.hpp>
+#include <tenzir/die.hpp>
+#include <tenzir/error.hpp>
 
 #include <fmt/format.h>
 
-namespace vast::plugins::kafka {
+namespace tenzir::plugins::kafka {
 
 auto configuration::make(const record& options)
   -> caf::expected<configuration> {
@@ -91,38 +91,39 @@ auto configuration::rebalancer::rebalance_cb(
   // is the offset assignment at the beginning.
   if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
     if (offset_ != RdKafka::Topic::OFFSET_INVALID) {
-      VAST_DEBUG("setting offset to {}", offset_);
+      TENZIR_DEBUG("setting offset to {}", offset_);
       for (auto* partition : partitions)
         partition->set_offset(offset_);
     }
     if (consumer->rebalance_protocol() == "COOPERATIVE") {
       if (auto err = consumer->incremental_assign(partitions)) {
-        VAST_ERROR("failed to assign incrementally: {}", err->str());
+        TENZIR_ERROR("failed to assign incrementally: {}", err->str());
         delete err;
       };
     } else {
       auto err = consumer->assign(partitions);
       if (err != RdKafka::ERR_NO_ERROR)
-        VAST_ERROR("failed to assign partitions: {}", RdKafka::err2str(err));
+        TENZIR_ERROR("failed to assign partitions: {}", RdKafka::err2str(err));
     }
   } else if (err == RdKafka::ERR__REVOKE_PARTITIONS) {
     // Application may commit offsets manually here
     // if auto.commit.enable=false
     if (consumer->rebalance_protocol() == "COOPERATIVE") {
       if (auto err = consumer->incremental_unassign(partitions)) {
-        VAST_ERROR("failed to unassign incrementally: {}", err->str());
+        TENZIR_ERROR("failed to unassign incrementally: {}", err->str());
         delete err;
       };
     } else {
       auto err = consumer->unassign();
       if (err != RdKafka::ERR_NO_ERROR)
-        VAST_ERROR("failed to unassign partitions: {}", RdKafka::err2str(err));
+        TENZIR_ERROR("failed to unassign partitions: {}",
+                     RdKafka::err2str(err));
     }
   } else {
-    VAST_ERROR("rebalancing error: {}", RdKafka::err2str(err));
+    TENZIR_ERROR("rebalancing error: {}", RdKafka::err2str(err));
     auto err = consumer->unassign();
     if (err != RdKafka::ERR_NO_ERROR)
-      VAST_ERROR("failed to unassign partitions: {}", RdKafka::err2str(err));
+      TENZIR_ERROR("failed to unassign partitions: {}", RdKafka::err2str(err));
   }
 }
 
@@ -132,4 +133,4 @@ configuration::configuration() {
     die("RdKafka::Conf::create");
 }
 
-} // namespace vast::plugins::kafka
+} // namespace tenzir::plugins::kafka

@@ -1,9 +1,0 @@
-version: "3"
-services:
-  quarto:
-    environment:
-      - TENZIR_ENDPOINT=vast:5158
-    networks:
-      - vast
-    depends_on:
-      - vast

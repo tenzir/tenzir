@@ -15,6 +15,6 @@ EOF
 }
 
 resource "aws_iam_role_policy_attachment" "s3_get" {
-  role       = var.vast_lambda_role_name
+  role       = var.tenzir_lambda_role_name
   policy_arn = aws_iam_policy.s3_get.arn
 }

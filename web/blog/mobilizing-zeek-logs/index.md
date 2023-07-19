@@ -3,6 +3,7 @@ title: Mobilizing Zeek Logs
 authors: mavam
 date: 2023-07-06
 tags: [tenzir, zeek, logs, json, kafka]
+comments: true
 ---
 
 # Mobilizing Zeek Logs
@@ -220,7 +221,7 @@ leverage Tenzir's [`kafka`](/next/connectors/kafka) connector and write:
 cat *.log | tenzir '
   read zeek-tsv
   | extend _path=#schema
-  | write json to kafka -t zeek
+  | to kafka -t zeek write json
   '
 ```
 

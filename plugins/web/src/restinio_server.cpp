@@ -3,12 +3,12 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "web/restinio_server.hpp"
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 server_t make_server(server_config config, std::unique_ptr<router_t> router,
                      restinio::io_context_holder_t io_context) {
@@ -51,4 +51,4 @@ server_t make_server(server_config config, std::unique_ptr<router_t> router,
   }
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

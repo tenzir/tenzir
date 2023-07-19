@@ -1,0 +1,27 @@
+include "type.fbs";
+
+namespace tenzir.fbs.type_registry;
+
+table Entry {
+  key: string (required);
+  values: [tenzir.fbs.TypeBuffer];
+}
+
+table v0 {
+  entries: [Entry] (required);
+}
+
+/// The sum type of all possible types.
+union TypeRegistry {
+  type_registry.v0,
+}
+
+namespace tenzir.fbs;
+
+/// The sematic representation of data.
+table TypeRegistry {
+  type: type_registry.TypeRegistry (required);
+}
+
+root_type TypeRegistry;
+file_identifier "vREG";

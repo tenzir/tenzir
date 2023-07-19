@@ -1,13 +1,13 @@
 [tool.poetry]
-name = "vast-website"
+name = "tenzir-website"
 version = "0.1.0"
-description = "VAST website"
+description = "Tenzir website"
 authors = ["Tenzir <engineering@tenzir.com>"]
 license = "BSD-3-Clause"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-nbconvert = "^7.6.0"
+nbconvert = "^7.7.1"
 ipykernel = "^6.24.0"
 bash_kernel = "^0.9.1"
 jupyter = "^1.0.0"

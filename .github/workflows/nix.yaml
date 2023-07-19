@@ -91,6 +91,11 @@ jobs:
         uses: cachix/install-nix-action@v22
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Use Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v2
+        with:
+          # disables telemetry
+          diagnostic-endpoint: ""
       - name: Setup Cachix
         uses: cachix/cachix-action@v12
         with:

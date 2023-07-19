@@ -1,3 +1,0 @@
-load "file", loader_args(located("a/b/c.json", location(10, 20)), null, null, null) | parse "json", config(null, null, "", false, false)
------
-located("<pipeline>", [[["load", "file", loader_args(located("a/b/c.json", location(10, 20)), null, null, null)]], [["parse", "json", config(null, null, "", false, false)]]], location(0, 20))

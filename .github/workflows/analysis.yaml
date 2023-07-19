@@ -39,7 +39,7 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
-          git submodule update --init --recursive libvast
+          git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
       - name: Install Dependencies
         run: |
@@ -58,12 +58,12 @@ jobs:
           # jobs and not suitable for general use.
           cmake -B "$BUILD_DIR" \
             -DCMAKE_BUILD_TYPE:STRING=Debug \
-            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
+            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
             -DCPACK_GENERATOR:STRING=TGZ \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
-            -DVAST_ENABLE_CODE_COVERAGE:BOOL=ON \
-            -DVAST_PLUGINS:STRING='plugins/*' \
-            -DVAST_UNIT_TEST_TIMEOUT=180
+            -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON \
+            -DTENZIR_ENABLE_CODE_COVERAGE:BOOL=ON \
+            -DTENZIR_PLUGINS:STRING='plugins/*' \
+            -DTENZIR_UNIT_TEST_TIMEOUT=180
       - name: Compile All Targets
         run: |
           cmake --build "$BUILD_DIR" --target all --parallel --verbose
@@ -85,5 +85,5 @@ jobs:
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v3
         with:
-          token: ${{ secrets.VAST_CODECOV_TOKEN }}
+          token: ${{ secrets.TENZIR_CODECOV_TOKEN }}
           files: ${{ env.BUILD_DIR }}/ccov/all-tests.info

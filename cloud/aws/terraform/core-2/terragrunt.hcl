@@ -16,10 +16,10 @@ terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
     execute = ["/bin/bash", "-c", <<EOT
-../../vast-cloud docker-login \
+../../tenzir-cloud docker-login \
                  build-images --step=core-2 \
                  push-images --step=core-2 && \
-../../vast-cloud print-image-vars --step=core-2 > images.generated.tfvars
+../../tenzir-cloud print-image-vars --step=core-2 > images.generated.tfvars
 EOT
     ]
   }
@@ -34,10 +34,10 @@ EOT
 
 inputs = {
   lambda_client_image = "dummy_overriden_by_before_hook"
-  vast_server_image   = "dummy_overriden_by_before_hook"
-  region_name         = get_env("VAST_AWS_REGION")
-  peered_vpc_id       = get_env("VAST_PEERED_VPC_ID")
-  vast_cidr           = get_env("VAST_CIDR")
-  vast_version        = get_env("VAST_VERSION")
-  vast_storage_type   = get_env("VAST_STORAGE_TYPE")
+  tenzir_server_image   = "dummy_overriden_by_before_hook"
+  region_name         = get_env("TENZIR_AWS_REGION")
+  peered_vpc_id       = get_env("TENZIR_PEERED_VPC_ID")
+  tenzir_cidr           = get_env("TENZIR_CIDR")
+  tenzir_version        = get_env("TENZIR_VERSION")
+  tenzir_storage_type   = get_env("TENZIR_STORAGE_TYPE")
 }

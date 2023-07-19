@@ -5,22 +5,22 @@ with section("parse"):
 
     # Specify structure for custom cmake functions
     additional_commands = {
-        "vastexportcompilecommands": {
-            "spelling": "VASTExportCompileCommands",
+        "tenzirexportcompilecommands": {
+            "spelling": "TenzirExportCompileCommands",
             "pargs": {
                 "nargs": 1,
             },
         },
-        "vastcompileflatbuffers": {
-            "spelling": "VASTCompileFlatBuffers",
+        "tenzircompileflatbuffers": {
+            "spelling": "TenzirCompileFlatBuffers",
             "kwargs": {
                 "TARGET": 1,
                 "INCLUDE_DIRECTORY": 1,
                 "SCHEMAS": "*",
             },
         },
-        "vastregisterplugin": {
-            "spelling": "VASTRegisterPlugin",
+        "tenzirregisterplugin": {
+            "spelling": "TenzirRegisterPlugin",
             "kwargs": {
                 "TARGET": 1,
                 "ENTRYPOINT": 1,
@@ -29,11 +29,11 @@ with section("parse"):
                 "INCLUDE_DIRECTORIES": "*",
             },
         },
-        "vastnormalizeinstalldirs": {
-            "spelling": "VASTNormalizeInstallDirs",
+        "tenzirnormalizeinstalldirs": {
+            "spelling": "TenzirNormalizeInstallDirs",
         },
-        "vasttargetenabletooling": {
-            "spelling": "VASTTargetEnableTooling",
+        "tenzirtargetenabletooling": {
+            "spelling": "TenzirTargetEnableTooling",
             "pargs": {
                 "nargs": 1,
             },
@@ -44,20 +44,20 @@ with section("parse"):
                 "PUBLIC": 0,
             },
         },
-        "vastinstallexampleconfiguration": {
-            "spelling": "VASTInstallExampleConfiguration",
+        "tenzirinstallexampleconfiguration": {
+            "spelling": "TenzirInstallExampleConfiguration",
             "pargs": {
                 "nargs": 4,
             },
         },
-        "vastsystemizetarget": {
-            "spelling": "VASTSystemizeTarget",
+        "tenzirsystemizetarget": {
+            "spelling": "TenzirSystemizeTarget",
             "pargs": {
                 "nargs": 1,
             },
         },
-        "vasttargetlinkwholearchive": {
-            "spelling": "VASTTargetLinkWholeArchive",
+        "tenzirtargetlinkwholearchive": {
+            "spelling": "TenzirTargetLinkWholeArchive",
             "pargs": {
                 "nargs": 3,
             },

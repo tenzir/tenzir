@@ -1,0 +1,54 @@
+[Unit]
+Description=Tenzir Node
+StartLimitIntervalSec=120
+StartLimitBurst=1
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=notify
+Restart=always
+
+# user + privileges
+# We explicitly don't use DynamicUser because that can lead to recursive `chown`s.
+# Doing that is pretty slow on some file systems (e.g., xfs).
+User=tenzir
+Group=tenzir
+NoNewPrivileges=yes
+
+# capabilities
+RestrictNamespaces=yes
+RestrictAddressFamilies=
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+
+# system access
+ExecPaths=/opt/tenzir/libexec/tenzir-df-percent.sh
+ProtectSystem=strict
+ReadWritePaths=/var/lib/tenzir
+ReadWritePaths=/var/lib/tenzir
+ReadWritePaths=/var/log/tenzir
+ReadWritePaths=/var/log/tenzir
+PrivateTmp=no
+# Allow read access to the home directory of the user so config files can be
+# read. In theory the config directory may be outside of the home directory, but
+# systemd has no mechanism to specify that.
+ProtectHome=read-only
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# service specifics
+TimeoutStopSec=600
+WorkingDirectory=/var/lib/tenzir
+ExecStart=/opt/tenzir/bin/tenzir-node
+
+[Install]
+Alias=tenzir.service
+WantedBy=multi-user.target

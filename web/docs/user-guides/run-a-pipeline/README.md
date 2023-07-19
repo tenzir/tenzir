@@ -33,10 +33,11 @@ For example, write [`version`](../../operators/sources/version.md) and click
 On the [command line](../../command-line.md), run `tenzir <pipeline>` where
 `<pipeline>` is the definition of the pipeline as shown in the examples.
 
-The following invariants apply:
-
-1. If you do not provide source, `read json` will be added
-2. If you do not provide sink, `write json` will be added
+If the given pipeline expects events as its input, an implicit
+`load - | read json` will be prepended. If it expects bytes instead, only
+`load -` is prepended. Likewise, if the pipeline outputs events, an implicit
+`write json | save -` will be appended. If it outputs bytes instead, only
+`save -` is appended.
 
 The diagram below illustrates these mechanics:
 
@@ -99,13 +100,13 @@ a single event rendered as JSON:
 </details>
 
 You could also render it differently by passing a different
-[format](../../formats.md) to the [`write`](../../operators/sinks/write.md)
-operator:
+[format](../../formats.md) to the [`write`](../../operators/transformations/write.md)
+operator, or by inferring the format from the file extension:
 
 ```bash
 tenzir 'version | write csv'
-tenzir 'version | write ssv to file /tmp/version.ssv'
-tenzir 'version | write parquet to file /tmp/version.parquet'
+tenzir 'version | to file /tmp/version.ssv'
+tenzir 'version | to file /tmp/version.parquet'
 ```
 
 Instead of passing the pipeline description to the `tenzir` executable, you can

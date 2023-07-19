@@ -18,22 +18,22 @@
     group: root
   register: tenzir_config
 
-- name: Ensure directory /etc/systemd/system/tenzir.service.d exists
+- name: Ensure directory /etc/systemd/system/tenzir-node.service.d exists
   ansible.builtin.file:
-    path: /etc/systemd/system/tenzir.service.d
+    path: /etc/systemd/system/tenzir-node.service.d
     state: directory
     mode: '0755'
     owner: root
     group: root
 
-- name: Create tenzir-service-overrides.conf
+- name: Create tenzir-node-service-overrides.conf
   ansible.builtin.template:
-    src: tenzir-service-overrides.conf.j2
-    dest: /etc/systemd/system/tenzir.service.d/tenzir-service-overrides.conf
+    src: tenzir-node-service-overrides.conf.j2
+    dest: /etc/systemd/system/tenzir-node.service.d/tenzir-node-service-overrides.conf
     mode: '0644'
     owner: root
     group: root
-  register: tenzir_overrides
+  register: tenzir_node_overrides
 
 - name: Deploy the Debian Package
   ansible.builtin.include_tasks: debian.yaml
@@ -47,7 +47,7 @@
 
 - name: Restart if config changed
   # Handler notification can't express conjuncion or negation, so we use a task.
-  when: tenzir_config.changed or tenzir_overrides.changed and not tenzir_package.changed  # noqa no-handler
+  when: tenzir_config.changed or tenzir_node_overrides.changed and not tenzir_package.changed  # noqa no-handler
   ansible.builtin.systemd:
     name: tenzir
     state: restarted

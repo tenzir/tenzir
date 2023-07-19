@@ -1,0 +1,66 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#pragma once
+
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/error.hpp"
+#include "tenzir/ids.hpp"
+#include "tenzir/operator.hpp"
+#include "tenzir/view.hpp"
+
+#include <caf/error.hpp>
+#include <caf/expected.hpp>
+
+#include <algorithm>
+#include <memory>
+#include <type_traits>
+
+namespace tenzir::detail {
+
+template <class Index, class Sequence>
+caf::expected<ids>
+container_lookup_impl(const Index& idx, relational_operator op,
+                      const Sequence& xs) {
+  ids result;
+  if (op == relational_operator::in) {
+    result = ids{idx.offset(), false};
+    for (auto x : xs) {
+      auto r = idx.lookup(relational_operator::equal, x);
+      if (r)
+        result |= *r;
+      else
+        return r;
+      if (all<1>(result)) // short-circuit
+        return result;
+    }
+  } else if (op == relational_operator::not_in) {
+    result = ids{idx.offset(), true};
+    for (auto x : xs) {
+      auto r = idx.lookup(relational_operator::equal, x);
+      if (r)
+        result -= *r;
+      else
+        return r;
+      if (all<0>(result)) // short-circuit
+        return result;
+    }
+  } else {
+    return caf::make_error(ec::unsupported_operator, op);
+  }
+  return result;
+}
+
+template <class Index>
+caf::expected<ids>
+container_lookup(const Index& idx, relational_operator op, view<list> xs) {
+  TENZIR_ASSERT(xs);
+  return container_lookup_impl(idx, op, *xs);
+}
+
+} // namespace tenzir::detail

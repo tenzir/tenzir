@@ -1,0 +1,3 @@
+load "file", loader_args(located("a/b/c.json", location(10, 20)), null, null, null) | read "cef"
+-----
+located("<pipeline>", [[["load", "file", loader_args(located("a/b/c.json", location(10, 20)), null, null, null)]], [["read", "cef"]]], location(0, 29))

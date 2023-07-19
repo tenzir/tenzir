@@ -3,20 +3,20 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
 
-#include <vast/http_api.hpp>
-#include <vast/plugin.hpp>
+#include <tenzir/http_api.hpp>
+#include <tenzir/plugin.hpp>
 
 #include <restinio/compiler_features.hpp>
 #include <restinio/message_builders.hpp>
 #include <restinio/request_handler.hpp>
 #include <restinio/router/express.hpp>
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 // Note: If desired, `restinio` provides users to embed arbitrary `extra_data`
 // into each request.
@@ -59,4 +59,4 @@ private:
   size_t body_size_ = {};
 };
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

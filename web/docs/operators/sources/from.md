@@ -6,7 +6,6 @@ Produces events by combining a [connector][connectors] and a [format][formats].
 
 ```
 from <connector> [read <format>]
-read <format> [from <connector>]
 ```
 
 ## Description
@@ -14,15 +13,15 @@ read <format> [from <connector>]
 The `from` operator produces events at the beginning of a pipeline by bringing
 together a [connector][connectors] and a [format][formats].
 
-Some connectors have a default format, and some formats have a default
-connector. This enables a shorter syntax, e.g., `read json` uses the
-`stdin` connector and `from stdin` the `json` format.
+All connectors have a default format. This enables a shorter syntax, e.g.,
+`from stdin` uses the `json` format, while `from file foo.csv` uses the `csv`
+format.
 
 The `from` operator is a pipeline under the hood. For most cases, it is equal to
-`load <connector> | parse <format>`. However, for some combinations of
+`load <connector> | read <format>`. However, for some combinations of
 connectors and formats the underlying pipeline is a lot more complex. We
-recommend always using `from` or [`read`](read.md) over [`load`](load.md) and
-[`parse`](../transformations/parse.md).
+recommend always using `from ... read ...` over the [`load`](load.md) and
+[`read`](../transformations/read.md) operators.
 
 ### `<connector>`
 

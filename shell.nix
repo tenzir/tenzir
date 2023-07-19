@@ -7,7 +7,7 @@ in
       hardeningDisable = ["fortify"] ++ lib.optional isStatic "pic";
       inputsFrom = [pkgs.tenzir-de];
       nativeBuildInputs =
-        [pkgs.ccache pkgs.speeve pkgs.clang-tools]
+        [pkgs.ccache pkgs.speeve pkgs.clang-tools_16]
         ++ pkgs.tenzir-integration-test-deps
         ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
           # Make clang available as alternative compiler when it isn't the default.
@@ -20,5 +20,5 @@ in
     }
     // lib.optionalAttrs isStatic {
       # Signal static build mode to CMake via the environment.
-      VAST_ENABLE_STATIC_EXECUTABLE = "ON";
+      TENZIR_ENABLE_STATIC_EXECUTABLE = "ON";
     })

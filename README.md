@@ -15,7 +15,7 @@ Easy Data Pipelines for Security Teams
 </h4>
 <div align="center">
 
-[![Chat][chat-badge]](https://discord.tenzir.com)
+[![Chat][chat-badge]](https://docs.tenzir.com/discord)
 
 </div>
 

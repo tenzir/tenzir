@@ -4,7 +4,7 @@ import time
 from trace import Trace
 import requests
 import dynaconf
-from vast_invoke import Context, Exit, task
+from tenzir_invoke import Context, Exit, task
 from typing import Tuple
 from common import (
     FargateService,
@@ -12,11 +12,11 @@ from common import (
 )
 
 VALIDATORS = [
-    dynaconf.Validator("VAST_CLOUDFLARE_ACCOUNT_ID", must_exist=True, ne=""),
-    dynaconf.Validator("VAST_CLOUDFLARE_ZONE", must_exist=True, ne=""),
-    dynaconf.Validator("VAST_CLOUDFLARE_API_TOKEN", must_exist=True, ne=""),
-    dynaconf.Validator("VAST_CLOUDFLARE_EXPOSE", must_exist=True, ne=""),
-    dynaconf.Validator("VAST_CLOUDFLARE_AUTHORIZED_EMAILS", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_CLOUDFLARE_ACCOUNT_ID", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_CLOUDFLARE_ZONE", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_CLOUDFLARE_API_TOKEN", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_CLOUDFLARE_EXPOSE", must_exist=True, ne=""),
+    dynaconf.Validator("TENZIR_CLOUDFLARE_AUTHORIZED_EMAILS", must_exist=True, ne=""),
 ]
 
 
@@ -31,8 +31,8 @@ class CloudflareClient:
     """A lightweight Cloudflare API client implementing the few needed endpoints"""
 
     def __init__(self):
-        self.token = os.environ["VAST_CLOUDFLARE_API_TOKEN"]
-        self.account_id = os.environ["VAST_CLOUDFLARE_ACCOUNT_ID"]
+        self.token = os.environ["TENZIR_CLOUDFLARE_API_TOKEN"]
+        self.account_id = os.environ["TENZIR_CLOUDFLARE_ACCOUNT_ID"]
         self.base_url = "https://api.cloudflare.com/client/v4"
 
     def _headers(self):
@@ -61,7 +61,7 @@ class CloudflareClient:
 
 
 def list_exposed_urls(c):
-    cf_expose = os.environ["VAST_CLOUDFLARE_EXPOSE"]
+    cf_expose = os.environ["TENZIR_CLOUDFLARE_EXPOSE"]
     try:
         for exp in cf_expose.split(","):
             mod, var = exp.split(".")
@@ -70,7 +70,7 @@ def list_exposed_urls(c):
         if Trace:
             print(e, file=sys.stderr)
         raise Exit(
-            f"Could not get urls for VAST_CLOUDFLARE_EXPOSE={os.environ['VAST_CLOUDFLARE_EXPOSE']}"
+            f"Could not get urls for TENZIR_CLOUDFLARE_EXPOSE={os.environ['TENZIR_CLOUDFLARE_EXPOSE']}"
         )
 
 

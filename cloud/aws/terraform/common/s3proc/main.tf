@@ -20,7 +20,7 @@ EOF
 }
 
 resource "aws_cloudwatch_event_target" "lambda_target" {
-  arn            = var.vast_lambda_arn
+  arn            = var.tenzir_lambda_arn
   event_bus_name = aws_cloudwatch_event_bus.local_obj_event_bus.name
   rule           = aws_cloudwatch_event_rule.local_s3_object_events_rule.name
 
@@ -42,7 +42,7 @@ EOF
 resource "aws_lambda_permission" "eventbridge_invoke_lambda" {
   statement_id  = "AllowFrom${var.source_name}EventBridge"
   action        = "lambda:InvokeFunction"
-  function_name = var.vast_lambda_name
+  function_name = var.tenzir_lambda_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.local_s3_object_events_rule.arn
 }

@@ -3,16 +3,16 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/arrow_compat.hpp>
-#include <vast/arrow_table_slice.hpp>
-#include <vast/concept/convertible/data.hpp>
-#include <vast/detail/base64.hpp>
-#include <vast/detail/inspection_common.hpp>
-#include <vast/plugin.hpp>
-#include <vast/store.hpp>
+#include <tenzir/arrow_compat.hpp>
+#include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/concept/convertible/data.hpp>
+#include <tenzir/detail/base64.hpp>
+#include <tenzir/detail/inspection_common.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/store.hpp>
 
 #include <arrow/array.h>
 #include <arrow/compute/cast.h>
@@ -24,7 +24,7 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 
-namespace vast::plugins::parquet {
+namespace tenzir::plugins::parquet {
 
 /// Configuration for the Parquet plugin.
 struct configuration {
@@ -50,7 +50,7 @@ struct configuration {
 namespace {
 
 /// Handles an array containing enum data, transforming the data into
-/// vast.enumeration extension type backed by a dictionary.
+/// tenzir.enumeration extension type backed by a dictionary.
 std::shared_ptr<arrow::Array>
 fix_enum_array(const enumeration_type& et,
                const std::shared_ptr<arrow::Array>& arr) {
@@ -105,12 +105,13 @@ map_chunked_array(const VastType& t,
   return result.ValueOrDie();
 }
 
-/// Transform an array into its canonical form for the provided vast type.
+/// Transform an array into its canonical form for the provided tenzir type.
 /// the Arrow parquet reader does not fully restore the schema used during
 /// write. In particular, it doesn't handle extension types in map keys and
-/// values, as well as dictionary indices, which are used in vast enumerations.
+/// values, as well as dictionary indices, which are used in tenzir enumerations.
 std::shared_ptr<arrow::Array>
-align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
+align_array_to_type(const tenzir::type& t,
+                    std::shared_ptr<arrow::Array> array) {
   auto f = detail::overload{
     [&](const enumeration_type& et) -> std::shared_ptr<arrow::Array> {
       return fix_enum_array(et, array);
@@ -184,18 +185,18 @@ align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
         struct_array->null_bitmap(), struct_array->null_count());
     },
     [&](const auto&) -> std::shared_ptr<arrow::Array> {
-      VAST_ASSERT(t.to_arrow_type()->Equals(array->type()));
+      TENZIR_ASSERT(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
   };
   return caf::visit(f, t);
 }
 
-/// Transform a given `ChunkedArray` according to the provided VAST type
-/// `ChunkedArray`s only occur at the outermost level, and the VAST type
+/// Transform a given `ChunkedArray` according to the provided Tenzir type
+/// `ChunkedArray`s only occur at the outermost level, and the Tenzir type
 /// that is not properly represented at this level is `enumeration_type`.
 std::shared_ptr<arrow::ChunkedArray>
-restore_enum_chunk_array(const vast::type& t,
+restore_enum_chunk_array(const tenzir::type& t,
                          std::shared_ptr<arrow::ChunkedArray> array) {
   auto f = detail::overload{
     [&](const enumeration_type& et) -> std::shared_ptr<arrow::ChunkedArray> {
@@ -211,7 +212,7 @@ restore_enum_chunk_array(const vast::type& t,
       return map_chunked_array(t, array, align_array_to_type);
     },
     [&](const auto&) -> std::shared_ptr<arrow::ChunkedArray> {
-      VAST_ASSERT(t.to_arrow_type()->Equals(array->type()));
+      TENZIR_ASSERT(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
   };
@@ -236,8 +237,8 @@ align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
   }
   auto new_table = arrow::Table::Make(target_schema, arrays, table->num_rows());
   const auto delta = std::chrono::steady_clock::now() - start;
-  VAST_DEBUG("table schema aligned in {}[ns]",
-             data{std::chrono::duration_cast<duration>(delta)});
+  TENZIR_DEBUG("table schema aligned in {}[ns]",
+               data{std::chrono::duration_cast<duration>(delta)});
   return new_table;
 }
 
@@ -247,7 +248,7 @@ auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
 
 /// Extract event column from record batch and transform into new record batch.
 /// The record batch contains a message envelope with the actual event data
-/// alongside VAST-related meta data (currently limited to the import time).
+/// alongside Tenzir-related meta data (currently limited to the import time).
 /// Message envelope is unwrapped and the metadata, attached to the to-level
 /// schema the input record batch is copied to the newly created record batch.
 std::shared_ptr<arrow::RecordBatch>
@@ -297,7 +298,7 @@ std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
 
 caf::expected<std::shared_ptr<arrow::Table>>
 read_parquet_buffer(const chunk_ptr& chunk) {
-  VAST_ASSERT(chunk);
+  TENZIR_ASSERT(chunk);
   auto bufr = std::make_shared<arrow::io::BufferReader>(as_arrow_buffer(chunk));
   const auto options = ::parquet::default_reader_properties();
   auto parquet_reader = ::parquet::ParquetFileReader::Open(bufr, options);
@@ -339,7 +340,7 @@ auto make_import_time_col(const time& import_time, int64_t rows) {
     die(fmt::format("make time column failed: '{}'", status.ToString()));
   for (int i = 0; i < rows; ++i) {
     auto status = builder->Append(v);
-    VAST_ASSERT(status.ok());
+    TENZIR_ASSERT(status.ok());
   }
   return builder->Finish().ValueOrDie();
 }
@@ -372,7 +373,7 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices,
   auto status
     = ::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink,
                                    1 << 24, writer_props, arrow_writer_props);
-  VAST_ASSERT(status.ok(), status.ToString().c_str());
+  TENZIR_ASSERT(status.ok(), status.ToString().c_str());
   return sink->Finish().ValueOrDie();
 }
 
@@ -443,7 +444,7 @@ public:
       // to partition-local ids. -- DL
       if (slice.offset() == invalid_id)
         slice.offset(num_rows_);
-      VAST_ASSERT(slice.offset() == num_rows_);
+      TENZIR_ASSERT(slice.offset() == num_rows_);
       num_rows_ += slice.rows();
       slices_.push_back(std::move(slice));
     }
@@ -513,7 +514,7 @@ private:
 
 } // namespace
 
-} // namespace vast::plugins::parquet
+} // namespace tenzir::plugins::parquet
 
 // Finally, register our plugin.
-VAST_REGISTER_PLUGIN(vast::plugins::parquet::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::parquet::plugin)

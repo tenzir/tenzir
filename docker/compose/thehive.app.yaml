@@ -5,21 +5,21 @@ services:
       context: ../..
       dockerfile: docker/dev/Dockerfile
       args:
-        - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
-        - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
+        - TENZIR_VERSION=${TENZIR_CONTAINER_REF:-latest}
+        - TENZIR_CONTAINER_REGISTRY=${TENZIR_CONTAINER_REGISTRY:-docker.io}
     command: app-thehive-run
     environment:
       - THEHIVE_URL=http://thehive:9000
-      - TENZIR_ENDPOINT=vast:5158
+      - TENZIR_ENDPOINT=tenzir:5158
       - BACKFILL_LIMIT=${BACKFILL_LIMIT:-100}
       - DEFAULT_ORGADMIN_EMAIL=${DEFAULT_ORGADMIN_EMAIL:-orgadmin@thehive.local}
       - DEFAULT_ORGADMIN_PWD=${DEFAULT_ORGADMIN_PWD:-secret}
     depends_on:
-      - vast
+      - tenzir
       - thehive
     networks:
-      - vast
+      - tenzir
       - thehive
   thehive:
     networks:
-      - vast
+      - tenzir

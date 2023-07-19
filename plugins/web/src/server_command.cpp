@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "web/server_command.hpp"
@@ -15,20 +15,20 @@
 #include "web/restinio_server.hpp"
 #include "web/specification_command.hpp"
 
-#include <vast/concept/convertible/data.hpp>
-#include <vast/concept/parseable/to.hpp>
-#include <vast/concept/parseable/vast/data.hpp>
-#include <vast/concept/parseable/vast/expression.hpp>
-#include <vast/detail/flat_map.hpp>
-#include <vast/format/json.hpp>
-#include <vast/logger.hpp>
-#include <vast/node.hpp>
-#include <vast/node_control.hpp>
-#include <vast/plugin.hpp>
-#include <vast/query_context.hpp>
-#include <vast/query_cursor.hpp>
-#include <vast/spawn_or_connect_to_node.hpp>
-#include <vast/validate.hpp>
+#include <tenzir/concept/convertible/data.hpp>
+#include <tenzir/concept/parseable/tenzir/data.hpp>
+#include <tenzir/concept/parseable/tenzir/expression.hpp>
+#include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/detail/flat_map.hpp>
+#include <tenzir/format/json.hpp>
+#include <tenzir/logger.hpp>
+#include <tenzir/node.hpp>
+#include <tenzir/node_control.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/query_context.hpp>
+#include <tenzir/query_cursor.hpp>
+#include <tenzir/spawn_or_connect_to_node.hpp>
+#include <tenzir/validate.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -41,7 +41,7 @@
 
 // Needed to forward incoming requests to the request_dispatcher
 
-namespace vast::plugins::web {
+namespace tenzir::plugins::web {
 
 using request_dispatcher_actor = typed_actor_fwd<
   // Handle a request.
@@ -54,11 +54,11 @@ using request_dispatcher_actor = typed_actor_fwd<
 
 namespace {
 
-restinio::http_method_id_t to_restinio_method(vast::http_method method) {
+restinio::http_method_id_t to_restinio_method(tenzir::http_method method) {
   switch (method) {
-    case vast::http_method::get:
+    case tenzir::http_method::get:
       return restinio::http_method_get();
-    case vast::http_method::post:
+    case tenzir::http_method::post:
       return restinio::http_method_post();
   }
   // Unreachable.
@@ -75,7 +75,7 @@ auto parse_query_params(std::string_view text)
 }
 
 auto format_api_route(const rest_endpoint& endpoint) -> std::string {
-  VAST_ASSERT_CHEAP(endpoint.path[0] == '/');
+  TENZIR_ASSERT_CHEAP(endpoint.path[0] == '/');
   return fmt::format("/api/v{}{}", static_cast<uint8_t>(endpoint.version),
                      endpoint.path);
 }
@@ -103,9 +103,9 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       }
       // Ask the authenticator to validate the passed token.
       auto const* token
-        = response->request()->header().try_get_field("X-VAST-Token");
+        = response->request()->header().try_get_field("X-Tenzir-Token");
       if (!token) {
-        response->abort(401, "missing header X-VAST-Token\n", caf::error{});
+        response->abort(401, "missing header X-Tenzir-Token\n", caf::error{});
         return;
       }
       self
@@ -132,7 +132,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       if (!query_params)
         return response->abort(400, "failed to parse query\n",
                                query_params.error());
-      auto body_params = vast::http_parameter_map{};
+      auto body_params = tenzir::http_parameter_map{};
       // POST requests can contain request parameters in their body in any
       // format supported by the server. The client indicates the data format
       // they used in the `Content-Type` header. See also
@@ -175,7 +175,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           // is passed using multiple methods.
           // TODO: Attempt to parse lists in query parameters, as in
           // `?x=1,2,3&y=[a,b]`
-          auto maybe_param = std::optional<vast::data>{};
+          auto maybe_param = std::optional<tenzir::data>{};
           if (auto query_param = query_params->get_param(name))
             maybe_param = std::string{*query_param};
           if (auto route_param = route_params.get_param(name))
@@ -201,7 +201,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
             response->finish(std::move(body));
           },
           [response](const caf::error& e) {
-            VAST_WARN("internal server error while handling request: {}", e);
+            TENZIR_WARN("internal server error while handling request: {}", e);
             response->abort(500, "internal server error", e);
           });
     },
@@ -210,11 +210,11 @@ request_dispatcher_actor::behavior_type request_dispatcher(
 
 void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                  request_dispatcher_actor dispatcher,
-                 const server_config& config, vast::rest_endpoint endpoint,
+                 const server_config& config, tenzir::rest_endpoint endpoint,
                  rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
   auto path = format_api_route(endpoint);
-  VAST_VERBOSE("setting up route {}", path);
+  TENZIR_VERBOSE("setting up route {}", path);
   // The handler just injects the request into the actor system, the
   // actual processing starts in the request_dispatcher.
   router->add_handler(
@@ -246,7 +246,7 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
 // cf. https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
 void setup_cors_preflight_handlers(std::unique_ptr<router_t>& router,
                                    const std::string& allowed_origin) {
-  VAST_VERBOSE("allowing CORS requests from origin '{}'", allowed_origin);
+  TENZIR_VERBOSE("allowing CORS requests from origin '{}'", allowed_origin);
   router->add_handler(
     restinio::http_method_options(), "/:path(.*)",
     [=](request_handle_t req, restinio::router::route_params_t)
@@ -268,11 +268,11 @@ void setup_cors_preflight_handlers(std::unique_ptr<router_t>& router,
 
 } // namespace
 
-auto server_command(const vast::invocation& inv, caf::actor_system& system)
+auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   -> caf::message {
   auto self = caf::scoped_actor{system};
   auto web_options = caf::get_or(inv.options, "plugins.web", caf::settings{});
-  auto data = vast::data{};
+  auto data = tenzir::data{};
   // TODO: Implement a single `convert_and_validate()` function for going
   // from caf::settings -> record_type
   if (!inv.arguments.empty())
@@ -284,8 +284,8 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt parse options"));
   auto invalid
-    = vast::validate(data, vast::plugins::web::configuration::schema(),
-                     vast::validate::permissive);
+    = tenzir::validate(data, tenzir::plugins::web::configuration::schema(),
+                       tenzir::validate::permissive);
   if (invalid)
     return caf::make_message(caf::make_error(
       ec::invalid_argument, fmt::format("invalid options: {}", invalid)));
@@ -296,32 +296,32 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       caf::make_error(ec::invalid_argument, "couldnt convert options"));
   auto server_config = convert_and_validate(config);
   if (!server_config) {
-    VAST_ERROR("failed to start server: {}", server_config.error());
+    TENZIR_ERROR("failed to start server: {}", server_config.error());
     return caf::make_message(caf::make_error(
       ec::invalid_configuration,
       fmt::format("invalid server configuration: {}", server_config.error())));
   }
   // Create necessary actors.
-  auto node_opt = vast::spawn_or_connect_to_node(self, inv.options,
-                                                 content(system.config()));
+  auto node_opt = tenzir::spawn_or_connect_to_node(self, inv.options,
+                                                   content(system.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt)) {
-    VAST_ERROR("failed to get node: {}", *err);
+    TENZIR_ERROR("failed to get node: {}", *err);
     return caf::make_message(std::move(*err));
   }
   const auto& node = std::holds_alternative<node_actor>(node_opt)
                        ? std::get<node_actor>(node_opt)
                        : std::get<scope_linked<node_actor>>(node_opt).get();
-  VAST_ASSERT(node != nullptr);
+  TENZIR_ASSERT(node != nullptr);
   auto authenticator = get_authenticator(self, node, caf::infinite);
   if (!authenticator) {
-    VAST_ERROR("failed to get web component: {}", authenticator.error());
+    TENZIR_ERROR("failed to get web component: {}", authenticator.error());
     return caf::make_message(std::move(authenticator.error()));
   }
   auto dispatcher
     = self->spawn(request_dispatcher, *server_config, *authenticator);
   // Set up router.
   auto router = std::make_unique<router_t>();
-  VAST_ASSERT_CHEAP(dispatcher);
+  TENZIR_ASSERT_CHEAP(dispatcher);
   // Set up API routes from plugins.
   std::vector<rest_handler_actor> handlers;
   std::vector<std::string> api_routes;
@@ -330,7 +330,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     handlers.push_back(handler);
     for (auto const& endpoint : rest_plugin->rest_endpoints()) {
       if (endpoint.path.empty() || endpoint.path[0] != '/') {
-        VAST_WARN("ignoring route {} due to missing '/'", endpoint.path);
+        TENZIR_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;
       }
       api_routes.push_back(format_api_route(endpoint));
@@ -344,8 +344,8 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     setup_cors_preflight_handlers(router, *server_config->cors_allowed_origin);
   // Set up non-API routes.
   router->non_matched_request_handler([](auto req) {
-    VAST_VERBOSE("404 not found: {} {}", req->header().method().c_str(),
-                 req->header().path());
+    TENZIR_VERBOSE("404 not found: {} {}", req->header().method().c_str(),
+                   req->header().path());
     return req->create_response(restinio::status_not_found())
       .set_body("404 not found\n")
       .done();
@@ -353,7 +353,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   router->http_get(
     "/", [](auto request, auto) -> restinio::request_handling_status_t {
       return request->create_response(restinio::status_temporary_redirect())
-        .append_header(restinio::http_field::server, "VAST")
+        .append_header(restinio::http_field::server, "Tenzir")
         .append_header_date_field()
         .append_header(restinio::http_field::location, "/api/v0/status")
         .done();
@@ -368,7 +368,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         .done();
     });
   if (server_config->webroot) {
-    VAST_VERBOSE("using {} as document root", *server_config->webroot);
+    TENZIR_VERBOSE("using {} as document root", *server_config->webroot);
     router->http_get(
       "/:path(.*)", restinio::path2regex::options_t{}.strict(true),
       [webroot = *server_config->webroot, api_routes](auto req,
@@ -383,7 +383,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
             .set_body("invalid request method\n")
             .done();
         auto path = std::filesystem::path{std::string{http_path}};
-        VAST_DEBUG("serving static file {}", http_path);
+        TENZIR_DEBUG("serving static file {}", http_path);
         auto normalized_path
           = (webroot / path.relative_path()).lexically_normal();
         if (ec)
@@ -401,15 +401,16 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         auto sf = restinio::sendfile(normalized_path);
         auto const* mime_type = content_type_by_file_extension(extension);
         return req->create_response()
-          .append_header(restinio::http_field::server, "VAST")
+          .append_header(restinio::http_field::server, "Tenzir")
           .append_header_date_field()
           .append_header(restinio::http_field::content_type, mime_type)
           .set_body(std::move(sf))
           .done();
       });
   } else {
-    VAST_VERBOSE("not serving a document root because no --web-root was given "
-                 "and the default location does not exist");
+    TENZIR_VERBOSE(
+      "not serving a document root because no --web-root was given "
+      "and the default location does not exist");
   }
   // Run server.
   auto io_context = asio::io_context{};
@@ -426,8 +427,8 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   // Launch the thread on which the server will work.
   std::thread server_thread{[&] {
     auto const* scheme = server_config->require_tls ? "https" : "http";
-    VAST_INFO("server listening on on {}://{}:{}", scheme,
-              server_config->bind_address, server_config->port);
+    TENZIR_INFO("server listening on on {}://{}:{}", scheme,
+                server_config->bind_address, server_config->port);
     io_context.run();
   }};
   // Run main loop.
@@ -437,17 +438,17 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   self
     ->do_receive(
       [&](caf::down_msg& msg) {
-        VAST_ASSERT(msg.source == node);
-        VAST_DEBUG("{} received DOWN from node", *self);
+        TENZIR_ASSERT(msg.source == node);
+        TENZIR_DEBUG("{} received DOWN from node", *self);
         stop = true;
         if (msg.reason != caf::exit_reason::user_shutdown)
           err = std::move(msg.reason);
       },
-      // Only called when running this command with `vast -N`.
+      // Only called when running this command with `tenzir -N`.
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
-                   ::strsignal(signal));
-        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        TENZIR_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
+                     ::strsignal(signal));
+        TENZIR_ASSERT(signal == SIGINT || signal == SIGTERM);
         stop = true;
       })
     .until([&] {
@@ -468,4 +469,4 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   return caf::make_message(std::move(err));
 }
 
-} // namespace vast::plugins::web
+} // namespace tenzir::plugins::web

@@ -507,4 +507,4 @@ caf:
              JSONStreaming::disable_default_logs=T
              JSONStreaming::enable_log_rotation=F
              json-streaming-logs"
-      | parse zeek-json
+      | read zeek-json
