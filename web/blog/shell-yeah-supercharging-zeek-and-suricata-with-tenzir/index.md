@@ -1,5 +1,5 @@
 ---
-title: Shelling out to Zeek and Suricata
+title: Shell Yeah! Supercharging Zeek and Suricata with Tenzir
 authors: mavam
 date: 2023-07-20
 tags: [zeek, suricata, logs, shell]
@@ -127,7 +127,7 @@ output into the next:
 When using the `shell` operator, the `tenzir` process spawns `zeek` or
 `suricata` as child process. The operator then forwards the bytes from stdin of
 the `tenzir` process to the child's stdin, and uses the child's stdout as input
-to the subsequent [`read`](/operators/transformations/read) operator.
+to the subsequent [`read`](/next/operators/transformations/read) operator.
 
 ![Shelling out to Zeek](zeek-to-tenzir-shell.excalidraw.svg)
 
