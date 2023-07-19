@@ -86,36 +86,49 @@ auto append_no_null_values(
   return caf::visit(
     detail::overload{
       []<class FieldType>(const FieldType& field_type,
-                          type_to_arrow_builder_t<FieldType>& builder,
-                          const type_to_data_t<FieldType>& data) -> bool {
-        auto status = append_builder(field_type, builder, make_view(data));
+                          arrow::ArrayBuilder& builder,
+                          const tenzir::data& basic_data) -> bool {
+        auto status
+          = append_builder(field_type, builder, make_view(basic_data));
         TENZIR_ASSERT(status.ok());
         return true;
       },
-      [&cast_field_parent_record](
-        const list_type& type, type_to_arrow_builder_t<list_type>& builder,
-        const type_to_data_t<list_type>& list) -> bool {
-        auto status = builder.Append();
+      [&cast_field_parent_record](const list_type& type,
+                                  arrow::ArrayBuilder& builder,
+                                  const tenzir::data& list_data) -> bool {
+        TENZIR_ASSERT(caf::holds_alternative<list>(list_data));
+        TENZIR_ASSERT(
+          caf::holds_alternative<type_to_arrow_builder_t<list_type>>(builder));
+        auto& list_builder
+          = static_cast<type_to_arrow_builder_t<list_type>&>(builder);
+        auto status = list_builder.Append();
         TENZIR_ASSERT(status.ok());
         auto should_append_builder = true;
-        for (const auto& v : list) {
+        for (const auto& v : caf::get<list>(list_data)) {
           if (v == caf::none) {
             continue;
           }
           auto should_append
-            = append_no_null_values(v, *builder.value_builder(),
+            = append_no_null_values(v, *list_builder.value_builder(),
                                     type.value_type(),
                                     cast_field_parent_record);
           should_append_builder = should_append ? should_append_builder : false;
         }
         return should_append_builder;
       },
-      [&cast_field_parent_record](
-        const record_type& type, type_to_arrow_builder_t<record_type>& builder,
-        const type_to_data_t<record_type>& record) -> bool {
+      [&cast_field_parent_record](const record_type& type,
+                                  arrow::ArrayBuilder& builder,
+                                  const tenzir::data& record_data) -> bool {
+        TENZIR_ASSERT(caf::holds_alternative<record>(record_data));
+        TENZIR_ASSERT(
+          caf::holds_alternative<type_to_arrow_builder_t<record_type>>(
+            builder));
+        auto& record_builder
+          = static_cast<type_to_arrow_builder_t<record_type>&>(builder);
         auto should_append_builder
-          = std::addressof(builder)
+          = std::addressof(record_builder)
             != cast_field_parent_record.get_arrow_builder().get();
+        const auto& record = caf::get<tenzir::record>(record_data);
         for (auto field_no = 0u; const auto& field : type.fields()) {
           const auto& data = record.at(field.name);
           // Only field of a record that started common type casting should have
@@ -126,23 +139,20 @@ auto append_no_null_values(
             continue;
           }
           auto should_append
-            = append_no_null_values(data, *builder.field_builder(field_no),
+            = append_no_null_values(data,
+                                    *record_builder.field_builder(field_no),
                                     field.type, cast_field_parent_record);
           should_append_builder = should_append ? should_append_builder : false;
           ++field_no;
         }
         if (should_append_builder) {
-          auto status = builder.Append();
+          auto status = record_builder.Append();
           TENZIR_ASSERT(status.ok());
         }
         return should_append_builder;
       },
-      [](auto&&...) -> bool {
-        TENZIR_WARN("unexpected data/builder/type");
-        return true;
-      },
     },
-    type, builder, data);
+    type, detail::passthrough(builder), detail::passthrough(data));
 }
 
 auto add_new_value(const data& data, const type& type_of_new_data,
@@ -233,31 +243,40 @@ auto add_last_cast_list_data(
   const data& last_data, arrow::ArrayBuilder& root_builder) -> void {
   caf::visit(
     detail::overload{
-      [last_record, &cast_field_parent_record](
-        const list& list, type_to_arrow_builder_t<list_type>& builder) {
-        auto status = builder.Append();
+      [last_record, &cast_field_parent_record](const list& list,
+                                               arrow::ArrayBuilder& builder) {
+        TENZIR_ASSERT(
+          caf::holds_alternative<type_to_arrow_builder_t<list_type>>(builder));
+        auto& list_builder
+          = static_cast<type_to_arrow_builder_t<list_type>&>(builder);
+        auto status = list_builder.Append();
         TENZIR_ASSERT(status.ok());
         for (const auto& v : list) {
           add_last_cast_list_data(last_record, cast_field_parent_record, v,
-                                  *builder.value_builder());
+                                  *list_builder.value_builder());
         }
       },
-      [last_record, &cast_field_parent_record](
-        const record& rec, type_to_arrow_builder_t<record_type>& builder) {
+      [last_record, &cast_field_parent_record](const record& rec,
+                                               arrow::ArrayBuilder& builder) {
+        TENZIR_ASSERT(
+          caf::holds_alternative<type_to_arrow_builder_t<record_type>>(
+            builder));
+        auto& record_builder
+          = static_cast<type_to_arrow_builder_t<record_type>&>(builder);
         auto type = type::from_arrow(*builder.type());
         if (last_record == std::addressof(rec)) {
           append_no_null_values(rec, builder, type, cast_field_parent_record);
           return;
         }
-        auto status = append_builder(caf::get<record_type>(type), builder,
-                                     make_view(rec));
+        auto status = append_builder(caf::get<record_type>(type),
+                                     record_builder, make_view(rec));
         TENZIR_ASSERT(status.ok());
       },
       [](auto&&...) {
         // nop
       },
     },
-    last_data, root_builder);
+    last_data, detail::passthrough(root_builder));
 }
 
 } // namespace
@@ -1000,22 +1019,29 @@ auto concrete_series_builder<list_type>::change_type(
     type_ = new_type;
     child_builders_.clear();
     auto update_builders = detail::overload{
-      [this](auto&& recursive_update,
-             type_to_arrow_builder_t<list_type>& builder) {
-        child_builders_[type::from_arrow(*builder.type())]
-          = std::addressof(builder);
-        recursive_update(recursive_update, *builder.value_builder());
+      [this](auto&& recursive_update, const list_type& type,
+             arrow::ArrayBuilder& builder) {
+        TENZIR_ASSERT(
+          caf::holds_alternative<type_to_arrow_builder_t<list_type>>(builder));
+        child_builders_[tenzir::type{type}] = std::addressof(builder);
+        recursive_update(
+          recursive_update, type.value_type(),
+          *(static_cast<type_to_arrow_builder_t<list_type>&>(builder)
+              .value_builder()));
       },
-      [this](auto&&, auto& builder) {
-        child_builders_[type::from_arrow(*builder.type())]
-          = std::addressof(builder);
+      [this](auto&&, const auto& actual_type, arrow::ArrayBuilder& builder) {
+        child_builders_[tenzir::type{actual_type}] = std::addressof(builder);
       },
     };
     auto update_builders_visit
-      = [&update_builders](auto&& update, arrow::ArrayBuilder& b) {
-          caf::visit(update_builders, detail::passthrough(update), b);
+      = [&update_builders](auto&& update, const tenzir::type& t,
+                           arrow::ArrayBuilder& b) {
+          caf::visit(update_builders, detail::passthrough(update), t,
+                     detail::passthrough(b));
         };
-    update_builders_visit(update_builders_visit, *builder_->value_builder());
+    update_builders_visit(update_builders_visit,
+                          caf::get<list_type>(type_).value_type(),
+                          *builder_->value_builder());
     auto status = append_builder(common_type, *child_builders_[common_type],
                                  make_view(new_val_to_add));
     TENZIR_ASSERT(status.ok());
