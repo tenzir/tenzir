@@ -896,8 +896,8 @@ public:
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte>
   as_bytes(const enumeration_type& x) noexcept;
-  friend std::span<const std::byte>
-  as_bytes(enumeration_type&&) noexcept = delete;
+  friend std::span<const std::byte> as_bytes(enumeration_type&&) noexcept
+    = delete;
 
   /// Constructs data from the type.
   [[nodiscard]] enumeration construct() const noexcept;
@@ -1636,19 +1636,20 @@ struct sum_type_access<arrow::DataType> final {
     -> Result {
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::DataType& x, Visitor&& v, Args&&... xs) -> Result {
-          auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = detail::get_indices(xs_as_tuple);
-          return detail::apply_args_suffxied(
-            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-            get(x, sum_type_token<Ts, Indices>{}));
-        }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{
+          +[](const arrow::DataType& x, Visitor&& v, Args&&... xs) -> Result {
+            auto xs_as_tuple = std::forward_as_tuple(xs...);
+            auto indices = detail::get_indices(xs_as_tuple);
+            return detail::apply_args_suffxied(
+              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+              get(x, sum_type_token<Ts, Indices>{}));
+          }...};
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch = table[index_from_type(x)];
     TENZIR_ASSERT(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
@@ -1711,19 +1712,20 @@ struct sum_type_access<arrow::Array> final {
     TENZIR_ASSERT(x.type());
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
-          auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = detail::get_indices(xs_as_tuple);
-          return detail::apply_args_suffxied(
-            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-            get(x, sum_type_token<Ts, Indices>{}));
-        }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{
+          +[](const arrow::Array& x, Visitor&& v, Args&&... xs) -> Result {
+            auto xs_as_tuple = std::forward_as_tuple(xs...);
+            auto indices = detail::get_indices(xs_as_tuple);
+            return detail::apply_args_suffxied(
+              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+              get(x, sum_type_token<Ts, Indices>{}));
+          }...};
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
     TENZIR_ASSERT(dispatch);
@@ -1792,19 +1794,20 @@ struct sum_type_access<arrow::Scalar> final {
     TENZIR_ASSERT(x.type);
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::Scalar& x, Visitor&& v, Args&&... xs) -> Result {
-          auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = detail::get_indices(xs_as_tuple);
-          return detail::apply_args_suffxied(
-            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-            get(x, sum_type_token<Ts, Indices>{}));
-        }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{
+          +[](const arrow::Scalar& x, Visitor&& v, Args&&... xs) -> Result {
+            auto xs_as_tuple = std::forward_as_tuple(xs...);
+            auto indices = detail::get_indices(xs_as_tuple);
+            return detail::apply_args_suffxied(
+              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+              get(x, sum_type_token<Ts, Indices>{}));
+          }...};
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type)];
     TENZIR_ASSERT(dispatch);
@@ -1953,23 +1956,23 @@ struct formatter<tenzir::type> {
     -> decltype(ctx.out()) {
     auto out = ctx.out();
     if (const auto& name = value.name(); !name.empty())
-      out = format_to(out, "{}", name);
+      out = fmt::format_to(out, "{}", name);
     else if (!value)
-      out = format_to(out, "none");
+      out = fmt::format_to(out, "none");
     else
       caf::visit(
         [&](const auto& x) {
-          out = format_to(out, "{}", x);
+          out = fmt::format_to(out, "{}", x);
         },
         value);
     if (print_attributes) {
       for (bool first = false; const auto& attribute :
                                value.attributes(tenzir::type::recurse::no)) {
         if (!first) {
-          out = format_to(out, " ");
+          out = fmt::format_to(out, " ");
           first = false;
         }
-        out = format_to(out, "{}", attribute);
+        out = fmt::format_to(out, "{}", attribute);
       }
     }
     return out;
@@ -1988,8 +1991,8 @@ struct formatter<tenzir::type::attribute_view> {
   format(const tenzir::type::attribute_view& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     if (value.value.empty())
-      return format_to(ctx.out(), "#{}", value.key);
-    return format_to(ctx.out(), "#{}={}", value.key, value.value);
+      return fmt::format_to(ctx.out(), "#{}", value.key);
+    return fmt::format_to(ctx.out(), "#{}={}", value.key, value.value);
   }
 };
 
@@ -2003,90 +2006,91 @@ struct formatter<T> {
   template <class FormatContext>
   auto format(const tenzir::bool_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "bool");
+    return fmt::format_to(ctx.out(), "bool");
   }
 
   template <class FormatContext>
   auto format(const tenzir::int64_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "int64");
+    return fmt::format_to(ctx.out(), "int64");
   }
 
   template <class FormatContext>
   auto format(const tenzir::uint64_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "uint64");
+    return fmt::format_to(ctx.out(), "uint64");
   }
 
   template <class FormatContext>
   auto format(const tenzir::double_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "double");
+    return fmt::format_to(ctx.out(), "double");
   }
 
   template <class FormatContext>
   auto format(const tenzir::duration_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "duration");
+    return fmt::format_to(ctx.out(), "duration");
   }
 
   template <class FormatContext>
   auto format(const tenzir::time_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "time");
+    return fmt::format_to(ctx.out(), "time");
   }
 
   template <class FormatContext>
   auto format(const tenzir::string_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "string");
+    return fmt::format_to(ctx.out(), "string");
   }
 
   template <class FormatContext>
   auto format(const tenzir::ip_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "ip");
+    return fmt::format_to(ctx.out(), "ip");
   }
 
   template <class FormatContext>
   auto format(const tenzir::subnet_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "subnet");
+    return fmt::format_to(ctx.out(), "subnet");
   }
 
   template <class FormatContext>
   auto format(const tenzir::enumeration_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "enum {{{}}}", fmt::join(value.fields(), ", "));
+    return fmt::format_to(ctx.out(), "enum {{{}}}",
+                          fmt::join(value.fields(), ", "));
   }
 
   template <class FormatContext>
   auto format(const tenzir::list_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "list<{}>", value.value_type());
+    return fmt::format_to(ctx.out(), "list<{}>", value.value_type());
   }
 
   template <class FormatContext>
   auto format(const tenzir::map_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "map<{}, {}>", value.key_type(),
-                     value.value_type());
+    return fmt::format_to(ctx.out(), "map<{}, {}>", value.key_type(),
+                          value.value_type());
   }
 
   template <class FormatContext>
   auto format(const tenzir::record_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     auto out = ctx.out();
-    out = format_to(out, "record {{");
+    out = fmt::format_to(out, "record {{");
     for (bool first = true; auto field : value.fields()) {
       if (first) {
-        out = format_to(out, "{}", field);
+        out = fmt::format_to(out, "{}", field);
         first = false;
       } else {
-        out = format_to(out, ", {}", field);
+        out = fmt::format_to(out, ", {}", field);
       }
     }
-    return format_to(out, "}}");
+    return fmt::format_to(out, "}}");
   }
 };
 
@@ -2100,7 +2104,7 @@ struct formatter<struct tenzir::enumeration_type::field_view> {
   template <class FormatContext>
   auto format(const struct tenzir::enumeration_type::field_view& value,
               FormatContext& ctx) const -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "{}: {}", value.name, value.key);
+    return fmt::format_to(ctx.out(), "{}: {}", value.name, value.key);
   }
 };
 
@@ -2114,7 +2118,7 @@ struct formatter<struct tenzir::record_type::field> {
   template <class FormatContext>
   auto format(const struct tenzir::record_type::field& value,
               FormatContext& ctx) const -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "{}: {}", value.name, value.type);
+    return fmt::format_to(ctx.out(), "{}: {}", value.name, value.type);
   }
 };
 
@@ -2129,7 +2133,7 @@ struct formatter<tenzir::record_type::field_view> {
   auto
   format(const tenzir::record_type::field_view& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "{}: {}", value.name, value.type);
+    return fmt::format_to(ctx.out(), "{}: {}", value.name, value.type);
   }
 };
 
