@@ -161,6 +161,7 @@ struct [[nodiscard]] pipeline_op_metrics {
   caf::timespan time_starting = {};
   caf::timespan time_running = {};
   caf::timespan time_scheduled = {};
+  caf::timespan time_elapsed = {};
   std::string in_unit = {};
   std::string out_unit = {};
   uint64_t inbound_total = {};
@@ -178,6 +179,7 @@ struct [[nodiscard]] pipeline_op_metrics {
               f.field("time_starting", x.time_starting),
               f.field("time_running", x.time_running),
               f.field("time_scheduled", x.time_scheduled),
+              f.field("time_elapsed", x.time_elapsed),
               f.field("in_unit", x.in_unit), f.field("out_unit", x.out_unit),
               f.field("inbound_total", x.inbound_total),
               f.field("num_inbound_batches", x.num_inbound_batches),
