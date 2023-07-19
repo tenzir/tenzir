@@ -331,16 +331,40 @@ struct exec_node_state : inbound_state_mixin<Input>,
   /// Set by `ctrl.abort(...)`, to be checked by `start()` and `run()`.
   caf::error abort;
 
+  auto emit_metrics() -> void {
+    current_metrics.time_elapsed = std::chrono::duration_cast<duration>(
+      std::chrono::steady_clock::now() - start_time);
+    if constexpr (not std::is_same_v<Input, std::monostate>) {
+      const auto total = static_cast<double>(current_metrics.inbound_total);
+      current_metrics.inbound_rate_per_second
+        = total
+          / std::chrono::duration_cast<
+              std::chrono::duration<double, std::chrono::seconds::period>>(
+              current_metrics.time_elapsed)
+              .count();
+    }
+    if constexpr (not std::is_same_v<Output, std::monostate>) {
+      const auto total = static_cast<double>(current_metrics.outbound_total);
+      current_metrics.outbound_rate_per_second
+        = total
+          / std::chrono::duration_cast<
+              std::chrono::duration<double, std::chrono::seconds::period>>(
+              current_metrics.time_elapsed)
+              .count();
+    }
+    self->request(metrics_handler, caf::infinite, current_metrics)
+      .then([]() {},
+            [](caf::error& e) {
+              TENZIR_WARN("failed to send metrics: {}", e);
+            });
+  }
+
   auto start(std::vector<caf::actor> previous) -> caf::result<void> {
     auto time_starting_guard = make_timer_guard(current_metrics.time_scheduled,
                                                 current_metrics.time_starting);
     TENZIR_DEBUG("{} received start request for `{}`", *self, op->to_string());
     detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
-      self->request(metrics_handler, caf::infinite, current_metrics)
-        .then([]() {},
-              [](caf::error& e) {
-                VAST_WARN("failed to send metrics: {}", e);
-              });
+      emit_metrics();
     });
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
@@ -656,8 +680,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
   };
 
   auto print_metrics() -> void {
-    const auto elapsed = std::chrono::duration_cast<duration>(
-      std::chrono::steady_clock::now() - start_time);
     auto percentage = [](auto num, auto den) {
       return std::chrono::duration<double, std::chrono::seconds::period>(num)
                .count()
@@ -666,7 +688,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
              * 100.0;
     };
     TENZIR_VERBOSE("{} was scheduled for {:.2g}% of total runtime", op->name(),
-                   percentage(current_metrics.time_scheduled, elapsed));
+                   percentage(current_metrics.time_scheduled,
+                              current_metrics.time_elapsed));
     TENZIR_VERBOSE("{} spent {:.2g}% of scheduled time starting", op->name(),
                    percentage(current_metrics.time_starting,
                               current_metrics.time_scheduled));
@@ -676,40 +699,28 @@ struct exec_node_state : inbound_state_mixin<Input>,
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       constexpr auto inbound_unit
         = std::is_same_v<Input, chunk_ptr> ? "B" : "events";
-      const auto total = static_cast<double>(current_metrics.inbound_total);
-      current_metrics.inbound_rate_per_second
-        = total
-          / std::chrono::duration_cast<
-              std::chrono::duration<double, std::chrono::seconds::period>>(
-              elapsed)
-              .count();
-      VAST_VERBOSE("{} inbound {:.0f} {} in {} rate = {:.2f} {}/s avg batch "
-                   "size = {:.2f} "
-                   "{}",
-                   op->name(), total, inbound_unit, data{elapsed},
-                   current_metrics.inbound_rate_per_second, inbound_unit,
-                   static_cast<double>(current_metrics.inbound_total)
-                     / current_metrics.num_inbound_batches,
-                   inbound_unit);
+      TENZIR_VERBOSE("{} inbound {} {} in {} rate = {:.2f} {}/s avg batch "
+                     "size = {:.2f} "
+                     "{}",
+                     op->name(), current_metrics.inbound_total, inbound_unit,
+                     data{current_metrics.time_elapsed},
+                     current_metrics.inbound_rate_per_second, inbound_unit,
+                     static_cast<double>(current_metrics.inbound_total)
+                       / current_metrics.num_inbound_batches,
+                     inbound_unit);
     }
     if constexpr (not std::is_same_v<Output, std::monostate>) {
       constexpr auto outbound_unit
         = std::is_same_v<Output, chunk_ptr> ? "B" : "events";
-      const auto total = static_cast<double>(current_metrics.outbound_total);
-      current_metrics.outbound_rate_per_second
-        = total
-          / std::chrono::duration_cast<
-              std::chrono::duration<double, std::chrono::seconds::period>>(
-              elapsed)
-              .count();
-      VAST_VERBOSE("{} outbound {:.0f} {} in {} rate = {:.2f} {}/s avg batch "
-                   "size = "
-                   "{:.2f} {}",
-                   op->name(), total, outbound_unit, data{elapsed},
-                   current_metrics.outbound_rate_per_second, outbound_unit,
-                   static_cast<double>(current_metrics.outbound_total)
-                     / current_metrics.num_outbound_batches,
-                   outbound_unit);
+      TENZIR_VERBOSE("{} outbound {} {} in {} rate = {:.2f} {}/s avg batch "
+                     "size = "
+                     "{:.2f} {}",
+                     op->name(), current_metrics.outbound_total, outbound_unit,
+                     data{current_metrics.time_elapsed},
+                     current_metrics.outbound_rate_per_second, outbound_unit,
+                     static_cast<double>(current_metrics.outbound_total)
+                       / current_metrics.num_outbound_batches,
+                     outbound_unit);
     }
   }
 
@@ -753,12 +764,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
         TENZIR_ASSERT(this->outbound_buffer_size == 0);
       }
       TENZIR_VERBOSE("{} is done", op);
+      emit_metrics();
       print_metrics();
-      self->request(metrics_handler, caf::infinite, current_metrics)
-        .then([]() {},
-              [](caf::error& e) {
-                VAST_WARN("failed to send metrics: {}", e);
-              });
       self->quit();
       return;
     }
