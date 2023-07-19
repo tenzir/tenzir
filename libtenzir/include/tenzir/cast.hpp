@@ -300,6 +300,7 @@ struct cast_helper<list_type, list_type> {
     if (from_type == to_type)
       return value;
     auto output = to_type.construct();
+    output.reserve(value.size());
     for (const auto& val : value) {
       auto cast_val = cast_helper<type, type>::cast_value(
         from_type.value_type(), val, to_type.value_type());
