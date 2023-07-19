@@ -25,6 +25,12 @@ struct type_from_data
 template <class T>
 using type_from_data_t = typename type_from_data<T>::type;
 
+/// @brief returns a valid pointer to the parent record_type builder when the
+/// parent builder is constructed and it is allowed to change fields (it is not
+/// a fixed_fields_record_builder) The parent builder will be constructed for:
+/// 1) The fields from the input schema
+/// 2) Inferred fields that had a value added to them (the type was inferred
+/// from the input -> adequate builder was created)
 using parent_record_builder_provider
   = std::function<concrete_series_builder<record_type>*()>;
 
