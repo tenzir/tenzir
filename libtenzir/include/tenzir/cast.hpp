@@ -842,11 +842,13 @@ struct cast_helper<enumeration_type, enumeration_type> {
     return std::move(can.error());
   }
 
-  static auto cast(const enumeration_type&,
-                   std::shared_ptr<type_to_arrow_array_t<enumeration_type>>,
-                   const enumeration_type&) noexcept
+  static auto
+  cast(const enumeration_type& from,
+       std::shared_ptr<type_to_arrow_array_t<enumeration_type>> array,
+       const enumeration_type& to) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
-    die("enumeration to enumeration cast unimplemented");
+    TENZIR_ASSERT(can_cast(from, to));
+    return array;
   }
 };
 
