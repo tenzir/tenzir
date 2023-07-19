@@ -603,9 +603,11 @@ struct serve_handler_state {
     }
     if (*timeout) {
       if (**timeout > defaults::api::serve::max_timeout) {
+        auto message = fmt::format("timeout exceeds limit of {}",
+                                   defaults::api::serve::max_timeout);
         auto detail = caf::make_error(
           ec::invalid_argument, fmt::format("got timeout {}", data{**timeout}));
-        return parse_error{.message = "timeout exceeds limit of 5 seconds",
+        return parse_error{.message = std::move(message),
                            .detail = std::move(detail)};
       }
       result.timeout = **timeout;
@@ -671,8 +673,8 @@ struct serve_handler_state {
     }
     out_iter = fmt::format_to(out_iter, R"(}}], "dropped": 0}}{})", '\n');
     if (result.size() > defaults::api::max_response_size) {
-      TENZIR_WARN("serve-manager discards oversized response with {} events",
-                  num_events);
+      TENZIR_DEBUG("serve-manager discards oversized response with {} events",
+                   num_events);
       return fmt::format(
         R"({{"next_continuation_token":"{}","events":[],"schemas":[],"dropped":{} }})",
         next_continuation_token, num_events);

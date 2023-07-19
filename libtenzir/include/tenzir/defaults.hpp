@@ -167,11 +167,15 @@ inline constexpr const size_t rotate_files = 3;
 namespace api {
 
 /// The maximum response size for one request.
+//  The AWS API Gateway enforces a 128KiB limit for websocket messages,
+//  and we stay slightly below that here to allow the platform plugin to
+//  add it's own framing and metadata.
 inline constexpr size_t max_response_size = size_t{124} * 1'024; // 124 KiB
 
 namespace serve {
 
-/// The duration for which old results are kept after being fetched.
+/// The duration for which results for the last set of results of a pipeline
+/// is kept available after being fetched for the first time.
 inline constexpr std::chrono::seconds retention_time = std::chrono::minutes{1};
 
 /// Number of events returned.
