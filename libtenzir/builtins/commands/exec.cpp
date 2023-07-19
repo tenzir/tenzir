@@ -29,10 +29,6 @@ struct exec_config {
   bool dump_diagnostics = false;
 };
 
-struct metrics_manager_state {
-  std::vector<pipeline_op_metrics> metrics;
-};
-
 auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
   if (pipe.infer_type<void>()) {
     // Don't add implicit source.
