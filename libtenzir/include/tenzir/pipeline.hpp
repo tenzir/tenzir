@@ -165,10 +165,10 @@ struct [[nodiscard]] pipeline_op_metrics {
   std::string in_unit = {};
   std::string out_unit = {};
   uint64_t inbound_total = {};
-  uint64_t num_inbound_batches = {};
+  uint64_t inbound_num_batches = {};
   double inbound_rate_per_second = {};
   uint64_t outbound_total = {};
-  uint64_t num_outbound_batches = {};
+  uint64_t outbound_num_batches = {};
   double outbound_rate_per_second = {};
 
   template <class Inspector>
@@ -182,10 +182,10 @@ struct [[nodiscard]] pipeline_op_metrics {
               f.field("time_elapsed", x.time_elapsed),
               f.field("in_unit", x.in_unit), f.field("out_unit", x.out_unit),
               f.field("inbound_total", x.inbound_total),
-              f.field("num_inbound_batches", x.num_inbound_batches),
+              f.field("inbound_num_batches", x.inbound_num_batches),
               f.field("inbound_rate_per_second", x.inbound_rate_per_second),
               f.field("outbound_total", x.outbound_total),
-              f.field("num_outbound_batches", x.num_outbound_batches),
+              f.field("outbound_num_batches", x.outbound_num_batches),
               f.field("outbound_rate_per_second", x.outbound_rate_per_second));
   }
 };

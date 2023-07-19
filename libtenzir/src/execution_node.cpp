@@ -650,7 +650,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       TENZIR_TRACE("{} pushed successfully", op->name());
       current_metrics.outbound_total += capped_demand;
       auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
-      current_metrics.num_outbound_batches += lhs.size();
+      current_metrics.outbound_num_batches += lhs.size();
       this->outbound_buffer = std::move(rhs);
       this->outbound_buffer_size
         = std::transform_reduce(this->outbound_buffer.begin(),
@@ -712,7 +712,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
                      data{current_metrics.time_elapsed},
                      current_metrics.inbound_rate_per_second, inbound_unit,
                      static_cast<double>(current_metrics.inbound_total)
-                       / current_metrics.num_inbound_batches,
+                       / current_metrics.inbound_num_batches,
                      inbound_unit);
     }
     if constexpr (not std::is_same_v<Output, std::monostate>) {
@@ -725,7 +725,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
                      data{current_metrics.time_elapsed},
                      current_metrics.outbound_rate_per_second, outbound_unit,
                      static_cast<double>(current_metrics.outbound_total)
-                       / current_metrics.num_outbound_batches,
+                       / current_metrics.outbound_num_batches,
                      outbound_unit);
     }
   }
@@ -852,7 +852,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       input.begin(), input.end(), uint64_t{}, std::plus{}, [](const Input& x) {
         return size(x);
       });
-    current_metrics.num_inbound_batches += input.size();
+    current_metrics.inbound_num_batches += input.size();
     if (input_size == 0) {
       return caf::make_error(ec::logic_error, "received empty batch");
     }
