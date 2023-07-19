@@ -130,6 +130,15 @@ public:
       ctrl_{ctrl} {
   }
 
+  doc_parser(const FieldValidator& field_validator,
+             std::string_view parsed_document, operator_control_plane& ctrl,
+             std::size_t parsed_lines)
+    : field_validator_{field_validator},
+      parsed_document_{parsed_document},
+      ctrl_{ctrl},
+      parsed_lines_{parsed_lines} {
+  }
+
   auto parse_object(simdjson::ondemand::value v, auto&& field_pusher,
                     size_t depth = 0u) -> void {
     auto obj = v.get_object().value_unsafe();
@@ -157,12 +166,54 @@ public:
   }
 
 private:
+  auto emit_unparsed_json_diagnostics(
+    std::string description,
+    simdjson::simdjson_result<const char*> document_location) {
+    auto document_to_truncate = parsed_document_;
+    auto note_prefix = "somewhere in";
+    if (not document_location.error()) {
+      document_to_truncate = std::string_view{document_location.value_unsafe(),
+                                              parsed_document_.end()};
+      note_prefix = "at";
+    }
+    constexpr auto character_limit = 50u;
+    if (document_to_truncate.length() > character_limit) {
+      diagnostic::warning("failed to parse {} in the JSON document",
+                          std::move(description))
+        .note("{} {} ...", note_prefix,
+              document_to_truncate.substr(0, character_limit))
+        .emit(ctrl_.diagnostics());
+    }
+    diagnostic::warning("failed to parse {} in the JSON document",
+                        std::move(description))
+      .note("{} {}", note_prefix, document_to_truncate)
+      .emit(ctrl_.diagnostics());
+  }
+
   auto report_parse_err(auto& v, std::string description) -> void {
-    ctrl_.warn(caf::make_error(
-      ec::parse_error,
-      fmt::format("json parser failed to parse {} in line {} from '{}'",
-                  std::move(description), parsed_document_,
-                  v.current_location().value_unsafe())));
+    if (parsed_lines_) {
+      report_parse_err_with_parsed_lines(v, std::move(description));
+      return;
+    }
+    emit_unparsed_json_diagnostics(std::move(description),
+                                   v.current_location());
+  }
+
+  auto report_parse_err_with_parsed_lines(auto& v, std::string description)
+    -> void {
+    if (v.current_location().error()) {
+      diagnostic::warning("failed to parse {} in the JSON document",
+                          std::move(description))
+        .note("line {}", *parsed_lines_)
+        .emit(ctrl_.diagnostics());
+      return;
+    }
+    auto column = v.current_location().value_unsafe() - parsed_document_.data();
+    diagnostic::warning("failed to parse {} in the JSON document",
+                        std::move(description))
+      .note("line {} column {}", *parsed_lines_, column)
+      .emit(ctrl_.diagnostics());
+    return;
   }
 
   auto parse_number(simdjson::ondemand::value val, auto& pusher) -> void {
@@ -270,6 +321,7 @@ private:
   const FieldValidator& field_validator_;
   std::string_view parsed_document_;
   operator_control_plane& ctrl_;
+  std::optional<std::size_t> parsed_lines_;
 };
 
 auto handle_empty_chunk(parser_state& state, bool has_selector) -> table_slice {
@@ -490,6 +542,7 @@ public:
 
   auto parse(simdjson::padded_string_view json_line, parser_state& state)
     -> generator<table_slice> {
+    ++lines_processed_;
     auto maybe_doc = this->parser_.iterate(json_line);
     auto val = maybe_doc.get_value();
     // val.error() will inherit all errors from maybe_doc. No need to check
@@ -511,8 +564,8 @@ public:
         co_yield *slice;
     }
     auto row = state.last_used_builder->push_row();
-    doc_parser{this->field_validator_, json_line, this->ctrl_}.parse_object(
-      val.value_unsafe(), row);
+    doc_parser{this->field_validator_, json_line, this->ctrl_, lines_processed_}
+      .parse_object(val.value_unsafe(), row);
     // After parsing one JSON object it is expected for the result to be at
     // the end. If it's otherwise then it means that a line contains more than
     // one object in which case we don't add any data and emit a warning.
@@ -531,6 +584,9 @@ public:
     if (auto slice = this->handle_max_rows(state))
       co_yield *slice;
   }
+
+private:
+  std::size_t lines_processed_ = 0u;
 };
 
 template <class FieldValidator>
