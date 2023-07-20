@@ -1112,6 +1112,21 @@ TEST(Fixed fields builder remove record type row) {
               }));
 }
 
+TEST(Remove row when not all of the schema fields got value added) {
+  const auto schema
+    = tenzir::type{"a nice name", record_type{{"int", int64_type{}},
+                                              {"str", string_type{}},
+                                              {"duration", duration_type{}}}};
+  auto sut = adaptive_table_slice_builder{schema};
+  {
+    auto row = sut.push_row();
+    REQUIRE(not row.push_field("int").add(int64_t{5}));
+    row.cancel();
+  }
+  auto out = sut.finish();
+  CHECK_EQUAL(out.rows(), 0u);
+}
+
 TEST(Field type changes when it was first discovered with a different one but
        the value got removed and a different type value was added) {
   auto sut = adaptive_table_slice_builder{};
