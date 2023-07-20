@@ -22,6 +22,40 @@ auto openapi_record() -> record {
     return lhs.first < rhs.first;
   });
   auto schemas = from_yaml(R"_(
+Metrics:
+  type: object
+  description: Information about pipeline data ingress and egress.
+  properties:
+    total:
+      type: object
+      description: Information about total pipeline metrics (e.g. total ingress/egress)
+      properties:
+        in:
+          type: object
+          description: Information about the total ingress. Contains empty values when data has not passed through the source operator.
+          properties:
+            unit:
+              type: string
+              description: The unit of the input data (bytes/events).
+            elements:
+              type: integer
+              description: The total amount of elements that entered the pipeline source.
+            avg_rate:
+              type: number
+              description: The average rate of input elements per second.
+        out:
+          type: object
+          description: Information about the total egress. Contains empty values when data has not passed through the sink operator.
+          properties:
+            unit:
+              type: string
+              description: The unit of the output data (bytes/events).
+            elements:
+              type: integer
+              description: The total amount of elements that entered the pipeline sink.
+            avg_rate:
+              type: number
+              description: The average rate of output elements per second.
 Diagnostics:
   type: array
   items:
@@ -116,6 +150,8 @@ PipelineInfo:
             description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
     diagnostics:
       $ref: '#/components/schemas/Diagnostics'
+    metrics:
+      $ref: '#/components/schemas/Metrics'
   )_");
   TENZIR_ASSERT_CHEAP(schemas);
   // clang-format off
