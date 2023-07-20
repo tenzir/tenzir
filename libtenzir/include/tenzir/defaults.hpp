@@ -221,8 +221,11 @@ inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 inline constexpr caf::timespan active_partition_timeout
   = std::chrono::seconds{30};
 
+/// Timeout after which a new automatic rebuild is triggered.
+inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{120};
+
 /// Maximum number of in-memory INDEX partitions.
-inline constexpr size_t max_in_mem_partitions = 10;
+inline constexpr size_t max_in_mem_partitions = 1;
 
 /// Number of immediately scheduled INDEX partitions.
 inline constexpr size_t taste_partitions = 5;
