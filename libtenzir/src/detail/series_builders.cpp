@@ -693,6 +693,7 @@ auto concrete_series_builder<list_type>::remove_last_row() -> bool {
 
 fixed_fields_record_builder::fixed_fields_record_builder(record_type type)
   : type_{std::move(type)} {
+  TENZIR_ERROR("{} - {}:{}", __func__, __FILE__, __LINE__);
   constexpr auto fixed_fields = true;
   for (auto view : caf::get<record_type>(type_).fields()) {
     field_builders_[std::string{view.name}] = std::make_unique<series_builder>(

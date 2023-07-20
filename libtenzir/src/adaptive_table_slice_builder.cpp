@@ -10,6 +10,8 @@
 
 #include <arrow/record_batch.h>
 
+#include <utility>
+
 namespace tenzir {
 
 namespace {
@@ -18,13 +20,18 @@ auto init_root_builder(const type& start_schema, bool allow_fields_discovery)
                                   detail::fixed_fields_record_builder>> {
   using variant = std::variant<detail::concrete_series_builder<record_type>,
                                detail::fixed_fields_record_builder>;
+  TENZIR_ERROR("{} - {}:{}", __func__, __FILE__, __LINE__);
   TENZIR_ASSERT(caf::holds_alternative<record_type>(start_schema));
-  if (allow_fields_discovery)
+  if (allow_fields_discovery) {
+    TENZIR_WARN("{} - {}:{}", __func__, __FILE__, __LINE__);
     return std::make_unique<variant>(
-      detail::concrete_series_builder<record_type>{
-        caf::get<record_type>(start_schema)});
-  return std::make_unique<variant>(detail::fixed_fields_record_builder{
-    std::move(caf::get<record_type>(start_schema))});
+      std::in_place_type<detail::concrete_series_builder<record_type>>,
+      caf::get<record_type>(start_schema));
+  }
+  TENZIR_WARN("{} - {}:{}", __func__, __FILE__, __LINE__);
+  return std::make_unique<variant>(
+    std::in_place_type<detail::fixed_fields_record_builder>,
+    caf::get<record_type>(start_schema));
 }
 } // namespace
 
@@ -32,6 +39,7 @@ adaptive_table_slice_builder::adaptive_table_slice_builder()
   : root_builder_{
     std::make_unique<std::variant<detail::concrete_series_builder<record_type>,
                                   detail::fixed_fields_record_builder>>()} {
+  TENZIR_ERROR("constructing adaptive_table_slice_builder {}", (void*)this);
 }
 
 adaptive_table_slice_builder::adaptive_table_slice_builder(

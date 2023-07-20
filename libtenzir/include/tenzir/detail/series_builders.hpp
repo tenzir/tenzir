@@ -215,15 +215,23 @@ public:
 
   explicit concrete_series_builder(const record_type& type);
 
-  ~concrete_series_builder() {
-    // backtrace();
-    TENZIR_INFO("destroying: {}", (void*)this);
-  }
+  // FIXME: We passed `this` in the constructor.
+  // concrete_series_builder(const concrete_series_builder&) = delete;
+  // concrete_series_builder(concrete_series_builder&&) = delete;
+  // auto operator=(const concrete_series_builder&)
+  //   -> concrete_series_builder& = delete;
+  // auto operator=(concrete_series_builder&&)
+  //   -> concrete_series_builder& = delete;
 
-  concrete_series_builder(concrete_series_builder const&) = default;
-  concrete_series_builder& operator=(concrete_series_builder const&) = default;
-  concrete_series_builder(concrete_series_builder&&) = default;
-  concrete_series_builder& operator=(concrete_series_builder&&) = default;
+  // concrete_series_builder(concrete_series_builder const&) = default;
+  // concrete_series_builder& operator=(concrete_series_builder const&) =
+  // default; concrete_series_builder(concrete_series_builder&&) = default;
+  // concrete_series_builder& operator=(concrete_series_builder&&) = default;
+
+  // ~concrete_series_builder() {
+  //   // backtrace();
+  //   TENZIR_INFO("destroying: {}", (void*)this);
+  // }
 
   auto get_field_builder_provider(std::string_view field,
                                   arrow_length_type starting_fields_length)

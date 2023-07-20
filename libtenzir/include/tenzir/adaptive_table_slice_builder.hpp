@@ -19,6 +19,10 @@ namespace tenzir {
 class adaptive_table_slice_builder {
 public:
   adaptive_table_slice_builder();
+  ~adaptive_table_slice_builder() {
+    TENZIR_ERROR("destroying adaptive_table_slice_builder {}", (void*)this);
+  }
+
   explicit adaptive_table_slice_builder(type starting_schema,
                                         bool allow_fields_discovery = false);
 
