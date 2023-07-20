@@ -18,9 +18,18 @@ namespace tenzir {
 
 class adaptive_table_slice_builder {
 public:
-  adaptive_table_slice_builder() = default;
+  adaptive_table_slice_builder();
   explicit adaptive_table_slice_builder(type starting_schema,
                                         bool allow_fields_discovery = false);
+
+  adaptive_table_slice_builder(const adaptive_table_slice_builder&) = delete;
+  adaptive_table_slice_builder(adaptive_table_slice_builder&&) noexcept
+    = default;
+  auto operator=(const adaptive_table_slice_builder&)
+    -> adaptive_table_slice_builder& = delete;
+  auto operator=(adaptive_table_slice_builder&&) noexcept
+    -> adaptive_table_slice_builder& = default;
+
   struct row_guard {
   public:
     explicit row_guard(adaptive_table_slice_builder& builder);
@@ -61,8 +70,8 @@ private:
   auto get_schema(std::string_view slice_schema_name) const -> type;
   auto finish_impl() -> std::shared_ptr<arrow::Array>;
 
-  std::variant<detail::concrete_series_builder<record_type>,
-               detail::fixed_fields_record_builder>
+  std::unique_ptr<std::variant<detail::concrete_series_builder<record_type>,
+                               detail::fixed_fields_record_builder>>
     root_builder_;
 };
 

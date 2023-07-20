@@ -422,13 +422,20 @@ public:
 protected:
   auto handle_schema_found(parser_state& state, const type& schema) const
     -> std::optional<table_slice> {
-    if (not state.builders_per_schema.contains(schema.name())) {
-      state.builders_per_schema[schema.name()]
-        = adaptive_table_slice_builder{schema, infer_types_};
+    auto builder = state.builders_per_schema.find(schema.name());
+    if (builder == state.builders_per_schema.end()) {
+      auto [it, inserted] = state.builders_per_schema.emplace(
+        std::piecewise_construct, std::make_tuple(schema.name()),
+        std::make_tuple(schema, infer_types_));
+      TENZIR_ASSERT(inserted);
+      builder = it;
     }
-    auto& current_builder = state.builders_per_schema[schema.name()];
-    auto maybe_slice_to_yield = handle_builder_change(current_builder, state);
-    state.last_used_builder = std::addressof(current_builder);
+    // if (not state.builders_per_schema.contains(schema.name())) {
+    //   state.builders_per_schema.emplace(schema.name(), schema, infer_types_);
+    // }
+    // auto& current_builder = state.builders_per_schema[schema.name()];
+    auto maybe_slice_to_yield = handle_builder_change(builder->second, state);
+    state.last_used_builder = std::addressof(builder->second);
     state.last_used_schema_name = std::string{schema.name()};
     return maybe_slice_to_yield;
   }
