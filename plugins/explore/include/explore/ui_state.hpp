@@ -13,12 +13,17 @@
 #include <tenzir/table_slice.hpp>
 #include <tenzir/type.hpp>
 
+#include <ftxui/dom/direction.hpp>
+
 #include <map>
 #include <memory>
 #include <unordered_map>
 #include <vector>
 
 namespace tenzir::plugins::explore {
+
+struct operator_args;
+struct printer_args;
 
 struct table_state;
 using table_state_ptr = std::shared_ptr<table_state>;
@@ -45,9 +50,12 @@ struct ui_state {
 
   /// Flag that controls whether to show the column types.
   bool hide_types = false;
-
-  /// Updates the UI state when a new slice of data arrives.
-  auto add(table_slice slice) -> void;
 };
+
+/// Construct the global UI state from the plugin configuration.
+auto make_ui_state(const operator_args& args) -> ui_state;
+
+/// Construct the global UI state from the plugin configuration.
+auto make_ui_state(const printer_args& args) -> ui_state;
 
 } // namespace tenzir::plugins::explore

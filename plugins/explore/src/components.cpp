@@ -24,9 +24,17 @@
 
 #include <unordered_set>
 
+using namespace ftxui;
+
 namespace tenzir::plugins::explore {
 
-using namespace ftxui;
+auto to_string(const Component& component) -> std::string {
+  auto document = component->Render();
+  auto screen
+    = Screen::Create(Dimension::Fit(document), Dimension::Fit(document));
+  Render(screen, document);
+  return screen.ToString();
+}
 
 auto lift(Element e) -> Component {
   class Impl : public ComponentBase {
@@ -44,14 +52,13 @@ auto lift(Element e) -> Component {
   return Make<Impl>(std::move(e));
 }
 
-namespace {
-
-/// Makes a component a vertically scrollable in a frame.
 auto enframe(const Component& component) -> Component {
   return Renderer(component, [component] {
     return component->Render() | frame;
   });
 }
+
+namespace {
 
 /// A table showing user help and keyboard shortcuts.
 auto Help() -> Component {
@@ -79,7 +86,7 @@ auto Help() -> Component {
 
 enum class alignment { left, center, right };
 
-auto colorize(auto& make, view<data> value, const struct theme& theme) {
+auto colorize(auto make, view<data> value, const struct theme& theme) {
   auto factory = detail::overload{
     [&](const auto& x) {
       return make(x, alignment::left, theme.palette.text);
@@ -134,6 +141,7 @@ auto align_element(alignment align, Element element) -> Element {
 }
 
 auto StaticCell(view<data> value, const struct theme& theme) -> Element {
+  using tenzir::to_string;
   auto make = [&](const auto& x, alignment align, auto data_color) {
     auto element = text(to_string(x)) | color(data_color);
     return align_element(align, std::move(element));
@@ -212,10 +220,10 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
       auto height
         = field_height
           * detail::narrow_cast<int>(schema_depth - current_depth + 1);
-      if (state->hide_types)
+      if (state_->hide_types)
         height--;
       auto header
-        = state->hide_types
+        = state_->hide_types
             ? SingleColumnHeader(std::string{field.name}, height, state_->theme)
             : DualColumnHeader(std::string{field.name},
                                fmt::to_string(field.type), height,
@@ -229,14 +237,14 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
 
     auto Render() -> Element override {
       if (num_slices_rendered_ == table_->slices.size())
-        return ComponentBase::Render();
+        return ComponentBase::Render() | flex;
       for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i) {
         const auto& slice = table_->slices[i];
         TENZIR_DEBUG("rendering [{},{}) of schema '{}'", i,
                      i + table_->slices.size(), slice.schema().name());
         auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
         // TODO: make the component configurable with respect to static vs.
-        // dynamic behavior. Uncommenting the cell.
+        // dynamic behavior.
         // for (size_t row = 0; row < slice.rows(); ++row) {
         //  auto cell = InteractiveCell(slice.at(row, col), state_->theme);
         //  body_->Add(cell);
@@ -250,7 +258,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
         body_->Add(lift(vbox(std::move(body))));
       }
       num_slices_rendered_ = table_->slices.size();
-      return ComponentBase::Render();
+      return ComponentBase::Render() | flex;
     }
 
   private:
@@ -347,8 +355,12 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
     [&](const auto&) {
       return LeafColumn(state, schema, index);
     },
-    [&](const list_type&) {
-      // TODO: support lists natively.
+    [&](const list_type& /* list */) {
+      // auto value_type = list.value_type();
+      // if (const auto* record = caf::get_if<record_type>(&value_type)) {
+      //   // Consider the nested record as new top-level schema.
+      //   return VerticalTable(state, value_type, index);
+      // }
       return LeafColumn(state, schema, index);
     },
     [&](const record_type& record) {
@@ -436,6 +448,29 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
 // auto HorizontalTable(ui_state* state, const type& schema) -> Component {
 //   return {};
 // }
+
+} // namespace
+
+auto DataFrame(ui_state* state, const type& schema) -> Component {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state, const type& schema) : state_{state} {
+      Add(Container::Vertical({
+        lift(text(std::string{schema.name()}) | center),
+        lift(state_->theme.separator()),
+        VerticalTable(state, schema),
+      }));
+    }
+
+    auto Render() -> Element override {
+      return ComponentBase::Render() | state_->theme.border();
+    }
+
+  private:
+    ui_state* state_;
+  };
+  return Make<Impl>(state, schema);
+}
 
 auto Navigator(ui_state* state, int* index, int* width) -> Component {
   class Impl : public ComponentBase {
@@ -531,7 +566,7 @@ auto Explorer(ui_state* state) -> Component {
     auto Render() -> Element override {
       auto num_tables = state_->tables.size();
       if (tables_.size() == num_tables)
-        return ComponentBase::Render();
+        return ComponentBase::Render() | state_->theme.border();
       if (state_->navigator_auto_hide && num_tables == 1) {
         DetachAllChildren();
         Add(tab_);
@@ -574,7 +609,7 @@ auto Explorer(ui_state* state) -> Component {
       TENZIR_ASSERT(num_tables == state_->tables.size());
       TENZIR_ASSERT(num_tables == tables_.size());
       TENZIR_ASSERT(num_tables == tab_->ChildCount());
-      return ComponentBase::Render();
+      return ComponentBase::Render() | state_->theme.border();
     }
 
   private:
@@ -594,8 +629,6 @@ auto Explorer(ui_state* state) -> Component {
   };
   return Make<Impl>(state);
 }
-
-} // namespace
 
 auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
   class Impl : public ComponentBase {
@@ -624,10 +657,6 @@ auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
         return false;
       });
       Add(std::move(main));
-    }
-
-    auto Render() -> Element override {
-      return ComponentBase::Render() | state_->theme.border();
     }
 
   private:

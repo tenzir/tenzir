@@ -18,8 +18,14 @@
 
 namespace tenzir::plugins::explore {
 
+/// Prints a component as a string.
+auto to_string(const ftxui::Component& component) -> std::string;
+
 /// Lifts an FTXUI element into a component.
 auto lift(ftxui::Element e) -> ftxui::Component;
+
+/// Makes a component a vertically scrollable in a frame.
+auto enframe(const ftxui::Component& component) -> ftxui::Component;
 
 // We are adding a "deep" event catching helper here becase we are facing the
 // same issue of a parent component masking the events from its children as
@@ -68,6 +74,15 @@ auto Catch(std::function<bool(ftxui::Event)> on_event)
                          });
   };
 }
+
+/// A data frame.
+auto DataFrame(ui_state* state, const type& schema) -> ftxui::Component;
+
+/// The schema navigator.
+auto Navigator(ui_state* state, int* index, int* width) -> ftxui::Component;
+
+/// The Explorer.
+auto Explorer(ui_state* state) -> ftxui::Component;
 
 /// The top-level component of the application.
 /// @param screen The screen to hook for UI events.

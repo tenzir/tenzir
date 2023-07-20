@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "explore/components.hpp"
+#include "explore/operator_args.hpp"
+#include "explore/printer_args.hpp"
 #include "explore/ui_state.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -16,7 +18,9 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 
+#include <ftxui/component/loop.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/screen/screen.hpp>
 
 #include <thread>
 
@@ -24,28 +28,9 @@ namespace tenzir::plugins::explore {
 
 namespace {
 
-/// The configuration for the `explore` operator.
-struct plugin_args {
-  std::optional<located<int>> width;
-  std::optional<located<int>> height;
-  std::optional<location> fullscreen;
-  std::optional<located<std::string>> navigator_position;
-  std::optional<location> navigator_auto_hide;
-  std::optional<location> hide_types;
-
-  friend auto inspect(auto& f, plugin_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("plugin_args")
-      .fields(f.field("width", x.width), f.field("height", x.height),
-              f.field("fullscreen", x.fullscreen),
-              f.field("navigator_position", x.navigator_position),
-              f.field("navigator_auto_hide", x.navigator_auto_hide),
-              f.field("hide_types", x.hide_types));
-  }
-};
-
-/// Construct an FTXUI screen from the operator configuration.
-auto make_screen(const plugin_args& args) -> ftxui::ScreenInteractive {
+/// Construct an FTXUI screen from the plugin configuration.
+auto make_interactive_screen(const operator_args& args)
+  -> ftxui::ScreenInteractive {
   using namespace ftxui;
   TENZIR_ASSERT((args.width && args.height) || (!args.width && !args.height));
   TENZIR_ASSERT(!args.width
@@ -54,14 +39,16 @@ auto make_screen(const plugin_args& args) -> ftxui::ScreenInteractive {
     return ScreenInteractive::FixedSize(args.width->inner, args.height->inner);
   if (args.fullscreen)
     return ScreenInteractive::Fullscreen();
-  return ScreenInteractive::FitComponent();
+  if (args.fit)
+    return ScreenInteractive::FitComponent();
+  return ScreenInteractive::TerminalOutput();
 }
 
 class explore_operator final : public crtp_operator<explore_operator> {
 public:
   explore_operator() = default;
 
-  explicit explore_operator(plugin_args args) : args_{std::move(args)} {
+  explicit explore_operator(operator_args args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -71,22 +58,8 @@ public:
   auto operator()(generator<table_slice> input) const
     -> generator<std::monostate> {
     using namespace ftxui;
-    auto screen = make_screen(args_);
-    ui_state state;
-    if (args_.navigator_position) {
-      if (args_.navigator_position->inner == "left")
-        state.navigator_position = ftxui::Direction::Left;
-      else if (args_.navigator_position->inner == "right")
-        state.navigator_position = ftxui::Direction::Right;
-      else if (args_.navigator_position->inner == "top")
-        state.navigator_position = ftxui::Direction::Up;
-      else if (args_.navigator_position->inner == "bottom")
-        state.navigator_position = ftxui::Direction::Down;
-    }
-    if (args_.navigator_auto_hide)
-      state.navigator_auto_hide = true;
-    if (args_.hide_types)
-      state.hide_types = true;
+    auto screen = make_interactive_screen(args_);
+    auto state = make_ui_state(args_);
     // Ban UI main loop into dedicated thread.
     auto thread = std::thread([&] {
       auto main = MainWindow(&screen, &state);
@@ -122,23 +95,106 @@ public:
   }
 
 private:
-  plugin_args args_;
+  operator_args args_;
 };
 
-class plugin final : public virtual operator_plugin<explore_operator> {
+class table_printer final : public plugin_printer {
 public:
+  table_printer() = default;
+
+  explicit table_printer(printer_args args) : args_{std::move(args)} {
+  }
+
+  // FIXME: this should actually be "table", but it's currently not possible.
+  auto name() const -> std::string override {
+    return "explore";
+  }
+
+  auto instantiate(type, operator_control_plane&) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    class screen_printer : public printer_instance {
+    public:
+      screen_printer(const printer_args& args)
+        : state_{make_ui_state(args)}, real_time_{args.real_time} {
+      }
+
+      auto process(table_slice slice) -> generator<chunk_ptr> override {
+        if (slice.rows() == 0) {
+          co_yield {};
+          co_return;
+        }
+        auto& table = state_.tables[slice.schema()];
+        if (!table)
+          table = std::make_shared<table_state>();
+        table->slices.push_back(slice);
+        auto& component = components_[slice.schema()];
+        if (!component)
+          component = DataFrame(&state_, slice.schema());
+        if (real_time_) {
+          auto result = chunk::make(to_string(component) + '\n');
+          state_.tables.clear();
+          components_.clear();
+          co_yield result;
+        } else {
+          co_yield {};
+        }
+      }
+
+      auto finish() -> generator<chunk_ptr> override {
+        if (real_time_)
+          co_return;
+        for (const auto& [schema, component] : components_)
+          co_yield chunk::make(to_string(component) + '\n');
+      }
+
+    private:
+      ui_state state_;
+      bool real_time_;
+      ftxui::Component component_;
+      std::unordered_map<type, ftxui::Component> components_;
+    };
+    return std::make_unique<screen_printer>(args_);
+  }
+
+  auto allows_joining() const -> bool override {
+    return true;
+  }
+
+  friend auto inspect(auto& f, table_printer& x) -> bool {
+    return f.object(x)
+      .pretty_name("table_printer")
+      .fields(f.field("args", x.args_));
+  }
+
+private:
+  printer_args args_;
+};
+
+class explore_plugin final : public virtual operator_plugin<explore_operator>,
+                             public virtual printer_plugin<table_printer> {
+public:
+  auto name() const -> std::string override {
+    return "explore";
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser
       = argument_parser{"explore", fmt::format("https://docs.tenzir.com/docs/"
                                                "connectors/sinks/explore")};
-    auto args = plugin_args{};
-    parser.add("-f,--fullscreen", args.fullscreen);
+    auto args = operator_args{};
+    parser.add("-F,--fullscreen", args.fullscreen);
+    parser.add("-f,--fit", args.fit);
     parser.add("-w,--width", args.width, "<int>");
     parser.add("-h,--height", args.height, "<int>");
     parser.add("-n,--navigator-position", args.navigator_position, "<string>");
     parser.add("-N,--navigator", args.navigator_auto_hide);
     parser.add("-T,--hide-types", args.hide_types);
     parser.parse(p);
+    if (args.fullscreen && args.fit)
+      diagnostic::error("--fullscreen and --fit are mutually exclusive")
+        .primary(*args.fullscreen)
+        .primary(*args.fit)
+        .throw_();
     if (args.width && !args.height)
       diagnostic::error("--width requires also setting --height")
         .primary(args.width->source)
@@ -157,10 +213,23 @@ public:
     }
     return std::make_unique<explore_operator>(std::move(args));
   }
+
+  auto parse_printer(parser_interface& p) const
+    -> std::unique_ptr<plugin_printer> override {
+    auto parser
+      = argument_parser{"explore", fmt::format("https://docs.tenzir.com/docs/"
+                                               "formats/table")};
+    auto args = printer_args{};
+    parser.add("-r,--real-time", args.real_time);
+    parser.add("-T,--hide-types", args.hide_types);
+    parser.parse(p);
+    return std::make_unique<table_printer>(std::move(args));
+  }
 };
 
 } // namespace
 
 } // namespace tenzir::plugins::explore
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::explore::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::explore::explore_plugin)
+// TENZIR_REGISTER_PLUGIN(tenzir::plugins::explore::table_plugin)
