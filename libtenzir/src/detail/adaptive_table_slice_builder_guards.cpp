@@ -39,57 +39,47 @@ auto add_data_view(auto& guard, const data_view& view) -> caf::error {
 }
 
 auto try_create_field_builder_for_fixed_builder(
-  builder_provider& record_builder_provider, std::string_view field_name,
-  arrow_length_type starting_fields_length) -> std::optional<field_guard> {
+  builder_provider& record_builder_provider, std::string_view field_name)
+  -> std::optional<field_guard> {
   if (not record_builder_provider.is_builder_constructed())
     return {};
   auto fixed_builder = std::get_if<fixed_fields_record_builder>(
     &record_builder_provider.provide());
   if (not fixed_builder)
     return {};
-  return field_guard{fixed_builder->get_field_builder_provider(field_name),
-                     [] {
+  return field_guard{fixed_builder->get_field_builder_provider(field_name), [] {
                        return nullptr;
-                     },
-                     starting_fields_length};
+                     }};
 }
 
 } // namespace
 
 auto record_guard::push_field(std::string_view name) -> field_guard {
-  if (auto guard = try_create_field_builder_for_fixed_builder(
-        builder_provider_, name, starting_fields_length_))
+  if (auto guard
+      = try_create_field_builder_for_fixed_builder(builder_provider_, name))
     return std::move(*guard);
   if (builder_provider_.is_builder_constructed()) {
     auto& b = builder_provider_.provide();
     auto& record_builder = std::get<concrete_series_builder<record_type>>(b);
-    return {record_builder.get_field_builder_provider(name,
-                                                      starting_fields_length_),
-            [&record_builder] {
+    return {record_builder.get_field_builder_provider(name), [&record_builder] {
               return std::addressof(record_builder);
-            },
-            starting_fields_length_};
+            }};
   }
   auto provider = [name, this]() -> series_builder& {
     auto& b = builder_provider_.provide();
     if (std::holds_alternative<unknown_type_builder>(b)) {
       b = {concrete_series_builder<record_type>(),
            parent_record_builder_provider_()};
-      b.add_up_to_n_nulls(starting_fields_length_);
       std::get<concrete_series_builder<record_type>>(b).set_type_change_observer(
         parent_record_builder_provider_());
     }
     auto& record_builder = std::get<concrete_series_builder<record_type>>(b);
-    return record_builder
-      .get_field_builder_provider(name, starting_fields_length_)
-      .provide();
+    return record_builder.get_field_builder_provider(name).provide();
   };
-  return {{std::move(provider)},
-          [this] {
+  return {{std::move(provider)}, [this] {
             return std::get_if<concrete_series_builder<record_type>>(
               std::addressof(builder_provider_.provide()));
-          },
-          starting_fields_length_};
+          }};
 }
 
 auto list_guard::list_record_guard::push_field(std::string_view name)
@@ -97,32 +87,25 @@ auto list_guard::list_record_guard::push_field(std::string_view name)
   // The columnar growth of list type is handled by arrow::ListBuilder. From the
   // perspective of a record value of a list we start with a field of 0 length
   // which is later appended into the list builder.
-  constexpr auto list_fields_start_length = arrow_length_type{0};
-  if (auto guard = try_create_field_builder_for_fixed_builder(
-        builder_provider_, name, list_fields_start_length))
+  if (auto guard
+      = try_create_field_builder_for_fixed_builder(builder_provider_, name))
     return std::move(*guard);
   if (builder_provider_.is_builder_constructed()) {
     auto& b = std::get<concrete_series_builder<record_type>>(
       builder_provider_.provide());
-    return field_guard{b.get_field_builder_provider(name,
-                                                    list_fields_start_length),
-                       [&b] {
+    return field_guard{b.get_field_builder_provider(name), [&b] {
                          return std::addressof(b);
-                       },
-                       list_fields_start_length};
+                       }};
   }
   auto provider = [this, name]() -> series_builder& {
     auto& builder = std::get<concrete_series_builder<record_type>>(
       builder_provider_.provide());
-    return builder.get_field_builder_provider(name, list_fields_start_length)
-      .provide();
+    return builder.get_field_builder_provider(name).provide();
   };
-  return field_guard{{std::move(provider)},
-                     [this] {
+  return field_guard{{std::move(provider)}, [this] {
                        return std::get_if<concrete_series_builder<record_type>>(
                          &builder_provider_.provide());
-                     },
-                     list_fields_start_length};
+                     }};
 }
 
 list_guard::list_record_guard::~list_record_guard() noexcept {
@@ -134,9 +117,18 @@ list_guard::list_record_guard::~list_record_guard() noexcept {
       parent_.propagate_type_change(builder_provider_.type());
     }
     std::visit(
-      []<class Builder>(Builder& b) {
+      [this]<class Builder>(Builder& b) {
         if constexpr (std::is_base_of_v<record_series_builder_base, Builder>) {
-          b.fill_nulls();
+          // auto new_length = b.length();
+          // if (new_length > starting_fields_length_)
+          // {
+          //   auto new_elements = new_length - starting_fields_length_;
+          //     b.fill_nulls();
+          //   if (new_elements > 1u)
+          //   {
+          //     b.cut(new_elements);
+          //   }
+          // }
           b.append();
         }
       },
@@ -217,8 +209,7 @@ auto field_guard::add(const data_view& view) -> caf::error {
 }
 
 auto field_guard::push_record() -> record_guard {
-  return {builder_provider_, parent_record_builder_provider_,
-          starting_fields_length_};
+  return {builder_provider_, parent_record_builder_provider_};
 }
 
 auto field_guard::push_list() -> list_guard {
@@ -236,8 +227,7 @@ auto field_guard::push_list() -> list_guard {
     auto& builder = builder_provider_.provide();
     if (std::holds_alternative<unknown_type_builder>(builder)) {
       auto parent_record = parent_record_builder_provider_();
-      builder = {concrete_series_builder<list_type>(starting_fields_length_),
-                 parent_record};
+      builder = {concrete_series_builder<list_type>(0u), parent_record};
       if (parent_record) {
         std::get<concrete_series_builder<list_type>>(builder)
           .set_record_type_change_observer(parent_record);

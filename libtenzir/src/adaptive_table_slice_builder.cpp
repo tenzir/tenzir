@@ -31,6 +31,7 @@ adaptive_table_slice_builder::adaptive_table_slice_builder(
 }
 
 auto adaptive_table_slice_builder::push_row() -> row_guard {
+  ++rows_;
   return row_guard{*this};
 }
 
@@ -52,11 +53,7 @@ auto adaptive_table_slice_builder::finish(std::string_view slice_schema_name)
 }
 
 auto adaptive_table_slice_builder::rows() const -> detail::arrow_length_type {
-  return std::visit(
-    [](const auto& builder) {
-      return builder.length();
-    },
-    root_builder_);
+  return rows_;
 }
 
 auto adaptive_table_slice_builder::get_schema(
@@ -82,37 +79,40 @@ auto adaptive_table_slice_builder::finish_impl()
 
 adaptive_table_slice_builder::row_guard::row_guard(
   adaptive_table_slice_builder& builder)
-  : builder_{builder}, starting_rows_count_{builder_.rows()} {
+  : builder_{builder} {
 }
 
 auto adaptive_table_slice_builder::row_guard::cancel() -> void {
-  auto current_rows = builder_.rows();
-  if (auto row_added = current_rows > starting_rows_count_; row_added) {
-    std::visit(
-      [](auto& b) {
-        b.fill_nulls();
-        b.remove_last_row();
-      },
-      builder_.root_builder_);
-  }
+  // if (auto row_added = current_rows > starting_rows_count_; row_added) {
+  std::visit(
+    [this](auto& b) {
+      b.cut(builder_.rows_ - 1);
+      --builder_.rows_;
+    },
+    builder_.root_builder_);
+  // }
 }
 
 auto adaptive_table_slice_builder::row_guard::push_field(
   std::string_view field_name) -> detail::field_guard {
   auto [builder_provider, parent_record_builder_provider] = std::visit(
     detail::overload{
-      [field_name](detail::fixed_fields_record_builder& b)
+      [field_name, this](detail::fixed_fields_record_builder& b)
         -> std::pair<detail::builder_provider,
                      detail::parent_record_builder_provider> {
+        TENZIR_ASSERT(b.length() <= builder_.rows());
+        b.cut(builder_.rows() - 1);
         return std::pair{b.get_field_builder_provider(field_name), []() {
                            return nullptr;
                          }};
       },
-      [field_name, len = starting_rows_count_](
-        detail::concrete_series_builder<record_type>& b)
+      [field_name, this](detail::concrete_series_builder<record_type>& b)
         -> std::pair<detail::builder_provider,
                      detail::parent_record_builder_provider> {
-        return std::pair{b.get_field_builder_provider(field_name, len), [&b]() {
+        TENZIR_ASSERT(b.length() <= builder_.rows());
+        b.cut(builder_.rows() - 1);
+
+        return std::pair{b.get_field_builder_provider(field_name), [&b]() {
                            return std::addressof(b);
                          }};
       },
@@ -120,13 +120,21 @@ auto adaptive_table_slice_builder::row_guard::push_field(
     builder_.root_builder_);
 
   return {std::move(builder_provider),
-          std::move(parent_record_builder_provider), starting_rows_count_};
+          std::move(parent_record_builder_provider)};
 }
 
 adaptive_table_slice_builder::row_guard::~row_guard() noexcept {
   std::visit(
-    [](auto& b) {
-      b.fill_nulls();
+    [this](auto& b) {
+      TENZIR_ASSERT(builder_.rows_ >= b.length());
+
+      // auto current_rows = b.length();
+      //   b.fill_nulls();
+      //   if (auto row_added = (current_rows - starting_rows_count_); row_added
+      //   > 1)
+      //   {
+      //     b.cut(row_added);
+      //   }
     },
     builder_.root_builder_);
 }

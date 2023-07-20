@@ -80,6 +80,10 @@ public:
     --null_count_;
   }
 
+  auto cut(arrow_length_type x) -> void {
+    null_count_ -= x;
+  }
+
 private:
   arrow_length_type null_count_ = 0u;
 };
@@ -146,6 +150,28 @@ public:
     return builder_->null_count() == builder_->length();
   }
 
+  auto cut(arrow_length_type x) -> void {
+    if (builder_->length() == x) {
+      return;
+    }
+    if (builder_->length() < x) {
+      auto status = builder_->AppendNulls(x - builder_->length());
+      TENZIR_ASSERT(status.ok());
+      return;
+    }
+
+    auto array = builder_->Finish().ValueOrDie();
+    auto valid_elements = array->Slice(0u, x);
+    // TENZIR_WARN("last element {}", last_element->ToString());
+    // TENZIR_WARN("valid element {}", valid_elements->ToString());\
+    // TODO use append array slice when possible
+    for (auto view : values(type_, *valid_elements)) {
+      auto status = append_builder(
+        type_, static_cast<arrow::ArrayBuilder&>(*builder_), view);
+      TENZIR_ASSERT(status.ok());
+    }
+  }
+
 protected:
   tenzir::type type_;
   std::shared_ptr<type_to_arrow_builder_t<Type>> builder_;
@@ -187,6 +213,7 @@ public:
   auto finish() -> std::shared_ptr<arrow::Array>;
   auto remove_last_row() -> void;
   auto append() -> void;
+  auto cut(arrow_length_type x) -> void;
 
 protected:
   auto get_arrow_builder(const type& type)
@@ -214,9 +241,7 @@ public:
 
   explicit concrete_series_builder(const record_type& type);
 
-  auto get_field_builder_provider(std::string_view field,
-                                  arrow_length_type starting_fields_length)
-    -> builder_provider;
+  auto get_field_builder_provider(std::string_view field) -> builder_provider;
 
   auto get_arrow_builder() -> std::shared_ptr<arrow::StructBuilder>;
   auto type() const -> tenzir::type;
@@ -330,6 +355,28 @@ public:
   auto change_type(tenzir::type list_value_type, tenzir::type new_value_type,
                    data value_to_add) -> caf::expected<tenzir::type>;
 
+  auto cut(arrow_length_type x) -> void {
+    if (builder_->length() == x) {
+      return;
+    }
+    if (builder_->length() < x) {
+      builder_->AppendNulls(x - builder_->length());
+
+      return;
+    }
+
+    auto array = builder_->Finish().ValueOrDie();
+    auto valid_elements = array->Slice(0u, x);
+    // TENZIR_WARN("last element {}", last_element->ToString());
+    // TENZIR_WARN("valid element {}", valid_elements->ToString());
+    // TODO use append array slice when possible
+    for (auto view : values(type_, *valid_elements)) {
+      auto status = append_builder(
+        type_, static_cast<arrow::ArrayBuilder&>(*builder_), view);
+      TENZIR_ASSERT(status.ok());
+    }
+  }
+
 private:
   auto create_builder_impl(const tenzir::type& t)
     -> std::shared_ptr<arrow::ArrayBuilder>;
@@ -391,6 +438,14 @@ struct series_builder : series_builder_base {
   // Returns error on failure.
   auto change_type(const tenzir::type& new_type, const arrow::Array& array)
     -> caf::error;
+
+  auto cut(arrow_length_type x) -> void {
+    std::visit(
+      [this, x](auto& actual) {
+        actual.cut(x);
+      },
+      *this);
+  }
 
 private:
   template <concrete_type ViewType>

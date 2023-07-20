@@ -314,18 +314,15 @@ concrete_series_builder<record_type>::concrete_series_builder(
 }
 
 auto concrete_series_builder<record_type>::get_field_builder_provider(
-  std::string_view field, arrow_length_type starting_fields_length)
-  -> builder_provider {
+  std::string_view field) -> builder_provider {
   if (auto it = field_builders_.find(std::string{field});
       it != field_builders_.end())
     return {std::ref(*(it->second))};
-  return {[field, starting_fields_length, &builders = field_builders_,
-           this]() -> series_builder& {
+  return {[field, &builders = field_builders_, this]() -> series_builder& {
     auto& new_builder = *(builders
                             .emplace(field, std::make_unique<series_builder>(
                                               unknown_type_builder{}, this))
                             .first->second);
-    new_builder.add_up_to_n_nulls(starting_fields_length);
     return new_builder;
   }};
 }
@@ -605,6 +602,13 @@ auto record_series_builder_base::remove_last_row() -> void {
   }
 }
 
+auto record_series_builder_base::cut(arrow_length_type x) -> void {
+  for (const auto& [name, builder] : field_builders_) {
+    TENZIR_WARN("name {} cut", name);
+    builder->cut(x);
+  }
+}
+
 concrete_series_builder<list_type>::concrete_series_builder(
   arrow_length_type nulls_to_prepend)
   : nulls_to_prepend_{nulls_to_prepend} {
@@ -624,13 +628,13 @@ std::shared_ptr<arrow::Array> concrete_series_builder<list_type>::finish() {
 
 auto concrete_series_builder<list_type>::add_up_to_n_nulls(
   arrow_length_type max_null_count) -> void {
-  if (builder_) {
-    TENZIR_ASSERT(max_null_count >= length());
-    const auto status = builder_->AppendNulls(max_null_count - length());
-    TENZIR_ASSERT(status.ok());
-    return;
-  }
-  nulls_to_prepend_ = std::max(max_null_count, nulls_to_prepend_);
+  // if (builder_) {
+  //   TENZIR_ASSERT(max_null_count >= length());
+  //   const auto status = builder_->AppendNulls(max_null_count - length());
+  //   TENZIR_ASSERT(status.ok());
+  //   return;
+  // }
+  // nulls_to_prepend_ = std::max(max_null_count, nulls_to_prepend_);
 }
 
 auto concrete_series_builder<list_type>::type() const -> const tenzir::type& {
@@ -788,11 +792,11 @@ std::shared_ptr<arrow::Array> series_builder::finish() {
 
 auto series_builder::add_up_to_n_nulls(arrow_length_type max_null_count)
   -> void {
-  std::visit(
-    [max_null_count](auto& actual) {
-      actual.add_up_to_n_nulls(max_null_count);
-    },
-    *this);
+  // std::visit(
+  //   [max_null_count](auto& actual) {
+  //     actual.add_up_to_n_nulls(max_null_count);
+  //   },
+  //   *this);
 }
 
 auto series_builder::remove_last_row() -> void {

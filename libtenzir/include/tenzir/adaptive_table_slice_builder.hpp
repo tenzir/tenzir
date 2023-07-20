@@ -37,7 +37,7 @@ public:
 
   private:
     adaptive_table_slice_builder& builder_;
-    detail::arrow_length_type starting_rows_count_ = 0;
+    detail::arrow_length_type row_nr_ = 0;
   };
 
   /// @brief Inserts a row to the output table slice.
@@ -64,6 +64,8 @@ private:
   std::variant<detail::concrete_series_builder<record_type>,
                detail::fixed_fields_record_builder>
     root_builder_;
+
+  detail::arrow_length_type rows_{0u};
 };
 
 } // namespace tenzir

@@ -189,12 +189,10 @@ private:
 class record_guard {
 public:
   record_guard(builder_provider builder_provider,
-               parent_record_builder_provider parent_record_builder_provider,
-               arrow_length_type starting_fields_length)
+               parent_record_builder_provider parent_record_builder_provider)
     : builder_provider_{std::move(builder_provider)},
       parent_record_builder_provider_{
-        std::move(parent_record_builder_provider)},
-      starting_fields_length_{starting_fields_length} {
+        std::move(parent_record_builder_provider)} {
   }
 
   /// @brief Adds a field to a record.
@@ -205,7 +203,6 @@ public:
 private:
   builder_provider builder_provider_;
   parent_record_builder_provider parent_record_builder_provider_;
-  arrow_length_type starting_fields_length_ = 0u;
 };
 
 /// @brief A view of field created within adaptive_table_slice_builder.
@@ -213,12 +210,10 @@ private:
 class field_guard {
 public:
   field_guard(builder_provider builder_provider,
-              parent_record_builder_provider parent_record_builder_provider,
-              arrow_length_type starting_fields_length)
+              parent_record_builder_provider parent_record_builder_provider)
     : builder_provider_{std::move(builder_provider)},
       parent_record_builder_provider_{
-        std::move(parent_record_builder_provider)},
-      starting_fields_length_{starting_fields_length} {
+        std::move(parent_record_builder_provider)} {
   }
 
   /// @brief Adds a value to a field.
@@ -258,7 +253,6 @@ public:
 private:
   builder_provider builder_provider_;
   parent_record_builder_provider parent_record_builder_provider_;
-  arrow_length_type starting_fields_length_ = 0u;
 };
 
 } // namespace tenzir::detail
