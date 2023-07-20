@@ -262,7 +262,7 @@ struct managed_serve_operator {
     delayed_attempt.dispose();
     requested = 0;
     TENZIR_DEBUG("clearing continuation token");
-    last_continuation_token = std::exchange(continuation_token, {});
+    last_continuation_token = std::exchange(continuation_token, "__DONE__");
     last_results = results;
     // If the pipeline is at its end then we must not assign a new token, but
     // rather end here.
