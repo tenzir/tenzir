@@ -501,12 +501,6 @@ private:
 class plugin final : public virtual parser_plugin<pcap_parser>,
                      public virtual printer_plugin<pcap_printer> {
 public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
-    config_ = config;
-    return caf::none;
-  }
-
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
@@ -531,9 +525,6 @@ public:
   auto name() const -> std::string override {
     return "pcap";
   }
-
-private:
-  record config_;
 };
 
 } // namespace
