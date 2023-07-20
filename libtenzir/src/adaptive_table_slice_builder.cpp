@@ -98,19 +98,28 @@ auto adaptive_table_slice_builder::row_guard::cancel() -> void {
 
 auto adaptive_table_slice_builder::row_guard::push_field(
   std::string_view field_name) -> detail::field_guard {
-  auto provider
-    = std::visit(detail::overload{
-                   [field_name](detail::fixed_fields_record_builder& b) {
-                     return b.get_field_builder_provider(field_name);
-                   },
-                   [field_name, len = starting_rows_count_](
-                     detail::concrete_series_builder<record_type>& b) {
-                     return b.get_field_builder_provider(field_name, len);
-                   },
-                 },
-                 builder_.root_builder_);
+  auto [builder_provider, parent_record_builder_provider] = std::visit(
+    detail::overload{
+      [field_name](detail::fixed_fields_record_builder& b)
+        -> std::pair<detail::builder_provider,
+                     detail::parent_record_builder_provider> {
+        return std::pair{b.get_field_builder_provider(field_name), []() {
+                           return nullptr;
+                         }};
+      },
+      [field_name, len = starting_rows_count_](
+        detail::concrete_series_builder<record_type>& b)
+        -> std::pair<detail::builder_provider,
+                     detail::parent_record_builder_provider> {
+        return std::pair{b.get_field_builder_provider(field_name, len), [&b]() {
+                           return std::addressof(b);
+                         }};
+      },
+    },
+    builder_.root_builder_);
 
-  return {std::move(provider), starting_rows_count_};
+  return {std::move(builder_provider),
+          std::move(parent_record_builder_provider), starting_rows_count_};
 }
 
 adaptive_table_slice_builder::row_guard::~row_guard() noexcept {
