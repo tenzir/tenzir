@@ -337,34 +337,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
   /// Set by `ctrl.abort(...)`, to be checked by `start()` and `run()`.
   caf::error abort;
 
-  auto emit_metrics() -> void {
-    current_metrics.time_elapsed = std::chrono::duration_cast<duration>(
-      std::chrono::steady_clock::now() - start_time);
-    if constexpr (not std::is_same_v<Input, std::monostate>) {
-      const auto total = static_cast<double>(current_metrics.inbound_total);
-      current_metrics.inbound_rate_per_second
-        = total
-          / std::chrono::duration_cast<
-              std::chrono::duration<double, std::chrono::seconds::period>>(
-              current_metrics.time_elapsed)
-              .count();
-    }
-    if constexpr (not std::is_same_v<Output, std::monostate>) {
-      const auto total = static_cast<double>(current_metrics.outbound_total);
-      current_metrics.outbound_rate_per_second
-        = total
-          / std::chrono::duration_cast<
-              std::chrono::duration<double, std::chrono::seconds::period>>(
-              current_metrics.time_elapsed)
-              .count();
-    }
-    self->request(metrics_handler, caf::infinite, current_metrics)
-      .then([]() {},
-            [](caf::error& e) {
-              TENZIR_WARN("failed to send metrics: {}", e);
-            });
-  }
-
   auto start(std::vector<caf::actor> previous) -> caf::result<void> {
     auto time_starting_guard = make_timer_guard(current_metrics.time_scheduled,
                                                 current_metrics.time_starting);
@@ -684,6 +656,34 @@ struct exec_node_state : inbound_state_mixin<Input>,
         .then(std::move(handle_result), std::move(handle_error));
     }
   };
+
+  auto emit_metrics() -> void {
+    current_metrics.time_elapsed = std::chrono::duration_cast<duration>(
+      std::chrono::steady_clock::now() - start_time);
+    if constexpr (not std::is_same_v<Input, std::monostate>) {
+      const auto total = static_cast<double>(current_metrics.inbound_total);
+      current_metrics.inbound_rate_per_second
+        = total
+          / std::chrono::duration_cast<
+              std::chrono::duration<double, std::chrono::seconds::period>>(
+              current_metrics.time_elapsed)
+              .count();
+    }
+    if constexpr (not std::is_same_v<Output, std::monostate>) {
+      const auto total = static_cast<double>(current_metrics.outbound_total);
+      current_metrics.outbound_rate_per_second
+        = total
+          / std::chrono::duration_cast<
+              std::chrono::duration<double, std::chrono::seconds::period>>(
+              current_metrics.time_elapsed)
+              .count();
+    }
+    self->request(metrics_handler, caf::infinite, current_metrics)
+      .then([]() {},
+            [](caf::error& e) {
+              TENZIR_WARN("failed to send metrics: {}", e);
+            });
+  }
 
   auto print_metrics() -> void {
     auto percentage = [](auto num, auto den) {
