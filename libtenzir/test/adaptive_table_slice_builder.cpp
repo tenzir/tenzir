@@ -772,6 +772,24 @@ TEST(remove row empty list) {
   CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{10});
 }
 
+TEST(remove row with extension type fields) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    REQUIRE(not row.push_field("ip1").add(ip::v4(0xFF << 1)));
+    REQUIRE(not row.push_field("ip2").add(ip::v4(0xFF << 1)));
+  }
+  auto row = sut.push_row();
+  REQUIRE(not row.push_field("ip1").add(ip::v4(0xFF << 2)));
+  REQUIRE(not row.push_field("ip2").add(ip::v4(0xFF << 2)));
+  row.cancel();
+  auto output = sut.finish();
+  REQUIRE_EQUAL(output.rows(), 1u);
+  REQUIRE_EQUAL(output.columns(), 2u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), ip::v4(0xFF << 1));
+  CHECK_EQUAL(materialize(output.at(0u, 1u)), ip::v4(0xFF << 1));
+}
+
 TEST(Add nulls to fields that didnt have values added when adaptive builder is
        constructed with a schema) {
   const auto schema = tenzir::type{
@@ -1092,6 +1110,21 @@ TEST(Fixed fields builder remove record type row) {
                   {"nested list", list{{int64_t{100}}}},
                 }},
               }));
+}
+
+TEST(Remove row when not all of the schema fields got value added) {
+  const auto schema
+    = tenzir::type{"a nice name", record_type{{"int", int64_type{}},
+                                              {"str", string_type{}},
+                                              {"duration", duration_type{}}}};
+  auto sut = adaptive_table_slice_builder{schema};
+  {
+    auto row = sut.push_row();
+    REQUIRE(not row.push_field("int").add(int64_t{5}));
+    row.cancel();
+  }
+  auto out = sut.finish();
+  CHECK_EQUAL(out.rows(), 0u);
 }
 
 TEST(Field type changes when it was first discovered with a different one but

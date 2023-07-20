@@ -90,6 +90,7 @@ auto adaptive_table_slice_builder::row_guard::cancel() -> void {
   if (auto row_added = current_rows > starting_rows_count_; row_added) {
     std::visit(
       [](auto& b) {
+        b.fill_nulls();
         b.remove_last_row();
       },
       builder_.root_builder_);

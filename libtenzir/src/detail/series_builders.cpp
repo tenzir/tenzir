@@ -677,9 +677,11 @@ auto concrete_series_builder<list_type>::remove_last_row() -> bool {
 
   auto array = builder_->Finish().ValueOrDie();
   auto new_array = array->Slice(0, array->length() - 1);
-  const auto status
-    = builder_->AppendArraySlice(*new_array->data(), 0u, new_array->length());
-  TENZIR_ASSERT(status.ok());
+  for (auto view : values(type_, *new_array)) {
+    auto status = append_builder(
+      type_, static_cast<arrow::ArrayBuilder&>(*builder_), view);
+    TENZIR_ASSERT(status.ok());
+  }
   if (are_fields_fixed_)
     return false;
   return builder_->null_count() == builder_->length();

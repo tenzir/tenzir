@@ -129,9 +129,20 @@ public:
   auto remove_last_row() -> bool {
     auto array = builder_->Finish().ValueOrDie();
     auto new_array = array->Slice(0, array->length() - 1);
-    const auto status
-      = builder_->AppendArraySlice(*new_array->data(), 0u, new_array->length());
-    TENZIR_ASSERT(status.ok());
+    constexpr auto can_use_array_slice_api
+      = basic_type<Type> && //
+        !arrow::is_extension_type<type_to_arrow_type_t<Type>>::value;
+    if constexpr (can_use_array_slice_api) {
+      const auto status = builder_->AppendArraySlice(*new_array->data(), 0,
+                                                     new_array->length());
+      TENZIR_ASSERT(status.ok());
+    } else {
+      for (auto view : values(type_, *new_array)) {
+        auto status = append_builder(
+          type_, static_cast<arrow::ArrayBuilder&>(*builder_), view);
+        TENZIR_ASSERT(status.ok());
+      }
+    }
     return builder_->null_count() == builder_->length();
   }
 
