@@ -106,14 +106,16 @@ struct selector {
 };
 
 struct entry_data {
-  entry_data(std::string name, adaptive_table_slice_builder builder)
+  template <class... Ts>
+  explicit entry_data(std::string name, Ts&&... xs)
     : name{std::move(name)},
-      builder{std::move(builder)},
+      builder{std::forward<Ts>(xs)...},
       flushed{std::chrono::steady_clock::now()} {
   }
 
-  entry_data(std::string_view name, adaptive_table_slice_builder builder)
-    : entry_data{std::string{name}, std::move(builder)} {
+  template <class... Ts>
+  entry_data(std::string_view name, Ts&&... xs)
+    : entry_data{std::string{name}, std::forward<Ts>(xs)...} {
   }
 
   auto flush() -> table_slice {
@@ -504,8 +506,7 @@ protected:
                                      schema_name, parsed_doc));
     }
     // The case where this schema exists is already handled before.
-    return state.activate(
-      state.add_entry(schema_name, adaptive_table_slice_builder{}));
+    return state.activate(state.add_entry(schema_name));
   }
 
   auto handle_schema_name_found(std::string_view schema_name,
@@ -728,11 +729,9 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
   (void)try_find_schema;
   auto state = parser_state{preserve_order};
   if (schema) {
-    state.active_entry = state.add_entry(
-      schema->name(), adaptive_table_slice_builder{*schema, infer_types});
+    state.active_entry = state.add_entry(schema->name(), *schema, infer_type);
   } else {
-    state.active_entry
-      = state.add_entry(unknown_entry_name, adaptive_table_slice_builder{});
+    state.active_entry = state.add_entry(unknown_entry_name);
   }
   // After this point, we always have an active entry.
   for (auto chnk : json_chunk_generator) {
