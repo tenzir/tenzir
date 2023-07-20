@@ -120,7 +120,7 @@ constexpr auto SPEC_V0 = R"_(
                   example: "340ce2j"
                 dropped:
                   type: integer
-                  description: The number of events that were dropped by the serve endpoint. Hopefully 0 most of the time.
+                  description: The serve endpoint will drop responses that exceed the configured maximum message size. The number of events dropped this way is returned here. Should be 0 most of the time.
                   example: 0
                 schemas:
                   type: array
