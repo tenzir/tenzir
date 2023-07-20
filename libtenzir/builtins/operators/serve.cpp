@@ -118,6 +118,10 @@ constexpr auto SPEC_V0 = R"_(
                   type: string
                   description: A token to access the next pipeline data batch, null if the pipeline is completed.
                   example: "340ce2j"
+                dropped:
+                  type: integer
+                  description: The serve endpoint will drop responses that exceed the configured maximum message size. The number of events dropped this way is returned here. Should be 0 most of the time.
+                  example: 0
                 schemas:
                   type: array
                   items:
@@ -198,8 +202,8 @@ using serve_manager_actor = typed_actor_fwd<
 struct serve_request {
   std::string serve_id = {};
   std::string continuation_token = {};
-  uint64_t limit = std::numeric_limits<uint64_t>::max();
-  duration timeout = std::chrono::milliseconds{100};
+  uint64_t limit = defaults::api::serve::max_events;
+  duration timeout = defaults::api::serve::timeout;
 };
 
 /// A single serve operator as observed by the serve-manager.
@@ -310,11 +314,12 @@ struct serve_manager_state {
                    "token {}",
                    *self, found->serve_id, found->continuation_token);
     }
-    // We delay the actual removal by 1 minute because we support fetching the
+    // We delay the actual removal because we support fetching the
     // last set of events again by reusing the last continuation token.
     found->done = true;
     detail::weak_run_delayed(
-      self, std::chrono::minutes{1}, [this, source = msg.source]() {
+      self, defaults::api::serve::retention_time,
+      [this, source = msg.source]() {
         const auto found
           = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
               return op.source == source;
@@ -597,10 +602,12 @@ struct serve_handler_state {
                          .detail = std::move(detail)};
     }
     if (*timeout) {
-      if (**timeout > std::chrono::seconds{5}) {
+      if (**timeout > defaults::api::serve::max_timeout) {
+        auto message = fmt::format("timeout exceeds limit of {}",
+                                   defaults::api::serve::max_timeout);
         auto detail = caf::make_error(
           ec::invalid_argument, fmt::format("got timeout {}", data{**timeout}));
-        return parse_error{.message = "timeout exceeds limit of 5 seconds",
+        return parse_error{.message = std::move(message),
                            .detail = std::move(detail)};
       }
       result.timeout = **timeout;
@@ -623,6 +630,7 @@ struct serve_handler_state {
     auto out_iter = std::back_inserter(result);
     auto seen_schemas = std::unordered_set<type>{};
     bool first = true;
+    auto num_events = size_t{0};
     for (const auto& slice : results) {
       if (slice.rows() == 0)
         continue;
@@ -642,6 +650,7 @@ struct serve_handler_state {
         TENZIR_ASSERT_CHEAP(row);
         const auto ok = printer.print(out_iter, *row);
         TENZIR_ASSERT_CHEAP(ok);
+        ++num_events;
       }
     }
     // Write schemas
@@ -662,7 +671,14 @@ struct serve_handler_state {
         = printer.print(out_iter, schema.to_definition(/*expand*/ false));
       TENZIR_ASSERT_CHEAP(ok);
     }
-    out_iter = fmt::format_to(out_iter, "}}]}}{}", '\n');
+    out_iter = fmt::format_to(out_iter, R"(}}], "dropped": 0}}{})", '\n');
+    if (result.size() > defaults::api::max_response_size) {
+      TENZIR_DEBUG("serve-manager discards oversized response with {} events",
+                   num_events);
+      return fmt::format(
+        R"({{"next_continuation_token":"{}","events":[],"schemas":[],"dropped":{} }})",
+        next_continuation_token, num_events);
+    }
     return result;
   }
 
