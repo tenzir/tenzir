@@ -72,7 +72,7 @@ struct formatter<tenzir::scope_linked<T>> {
 
   template <typename FormatContext>
   auto format(const tenzir::scope_linked<T>& item, FormatContext& ctx) const {
-    return format_to(ctx.out(), "{}", item.get());
+    return fmt::format_to(ctx.out(), "{}", item.get());
   }
 };
 
