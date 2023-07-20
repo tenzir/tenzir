@@ -307,7 +307,9 @@ auto builder_provider::is_builder_constructed() const -> bool {
 
 concrete_series_builder<record_type>::concrete_series_builder(
   const record_type& type) {
+  TENZIR_WARN("constructing {}", (void*)this);
   for (auto view : type.fields()) {
+    TENZIR_INFO("field {}", view.name);
     field_builders_[std::string{view.name}]
       = std::make_unique<series_builder>(std::move(view.type), this);
   }
@@ -395,6 +397,7 @@ auto concrete_series_builder<record_type>::is_part_of_a_list() const -> bool {
                         return false;
                       },
                       [](concrete_series_builder<record_type>* obs) {
+                        TENZIR_WARN("{}", (void*)obs);
                         return obs ? obs->is_part_of_a_list() : false;
                       },
                       [](concrete_series_builder<list_type>* obs) {
@@ -407,6 +410,7 @@ auto concrete_series_builder<record_type>::is_part_of_a_list() const -> bool {
 auto concrete_series_builder<record_type>::on_field_type_change(
   series_builder& builder_that_needs_type_change,
   const tenzir::type& type_of_new_input, const data& new_input) -> caf::error {
+  TENZIR_INFO("on_field_type_change");
   auto possible_new_field_types = get_common_types(
     new_input, type_of_new_input, builder_that_needs_type_change.type());
   if (possible_new_field_types.empty()) {
@@ -730,8 +734,10 @@ series_builder::series_builder(
       },
       [this, are_fields_fixed, parent_record](const record_type& t) {
         if (are_fields_fixed) {
+          TENZIR_WARN("2");
           *this = {fixed_fields_record_builder{t}, parent_record};
         } else {
+          TENZIR_WARN("3");
           auto builder = concrete_series_builder<record_type>{t};
           builder.set_type_change_observer(parent_record);
           *this = {std::move(builder), parent_record};

@@ -141,6 +141,7 @@ public:
 
   auto parse_object(simdjson::ondemand::value v, auto&& field_pusher,
                     size_t depth = 0u) -> void {
+    TENZIR_WARN("parse_object");
     auto obj = v.get_object().value_unsafe();
     for (auto pair : obj) {
       if (pair.error()) {
@@ -163,6 +164,7 @@ public:
         continue;
       parse_impl(val.value_unsafe(), field, depth + 1);
     }
+    TENZIR_WARN("parse_object end");
   }
 
 private:
@@ -314,6 +316,7 @@ private:
   }
 
   auto add_value(auto& guard, auto value) -> void {
+    TENZIR_INFO("SJDASIEAJ");
     if (auto err = guard.add(value))
       ctrl_.warn(std::move(err));
   }
@@ -444,6 +447,7 @@ protected:
     if (state.last_used_schema_name == schema_name) {
       return {std::nullopt};
     }
+    TENZIR_WARN("134134813897");
     std::optional<table_slice> maybe_slice_to_yield;
     if (state.last_used_builder) {
       if (auto slice
@@ -462,6 +466,7 @@ protected:
                                 std::string_view json_source,
                                 parser_state& state) const
     -> caf::expected<std::optional<table_slice>> {
+    TENZIR_WARN("found");
     auto schema_it
       = std::find_if(schemas_.begin(), schemas_.end(), [&](const auto& schema) {
           return schema.name() == schema_name;
@@ -554,7 +559,9 @@ public:
       co_return;
     }
     auto& doc = maybe_doc.value_unsafe();
+    TENZIR_WARN("handle_selector");
     auto [action, slice] = this->handle_selector(doc, json_line, state);
+    TENZIR_WARN("handle_selector end");
     switch (action) {
       case parser_action::parse:
         break;

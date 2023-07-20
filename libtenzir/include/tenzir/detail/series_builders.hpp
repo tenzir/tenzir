@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/cast.hpp"
+#include "tenzir/detail/backtrace.hpp"
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/detail/type_list.hpp"
 #include "tenzir/table_slice_builder.hpp"
@@ -214,6 +215,16 @@ public:
 
   explicit concrete_series_builder(const record_type& type);
 
+  ~concrete_series_builder() {
+    // backtrace();
+    TENZIR_INFO("destroying: {}", (void*)this);
+  }
+
+  concrete_series_builder(concrete_series_builder const&) = default;
+  concrete_series_builder& operator=(concrete_series_builder const&) = default;
+  concrete_series_builder(concrete_series_builder&&) = default;
+  concrete_series_builder& operator=(concrete_series_builder&&) = default;
+
   auto get_field_builder_provider(std::string_view field,
                                   arrow_length_type starting_fields_length)
     -> builder_provider;
@@ -373,6 +384,7 @@ struct series_builder : series_builder_base {
 
   template <concrete_type Type>
   auto add(auto view) -> caf::error {
+    TENZIR_INFO("GAJIGJE");
     if constexpr (std::is_same_v<Type, string_type>) {
       if (auto enum_builder
           = std::get_if<concrete_series_builder<enumeration_type>>(this)) {
@@ -455,6 +467,7 @@ private:
         },
         [view, this]<class BuilderValueType>(
           concrete_series_builder<BuilderValueType>& builder) {
+          TENZIR_INFO("AEIJAE");
           if (auto maybe_err = can_cast(Type{}, BuilderValueType{});
               not maybe_err) {
             if (field_type_change_handler_) {
