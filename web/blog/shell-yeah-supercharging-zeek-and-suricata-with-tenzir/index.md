@@ -3,6 +3,7 @@ title: Shell Yeah! Supercharging Zeek and Suricata with Tenzir
 authors: mavam
 date: 2023-07-20
 tags: [zeek, suricata, logs, shell]
+comments: true
 ---
 
 As an incident responder, threat hunter, or detection engineer, getting quickly

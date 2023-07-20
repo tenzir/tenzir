@@ -1,6 +1,6 @@
 # write
 
-The `write` operator converts raw bytes into events.
+The `write` operator converts events into raw bytes.
 
 ## Synopsis
 
