@@ -21,7 +21,7 @@ components:
           properties:
             in:
               type: object
-              description: Information about the total ingress. Contains empty values when data has not passed through the source operator.
+              description: Information about the total ingress. Contains no values when data has not passed through the source operator.
               properties:
                 unit:
                   type: string
@@ -34,7 +34,7 @@ components:
                   description: The average rate of input elements per second.
             out:
               type: object
-              description: Information about the total egress. Contains empty values when data has not passed through the sink operator.
+              description: Information about the total egress. Contains no values when data has not passed through the sink operator.
               properties:
                 unit:
                   type: string

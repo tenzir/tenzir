@@ -32,7 +32,7 @@ Metrics:
       properties:
         in:
           type: object
-          description: Information about the total ingress. Contains empty values when data has not passed through the source operator.
+          description: Information about the total ingress. Contains no values when the source operator has not run.
           properties:
             unit:
               type: string
@@ -45,7 +45,7 @@ Metrics:
               description: The average rate of input elements per second.
         out:
           type: object
-          description: Information about the total egress. Contains empty values when data has not passed through the sink operator.
+          description: Information about the total egress. Contains no values when the sink operator has not run.
           properties:
             unit:
               type: string
