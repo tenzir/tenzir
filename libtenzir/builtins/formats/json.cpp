@@ -106,44 +106,92 @@ struct selector {
 };
 
 struct entry_data {
-  explicit entry_data(adaptive_table_slice_builder builder)
-    : builder{std::move(builder)}, flushed{std::chrono::steady_clock::now()} {
+  template <class... Ts>
+  explicit entry_data(std::string name, Ts&&... xs)
+    : name{std::move(name)},
+      builder{std::forward<Ts>(xs)...},
+      flushed{std::chrono::steady_clock::now()} {
   }
 
-  auto flush(std::string_view schema_name) -> table_slice {
+  template <class... Ts>
+  entry_data(std::string_view name, Ts&&... xs)
+    : entry_data{std::string{name}, std::forward<Ts>(xs)...} {
+  }
+
+  auto flush() -> table_slice {
     flushed = std::chrono::steady_clock::now();
-    return builder.finish(schema_name);
+    return builder.finish(name);
   }
 
+  std::string name;
   adaptive_table_slice_builder builder;
   std::chrono::steady_clock::time_point flushed;
 };
 
-using entry_pair = std::pair<const std::string, entry_data>;
-
 constexpr auto unknown_entry_name = std::string_view{};
 
 struct parser_state {
-  parser_state(bool preserve_order) : preserve_order{preserve_order} {
+  explicit parser_state(bool preserve_order) : preserve_order{preserve_order} {
   }
 
   // Cache of table slice builder for each schema. These objects can be reused
   // and there is no need to recreate them each time we parse an event.
-  // TODO: We should use a different map type probably.
-  std::unordered_map<std::string, entry_data, detail::heterogeneous_string_hash,
-                     std::equal_to<>>
-    entries{};
+  detail::heterogeneous_string_hashmap<size_t> entry_map;
+  std::vector<entry_data> entries;
   // Used to check if the parser must yield in case the parser was seeded with a
   // known schema. The parses must yield the table_slice of previously parsed
   // schema when it parses an event of a different one. TODO: Not true anymore.
   // TODO: This can never be null after initialization.
-  entry_data* active_entry = nullptr;
-  std::string_view active_entry_name;
+  size_t active_entry{};
   // Used to communicate a need for a co_return in the operator coroutine from
   // the ndjson parser/default parser coroutine.
   bool abort_requested = false;
   // TODO
   bool preserve_order = true;
+
+  auto get_entry(size_t idx) -> entry_data& {
+    TENZIR_ASSERT_CHEAP(idx < entries.size());
+    return entries[idx];
+  }
+
+  auto get_active_entry() -> entry_data& {
+    return get_entry(active_entry);
+  }
+
+  template <class... Ts>
+  auto add_entry(Ts&&... xs) -> size_t {
+    auto data = entry_data{std::forward<Ts>(xs)...};
+    auto idx = entries.size();
+    auto name = data.name;
+    entries.push_back(std::move(data));
+    auto inserted = entry_map.try_emplace(std::move(name), idx).second;
+    TENZIR_ASSERT_CHEAP(inserted);
+    return idx;
+  }
+
+  auto try_get_entry(std::string_view name) -> std::optional<size_t> {
+    auto it = entry_map.find(name);
+    if (it == entry_map.end()) {
+      return std::nullopt;
+    }
+    return it->second;
+  }
+
+  /// Activates an entry after potentially flushing the active one.
+  [[nodiscard]] auto activate(size_t entry) -> std::optional<table_slice> {
+    if (entry == active_entry) {
+      return std::nullopt;
+    }
+    auto result = std::optional<table_slice>{};
+    if (preserve_order) {
+      auto slice = get_entry(active_entry).flush();
+      if (slice.rows() > 0) {
+        result = std::move(slice);
+      }
+    }
+    active_entry = entry;
+    return result;
+  }
 };
 
 template <class FieldValidator>
@@ -370,43 +418,19 @@ auto get_schema_name(simdjson::ondemand::document_reference doc,
                      maybe_schema_name.value_unsafe());
 }
 
-/// Activates an entry after potentially flushing the active one.
-[[nodiscard]] auto
-activate_entry(std::string_view name, entry_data& entry, parser_state& state)
-  -> std::optional<table_slice> {
-  TENZIR_ASSERT(state.active_entry);
-  auto result = std::optional<table_slice>{};
-  if (state.preserve_order && std::addressof(entry) != state.active_entry) {
-    TENZIR_ASSERT(name != state.active_entry_name);
-    auto slice = state.active_entry->flush(state.active_entry_name);
-    if (slice.rows() > 0) {
-      result = std::move(slice);
-    }
-  }
-  state.active_entry = std::addressof(entry);
-  state.active_entry_name = name;
-  return result;
-}
-
-[[nodiscard]] auto activate_entry(entry_pair& entry, parser_state& state)
-  -> std::optional<table_slice> {
-  return activate_entry(entry.first, entry.second, state);
-}
-
 auto non_empty_entries(parser_state& state)
-  -> generator<std::pair<std::string_view, std::reference_wrapper<entry_data>>> {
+  -> generator<std::reference_wrapper<entry_data>> {
   if (state.preserve_order) {
     // In that case, only the active builder can be non-empty.
-    if (state.active_entry->builder.rows() > 0) {
-      co_yield std::pair{state.active_entry_name,
-                         std::ref(*state.active_entry)};
+    if (state.get_active_entry().builder.rows() > 0) {
+      co_yield std::ref(state.get_active_entry());
     }
   } else {
     // Otherwise, builders are not flushed when changing schema. Thus, we have
     // to take a look at every entry.
-    for (auto& [name, entry] : state.entries) {
+    for (auto& entry : state.entries) {
       if (entry.builder.rows() > 0) {
-        co_yield std::pair{std::string_view{name}, std::ref(entry)};
+        co_yield std::ref(entry);
       }
     }
   }
@@ -436,14 +460,11 @@ auto unflatten_if_needed(std::string_view separator, table_slice slice)
 
 [[nodiscard]] auto activate_unknown_entry(parser_state& state)
   -> std::optional<table_slice> {
-  // We first have to create it if it does not exist.
-  auto it = state.entries.find(unknown_entry_name);
-  if (it == state.entries.end()) {
-    it = state.entries
-           .emplace(unknown_entry_name, adaptive_table_slice_builder{})
-           .first;
+  if (auto idx = state.try_get_entry(unknown_entry_name)) {
+    return state.activate(*idx);
   }
-  return activate_entry(it->first, it->second, state);
+  return state.activate(
+    state.add_entry(unknown_entry_name, adaptive_table_slice_builder{}));
 }
 
 template <class FieldValidator>
@@ -466,10 +487,8 @@ protected:
   auto handle_schema_found(parser_state& state, const type& schema) const
     -> std::optional<table_slice> {
     // The case where this schema exists is already handled before.
-    auto [it, inserted] = state.entries.emplace(
-      schema.name(), adaptive_table_slice_builder{schema, infer_types_});
-    TENZIR_ASSERT(inserted);
-    return activate_entry(*it, state);
+    return state.activate(state.add_entry(
+      schema.name(), adaptive_table_slice_builder{schema, infer_types_}));
   }
 
   auto handle_no_matching_schema_found(parser_state& state,
@@ -484,19 +503,15 @@ protected:
                                      schema_name, parsed_doc));
     }
     // The case where this schema exists is already handled before.
-    auto [it, inserted]
-      = state.entries.emplace(schema_name, adaptive_table_slice_builder{});
-    TENZIR_ASSERT(inserted);
-    return activate_entry(*it, state);
+    return state.activate(state.add_entry(schema_name));
   }
 
   auto handle_schema_name_found(std::string_view schema_name,
                                 std::string_view json_source,
                                 parser_state& state) const
     -> caf::expected<std::optional<table_slice>> {
-    auto entry_it = state.entries.find(schema_name);
-    if (entry_it != state.entries.end()) {
-      return activate_entry(*entry_it, state);
+    if (auto idx = state.try_get_entry(schema_name)) {
+      return state.activate(*idx);
     }
     auto schema_it
       = std::find_if(schemas_.begin(), schemas_.end(), [&](const auto& schema) {
@@ -548,9 +563,9 @@ protected:
 
   auto handle_max_rows(parser_state& state) const
     -> std::optional<table_slice> {
-    if (state.active_entry->builder.rows() < max_table_slice_rows_)
+    if (state.get_active_entry().builder.rows() < max_table_slice_rows_)
       return std::nullopt;
-    return state.active_entry->flush(state.active_entry_name);
+    return state.get_active_entry().flush();
   }
 
   operator_control_plane& ctrl_;
@@ -595,7 +610,7 @@ public:
         TENZIR_ASSERT(slice);
         co_yield std::move(*slice);
     }
-    auto row = state.active_entry->builder.push_row();
+    auto row = state.get_active_entry().builder.push_row();
     doc_parser{this->field_validator_, json_line, this->ctrl_, lines_processed_}
       .parse_object(val.value_unsafe(), row);
     // After parsing one JSON object it is expected for the result to be at
@@ -665,7 +680,7 @@ public:
           TENZIR_ASSERT(slice);
           co_yield std::move(*slice);
       }
-      auto row = state.active_entry->builder.push_row();
+      auto row = state.get_active_entry().builder.push_row();
       doc_parser{this->field_validator_, doc_it.source(), this->ctrl_}
         .parse_object(doc.value_unsafe(), row);
       if (auto slice = this->handle_max_rows(state))
@@ -709,25 +724,18 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
   (void)try_find_schema;
   auto state = parser_state{preserve_order};
   if (schema) {
-    auto [it, inserted] = state.entries.emplace(
-      schema->name(), adaptive_table_slice_builder{*schema, infer_types});
-    TENZIR_ASSERT(inserted);
-    state.active_entry = std::addressof(it->second);
+    state.active_entry = state.add_entry(schema->name(), *schema, infer_types);
   } else {
-    auto [it, inserted] = state.entries.emplace(unknown_entry_name,
-                                                adaptive_table_slice_builder{});
-    TENZIR_ASSERT(inserted);
-    state.active_entry = std::addressof(it->second);
+    state.active_entry = state.add_entry(unknown_entry_name);
   }
   // After this point, we always have an active entry.
-  TENZIR_ASSERT(state.active_entry);
   for (auto chnk : json_chunk_generator) {
     // Flush builders if their timeout has expired.
     auto now = std::chrono::steady_clock::now();
-    for (auto [name, entry_ref] : non_empty_entries(state)) {
+    for (auto&& entry_ref : non_empty_entries(state)) {
       auto& entry = entry_ref.get();
       if (now > entry.flushed + defaults::import::batch_timeout) {
-        co_yield unflatten_if_needed(separator, entry.flush(name));
+        co_yield unflatten_if_needed(separator, entry.flush());
       }
     }
     if (not chnk or chnk->size() == 0u) {
@@ -743,8 +751,8 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
     }
   }
   // Flush all entries.
-  for (auto [name, entry_ref] : non_empty_entries(state)) {
-    co_yield unflatten_if_needed(separator, entry_ref.get().flush(name));
+  for (auto&& entry : non_empty_entries(state)) {
+    co_yield unflatten_if_needed(separator, entry.get().flush());
   }
 }
 

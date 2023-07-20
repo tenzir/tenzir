@@ -11,15 +11,15 @@
   ]
 }
 {
-  "_path": "weird.123.190",
-  "x": [
-    "weird.123.190"
-  ]
-}
-{
   "_path": "tunnel",
   "x": [
     "tunnel"
+  ]
+}
+{
+  "_path": "weird.123.190",
+  "x": [
+    "weird.123.190"
   ]
 }
 {
@@ -35,15 +35,15 @@
   ]
 }
 {
-  "_path": "corelight_metrics_cpu",
-  "x": [
-    "corelight_metrics_cpu"
-  ]
-}
-{
   "_path": "dhcp",
   "x": [
     "dhcp"
+  ]
+}
+{
+  "_path": "corelight_metrics_cpu",
+  "x": [
+    "corelight_metrics_cpu"
   ]
 }
 {
@@ -83,15 +83,15 @@
   ]
 }
 {
-  "_path": "weird",
-  "x": [
-    "weird"
-  ]
-}
-{
   "_path": "files",
   "x": [
     "files"
+  ]
+}
+{
+  "_path": "weird",
+  "x": [
+    "weird"
   ]
 }
 {
@@ -129,15 +129,15 @@
   "x": null
 }
 {
-  "_path": "reporter",
-  "x": [
-    "reporter"
-  ]
-}
-{
   "_path": "corelight_metrics_system",
   "x": [
     "corelight_metrics_system"
+  ]
+}
+{
+  "_path": "reporter",
+  "x": [
+    "reporter"
   ]
 }
 {
@@ -165,15 +165,15 @@
   ]
 }
 {
-  "_path": "dns",
-  "x": [
-    "dns"
-  ]
-}
-{
   "_path": "corelight_metrics_bro",
   "x": [
     "corelight_metrics_bro"
+  ]
+}
+{
+  "_path": "dns",
+  "x": [
+    "dns"
   ]
 }
 {
