@@ -126,7 +126,7 @@ If you want Tenzir post-processing out of the box, use our official [Zeek
 package](https://github.com/tenzir/zeek-tenzir):
 
 ```bash
-zkg install tenzir
+zkg install zeek-tenzir
 ```
 
 After installing the package, you have two options to run pipelines on rotated
@@ -134,9 +134,15 @@ Zeek logs:
 
 1. Load the `tenzir-import` Zeek script to ship logs to a local Tenzir node
 
-    ```bash
-    zeek -r trace.pcap tenzir-import
-    ```
+   ```bash
+   # Start a node.
+   tenzir-node
+   # Ship logs to it and delete the original files.
+   zeek -r trace.pcap tenzir/import
+   ```
+
+  Pass `Tenzir::delete_after_postprocesing=F` to `zeek` to keep the original
+  logs.
 
 2. Write Zeek scripts to register pipelines manually:
 
@@ -154,7 +160,7 @@ Zeek logs:
    The above Zeek script hooks up two pipelines via the function
    `Tenzir::postprocess`. Each pipelines executes upon log rotation and receives
    the Zeek log file as input. The first simply imports all data via
-   [`import`](/operators/sinks/import`) and the second writes the logs as
+   [`import`](/operators/sinks/import) and the second writes the logs as
    [`parquet`](/formats/parquet) files using [`to`](/operators/sinks/to).
 
 ## Fate sharing
