@@ -55,8 +55,15 @@ public:
     return "explore";
   }
 
-  auto operator()(generator<table_slice> input) const
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
+    if (!ctrl.has_terminal()) {
+      diagnostic::error("no terminal found")
+        .note("{} operator requires terminal", name())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
     using namespace ftxui;
     auto screen = make_interactive_screen(args_);
     auto state = make_ui_state(args_);
