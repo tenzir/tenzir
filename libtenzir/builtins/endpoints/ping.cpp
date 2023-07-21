@@ -3,23 +3,22 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-FileCopyrightText: (c) 2022 The TENZIR Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/builtin_rest_endpoints.hpp>
-#include <vast/node.hpp>
-#include <vast/plugin.hpp>
-#include <vast/version.hpp>
+#include <tenzir/builtin_rest_endpoints.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/version.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
-namespace vast::plugins::rest_api::status {
+namespace tenzir::plugins::rest_api::ping {
 
 static auto const* SPEC_V0 = R"_(
-/version:
+/ping:
   get:
-    summary: Return node version
-    description: Returns the version number of the node
+    summary: Returns a success response
+    description: Returns a success response to indicate that the node is able to respond to requests. The response body includes the current node version.
     responses:
       200:
         description: OK.
@@ -27,29 +26,33 @@ static auto const* SPEC_V0 = R"_(
           application/json:
             schema:
               type: object
+              properties:
+                version:
+                  type: string
+                  description: The version of the responding node.
+                  example: "v2.3.0-rc3-32-g8529a6c43f"
             example:
               version: v2.3.0-rc3-32-g8529a6c43f
       401:
         description: Not authenticated.
     )_";
 
-using status_handler_actor
+using ping_handler_actor
   = typed_actor_fwd<>::extend_with<rest_handler_actor>::unwrap;
 
-struct version_handler_state {
-  static constexpr auto name = "version-handler";
-  version_handler_state() = default;
+struct ping_handler_state {
+  static constexpr auto name = "ping-handler";
+  ping_handler_state() = default;
 };
 
-auto version_handler(
-  status_handler_actor::stateful_pointer<version_handler_state> self)
-  -> status_handler_actor::behavior_type {
+auto ping_handler(ping_handler_actor::stateful_pointer<ping_handler_state> self)
+  -> ping_handler_actor::behavior_type {
   return {
     [self](atom::http_request, uint64_t,
-           const vast::record&) -> caf::result<rest_response> {
-      VAST_DEBUG("{} handles /version request", *self);
+           const tenzir::record&) -> caf::result<rest_response> {
+      TENZIR_DEBUG("{} handles /ping request", *self);
       auto versions = retrieve_versions();
-      VAST_ASSERT_CHEAP(versions.contains("Tenzir"));
+      TENZIR_ASSERT_CHEAP(versions.contains("Tenzir"));
       return rest_response{record{{{"version", versions.at("Tenzir")}}}};
     },
   };
@@ -63,15 +66,15 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   [[nodiscard]] auto name() const -> std::string override {
-    return "api-version";
+    return "api-ping";
   };
 
   [[nodiscard]] auto openapi_specification(api_version version) const
     -> data override {
     if (version != api_version::v0)
-      return vast::record{};
+      return tenzir::record{};
     auto result = from_yaml(SPEC_V0);
-    VAST_ASSERT(result);
+    TENZIR_ASSERT(result);
     return *result;
   }
 
@@ -82,7 +85,7 @@ class plugin final : public virtual rest_endpoint_plugin {
       {
         .endpoint_id = static_cast<uint64_t>(status_endpoints::status),
         .method = http_method::post,
-        .path = "/version",
+        .path = "/ping",
         .params = std::nullopt,
         .version = api_version::v0,
         .content_type = http_content_type::json,
@@ -91,12 +94,12 @@ class plugin final : public virtual rest_endpoint_plugin {
     return endpoints;
   }
 
-  auto handler(caf::actor_system& system, node_actor node) const
+  auto handler(caf::actor_system& system, node_actor) const
     -> rest_handler_actor override {
-    return system.spawn(version_handler);
+    return system.spawn(ping_handler);
   }
 };
 
-} // namespace vast::plugins::rest_api::status
+} // namespace tenzir::plugins::rest_api::ping
 
-VAST_REGISTER_PLUGIN(vast::plugins::rest_api::status::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::rest_api::ping::plugin)
