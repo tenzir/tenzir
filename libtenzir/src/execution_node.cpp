@@ -342,6 +342,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
                                                 current_metrics.time_starting);
     TENZIR_DEBUG("{} received start request for `{}`", *self, op->to_string());
     detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
+      auto time_scheduled_guard = make_timer_guard(current_metrics.time_scheduled);
       emit_metrics();
     });
     if (instance.has_value()) {
