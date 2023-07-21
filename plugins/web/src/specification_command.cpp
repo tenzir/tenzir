@@ -36,26 +36,38 @@ Metrics:
           properties:
             unit:
               type: string
-              description: The unit of the input data (bytes/events).
+              enum:
+                - bytes
+                - events
+              description: The unit of the input data.
+              example: bytes
             elements:
               type: integer
               description: The total amount of elements that entered the pipeline source.
+              example: 109834
             avg_rate:
               type: number
               description: The average rate of input elements per second.
+              example: 27450.345233
         out:
           type: object
           description: Information about the total egress. Contains no values when the sink operator has not run.
           properties:
             unit:
               type: string
-              description: The unit of the output data (bytes/events).
+              enum:
+                - bytes
+                - events
+              description: The unit of the output data.
+              example: bytes
             elements:
               type: integer
               description: The total amount of elements that entered the pipeline sink.
+              example: 30414
             avg_rate:
               type: number
               description: The average rate of output elements per second.
+              example: 7603.599345
 Diagnostics:
   type: array
   items:
