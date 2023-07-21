@@ -440,7 +440,7 @@ using node_actor = typed_actor_fwd<
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
-       receiver_actor<pipeline_op_metrics>, int index)
+       receiver_actor<metric>, int index)
     ->caf::result<exec_node_actor>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.
@@ -492,7 +492,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
-  TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::pipeline_op_metrics>))
+  TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::metric>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
   TENZIR_ADD_TYPE_ID((tenzir::stream_sink_actor<tenzir::table_slice>))

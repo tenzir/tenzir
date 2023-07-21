@@ -232,8 +232,8 @@ auto pipeline_executor_state::start() -> caf::result<void> {
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  receiver_actor<pipeline_op_metrics> metrics, node_actor node,
-  bool has_terminal) -> pipeline_executor_actor::behavior_type {
+  receiver_actor<metric> metrics, node_actor node, bool has_terminal)
+  -> pipeline_executor_actor::behavior_type {
   TENZIR_DEBUG("{} was created", *self);
   self->state.self = self;
   self->state.node = std::move(node);

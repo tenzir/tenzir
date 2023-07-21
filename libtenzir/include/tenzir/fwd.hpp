@@ -194,7 +194,7 @@ struct data_extractor;
 struct data_point;
 struct diagnostic;
 struct disjunction;
-struct pipeline_op_metrics;
+struct metric;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
@@ -400,7 +400,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::disjunction))
   TENZIR_ADD_TYPE_ID((tenzir::ec))
   TENZIR_ADD_TYPE_ID((tenzir::ewah_bitmap))
-  TENZIR_ADD_TYPE_ID((tenzir::pipeline_op_metrics))
+  TENZIR_ADD_TYPE_ID((tenzir::metric))
   TENZIR_ADD_TYPE_ID((tenzir::expression))
   TENZIR_ADD_TYPE_ID((tenzir::extract_query_context))
   TENZIR_ADD_TYPE_ID((tenzir::field_extractor))

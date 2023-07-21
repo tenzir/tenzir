@@ -131,8 +131,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
       self->state.executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
         caf::actor_cast<receiver_actor<diagnostic>>(self),
-        caf::actor_cast<receiver_actor<pipeline_op_metrics>>(self),
-        node_actor{}, true);
+        caf::actor_cast<receiver_actor<metric>>(self), node_actor{}, true);
       self->request(self->state.executor, caf::infinite, atom::start_v)
         .then(
           []() {
@@ -147,7 +146,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
         [&](diagnostic& d) {
           diag->emit(std::move(d));
         },
-        [&](pipeline_op_metrics&) {
+        [&](metric&) {
           // Do nothing with metrics locally for now.
         },
       };

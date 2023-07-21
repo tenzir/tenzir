@@ -316,9 +316,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
   // passed through this operator.
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
-  pipeline_op_metrics current_metrics = {};
+  metric current_metrics = {};
 
-  receiver_actor<pipeline_op_metrics> metrics_handler = {};
+  receiver_actor<metric> metrics_handler = {};
 
   // Indicates whether the operator has stalled, i.e., the generator should not
   // be advanced.
@@ -620,9 +620,14 @@ struct exec_node_state : inbound_state_mixin<Input>,
       auto time_scheduled_guard
         = make_timer_guard(current_metrics.time_scheduled);
       TENZIR_TRACE("{} pushed successfully", op->name());
-      current_metrics.outbound_total += capped_demand;
+      current_metrics.outbound_measurement.num_elements += capped_demand;
+      if constexpr (std::is_same_v<Input, chunk_ptr>) {
+        // TODO: Implement incrementation of approximate bytes for events.
+        current_metrics.inbound_measurement.num_approx_bytes
+          = current_metrics.inbound_measurement.num_elements;
+      }
       auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
-      current_metrics.outbound_num_batches += lhs.size();
+      current_metrics.outbound_measurement.num_batches += lhs.size();
       this->outbound_buffer = std::move(rhs);
       this->outbound_buffer_size
         = std::transform_reduce(this->outbound_buffer.begin(),
@@ -660,24 +665,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
   auto emit_metrics() -> void {
     current_metrics.time_elapsed = std::chrono::duration_cast<duration>(
       std::chrono::steady_clock::now() - start_time);
-    if constexpr (not std::is_same_v<Input, std::monostate>) {
-      const auto total = static_cast<double>(current_metrics.inbound_total);
-      current_metrics.inbound_rate_per_second
-        = total
-          / std::chrono::duration_cast<
-              std::chrono::duration<double, std::chrono::seconds::period>>(
-              current_metrics.time_elapsed)
-              .count();
-    }
-    if constexpr (not std::is_same_v<Output, std::monostate>) {
-      const auto total = static_cast<double>(current_metrics.outbound_total);
-      current_metrics.outbound_rate_per_second
-        = total
-          / std::chrono::duration_cast<
-              std::chrono::duration<double, std::chrono::seconds::period>>(
-              current_metrics.time_elapsed)
-              .count();
-    }
     self->request(metrics_handler, caf::infinite, current_metrics)
       .then([]() {},
             [](caf::error& e) {
@@ -705,28 +692,38 @@ struct exec_node_state : inbound_state_mixin<Input>,
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       constexpr auto inbound_unit
         = std::is_same_v<Input, chunk_ptr> ? "B" : "events";
-      TENZIR_VERBOSE("{} inbound {} {} in {} rate = {:.2f} {}/s avg batch "
-                     "size = {:.2f} "
-                     "{}",
-                     op->name(), current_metrics.inbound_total, inbound_unit,
-                     data{current_metrics.time_elapsed},
-                     current_metrics.inbound_rate_per_second, inbound_unit,
-                     static_cast<double>(current_metrics.inbound_total)
-                       / current_metrics.inbound_num_batches,
-                     inbound_unit);
+      auto inbound_rate_per_second
+        = current_metrics.inbound_measurement.average_rate_per_second(
+          current_metrics.time_elapsed);
+      TENZIR_VERBOSE(
+        "{} inbound {} {} in {} rate = {:.2f} {}/s avg batch "
+        "size = {:.2f} "
+        "{}",
+        op->name(), current_metrics.inbound_measurement.num_elements,
+        current_metrics.inbound_measurement.unit,
+        data{current_metrics.time_elapsed}, inbound_rate_per_second,
+        current_metrics.inbound_measurement.unit,
+        static_cast<double>(current_metrics.inbound_measurement.num_elements)
+          / current_metrics.inbound_measurement.num_batches,
+        inbound_unit);
     }
     if constexpr (not std::is_same_v<Output, std::monostate>) {
       constexpr auto outbound_unit
         = std::is_same_v<Output, chunk_ptr> ? "B" : "events";
-      TENZIR_VERBOSE("{} outbound {} {} in {} rate = {:.2f} {}/s avg batch "
-                     "size = "
-                     "{:.2f} {}",
-                     op->name(), current_metrics.outbound_total, outbound_unit,
-                     data{current_metrics.time_elapsed},
-                     current_metrics.outbound_rate_per_second, outbound_unit,
-                     static_cast<double>(current_metrics.outbound_total)
-                       / current_metrics.outbound_num_batches,
-                     outbound_unit);
+      auto outbound_rate_per_second
+        = current_metrics.outbound_measurement.average_rate_per_second(
+          current_metrics.time_elapsed);
+      TENZIR_VERBOSE(
+        "{} outbound {} {} in {} rate = {:.2f} {}/s avg batch "
+        "size = "
+        "{:.2f} {}",
+        op->name(), current_metrics.outbound_measurement.num_elements,
+        current_metrics.outbound_measurement.unit,
+        data{current_metrics.time_elapsed}, outbound_rate_per_second,
+        outbound_unit,
+        static_cast<double>(current_metrics.outbound_measurement.num_elements)
+          / current_metrics.outbound_measurement.num_batches,
+        outbound_unit);
     }
   }
 
@@ -852,7 +849,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       input.begin(), input.end(), uint64_t{}, std::plus{}, [](const Input& x) {
         return size(x);
       });
-    current_metrics.inbound_num_batches += input.size();
+    current_metrics.inbound_measurement.num_batches += input.size();
     if (input_size == 0) {
       return caf::make_error(ec::logic_error, "received empty batch");
     }
@@ -864,7 +861,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
                                 std::make_move_iterator(input.begin()),
                                 std::make_move_iterator(input.end()));
     this->inbound_buffer_size += input_size;
-    current_metrics.inbound_total += input_size;
+    current_metrics.inbound_measurement.num_elements += input_size;
+    if constexpr (std::is_same_v<Input, chunk_ptr>) {
+      // TODO: Implement incrementation of approximate bytes for events.
+      current_metrics.inbound_measurement.num_approx_bytes
+        = current_metrics.inbound_measurement.num_elements;
+    }
     return {};
   }
 };
@@ -874,14 +876,16 @@ auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, node_actor node,
   receiver_actor<diagnostic> diagnostic_handler,
-  receiver_actor<pipeline_op_metrics> metrics_handler, int index,
-  bool has_terminal) -> exec_node_actor::behavior_type {
+  receiver_actor<metric> metrics_handler, int index, bool has_terminal)
+  -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.metrics_handler = std::move(metrics_handler);
-  self->state.current_metrics.index = index;
-  self->state.current_metrics.in_unit = operator_type_name<Input>();
-  self->state.current_metrics.out_unit = operator_type_name<Output>();
+  self->state.current_metrics.operator_index = index;
+  self->state.current_metrics.inbound_measurement.unit
+    = operator_type_name<Input>();
+  self->state.current_metrics.outbound_measurement.unit
+    = operator_type_name<Output>();
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler), has_terminal);
   // The node actor must be set when the operator is not a source.
@@ -936,8 +940,8 @@ auto exec_node(
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
-                     receiver_actor<pipeline_op_metrics> metrics_handler,
-                     int index, bool has_terminal)
+                     receiver_actor<metric> metrics_handler, int index,
+                     bool has_terminal)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
