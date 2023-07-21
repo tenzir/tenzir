@@ -74,6 +74,7 @@ namespace tenzir::plugins::serve {
 namespace {
 
 constexpr auto SERVE_ENDPOINT_ID = 0;
+constexpr auto FINAL_CONTINUATION_TOKEN = std::string{"__DONE__"};
 
 constexpr auto SPEC_V0 = R"_(
 /serve:
@@ -268,11 +269,10 @@ struct managed_serve_operator {
     TENZIR_DEBUG("clearing continuation token");
     last_continuation_token = std::exchange(continuation_token, {});
     last_results = results;
-    // If the pipeline is at its end then we must not assign a new token, but
-    // rather end here.
     if (stop_rp.pending() and buffer.empty()) {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
+      continuation_token = FINAL_CONTINUATION_TOKEN;
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
       return true;
@@ -623,7 +623,7 @@ struct serve_handler_state {
       .oneline = true,
     }};
     auto result
-      = next_continuation_token.empty()
+      = next_continuation_token == FINAL_CONTINUATION_TOKEN
           ? std::string{R"({"next_continuation_token":null,"events":[)"}
           : fmt::format(R"({{"next_continuation_token":"{}","events":[)",
                         next_continuation_token);
