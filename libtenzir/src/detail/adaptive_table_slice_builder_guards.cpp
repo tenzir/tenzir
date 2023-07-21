@@ -73,8 +73,8 @@ auto record_guard::push_field(std::string_view name) -> field_guard {
   auto provider = [name, this]() -> series_builder& {
     auto& b = builder_provider_.provide();
     if (std::holds_alternative<unknown_type_builder>(b)) {
-      b = {concrete_series_builder<record_type>(),
-           parent_record_builder_provider_()};
+      b.emplace_with_builder<concrete_series_builder<record_type>>(
+        parent_record_builder_provider_());
       b.add_up_to_n_nulls(starting_fields_length_);
       std::get<concrete_series_builder<record_type>>(b).set_type_change_observer(
         parent_record_builder_provider_());
@@ -236,8 +236,8 @@ auto field_guard::push_list() -> list_guard {
     auto& builder = builder_provider_.provide();
     if (std::holds_alternative<unknown_type_builder>(builder)) {
       auto parent_record = parent_record_builder_provider_();
-      builder = {concrete_series_builder<list_type>(starting_fields_length_),
-                 parent_record};
+      builder.emplace_with_builder<concrete_series_builder<list_type>>(
+        parent_record, starting_fields_length_);
       if (parent_record) {
         std::get<concrete_series_builder<list_type>>(builder)
           .set_record_type_change_observer(parent_record);

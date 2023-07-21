@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/aliases.hpp"
 #include "tenzir/cast.hpp"
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/detail/type_list.hpp"
@@ -214,6 +215,15 @@ public:
 
   explicit concrete_series_builder(const record_type& type);
 
+  // Note: This type is immovable because we might capture a pointer to it. This
+  // could be redesigned in the future.
+  concrete_series_builder(const concrete_series_builder&) = delete;
+  concrete_series_builder(concrete_series_builder&& other) = delete;
+  auto operator=(const concrete_series_builder&)
+    -> concrete_series_builder& = delete;
+  auto operator=(concrete_series_builder&& other)
+    -> concrete_series_builder& = delete;
+
   auto get_field_builder_provider(std::string_view field,
                                   arrow_length_type starting_fields_length)
     -> builder_provider;
@@ -356,14 +366,27 @@ using series_builder_base = caf::detail::tl_apply_t<
   std::variant>;
 
 struct series_builder : series_builder_base {
-  series_builder(series_builder_base base,
-                 concrete_series_builder<record_type>* parent_record)
-    : series_builder_base{std::move(base)},
+  template <class T, class... Ts>
+  series_builder(concrete_series_builder<record_type>* parent_record,
+                 std::in_place_type_t<T> tag, Ts&&... xs)
+    : series_builder_base{tag, std::forward<Ts>(xs)...},
       field_type_change_handler_{parent_record} {
   }
+
   series_builder(const tenzir::type&,
                  concrete_series_builder<record_type>* parent_record,
                  bool are_fields_fixed = false);
+
+  template <class Builder, class... Ts>
+  auto emplace_with_builder(concrete_series_builder<record_type>* parent_record,
+                            Ts&&... xs) -> decltype(auto) {
+    field_type_change_handler_ = parent_record;
+    return series_builder_base::emplace<Builder>(std::forward<Ts>(xs)...);
+  }
+
+  void emplace_with_type(const tenzir::type& type,
+                         concrete_series_builder<record_type>* parent_record,
+                         bool are_fields_fixed = false);
 
   arrow_length_type length() const;
 
@@ -447,21 +470,22 @@ private:
         },
         [this, view](unknown_type_builder& builder) {
           const auto nulls_to_prepend = builder.length();
-          auto new_builder = concrete_series_builder<Type>{};
+          auto& new_builder
+            = emplace_with_builder<concrete_series_builder<Type>>(
+              field_type_change_handler_);
           new_builder.add_up_to_n_nulls(nulls_to_prepend);
           new_builder.add(view);
-          *this = {std::move(new_builder), field_type_change_handler_};
           return caf::error{};
         },
         [view, this]<class BuilderValueType>(
           concrete_series_builder<BuilderValueType>& builder) {
-          if (auto maybe_err = can_cast(Type{}, BuilderValueType{});
-              not maybe_err) {
+          auto castable = can_cast(Type{}, BuilderValueType{});
+          if (not castable) {
             if (field_type_change_handler_) {
               return field_type_change_handler_->on_field_type_change(
                 *this, tenzir::type{Type{}}, materialize(view));
             }
-            return maybe_err.error();
+            return castable.error();
           }
           auto err = cast_impl<BuilderValueType, Type>(builder, view);
           if (not err) {

@@ -330,7 +330,9 @@ auto handle_empty_chunk(parser_state& state, bool has_selector) -> table_slice {
       return state.last_used_builder->finish(state.last_used_schema_name);
     return table_slice{};
   }
-  return std::exchange(state.unknown_schema_builder, {}).finish();
+  auto slice = state.unknown_schema_builder.finish();
+  state.unknown_schema_builder.reset();
+  return slice;
 }
 
 auto get_schema_name(simdjson::ondemand::document_reference doc,
@@ -363,7 +365,7 @@ auto handle_builder_change(adaptive_table_slice_builder& builder_to_use,
         slice.rows() > 0) {
       if (state.last_used_builder
           == std::addressof(state.unknown_schema_builder))
-        state.unknown_schema_builder = {};
+        state.unknown_schema_builder.reset();
       return slice;
     }
   }
@@ -420,8 +422,10 @@ protected:
   auto handle_schema_found(parser_state& state, const type& schema) const
     -> std::optional<table_slice> {
     if (not state.builders_per_schema.contains(schema.name())) {
-      state.builders_per_schema[schema.name()]
-        = adaptive_table_slice_builder{schema, infer_types_};
+      auto inserted = state.builders_per_schema
+                        .try_emplace(schema.name(), schema, infer_types_)
+                        .second;
+      TENZIR_ASSERT(inserted);
     }
     auto& current_builder = state.builders_per_schema[schema.name()];
     auto maybe_slice_to_yield = handle_builder_change(current_builder, state);
@@ -452,7 +456,7 @@ protected:
         maybe_slice_to_yield.emplace(std::move(slice));
       }
     }
-    state.unknown_schema_builder = {};
+    state.unknown_schema_builder.reset();
     state.last_used_builder = std::addressof(state.unknown_schema_builder);
     state.last_used_schema_name = std::string{schema_name};
     return {std::move(maybe_slice_to_yield)};
@@ -519,7 +523,7 @@ protected:
       return std::nullopt;
     auto slice = state.last_used_builder->finish(state.last_used_schema_name);
     if (not this->selector_)
-      state.unknown_schema_builder = {};
+      state.unknown_schema_builder.reset();
     return slice;
   }
 
@@ -570,9 +574,9 @@ public:
     // the end. If it's otherwise then it means that a line contains more than
     // one object in which case we don't add any data and emit a warning.
     // It is also possible for a parsing failure to occurr in doc_parser. the
-    // is_alive() call ensures that the first object was parsed without errors.
-    // Calling at_end() when is_alive() returns false is unsafe and resulted in
-    // crashes.
+    // is_alive() call ensures that the first object was parsed without
+    // errors. Calling at_end() when is_alive() returns false is unsafe and
+    // resulted in crashes.
     if (doc.is_alive() and not doc.at_end()) {
       row.cancel();
       this->ctrl_.warn(caf::make_error(
@@ -648,8 +652,8 @@ private:
       buffer_.reset();
       return;
     }
-    // Likely not needed, but should be harmless. Needs additional investigation
-    // in the future.
+    // Likely not needed, but should be harmless. Needs additional
+    // investigation in the future.
     if (truncated_bytes > buffer_.view().size()) {
       state.abort_requested = true;
       this->ctrl_.abort(caf::make_error(
@@ -661,7 +665,8 @@ private:
     buffer_.truncate(truncated_bytes);
   }
 
-  // The simdjson suggests to initialize the padding part to either 0s or spaces.
+  // The simdjson suggests to initialize the padding part to either 0s or
+  // spaces.
   detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'> buffer_;
   simdjson::ondemand::document_stream stream_;
 };
@@ -673,8 +678,8 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
   -> generator<table_slice> {
   auto state = parser_state{};
   if (schema) {
-    const auto [it, inserted] = state.builders_per_schema.emplace(
-      schema->name(), adaptive_table_slice_builder{*schema, infer_types});
+    const auto [it, inserted] = state.builders_per_schema.try_emplace(
+      schema->name(), *schema, infer_types);
     TENZIR_ASSERT(inserted);
     state.last_used_builder = std::addressof(it->second);
   } else {

@@ -10,23 +10,29 @@
 
 #include <arrow/record_batch.h>
 
+#include <memory>
+#include <utility>
+
 namespace tenzir {
 
 namespace {
 auto init_root_builder(const type& start_schema, bool allow_fields_discovery)
-  -> std::variant<detail::concrete_series_builder<record_type>,
-                  detail::fixed_fields_record_builder> {
+  -> detail::adaptive_builder_root {
   TENZIR_ASSERT(caf::holds_alternative<record_type>(start_schema));
-  if (allow_fields_discovery)
-    return detail::concrete_series_builder<record_type>{
+  if (allow_fields_discovery) {
+    return detail::adaptive_builder_root{
+      std::in_place_type<detail::concrete_series_builder<record_type>>,
       caf::get<record_type>(start_schema)};
-  return detail::fixed_fields_record_builder{
+  }
+  return detail::adaptive_builder_root{
+    std::in_place_type<detail::fixed_fields_record_builder>,
     std::move(caf::get<record_type>(start_schema))};
 }
 } // namespace
 
 adaptive_table_slice_builder::adaptive_table_slice_builder(
   type start_schema, bool allow_fields_discovery)
+  // Note: We rely on move-elision here, but this is quite brittle.
   : root_builder_{init_root_builder(start_schema, allow_fields_discovery)} {
 }
 
@@ -129,6 +135,10 @@ adaptive_table_slice_builder::row_guard::~row_guard() noexcept {
       b.fill_nulls();
     },
     builder_.root_builder_);
+}
+
+void adaptive_table_slice_builder::reset() {
+  root_builder_.emplace<0>();
 }
 
 } // namespace tenzir
