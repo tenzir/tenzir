@@ -321,10 +321,11 @@ auto concrete_series_builder<record_type>::get_field_builder_provider(
     return {std::ref(*(it->second))};
   return {[field, starting_fields_length, &builders = field_builders_,
            this]() -> series_builder& {
-    auto& new_builder = *(builders
-                            .emplace(field, std::make_unique<series_builder>(
-                                              unknown_type_builder{}, this))
-                            .first->second);
+    auto& new_builder
+      = *(builders
+            .emplace(field, std::make_unique<series_builder>(
+                              this, std::in_place_type<unknown_type_builder>))
+            .first->second);
     new_builder.add_up_to_n_nulls(starting_fields_length);
     return new_builder;
   }};
@@ -573,7 +574,7 @@ auto concrete_series_builder<record_type>::reset(
     ++field_index;
   }
   if (changing_builder_) {
-    *changing_builder_ = series_builder{chosen_type_of_changing_field, this};
+    changing_builder_->emplace_with_type(chosen_type_of_changing_field, this);
   }
   if (arrow_builder_)
     arrow_builder_.reset();
@@ -664,7 +665,7 @@ auto concrete_series_builder<list_type>::get_record_builder()
   -> series_builder& {
   if (not record_builder_) [[unlikely]] {
     record_builder_ = std::make_unique<series_builder>(
-      concrete_series_builder<record_type>{}, nullptr);
+      nullptr, std::in_place_type<concrete_series_builder<record_type>>);
     std::get<concrete_series_builder<record_type>>(*record_builder_)
       .set_type_change_observer(this);
   }
@@ -723,24 +724,31 @@ auto fixed_fields_record_builder::get_arrow_builder()
 series_builder::series_builder(
   const tenzir::type& type, concrete_series_builder<record_type>* parent_record,
   bool are_fields_fixed) {
+  emplace_with_type(type, parent_record, are_fields_fixed);
+}
+
+void series_builder::emplace_with_type(
+  const tenzir::type& type, concrete_series_builder<record_type>* parent_record,
+  bool are_fields_fixed) {
   caf::visit(
     detail::overload{
       [this, &type, parent_record]<class Type>(const Type&) {
-        *this = {concrete_series_builder<Type>{type}, parent_record};
+        emplace_with_builder<concrete_series_builder<Type>>(parent_record,
+                                                            type);
       },
       [this, are_fields_fixed, parent_record](const record_type& t) {
         if (are_fields_fixed) {
-          *this = {fixed_fields_record_builder{t}, parent_record};
+          emplace_with_builder<fixed_fields_record_builder>(parent_record, t);
         } else {
-          auto builder = concrete_series_builder<record_type>{t};
-          builder.set_type_change_observer(parent_record);
-          *this = {std::move(builder), parent_record};
+          emplace_with_builder<concrete_series_builder<record_type>>(
+            parent_record, t)
+            .set_type_change_observer(parent_record);
         }
       },
       [this, are_fields_fixed, parent_record](const list_type& t) {
-        auto builder = concrete_series_builder<list_type>{t, are_fields_fixed};
-        builder.set_record_type_change_observer(parent_record);
-        *this = {std::move(builder), parent_record};
+        emplace_with_builder<concrete_series_builder<list_type>>(
+          parent_record, t, are_fields_fixed)
+          .set_record_type_change_observer(parent_record);
       },
       [](const map_type&) {
         die("unsupported map_type in construction of series builder");
@@ -801,8 +809,8 @@ auto series_builder::remove_last_row() -> void {
       if constexpr (std::is_same_v<bool, decltype(actual.remove_last_row())>) {
         if (auto all_values_are_null = actual.remove_last_row();
             all_values_are_null and field_type_change_handler_) {
-          *this = {unknown_type_builder(actual.length()),
-                   field_type_change_handler_};
+          emplace_with_builder<unknown_type_builder>(field_type_change_handler_,
+                                                     actual.length());
         }
       } else {
         actual.remove_last_row();
@@ -830,9 +838,8 @@ auto series_builder::change_type(const tenzir::type& new_type,
           concrete_new_type);
         if (not cast_builder)
           return std::move(cast_builder.error());
-        auto new_builder = concrete_series_builder<NewType>(
-          new_type, std::move(*cast_builder));
-        *this = {std::move(new_builder), field_type_change_handler_};
+        emplace_with_builder<concrete_series_builder<NewType>>(
+          field_type_change_handler_, new_type, std::move(*cast_builder));
         return caf::error{};
       },
     },
@@ -967,10 +974,11 @@ auto concrete_series_builder<list_type>::create_builder_impl(
         if (not record_builder_) {
           if (are_fields_fixed_) {
             record_builder_ = std::make_unique<series_builder>(
-              fixed_fields_record_builder{type}, nullptr);
+              nullptr, std::in_place_type<fixed_fields_record_builder>, type);
           } else {
             record_builder_ = std::make_unique<series_builder>(
-              concrete_series_builder<record_type>{type}, nullptr);
+              nullptr, std::in_place_type<concrete_series_builder<record_type>>,
+              type);
             std::get<concrete_series_builder<record_type>>(*record_builder_)
               .set_type_change_observer(this);
           }

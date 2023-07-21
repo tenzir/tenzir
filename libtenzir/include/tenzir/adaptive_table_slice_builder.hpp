@@ -16,6 +16,12 @@
 
 namespace tenzir {
 
+namespace detail {
+using adaptive_builder_root
+  = std::variant<detail::concrete_series_builder<record_type>,
+                 detail::fixed_fields_record_builder>;
+} // namespace detail
+
 class adaptive_table_slice_builder {
 public:
   adaptive_table_slice_builder() = default;
@@ -57,13 +63,13 @@ public:
   /// @return count of currently occupied rows.
   auto rows() const -> detail::arrow_length_type;
 
+  void reset();
+
 private:
   auto get_schema(std::string_view slice_schema_name) const -> type;
   auto finish_impl() -> std::shared_ptr<arrow::Array>;
 
-  std::variant<detail::concrete_series_builder<record_type>,
-               detail::fixed_fields_record_builder>
-    root_builder_;
+  detail::adaptive_builder_root root_builder_;
 };
 
 } // namespace tenzir
