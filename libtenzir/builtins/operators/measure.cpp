@@ -32,7 +32,6 @@ public:
   auto operator()(generator<table_slice> input) const
     -> generator<table_slice> {
     auto last_finish = std::chrono::steady_clock::now();
-    const auto batch_timeout = std::chrono::seconds{1};
     static const auto schema = type{
       "tenzir.metrics.events",
       record_type{
@@ -47,7 +46,8 @@ public:
     for (auto&& slice : input) {
       const auto now = std::chrono::steady_clock::now();
       if (slice.rows() == 0) {
-        if (builder.rows() > 0 and last_finish + batch_timeout < now) {
+        if (builder.rows() > 0
+            and last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;
           co_yield builder.finish();
           continue;
@@ -62,7 +62,7 @@ public:
                       slice.schema().name(), slice.schema().make_fingerprint());
       TENZIR_ASSERT(ok);
       if (real_time_ or builder.rows() == batch_size_
-          or last_finish + batch_timeout < now) {
+          or last_finish + defaults::import::batch_timeout < now) {
         last_finish = now;
         co_yield builder.finish();
         continue;
@@ -75,7 +75,6 @@ public:
 
   auto operator()(generator<chunk_ptr> input) const -> generator<table_slice> {
     auto last_finish = std::chrono::steady_clock::now();
-    const auto batch_timeout = std::chrono::seconds{1};
     static const auto schema = type{
       "tenzir.metrics.bytes",
       record_type{
@@ -88,7 +87,8 @@ public:
     for (auto&& chunk : input) {
       const auto now = std::chrono::steady_clock::now();
       if (!chunk || chunk->size() == 0) {
-        if (builder.rows() > 0 and last_finish + batch_timeout < now) {
+        if (builder.rows() > 0
+            and last_finish + defaults::import::batch_timeout < now) {
           last_finish = now;
           co_yield builder.finish();
           continue;
@@ -102,7 +102,7 @@ public:
                                   counter);
       TENZIR_ASSERT(ok);
       if (real_time_ or builder.rows() == batch_size_
-          or last_finish + batch_timeout < now) {
+          or last_finish + defaults::import::batch_timeout < now) {
         last_finish = now;
         co_yield builder.finish();
         continue;

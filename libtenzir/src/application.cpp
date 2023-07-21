@@ -106,13 +106,16 @@ void add_root_opts(command& cmd) {
                             "forcibly flushed (default: 30s)");
   cmd.options.add<int64_t>("?tenzir", "max-resident-partitions",
                            "maximum number of in-memory "
-                           "partitions");
+                           "partitions (default: 1)");
   cmd.options.add<int64_t>("?tenzir", "max-taste-partitions",
                            "maximum number of immediately "
                            "scheduled partitions");
   cmd.options.add<int64_t>("?tenzir", "max-queries,q",
                            "maximum number of "
                            "concurrent queries");
+  cmd.options.add<duration>("?tenzir", "rebuild-interval",
+                            "timespan after which an automatic rebuild is "
+                            "triggered (default: 2h)");
 }
 
 auto make_count_command() {

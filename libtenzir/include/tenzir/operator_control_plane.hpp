@@ -58,6 +58,9 @@ struct operator_control_plane {
 
   /// Returns whether the pipeline may do potentially unsafe things.
   virtual auto allow_unsafe_pipelines() const noexcept -> bool = 0;
+
+  /// Returns true if the operator is hosted by process that has a terminal.
+  virtual auto has_terminal() const noexcept -> bool = 0;
 };
 
 } // namespace tenzir

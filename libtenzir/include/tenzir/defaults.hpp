@@ -163,27 +163,34 @@ inline constexpr const size_t rotate_files = 3;
 
 } // namespace logger
 
-// -- constants for the various builtin REST endpoints -------------------------
-namespace rest {
+// -- constants for the builtin REST endpoints -------------------------
+namespace api {
 
-/// Settings related to the `/query` endpoint.
-namespace query {
+/// The maximum response size for one request.
+//  The AWS API Gateway enforces a 128KiB limit for websocket messages,
+//  and we stay slightly below that here to allow the platform plugin to
+//  add it's own framing and metadata.
+inline constexpr size_t max_response_size = size_t{124} * 1'024; // 124 KiB
 
-/// The maximum number of results
-inline constexpr const size_t limit = 50;
+namespace serve {
 
-/// Whether to flatten nested fields.
-inline constexpr const bool flatten = false;
+/// The duration for which results for the last set of results of a pipeline
+/// is kept available after being fetched for the first time.
+inline constexpr std::chrono::seconds retention_time = std::chrono::minutes{1};
 
-/// Whether to render durations as numbers.
-inline constexpr const bool numeric_durations = false;
+/// Number of events returned.
+inline constexpr uint64_t max_events = 64;
 
-/// Whether to omit null fields.
-inline constexpr const bool omit_nulls = false;
+/// The amount of time to wait for additional events.
+inline constexpr std::chrono::milliseconds timeout
+  = std::chrono::milliseconds{100};
 
-} // namespace query
+/// The maximum timeout that can be requested by the client.
+inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{5};
 
-} // namespace rest
+} // namespace serve
+
+} // namespace api
 
 // -- constants for the entire system ------------------------------------------
 
@@ -221,8 +228,11 @@ inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 inline constexpr caf::timespan active_partition_timeout
   = std::chrono::seconds{30};
 
+/// Timeout after which a new automatic rebuild is triggered.
+inline constexpr caf::timespan rebuild_interval = std::chrono::minutes{120};
+
 /// Maximum number of in-memory INDEX partitions.
-inline constexpr size_t max_in_mem_partitions = 10;
+inline constexpr size_t max_in_mem_partitions = 1;
 
 /// Number of immediately scheduled INDEX partitions.
 inline constexpr size_t taste_partitions = 5;

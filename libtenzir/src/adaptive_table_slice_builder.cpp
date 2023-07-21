@@ -10,23 +10,29 @@
 
 #include <arrow/record_batch.h>
 
+#include <memory>
+#include <utility>
+
 namespace tenzir {
 
 namespace {
 auto init_root_builder(const type& start_schema, bool allow_fields_discovery)
-  -> std::variant<detail::concrete_series_builder<record_type>,
-                  detail::fixed_fields_record_builder> {
+  -> detail::adaptive_builder_root {
   TENZIR_ASSERT(caf::holds_alternative<record_type>(start_schema));
-  if (allow_fields_discovery)
-    return detail::concrete_series_builder<record_type>{
+  if (allow_fields_discovery) {
+    return detail::adaptive_builder_root{
+      std::in_place_type<detail::concrete_series_builder<record_type>>,
       caf::get<record_type>(start_schema)};
-  return detail::fixed_fields_record_builder{
+  }
+  return detail::adaptive_builder_root{
+    std::in_place_type<detail::fixed_fields_record_builder>,
     std::move(caf::get<record_type>(start_schema))};
 }
 } // namespace
 
 adaptive_table_slice_builder::adaptive_table_slice_builder(
   type start_schema, bool allow_fields_discovery)
+  // Note: We rely on move-elision here, but this is quite brittle.
   : root_builder_{init_root_builder(start_schema, allow_fields_discovery)} {
 }
 
@@ -90,6 +96,7 @@ auto adaptive_table_slice_builder::row_guard::cancel() -> void {
   if (auto row_added = current_rows > starting_rows_count_; row_added) {
     std::visit(
       [](auto& b) {
+        b.fill_nulls();
         b.remove_last_row();
       },
       builder_.root_builder_);
@@ -98,19 +105,28 @@ auto adaptive_table_slice_builder::row_guard::cancel() -> void {
 
 auto adaptive_table_slice_builder::row_guard::push_field(
   std::string_view field_name) -> detail::field_guard {
-  auto provider
-    = std::visit(detail::overload{
-                   [field_name](detail::fixed_fields_record_builder& b) {
-                     return b.get_field_builder_provider(field_name);
-                   },
-                   [field_name, len = starting_rows_count_](
-                     detail::concrete_series_builder<record_type>& b) {
-                     return b.get_field_builder_provider(field_name, len);
-                   },
-                 },
-                 builder_.root_builder_);
+  auto [builder_provider, parent_record_builder_provider] = std::visit(
+    detail::overload{
+      [field_name](detail::fixed_fields_record_builder& b)
+        -> std::pair<detail::builder_provider,
+                     detail::parent_record_builder_provider> {
+        return std::pair{b.get_field_builder_provider(field_name), []() {
+                           return nullptr;
+                         }};
+      },
+      [field_name, len = starting_rows_count_](
+        detail::concrete_series_builder<record_type>& b)
+        -> std::pair<detail::builder_provider,
+                     detail::parent_record_builder_provider> {
+        return std::pair{b.get_field_builder_provider(field_name, len), [&b]() {
+                           return std::addressof(b);
+                         }};
+      },
+    },
+    builder_.root_builder_);
 
-  return {std::move(provider), starting_rows_count_};
+  return {std::move(builder_provider),
+          std::move(parent_record_builder_provider), starting_rows_count_};
 }
 
 adaptive_table_slice_builder::row_guard::~row_guard() noexcept {
@@ -119,6 +135,10 @@ adaptive_table_slice_builder::row_guard::~row_guard() noexcept {
       b.fill_nulls();
     },
     builder_.root_builder_);
+}
+
+void adaptive_table_slice_builder::reset() {
+  root_builder_.emplace<0>();
 }
 
 } // namespace tenzir

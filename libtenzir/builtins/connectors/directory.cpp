@@ -6,9 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/concept/parseable/tenzir/pipeline.hpp"
-
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
@@ -20,11 +19,25 @@
 
 namespace tenzir::plugins::directory {
 
+struct saver_args {
+  std::string path;
+  bool appending;
+  bool real_time;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, saver_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("saver_args")
+      .fields(f.field("path", x.path), f.field("appending", x.appending),
+              f.field("real_time", x.real_time));
+  }
+};
+
 class directory_saver final : public plugin_saver {
 public:
   directory_saver() = default;
 
-  explicit directory_saver(std::string path) : path_{std::move(path)} {
+  explicit directory_saver(saver_args args) : args_{std::move(args)} {
   }
 
   auto name() const -> std::string override {
@@ -36,10 +49,10 @@ public:
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     if (!info) {
       return caf::make_error(ec::syntax_error,
-                             "cannot use directory saver "
-                             "outside of write ... to directory");
+                             "cannot use directory saver outside of `to "
+                             "directory write ...`");
     }
-    auto dir_path = std::filesystem::path(path_);
+    auto dir_path = std::filesystem::path(args_.path);
     std::error_code ec{};
     std::filesystem::create_directories(dir_path, ec);
     if (ec) {
@@ -56,10 +69,14 @@ public:
       return caf::make_error(ec::unspecified, "could not find `file` saver");
     }
     auto diag = null_diagnostic_handler{};
+    auto file_pipeline = escape_operator_arg(file_path.string());
+    if (args_.appending)
+      file_pipeline += " --appending";
+    if (args_.real_time)
+      file_pipeline += " --real-time";
     // TODO: We should probably use a better mechanism here than escaping and
     // re-parsing.
-    auto pi = tql::make_parser_interface(
-      escape_operator_arg(file_path.string()), diag);
+    auto pi = tql::make_parser_interface(std::move(file_pipeline), diag);
     auto parsed = std::unique_ptr<plugin_saver>{};
     try {
       parsed = p->parse_saver(*pi);
@@ -93,11 +110,11 @@ public:
   }
 
   friend auto inspect(auto& f, directory_saver& x) -> bool {
-    return f.apply(x.path_);
+    return f.apply(x.args_);
   }
 
 private:
-  std::string path_;
+  saver_args args_;
 };
 
 class plugin : public virtual saver_plugin<directory_saver> {
@@ -106,10 +123,12 @@ public:
     -> std::unique_ptr<plugin_saver> override {
     auto parser = argument_parser{name(), "https://docs.tenzir.com/next/"
                                           "connectors/directory"};
-    auto path = std::string{};
-    parser.add(path, "<path>");
+    auto args = saver_args{};
+    parser.add(args.path, "<path>");
+    parser.add("-a,--appending", args.appending);
+    parser.add("-r,--real-time", args.real_time);
     parser.parse(p);
-    return std::make_unique<directory_saver>(std::move(path));
+    return std::make_unique<directory_saver>(std::move(args));
   }
 };
 

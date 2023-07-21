@@ -101,6 +101,7 @@ public:
   }
 
   void emit(diagnostic d) override {
+    TENZIR_VERBOSE("emitting diagnostic: {}", d);
     self_->request(diagnostic_handler_, caf::infinite, std::move(d))
       .then([]() {},
             [](caf::error& e) {
@@ -127,11 +128,12 @@ class exec_node_control_plane final : public operator_control_plane {
 public:
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler)
+    receiver_actor<diagnostic> diagnostic_handler, bool has_terminal)
     : state_{self->state},
       diagnostic_handler_{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
-          self, std::move(diagnostic_handler))} {
+          self, std::move(diagnostic_handler))},
+      has_terminal_{has_terminal} {
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
@@ -150,7 +152,10 @@ public:
         .emit(diagnostics());
     }
     if (not state_.abort) {
+      TENZIR_VERBOSE("setting abort flag of `{}`", state_.op->name());
       state_.abort = caf::make_error(ec::silent, fmt::to_string(error));
+    } else {
+      TENZIR_VERBOSE("abort flag of `{}` was already set", state_.op->name());
     }
   }
 
@@ -183,10 +188,15 @@ public:
                        "tenzir.allow-unsafe-pipelines", false);
   }
 
+  auto has_terminal() const noexcept -> bool override {
+    return has_terminal_;
+  }
+
 private:
   exec_node_state<Input, Output>& state_;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler_
     = {};
+  bool has_terminal_;
 };
 
 auto size(const table_slice& slice) -> uint64_t {
@@ -355,7 +365,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
       self->set_down_handler([this](const caf::down_msg& msg) {
         auto time_scheduled_guard = make_timer_guard(time_scheduled);
         if (msg.source != this->previous.address()) {
-          TENZIR_DEBUG("ignores down msg from unknown source: {}", msg.reason);
+          TENZIR_DEBUG("ignores down msg `{}` from unknown source: {}",
+                       msg.reason, msg.source);
           return;
         }
         TENZIR_DEBUG("{} got down from previous execution node: {}", op->name(),
@@ -368,10 +379,12 @@ struct exec_node_state : inbound_state_mixin<Input>,
         this->signaled_demand = false;
         schedule_run();
         if (msg.reason) {
+          auto category
+            = msg.reason == ec::silent ? ec::silent : ec::unspecified;
           ctrl->abort(caf::make_error(
-            ec::unspecified, fmt::format("{} shuts down because of irregular "
-                                         "exit of previous operator: {}",
-                                         op, msg.reason)));
+            category, fmt::format("{} shuts down because of irregular "
+                                  "exit of previous operator: {}",
+                                  op, msg.reason)));
         }
       });
     }
@@ -451,15 +464,21 @@ struct exec_node_state : inbound_state_mixin<Input>,
     /// response, causing this actor to be suspended until the events have
     /// arrived.
     auto handle_result = [this]() mutable {
+      TENZIR_TRACE("pull from {} was successful", op->name());
       auto time_scheduled_guard = make_timer_guard(time_scheduled);
       this->signaled_demand = false;
       schedule_run();
     };
     auto handle_error = [this](caf::error& error) {
+      TENZIR_TRACE("pull from {} failed: {}", op->name(), error);
       auto time_scheduled_guard = make_timer_guard(time_scheduled);
       this->signaled_demand = false;
       schedule_run();
-      if (error == caf::sec::request_receiver_down) {
+      // TODO: We currently have to use `caf::exit_reason::kill` in
+      // `pipeline_executor.cpp` to work around a CAF bug. However, this implies
+      // that we might receive a `caf::sec::broken_promise` error here.
+      if (error == caf::sec::request_receiver_down
+          || error == caf::sec::broken_promise) {
         this->previous = nullptr;
         return;
       }
@@ -473,6 +492,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       }
     };
     this->signaled_demand = true;
+    TENZIR_TRACE("sending pull from {}", op->name());
     auto response_handle
       = self->request(this->previous, caf::infinite, atom::pull_v,
                       static_cast<exec_node_sink_actor>(self), batch_size,
@@ -820,12 +840,12 @@ template <class Input, class Output>
 auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, node_actor node,
-  receiver_actor<diagnostic> diagnostic_handler)
+  receiver_actor<diagnostic> diagnostic_handler, bool has_terminal)
   -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, std::move(diagnostic_handler));
+    self, std::move(diagnostic_handler), has_terminal);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->quit(caf::make_error(
@@ -834,6 +854,9 @@ auto exec_node(
     return exec_node_actor::behavior_type::make_empty_behavior();
   }
   self->state.weak_node = node;
+  self->attach_functor([name = self->state.op->name()] {
+    TENZIR_DEBUG("exec-node for {} shut down", name);
+  });
   return {
     [self](atom::start,
            std::vector<caf::actor>& previous) -> caf::result<void> {
@@ -874,7 +897,8 @@ auto exec_node(
 
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
-                     receiver_actor<diagnostic> diagnostic_handler)
+                     receiver_actor<diagnostic> diagnostic_handler,
+                     bool has_terminal)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
@@ -897,10 +921,9 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       if constexpr (std::is_void_v<Input> and std::is_void_v<Output>) {
         die("unimplemented");
       } else {
-        auto result
-          = self->spawn<SpawnOptions>(exec_node<input_type, output_type>,
-                                      std::move(op), std::move(node),
-                                      std::move(diagnostic_handler));
+        auto result = self->spawn<SpawnOptions>(
+          exec_node<input_type, output_type>, std::move(op), std::move(node),
+          std::move(diagnostic_handler), has_terminal);
         return result;
       }
     };

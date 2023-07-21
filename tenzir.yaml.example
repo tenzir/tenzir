@@ -108,8 +108,11 @@ tenzir:
   # disable.
   automatic-rebuild: 1
 
+  # Timeout after which an automatic rebuild is triggered.
+  rebuild-interval: 2 hours
+
   # The number of index shards that can be cached in memory.
-  max-resident-partitions: 10
+  max-resident-partitions: 1
 
   # The number of index shards that are considered for the first evaluation
   # round of a query.
@@ -507,4 +510,4 @@ caf:
              JSONStreaming::disable_default_logs=T
              JSONStreaming::enable_log_rotation=F
              json-streaming-logs"
-      | parse zeek-json
+      | read zeek-json

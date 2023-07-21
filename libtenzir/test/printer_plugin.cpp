@@ -84,6 +84,10 @@ struct fixture : fixtures::events {
     auto allow_unsafe_pipelines() const noexcept -> bool override {
       return false;
     }
+
+    auto has_terminal() const noexcept -> bool override {
+      return false;
+    }
   };
 
   fixture() {

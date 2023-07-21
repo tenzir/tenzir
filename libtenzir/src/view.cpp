@@ -301,4 +301,39 @@ data_view to_internal(const type& t, const data_view& x) {
   return caf::visit(v, x, t);
 }
 
+auto descend(view<record> r, std::string_view path)
+  -> caf::expected<data_view> {
+  TENZIR_ASSERT(!path.empty());
+  auto names = detail::split(path, ".");
+  TENZIR_ASSERT(!names.empty());
+  auto current = r;
+  for (auto& name : names) {
+    auto last = &name == &names.back();
+    auto it = std::find_if(current.begin(), current.end(),
+                           [&name](const auto& field_name_and_value) {
+                             return field_name_and_value.first == name;
+                           });
+    if (it == current.end()) {
+      // Field not found.
+      return caf::make_error(ec::lookup_error,
+                             fmt::format("can't find record at path {}", path));
+    }
+    auto field = it->second;
+    if (last) {
+      // Path was completely processed.
+      return field;
+    }
+    auto maybe_rec = caf::get_if<view<record>>(&field);
+    if (!maybe_rec) {
+      // This is not a record, but path continues.
+      return caf::make_error(
+        ec::lookup_error,
+        fmt::format("expected {} to be a record",
+                    fmt::join(std::span{names.data(), &name}, ".")));
+    }
+    current = *maybe_rec;
+  }
+  die("unreachable");
+}
+
 } // namespace tenzir

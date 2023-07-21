@@ -37,11 +37,11 @@ We introduced several new operators:
   event displaying version information of VAST.
 - [`from`](/next/operators/sources/from): produces events by
   combining a connector and a format.
-- [`read`](/next/operators/sources/read): a short form of `from`
+- [`read`](/VAST v3.1/understand/operators/sources/read): a short form of `from`
   that allows for omitting the connector.
 - [`to`](/next/operators/sinks/to): consumes events by combining
   a connector and format.
-- [`write`](/next/operators/sinks/write): a short form of `to`
+- [`write`](/VAST v3.1/understand/operators/sinks/write): a short form of `to`
   that allows for omitting the connector.
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to

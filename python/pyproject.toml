@@ -26,14 +26,14 @@ repository = "https://github.com/tenzir/tenzir"
 python = "^3.10"
 aiohttp = "^3.8"
 coloredlogs = "^15.0"
-dynaconf = "^3.1"
+dynaconf = "^3.2"
 numpy = "^1.24"
 pandas = ">=1.5,<3.0"
 pyarrow = ">=11,<13"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.4"
-pytest-asyncio = "^0.21.0"
+pytest-asyncio = "^0.21.1"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto" # required for async fixtures

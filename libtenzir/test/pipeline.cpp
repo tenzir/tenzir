@@ -76,6 +76,10 @@ public:
     return false;
   }
 
+  auto has_terminal() const noexcept -> bool override {
+    return false;
+  }
+
 private:
   caf::error error_{};
 };
@@ -152,7 +156,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto self = caf::scoped_actor{sys};
     auto executor = self->spawn<caf::monitored>(
       pipeline_executor, std::move(p),
-      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{});
+      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{}, false);
     self->send(executor, atom::start_v);
     auto start_result = std::optional<caf::error>{};
     auto down_result = std::optional<caf::error>{};
@@ -487,14 +491,13 @@ TEST(to with invalid inputs) {
   REQUIRE_ERROR(pipeline::internal_parse("to json write stdout"));
 }
 
-TEST(stdin with json parser with all from and read combinations) {
-  auto definitions = {"from stdin",
-                      "from stdin --timeout 1s",
-                      "from stdin read json",
-                      "from stdin --timeout 1s read json",
-                      "read json from stdin",
-                      "read json from stdin --timeout 1s",
-                      "read json"};
+TEST(stdin with json parser with all from combinations) {
+  auto definitions = {
+    "from stdin",
+    "from stdin --timeout 1s",
+    "from stdin read json",
+    "from stdin --timeout 1s read json",
+  };
   for (auto definition : definitions) {
     MESSAGE("trying '" << definition << "'");
     test::stdin_file_input<"artifacts/inputs/json.txt"> file;
@@ -612,18 +615,17 @@ TEST(file loader - arguments) {
        "from file - read json",
        "from file " TENZIR_TEST_PATH "artifacts/inputs/json.json",
        "from file " TENZIR_TEST_PATH "artifacts/inputs/json.json read json",
-       "read json from file " TENZIR_TEST_PATH "artifacts/inputs/json.json",
-       "read json from file " TENZIR_TEST_PATH
-       "artifacts/inputs/json.json --follow",
-       "read json from file " TENZIR_TEST_PATH "artifacts/inputs/json.json -f",
-       "read json from file --follow " TENZIR_TEST_PATH
-       "artifacts/inputs/json.json",
-       "read json from file -f " TENZIR_TEST_PATH "artifacts/inputs/json.json",
-       "read json from file -",
-       "load file " TENZIR_TEST_PATH "artifacts/inputs/json.json | parse json",
-       "load file - | parse json",
+       "from file " TENZIR_TEST_PATH
+       "artifacts/inputs/json.json --follow read json",
+       "from file " TENZIR_TEST_PATH "artifacts/inputs/json.json -f read json",
+       "from file --follow " TENZIR_TEST_PATH
+       "artifacts/inputs/json.json read json",
+       "from file -f " TENZIR_TEST_PATH "artifacts/inputs/json.json read json",
+       "from file - read json",
+       "load file " TENZIR_TEST_PATH "artifacts/inputs/json.json | read json",
+       "load file - | read json",
        "load file " TENZIR_TEST_PATH
-       "artifacts/inputs/json.json --timeout 2m | parse json"};
+       "artifacts/inputs/json.json --timeout 2m | read json"};
   auto error
     = {"from - --timeout",
        "from - --timeout nope",
@@ -633,9 +635,9 @@ TEST(file loader - arguments) {
        "from file --timeout 2m",
        "load stdin --timeout 1s /home/dakostu/Documents/tenzir2/version.json",
        "load file " TENZIR_TEST_PATH
-       "artifacts/inputs/json.json --timeout | parse json",
+       "artifacts/inputs/json.json --timeout | read json",
        "load file " TENZIR_TEST_PATH
-       "artifacts/inputs/json.json --timeout wtf | parse json"};
+       "artifacts/inputs/json.json --timeout wtf | read json"};
   for (const auto* x : success) {
     MESSAGE(x);
     REQUIRE_NOERROR(pipeline::internal_parse(fmt::format("{} | to stdout", x)));

@@ -25,6 +25,15 @@ struct type_from_data
 template <class T>
 using type_from_data_t = typename type_from_data<T>::type;
 
+/// @brief returns a valid pointer to the parent record_type builder when the
+/// parent builder is constructed and it is allowed to change fields (it is not
+/// a fixed_fields_record_builder) The parent builder will be constructed for:
+/// 1) The fields from the input schema
+/// 2) Inferred fields that had a value added to them (the type was inferred
+/// from the input -> adequate builder was created)
+using parent_record_builder_provider
+  = std::function<concrete_series_builder<record_type>*()>;
+
 class field_guard;
 
 /// @brief A view of a list column created within adaptive_table_slice_builder.
@@ -87,7 +96,8 @@ public:
   auto push_list() -> list_guard;
 
 private:
-  auto propagate_type(type child_type) -> void;
+  auto propagate_type_discovery(type child_type) -> void;
+  auto propagate_type_change(type child_type) -> void;
   auto get_root_list_builder() -> concrete_series_builder<tenzir::list_type>&;
 
   template <concrete_type Type>
@@ -129,7 +139,7 @@ private:
   template <concrete_type Type>
   auto add_impl(auto view) -> caf::error {
     if (not value_type)
-      propagate_type(tenzir::type{Type{}});
+      propagate_type_discovery(tenzir::type{Type{}});
     return caf::visit(
       detail::overload{
         [this, view](const Type& t) {
@@ -137,18 +147,16 @@ private:
           return caf::error{};
         },
         [view, this](const auto& t) {
-          if (auto castable = can_cast(Type{}, t); not castable)
-            return std::move(castable.error());
           auto cast_val = cast_value(Type{}, view, t);
-          if (not cast_val)
-            return std::move(cast_val.error());
-          // this is sometimes not used due to the if constexpr below.
-          // This is done to prevent compilation warning treated as an error.
-          (void)this;
-          if constexpr (not std::is_same_v<caf::expected<void>,
-                                           decltype(cast_val)>) {
+          if (cast_val) {
             append_value_to_builder(t, *cast_val);
+            return caf::error{};
           }
+          auto new_type = get_root_list_builder().change_type(
+            type{t}, type{Type{}}, data{materialize(view)});
+          if (not new_type)
+            return std::move(new_type.error());
+          propagate_type_change(*new_type);
           return caf::error{};
         },
         [view](const list_type& t) -> caf::error {
@@ -181,8 +189,11 @@ private:
 class record_guard {
 public:
   record_guard(builder_provider builder_provider,
+               parent_record_builder_provider parent_record_builder_provider,
                arrow_length_type starting_fields_length)
     : builder_provider_{std::move(builder_provider)},
+      parent_record_builder_provider_{
+        std::move(parent_record_builder_provider)},
       starting_fields_length_{starting_fields_length} {
   }
 
@@ -193,6 +204,7 @@ public:
 
 private:
   builder_provider builder_provider_;
+  parent_record_builder_provider parent_record_builder_provider_;
   arrow_length_type starting_fields_length_ = 0u;
 };
 
@@ -201,8 +213,11 @@ private:
 class field_guard {
 public:
   field_guard(builder_provider builder_provider,
+              parent_record_builder_provider parent_record_builder_provider,
               arrow_length_type starting_fields_length)
     : builder_provider_{std::move(builder_provider)},
+      parent_record_builder_provider_{
+        std::move(parent_record_builder_provider)},
       starting_fields_length_{starting_fields_length} {
   }
 
@@ -242,6 +257,7 @@ public:
 
 private:
   builder_provider builder_provider_;
+  parent_record_builder_provider parent_record_builder_provider_;
   arrow_length_type starting_fields_length_ = 0u;
 };
 
