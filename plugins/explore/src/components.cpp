@@ -141,8 +141,8 @@ auto align_element(alignment align, Element element) -> Element {
 }
 
 auto StaticCell(view<data> value, const struct theme& theme) -> Element {
-  using tenzir::to_string;
   auto make = [&](const auto& x, alignment align, auto data_color) {
+    using tenzir::to_string;
     auto element = text(to_string(x)) | color(data_color);
     return align_element(align, std::move(element));
   };
@@ -150,18 +150,18 @@ auto StaticCell(view<data> value, const struct theme& theme) -> Element {
 }
 
 /// A cell in the table body.
-// auto InteractiveCell(view<data> value, const struct theme& theme) ->
-// Component {
-//   auto make = [&](const auto& x, alignment align, auto data_color) {
-//     auto focus_color = theme.focus_color();
-//     return Renderer([=, txt = text(to_string(x)),
-//                      normal_color = color(data_color)](bool focused) {
-//       auto element = focused ? txt | focus | focus_color : txt |
-//       normal_color; return align_element(align, std::move(element));
-//     });
-//   };
-//   return colorize(make, value, theme);
-// }
+auto InteractiveCell(view<data> value, const struct theme& theme) -> Component {
+  auto make = [&](const auto& x, alignment align, auto data_color) {
+    using tenzir::to_string;
+    auto focus_color = theme.focus_color();
+    return Renderer([=, txt = text(to_string(x)),
+                     normal_color = color(data_color)](bool focused) {
+      auto element = focused ? txt | focus | focus_color : txt | normal_color;
+      return align_element(align, std::move(element));
+    });
+  };
+  return colorize(make, value, theme);
+}
 
 /// A single-row focusable cell in the table header.
 auto SingleColumnHeader(std::string top, int height, const struct theme& theme)
@@ -243,19 +243,17 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
         TENZIR_DEBUG("rendering [{},{}) of schema '{}'", i,
                      i + table_->slices.size(), slice.schema().name());
         auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
-        // TODO: make the component configurable with respect to static vs.
-        // dynamic behavior.
-        // for (size_t row = 0; row < slice.rows(); ++row) {
-        //  auto cell = InteractiveCell(slice.at(row, col), state_->theme);
-        //  body_->Add(cell);
-        //}
-        Elements body;
-        body.reserve(slice.rows());
         for (size_t row = 0; row < slice.rows(); ++row) {
-          auto cell = StaticCell(slice.at(row, col), state_->theme);
-          body.push_back(std::move(cell));
+          auto cell = InteractiveCell(slice.at(row, col), state_->theme);
+          body_->Add(cell);
         }
-        body_->Add(lift(vbox(std::move(body))));
+        // Elements body;
+        // body.reserve(slice.rows());
+        // for (size_t row = 0; row < slice.rows(); ++row) {
+        //   auto cell = StaticCell(slice.at(row, col), state_->theme);
+        //   body.push_back(std::move(cell));
+        // }
+        // body_->Add(lift(vbox(std::move(body))));
       }
       num_slices_rendered_ = table_->slices.size();
       return ComponentBase::Render() | flex;

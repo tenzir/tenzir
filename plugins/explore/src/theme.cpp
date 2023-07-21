@@ -143,7 +143,7 @@ auto theme::menu(std::vector<std::string>* entries, int* selected,
   auto horizontal = direction == Up || direction == Down;
   MenuOption option;
   option.direction = menu_direction(direction);
-  option.entries.transform = [this, horizontal](const EntryState& entry) {
+  option.entries_option.transform = [this, horizontal](const EntryState& entry) {
     Element e = text(entry.label);
     if (horizontal)
       e |= center;
