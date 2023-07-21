@@ -368,6 +368,13 @@ struct exec_node_state : inbound_state_mixin<Input>,
         = caf::actor_cast<exec_node_actor>(std::move(previous.back()));
       previous.pop_back();
       self->monitor(this->previous);
+      self->set_exit_handler([this](const caf::exit_msg& msg) {
+        TENZIR_DEBUG("{} emitting last metrics before exiting", op->name());
+        auto time_scheduled_guard
+          = make_timer_guard(current_metrics.time_scheduled);
+        emit_metrics();
+        self->quit(msg.reason);
+      });
       self->set_down_handler([this](const caf::down_msg& msg) {
         auto time_scheduled_guard
           = make_timer_guard(current_metrics.time_scheduled);
