@@ -143,17 +143,18 @@ auto theme::menu(std::vector<std::string>* entries, int* selected,
   auto horizontal = direction == Up || direction == Down;
   MenuOption option;
   option.direction = menu_direction(direction);
-  option.entries_option.transform = [this, horizontal](const EntryState& entry) {
-    Element e = text(entry.label);
-    if (horizontal)
-      e |= center;
-    e |= flex;
-    if (!entry.active)
-      e |= color(palette.muted);
-    if (entry.focused)
-      e |= bgcolor(palette.highlight_high);
-    return e;
-  };
+  option.entries_option.transform
+    = [this, horizontal](const EntryState& entry) {
+        Element e = text(entry.label);
+        if (horizontal)
+          e |= center;
+        e |= flex;
+        if (!entry.active)
+          e |= color(palette.muted);
+        if (entry.focused)
+          e |= bgcolor(palette.highlight_high);
+        return e;
+      };
   option.underline.enabled = false;
   return Menu(entries, selected, option);
 }

@@ -6,9 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "explore/ui_state.hpp"
+
 #include "explore/operator_args.hpp"
 #include "explore/printer_args.hpp"
-#include "explore/ui_state.hpp"
 
 namespace tenzir::plugins::explore {
 

@@ -29,8 +29,7 @@ struct operator_args {
     return f.object(x)
       .pretty_name("operator_args")
       .fields(f.field("width", x.width), f.field("height", x.height),
-              f.field("fullscreen", x.fullscreen),
-              f.field("fit", x.fit),
+              f.field("fullscreen", x.fullscreen), f.field("fit", x.fit),
               f.field("hide_types", x.hide_types),
               f.field("navigator_position", x.navigator_position),
               f.field("navigator_auto_hide", x.navigator_auto_hide));
