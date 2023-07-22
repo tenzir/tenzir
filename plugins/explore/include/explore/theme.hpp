@@ -48,14 +48,14 @@ struct theme {
   auto menu(std::vector<std::string>* entries, int* selected,
             ftxui::Direction direction) const -> ftxui::Component;
 
-  /// A themed FTXUI border.
-  auto border() const -> ftxui::Decorator;
-
   /// The focus color.
   auto focus_color() const -> ftxui::Decorator;
 
   /// Returns a themed separator.
-  auto separator() const -> ftxui::Element;
+  auto separator(bool focused = false) const -> ftxui::Element;
+
+  /// A themed FTXUI border.
+  auto border(bool focused = false) const -> ftxui::Decorator;
 
   struct palette palette = default_palette();
 };

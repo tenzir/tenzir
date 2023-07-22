@@ -230,7 +230,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
                                state_->theme);
       auto container = Container::Vertical({});
       container->Add(header);
-      container->Add(lift(state_->theme.separator()));
+      container->Add(lift(state_->theme.separator(Focused())));
       container->Add(body_);
       Add(container);
     }
@@ -297,13 +297,13 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
         if (first)
           first = false;
         else
-          body_->Add(lift(state_->theme.separator()));
+          body_->Add(lift(state_->theme.separator(Focused())));
         body_->Add(std::move(column));
       }
       auto result = Container::Vertical({});
       if (header_) {
         result->Add(header_);
-        result->Add(lift(state_->theme.separator()));
+        result->Add(lift(state_->theme.separator(Focused())));
       }
       result->Add(body_);
       Add(result);
@@ -315,7 +315,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
         return;
       auto result = Container::Vertical({
         header_,
-        lift(state_->theme.separator()),
+        lift(state_->theme.separator(Focused())),
         body_,
       });
       DetachAllChildren();
@@ -327,7 +327,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
         return;
       auto result = Container::Vertical({
         header_,
-        lift(state_->theme.separator()),
+        lift(state_->theme.separator(Focused())),
         lift(text("...") | center),
       });
       DetachAllChildren();
@@ -427,13 +427,13 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
 //        if (first)
 //          first = false;
 //        else
-//          fields->Add(lift(state->theme.separator()));
+//          fields->Add(lift(state->theme.separator(Focused())));
 //        fields->Add(TableHeader(state, schema, index));
 //        ++index.back();
 //      }
 //      return Container::Vertical({
 //        HeaderCell(field.name, field.type, state->theme),
-//        lift(state->theme.separator()),
+//        lift(state->theme.separator(Focused())),
 //        std::move(fields),
 //      });
 //    },
@@ -449,6 +449,23 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
 
 } // namespace
 
+auto Pane(ui_state* state, Component component) -> Component {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state, Component component) : state_{state} {
+      Add(std::move(component));
+    }
+
+    auto Render() -> Element override {
+      return ComponentBase::Render() | state_->theme.border(Focused());
+    }
+
+  private:
+    ui_state* state_;
+  };
+  return Make<Impl>(state, std::move(component));
+}
+
 auto DataFrame(ui_state* state, const type& schema) -> Component {
   class Impl : public ComponentBase {
   public:
@@ -461,7 +478,7 @@ auto DataFrame(ui_state* state, const type& schema) -> Component {
     }
 
     auto Render() -> Element override {
-      return ComponentBase::Render() | state_->theme.border();
+      return ComponentBase::Render() | state_->theme.border(Focused());
     }
 
   private:
@@ -470,11 +487,10 @@ auto DataFrame(ui_state* state, const type& schema) -> Component {
   return Make<Impl>(state, schema);
 }
 
-auto Navigator(ui_state* state, int* index, int* width) -> Component {
+auto Navigator(ui_state* state, int* index) -> Component {
   class Impl : public ComponentBase {
   public:
-    Impl(ui_state* state, int* index, int* width)
-      : state_{state}, index_{index}, width_{width} {
+    Impl(ui_state* state, int* index) : state_{state}, index_{index} {
       fingerprints_ = Container::Vertical({});
       fingerprints_->DetachAllChildren();
       menu_
@@ -494,27 +510,27 @@ auto Navigator(ui_state* state, int* index, int* width) -> Component {
 
     auto Render() -> Element override {
       auto num_schemas = state_->tables.size();
-      if (schema_cache_.size() == num_schemas)
-        return ComponentBase::Render();
-      // Assemble new tables and update components.
-      for (const auto& [type, table] : state_->tables) {
-        if (!schema_cache_.contains(type)) {
-          schema_cache_.insert(type);
-          schema_names_.emplace_back(type.name());
-          auto fingerprint = type.make_fingerprint();
-          // One extra character for the separator.
-          auto width = type.name().size() + fingerprint.size() + 1;
-          *width_ = std::max(*width_, detail::narrow_cast<int>(width));
-          auto element
-            = text(std::move(fingerprint)) | color(state_->theme.palette.muted);
-          fingerprints_->Add(lift(std::move(element)));
+      if (schema_cache_.size() < num_schemas) {
+        // Assemble new tables and update components.
+        for (const auto& [type, table] : state_->tables) {
+          if (!schema_cache_.contains(type)) {
+            schema_cache_.insert(type);
+            schema_names_.emplace_back(type.name());
+            auto fingerprint = type.make_fingerprint();
+            // One extra character for the separator.
+            auto width = type.name().size() + fingerprint.size() + 1;
+            width_ = std::max(width_, detail::narrow_cast<int>(width));
+            auto element = text(std::move(fingerprint))
+                           | color(state_->theme.palette.muted);
+            fingerprints_->Add(lift(std::move(element)));
+          }
         }
+        TENZIR_ASSERT(num_schemas == state_->tables.size());
+        TENZIR_ASSERT(num_schemas == schema_cache_.size());
+        TENZIR_ASSERT(num_schemas == schema_names_.size());
+        TENZIR_ASSERT(num_schemas == fingerprints_->ChildCount());
       }
-      TENZIR_ASSERT(num_schemas == state_->tables.size());
-      TENZIR_ASSERT(num_schemas == schema_cache_.size());
-      TENZIR_ASSERT(num_schemas == schema_names_.size());
-      TENZIR_ASSERT(num_schemas == fingerprints_->ChildCount());
-      return ComponentBase::Render();
+      return ComponentBase::Render() | size(WIDTH, GREATER_THAN, width_);
     }
 
     auto OnEvent(Event event) -> bool override {
@@ -536,7 +552,7 @@ auto Navigator(ui_state* state, int* index, int* width) -> Component {
     int* index_ = nullptr;
 
     /// The width of the menu (iff horizontal).
-    int* width_ = nullptr;
+    int width_ = 0;
 
     /// The menu items for the navigator. In sync with the tab.
     std::vector<std::string> schema_names_;
@@ -550,7 +566,7 @@ auto Navigator(ui_state* state, int* index, int* width) -> Component {
     /// The tables by schema.
     std::unordered_set<type> schema_cache_;
   };
-  return Make<Impl>(state, index, width);
+  return Make<Impl>(state, index);
 }
 
 auto Explorer(ui_state* state) -> Component {
@@ -564,38 +580,29 @@ auto Explorer(ui_state* state) -> Component {
     auto Render() -> Element override {
       auto num_tables = state_->tables.size();
       if (tables_.size() == num_tables)
-        return ComponentBase::Render() | state_->theme.border();
+        return ComponentBase::Render();
       if (state_->navigator_auto_hide && num_tables == 1) {
         DetachAllChildren();
         Add(tab_);
       } else if ((state_->navigator_auto_hide && num_tables == 2)
                  || tables_.empty()) {
         DetachAllChildren();
-        if (state_->navigator_position == Direction::Left
-            || state_->navigator_position == Direction::Right) {
-          Add(ResizableSplit({
-            .main = Navigator(state_, &index_, &navigator_width_),
-            .back = tab_,
-            .direction = state_->navigator_position,
-            .main_size = &navigator_width_,
-            .separator_func =
-              [&] {
-                return state_->theme.separator();
-              },
-          }));
-        } else if (state_->navigator_position == Direction::Up) {
-          Add(Container::Vertical({
-            Navigator(state_, &index_, &navigator_width_),
-            lift(state_->theme.separator()),
-            tab_,
-          }));
-        } else if (state_->navigator_position == Direction::Down) {
-          Add(Container::Vertical({
-            tab_,
-            lift(state_->theme.separator()),
-            Navigator(state_, &index_, &navigator_width_),
-          }));
-        }
+        auto juxtapose = [](Direction position, Component x, Component y) {
+          switch (position) {
+            case Direction::Left:
+              return Container::Horizontal({x, y});
+            case Direction::Right:
+              return Container::Horizontal({y, x});
+            case Direction::Up:
+              return Container::Vertical({x, y});
+            case Direction::Down:
+              return Container::Vertical({y, x});
+          }
+        };
+        auto component = juxtapose(state_->navigator_position,
+                                   Pane(state_, Navigator(state_, &index_)),
+                                   Pane(state_, tab_));
+        Add(std::move(component));
       }
       for (const auto& [type, table] : state_->tables) {
         if (!tables_.contains(type)) {
@@ -607,14 +614,11 @@ auto Explorer(ui_state* state) -> Component {
       TENZIR_ASSERT(num_tables == state_->tables.size());
       TENZIR_ASSERT(num_tables == tables_.size());
       TENZIR_ASSERT(num_tables == tab_->ChildCount());
-      return ComponentBase::Render() | state_->theme.border();
+      return ComponentBase::Render();
     }
 
   private:
     ui_state* state_;
-
-    /// The width of the navigation split (iff horizontal).
-    int navigator_width_ = 0;
 
     /// The currently selected schema.
     int index_ = 0;

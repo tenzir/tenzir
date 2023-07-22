@@ -75,6 +75,9 @@ auto Catch(std::function<bool(ftxui::Event)> on_event)
   };
 }
 
+/// A major UI component in a focusable, bordered frame.
+auto Pane(ui_state* state, ftxui::Component component) -> ftxui::Component;
+
 /// A data frame.
 auto DataFrame(ui_state* state, const type& schema) -> ftxui::Component;
 

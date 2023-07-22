@@ -159,16 +159,18 @@ auto theme::menu(std::vector<std::string>* entries, int* selected,
   return Menu(entries, selected, option);
 }
 
-auto theme::border() const -> ftxui::Decorator {
-  return borderStyled(ROUNDED, palette.highlight_high);
-}
-
 auto theme::focus_color() const -> ftxui::Decorator {
   return color(palette.text) | bgcolor(palette.highlight_high);
 }
 
-auto theme::separator() const -> ftxui::Element {
-  return ftxui::separator() | ftxui::color(palette.highlight_high);
+auto theme::separator(bool focused) const -> ftxui::Element {
+  auto color = focused ? palette.highlight_high : palette.highlight_med;
+  return ftxui::separator() | ftxui::color(color);
+}
+
+auto theme::border(bool focused) const -> ftxui::Decorator {
+  auto color = focused ? palette.highlight_high : palette.highlight_med;
+  return borderStyled(ROUNDED, color);
 }
 
 auto default_theme() -> theme {
