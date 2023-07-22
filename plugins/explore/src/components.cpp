@@ -557,12 +557,39 @@ auto Navigator(ui_state* state, int* index) -> Component {
   return Make<Impl>(state, index);
 }
 
+auto Loading(ui_state* state) -> Component {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state) : state_{state} {
+      logo_ = logo() | color(state_->theme.palette.muted);
+    }
+
+    auto Render() -> Element override {
+      constexpr int spinner_type = 15;
+      return vbox({
+        hbox({
+          text("loading ") | color(state_->theme.palette.text),
+          spinner(spinner_type, image_++),
+        }) | center
+          | size(HEIGHT, EQUAL, 3),
+        logo_,
+      });
+    }
+
+  private:
+    size_t image_ = 0;
+    Element logo_;
+    ui_state* state_;
+  };
+  return Make<Impl>(state);
+}
+
 auto Explorer(ui_state* state) -> Component {
   class Impl : public ComponentBase {
   public:
     Impl(ui_state* state) : state_{state} {
       tab_ = Container::Tab({}, &index_); // to be filled
-      Add(lift(logo()));
+      Add(Pane(state_, Loading(state_)));
     }
 
     auto Render() -> Element override {
