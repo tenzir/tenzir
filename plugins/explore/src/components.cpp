@@ -64,12 +64,15 @@ namespace {
 auto Help() -> Component {
   auto table = Table({
     {" Key ", " Alias ", " Description "},
-    {"k", "↑", "move focus one window up"},
-    {"j", "↓", "move focus one window down"},
-    {"h", "←", "move focus one window to the left"},
-    {"l", "→", "move focus one window to the right"},
-    {"K", "p", "move up in schema navigator"},
-    {"J", "n", "move down in schema navigator"},
+    {"t", " ", "toggle type annotations in headers"},
+    {"k", "↑", "move focus one component up"},
+    {"j", "↓", "move focus one component down"},
+    {"h", "←", "move focus one component to the left"},
+    {"l", "→", "move focus one component to the right"},
+    {"K", " ", "move up in schema navigator"},
+    {"J", " ", "move down in schema navigator"},
+    {"H", " ", "move left in schema navigator"},
+    {"L", " ", "move right in schema navigator"},
     {"?", "", "show this help"},
     {"q", "", "quit the UI"},
   });
@@ -163,40 +166,28 @@ auto InteractiveCell(view<data> value, const struct theme& theme) -> Component {
   return colorize(make, value, theme);
 }
 
-/// A single-row focusable cell in the table header.
-auto SingleColumnHeader(std::string top, int height, const struct theme& theme)
-  -> Component {
-  TENZIR_ASSERT(height >= 1);
-  return Renderer([height, &theme, top_text = std::move(top),
-                   top_color = color(theme.palette.text),
-                   focus_color = theme.focus_color()](bool focused) mutable {
-    auto header = text(top_text) | center;
-    header |= focused ? focus | theme.focus_color() : color(theme.palette.text);
-    return vbox({
-             filler(),
-             std::move(header),
-             filler(),
-           })
-           | size(HEIGHT, EQUAL, height) | size(WIDTH, GREATER_THAN, 3);
-  });
-}
-
-/// A dual-row focusable cell in the table header.
-auto DualColumnHeader(std::string top, std::string bottom, int height,
-                      const struct theme& theme) -> Component {
-  TENZIR_ASSERT(height >= 2);
-  return Renderer([height, &theme, top_text = std::move(top),
-                   bottom_text = std::move(bottom)](bool focused) mutable {
-    auto header = text(top_text) | center;
-    header |= focused ? focus | theme.focus_color() : color(theme.palette.text);
-    return vbox({
-             filler(),
-             std::move(header),
-             text(bottom_text) | center | color(theme.palette.muted),
-             filler(),
-           })
-           | size(HEIGHT, EQUAL, height) | size(WIDTH, GREATER_THAN, 3);
-  });
+/// A header of a column.
+auto ColumnHeader(ui_state* state, int height, std::string line1,
+                  std::string line2 = {}) -> Component {
+  auto top = text(std::move(line1)) | color(state->theme.palette.text) | center;
+  auto top_focused = top | focus | state->theme.focus_color();
+  auto bottom = Element{};
+  if (!line2.empty())
+    bottom
+      = text(std::move(line2)) | color(state->theme.palette.muted) | center;
+  auto f = [=](bool focused) -> Element {
+    auto show_bottom = !state->hide_types && bottom;
+    Elements elements;
+    elements.push_back(filler());
+    elements.push_back(focused ? top_focused : top);
+    if (show_bottom)
+      elements.push_back(bottom);
+    elements.push_back(filler());
+    return vbox(std::move(elements)) | center
+           | size(HEIGHT, EQUAL, show_bottom ? height + 1 : height)
+           | size(WIDTH, GREATER_THAN, 3);
+  };
+  return Renderer(f);
 }
 
 /// A leaf column consisting of header and body.
@@ -219,15 +210,10 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
       constexpr auto field_height = 2;
       auto height
         = field_height
-          * detail::narrow_cast<int>(schema_depth - current_depth + 1);
-      if (state_->hide_types)
-        height--;
-      auto header
-        = state_->hide_types
-            ? SingleColumnHeader(std::string{field.name}, height, state_->theme)
-            : DualColumnHeader(std::string{field.name},
-                               fmt::to_string(field.type), height,
-                               state_->theme);
+            * detail::narrow_cast<int>(schema_depth - current_depth + 1)
+          - 1;
+      auto header = ColumnHeader(state, height, std::string{field.name},
+                                 fmt::to_string(field.type));
       auto container = Container::Vertical({});
       container->Add(header);
       container->Add(lift(state_->theme.separator(Focused())));
@@ -278,7 +264,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
       : state_{state} {
       TENZIR_ASSERT(!columns.empty());
       if (!name.empty()) {
-        header_ = SingleColumnHeader(std::move(name), 1, state_->theme);
+        header_ = ColumnHeader(state, 1, std::move(name));
         header_ |= Catch<catch_policy::child>([this](Event event) {
           if (event == Event::Character('c')
               || event == Event::Character(' ')) {
@@ -618,15 +604,21 @@ auto Explorer(ui_state* state) -> Component {
         auto component = juxtapose(state_->navigator_position,
                                    Pane(state_, navigator), Pane(state_, tab_));
         component |= Catch<catch_policy::child>([navigator](Event event) {
-          if (event == Event::Character('J')
-              || event == Event::Character('n')) {
+          if (event == Event::Character('J')) {
             navigator->TakeFocus();
             return navigator->OnEvent(Event::ArrowDown);
           }
-          if (event == Event::Character('K')
-              || event == Event::Character('p')) {
+          if (event == Event::Character('K')) {
             navigator->TakeFocus();
             return navigator->OnEvent(Event::ArrowUp);
+          }
+          if (event == Event::Character('H')) {
+            navigator->TakeFocus();
+            return navigator->OnEvent(Event::ArrowLeft);
+          }
+          if (event == Event::Character('L')) {
+            navigator->TakeFocus();
+            return navigator->OnEvent(Event::ArrowRight);
           }
           return false;
         });
@@ -668,6 +660,10 @@ auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
       auto main = Explorer(state_);
       main |= Modal(Help(), &show_help_);
       main |= Catch<catch_policy::child>([this](Event event) {
+        if (event == Event::Character('t')) {
+          state_->hide_types = !state_->hide_types;
+          return true;
+        }
         if (show_help_) {
           if (event == Event::Character('q') || event == Event::Escape) {
             show_help_ = false;
