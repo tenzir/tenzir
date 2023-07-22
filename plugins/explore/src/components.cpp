@@ -533,18 +533,6 @@ auto Navigator(ui_state* state, int* index) -> Component {
       return ComponentBase::Render() | size(WIDTH, GREATER_THAN, width_);
     }
 
-    auto OnEvent(Event event) -> bool override {
-      if (event == Event::Character('J') || event == Event::Character('n')) {
-        menu_->TakeFocus();
-        return menu_->OnEvent(Event::ArrowDown);
-      }
-      if (event == Event::Character('K') || event == Event::Character('p')) {
-        menu_->TakeFocus();
-        return menu_->OnEvent(Event::ArrowUp);
-      }
-      return ComponentBase::OnEvent(event);
-    }
-
   private:
     ui_state* state_;
 
@@ -599,9 +587,22 @@ auto Explorer(ui_state* state) -> Component {
               return Container::Vertical({y, x});
           }
         };
+        auto navigator = Navigator(state_, &index_);
         auto component = juxtapose(state_->navigator_position,
-                                   Pane(state_, Navigator(state_, &index_)),
-                                   Pane(state_, tab_));
+                                   Pane(state_, navigator), Pane(state_, tab_));
+        component |= Catch<catch_policy::child>([navigator](Event event) {
+          if (event == Event::Character('J')
+              || event == Event::Character('n')) {
+            navigator->TakeFocus();
+            return navigator->OnEvent(Event::ArrowDown);
+          }
+          if (event == Event::Character('K')
+              || event == Event::Character('p')) {
+            navigator->TakeFocus();
+            return navigator->OnEvent(Event::ArrowUp);
+          }
+          return false;
+        });
         Add(std::move(component));
       }
       for (const auto& [type, table] : state_->tables) {
