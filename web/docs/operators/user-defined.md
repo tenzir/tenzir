@@ -14,7 +14,7 @@ tenzir:
   operators:
     # Aggregate suricata.flow events with matching source and destination IP
     # addresses.
-    summarize-flows: >
+    summarize-flows:
       where #schema == "suricata.flow"
       | summarize
           pkts_toserver=sum(flow.pkts_toserver),
