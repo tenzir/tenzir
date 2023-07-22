@@ -137,21 +137,18 @@ public:
         auto& component = components_[slice.schema()];
         if (!component)
           component = DataFrame(&state_, slice.schema());
-        if (real_time_) {
-          auto result = chunk::make(to_string(component) + '\n');
-          state_.tables.clear();
-          components_.clear();
-          co_yield result;
-        } else {
-          co_yield {};
-        }
+        if (!real_time_)
+          co_return;
+        auto result = chunk::make(to_string(component) + '\n');
+        state_.tables.clear();
+        components_.clear();
+        co_yield result;
       }
 
       auto finish() -> generator<chunk_ptr> override {
-        if (real_time_)
-          co_return;
-        for (const auto& [schema, component] : components_)
-          co_yield chunk::make(to_string(component) + '\n');
+        if (!real_time_)
+          for (const auto& [schema, component] : components_)
+            co_yield chunk::make(to_string(component) + '\n');
       }
 
     private:
