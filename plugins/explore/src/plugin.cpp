@@ -39,9 +39,7 @@ auto make_interactive_screen(const operator_args& args)
     return ScreenInteractive::FixedSize(args.width->inner, args.height->inner);
   if (args.fullscreen)
     return ScreenInteractive::Fullscreen();
-  if (args.fit)
-    return ScreenInteractive::FitComponent();
-  return ScreenInteractive::TerminalOutput();
+  return ScreenInteractive::FitComponent();
 }
 
 class explore_operator final : public crtp_operator<explore_operator> {
@@ -186,19 +184,13 @@ public:
       = argument_parser{"explore", fmt::format("https://docs.tenzir.com/docs/"
                                                "connectors/sinks/explore")};
     auto args = operator_args{};
-    parser.add("-F,--fullscreen", args.fullscreen);
-    parser.add("-f,--fit", args.fit);
+    parser.add("-f,--fullscreen", args.fullscreen);
     parser.add("-w,--width", args.width, "<int>");
     parser.add("-h,--height", args.height, "<int>");
     parser.add("-n,--navigator-position", args.navigator_position, "<string>");
     parser.add("-N,--navigator", args.navigator_auto_hide);
     parser.add("-T,--hide-types", args.hide_types);
     parser.parse(p);
-    if (args.fullscreen && args.fit)
-      diagnostic::error("--fullscreen and --fit are mutually exclusive")
-        .primary(*args.fullscreen)
-        .primary(*args.fit)
-        .throw_();
     if (args.width && !args.height)
       diagnostic::error("--width requires also setting --height")
         .primary(args.width->source)
