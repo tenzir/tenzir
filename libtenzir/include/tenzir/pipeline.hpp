@@ -155,14 +155,14 @@ struct inspector
 };
 
 struct operator_measurement {
-  std::string unit;
-  uint64_t num_elements;
-  uint64_t num_batches;
+  std::string unit = std::string{operator_type_name<void>()};
+  uint64_t num_elements = {};
+  uint64_t num_batches = {};
 
   // TODO: Always 0 for now for events until we find a way
   // to reliably measure this and always the same as
   // num_elements for bytes.
-  uint64_t num_approx_bytes;
+  uint64_t num_approx_bytes = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_measurement& x) -> bool {
@@ -188,18 +188,20 @@ struct operator_measurement {
 // Metrics that track the information about inbound and outbound elements that
 // pass through this operator.
 struct [[nodiscard]] metric {
-  uint64_t operator_index;
-  operator_measurement inbound_measurement;
-  operator_measurement outbound_measurement;
-  duration time_starting;
-  duration time_running;
-  duration time_scheduled;
-  duration time_elapsed;
+  uint64_t operator_index = {};
+  std::string operator_name = {};
+  operator_measurement inbound_measurement = {};
+  operator_measurement outbound_measurement = {};
+  duration time_starting = {};
+  duration time_running = {};
+  duration time_scheduled = {};
+  duration time_elapsed = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, metric& x) -> bool {
     return f.object(x).pretty_name("metric").fields(
       f.field("operator_index", x.operator_index),
+      f.field("operator_name", x.operator_name),
       f.field("time_starting", x.time_starting),
       f.field("time_running", x.time_running),
       f.field("time_scheduled", x.time_scheduled),
