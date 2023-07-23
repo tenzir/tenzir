@@ -67,14 +67,12 @@ auto Help() -> Component {
     {"H", " ", "move left in navigator"},
     {"L", " ", "move right in navigator"},
     {"?", "", "show this help"},
-    {"q", "", "quit the UI"},
+    {"q", "ESC", "quit the UI"},
   });
   table.SelectAll().Border(ROUNDED);
-  // Set the table header apart from the rest
   table.SelectRow(0).Decorate(bold);
   table.SelectRow(0).SeparatorHorizontal(ROUNDED);
   table.SelectRow(0).Border(ROUNDED);
-  // Align center the first column.
   table.SelectColumn(0).DecorateCells(center);
   table.SelectColumn(1).DecorateCells(center);
   return lift(table.Render());
@@ -137,21 +135,20 @@ auto align_element(alignment align, Element element) -> Element {
 }
 
 /// A cell in the table body.
-auto Cell(view<data> value, const struct theme& theme) -> Component {
+auto BodyCell(ui_state* state, view<data> value) -> Component {
   auto make = [&](const auto& x, alignment align, auto data_color) {
-    auto focus_color = theme.focus_color();
-    return Renderer([=, txt = text(to_string(x)),
-                     normal_color = color(data_color)](bool focused) {
-      auto element = focused ? txt | focus | focus_color : txt | normal_color;
+    return Renderer([=, txt = text(to_string(x))](bool focused) {
+      auto element = focused ? txt | focus | state->theme.focus_color()
+                             : txt | color(data_color);
       return align_element(align, std::move(element));
     });
   };
-  return colorize(make, value, theme);
+  return colorize(make, value, state->theme);
 }
 
 /// A header of a column.
-auto ColumnHeader(ui_state* state, int height, std::string line1,
-                  std::string line2 = {}) -> Component {
+auto HeaderCell(ui_state* state, int height, std::string line1,
+                std::string line2 = {}) -> Component {
   auto top = text(std::move(line1)) | color(state->theme.palette.text) | center;
   auto top_focused = top | focus | state->theme.focus_color();
   auto bottom = Element{};
@@ -195,8 +192,8 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
         = field_height
             * detail::narrow_cast<int>(schema_depth - current_depth + 1)
           - 1;
-      auto header = ColumnHeader(state, height, std::string{field.name},
-                                 fmt::to_string(field.type));
+      auto header = HeaderCell(state, height, std::string{field.name},
+                               fmt::to_string(field.type));
       auto container = Container::Vertical({});
       container->Add(header);
       container->Add(lift(state_->theme.separator(Focused())));
@@ -212,7 +209,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
                        i + table_->slices.size(), slice.schema().name());
           auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
           for (size_t row = 0; row < slice.rows(); ++row) {
-            auto cell = Cell(slice.at(row, col), state_->theme);
+            auto cell = BodyCell(state_, slice.at(row, col));
             body_->Add(cell);
           }
         }
@@ -240,7 +237,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
       : state_{state} {
       TENZIR_ASSERT(!columns.empty());
       if (!name.empty()) {
-        header_ = ColumnHeader(state, 1, std::move(name));
+        header_ = HeaderCell(state, 1, std::move(name));
         header_ |= Catch<catch_policy::child>([this](Event event) {
           if (event == Event::Character('c')
               || event == Event::Character(' ')) {
@@ -340,31 +337,6 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
   return caf::visit(f, parent);
 }
 
-// auto FieldHeader(std::string top, std::string bottom, const struct theme&
-// theme)
-//   -> Component {
-//   return Renderer([&theme, top_text = std::move(top),
-//                    bottom_text = std::move(bottom)](bool focused) mutable {
-//     auto header = text(top_text) | center;
-//     header |= focused ? focus | theme.focus_color() :
-//     color(theme.palette.text); return vbox({
-//              std::move(header),
-//              text(bottom_text) | center | color(theme.palette.comment),
-//            })
-//            | vcenter;
-//   });
-// }
-//
-// auto HeaderCell(std::string_view name, const type& type,
-//                 const struct theme& theme) -> Component {
-//   return {};
-// }
-//
-// auto HeaderCell(std::string_view name, Components fields,
-//                 const struct theme& theme) -> Component {
-//   return {};
-// }
-//
 // auto TableHeader(ui_state* state, const type& schema, offset index = {})
 //  -> Component {
 //  auto field = record_type::field_view{};
