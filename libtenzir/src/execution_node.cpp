@@ -101,6 +101,7 @@ auto num_approx_bytes(const std::vector<table_slice>& events) {
 #if ARROW_VERSION_MAJOR < 12
   // arrow::util::ReferenceBufferSize is broken for Arrow before 12.0.0 and
   // crashes for extension types.
+  (void)events;
   return uint64_t{0};
 #else
   auto result = uint64_t{};
