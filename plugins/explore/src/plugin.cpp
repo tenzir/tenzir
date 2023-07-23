@@ -119,8 +119,8 @@ public:
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     class screen_printer : public printer_instance {
     public:
-      screen_printer(const printer_args& args)
-        : state_{make_ui_state(args)}, real_time_{args.real_time} {
+      screen_printer(const printer_args args)
+        : args_{std::move(args)}, state_{make_ui_state(args_)} {
       }
 
       auto process(table_slice slice) -> generator<chunk_ptr> override {
@@ -135,24 +135,35 @@ public:
         auto& component = components_[slice.schema()];
         if (!component)
           component = DataFrame(&state_, slice.schema());
-        if (!real_time_)
+        if (!args_.real_time)
           co_return;
-        auto result = chunk::make(to_string(component) + '\n');
+        auto result = chunk::make(to_string(component));
         state_.tables.clear();
         components_.clear();
         co_yield result;
       }
 
       auto finish() -> generator<chunk_ptr> override {
-        if (!real_time_)
+        if (!args_.real_time)
           for (const auto& [schema, component] : components_)
-            co_yield chunk::make(to_string(component) + '\n');
+            co_yield chunk::make(to_string(component));
+      }
+
+      auto to_string(const ftxui::Component& component) -> std::string {
+        auto document = component->Render();
+        auto width = args_.width ? ftxui::Dimension::Fixed(args_.width->inner)
+                                 : ftxui::Dimension::Fit(document);
+        auto height = args_.height
+                        ? ftxui::Dimension::Fixed(args_.height->inner)
+                        : ftxui::Dimension::Fit(document);
+        auto screen = ftxui::Screen::Create(width, height);
+        Render(screen, document);
+        return screen.ToString() + '\n';
       }
 
     private:
+      printer_args args_;
       ui_state state_;
-      bool real_time_;
-      ftxui::Component component_;
       std::unordered_map<type, ftxui::Component> components_;
     };
     return std::make_unique<screen_printer>(args_);
@@ -216,6 +227,8 @@ public:
       = argument_parser{"explore", fmt::format("https://docs.tenzir.com/docs/"
                                                "formats/table")};
     auto args = printer_args{};
+    parser.add("-w,--width", args.width, "<int>");
+    parser.add("-h,--height", args.height, "<int>");
     parser.add("-r,--real-time", args.real_time);
     parser.add("-T,--hide-types", args.hide_types);
     parser.parse(p);

@@ -18,9 +18,6 @@
 
 namespace tenzir::plugins::explore {
 
-/// Prints a component as a string.
-auto to_string(const ftxui::Component& component) -> std::string;
-
 /// Lifts an FTXUI element into a component.
 auto lift(ftxui::Element e) -> ftxui::Component;
 

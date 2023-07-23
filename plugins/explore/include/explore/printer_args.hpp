@@ -17,13 +17,16 @@ namespace tenzir::plugins::explore {
 
 /// The operator configuration.
 struct printer_args {
+  std::optional<located<int>> width;
+  std::optional<located<int>> height;
   bool real_time;
   bool hide_types;
 
   friend auto inspect(auto& f, printer_args& x) -> bool {
     return f.object(x)
       .pretty_name("printer_args")
-      .fields(f.field("real-time", x.real_time),
+      .fields(f.field("width", x.width), f.field("height", x.height),
+              f.field("real-time", x.real_time),
               f.field("hide_types", x.hide_types));
   }
 };

@@ -28,14 +28,6 @@ using namespace ftxui;
 
 namespace tenzir::plugins::explore {
 
-auto to_string(const Component& component) -> std::string {
-  auto document = component->Render();
-  auto screen
-    = Screen::Create(Dimension::Fit(document), Dimension::Fit(document));
-  Render(screen, document);
-  return screen.ToString();
-}
-
 auto lift(Element e) -> Component {
   class Impl : public ComponentBase {
   public:
@@ -145,7 +137,6 @@ auto align_element(alignment align, Element element) -> Element {
 
 auto StaticCell(view<data> value, const struct theme& theme) -> Element {
   auto make = [&](const auto& x, alignment align, auto data_color) {
-    using tenzir::to_string;
     auto element = text(to_string(x)) | color(data_color);
     return align_element(align, std::move(element));
   };
@@ -155,7 +146,6 @@ auto StaticCell(view<data> value, const struct theme& theme) -> Element {
 /// A cell in the table body.
 auto InteractiveCell(view<data> value, const struct theme& theme) -> Component {
   auto make = [&](const auto& x, alignment align, auto data_color) {
-    using tenzir::to_string;
     auto focus_color = theme.focus_color();
     return Renderer([=, txt = text(to_string(x)),
                      normal_color = color(data_color)](bool focused) {
@@ -223,7 +213,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
 
     auto Render() -> Element override {
       if (num_slices_rendered_ == table_->slices.size())
-        return ComponentBase::Render() | flex;
+        return ComponentBase::Render() | flex_grow;
       for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i) {
         const auto& slice = table_->slices[i];
         TENZIR_DEBUG("rendering [{},{}) of schema '{}'", i,
@@ -242,7 +232,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
         // body_->Add(lift(vbox(std::move(body))));
       }
       num_slices_rendered_ = table_->slices.size();
-      return ComponentBase::Render() | flex;
+      return ComponentBase::Render() | flex_grow;
     }
 
   private:
