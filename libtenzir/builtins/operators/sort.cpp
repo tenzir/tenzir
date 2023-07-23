@@ -22,15 +22,6 @@ namespace tenzir::plugins::sort {
 
 namespace {
 
-auto is_extension_type(const type& type) -> bool {
-  TENZIR_ASSERT(type);
-  const auto f = []<concrete_type Type>(const Type&) {
-    return not std::is_same_v<type_to_arrow_array_t<Type>,
-                              type_to_arrow_array_storage_t<Type>>;
-  };
-  return caf::visit(f, type);
-}
-
 class sort_state {
 public:
   sort_state(const std::string& key,
@@ -48,7 +39,17 @@ public:
     }
     auto batch = to_record_batch(slice);
     TENZIR_ASSERT(batch);
-    sort_keys_.push_back(path->get(*batch));
+    auto array = path->get(*batch);
+    // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
+    // supported for extension types, so eventually we'll have to roll our
+    // own imlementation. In the meantime, we sort the underlying storage array,
+    // which at least sorts in some stable way.
+    if (auto ext_array
+        = std::dynamic_pointer_cast<arrow::ExtensionArray>(array)) {
+      sort_keys_.push_back(ext_array->storage());
+    } else {
+      sort_keys_.push_back(std::move(array));
+    }
     offset_table_.push_back(offset_table_.back()
                             + detail::narrow_cast<int64_t>(slice.rows()));
     cache_.push_back(std::move(slice));
@@ -107,20 +108,13 @@ private:
     }
     auto current_key_type
       = key_path->second
-          ? caf::get<record_type>(schema).field(*key_path->second).type
+          ? caf::get<record_type>(schema).field(*key_path->second).type.prune()
           : type{};
     if (not key_type_ && current_key_type) {
       // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
-      // supported for extension types, so eventually we'll have to roll our
-      // own imlementation. In the meantime, we ignore extension types for
-      // sorting and warn about them.
-      if (is_extension_type(current_key_type)) {
-        ctrl.warn(caf::make_error(
-          ec::invalid_configuration,
-          fmt::format("sort key {} resolved to type {} for schema {}, for "
-                      "which sorting is not yet implemented; this schema "
-                      "will not be sorted",
-                      key_, current_key_type, schema)));
+      // supported for extension types. We can fall back to the storage array
+      // for all types but subnet, which has a nested extension type.
+      if (caf::holds_alternative<subnet_type>(current_key_type)) {
         key_path->second = std::nullopt;
       } else {
         key_type_ = current_key_type;
