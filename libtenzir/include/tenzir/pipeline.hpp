@@ -463,10 +463,9 @@ public:
         } else if constexpr (gen_ctrl) {
           return convert_output(self()(std::move(input), ctrl));
         } else {
-          return caf::make_error(ec::type_clash,
-                                 fmt::format("'{}' does not accept {} as input",
-                                             to_string(),
-                                             operator_type_name<Input>()));
+          return caf::make_error(
+            ec::type_clash, fmt::format("'{}' does not accept {} as input",
+                                        name(), operator_type_name<Input>()));
         }
       },
     };
