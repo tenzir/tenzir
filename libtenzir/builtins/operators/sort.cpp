@@ -81,9 +81,6 @@ public:
       const auto& slice = cache_[cache_index];
       auto result = subslice(slice, row, row + 1);
       TENZIR_ASSERT(result.rows() == 1);
-      // TODO: Yielding slices with 1 row is very inefficient, and we probably
-      // want to batch them to larger slices here before yielding (or implicitly
-      // run the results through the rebatch operator).
       co_yield std::move(result);
     }
   }
@@ -178,8 +175,32 @@ public:
     for (auto&& slice : input) {
       co_yield state.try_add(std::move(slice), ctrl);
     }
+    // The sorted slices are very like to have size 1 each, so we rebatch them
+    // first to avoid inefficiencies in downstream operators.
+    auto buffer = std::vector<table_slice>{};
+    auto num_buffered = uint64_t{0};
     for (auto&& slice : std::move(state).sorted()) {
-      co_yield std::move(slice);
+      if (not buffer.empty() and buffer.back().schema() != slice.schema()) {
+        while (not buffer.empty()) {
+          auto [lhs, rhs] = split(buffer, defaults::import::table_slice_size);
+          auto result = concatenate(std::move(lhs));
+          num_buffered -= result.rows();
+          co_yield std::move(result);
+          buffer = std::move(rhs);
+        }
+      }
+      num_buffered += slice.rows();
+      buffer.push_back(std::move(slice));
+      while (num_buffered >= defaults::import::table_slice_size) {
+        auto [lhs, rhs] = split(buffer, defaults::import::table_slice_size);
+        auto result = concatenate(std::move(lhs));
+        num_buffered -= result.rows();
+        co_yield std::move(result);
+        buffer = std::move(rhs);
+      }
+    }
+    if (not buffer.empty()) {
+      co_yield concatenate(std::move(buffer));
     }
   }
 
