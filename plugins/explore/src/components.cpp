@@ -136,16 +136,8 @@ auto align_element(alignment align, Element element) -> Element {
   __builtin_unreachable();
 }
 
-auto StaticCell(view<data> value, const struct theme& theme) -> Element {
-  auto make = [&](const auto& x, alignment align, auto data_color) {
-    auto element = text(to_string(x)) | color(data_color);
-    return align_element(align, std::move(element));
-  };
-  return colorize(make, value, theme);
-}
-
 /// A cell in the table body.
-auto InteractiveCell(view<data> value, const struct theme& theme) -> Component {
+auto Cell(view<data> value, const struct theme& theme) -> Component {
   auto make = [&](const auto& x, alignment align, auto data_color) {
     auto focus_color = theme.focus_color();
     return Renderer([=, txt = text(to_string(x)),
@@ -213,26 +205,19 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
     }
 
     auto Render() -> Element override {
-      if (num_slices_rendered_ == table_->slices.size())
-        return ComponentBase::Render() | flex_grow;
-      for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i) {
-        const auto& slice = table_->slices[i];
-        TENZIR_DEBUG("rendering [{},{}) of schema '{}'", i,
-                     i + table_->slices.size(), slice.schema().name());
-        auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
-        for (size_t row = 0; row < slice.rows(); ++row) {
-          auto cell = InteractiveCell(slice.at(row, col), state_->theme);
-          body_->Add(cell);
+      if (num_slices_rendered_ < table_->slices.size()) {
+        for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i) {
+          const auto& slice = table_->slices[i];
+          TENZIR_DEBUG("rendering [{},{}) of schema '{}'", i,
+                       i + table_->slices.size(), slice.schema().name());
+          auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
+          for (size_t row = 0; row < slice.rows(); ++row) {
+            auto cell = Cell(slice.at(row, col), state_->theme);
+            body_->Add(cell);
+          }
         }
-        // Elements body;
-        // body.reserve(slice.rows());
-        // for (size_t row = 0; row < slice.rows(); ++row) {
-        //   auto cell = StaticCell(slice.at(row, col), state_->theme);
-        //   body.push_back(std::move(cell));
-        // }
-        // body_->Add(lift(vbox(std::move(body))));
+        num_slices_rendered_ = table_->slices.size();
       }
-      num_slices_rendered_ = table_->slices.size();
       return ComponentBase::Render() | flex_grow;
     }
 
