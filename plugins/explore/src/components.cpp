@@ -46,7 +46,7 @@ auto lift(Element e) -> Component {
 
 auto enframe(const Component& component) -> Component {
   return Renderer(component, [component] {
-    return component->Render() | frame;
+    return component->Render() | vscroll_indicator | frame;
   });
 }
 
@@ -80,6 +80,7 @@ auto Help() -> Component {
 
 enum class alignment { left, center, right };
 
+/// Colors a piece of data according to a given theme.
 auto colorize(auto make, view<data> value, const struct theme& theme) {
   auto factory = detail::overload{
     [&](const auto& x) {
@@ -122,6 +123,7 @@ auto colorize(auto make, view<data> value, const struct theme& theme) {
   return caf::visit(factory, value);
 }
 
+/// Aligns an element within a cell.
 auto align_element(alignment align, Element element) -> Element {
   switch (align) {
     case alignment::left:
@@ -134,21 +136,40 @@ auto align_element(alignment align, Element element) -> Element {
   __builtin_unreachable();
 }
 
+/// Creates an element from a piece of data.
+auto render(view<data> value) -> Element {
+  auto f = detail::overload{
+    [&](const auto&) {
+      return text(to_string(value));
+    },
+    [&](const view<list>& xs) {
+      if (xs.empty())
+        return text("[]");
+      Elements elements;
+      elements.reserve(xs.size());
+      for (auto x : xs)
+        elements.push_back(render(x));
+      return vbox(std::move(elements));
+    },
+  };
+  return caf::visit(f, value);
+}
+
 /// A cell in the table body.
-auto BodyCell(ui_state* state, view<data> value) -> Component {
-  auto make = [&](const auto& x, alignment align, auto data_color) {
-    return Renderer([=, txt = text(to_string(x))](bool focused) {
-      auto element = focused ? txt | focus | state->theme.focus_color()
-                             : txt | color(data_color);
-      return align_element(align, std::move(element));
+auto ColumnCell(ui_state* state, view<data> value) -> Component {
+  auto make = [&](const auto&, alignment align, auto data_color) {
+    return Renderer([=, element = render(value)](bool focused) {
+      auto e = focused ? element | focus | state->theme.focus_color()
+                       : element | color(data_color);
+      return align_element(align, std::move(e));
     });
   };
   return colorize(make, value, state->theme);
 }
 
 /// A header of a column.
-auto HeaderCell(ui_state* state, int height, std::string line1,
-                std::string line2 = {}) -> Component {
+auto ColumnHeader(ui_state* state, int height, std::string line1,
+                  std::string line2 = {}) -> Component {
   auto top = text(std::move(line1)) | color(state->theme.palette.text) | center;
   auto top_focused = top | focus | state->theme.focus_color();
   auto bottom = Element{};
@@ -192,8 +213,8 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
         = field_height
             * detail::narrow_cast<int>(schema_depth - current_depth + 1)
           - 1;
-      auto header = HeaderCell(state, height, std::string{field.name},
-                               fmt::to_string(field.type));
+      auto header = ColumnHeader(state, height, std::string{field.name},
+                                 fmt::to_string(field.type));
       auto container = Container::Vertical({});
       container->Add(header);
       container->Add(lift(state_->theme.separator(Focused())));
@@ -209,7 +230,7 @@ auto LeafColumn(ui_state* state, const type& schema, offset index)
                        i + table_->slices.size(), slice.schema().name());
           auto col = caf::get<record_type>(slice.schema()).flat_index(index_);
           for (size_t row = 0; row < slice.rows(); ++row) {
-            auto cell = BodyCell(state_, slice.at(row, col));
+            auto cell = ColumnCell(state_, slice.at(row, col));
             body_->Add(cell);
           }
         }
@@ -237,7 +258,7 @@ auto RecordColumn(ui_state* state, Components columns, std::string name = {})
       : state_{state} {
       TENZIR_ASSERT(!columns.empty());
       if (!name.empty()) {
-        header_ = HeaderCell(state, 1, std::move(name));
+        header_ = ColumnHeader(state, 1, std::move(name));
         header_ |= Catch<catch_policy::child>([this](Event event) {
           if (event == Event::Character('c')
               || event == Event::Character(' ')) {
@@ -337,49 +358,123 @@ auto VerticalTable(ui_state* state, const type& schema, offset index = {})
   return caf::visit(f, parent);
 }
 
-// auto TableHeader(ui_state* state, const type& schema, offset index = {})
-//  -> Component {
-//  auto field = record_type::field_view{};
-//  if (index.empty())
-//    field.type = schema;
-//  else
-//    field = caf::get<record_type>(schema).field(index);
-//  auto f = detail::overload{
-//    [&](const auto&) {
-//      TENZIR_ASSERT(!index.empty());
-//      return HeaderCell(field.name, field.type, state->theme);
-//    },
-//    [&](const list_type&) {
-//      TENZIR_ASSERT(!index.empty());
-//      return HeaderCell(field.name, field.type, state->theme);
-//    },
-//    [&](const record_type& record) {
-//      auto fields = Container::Horizontal({});
-//      index.push_back(0);
-//      auto first = true;
-//      for (size_t i = 0; i < record.num_fields(); ++i) {
-//        if (first)
-//          first = false;
-//        else
-//          fields->Add(lift(state->theme.separator(Focused())));
-//        fields->Add(TableHeader(state, schema, index));
-//        ++index.back();
-//      }
-//      return Container::Vertical({
-//        HeaderCell(field.name, field.type, state->theme),
-//        lift(state->theme.separator(Focused())),
-//        std::move(fields),
-//      });
-//    },
-//  };
-//  return caf::visit(f, field.type);
-//}
-//
-/// Generates a row-wise table component.
-/// A table that represents values of events in a row-oriented fashion.
-// auto HorizontalTable(ui_state* state, const type& schema) -> Component {
-//   return {};
-// }
+auto HeaderCell(ui_state* state, record_type::field_view field) -> Component {
+  auto top
+    = text(std::string{field.name}) | color(state->theme.palette.text) | center;
+  auto top_focused = top | focus | state->theme.focus_color();
+  auto bottom = Element{};
+  if (!state->hide_types)
+    bottom = text(fmt::to_string(field.type))
+             | color(state->theme.palette.muted) | center;
+  auto f = [=](bool focused) -> Element {
+    Elements elements;
+    elements.push_back(filler());
+    elements.push_back(focused ? top_focused : top);
+    if (!state->hide_types)
+      elements.push_back(bottom);
+    elements.push_back(filler());
+    return vbox(std::move(elements));
+  };
+  return Renderer(f);
+}
+
+auto TableHeader(ui_state* state, const type& schema, offset index = {})
+  -> Component {
+  auto field = record_type::field_view{};
+  auto top_level = index.empty();
+  if (top_level)
+    field.type = schema;
+  else
+    field = caf::get<record_type>(schema).field(index);
+  auto f = detail::overload{
+    [&](const auto&) {
+      TENZIR_ASSERT(!top_level);
+      return HeaderCell(state, field);
+    },
+    [&](const list_type&) {
+      TENZIR_ASSERT(!top_level);
+      return HeaderCell(state, field);
+    },
+    [&](const record_type& record) {
+      auto fields = Container::Horizontal({});
+      index.push_back(0);
+      auto first = true;
+      for (size_t i = 0; i < record.num_fields(); ++i) {
+        if (first)
+          first = false;
+        else
+          fields->Add(lift(state->theme.separator(fields->Focused())));
+        fields->Add(TableHeader(state, schema, index));
+        ++index.back();
+      }
+      if (top_level)
+        return fields;
+      return Container::Vertical({
+        HeaderCell(state, field),
+        lift(state->theme.separator(fields->Focused())),
+        std::move(fields),
+      });
+    },
+  };
+  return caf::visit(f, field.type);
+}
+
+auto TableRow(ui_state* state, const table_slice& slice, size_t row)
+  -> Component {
+  Components cells;
+  cells.reserve(slice.columns());
+  auto first = true;
+  for (size_t col = 0; col < slice.columns(); ++col) {
+    if (first)
+      first = false;
+    else
+      cells.push_back(lift(state->theme.separator()));
+    cells.push_back(ColumnCell(state, slice.at(row, col)));
+  }
+  return Container::Horizontal(std::move(cells));
+}
+
+auto TableSlice(ui_state* state, const table_slice& slice) -> Component {
+  Components rows;
+  rows.reserve(slice.rows());
+  for (size_t row = 0; row < slice.rows(); ++row)
+    rows.push_back(TableRow(state, slice, row));
+  return Container::Vertical(std::move(rows));
+}
+
+auto HorizontalTable(ui_state* state, const type& schema) -> Component {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state, const type& schema)
+      : state_{state}, table_{state->tables[schema]} {
+      TENZIR_ASSERT(table_ != nullptr);
+      TENZIR_ASSERT(!table_->slices.empty());
+      slices_ = Container::Vertical({});
+      slices_->DetachAllChildren();
+      Add(Container::Vertical({
+        TableHeader(state_, schema),
+        lift(state_->theme.separator()),
+        enframe(slices_),
+      }));
+    }
+
+    auto Render() -> Element override {
+      if (num_slices_rendered_ < table_->slices.size()) {
+        for (auto i = num_slices_rendered_; i < table_->slices.size(); ++i)
+          slices_->Add(TableSlice(state_, table_->slices[i]));
+        num_slices_rendered_ = table_->slices.size();
+      }
+      return ComponentBase::Render();
+    }
+
+  private:
+    ui_state* state_;
+    table_state_ptr table_;
+    size_t num_slices_rendered_ = 0;
+    Component slices_;
+  };
+  return Make<Impl>(state, schema);
+}
 
 } // namespace
 
@@ -557,8 +652,9 @@ auto Explorer(ui_state* state) -> Component {
                         Pane(state_, tab_));
           Add(std::move(component));
         }
-        for (const auto& [type, table] : state_->tables) {
+        for (const auto& [type, _] : state_->tables) {
           if (!tables_.contains(type)) {
+            // auto component = HorizontalTable(state_, type);
             auto component = enframe(VerticalTable(state_, type));
             tables_.emplace(type, component);
             tab_->Add(component);
