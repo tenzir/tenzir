@@ -15,12 +15,13 @@ explore [-f|--fullscreen <bool>] [-h|--height <int>] [-w|--width <int>]
 The `explore` operator renders the data in the pipeline in a terminal user
 interface (TUI).
 
-Use the arrow keys or `j`/`k`/`h`/`l` to navigate through the cells. You can
-also use the mouse to scroll vertically and horizontally, but moving the pointer
-relative off the center of the TUI in a specific direction. For example, moving
-the point to the right from the center point scrolls to the right.
+Press `?` to get an help screen that shows available key bindings.
 
-Press `?` to get an interactive help.
+Use the arrow keys or `j`/`k`/`h`/`l` to navigate through focusable components.
+
+You can also use the mouse to scroll vertically and horizontally by moving the
+pointer relative to the center of the TUI in a specific direction. For example,
+moving the point to the right from the center point scrolls to the right.
 
 The implementation uses the [FTXUI](https://arthursonzogni.github.io/FTXUI/)
 library for functional terminal interfaces in C++.
@@ -52,9 +53,13 @@ Defaults to `top`.
 
 Disables the navigator pane when there is exactly *one* schema.
 
+Press `n` to manually toggle between showing/hiding the navigator.
+
 ### `-T|--hide-types`
 
 Do not show the type names in the header column.
+
+Press `t` to toggle between showing/hiding type annotations.
 
 ## Example
 

@@ -56,15 +56,16 @@ namespace {
 auto Help() -> Component {
   auto table = Table({
     {" Key ", " Alias ", " Description "},
-    {"t", " ", "toggle type annotations in headers"},
+    {"t", " ", "toggle display of type annotations in headers"},
+    {"n", " ", "toggle display of navigator"},
     {"k", "↑", "move focus one component up"},
     {"j", "↓", "move focus one component down"},
     {"h", "←", "move focus one component to the left"},
     {"l", "→", "move focus one component to the right"},
-    {"K", " ", "move up in schema navigator"},
-    {"J", " ", "move down in schema navigator"},
-    {"H", " ", "move left in schema navigator"},
-    {"L", " ", "move right in schema navigator"},
+    {"K", " ", "move up in navigator"},
+    {"J", " ", "move down in navigator"},
+    {"H", " ", "move left in navigator"},
+    {"L", " ", "move right in navigator"},
     {"?", "", "show this help"},
     {"q", "", "quit the UI"},
   });
@@ -565,66 +566,72 @@ auto Explorer(ui_state* state) -> Component {
   public:
     Impl(ui_state* state) : state_{state} {
       tab_ = Container::Tab({}, &index_); // to be filled
+      navigator_ = Navigator(state_, &index_);
       Add(Pane(state_, Loading(state_)));
     }
 
     auto Render() -> Element override {
       auto num_tables = state_->tables.size();
-      if (tables_.size() == num_tables)
-        return ComponentBase::Render();
-      if (state_->navigator_auto_hide && num_tables == 1) {
-        DetachAllChildren();
-        Add(tab_);
-      } else if ((state_->navigator_auto_hide && num_tables == 2)
-                 || tables_.empty()) {
-        DetachAllChildren();
-        auto juxtapose = [](Direction position, Component x, Component y) {
-          switch (position) {
-            case Direction::Left:
-              return Container::Horizontal({x, y});
-            case Direction::Right:
-              return Container::Horizontal({y, x});
-            case Direction::Up:
-              return Container::Vertical({x, y});
-            case Direction::Down:
-              return Container::Vertical({y, x});
-          }
-        };
-        auto navigator = Navigator(state_, &index_);
-        auto component = juxtapose(state_->navigator_position,
-                                   Pane(state_, navigator), Pane(state_, tab_));
-        component |= Catch<catch_policy::child>([navigator](Event event) {
-          if (event == Event::Character('J')) {
-            navigator->TakeFocus();
-            return navigator->OnEvent(Event::ArrowDown);
-          }
-          if (event == Event::Character('K')) {
-            navigator->TakeFocus();
-            return navigator->OnEvent(Event::ArrowUp);
-          }
-          if (event == Event::Character('H')) {
-            navigator->TakeFocus();
-            return navigator->OnEvent(Event::ArrowLeft);
-          }
-          if (event == Event::Character('L')) {
-            navigator->TakeFocus();
-            return navigator->OnEvent(Event::ArrowRight);
-          }
-          return false;
-        });
-        Add(std::move(component));
-      }
-      for (const auto& [type, table] : state_->tables) {
-        if (!tables_.contains(type)) {
-          auto component = enframe(VerticalTable(state_, type));
-          tables_.emplace(type, component);
-          tab_->Add(component);
+      if (tables_.size() < num_tables
+          || hide_navigator_ != state_->hide_navigator) {
+        hide_navigator_ = state_->hide_navigator;
+        if (hide_navigator_
+            || (state_->navigator_auto_hide && num_tables == 1)) {
+          DetachAllChildren();
+          Add(Pane(state_, tab_));
+        } else if (!hide_navigator_
+                   || (state_->navigator_auto_hide && num_tables == 2)
+                   || tables_.empty()) {
+          DetachAllChildren();
+          auto juxtapose = [](Direction position, Component x, Component y) {
+            switch (position) {
+              case Direction::Left:
+                return Container::Horizontal({x, y});
+              case Direction::Right:
+                return Container::Horizontal({y, x});
+              case Direction::Up:
+                return Container::Vertical({x, y});
+              case Direction::Down:
+                return Container::Vertical({y, x});
+            }
+          };
+          auto component
+            = juxtapose(state_->navigator_position, Pane(state_, navigator_),
+                        Pane(state_, tab_));
+          Add(std::move(component));
         }
+        for (const auto& [type, table] : state_->tables) {
+          if (!tables_.contains(type)) {
+            auto component = enframe(VerticalTable(state_, type));
+            tables_.emplace(type, component);
+            tab_->Add(component);
+          }
+        }
+        TENZIR_ASSERT(num_tables == state_->tables.size());
+        TENZIR_ASSERT(num_tables == tables_.size());
+        TENZIR_ASSERT(num_tables == tab_->ChildCount());
       }
-      TENZIR_ASSERT(num_tables == state_->tables.size());
-      TENZIR_ASSERT(num_tables == tables_.size());
-      TENZIR_ASSERT(num_tables == tab_->ChildCount());
       return ComponentBase::Render();
+    }
+
+    auto OnEvent(Event event) -> bool override {
+      if (event == Event::Character('J')) {
+        navigator_->TakeFocus();
+        return navigator_->OnEvent(Event::ArrowDown);
+      }
+      if (event == Event::Character('K')) {
+        navigator_->TakeFocus();
+        return navigator_->OnEvent(Event::ArrowUp);
+      }
+      if (event == Event::Character('H')) {
+        navigator_->TakeFocus();
+        return navigator_->OnEvent(Event::ArrowLeft);
+      }
+      if (event == Event::Character('L')) {
+        navigator_->TakeFocus();
+        return navigator_->OnEvent(Event::ArrowRight);
+      }
+      return ComponentBase::OnEvent(event);
     }
 
   private:
@@ -635,6 +642,11 @@ auto Explorer(ui_state* state) -> Component {
 
     /// The tab component containing all table viewers. In sync with schemas.
     Component tab_;
+
+    /// The Navigator.
+    Component navigator_;
+
+    bool hide_navigator_{false};
 
     /// The tables by schema.
     std::unordered_map<type, Component> tables_;
@@ -652,6 +664,10 @@ auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
       main |= Catch<catch_policy::child>([this](Event event) {
         if (event == Event::Character('t')) {
           state_->hide_types = !state_->hide_types;
+          return true;
+        }
+        if (event == Event::Character('n')) {
+          state_->hide_navigator = !state_->hide_navigator;
           return true;
         }
         if (show_help_) {

@@ -48,8 +48,14 @@ struct ui_state {
   /// Hide the navigator if there is exactly one schema.
   bool navigator_auto_hide = false;
 
+  /// Flag that controls whether to show the Navigator.
+  bool hide_navigator = false;
+
   /// Flag that controls whether to show the column types.
   bool hide_types = false;
+
+  /// Updates the UI state when a new slice of data arrives.
+  auto add(table_slice slice) -> void;
 };
 
 /// Construct the global UI state from the plugin configuration.
