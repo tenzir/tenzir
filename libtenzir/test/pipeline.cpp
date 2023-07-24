@@ -93,6 +93,12 @@ struct command final : public crtp_operator<command> {
     MESSAGE("hello, world!");
     co_return;
   }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
 };
 
 struct source final : public crtp_operator<source> {
@@ -113,6 +119,12 @@ struct source final : public crtp_operator<source> {
       co_yield table_slice;
     }
     MESSAGE("source return");
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
   }
 
   std::vector<table_slice> events_;
@@ -141,6 +153,12 @@ struct sink final : public crtp_operator<sink> {
       co_yield {};
     }
     MESSAGE("sink return");
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
   }
 
   std::function<void(table_slice)> callback_;
@@ -258,6 +276,12 @@ TEST(actor executor execution error) {
       ctrl.abort(caf::make_error(ec::unspecified));
       co_return;
     }
+
+    auto optimize(expression const& filter, event_order order) const
+      -> optimize_result override {
+      (void)filter, (void)order;
+      return do_not_optimize(*this);
+    }
   };
 
   auto ops = std::vector<operator_ptr>{};
@@ -283,6 +307,12 @@ TEST(actor executor instantiation error) {
     auto operator()(generator<table_slice>, operator_control_plane&) const
       -> caf::expected<generator<table_slice>> {
       return caf::make_error(ec::unspecified);
+    }
+
+    auto optimize(expression const& filter, event_order order) const
+      -> optimize_result override {
+      (void)filter, (void)order;
+      return do_not_optimize(*this);
     }
   };
 
@@ -477,11 +507,9 @@ TEST(pipeline serialization) {
 TEST(predicate pushdown into empty pipeline) {
   auto pipeline
     = unbox(pipeline::internal_parse("where x == 1 | where y == 2"));
-  auto result
-    = pipeline.predicate_pushdown_pipeline(unbox(to<expression>("z == 3")));
-  REQUIRE(result);
-  auto [expr, op] = std::move(*result);
-  CHECK(std::move(op).unwrap().empty());
+  auto [expr, pipe]
+    = pipeline.optimize_into_filter(unbox(to<expression>("z == 3")));
+  CHECK(std::move(pipe).unwrap().empty());
   CHECK_EQUAL(unbox(normalize_and_validate(expr)),
               to<expression>("x == 1 && y == 2 && z == 3"));
 }
@@ -489,10 +517,9 @@ TEST(predicate pushdown into empty pipeline) {
 TEST(predicate pushdown select conflict) {
   auto pipeline = unbox(pipeline::internal_parse("where x == 0 | select x, z | "
                                                  "where y > 0 | where y < 5"));
-  auto result = pipeline.predicate_pushdown(unbox(to<expression>("z == 3")));
-  REQUIRE(result);
-  auto [expr, op] = std::move(*result);
-  CHECK_EQUAL(op->to_string(),
+  auto [expr, pipe]
+    = pipeline.optimize_into_filter(unbox(to<expression>("z == 3")));
+  CHECK_EQUAL(pipe.to_string(),
               "select x, z | where (y > 0 && y < 5 && z == 3)");
   auto expected_expr = unbox(to<expression>("x == 0"));
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);

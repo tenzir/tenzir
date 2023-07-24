@@ -5,7 +5,7 @@ Sorts events.
 ## Synopsis
 
 ```
-sort <field> [<asc>|<desc>] [<nulls-first>|<nulls-last>]
+sort [--stable] <field> [<asc>|<desc>] [<nulls-first>|<nulls-last>]
 ```
 
 ## Description
@@ -15,9 +15,13 @@ Sorts events by a provided field.
 :::caution Work in Progress
 The implementation of the `sort` operator currently only works with field names.
 We plan to support sorting by meta data, and more generally, entire expressions.
-To date, the operator also lacks support for all data types. Unsupported are
-currently compound and extension types (`ip`, `subnet`, `enum`).
+To date, the operator also lacks support sorting `subnet` fields.
 :::
+
+### `--stable`
+
+Preserve the relative order of events that cannot be sorted because the provided
+fields resolve to the same value.
 
 ### `<field>`
 

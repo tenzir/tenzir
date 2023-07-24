@@ -842,6 +842,12 @@ public:
     return "serve";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, serve_operator& x) -> bool {
     return f.apply(x.serve_id_) && f.apply(x.buffer_size_);
   }

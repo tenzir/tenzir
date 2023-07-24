@@ -99,12 +99,18 @@ public:
     return {};
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto to_string() const -> std::string override {
     return fmt::format("drop {}", fmt::join(config_.fields, ", "));
   }
 
   auto name() const -> std::string override {
     return "drop";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, drop_operator& x) -> bool {

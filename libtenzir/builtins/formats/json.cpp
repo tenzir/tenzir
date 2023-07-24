@@ -15,6 +15,7 @@
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/env.hpp>
+#include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/detail/padded_buffer.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -28,6 +29,7 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
+#include <chrono>
 #include <simdjson.h>
 
 namespace tenzir::plugins::json {
@@ -103,21 +105,108 @@ struct selector {
   }
 };
 
+struct entry_data {
+  template <class... Ts>
+  explicit entry_data(std::string name, Ts&&... xs)
+    : name{std::move(name)},
+      builder{std::make_unique<adaptive_table_slice_builder>(
+        std::forward<Ts>(xs)...)},
+      flushed{std::chrono::steady_clock::now()} {
+  }
+
+  template <class... Ts>
+  entry_data(std::string_view name, Ts&&... xs)
+    : entry_data{std::string{name}, std::forward<Ts>(xs)...} {
+  }
+
+  auto flush(operator_control_plane& ctrl) -> table_slice {
+    flushed = std::chrono::steady_clock::now();
+    auto slice = builder->finish(name);
+    if (expected_rows != slice.rows()) {
+      // TODO: Remove this check once the parser is reliable.
+      diagnostic::warning("JSON parser detected internal error: expected {} "
+                          "rows but got {}",
+                          expected_rows, slice.rows())
+        .note("this is a known issue and we are already working on a fix")
+        .emit(ctrl.diagnostics());
+    }
+    expected_rows = 0;
+    return slice;
+  }
+
+  std::string name;
+  // TODO: This is only a `unique_ptr` because it is currently not movable.
+  std::unique_ptr<adaptive_table_slice_builder> builder;
+  std::chrono::steady_clock::time_point flushed;
+  // TODO: Remove this once `builder.finish()` is guarnateed to return the
+  // correct number of rows.
+  size_t expected_rows = 0;
+};
+
+constexpr auto unknown_entry_name = std::string_view{};
+
 struct parser_state {
-  // Cache of table slice builder for each schema. These objects can be reused
-  // and there is no need to recreate them each time we parse an event.
-  std::unordered_map<std::string_view, adaptive_table_slice_builder>
-    builders_per_schema{};
-  // Used to check if the parser must yield in case the parser was seeded with a
-  // known schema. The parses must yield the table_slice of previously parsed
-  // schema when it parses an event of a different one.
-  adaptive_table_slice_builder* last_used_builder = nullptr;
-  std::string last_used_schema_name{};
-  // Table slice builder used when the schema is not known.
-  adaptive_table_slice_builder unknown_schema_builder{};
-  // Used to communicate a need for a co_return in the operator coroutine from
-  // the ndjson parser/default parser coroutine.
+  explicit parser_state(operator_control_plane& ctrl, bool preserve_order)
+    : ctrl_{ctrl}, preserve_order{preserve_order} {
+  }
+
+  operator_control_plane& ctrl_;
+  /// Maps schema names to indices for the `entries` member.
+  detail::heterogeneous_string_hashmap<size_t> entry_map;
+  /// Stores the schema-specific builders and some additional metadata.
+  std::vector<entry_data> entries;
+  /// The index of the currently active or last used builder.
+  size_t active_entry{};
+  /// Used to communicate a need for a co_return in the operator coroutine from
+  /// the ndjson parser/default parser coroutine.
   bool abort_requested = false;
+  /// If this is false, then the JSON parser is allowed to reorder events
+  /// between different schemas.
+  bool preserve_order = true;
+
+  auto get_entry(size_t idx) -> entry_data& {
+    TENZIR_ASSERT_CHEAP(idx < entries.size());
+    return entries[idx];
+  }
+
+  auto get_active_entry() -> entry_data& {
+    return get_entry(active_entry);
+  }
+
+  /// Registers a new entry and returns its index.
+  /// @pre An entry with this name must not exist yet.
+  template <class... Ts>
+  auto add_entry(Ts&&... xs) -> size_t {
+    auto index = entries.size();
+    auto& entry = entries.emplace_back(std::forward<Ts>(xs)...);
+    auto inserted = entry_map.try_emplace(entry.name, index).second;
+    TENZIR_ASSERT_CHEAP(inserted);
+    return index;
+  }
+
+  auto find_entry(std::string_view name) -> std::optional<size_t> {
+    auto it = entry_map.find(name);
+    if (it == entry_map.end()) {
+      return std::nullopt;
+    }
+    return it->second;
+  }
+
+  /// Activates an entry after potentially flushing the active one.
+  [[nodiscard]] auto activate(size_t entry) -> std::optional<table_slice> {
+    if (entry == active_entry) {
+      return std::nullopt;
+    }
+    auto result = std::optional<table_slice>{};
+    if (preserve_order) {
+      auto slice = get_entry(active_entry).flush(ctrl_);
+      if (slice.rows() > 0) {
+        result = std::move(slice);
+      }
+    }
+    active_entry = entry;
+    return result;
+  }
 };
 
 template <class FieldValidator>
@@ -139,34 +228,38 @@ public:
       parsed_lines_{parsed_lines} {
   }
 
-  auto parse_object(simdjson::ondemand::value v, auto&& field_pusher,
-                    size_t depth = 0u) -> void {
+  [[nodiscard]] auto parse_object(simdjson::ondemand::value v,
+                                  auto&& field_pusher, size_t depth = 0u)
+    -> bool {
     auto obj = v.get_object().value_unsafe();
     for (auto pair : obj) {
       if (pair.error()) {
         report_parse_err(v, "key value pair");
-        return;
+        return false;
       }
       auto maybe_key = pair.unescaped_key();
       if (maybe_key.error()) {
         report_parse_err(v, "key in an object");
-        return;
+        return false;
       }
       auto key = maybe_key.value_unsafe();
       auto val = pair.value();
       if (val.error()) {
         report_parse_err(val, fmt::format("object value at key {}", key));
-        return;
+        return false;
       }
       auto field = field_pusher.push_field(key);
       if (not field_validator_(field))
         continue;
-      parse_impl(val.value_unsafe(), field, depth + 1);
+      if (not parse_impl(val.value_unsafe(), field, depth + 1)) {
+        return false;
+      }
     }
+    return true;
   }
 
 private:
-  auto emit_unparsed_json_diagnostics(
+  void emit_unparsed_json_diagnostics(
     std::string description,
     simdjson::simdjson_result<const char*> document_location) {
     auto document_to_truncate = parsed_document_;
@@ -190,7 +283,7 @@ private:
       .emit(ctrl_.diagnostics());
   }
 
-  auto report_parse_err(auto& v, std::string description) -> void {
+  void report_parse_err(auto& v, std::string description) {
     if (parsed_lines_) {
       report_parse_err_with_parsed_lines(v, std::move(description));
       return;
@@ -199,8 +292,7 @@ private:
                                    v.current_location());
   }
 
-  auto report_parse_err_with_parsed_lines(auto& v, std::string description)
-    -> void {
+  void report_parse_err_with_parsed_lines(auto& v, std::string description) {
     if (v.current_location().error()) {
       diagnostic::warning("failed to parse {} in the JSON document",
                           std::move(description))
@@ -213,46 +305,45 @@ private:
                         std::move(description))
       .note("line {} column {}", *parsed_lines_, column)
       .emit(ctrl_.diagnostics());
-    return;
   }
 
-  auto parse_number(simdjson::ondemand::value val, auto& pusher) -> void {
+  [[nodiscard]] auto parse_number(simdjson::ondemand::value val, auto& pusher)
+    -> bool {
     switch (val.get_number_type().value_unsafe()) {
       case simdjson::ondemand::number_type::floating_point_number: {
         auto result = val.get_double();
         if (result.error()) {
           report_parse_err(val, "a number");
-          return;
+          return false;
         }
-        add_value(pusher, result.value_unsafe());
-        return;
+        return add_value(pusher, result.value_unsafe());
       }
       case simdjson::ondemand::number_type::signed_integer: {
         auto result = val.get_int64();
         if (result.error()) {
           report_parse_err(val, "a number");
-          return;
+          return false;
         }
-        add_value(pusher, result.value_unsafe());
-        return;
+        return add_value(pusher, result.value_unsafe());
       }
       case simdjson::ondemand::number_type::unsigned_integer: {
         auto result = val.get_uint64();
         if (result.error()) {
           report_parse_err(val, "a number");
-          return;
+          return false;
         }
-        add_value(pusher, result.value_unsafe());
-        return;
+        return add_value(pusher, result.value_unsafe());
       }
     }
+    TENZIR_UNREACHABLE();
   }
 
-  auto parse_string(simdjson::ondemand::value val, auto& pusher) -> void {
+  [[nodiscard]] auto parse_string(simdjson::ondemand::value val, auto& pusher)
+    -> bool {
     auto maybe_str = val.get_string();
     if (maybe_str.error()) {
       report_parse_err(val, "a string");
-      return;
+      return false;
     }
     auto str = maybe_str.value_unsafe();
     using namespace parser_literals;
@@ -260,62 +351,65 @@ private:
       = parsers::time | parsers::duration | parsers::net | parsers::ip;
     data result;
     if (parser(str, result)) {
-      add_value(pusher, make_view(result));
-      return;
+      return add_value(pusher, make_view(result));
     }
     // Take the input as-is if nothing worked.
-    add_value(pusher, str);
+    return add_value(pusher, str);
   }
 
-  auto parse_array(simdjson::ondemand::array arr, auto& pusher, size_t depth)
-    -> void {
+  [[nodiscard]] auto parse_array(simdjson::ondemand::array arr, auto& pusher,
+                                 size_t depth) -> bool {
     auto list = pusher.push_list();
     for (auto element : arr) {
       if (element.error()) {
         report_parse_err(element, "an array element");
-        continue;
+        return false;
       }
-      parse_impl(element.value_unsafe(), list, depth + 1);
+      if (not parse_impl(element.value_unsafe(), list, depth + 1)) {
+        return false;
+      }
     }
+    return true;
   }
 
-  auto parse_impl(simdjson::ondemand::value val, auto& pusher, size_t depth)
-    -> void {
+  [[nodiscard]] auto parse_impl(simdjson::ondemand::value val, auto& pusher,
+                                size_t depth) -> bool {
     if (depth > defaults::max_recursion)
       die("nesting too deep in json_parser parse");
     auto type = val.type();
-    if (type.error())
-      return;
-    switch (val.type().value_unsafe()) {
+    if (type.error()) {
+      report_parse_err(val, "a value");
+      return false;
+    }
+    switch (type.value_unsafe()) {
       case simdjson::ondemand::json_type::null:
-        return;
+        return true;
       case simdjson::ondemand::json_type::number:
-        parse_number(val, pusher);
-        return;
+        return parse_number(val, pusher);
       case simdjson::ondemand::json_type::boolean: {
         auto result = val.get_bool();
         if (result.error()) {
           report_parse_err(val, "a boolean value");
-          return;
+          return false;
         }
-        add_value(pusher, result.value_unsafe());
-        return;
+        return add_value(pusher, result.value_unsafe());
       }
       case simdjson::ondemand::json_type::string:
-        parse_string(val, pusher);
-        return;
+        return parse_string(val, pusher);
       case simdjson::ondemand::json_type::array:
-        parse_array(val.get_array().value_unsafe(), pusher, depth + 1);
-        return;
+        return parse_array(val.get_array().value_unsafe(), pusher, depth + 1);
       case simdjson::ondemand::json_type::object:
-        parse_object(val, pusher.push_record(), depth + 1);
-        return;
+        return parse_object(val, pusher.push_record(), depth + 1);
     }
+    TENZIR_UNREACHABLE();
   }
 
-  auto add_value(auto& guard, auto value) -> void {
-    if (auto err = guard.add(value))
+  [[nodiscard]] auto add_value(auto& guard, auto value) -> bool {
+    if (auto err = guard.add(value)) {
       ctrl_.warn(std::move(err));
+      return false;
+    }
+    return true;
   }
 
   const FieldValidator& field_validator_;
@@ -324,17 +418,6 @@ private:
   std::optional<std::size_t> parsed_lines_;
 };
 
-auto handle_empty_chunk(parser_state& state, bool has_selector) -> table_slice {
-  if (has_selector) {
-    if (state.last_used_builder)
-      return state.last_used_builder->finish(state.last_used_schema_name);
-    return table_slice{};
-  }
-  auto slice = state.unknown_schema_builder.finish();
-  state.unknown_schema_builder.reset();
-  return slice;
-}
-
 auto get_schema_name(simdjson::ondemand::document_reference doc,
                      const selector& selector) -> caf::expected<std::string> {
   auto type = doc[selector.selector_field];
@@ -342,7 +425,7 @@ auto get_schema_name(simdjson::ondemand::document_reference doc,
   if (auto err = type.error()) {
     if (err != simdjson::error_code::NO_SUCH_FIELD)
       return caf::make_error(ec::parse_error, error_message(err));
-    return "";
+    return std::string{unknown_entry_name};
   }
   auto maybe_schema_name = type.value_unsafe().get_string();
   if (auto err = maybe_schema_name.error()) {
@@ -355,36 +438,26 @@ auto get_schema_name(simdjson::ondemand::document_reference doc,
                      maybe_schema_name.value_unsafe());
 }
 
-auto handle_builder_change(adaptive_table_slice_builder& builder_to_use,
-                           parser_state& state) -> std::optional<table_slice> {
-  if (not state.last_used_builder)
-    return {};
-  if (state.last_used_builder != std::addressof(builder_to_use)) {
-    if (auto slice
-        = state.last_used_builder->finish(state.last_used_schema_name);
-        slice.rows() > 0) {
-      if (state.last_used_builder
-          == std::addressof(state.unknown_schema_builder))
-        state.unknown_schema_builder.reset();
-      return slice;
+auto non_empty_entries(parser_state& state)
+  -> generator<std::reference_wrapper<entry_data>> {
+  if (state.preserve_order) {
+    // In that case, only the active builder can be non-empty.
+    if (state.get_active_entry().builder->rows() > 0) {
+      co_yield std::ref(state.get_active_entry());
+    }
+  } else {
+    // Otherwise, builders are not flushed when changing schema. Thus, we have
+    // to take a look at every entry.
+    for (auto& entry : state.entries) {
+      if (entry.builder->rows() > 0) {
+        co_yield std::ref(entry);
+      }
     }
   }
-  return {};
 }
 
-auto finalize(adaptive_table_slice_builder* last_used_builder,
-              const std::string& last_used_schema_name)
-  -> std::optional<table_slice> {
-  if (not last_used_builder)
-    return {};
-  if (auto slice = last_used_builder->finish(last_used_schema_name);
-      slice.rows() > 0u)
-    return std::move(slice);
-  return {};
-}
-
-std::vector<type> get_schemas(bool try_find_schema,
-                              operator_control_plane& ctrl, bool unflatten) {
+auto get_schemas(bool try_find_schema, operator_control_plane& ctrl,
+                 bool unflatten) -> std::vector<type> {
   if (not try_find_schema)
     return {};
   if (not unflatten)
@@ -398,10 +471,19 @@ std::vector<type> get_schemas(bool try_find_schema,
   return ret;
 }
 
-auto unflatten_if_needed(std::string_view separator, table_slice slice) {
+auto unflatten_if_needed(std::string_view separator, table_slice slice)
+  -> table_slice {
   if (separator.empty())
     return slice;
   return unflatten(slice, separator);
+}
+
+[[nodiscard]] auto activate_unknown_entry(parser_state& state)
+  -> std::optional<table_slice> {
+  if (auto idx = state.find_entry(unknown_entry_name)) {
+    return state.activate(*idx);
+  }
+  return state.activate(state.add_entry(unknown_entry_name));
 }
 
 template <class FieldValidator>
@@ -409,29 +491,22 @@ class parser_base {
 public:
   parser_base(operator_control_plane& ctrl, std::optional<selector> selector,
               std::optional<type> schema, std::vector<type> schemas,
-              FieldValidator field_validator, bool infer_types)
+              FieldValidator field_validator, bool infer_types,
+              bool preserve_order)
     : ctrl_{ctrl},
       selector_{std::move(selector)},
       schema_{std::move(schema)},
       schemas_{std::move(schemas)},
       field_validator_{std::move(field_validator)},
-      infer_types_{infer_types} {
+      infer_types_{infer_types},
+      preserve_order{preserve_order} {
   }
 
 protected:
   auto handle_schema_found(parser_state& state, const type& schema) const
     -> std::optional<table_slice> {
-    if (not state.builders_per_schema.contains(schema.name())) {
-      auto inserted = state.builders_per_schema
-                        .try_emplace(schema.name(), schema, infer_types_)
-                        .second;
-      TENZIR_ASSERT(inserted);
-    }
-    auto& current_builder = state.builders_per_schema[schema.name()];
-    auto maybe_slice_to_yield = handle_builder_change(current_builder, state);
-    state.last_used_builder = std::addressof(current_builder);
-    state.last_used_schema_name = std::string{schema.name()};
-    return maybe_slice_to_yield;
+    // The case where this schema exists is already handled before.
+    return state.activate(state.add_entry(schema.name(), schema, infer_types_));
   }
 
   auto handle_no_matching_schema_found(parser_state& state,
@@ -445,27 +520,17 @@ protected:
                                      "JSON object '{}'",
                                      schema_name, parsed_doc));
     }
-    if (state.last_used_schema_name == schema_name) {
-      return {std::nullopt};
-    }
-    std::optional<table_slice> maybe_slice_to_yield;
-    if (state.last_used_builder) {
-      if (auto slice
-          = state.last_used_builder->finish(state.last_used_schema_name);
-          slice.rows() > 0) {
-        maybe_slice_to_yield.emplace(std::move(slice));
-      }
-    }
-    state.unknown_schema_builder.reset();
-    state.last_used_builder = std::addressof(state.unknown_schema_builder);
-    state.last_used_schema_name = std::string{schema_name};
-    return {std::move(maybe_slice_to_yield)};
+    // The case where this schema exists is already handled before.
+    return state.activate(state.add_entry(schema_name));
   }
 
   auto handle_schema_name_found(std::string_view schema_name,
                                 std::string_view json_source,
                                 parser_state& state) const
     -> caf::expected<std::optional<table_slice>> {
+    if (auto idx = state.find_entry(schema_name)) {
+      return state.activate(*idx);
+    }
     auto schema_it
       = std::find_if(schemas_.begin(), schemas_.end(), [&](const auto& schema) {
           return schema.name() == schema_name;
@@ -477,8 +542,8 @@ protected:
   }
 
   auto
-  handle_known_schema(simdjson::ondemand::document_reference doc_ref,
-                      std::string_view json_source, parser_state& state) const
+  handle_with_selector(simdjson::ondemand::document_reference doc_ref,
+                       std::string_view json_source, parser_state& state) const
     -> std::pair<parser_action, std::optional<table_slice>> {
     TENZIR_ASSERT(not schema_);
     TENZIR_ASSERT(selector_);
@@ -487,10 +552,7 @@ protected:
       ctrl_.warn(std::move(maybe_schema_name.error()));
       if (not infer_types_)
         return {parser_action::skip, std::nullopt};
-      auto maybe_slice_to_yield
-        = handle_builder_change(state.unknown_schema_builder, state);
-      state.last_used_builder = std::addressof(state.unknown_schema_builder);
-      state.last_used_schema_name.clear();
+      auto maybe_slice_to_yield = activate_unknown_entry(state);
       if (maybe_slice_to_yield) {
         return {parser_action::yield, std::move(maybe_slice_to_yield)};
       }
@@ -514,17 +576,15 @@ protected:
     if (not selector_) {
       return {parser_action::parse, std::nullopt};
     }
-    return handle_known_schema(doc_ref, json_source, state);
+    return handle_with_selector(doc_ref, json_source, state);
   }
 
-  auto handle_max_rows(parser_state& state)
-    -> std::optional<table_slice> const {
-    if (state.last_used_builder->rows() < max_table_slice_rows_)
+  auto handle_max_rows(parser_state& state) const
+    -> std::optional<table_slice> {
+    if (state.get_active_entry().builder->rows() < max_table_slice_rows_) {
       return std::nullopt;
-    auto slice = state.last_used_builder->finish(state.last_used_schema_name);
-    if (not this->selector_)
-      state.unknown_schema_builder.reset();
-    return slice;
+    }
+    return state.get_active_entry().flush(ctrl_);
   }
 
   operator_control_plane& ctrl_;
@@ -533,6 +593,7 @@ protected:
   std::vector<type> schemas_;
   FieldValidator field_validator_;
   bool infer_types_ = true;
+  bool preserve_order = true;
   simdjson::ondemand::parser parser_;
   // TODO: change max table slice size to be fetched from options.
   tenzir::detail::arrow_length_type max_table_slice_rows_
@@ -565,28 +626,40 @@ public:
       case parser_action::skip:
         co_return;
       case parser_action::yield:
-        co_yield *slice;
+        TENZIR_ASSERT(slice);
+        co_yield std::move(*slice);
     }
-    auto row = state.last_used_builder->push_row();
-    doc_parser{this->field_validator_, json_line, this->ctrl_, lines_processed_}
-      .parse_object(val.value_unsafe(), row);
-    // After parsing one JSON object it is expected for the result to be at
-    // the end. If it's otherwise then it means that a line contains more than
-    // one object in which case we don't add any data and emit a warning.
-    // It is also possible for a parsing failure to occurr in doc_parser. the
-    // is_alive() call ensures that the first object was parsed without
-    // errors. Calling at_end() when is_alive() returns false is unsafe and
-    // resulted in crashes.
-    if (doc.is_alive() and not doc.at_end()) {
-      row.cancel();
-      this->ctrl_.warn(caf::make_error(
-        ec::parse_error, fmt::format("more than one JSON object in a "
-                                     "single line for NDJSON "
-                                     "mode (while parsing '{}')",
-                                     json_line)));
+    {
+      // The `row` gets it's own scope so that it is destroyed before we finish.
+      auto row = state.get_active_entry().builder->push_row();
+      auto success = doc_parser{this->field_validator_, json_line, this->ctrl_,
+                                lines_processed_}
+                       .parse_object(val.value_unsafe(), row);
+      // After parsing one JSON object it is expected for the result to be at
+      // the end. If it's otherwise then it means that a line contains more than
+      // one object in which case we don't add any data and emit a warning.
+      // It is also possible for a parsing failure to occurr in doc_parser. the
+      // is_alive() call ensures that the first object was parsed without
+      // errors. Calling at_end() when is_alive() returns false is unsafe and
+      // resulted in crashes.
+      if (success and not doc.at_end()) {
+        this->ctrl_.warn(caf::make_error(
+          ec::parse_error, fmt::format("more than one JSON object in a "
+                                       "single line for NDJSON "
+                                       "mode (while parsing '{}')",
+                                       json_line)));
+        success = false;
+      }
+      if (not success) {
+        // We already reported the issue.
+        row.cancel();
+        co_return;
+      }
     }
-    if (auto slice = this->handle_max_rows(state))
-      co_yield *slice;
+    state.get_active_entry().expected_rows += 1;
+    if (auto slice = this->handle_max_rows(state)) {
+      co_yield std::move(*slice);
+    }
   }
 
 private:
@@ -634,13 +707,24 @@ public:
         case parser_action::parse:
           break;
         case parser_action::yield:
-          co_yield *slice;
+          TENZIR_ASSERT(slice);
+          co_yield std::move(*slice);
       }
-      auto row = state.last_used_builder->push_row();
-      doc_parser{this->field_validator_, doc_it.source(), this->ctrl_}
-        .parse_object(doc.value_unsafe(), row);
+      {
+        // The `row` gets it's own scope so that it is destroyed before we finish.
+        auto row = state.get_active_entry().builder->push_row();
+        auto success
+          = doc_parser{this->field_validator_, doc_it.source(), this->ctrl_}
+              .parse_object(doc.value_unsafe(), row);
+        if (not success) {
+          // We already reported the issue.
+          row.cancel();
+          continue;
+        }
+      }
+      state.get_active_entry().expected_rows += 1;
       if (auto slice = this->handle_max_rows(state))
-        co_yield *slice;
+        co_yield std::move(*slice);
     }
     handle_truncated_bytes(state);
   }
@@ -673,38 +757,31 @@ private:
 
 template <class GeneratorValue>
 auto make_parser(generator<GeneratorValue> json_chunk_generator,
-                 std::string separator, bool try_find_schema,
-                 std::optional<type> schema, bool infer_types, auto parser_impl)
+                 operator_control_plane& ctrl, std::string separator,
+                 std::optional<type> schema, bool infer_types,
+                 bool preserve_order, auto parser_impl)
   -> generator<table_slice> {
-  auto state = parser_state{};
+  auto state = parser_state{ctrl, preserve_order};
   if (schema) {
-    const auto [it, inserted] = state.builders_per_schema.try_emplace(
-      schema->name(), *schema, infer_types);
-    TENZIR_ASSERT(inserted);
-    state.last_used_builder = std::addressof(it->second);
+    state.active_entry = state.add_entry(schema->name(), *schema, infer_types);
   } else {
-    state.last_used_builder = std::addressof(state.unknown_schema_builder);
+    state.active_entry = state.add_entry(unknown_entry_name);
   }
-  auto last_finish = std::chrono::steady_clock::now();
-  for (const auto& chnk : json_chunk_generator) {
-    const auto now = std::chrono::steady_clock::now();
-    if ((state.last_used_builder
-         and state.last_used_builder->rows() >= detail::narrow_cast<int64_t>(
-               defaults::import::table_slice_size))
-        or last_finish + defaults::import::batch_timeout < now) {
-      last_finish = now;
-      co_yield unflatten_if_needed(separator,
-                                   handle_empty_chunk(state, try_find_schema));
-    }
-    if (not chnk) {
-      if (last_finish != now) {
-        co_yield {};
+  // After this point, we always have an active entry.
+  for (auto chnk : json_chunk_generator) {
+    // Flush builders if their timeout has expired.
+    auto now = std::chrono::steady_clock::now();
+    for (auto&& entry_ref : non_empty_entries(state)) {
+      auto& entry = entry_ref.get();
+      if (now > entry.flushed + defaults::import::batch_timeout) {
+        co_yield unflatten_if_needed(separator, entry.flush(ctrl));
       }
+    }
+    if (not chnk or chnk->size() == 0u) {
+      co_yield {};
       continue;
     }
-    if (chnk->size() == 0u) {
-      continue;
-    }
+    // This also flushes the builder if they grow over the threshold.
     for (auto slice : parser_impl.parse(*chnk, state)) {
       co_yield unflatten_if_needed(separator, std::move(slice));
     }
@@ -712,9 +789,9 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
       co_return;
     }
   }
-  if (auto slice
-      = finalize(state.last_used_builder, state.last_used_schema_name)) {
-    co_yield unflatten_if_needed(separator, std::move(*slice));
+  // Flush all entries.
+  for (auto&& entry : non_empty_entries(state)) {
+    co_yield unflatten_if_needed(separator, entry.get().flush(ctrl));
   }
 }
 
@@ -739,6 +816,7 @@ struct parser_args {
   std::string unnest_separator;
   bool no_infer = false;
   bool use_ndjson_mode = false;
+  bool preserve_order = true;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
@@ -747,7 +825,8 @@ struct parser_args {
       .fields(f.field("selector", x.selector), f.field("schema", x.schema),
               f.field("unnest_separator", x.unnest_separator),
               f.field("no_infer", x.no_infer),
-              f.field("use_ndjson_mode", x.use_ndjson_mode));
+              f.field("use_ndjson_mode", x.use_ndjson_mode),
+              f.field("preserve_order", x.preserve_order));
   }
 };
 
@@ -765,6 +844,12 @@ public:
 
   auto name() const -> std::string override {
     return "json";
+  }
+
+  auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
+    auto args = args_;
+    args.preserve_order = order == event_order::ordered;
+    return std::make_unique<json_parser>(std::move(args));
   }
 
   auto
@@ -820,9 +905,9 @@ private:
       schema = *found;
     }
     if (args_.use_ndjson_mode) {
-      return make_parser(to_padded_lines(std::move(input)),
-                         args_.unnest_separator, args_.selector.has_value(),
-                         schema, not args_.no_infer,
+      return make_parser(to_padded_lines(std::move(input)), ctrl,
+                         args_.unnest_separator, schema, not args_.no_infer,
+                         args_.preserve_order,
                          ndjson_parser<FieldValidator>{
                            ctrl,
                            args_.selector,
@@ -830,10 +915,11 @@ private:
                            std::move(schemas),
                            std::move(field_validator),
                            not args_.no_infer,
+                           args_.preserve_order,
                          });
     }
-    return make_parser(std::move(input), args_.unnest_separator,
-                       args_.selector.has_value(), schema, not args_.no_infer,
+    return make_parser(std::move(input), ctrl, args_.unnest_separator, schema,
+                       not args_.no_infer, args_.preserve_order,
                        default_parser<FieldValidator>{
                          ctrl,
                          args_.selector,
@@ -841,6 +927,7 @@ private:
                          std::move(schemas),
                          std::move(field_validator),
                          not args_.no_infer,
+                         args_.preserve_order,
                        });
   }
 

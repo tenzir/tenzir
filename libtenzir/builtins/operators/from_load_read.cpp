@@ -40,6 +40,12 @@ public:
     return "load";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, load_operator& x) -> bool {
     return plugin_inspect(f, x.loader_);
   }
@@ -74,6 +80,24 @@ public:
 
   auto name() const -> std::string override {
     return "read";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    if (order == event_order::ordered) {
+      return do_not_optimize(*this);
+    }
+    // TODO: We could also propagate `where #schema == "..."` to the parser.
+    auto parser_opt = parser_->optimize(order);
+    if (not parser_opt) {
+      return do_not_optimize(*this);
+    }
+    return optimize_result{
+      std::nullopt,
+      event_order::ordered,
+      std::make_unique<read_operator>(std::move(parser_opt)),
+    };
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {
