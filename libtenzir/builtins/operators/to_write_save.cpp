@@ -133,7 +133,7 @@ protected:
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
                            fmt::format("'{}' does not accept {} as input",
-                                       to_string(), operator_type_name(input)));
+                                       name(), operator_type_name(input)));
   }
 
 private:
@@ -213,7 +213,7 @@ protected:
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
                            fmt::format("'{}' does not accept {} as input",
-                                       to_string(), operator_type_name(input)));
+                                       name(), operator_type_name(input)));
   }
 
 private:
@@ -305,7 +305,7 @@ protected:
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
                            fmt::format("'{}' does not accept {} as input",
-                                       to_string(), operator_type_name(input)));
+                                       name(), operator_type_name(input)));
   }
 
 private:
