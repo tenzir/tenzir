@@ -99,7 +99,7 @@ auto make_timer_guard(Duration&... elapsed) {
 // information from extension types.
 auto num_approx_bytes(const std::vector<table_slice>& events) {
 #if ARROW_VERSION_MAJOR < 12
-  // arrow::util::ReferenceBufferSize is broken for Arrow before 12.0.0 and
+  // arrow::util::ReferencedBufferSize is broken for Arrow before 12.0.0 and
   // crashes for extension types.
   (void)events;
   return uint64_t{0};
@@ -112,7 +112,18 @@ auto num_approx_bytes(const std::vector<table_slice>& events) {
     TENZIR_ASSERT(record_batch);
     // Note that this function can sometimes fail. Because we ultimately want to
     // return an underestimate for the value of bytes, we silently fall back to
-    // a value of zero is the referenced buffer size cannot be measured.
+    // a value of zero if the referenced buffer size cannot be measured.
+    //
+    // As a consequence, the result of this function can be off by a large
+    // margin. It never overestimates, but sometimes the result is a lot smaller
+    // than you would think and also a lot smaller than it should be.
+    //
+    // We opted to use the built-in Arrow solution here hoping that it will be
+    // improved upon in the future upsrream, rather than us having to roll our
+    // own.
+    //
+    // We cannot feasibly warn for failure here as that would cause a lot of
+    // noise.
     result += detail::narrow_cast<uint64_t>(
       arrow::util::ReferencedBufferSize(*record_batch).ValueOr(0));
   }

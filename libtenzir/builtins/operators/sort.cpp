@@ -42,8 +42,8 @@ public:
     auto array = path->get(*batch);
     // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
     // supported for extension types, so eventually we'll have to roll our
-    // own imlementation. In the meantime, we sort the underlying storage array,
-    // which at least sorts in some stable way.
+    // own implementation. In the meantime, we sort the underlying storage
+    // array, which at least sorts in some stable way.
     if (auto ext_array
         = std::dynamic_pointer_cast<arrow::ExtensionArray>(array)) {
       sort_keys_.push_back(ext_array->storage());

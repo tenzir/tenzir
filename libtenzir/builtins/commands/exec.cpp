@@ -118,7 +118,7 @@ auto format_metric(const metric& metric) {
             std::chrono::duration<double, std::chrono::seconds::period>>(
             metric.time_elapsed)
             .count());
-    if (metric.inbound_measurement.unit != "bytes") {
+    if (metric.inbound_measurement.unit != operator_type_name<chunk_ptr>()) {
       it = fmt::format_to(
         it, locale, "{}{}bytes: {:L} at a rate of {:.2f}/s (estimate)\n",
         indent, indent, metric.inbound_measurement.num_approx_bytes,
@@ -146,7 +146,7 @@ auto format_metric(const metric& metric) {
             std::chrono::duration<double, std::chrono::seconds::period>>(
             metric.time_elapsed)
             .count());
-    if (metric.outbound_measurement.unit != "bytes") {
+    if (metric.outbound_measurement.unit != operator_type_name<chunk_ptr>()) {
       it = fmt::format_to(
         it, locale, "{}{}bytes: {:L} at a rate of {:.2f}/s (estimate)\n",
         indent, indent, metric.outbound_measurement.num_approx_bytes,
