@@ -815,13 +815,13 @@ test = ["black", "check-manifest", "flake8", "ipykernel", "ipython", "ipywidgets
 
 [[package]]
 name = "nbconvert"
-version = "7.7.1"
+version = "7.7.2"
 description = "Converting Jupyter Notebooks"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "nbconvert-7.7.1-py3-none-any.whl", hash = "sha256:c99158a98e2bd32c4877de425f008e149af28f4fffbcc8a898086dd83109c1de"},
-    {file = "nbconvert-7.7.1.tar.gz", hash = "sha256:b820b206bd16898d39198a732dac6fb7019e82a44a282f606d931b8113240295"},
+    {file = "nbconvert-7.7.2-py3-none-any.whl", hash = "sha256:25e0cf2b663ee0cd5a90afb6b2f2940bf1abe5cc5bc995b88c8156ca65fa7ede"},
+    {file = "nbconvert-7.7.2.tar.gz", hash = "sha256:36d3e7bf32f0c075878176cdeeb645931c994cbed5b747bc7a570ba8cd2321f3"},
 ]
 
 [package.dependencies]
@@ -1546,4 +1546,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "0046cfc601abe96e4ec2e9fc299084a6ac547aa47098dc320978a564df66866f"
+content-hash = "233878d6f48e60d5e50d52949f453ee00afc7086c9e06462cc6be352c7ee528d"
