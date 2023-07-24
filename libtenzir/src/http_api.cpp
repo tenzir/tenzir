@@ -18,7 +18,7 @@
 namespace {
 
 // Validates that the argument is a valid JSON object.
-auto validate_json(const std::string& json) -> bool {
+[[maybe_unused]] auto validate_json(const std::string& json) -> bool {
   auto parser = simdjson::dom::parser{};
   auto padded = simdjson::padded_string{json};
   auto obj = simdjson::dom::object{};

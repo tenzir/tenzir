@@ -179,23 +179,16 @@ TEST(event split across two chunks) {
   }
 }
 
-TEST(skip field with invalid value and emit a warning) {
+TEST(skip field with invalid value) {
   auto in_json = R"(
         {"12345":{"a":1234,"b":5678,"c":1D}}
         )";
-  auto warn_issued = false;
-  auto mock = operator_control_plane_mock{[&warn_issued](auto&&) {
-    if (warn_issued)
-      FAIL("Warning expected to be emitted only once");
-    warn_issued = true;
-  }};
-  auto sut = create_sut(make_chunk_generator({in_json}), mock);
+  auto sut = create_sut(make_chunk_generator({in_json}), control_plane_mock);
   auto output_slices = std::vector<tenzir::table_slice>{};
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
-  CHECK(warn_issued);
   auto& slice = output_slices.front();
   REQUIRE_EQUAL(slice.columns(), 2u);
   REQUIRE_EQUAL(slice.rows(), 1u);

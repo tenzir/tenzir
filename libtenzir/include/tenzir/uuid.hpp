@@ -137,16 +137,18 @@ struct formatter<tenzir::uuid> {
     const auto args
       = std::span{reinterpret_cast<const unsigned char*>(x.begin()), x.size()};
     if (uppercase)
-      return format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
-                       join(args.subspan(0, 4), ""),
-                       join(args.subspan(4, 2), ""),
-                       join(args.subspan(6, 2), ""),
-                       join(args.subspan(8, 2), ""),
-                       join(args.subspan(10, 6), ""));
-    return format_to(ctx.out(), "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-                     join(args.subspan(0, 4), ""), join(args.subspan(4, 2), ""),
-                     join(args.subspan(6, 2), ""), join(args.subspan(8, 2), ""),
-                     join(args.subspan(10, 6), ""));
+      return fmt::format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
+                            join(args.subspan(0, 4), ""),
+                            join(args.subspan(4, 2), ""),
+                            join(args.subspan(6, 2), ""),
+                            join(args.subspan(8, 2), ""),
+                            join(args.subspan(10, 6), ""));
+    return fmt::format_to(ctx.out(), "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
+                          join(args.subspan(0, 4), ""),
+                          join(args.subspan(4, 2), ""),
+                          join(args.subspan(6, 2), ""),
+                          join(args.subspan(8, 2), ""),
+                          join(args.subspan(10, 6), ""));
   }
 };
 

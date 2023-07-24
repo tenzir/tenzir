@@ -21,8 +21,8 @@ namespace tenzir {
 /// guaranteed to use the newest vesion of the encoding, while deserialized
 /// table slices may use an older version.
 enum class table_slice_encoding : uint8_t {
-  none,         ///< No data is encoded; the table slice is empty or invalid.
-  arrow,        ///< The table slice is encoded using the Apache Arrow format.
+  none,  ///< No data is encoded; the table slice is empty or invalid.
+  arrow, ///< The table slice is encoded using the Apache Arrow format.
 };
 
 } // namespace tenzir
@@ -40,9 +40,9 @@ struct formatter<tenzir::table_slice_encoding> {
   auto format(const tenzir::table_slice_encoding& x, FormatContext& ctx) const {
     switch (x) {
       case tenzir::table_slice_encoding::none:
-        return format_to(ctx.out(), "none");
+        return fmt::format_to(ctx.out(), "none");
       case tenzir::table_slice_encoding::arrow:
-        return format_to(ctx.out(), "arrow");
+        return fmt::format_to(ctx.out(), "arrow");
     }
     tenzir::die("unreachable");
   }

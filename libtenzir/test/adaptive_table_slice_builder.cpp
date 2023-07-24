@@ -772,6 +772,24 @@ TEST(remove row empty list) {
   CHECK_EQUAL(materialize(output.at(0u, 0u)), int64_t{10});
 }
 
+TEST(remove row with extension type fields) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    REQUIRE(not row.push_field("ip1").add(ip::v4(0xFF << 1)));
+    REQUIRE(not row.push_field("ip2").add(ip::v4(0xFF << 1)));
+  }
+  auto row = sut.push_row();
+  REQUIRE(not row.push_field("ip1").add(ip::v4(0xFF << 2)));
+  REQUIRE(not row.push_field("ip2").add(ip::v4(0xFF << 2)));
+  row.cancel();
+  auto output = sut.finish();
+  REQUIRE_EQUAL(output.rows(), 1u);
+  REQUIRE_EQUAL(output.columns(), 2u);
+  CHECK_EQUAL(materialize(output.at(0u, 0u)), ip::v4(0xFF << 1));
+  CHECK_EQUAL(materialize(output.at(0u, 1u)), ip::v4(0xFF << 1));
+}
+
 TEST(Add nulls to fields that didnt have values added when adaptive builder is
        constructed with a schema) {
   const auto schema = tenzir::type{
@@ -1094,6 +1112,21 @@ TEST(Fixed fields builder remove record type row) {
               }));
 }
 
+TEST(Remove row when not all of the schema fields got value added) {
+  const auto schema
+    = tenzir::type{"a nice name", record_type{{"int", int64_type{}},
+                                              {"str", string_type{}},
+                                              {"duration", duration_type{}}}};
+  auto sut = adaptive_table_slice_builder{schema};
+  {
+    auto row = sut.push_row();
+    REQUIRE(not row.push_field("int").add(int64_t{5}));
+    row.cancel();
+  }
+  auto out = sut.finish();
+  CHECK_EQUAL(out.rows(), 0u);
+}
+
 TEST(Field type changes when it was first discovered with a different one but
        the value got removed and a different type value was added) {
   auto sut = adaptive_table_slice_builder{};
@@ -1196,4 +1229,450 @@ TEST(cast the whole column to a double type when input double is not 0.0
   const auto schema = tenzir::type{record_type{{"a", double_type{}}}};
   const auto expected_schema = tenzir::type{schema.make_fingerprint(), schema};
   CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(common type casting of a nested record field) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("a");
+    auto rec = f.push_record();
+    auto nested = rec.push_field("nested");
+    REQUIRE(not nested.add(true));
+  }
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("a");
+    auto rec = f.push_record();
+    auto nested = rec.push_field("nested");
+    REQUIRE(not nested.add("str"));
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))), "true");
+  CHECK_EQUAL((materialize(out.at(1u, 0u))), "str");
+  const auto schema
+    = type{record_type{{"a", record_type{{"nested", string_type{}}}}}};
+  const auto expected_schema = type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(common type casting of a nested record list field) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+
+    {
+      auto rec = list.push_record();
+      auto nested = rec.push_field("nested");
+      REQUIRE(not nested.add(true));
+    }
+    {
+      auto rec = list.push_record();
+      auto nested = rec.push_field("nested");
+      REQUIRE(not nested.add(false));
+    }
+  }
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+    {
+      auto rec = list.push_record();
+      auto nested = rec.push_field("nested");
+      REQUIRE(not nested.add(false));
+    }
+    {
+      auto rec = list.push_record();
+      auto nested = rec.push_field("nested");
+      REQUIRE(not nested.add("str"));
+    }
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))),
+              (list{record{{"nested", "true"}}, record{
+                                                  {{"nested", "false"}},
+                                                }}));
+  CHECK_EQUAL((materialize(out.at(1u, 0u))),
+              (list{record{{"nested", "false"}}, record{{"nested", "str"}}}));
+  const auto schema = type{
+    record_type{{"list", list_type{record_type{{"nested", string_type{}}}}}}};
+  const auto expected_schema = type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(common type casting of a list<record<record>> field with additional fields
+       in both records) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+    {
+      auto rec = list.push_record();
+      auto int_field = rec.push_field("int");
+      REQUIRE(not int_field.add(int64_t{5}));
+      {
+        auto nested = rec.push_field("nested rec");
+        auto nested_rec = nested.push_record();
+        auto nested_int_field = nested_rec.push_field("nested int");
+        REQUIRE(not nested_int_field.add(int64_t{50}));
+        auto cast_field = nested_rec.push_field("cast");
+        REQUIRE(not cast_field.add(int64_t{500}));
+        auto nested_str_field = nested_rec.push_field("nested str");
+        REQUIRE(not nested_str_field.add("nested_str1"));
+      }
+      auto str_field = rec.push_field("str");
+      REQUIRE(not str_field.add("str1"));
+    }
+    {
+      auto rec = list.push_record();
+      auto int_field = rec.push_field("int");
+      REQUIRE(not int_field.add(int64_t{2}));
+      {
+        auto nested = rec.push_field("nested rec");
+        auto nested_rec = nested.push_record();
+        auto nested_int_field = nested_rec.push_field("nested int");
+        REQUIRE(not nested_int_field.add(int64_t{20}));
+        auto cast_field = nested_rec.push_field("cast");
+        REQUIRE(not cast_field.add(int64_t{200}));
+        auto nested_str_field = nested_rec.push_field("nested str");
+        REQUIRE(not nested_str_field.add("nested_str2"));
+      }
+      auto str_field = rec.push_field("str");
+      REQUIRE(not str_field.add("str2"));
+    }
+  }
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+    {
+      auto rec = list.push_record();
+      auto int_field = rec.push_field("int");
+      REQUIRE(not int_field.add(int64_t{3}));
+      {
+        auto nested = rec.push_field("nested rec");
+        auto nested_rec = nested.push_record();
+        auto nested_int_field = nested_rec.push_field("nested int");
+        REQUIRE(not nested_int_field.add(int64_t{30}));
+        auto cast_field = nested_rec.push_field("cast");
+        REQUIRE(not cast_field.add("cast_str"));
+        auto nested_str_field = nested_rec.push_field("nested str");
+        REQUIRE(not nested_str_field.add("nested_str3"));
+      }
+      auto str_field = rec.push_field("str");
+      REQUIRE(not str_field.add("str3"));
+    }
+    {
+      auto rec = list.push_record();
+      auto int_field = rec.push_field("int");
+      REQUIRE(not int_field.add(int64_t{4}));
+      {
+        auto nested = rec.push_field("nested rec");
+        auto nested_rec = nested.push_record();
+        auto nested_int_field = nested_rec.push_field("nested int");
+        REQUIRE(not nested_int_field.add(int64_t{40}));
+        auto cast_field = nested_rec.push_field("cast");
+        // int type should be casted to a new string_type.
+        REQUIRE(not cast_field.add(int64_t{400}));
+        auto nested_str_field = nested_rec.push_field("nested str");
+        REQUIRE(not nested_str_field.add("nested_str4"));
+      }
+      auto str_field = rec.push_field("str");
+      REQUIRE(not str_field.add("str4"));
+    }
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))),
+              (list{record{
+                      {"int", int64_t{5}},
+                      {"nested rec",
+                       record{
+                         {"nested int", int64_t{50}},
+                         {"cast", "+500"},
+                         {"nested str", "nested_str1"},
+                       }},
+                      {"str", "str1"},
+                    },
+                    record{
+                      {"int", int64_t{2}},
+                      {"nested rec",
+                       record{
+                         {"nested int", int64_t{20}},
+                         {"cast", "+200"},
+                         {"nested str", "nested_str2"},
+                       }},
+                      {"str", "str2"},
+                    }}));
+  CHECK_EQUAL((materialize(out.at(1u, 0u))),
+              (list{record{
+                      {"int", int64_t{3}},
+                      {"nested rec",
+                       record{
+                         {"nested int", int64_t{30}},
+                         {"cast", "cast_str"},
+                         {"nested str", "nested_str3"},
+                       }},
+                      {"str", "str3"},
+                    },
+                    record{
+                      {"int", int64_t{4}},
+                      {"nested rec",
+                       record{
+                         {"nested int", int64_t{40}},
+                         {"cast", "+400"},
+                         {"nested str", "nested_str4"},
+                       }},
+                      {"str", "str4"},
+                    }}));
+  const auto schema
+    = type{record_type{{"list", list_type{record_type{
+                                  {"int", int64_type{}},
+                                  {"nested rec",
+                                   record_type{
+                                     {"nested int", int64_type{}},
+                                     {"cast", string_type{}},
+                                     {"nested str", string_type{}},
+                                   }},
+                                  {"str", string_type{}},
+
+                                }}}}};
+  const auto expected_schema = type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(field changes in the deepest record in list<record<list<record>>>and
+       another field changes in the first record) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+    {
+      auto rec = list.push_record();
+      {
+        auto nested_list_field = rec.push_field("nested list");
+        auto nested_list = nested_list_field.push_list();
+        auto nested_record = nested_list.push_record();
+        auto cast_field1 = nested_record.push_field("cast_field1");
+        REQUIRE(not cast_field1.add(true));
+      }
+      auto cast_field2 = rec.push_field("cast_field2");
+      REQUIRE(not cast_field2.add(true));
+    }
+  }
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+    {
+      auto rec = list.push_record();
+      {
+        auto nested_list_field = rec.push_field("nested list");
+        auto nested_list = nested_list_field.push_list();
+        auto nested_record = nested_list.push_record();
+        auto cast_field1 = nested_record.push_field("cast_field1");
+        REQUIRE(not cast_field1.add("cast_field1_str"));
+      }
+      auto cast_field2 = rec.push_field("cast_field2");
+      REQUIRE(not cast_field2.add(10.0));
+    }
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))),
+              (list{{
+                record{
+                  {"nested list", list{{record{
+                                    {"cast_field1", "true"},
+                                  }}}},
+                  {"cast_field2", 1.0},
+                },
+              }}));
+  CHECK_EQUAL((materialize(out.at(1u, 0u))),
+              (list{{
+                record{
+                  {"nested list", list{{record{
+                                    {"cast_field1", "cast_field1_str"},
+                                  }}}},
+                  {"cast_field2", 10.0},
+                },
+              }}));
+
+  const auto schema = type{
+    record_type{{"list", list_type{record_type{
+                           {"nested list", list_type{record_type{
+                                             {"cast_field1", string_type{}},
+                                           }}},
+                           {"cast_field2", double_type{}},
+
+                         }}}}};
+  const auto expected_schema = type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(cast a list<ip> into list<string> when the list field is not a child of
+       another list type) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+    REQUIRE(not list.add(ip::v4(0xFF)));
+    REQUIRE(not list.add(ip::v4(0xFF << 1)));
+    REQUIRE(not list.add("str"));
+  }
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))),
+              (list{"0.0.0.255", "0.0.1.254", "str"}));
+  const auto schema = type{record_type{{"list", list_type{string_type{}}}}};
+  const auto expected_schema = type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(list field changes in list<record<list<..>>> with some fields common type
+       casting before the list common type cast) {
+  adaptive_table_slice_builder sut;
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+    {
+      auto rec_f = list.push_record();
+      {
+        auto a = rec_f.push_field("a");
+        REQUIRE(not a.add(true));
+        auto b = rec_f.push_field("b");
+        auto b_list = b.push_list();
+        REQUIRE(not b_list.add(false));
+        auto c = rec_f.push_field("c");
+        REQUIRE(not c.add(false));
+      }
+    }
+  }
+  {
+    auto row = sut.push_row();
+    auto f = row.push_field("list");
+    auto list = f.push_list();
+    {
+      auto rec_f = list.push_record();
+      {
+        auto a = rec_f.push_field("a");
+        REQUIRE(not a.add("a cast"));
+        auto b = rec_f.push_field("b");
+        auto b_list = b.push_list();
+        REQUIRE(not b_list.add(true));
+        auto c = rec_f.push_field("c");
+        REQUIRE(not c.add(true));
+      }
+    }
+    {
+      auto rec_f = list.push_record();
+      auto a = rec_f.push_field("a");
+      REQUIRE(not a.add(false));
+      auto b = rec_f.push_field("b");
+      auto b_list = b.push_list();
+      REQUIRE(not b_list.add(true));
+      REQUIRE(not b_list.add("list cast"));
+      REQUIRE(not b_list.add(false));
+      auto c = rec_f.push_field("c");
+      REQUIRE(not c.add("c cast"));
+    }
+  }
+
+  auto out = sut.finish();
+  REQUIRE_EQUAL(out.rows(), 2u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL((materialize(out.at(0u, 0u))), (list{{
+                                               record{
+                                                 {"a", "true"},
+                                                 {"b", list{{"false"}}},
+                                                 {"c", "false"},
+                                               },
+                                             }}));
+  CHECK_EQUAL((materialize(out.at(1u, 0u))), (list{
+                                               record{
+                                                 {"a", "a cast"},
+                                                 {"b", list{{"true"}}},
+                                                 {"c", "true"},
+                                               },
+                                               record{
+                                                 {"a", "false"},
+                                                 {"b",
+                                                  list{
+                                                    "true",
+                                                    "list cast",
+                                                    "false",
+                                                  }},
+                                                 {"c", "c cast"},
+                                               },
+                                             }));
+  const auto schema = type{record_type{{"list", list_type{record_type{
+                                                  {
+                                                    "a",
+                                                    string_type{},
+                                                  },
+                                                  {
+                                                    "b",
+                                                    list_type{string_type{}},
+                                                  },
+                                                  {
+                                                    "c",
+                                                    string_type{},
+                                                  },
+                                                }}}}};
+  const auto expected_schema = type{schema.make_fingerprint(), schema};
+  CHECK_EQUAL(expected_schema, out.schema());
+}
+
+TEST(fixed fields builder will return an error when trying to add a value
+       that requires common type cast to the record field) {
+  const auto schema = tenzir::type{
+    "a nice name",
+    record_type{{"a", bool_type{}}},
+  };
+  auto sut = adaptive_table_slice_builder{schema};
+  auto row = sut.push_row();
+  {
+    auto field = row.push_field("a");
+    REQUIRE(not field.add(true));
+    REQUIRE(field.add("str"));
+  }
+  auto out = sut.finish(schema.name());
+  REQUIRE_EQUAL(schema, out.schema());
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), true);
+}
+
+TEST(fixed fields builder will return an error when trying to add a value
+       that requires common type cast to the list) {
+  const auto schema
+    = tenzir::type{"a nice name", record_type{
+                                    {"list", list_type{bool_type{}}},
+                                  }};
+  auto sut = adaptive_table_slice_builder{schema};
+  auto row = sut.push_row();
+  {
+    auto list_field = row.push_field("list");
+    auto list = list_field.push_list();
+    REQUIRE(not list.add(true));
+    REQUIRE(list.add("str"));
+  }
+  auto out = sut.finish(schema.name());
+  REQUIRE_EQUAL(schema, out.schema());
+  REQUIRE_EQUAL(out.rows(), 1u);
+  REQUIRE_EQUAL(out.columns(), 1u);
+  CHECK_EQUAL(materialize(out.at(0u, 0u)), (list{{true}}));
 }
