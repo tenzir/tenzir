@@ -33,12 +33,12 @@ public:
     TENZIR_ASSERT(not dynamic_cast<const local_remote_operator*>(op_.get()));
   }
 
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override {
-    auto result = op_->predicate_pushdown(expr);
-    if (result and result->second) {
-      result->second = std::make_unique<local_remote_operator>(
-        std::move(result->second), location_);
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    auto result = op_->optimize(filter, order);
+    if (result.replacement) {
+      result.replacement = std::make_unique<local_remote_operator>(
+        std::move(result.replacement), location_);
     }
     return result;
   }

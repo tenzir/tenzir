@@ -24,6 +24,7 @@ using caf::detail::tl_apply_all;
 using caf::detail::tl_at;
 using caf::detail::tl_back;
 using caf::detail::tl_concat;
+using caf::detail::tl_contains;
 using caf::detail::tl_count;
 using caf::detail::tl_count_not;
 using caf::detail::tl_distinct;
@@ -73,6 +74,9 @@ using tl_unzip_t = typename tl_unzip<List>::type;
 
 template <class List>
 using tl_reverse_t = typename tl_reverse<List>::type;
+
+template <class List, class T>
+constexpr auto tl_contains_v = tl_contains<List, T>::value;
 
 template <class ListA, class ListB>
 using tl_concat_t = typename tl_concat<ListA, ListB>::type;
@@ -143,7 +147,7 @@ struct common_types_helper<L1, type_list<>> {
 template <class L1, class L2>
 struct common_types_helper<L1, L2> {
   using type = std::conditional_t<
-    caf::detail::tl_contains<L1, caf::detail::tl_head_t<L2>>::value,
+    tl_contains_v<L1, caf::detail::tl_head_t<L2>>,
     tl_prepend_t<
       typename common_types_helper<L1, caf::detail::tl_tail_t<L2>>::type,
       caf::detail::tl_head_t<L2>>,

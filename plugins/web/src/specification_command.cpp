@@ -184,12 +184,12 @@ on the command-line using the `tenzir rest generate-token` command.)_"},
       record{{"url", "https://tenzir.example.com/api/v0"}},
     }}},
     {"security", list {{
-      record {{"VastToken", list{}}},
+      record {{"TenzirToken", list{}}},
     }}},
     {"components", record{
       {"schemas", std::move(*schemas)},
       {"securitySchemes",
-        record{{"VastToken", record {
+        record{{"TenzirToken", record {
             {"type", "apiKey"},
             {"in", "header"},
             {"name", "X-Tenzir-Token"}

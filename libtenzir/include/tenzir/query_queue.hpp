@@ -164,8 +164,9 @@ struct formatter<tenzir::query_queue::entry> {
   template <class FormatContext>
   auto
   format(const tenzir::query_queue::entry& value, FormatContext& ctx) const {
-    return format_to(ctx.out(), "(partition: {}; priority: {}; queries: {})",
-                     value.partition, value.priority, value.queries);
+    return fmt::format_to(ctx.out(),
+                          "(partition: {}; priority: {}; queries: {})",
+                          value.partition, value.priority, value.queries);
   }
 };
 

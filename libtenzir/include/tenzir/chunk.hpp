@@ -305,8 +305,8 @@ struct formatter<tenzir::chunk_ptr> {
   template <class FormatContext>
   auto format(const tenzir::chunk_ptr& value, FormatContext& ctx) const {
     if (!value)
-      return format_to(ctx.out(), "{}", "nullptr");
-    return format_to(ctx.out(), "*{}", fmt::ptr(value.get()));
+      return fmt::format_to(ctx.out(), "{}", "nullptr");
+    return fmt::format_to(ctx.out(), "*{}", fmt::ptr(value.get()));
   }
 };
 

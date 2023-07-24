@@ -112,7 +112,7 @@ struct formatter<T> {
   template <class FormatContext>
   constexpr auto format(const T& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
+    return fmt::format_to(ctx.out(), "{}", caf::deep_to_string(value));
   }
 };
 
@@ -132,7 +132,7 @@ struct formatter<T> {
     };
     static_assert(has_name_member_function
                   || tenzir::detail::always_false_v<T>);
-    return format_to(ctx.out(), "{}", value.name());
+    return fmt::format_to(ctx.out(), "{}", value.name());
   }
 };
 
@@ -146,7 +146,7 @@ struct formatter<tenzir::detail::single_arg_wrapper<T>> {
   template <class FormatContext>
   auto format(const tenzir::detail::single_arg_wrapper<T>& value,
               FormatContext& ctx) const {
-    return format_to(ctx.out(), "{} = {}", value.name, value.value);
+    return fmt::format_to(ctx.out(), "{} = {}", value.name, value.value);
   }
 };
 
@@ -160,8 +160,8 @@ struct formatter<tenzir::detail::range_arg_wrapper<T>> {
   template <class FormatContext>
   auto format(const tenzir::detail::range_arg_wrapper<T>& value,
               FormatContext& ctx) const {
-    return format_to(ctx.out(), "{} = <{}>", value.name,
-                     join(value.first, value.last, ", "));
+    return fmt::format_to(ctx.out(), "{} = <{}>", value.name,
+                          join(value.first, value.last, ", "));
   }
 };
 
@@ -175,8 +175,8 @@ struct formatter<caf::intrusive_ptr<T>> {
   template <class FormatContext>
   auto format(const caf::intrusive_ptr<T>& value, FormatContext& ctx) const {
     if (!value)
-      return format_to(ctx.out(), "*{}", "nullptr");
-    return format_to(ctx.out(), "*{}", ptr(value.get()));
+      return fmt::format_to(ctx.out(), "*{}", "nullptr");
+    return fmt::format_to(ctx.out(), "*{}", ptr(value.get()));
   }
 };
 
@@ -191,8 +191,8 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
   auto
   format(const caf::intrusive_cow_ptr<T>& value, FormatContext& ctx) const {
     if (!value)
-      return format_to(ctx.out(), "*{}", "nullptr");
-    return format_to(ctx.out(), "*{}", ptr(value.get()));
+      return fmt::format_to(ctx.out(), "*{}", "nullptr");
+    return fmt::format_to(ctx.out(), "*{}", ptr(value.get()));
   }
 };
 
@@ -206,8 +206,8 @@ struct formatter<caf::optional<T>> {
   template <class FormatContext>
   auto format(const caf::optional<T>& value, FormatContext& ctx) const {
     if (!value)
-      return format_to(ctx.out(), "none");
-    return format_to(ctx.out(), "{}", *value);
+      return fmt::format_to(ctx.out(), "none");
+    return fmt::format_to(ctx.out(), "{}", *value);
   }
 };
 
@@ -223,8 +223,8 @@ struct formatter<std::optional<T>> {
   template <class FormatContext>
   auto format(const std::optional<T>& value, FormatContext& ctx) const {
     if (!value)
-      return format_to(ctx.out(), "nullopt");
-    return format_to(ctx.out(), "{}", *value);
+      return fmt::format_to(ctx.out(), "nullopt");
+    return fmt::format_to(ctx.out(), "{}", *value);
   }
 };
 
@@ -240,8 +240,8 @@ struct formatter<caf::expected<T>> {
   template <class FormatContext>
   auto format(const caf::expected<T>& value, FormatContext& ctx) const {
     if (!value)
-      return format_to(ctx.out(), "{}", value.error());
-    return format_to(ctx.out(), "{}", *value);
+      return fmt::format_to(ctx.out(), "{}", value.error());
+    return fmt::format_to(ctx.out(), "{}", *value);
   }
 };
 
@@ -255,7 +255,7 @@ struct formatter<caf::inbound_stream_slot<T>> {
   template <class FormatContext>
   auto
   format(const caf::inbound_stream_slot<T>& value, FormatContext& ctx) const {
-    return format_to(ctx.out(), "in:{}", value.value());
+    return fmt::format_to(ctx.out(), "in:{}", value.value());
   }
 };
 
@@ -269,7 +269,7 @@ struct formatter<caf::outbound_stream_slot<T>> {
   template <class FormatContext>
   auto
   format(const caf::outbound_stream_slot<T>& value, FormatContext& ctx) const {
-    return format_to(ctx.out(), "out:{}", value.value());
+    return fmt::format_to(ctx.out(), "out:{}", value.value());
   }
 };
 
@@ -282,7 +282,7 @@ struct formatter<caf::error> {
 
   template <class FormatContext>
   auto format(const caf::error& value, FormatContext& ctx) const {
-    return format_to(ctx.out(), "{}", tenzir::render(value));
+    return fmt::format_to(ctx.out(), "{}", tenzir::render(value));
   }
 };
 
@@ -304,8 +304,8 @@ struct formatter<std::span<T>> {
 
   template <class FormatContext>
   auto format(const std::span<T>& value, FormatContext& ctx) const {
-    return format_to(ctx.out(), "tenzir.span({})",
-                     join(value.begin(), value.end(), ", "));
+    return fmt::format_to(ctx.out(), "tenzir.span({})",
+                          join(value.begin(), value.end(), ", "));
   }
 };
 
@@ -319,7 +319,7 @@ struct formatter<std::span<std::byte>> {
   template <class FormatContext>
   auto format(const std::span<std::byte>&, FormatContext& ctx) const {
     // Inentioanlly unprintable.
-    return format_to(ctx.out(), "tenzir.span(<bytes>)");
+    return fmt::format_to(ctx.out(), "tenzir.span(<bytes>)");
   }
 };
 
@@ -332,8 +332,8 @@ struct formatter<caf::stream<T>> {
 
   template <class FormatContext>
   auto format(const caf::stream<T>&, FormatContext& ctx) const {
-    return format_to(ctx.out(), "caf.stream<{}>",
-                     caf::detail::pretty_type_name(typeid(T)));
+    return fmt::format_to(ctx.out(), "caf.stream<{}>",
+                          caf::detail::pretty_type_name(typeid(T)));
   }
 };
 
@@ -346,8 +346,8 @@ struct formatter<caf::downstream<T>> {
 
   template <class FormatContext>
   auto format(const caf::downstream<T>&, FormatContext& ctx) const {
-    return format_to(ctx.out(), "caf.downstream<{}>",
-                     caf::detail::pretty_type_name(typeid(T)));
+    return fmt::format_to(ctx.out(), "caf.downstream<{}>",
+                          caf::detail::pretty_type_name(typeid(T)));
   }
 };
 
@@ -368,7 +368,7 @@ struct formatter<std::error_code> {
   template <class FormatContext>
   constexpr auto format(const std::error_code& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "{}", value.message());
+    return fmt::format_to(ctx.out(), "{}", value.message());
   }
 };
 

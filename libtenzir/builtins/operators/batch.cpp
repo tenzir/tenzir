@@ -31,9 +31,6 @@ public:
 
   auto operator()(generator<table_slice> input) const
     -> generator<table_slice> {
-    // TODO: This operator can massively benefit from an unordered
-    // implementation, where it can keep multiple buffers per schema. We should
-    // implement that once the ordering optimization has landed.
     auto buffer = std::vector<table_slice>{};
     auto num_buffered = uint64_t{0};
     for (auto&& slice : input) {
@@ -63,6 +60,13 @@ public:
     if (not buffer.empty()) {
       co_yield concatenate(std::move(buffer));
     }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // TODO: This operator can massively benefit from an unordered
+    // implementation, where it can keep multiple buffers per schema.
+    return optimize_result{filter, order, copy()};
   }
 
   auto name() const -> std::string override {

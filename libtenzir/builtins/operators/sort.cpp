@@ -158,8 +158,11 @@ class sort_operator final : public crtp_operator<sort_operator> {
 public:
   sort_operator() = default;
 
-  sort_operator(std::string key, bool descending, bool nulls_first)
-    : key_{std::move(key)}, descending_{descending}, nulls_first_{nulls_first} {
+  sort_operator(std::string key, bool stable, bool descending, bool nulls_first)
+    : key_{std::move(key)},
+      stable_{stable},
+      descending_{descending},
+      nulls_first_{nulls_first} {
   }
 
   auto
@@ -208,16 +211,24 @@ public:
     return "sort";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    return optimize_result{filter, stable_ ? order : event_order::unordered,
+                           copy()};
+  }
+
   friend auto inspect(auto& f, sort_operator& x) -> bool {
     return f.object(x).fields(f.field("key", x.key_),
+                              f.field("stable", x.stable_),
                               f.field("descending", x.descending_),
                               f.field("nulls_first", x.nulls_first_));
   }
 
 private:
   std::string key_ = {};
-  bool descending_{};
-  bool nulls_first_{};
+  bool stable_ = {};
+  bool descending_ = {};
+  bool nulls_first_ = {};
 };
 
 class plugin final : public virtual operator_plugin<sort_operator> {
@@ -230,7 +241,11 @@ public:
     const auto* const l = pipeline.end();
     auto key = std::string{};
     const auto p
-      = required_ws_or_comment >> extractor
+      = required_ws_or_comment
+        >> -(str{"--stable"}.then([&](std::string) -> bool {
+            return true;
+          }) >> required_ws_or_comment)
+        >> extractor
         >> -(required_ws_or_comment >> (str{"asc"} | str{"desc"}))
               .then([&](std::string sort_order) {
                 return !(sort_order.empty() || sort_order == "asc");
@@ -241,9 +256,10 @@ public:
                          || null_placement == "nulls-last");
               })
         >> optional_ws_or_comment >> end_of_pipeline_operator;
+    bool stable = false;
     bool descending = false;
     bool nulls_first = false;
-    if (!p(f, l, key, descending, nulls_first)) {
+    if (!p(f, l, stable, key, descending, nulls_first)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -253,7 +269,8 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<sort_operator>(std::move(key), descending, nulls_first),
+      std::make_unique<sort_operator>(std::move(key), stable, descending,
+                                      nulls_first),
     };
   }
 };

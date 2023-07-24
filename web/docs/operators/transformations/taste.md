@@ -1,6 +1,6 @@
 # taste
 
-Limits the input to the first *N* events per unique schema.
+Limits the input to *N* events per unique schema.
 
 ## Synopsis
 
@@ -12,7 +12,8 @@ taste [<limit>]
 
 The `taste` operator provides an exemplary overview of the "shape" of the data
 described by the pipeline. This helps to understand the diversity of the
-result, especially when interactively exploring data.
+result, especially when interactively exploring data. Usually, the first *N*
+events are returned, but this is not guaranteed.
 
 ### `<limit>`
 
@@ -22,13 +23,13 @@ Defaults to 10.
 
 ## Examples
 
-Get the first 10 results of each unique schema:
+Get 10 results of each unique schema:
 
 ```
 taste
 ```
 
-Get the one sample for every unique event type:
+Get one sample for every unique event type:
 
 ```
 taste 1

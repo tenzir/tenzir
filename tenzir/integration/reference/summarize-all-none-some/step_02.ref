@@ -169,4 +169,3 @@ warning: aggregation column `y` does not exist for schema `zeek.syslog`
 warning: aggregation column `y` does not exist for schema `zeek.tunnel`
 warning: aggregation column `y` does not exist for schema `zeek.weird`
 warning: aggregation column `y` does not exist for schema `zeek.weird.123.190`
-warning: aggregation column `y` does not exist for schema `zeek.conn`

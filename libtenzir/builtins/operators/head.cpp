@@ -53,6 +53,12 @@ public:
     return fmt::format("head {}", limit_);
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::ordered, copy()};
+  }
+
 private:
   friend auto inspect(auto& f, head_operator& x) -> bool {
     return f.apply(x.limit_);

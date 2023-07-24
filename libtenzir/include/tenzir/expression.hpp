@@ -518,11 +518,11 @@ struct formatter<enum tenzir::meta_extractor::kind> {
   format(enum tenzir::meta_extractor::kind value, FormatContext& ctx) const {
     switch (value) {
       case tenzir::meta_extractor::kind::schema:
-        return format_to(ctx.out(), "#schema");
+        return fmt::format_to(ctx.out(), "#schema");
       case tenzir::meta_extractor::kind::schema_id:
-        return format_to(ctx.out(), "#schema_id");
+        return fmt::format_to(ctx.out(), "#schema_id");
       case tenzir::meta_extractor::kind::import_time:
-        return format_to(ctx.out(), "#import_time");
+        return fmt::format_to(ctx.out(), "#import_time");
     }
     tenzir::die("unreachable");
   }
@@ -584,7 +584,7 @@ struct formatter<tenzir::curried_predicate> {
   template <typename FormatContext>
   auto
   format(const tenzir::curried_predicate& value, FormatContext& ctx) const {
-    return format_to(ctx.out(), "{} {}", value.op, value.rhs);
+    return fmt::format_to(ctx.out(), "{} {}", value.op, value.rhs);
   }
 };
 

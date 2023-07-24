@@ -763,6 +763,13 @@ public:
     return "summarize";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // Note: The `unordered` relies on commutativity of the aggregation functions.
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::unordered, copy()};
+  }
+
   friend auto inspect(auto& f, summarize_operator& x) -> bool {
     return f.apply(x.config_);
   }

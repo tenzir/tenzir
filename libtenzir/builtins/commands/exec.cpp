@@ -179,11 +179,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
     }
     pipe = std::move(*implicit_pipe);
   }
-  auto optimized = pipe.optimize();
-  if (not optimized) {
-    return std::move(optimized.error());
-  }
-  pipe = std::move(*optimized);
+  pipe = pipe.optimize_if_closed();
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
   auto metrics = std::vector<metric>{};

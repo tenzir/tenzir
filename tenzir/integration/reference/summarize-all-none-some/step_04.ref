@@ -43,11 +43,11 @@
   "x": null
 }
 {
-  "id.orig_h": "71.6.167.142",
+  "id.orig_h": "45.58.146.42",
   "x": null
 }
 {
-  "id.orig_h": "45.58.146.42",
+  "id.orig_h": "71.6.167.142",
   "x": null
 }
 {
@@ -136,4 +136,3 @@ warning: aggregation column `y` does not exist for schema `zeek.tunnel`
 warning: aggregation column `y` does not exist for schema `zeek.weird`
 warning: group-by column `id.orig_h` does not exist for schema `zeek.weird.123.190`
 warning: aggregation column `y` does not exist for schema `zeek.weird.123.190`
-warning: aggregation column `y` does not exist for schema `zeek.conn`

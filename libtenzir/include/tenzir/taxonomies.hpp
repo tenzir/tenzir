@@ -146,8 +146,9 @@ struct formatter<tenzir::model> {
   template <class FormatContext>
   auto format(const tenzir::model& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "model {{description: {}, definition: [{}]}}",
-                     value.description, fmt::join(value.definition, ", "));
+    return fmt::format_to(ctx.out(),
+                          "model {{description: {}, definition: [{}]}}",
+                          value.description, fmt::join(value.definition, ", "));
   }
 };
 
@@ -161,7 +162,7 @@ struct formatter<tenzir::concept_> {
   template <class FormatContext>
   auto format(const tenzir::concept_& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return format_to(
+    return fmt::format_to(
       ctx.out(), "concept {{description: {}, fields: [{}], concepts: [{}]}}",
       value.description, fmt::join(value.fields, ", "),
       fmt::join(value.concepts, ", "));

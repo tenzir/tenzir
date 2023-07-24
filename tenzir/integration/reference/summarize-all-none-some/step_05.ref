@@ -71,4 +71,3 @@ warning: group-by column `z` does not exist for schema `zeek.tunnel`
 warning: group-by column `z` does not exist for schema `zeek.weird`
 warning: group-by column `z` does not exist for schema `zeek.weird.123.190`
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.weird.123.190`
-warning: group-by column `z` does not exist for schema `zeek.conn`
