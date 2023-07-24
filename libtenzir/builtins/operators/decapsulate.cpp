@@ -374,25 +374,10 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    // return fmt::format("decapsulate {}", "");
-    return "decapsulate";
-  }
-
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
-    // TODO: This is the previous implementation. But we might not want this.
-    // auto pred = predicate{
-    //   meta_extractor{meta_extractor::kind::schema},
-    //   relational_operator::equal,
-    //   data{"pcap.packet"},
-    // };
-    // auto op = pipeline::internal_parse_as_operator(
-    //   fmt::format("decapsulate | where {}", expr));
-    // TENZIR_ASSERT_CHEAP(op);
-    // return std::pair{expression{std::move(pred)}, std::move(*op)};
   }
 
   auto name() const -> std::string override {
