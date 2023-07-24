@@ -51,9 +51,7 @@ auto ping_handler(ping_handler_actor::stateful_pointer<ping_handler_state> self)
     [self](atom::http_request, uint64_t,
            const tenzir::record&) -> caf::result<rest_response> {
       TENZIR_DEBUG("{} handles /ping request", *self);
-      auto versions = retrieve_versions();
-      TENZIR_ASSERT_CHEAP(versions.contains("Tenzir"));
-      return rest_response{record{{{"version", versions.at("Tenzir")}}}};
+      return rest_response{record{{{"version", tenzir::version::version}}}};
     },
   };
 }
@@ -66,7 +64,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   [[nodiscard]] auto name() const -> std::string override {
-    return "api-ping";
+    return "ping";
   };
 
   [[nodiscard]] auto openapi_specification(api_version version) const
@@ -84,7 +82,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     static const auto endpoints = std::vector<rest_endpoint>{
       {
         .endpoint_id = static_cast<uint64_t>(status_endpoints::status),
-        .method = http_method::post,
+        .method = http_method::get,
         .path = "/ping",
         .params = std::nullopt,
         .version = api_version::v0,
