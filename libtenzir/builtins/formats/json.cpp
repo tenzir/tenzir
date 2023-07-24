@@ -124,7 +124,6 @@ struct entry_data {
     auto slice = builder->finish(name);
     if (expected_rows != slice.rows()) {
       // TODO: Remove this check once the parser is reliable.
-      // TODO: What exactly should happen while we still have it?
       diagnostic::warning("JSON parser detected internal error: expected {} "
                           "rows but got {}",
                           expected_rows, slice.rows())
@@ -630,29 +629,32 @@ public:
         TENZIR_ASSERT(slice);
         co_yield std::move(*slice);
     }
-    auto row = state.get_active_entry().builder->push_row();
-    auto success = doc_parser{this->field_validator_, json_line, this->ctrl_,
-                              lines_processed_}
-                     .parse_object(val.value_unsafe(), row);
-    // After parsing one JSON object it is expected for the result to be at
-    // the end. If it's otherwise then it means that a line contains more than
-    // one object in which case we don't add any data and emit a warning.
-    // It is also possible for a parsing failure to occurr in doc_parser. the
-    // is_alive() call ensures that the first object was parsed without
-    // errors. Calling at_end() when is_alive() returns false is unsafe and
-    // resulted in crashes.
-    if (success and not doc.at_end()) {
-      this->ctrl_.warn(caf::make_error(
-        ec::parse_error, fmt::format("more than one JSON object in a "
-                                     "single line for NDJSON "
-                                     "mode (while parsing '{}')",
-                                     json_line)));
-      success = false;
-    }
-    if (not success) {
-      // We already reported the issue.
-      row.cancel();
-      co_return;
+    {
+      // The `row` gets it's own scope so that it is destroyed before we finish.
+      auto row = state.get_active_entry().builder->push_row();
+      auto success = doc_parser{this->field_validator_, json_line, this->ctrl_,
+                                lines_processed_}
+                       .parse_object(val.value_unsafe(), row);
+      // After parsing one JSON object it is expected for the result to be at
+      // the end. If it's otherwise then it means that a line contains more than
+      // one object in which case we don't add any data and emit a warning.
+      // It is also possible for a parsing failure to occurr in doc_parser. the
+      // is_alive() call ensures that the first object was parsed without
+      // errors. Calling at_end() when is_alive() returns false is unsafe and
+      // resulted in crashes.
+      if (success and not doc.at_end()) {
+        this->ctrl_.warn(caf::make_error(
+          ec::parse_error, fmt::format("more than one JSON object in a "
+                                       "single line for NDJSON "
+                                       "mode (while parsing '{}')",
+                                       json_line)));
+        success = false;
+      }
+      if (not success) {
+        // We already reported the issue.
+        row.cancel();
+        co_return;
+      }
     }
     state.get_active_entry().expected_rows += 1;
     if (auto slice = this->handle_max_rows(state)) {
@@ -708,14 +710,17 @@ public:
           TENZIR_ASSERT(slice);
           co_yield std::move(*slice);
       }
-      auto row = state.get_active_entry().builder->push_row();
-      auto success
-        = doc_parser{this->field_validator_, doc_it.source(), this->ctrl_}
-            .parse_object(doc.value_unsafe(), row);
-      if (not success) {
-        // We already reported the issue.
-        row.cancel();
-        continue;
+      {
+        // The `row` gets it's own scope so that it is destroyed before we finish.
+        auto row = state.get_active_entry().builder->push_row();
+        auto success
+          = doc_parser{this->field_validator_, doc_it.source(), this->ctrl_}
+              .parse_object(doc.value_unsafe(), row);
+        if (not success) {
+          // We already reported the issue.
+          row.cancel();
+          continue;
+        }
       }
       state.get_active_entry().expected_rows += 1;
       if (auto slice = this->handle_max_rows(state))
