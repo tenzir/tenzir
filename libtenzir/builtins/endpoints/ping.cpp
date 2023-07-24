@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The TENZIR Contributors
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/builtin_rest_endpoints.hpp>
@@ -16,7 +16,7 @@ namespace tenzir::plugins::rest_api::ping {
 
 static auto const* SPEC_V0 = R"_(
 /ping:
-  get:
+  post:
     summary: Returns a success response
     description: Returns a success response to indicate that the node is able to respond to requests. The response body includes the current node version.
     responses:
@@ -81,8 +81,8 @@ class plugin final : public virtual rest_endpoint_plugin {
     -> const std::vector<rest_endpoint>& override {
     static const auto endpoints = std::vector<rest_endpoint>{
       {
-        .endpoint_id = static_cast<uint64_t>(status_endpoints::status),
-        .method = http_method::get,
+        .endpoint_id = static_cast<uint64_t>(0),
+        .method = http_method::post,
         .path = "/ping",
         .params = std::nullopt,
         .version = api_version::v0,
