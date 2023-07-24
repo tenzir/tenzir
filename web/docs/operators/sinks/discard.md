@@ -17,7 +17,6 @@ discard
 The `discard` operator has a similar effect as `to file /dev/null write json`,
 but it immediately discards all events without rendering them as JSON first.
 
-
 ## Examples
 
 We can benchmark the following pipeline to see how long it takes to export
