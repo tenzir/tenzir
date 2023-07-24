@@ -747,7 +747,6 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                    {"query", std::move(id_str)},
                    {"issuer", query_context.issuer},
                  });
-
       return result;
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
