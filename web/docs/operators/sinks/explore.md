@@ -1,6 +1,6 @@
 # explore
 
-Renders pipeline data in a terminal user interface (TUI).
+Renders pipeline data in a terminal user interface.
 
 ## Synopsis
 
@@ -28,19 +28,16 @@ library for functional terminal interfaces in C++.
 
 ### `-f|--fullscreen`
 
-Renders the TUI in fullscreen mode, as opposed to fitting it into the terminal.
+Use the full terminal screen, as opposed to fitting the output into the
+terminal.
 
 ### `-h|--height <int>`
 
 The height of the TUI. Only actionable when `-w|--width` is also present.
 
-Defaults to 0, which means automatic detection.
-
 ### `-w|--width <int>`
 
 The width of the TUI. Only actionable when `-h|--height` is also present.
-
-Defaults to 0, which means automatic detection.
 
 ### `-n|--navigator-position <string>`
 
