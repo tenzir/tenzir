@@ -154,6 +154,61 @@ struct inspector
   }
 };
 
+struct operator_measurement {
+  std::string unit;
+  uint64_t num_elements;
+  uint64_t num_batches;
+
+  // TODO: Always 0 for now for events until we find a way
+  // to reliably measure this and always the same as
+  // num_elements for bytes.
+  uint64_t num_approx_bytes;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, operator_measurement& x) -> bool {
+    return f.object(x).pretty_name("metric").fields(
+      f.field("unit", x.unit), f.field("num_elements", x.num_elements),
+      f.field("num_batches", x.num_batches),
+      f.field("num_approx_bytes", x.num_approx_bytes));
+  }
+
+  auto average_rate_per_second(const duration& elapsed) const -> double {
+    if (elapsed.count() == 0) {
+      return 0;
+    }
+    const auto total = static_cast<double>(num_elements);
+    return total
+           / std::chrono::duration_cast<
+               std::chrono::duration<double, std::chrono::seconds::period>>(
+               elapsed)
+               .count();
+  }
+};
+
+// Metrics that track the information about inbound and outbound elements that
+// pass through this operator.
+struct [[nodiscard]] metric {
+  uint64_t operator_index;
+  operator_measurement inbound_measurement;
+  operator_measurement outbound_measurement;
+  duration time_starting;
+  duration time_running;
+  duration time_scheduled;
+  duration time_elapsed;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, metric& x) -> bool {
+    return f.object(x).pretty_name("metric").fields(
+      f.field("operator_index", x.operator_index),
+      f.field("time_starting", x.time_starting),
+      f.field("time_running", x.time_running),
+      f.field("time_scheduled", x.time_scheduled),
+      f.field("time_elapsed", x.time_elapsed),
+      f.field("inbound_measurement", x.inbound_measurement),
+      f.field("outbound_measurement", x.outbound_measurement));
+  }
+};
+
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
 public:

@@ -153,14 +153,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   auto execute(pipeline p) -> caf::expected<void> {
     MESSAGE("executing pipeline: " << p.to_string());
+    auto operators = p.operators().size();
     auto self = caf::scoped_actor{sys};
     auto executor = self->spawn<caf::monitored>(
       pipeline_executor, std::move(p),
-      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{}, false);
+      caf::actor_cast<receiver_actor<diagnostic>>(self),
+      caf::actor_cast<receiver_actor<metric>>(self), node_actor{}, false);
     self->send(executor, atom::start_v);
     auto start_result = std::optional<caf::error>{};
     auto down_result = std::optional<caf::error>{};
     auto diag_error = std::optional<caf::error>{};
+    auto op_metrics = std::vector<metric>{};
     self->receive_while([&] {
       run();
       return not down_result.has_value();
@@ -192,6 +195,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
         if (not diag_error and d.severity == severity::error) {
           diag_error = caf::make_error(ec::unspecified, fmt::to_string(d));
         }
+      },
+      [&](metric& m) {
+        MESSAGE("received metrics");
+        if (m.operator_index + 1 > op_metrics.size()) {
+          op_metrics.resize(m.operator_index + 1);
+        }
+        op_metrics[m.operator_index] = m;
       });
     MESSAGE("waiting for executor");
     self->wait_for(executor);
@@ -201,6 +211,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       REQUIRE(down_result == ec::silent);
       return std::move(*diag_error);
     }
+    REQUIRE_EQUAL(operators, op_metrics.size());
     if (start_result and *start_result) {
       return std::move(*start_result);
     }
