@@ -444,7 +444,9 @@ public:
     -> std::optional<generator<table_slice>>
     = 0;
 
-  /// TODO
+  /// Implement ordering optimization for parsers. See
+  /// `operator_base::optimize(...)` for details. The default implementation
+  /// does not optimize.
   virtual auto optimize(event_order order) -> std::unique_ptr<plugin_parser> {
     (void)order;
     return nullptr;
