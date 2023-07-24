@@ -15,6 +15,58 @@ security:
   - TenzirToken: []
 components:
   schemas:
+    Metrics:
+      type: object
+      description: Information about pipeline data ingress and egress.
+      properties:
+        total:
+          type: object
+          description: Information about total pipeline metrics (e.g. total ingress/egress)
+          properties:
+            in:
+              type: object
+              description: >-
+                Information about the total ingress. Contains no values when
+                data has not passed through the source operator.
+              properties:
+                unit:
+                  type: string
+                  enum:
+                    - bytes
+                    - events
+                  description: The unit of the input data.
+                  example: bytes
+                elements:
+                  type: integer
+                  description: >-
+                    The total amount of elements that entered the pipeline
+                    source.
+                  example: 109834
+                avg_rate:
+                  type: number
+                  description: The average rate of input elements per second.
+                  example: 27450.345233
+            out:
+              type: object
+              description: >-
+                Information about the total egress. Contains no values when data
+                has not passed through the sink operator.
+              properties:
+                unit:
+                  type: string
+                  enum:
+                    - bytes
+                    - events
+                  description: The unit of the output data.
+                  example: bytes
+                elements:
+                  type: integer
+                  description: The total amount of elements that entered the pipeline sink.
+                  example: 30414
+                avg_rate:
+                  type: number
+                  description: The average rate of output elements per second.
+                  example: 7603.599345
     Diagnostics:
       type: array
       items:
@@ -120,6 +172,8 @@ components:
                   warnings under /pipeline/(pipeline-id)/(operator-id).
         diagnostics:
           $ref: '#/components/schemas/Diagnostics'
+        metrics:
+          $ref: '#/components/schemas/Metrics'
   securitySchemes:
     TenzirToken:
       type: apiKey
@@ -291,34 +345,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PipelineInfo'
-                example:
-                  pipelines:
-                    - id: 7
-                      name: user-assigned-name
-                      definition: export | where foo | publish /bar
-                      state: starting
-                      error: null
-                      restart_with_node: true
-                      operators:
-                        - id: 0
-                          definition: export
-                          instrumented: false
-                        - id: 1
-                          definition: where foo
-                          instrumented: true
-                        - id: 2
-                          definition: publish /bar
-                          instrumented: true
-                    - id: 8
-                      name: wrong-pipeline
-                      definition: export asdf
-                      state: stopped
-                      error: format 'asdf' not found
-                      restart_with_node: false
-                      operators:
-                        - id: 0
-                          definition: export asdf
-                          instrumented: false
         '400':
           description: Invalid arguments.
           content:
