@@ -18,8 +18,9 @@
 #include "tenzir/si_literals.hpp"
 #include "tenzir/table_slice.hpp"
 
+#include <arrow/config.h>
+#include <arrow/util/byte_size.h>
 #include <caf/downstream.hpp>
-#include <caf/event_based_actor.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
@@ -91,6 +92,43 @@ auto make_timer_guard(Duration&... elapsed) {
       const auto delta = std::chrono::steady_clock::now() - start_time;
       ((void)(elapsed += delta, true), ...);
     });
+}
+
+// Return an underestimate for the total number of referenced bytes for a vector
+// of table slices, excluding the schema and disregarding any overlap or custom
+// information from extension types.
+auto num_approx_bytes(const std::vector<table_slice>& events) {
+#if ARROW_VERSION_MAJOR < 12
+  // arrow::util::ReferencedBufferSize is broken for Arrow before 12.0.0 and
+  // crashes for extension types.
+  (void)events;
+  return uint64_t{0};
+#else
+  auto result = uint64_t{};
+  for (const auto& batch : events) {
+    if (batch.rows() == 0)
+      continue;
+    auto record_batch = to_record_batch(batch);
+    TENZIR_ASSERT(record_batch);
+    // Note that this function can sometimes fail. Because we ultimately want to
+    // return an underestimate for the value of bytes, we silently fall back to
+    // a value of zero if the referenced buffer size cannot be measured.
+    //
+    // As a consequence, the result of this function can be off by a large
+    // margin. It never overestimates, but sometimes the result is a lot smaller
+    // than you would think and also a lot smaller than it should be.
+    //
+    // We opted to use the built-in Arrow solution here hoping that it will be
+    // improved upon in the future upsrream, rather than us having to roll our
+    // own.
+    //
+    // We cannot feasibly warn for failure here as that would cause a lot of
+    // noise.
+    result += detail::narrow_cast<uint64_t>(
+      arrow::util::ReferencedBufferSize(*record_batch).ValueOr(0));
+  }
+  return result;
+#endif
 }
 
 template <class Input, class Output>
@@ -259,6 +297,21 @@ auto split(std::vector<chunk_ptr> chunks, uint64_t partition_point)
   };
 }
 
+struct metrics_state {
+  auto emit() -> void {
+    values.time_elapsed = std::chrono::duration_cast<duration>(
+      std::chrono::steady_clock::now() - start_time);
+    caf::anon_send(metrics_handler, values);
+  }
+
+  // Metrics that track the total number of inbound and outbound elements that
+  // passed through this operator.
+  std::chrono::steady_clock::time_point start_time
+    = std::chrono::steady_clock::now();
+  receiver_actor<metric> metrics_handler = {};
+  metric values = {};
+};
+
 template <class Input>
 struct inbound_state_mixin {
   /// A handle to the previous execution node.
@@ -312,13 +365,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
   };
   std::optional<resumable_generator> instance = {};
 
-  // Metrics that track the total number of inbound and outbound elements that
-  // passed through this operator.
-  std::chrono::steady_clock::time_point start_time
-    = std::chrono::steady_clock::now();
-  metric current_metrics = {};
-
-  receiver_actor<metric> metrics_handler = {};
+  /// State required for keeping and sending metrics. Stored in a separate
+  /// shared pointer to allow safe usage from an attached functor to send out
+  /// metrics after this actor has quit.
+  std::shared_ptr<metrics_state> metrics = {};
 
   // Indicates whether the operator has stalled, i.e., the generator should not
   // be advanced.
@@ -338,13 +388,13 @@ struct exec_node_state : inbound_state_mixin<Input>,
   caf::error abort;
 
   auto start(std::vector<caf::actor> previous) -> caf::result<void> {
-    auto time_starting_guard = make_timer_guard(current_metrics.time_scheduled,
-                                                current_metrics.time_starting);
+    auto time_starting_guard = make_timer_guard(metrics->values.time_scheduled,
+                                                metrics->values.time_starting);
     TENZIR_DEBUG("{} received start request for `{}`", *self, op->to_string());
     detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
       auto time_scheduled_guard
-        = make_timer_guard(current_metrics.time_scheduled);
-      emit_metrics();
+        = make_timer_guard(metrics->values.time_scheduled);
+      metrics->emit();
     });
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
@@ -372,13 +422,13 @@ struct exec_node_state : inbound_state_mixin<Input>,
       self->set_exit_handler([this](const caf::exit_msg& msg) {
         TENZIR_DEBUG("{} emitting last metrics before exiting", op->name());
         auto time_scheduled_guard
-          = make_timer_guard(current_metrics.time_scheduled);
-        emit_metrics();
+          = make_timer_guard(metrics->values.time_scheduled);
+        metrics->emit();
         self->quit(msg.reason);
       });
       self->set_down_handler([this](const caf::down_msg& msg) {
         auto time_scheduled_guard
-          = make_timer_guard(current_metrics.time_scheduled);
+          = make_timer_guard(metrics->values.time_scheduled);
         if (msg.source != this->previous.address()) {
           TENZIR_DEBUG("ignores down msg `{}` from unknown source: {}",
                        msg.reason, msg.source);
@@ -406,7 +456,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // Instantiate the operator with its input type.
     {
       auto time_scheduled_guard
-        = make_timer_guard(current_metrics.time_running);
+        = make_timer_guard(metrics->values.time_running);
       auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
       if (not output_generator) {
         TENZIR_VERBOSE("{} could not instantiate operator: {}", *self,
@@ -440,7 +490,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
         .then(
           [this, rp]() mutable {
             auto time_starting_guard = make_timer_guard(
-              current_metrics.time_scheduled, current_metrics.time_starting);
+              metrics->values.time_scheduled, metrics->values.time_starting);
             TENZIR_DEBUG("{} schedules run of sink after successful startup",
                          *self);
             schedule_run();
@@ -448,7 +498,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
           },
           [this, rp](caf::error& error) mutable {
             auto time_starting_guard = make_timer_guard(
-              current_metrics.time_scheduled, current_metrics.time_starting);
+              metrics->values.time_scheduled, metrics->values.time_starting);
             TENZIR_DEBUG("{} forwards error during startup: {}", *self, error);
             rp.deliver(std::move(error));
           });
@@ -482,14 +532,14 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto handle_result = [this]() mutable {
       TENZIR_TRACE("pull from {} was successful", op->name());
       auto time_scheduled_guard
-        = make_timer_guard(current_metrics.time_scheduled);
+        = make_timer_guard(metrics->values.time_scheduled);
       this->signaled_demand = false;
       schedule_run();
     };
     auto handle_error = [this](caf::error& error) {
       TENZIR_TRACE("pull from {} failed: {}", op->name(), error);
       auto time_scheduled_guard
-        = make_timer_guard(current_metrics.time_scheduled);
+        = make_timer_guard(metrics->values.time_scheduled);
       this->signaled_demand = false;
       schedule_run();
       // TODO: We currently have to use `caf::exit_reason::kill` in
@@ -520,7 +570,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
   }
 
   auto advance_generator() -> bool {
-    auto time_running_guard = make_timer_guard(current_metrics.time_running);
+    auto time_running_guard = make_timer_guard(metrics->values.time_running);
     TENZIR_ASSERT(instance);
     TENZIR_ASSERT(instance->it != instance->gen.end());
     bool empty = false;
@@ -589,7 +639,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     //   using `ctrl.self().request(...).await(...)`.
     auto action = [this] {
       auto time_scheduled_guard
-        = make_timer_guard(current_metrics.time_scheduled);
+        = make_timer_guard(metrics->values.time_scheduled);
       TENZIR_ASSERT(run_scheduled);
       run_scheduled = false;
       run();
@@ -627,16 +677,18 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto [lhs, _] = split(this->outbound_buffer, capped_demand);
     auto handle_result = [this, capped_demand]() {
       auto time_scheduled_guard
-        = make_timer_guard(current_metrics.time_scheduled);
+        = make_timer_guard(metrics->values.time_scheduled);
       TENZIR_TRACE("{} pushed successfully", op->name());
-      current_metrics.outbound_measurement.num_elements += capped_demand;
-      if constexpr (std::is_same_v<Input, chunk_ptr>) {
-        // TODO: Implement incrementation of approximate bytes for events.
-        current_metrics.inbound_measurement.num_approx_bytes
-          = current_metrics.inbound_measurement.num_elements;
-      }
+      metrics->values.outbound_measurement.num_elements += capped_demand;
       auto [lhs, rhs] = split(this->outbound_buffer, capped_demand);
-      current_metrics.outbound_measurement.num_batches += lhs.size();
+      metrics->values.outbound_measurement.num_batches += lhs.size();
+      if constexpr (std::is_same_v<Output, chunk_ptr>) {
+        metrics->values.outbound_measurement.num_approx_bytes
+          = metrics->values.outbound_measurement.num_elements;
+      } else if constexpr (std::is_same_v<Output, table_slice>) {
+        metrics->values.outbound_measurement.num_approx_bytes
+          = num_approx_bytes(lhs);
+      }
       this->outbound_buffer = std::move(rhs);
       this->outbound_buffer_size
         = std::transform_reduce(this->outbound_buffer.begin(),
@@ -650,7 +702,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     };
     auto handle_error = [this](caf::error& error) {
       auto time_scheduled_guard
-        = make_timer_guard(current_metrics.time_scheduled);
+        = make_timer_guard(metrics->values.time_scheduled);
       TENZIR_DEBUG("{} failed to push", op->name());
       this->current_demand->rp.deliver(std::move(error));
       this->current_demand.reset();
@@ -670,71 +722,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
         .then(std::move(handle_result), std::move(handle_error));
     }
   };
-
-  auto emit_metrics() -> void {
-    current_metrics.time_elapsed = std::chrono::duration_cast<duration>(
-      std::chrono::steady_clock::now() - start_time);
-    self->request(metrics_handler, caf::infinite, current_metrics)
-      .then([]() {},
-            [](caf::error& e) {
-              TENZIR_WARN("failed to send metrics: {}", e);
-            });
-  }
-
-  auto print_metrics() -> void {
-    auto percentage = [](auto num, auto den) {
-      return std::chrono::duration<double, std::chrono::seconds::period>(num)
-               .count()
-             / std::chrono::duration<double, std::chrono::seconds::period>(den)
-                 .count()
-             * 100.0;
-    };
-    TENZIR_VERBOSE("{} was scheduled for {:.2g}% of total runtime", op->name(),
-                   percentage(current_metrics.time_scheduled,
-                              current_metrics.time_elapsed));
-    TENZIR_VERBOSE("{} spent {:.2g}% of scheduled time starting", op->name(),
-                   percentage(current_metrics.time_starting,
-                              current_metrics.time_scheduled));
-    TENZIR_VERBOSE("{} spent {:.2g}% of scheduled time running", op->name(),
-                   percentage(current_metrics.time_running,
-                              current_metrics.time_scheduled));
-    if constexpr (not std::is_same_v<Input, std::monostate>) {
-      constexpr auto inbound_unit
-        = std::is_same_v<Input, chunk_ptr> ? "B" : "events";
-      auto inbound_rate_per_second
-        = current_metrics.inbound_measurement.average_rate_per_second(
-          current_metrics.time_elapsed);
-      TENZIR_VERBOSE(
-        "{} inbound {} {} in {} rate = {:.2f} {}/s avg batch "
-        "size = {:.2f} "
-        "{}",
-        op->name(), current_metrics.inbound_measurement.num_elements,
-        current_metrics.inbound_measurement.unit,
-        data{current_metrics.time_elapsed}, inbound_rate_per_second,
-        current_metrics.inbound_measurement.unit,
-        static_cast<double>(current_metrics.inbound_measurement.num_elements)
-          / current_metrics.inbound_measurement.num_batches,
-        inbound_unit);
-    }
-    if constexpr (not std::is_same_v<Output, std::monostate>) {
-      constexpr auto outbound_unit
-        = std::is_same_v<Output, chunk_ptr> ? "B" : "events";
-      auto outbound_rate_per_second
-        = current_metrics.outbound_measurement.average_rate_per_second(
-          current_metrics.time_elapsed);
-      TENZIR_VERBOSE(
-        "{} outbound {} {} in {} rate = {:.2f} {}/s avg batch "
-        "size = "
-        "{:.2f} {}",
-        op->name(), current_metrics.outbound_measurement.num_elements,
-        current_metrics.outbound_measurement.unit,
-        data{current_metrics.time_elapsed}, outbound_rate_per_second,
-        outbound_unit,
-        static_cast<double>(current_metrics.outbound_measurement.num_elements)
-          / current_metrics.outbound_measurement.num_batches,
-        outbound_unit);
-    }
-  }
 
   auto run() -> void {
     TENZIR_TRACE("{} enters run loop", op->name());
@@ -776,8 +763,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
         TENZIR_ASSERT(this->outbound_buffer_size == 0);
       }
       TENZIR_VERBOSE("{} is done", op);
-      emit_metrics();
-      print_metrics();
+      metrics->emit();
       self->quit();
       return;
     }
@@ -830,7 +816,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     requires(not std::is_same_v<Output, std::monostate>)
   {
     auto time_scheduled_guard
-      = make_timer_guard(current_metrics.time_scheduled);
+      = make_timer_guard(metrics->values.time_scheduled);
     if (this->reject_demand) {
       auto rp = self->make_response_promise<void>();
       detail::weak_run_delayed(self, batch_timeout, [rp]() mutable {
@@ -852,13 +838,13 @@ struct exec_node_state : inbound_state_mixin<Input>,
     requires(not std::is_same_v<Input, std::monostate>)
   {
     auto time_scheduled_guard
-      = make_timer_guard(current_metrics.time_scheduled);
+      = make_timer_guard(metrics->values.time_scheduled);
     schedule_run();
     const auto input_size = std::transform_reduce(
       input.begin(), input.end(), uint64_t{}, std::plus{}, [](const Input& x) {
         return size(x);
       });
-    current_metrics.inbound_measurement.num_batches += input.size();
+    metrics->values.inbound_measurement.num_batches += input.size();
     if (input_size == 0) {
       return caf::make_error(ec::logic_error, "received empty batch");
     }
@@ -866,16 +852,18 @@ struct exec_node_state : inbound_state_mixin<Input>,
         > defaults<Input>::max_buffered) {
       return caf::make_error(ec::logic_error, "inbound buffer full");
     }
+    this->inbound_buffer_size += input_size;
+    metrics->values.inbound_measurement.num_elements += input_size;
+    if constexpr (std::is_same_v<Input, chunk_ptr>) {
+      metrics->values.inbound_measurement.num_approx_bytes
+        = metrics->values.inbound_measurement.num_elements;
+    } else if constexpr (std::is_same_v<Input, table_slice>) {
+      metrics->values.inbound_measurement.num_approx_bytes
+        = num_approx_bytes(input);
+    }
     this->inbound_buffer.insert(this->inbound_buffer.end(),
                                 std::make_move_iterator(input.begin()),
                                 std::make_move_iterator(input.end()));
-    this->inbound_buffer_size += input_size;
-    current_metrics.inbound_measurement.num_elements += input_size;
-    if constexpr (std::is_same_v<Input, chunk_ptr>) {
-      // TODO: Implement incrementation of approximate bytes for events.
-      current_metrics.inbound_measurement.num_approx_bytes
-        = current_metrics.inbound_measurement.num_elements;
-    }
     return {};
   }
 };
@@ -889,11 +877,16 @@ auto exec_node(
   -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
-  self->state.metrics_handler = std::move(metrics_handler);
-  self->state.current_metrics.operator_index = index;
-  self->state.current_metrics.inbound_measurement.unit
+  self->state.metrics = std::make_shared<metrics_state>();
+  auto time_starting_guard
+    = make_timer_guard(self->state.metrics->values.time_scheduled,
+                       self->state.metrics->values.time_starting);
+  self->state.metrics->metrics_handler = std::move(metrics_handler);
+  self->state.metrics->values.operator_index = index;
+  self->state.metrics->values.operator_name = self->state.op->name();
+  self->state.metrics->values.inbound_measurement.unit
     = operator_type_name<Input>();
-  self->state.current_metrics.outbound_measurement.unit
+  self->state.metrics->values.outbound_measurement.unit
     = operator_type_name<Output>();
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler), has_terminal);
@@ -905,9 +898,11 @@ auto exec_node(
     return exec_node_actor::behavior_type::make_empty_behavior();
   }
   self->state.weak_node = node;
-  self->attach_functor([name = self->state.op->name()] {
-    TENZIR_DEBUG("exec-node for {} shut down", name);
-  });
+  self->attach_functor(
+    [name = self->state.op->name(), metrics = self->state.metrics] {
+      TENZIR_DEBUG("exec-node for {} shut down", name);
+      metrics->emit();
+    });
   return {
     [self](atom::start,
            std::vector<caf::actor>& previous) -> caf::result<void> {

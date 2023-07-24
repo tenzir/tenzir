@@ -22,15 +22,6 @@ namespace tenzir::plugins::sort {
 
 namespace {
 
-auto is_extension_type(const type& type) -> bool {
-  TENZIR_ASSERT(type);
-  const auto f = []<concrete_type Type>(const Type&) {
-    return not std::is_same_v<type_to_arrow_array_t<Type>,
-                              type_to_arrow_array_storage_t<Type>>;
-  };
-  return caf::visit(f, type);
-}
-
 class sort_state {
 public:
   sort_state(const std::string& key,
@@ -48,7 +39,17 @@ public:
     }
     auto batch = to_record_batch(slice);
     TENZIR_ASSERT(batch);
-    sort_keys_.push_back(path->get(*batch));
+    auto array = path->get(*batch);
+    // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
+    // supported for extension types, so eventually we'll have to roll our
+    // own implementation. In the meantime, we sort the underlying storage
+    // array, which at least sorts in some stable way.
+    if (auto ext_array
+        = std::dynamic_pointer_cast<arrow::ExtensionArray>(array)) {
+      sort_keys_.push_back(ext_array->storage());
+    } else {
+      sort_keys_.push_back(std::move(array));
+    }
     offset_table_.push_back(offset_table_.back()
                             + detail::narrow_cast<int64_t>(slice.rows()));
     cache_.push_back(std::move(slice));
@@ -80,9 +81,6 @@ public:
       const auto& slice = cache_[cache_index];
       auto result = subslice(slice, row, row + 1);
       TENZIR_ASSERT(result.rows() == 1);
-      // TODO: Yielding slices with 1 row is very inefficient, and we probably
-      // want to batch them to larger slices here before yielding (or implicitly
-      // run the results through the rebatch operator).
       co_yield std::move(result);
     }
   }
@@ -107,20 +105,13 @@ private:
     }
     auto current_key_type
       = key_path->second
-          ? caf::get<record_type>(schema).field(*key_path->second).type
+          ? caf::get<record_type>(schema).field(*key_path->second).type.prune()
           : type{};
     if (not key_type_ && current_key_type) {
       // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
-      // supported for extension types, so eventually we'll have to roll our
-      // own imlementation. In the meantime, we ignore extension types for
-      // sorting and warn about them.
-      if (is_extension_type(current_key_type)) {
-        ctrl.warn(caf::make_error(
-          ec::invalid_configuration,
-          fmt::format("sort key {} resolved to type {} for schema {}, for "
-                      "which sorting is not yet implemented; this schema "
-                      "will not be sorted",
-                      key_, current_key_type, schema)));
+      // supported for extension types. We can fall back to the storage array
+      // for all types but subnet, which has a nested extension type.
+      if (caf::holds_alternative<subnet_type>(current_key_type)) {
         key_path->second = std::nullopt;
       } else {
         key_type_ = current_key_type;
@@ -187,8 +178,32 @@ public:
     for (auto&& slice : input) {
       co_yield state.try_add(std::move(slice), ctrl);
     }
+    // The sorted slices are very like to have size 1 each, so we rebatch them
+    // first to avoid inefficiencies in downstream operators.
+    auto buffer = std::vector<table_slice>{};
+    auto num_buffered = uint64_t{0};
     for (auto&& slice : std::move(state).sorted()) {
-      co_yield std::move(slice);
+      if (not buffer.empty() and buffer.back().schema() != slice.schema()) {
+        while (not buffer.empty()) {
+          auto [lhs, rhs] = split(buffer, defaults::import::table_slice_size);
+          auto result = concatenate(std::move(lhs));
+          num_buffered -= result.rows();
+          co_yield std::move(result);
+          buffer = std::move(rhs);
+        }
+      }
+      num_buffered += slice.rows();
+      buffer.push_back(std::move(slice));
+      while (num_buffered >= defaults::import::table_slice_size) {
+        auto [lhs, rhs] = split(buffer, defaults::import::table_slice_size);
+        auto result = concatenate(std::move(lhs));
+        num_buffered -= result.rows();
+        co_yield std::move(result);
+        buffer = std::move(rhs);
+      }
+    }
+    if (not buffer.empty()) {
+      co_yield concatenate(std::move(buffer));
     }
   }
 

@@ -27,6 +27,7 @@ struct exec_config {
   bool no_implicit = false;
   bool dump_ast = false;
   bool dump_diagnostics = false;
+  bool dump_metrics = false;
 };
 
 auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
@@ -91,6 +92,80 @@ auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
   return pipe;
 }
 
+auto format_metric(const metric& metric) {
+  auto result = std::string{};
+  auto it = std::back_inserter(result);
+  const auto locale = std::locale("en_US.UTF-8");
+  constexpr auto indent = std::string_view{"  "};
+  it = fmt::format_to(it, "operator #{} ({})\n", metric.operator_index + 1,
+                      metric.operator_name);
+  it = fmt::format_to(it, "{}elapsed: {}\n", indent, data{metric.time_elapsed});
+  it = fmt::format_to(it, "{}scheduled: {} ({:.2f}%)\n", indent,
+                      data{metric.time_scheduled},
+                      100.0 * static_cast<double>(metric.time_scheduled.count())
+                        / static_cast<double>(metric.time_elapsed.count()));
+  it = fmt::format_to(it, "{}running: {} ({:.2f}%)\n", indent,
+                      data{metric.time_running},
+                      100.0 * static_cast<double>(metric.time_running.count())
+                        / static_cast<double>(metric.time_elapsed.count()));
+  if (metric.inbound_measurement.unit != "void") {
+    it = fmt::format_to(it, "{}inbound:\n", indent);
+    it = fmt::format_to(
+      it, locale, "{}{}{}: {:L} at a rate of {:.2f}/s\n", indent, indent,
+      metric.inbound_measurement.unit, metric.inbound_measurement.num_elements,
+      static_cast<double>(metric.inbound_measurement.num_elements)
+        / std::chrono::duration_cast<
+            std::chrono::duration<double, std::chrono::seconds::period>>(
+            metric.time_elapsed)
+            .count());
+    if (metric.inbound_measurement.unit != operator_type_name<chunk_ptr>()) {
+      it = fmt::format_to(
+        it, locale, "{}{}bytes: {:L} at a rate of {:.2f}/s (estimate)\n",
+        indent, indent, metric.inbound_measurement.num_approx_bytes,
+        static_cast<double>(metric.inbound_measurement.num_approx_bytes)
+          / std::chrono::duration_cast<
+              std::chrono::duration<double, std::chrono::seconds::period>>(
+              metric.time_elapsed)
+              .count());
+    }
+    it = fmt::format_to(
+      it, locale, "{}{}batches: {:L} ({:.2f} {}/batch)\n", indent, indent,
+      metric.inbound_measurement.num_batches,
+      static_cast<double>(metric.inbound_measurement.num_elements)
+        / static_cast<double>(metric.inbound_measurement.num_batches),
+      metric.inbound_measurement.unit);
+  }
+  if (metric.outbound_measurement.unit != "void") {
+    it = fmt::format_to(it, "{}outbound:\n", indent);
+    it = fmt::format_to(
+      it, locale, "{}{}{}: {:L} at a rate of {:.2f}/s\n", indent, indent,
+      metric.outbound_measurement.unit,
+      metric.outbound_measurement.num_elements,
+      static_cast<double>(metric.outbound_measurement.num_elements)
+        / std::chrono::duration_cast<
+            std::chrono::duration<double, std::chrono::seconds::period>>(
+            metric.time_elapsed)
+            .count());
+    if (metric.outbound_measurement.unit != operator_type_name<chunk_ptr>()) {
+      it = fmt::format_to(
+        it, locale, "{}{}bytes: {:L} at a rate of {:.2f}/s (estimate)\n",
+        indent, indent, metric.outbound_measurement.num_approx_bytes,
+        static_cast<double>(metric.outbound_measurement.num_approx_bytes)
+          / std::chrono::duration_cast<
+              std::chrono::duration<double, std::chrono::seconds::period>>(
+              metric.time_elapsed)
+              .count());
+    }
+    it = fmt::format_to(
+      it, locale, "{}{}batches: {:L} ({:.2f} {}/batch)\n", indent, indent,
+      metric.outbound_measurement.num_batches,
+      static_cast<double>(metric.outbound_measurement.num_elements)
+        / static_cast<double>(metric.outbound_measurement.num_batches),
+      metric.outbound_measurement.unit);
+  }
+  return result;
+}
+
 auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
                    std::unique_ptr<diagnostic_handler> diag,
                    const exec_config& cfg) -> caf::expected<void> {
@@ -107,6 +182,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   pipe = pipe.optimize_if_closed();
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
+  auto metrics = std::vector<metric>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
@@ -142,13 +218,24 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
         [&](diagnostic& d) {
           diag->emit(std::move(d));
         },
-        [&](metric&) {
-          // Do nothing with metrics locally for now.
+        [&](metric& m) {
+          if (cfg.dump_metrics) {
+            const auto idx = m.operator_index;
+            if (idx >= metrics.size()) {
+              metrics.resize(idx + 1);
+            }
+            metrics[idx] = std::move(m);
+          }
         },
       };
     });
   self->wait_for(handler);
   TENZIR_DEBUG("command is done");
+  if (cfg.dump_metrics) {
+    for (const auto& metric : metrics) {
+      fmt::print(stderr, "{}", format_metric(metric));
+    }
+  }
   return result;
 }
 
@@ -225,6 +312,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
   cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
   cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
+  cfg.dump_metrics
+    = caf::get_or(inv.options, "tenzir.exec.dump-metrics", false);
   auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
   cfg.no_implicit = caf::get_or(inv.options, "tenzir.exec.no-implicit", false);
   auto filename = std::string{};
@@ -272,6 +361,8 @@ public:
                    "print a textual description of the AST and then exit")
         .add<bool>("dump-diagnostics",
                    "print all diagnostics to stdout before exiting")
+        .add<bool>("dump-metrics",
+                   "print all diagnostics to stderr before exiting")
         .add<bool>("no-implicit", "disable implicit source and sink"));
     auto factory = command::factory{
       {"exec",

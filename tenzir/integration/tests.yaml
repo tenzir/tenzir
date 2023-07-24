@@ -773,6 +773,14 @@ tests:
       - command: exec 'load stdin | measure --real-time | summarize bytes=sum(bytes) | write json'
         input: data/json/conn.log.json.gz
 
+  Batch Events:
+    tags: [pipelines]
+    steps:
+      - command: exec 'version | repeat 10 | batch 5 | measure | select events'
+      - command: exec 'version | repeat 10 | batch 1 | measure | select events'
+      - command: exec 'version | repeat 10 | batch 3 | measure | select events'
+      - command: exec 'version | repeat 10 | batch 15 | measure | select events'
+
   Empty Record in Pipeline:
     tags: [pipelines]
     steps:
