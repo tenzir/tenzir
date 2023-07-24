@@ -12,7 +12,7 @@ info:
 servers:
   - url: https://tenzir.example.com/api/v0
 security:
-  - VastToken: []
+  - TenzirToken: []
 components:
   schemas:
     Diagnostics:
@@ -121,7 +121,7 @@ components:
         diagnostics:
           $ref: '#/components/schemas/Diagnostics'
   securitySchemes:
-    VastToken:
+    TenzirToken:
       type: apiKey
       in: header
       name: X-Tenzir-Token
