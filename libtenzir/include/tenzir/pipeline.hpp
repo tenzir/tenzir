@@ -154,7 +154,6 @@ struct inspector
   }
 };
 
-<<<<<<< HEAD
 /// See `operator_base::optimize` for a description of this.
 enum class event_order {
   ordered,
@@ -167,8 +166,7 @@ auto inspect(auto& f, event_order& x) -> bool {
 }
 
 struct optimize_result;
-||||||| f00cf80a6e
-=======
+
 struct operator_measurement {
   std::string unit;
   uint64_t num_elements;
@@ -223,7 +221,6 @@ struct [[nodiscard]] metric {
       f.field("outbound_measurement", x.outbound_measurement));
   }
 };
->>>>>>> origin/main
 
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
