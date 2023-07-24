@@ -1,6 +1,6 @@
 # batch
 
-The `batch` operator makes it possible to control batching precisely.
+The `batch` operator controls the batch size of events.
 
 :::warning Expert Operator
 The `batch` operator is a lower-level building block that lets users explicitly
@@ -27,8 +27,8 @@ Defaults to 65536.
 
 ## Examples
 
-Write exactly 1 NDJSON object at a time to a Kafka topic.
+Write exactly one NDJSON object at a time to a Kafka topic.
 
 ```
-... | batch 1 | to kafka -t topic write json -c
+batch 1 | to kafka -t topic write json -c
 ```

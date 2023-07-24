@@ -93,7 +93,7 @@ public:
     parser.parse(p);
     if (limit and limit->inner == 0) {
       diagnostic::error("batch size must not be 0")
-        .note("from `batch`")
+        .primary(limit->source)
         .throw_();
     }
     return limit ? std::make_unique<batch_operator>(limit->inner)
