@@ -22,6 +22,52 @@ auto openapi_record() -> record {
     return lhs.first < rhs.first;
   });
   auto schemas = from_yaml(R"_(
+Metrics:
+  type: object
+  description: Information about pipeline data ingress and egress.
+  properties:
+    total:
+      type: object
+      description: Information about total pipeline metrics (e.g. total ingress/egress)
+      properties:
+        in:
+          type: object
+          description: Information about the total ingress. Contains no values when the source operator has not run.
+          properties:
+            unit:
+              type: string
+              enum:
+                - bytes
+                - events
+              description: The unit of the input data.
+              example: bytes
+            elements:
+              type: integer
+              description: The total amount of elements that entered the pipeline source.
+              example: 109834
+            avg_rate:
+              type: number
+              description: The average rate of input elements per second.
+              example: 27450.345233
+        out:
+          type: object
+          description: Information about the total egress. Contains no values when the sink operator has not run.
+          properties:
+            unit:
+              type: string
+              enum:
+                - bytes
+                - events
+              description: The unit of the output data.
+              example: bytes
+            elements:
+              type: integer
+              description: The total amount of elements that entered the pipeline sink.
+              example: 30414
+            avg_rate:
+              type: number
+              description: The average rate of output elements per second.
+              example: 7603.599345
 Diagnostics:
   type: array
   items:
@@ -116,6 +162,8 @@ PipelineInfo:
             description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
     diagnostics:
       $ref: '#/components/schemas/Diagnostics'
+    metrics:
+      $ref: '#/components/schemas/Metrics'
   )_");
   TENZIR_ASSERT_CHEAP(schemas);
   // clang-format off
@@ -136,12 +184,12 @@ on the command-line using the `tenzir rest generate-token` command.)_"},
       record{{"url", "https://tenzir.example.com/api/v0"}},
     }}},
     {"security", list {{
-      record {{"VastToken", list{}}},
+      record {{"TenzirToken", list{}}},
     }}},
     {"components", record{
       {"schemas", std::move(*schemas)},
       {"securitySchemes",
-        record{{"VastToken", record {
+        record{{"TenzirToken", record {
             {"type", "apiKey"},
             {"in", "header"},
             {"name", "X-Tenzir-Token"}
