@@ -527,10 +527,11 @@ void catalog_state::insert(tenzir::type schema) {
     // whether the new schema is a superset of it.
     if (old_schemas.begin() != hint) {
       if (!is_subset(*old_schemas.begin(), *hint))
-        TENZIR_WARN("{} detected an incompatible schema change for {}", *self,
-                    hint->name());
+        TENZIR_VERBOSE("{} detected an incompatible schema change for {}",
+                       *self, hint->name());
       else
-        TENZIR_INFO("{} detected a schema change for {}", *self, hint->name());
+        TENZIR_VERBOSE("{} detected a schema change for {}", *self,
+                       hint->name());
     }
     TENZIR_DEBUG("{} registered {}", *self, hint->name());
   }
