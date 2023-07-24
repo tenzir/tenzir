@@ -2,6 +2,7 @@
 title: Shell Yeah! Supercharging Zeek and Suricata with Tenzir
 authors: mavam
 date: 2023-07-20
+last_updated: 2023-07-22
 tags: [zeek, suricata, logs, shell]
 comments: true
 ---
@@ -84,13 +85,13 @@ shell script:
 ```yaml title="tenzir.yaml"
 tenzir:
   operators:
-    zeek: >
+    zeek:
      shell "zeek -r - LogAscii::output_to_stdout=T
             JSONStreaming::disable_default_logs=T
             JSONStreaming::enable_log_rotation=F
             json-streaming-logs"
      | read zeek-json
-    suricata: >
+    suricata:
      shell "suricata -r /dev/stdin
             --set outputs.1.eve-log.filename=/dev/stdout
             --set logging.outputs.0.console.enabled=no"

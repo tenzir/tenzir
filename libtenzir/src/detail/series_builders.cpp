@@ -13,11 +13,6 @@
 namespace tenzir::detail {
 
 namespace {
-template <class T>
-constexpr auto is_caf_expected = false;
-
-template <class T>
-constexpr auto is_caf_expected<caf::expected<T>> = true;
 
 template <class T>
 concept allowed_common_type

@@ -74,7 +74,7 @@ namespace tenzir::plugins::serve {
 namespace {
 
 constexpr auto SERVE_ENDPOINT_ID = 0;
-constexpr auto FINAL_CONTINUATION_TOKEN = std::string{"__DONE__"};
+constexpr auto FINAL_CONTINUATION_TOKEN = std::string_view{"__DONE__"};
 
 constexpr auto SPEC_V0 = R"_(
 /serve:

@@ -3,11 +3,11 @@ openapi: 3.0.0
 info:
   title: Tenzir Rest API
   version: "\"0.1\""
-  description: "\nThis API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be\nsupplied in the `X-Tenzir-Token` request header. The token can be generated\non the command-line using the `vast rest generate-token` command."
+  description: "\nThis API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be\nsupplied in the `X-Tenzir-Token` request header. The token can be generated\non the command-line using the `tenzir rest generate-token` command."
 servers:
-  - url: https://vast.example.com/api/v0
+  - url: https://tenzir.example.com/api/v0
 security:
-  - VastToken:
+  - TenzirToken:
       []
 components:
   schemas:
@@ -113,11 +113,31 @@ components:
         diagnostics:
           $ref: "#/components/schemas/Diagnostics"
   securitySchemes:
-    VastToken:
+    TenzirToken:
       type: apiKey
       in: header
       name: X-Tenzir-Token
 paths:
+  /ping:
+    get:
+      summary: Returns a success response
+      description: Returns a success response to indicate that the node is able to respond to requests. The response body includes the current node version.
+      responses:
+        200:
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    description: The version of the responding node.
+                    example: v2.3.0-rc3-32-g8529a6c43f
+              example:
+                version: v2.3.0-rc3-32-g8529a6c43f
+        401:
+          description: Not authenticated.
   /pipeline/create:
     post:
       summary: Create a new pipeline
@@ -434,6 +454,10 @@ paths:
                     type: string
                     description: A token to access the next pipeline data batch, null if the pipeline is completed.
                     example: 340ce2j
+                  dropped:
+                    type: integer
+                    description: The serve endpoint will drop responses that exceed the configured maximum message size. The number of events dropped this way is returned here. Should be 0 most of the time.
+                    example: 0
                   schemas:
                     type: array
                     items:
