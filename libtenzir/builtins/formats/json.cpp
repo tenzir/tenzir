@@ -758,11 +758,9 @@ private:
 template <class GeneratorValue>
 auto make_parser(generator<GeneratorValue> json_chunk_generator,
                  operator_control_plane& ctrl, std::string separator,
-                 bool try_find_schema, std::optional<type> schema,
-                 bool infer_types, bool preserve_order, auto parser_impl)
+                 std::optional<type> schema, bool infer_types,
+                 bool preserve_order, auto parser_impl)
   -> generator<table_slice> {
-  // TODO: Seems like we don't need it anymore? Check this.
-  (void)try_find_schema;
   auto state = parser_state{ctrl, preserve_order};
   if (schema) {
     state.active_entry = state.add_entry(schema->name(), *schema, infer_types);
@@ -908,8 +906,8 @@ private:
     }
     if (args_.use_ndjson_mode) {
       return make_parser(to_padded_lines(std::move(input)), ctrl,
-                         args_.unnest_separator, args_.selector.has_value(),
-                         schema, not args_.no_infer, args_.preserve_order,
+                         args_.unnest_separator, schema, not args_.no_infer,
+                         args_.preserve_order,
                          ndjson_parser<FieldValidator>{
                            ctrl,
                            args_.selector,
@@ -920,9 +918,8 @@ private:
                            args_.preserve_order,
                          });
     }
-    return make_parser(std::move(input), ctrl, args_.unnest_separator,
-                       args_.selector.has_value(), schema, not args_.no_infer,
-                       args_.preserve_order,
+    return make_parser(std::move(input), ctrl, args_.unnest_separator, schema,
+                       not args_.no_infer, args_.preserve_order,
                        default_parser<FieldValidator>{
                          ctrl,
                          args_.selector,
