@@ -16,6 +16,6 @@
 [submodule "libtenzir/aux/caf"]
 	path = libtenzir/aux/caf
 	url = https://github.com/tenzir/actor-framework
-[submodule "plugins/tui/aux/ftxui"]
-	path = plugins/explore/aux/ftxui
+[submodule "libtenzir_tui/aux/ftxui"]
+	path = libtenzir_tui/aux/ftxui
 	url = https://github.com/ArthurSonzogni/FTXUI.git

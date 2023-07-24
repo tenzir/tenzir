@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The TEnzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "explore/components.hpp"
+#include "tenzir/tui/components.hpp"
 
-#include "explore/elements.hpp"
-#include "explore/ui_state.hpp"
+#include "tenzir/tui/elements.hpp"
+#include "tenzir/tui/ui_state.hpp"
 
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/printable/tenzir/data.hpp>
@@ -26,7 +26,7 @@
 
 using namespace ftxui;
 
-namespace tenzir::plugins::explore {
+namespace tenzir::tui {
 
 auto lift(Element e) -> Component {
   class Impl : public ComponentBase {
@@ -752,4 +752,4 @@ auto MainWindow(ScreenInteractive* screen, ui_state* state) -> Component {
   return Make<Impl>(screen, state);
 };
 
-} // namespace tenzir::plugins::explore
+} // namespace tenzir::tui

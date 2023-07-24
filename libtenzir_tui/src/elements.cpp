@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "explore/elements.hpp"
+#include "tenzir/tui/elements.hpp"
 
 #include <tenzir/detail/string.hpp>
 
-namespace tenzir::plugins::explore {
+namespace tenzir::tui {
 
 using namespace ftxui;
 
@@ -37,4 +37,4 @@ auto logo() -> Element {
   return vbox(elements);
 }
 
-} // namespace tenzir::plugins::explore
+} // namespace tenzir::tui

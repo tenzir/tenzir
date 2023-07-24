@@ -13,7 +13,7 @@
 #include <ftxui/dom/table.hpp>
 #include <ftxui/screen/color.hpp>
 
-namespace tenzir::plugins::explore {
+namespace tenzir::tui {
 
 /// The theme colors.
 /// See https://rosepinetheme.com/palette/ for semantics.
@@ -63,4 +63,4 @@ struct theme {
 /// Constructs the default scheme.
 auto default_theme() -> theme;
 
-} // namespace tenzir::plugins::explore
+} // namespace tenzir::tui

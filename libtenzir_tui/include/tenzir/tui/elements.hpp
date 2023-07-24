@@ -10,9 +10,9 @@
 
 #include <ftxui/dom/elements.hpp>
 
-namespace tenzir::plugins::explore {
+namespace tenzir::tui {
 
 /// Renders the Tenzir logo.
 auto logo() -> ftxui::Element;
 
-} // namespace tenzir::plugins::explore
+} // namespace tenzir::tui

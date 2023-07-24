@@ -6,13 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "explore/theme.hpp"
+#include "tenzir/tui/theme.hpp"
 
 #include <tenzir/detail/overload.hpp>
 
 #include <ftxui/component/component.hpp>
 
-namespace tenzir::plugins::explore {
+namespace tenzir::tui {
 
 using namespace ftxui;
 using namespace ftxui::literals;
@@ -177,4 +177,4 @@ auto default_theme() -> theme {
   return {};
 }
 
-} // namespace tenzir::plugins::explore
+} // namespace tenzir::tui

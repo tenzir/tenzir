@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "explore/ui_state.hpp"
+#include "tenzir/tui/ui_state.hpp"
 
 #include <tenzir/fwd.hpp>
 #include <tenzir/view.hpp>
@@ -16,7 +16,7 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/dom/elements.hpp>
 
-namespace tenzir::plugins::explore {
+namespace tenzir::tui {
 
 /// Lifts an FTXUI element into a component.
 auto lift(ftxui::Element e) -> ftxui::Component;
@@ -91,4 +91,4 @@ auto Explorer(ui_state* state) -> ftxui::Component;
 auto MainWindow(ftxui::ScreenInteractive* screen, ui_state* state)
   -> ftxui::Component;
 
-} // namespace tenzir::plugins::explore
+} // namespace tenzir::tui
