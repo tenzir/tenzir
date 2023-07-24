@@ -170,23 +170,23 @@ struct formatter<tenzir::query_context> {
     auto out = ctx.out();
     auto f = tenzir::detail::overload{
       [&](const tenzir::count_query_context& cmd) {
-        out = format_to(out, "count(");
+        out = fmt::format_to(out, "count(");
         switch (cmd.mode) {
           case tenzir::count_query_context::estimate:
-            out = format_to(out, "estimate, ");
+            out = fmt::format_to(out, "estimate, ");
             break;
           case tenzir::count_query_context::exact:
-            out = format_to(out, "exact, ");
+            out = fmt::format_to(out, "exact, ");
             break;
         }
       },
       [&](const tenzir::extract_query_context&) {
-        out = format_to(out, "extract(");
+        out = fmt::format_to(out, "extract(");
       },
     };
     caf::visit(f, value.cmd);
-    return format_to(out, "{} (priority={}), ids={}, issuer={})", value.expr,
-                     value.priority, value.ids, value.issuer);
+    return fmt::format_to(out, "{} (priority={}), ids={}, issuer={})",
+                          value.expr, value.priority, value.ids, value.issuer);
   }
 };
 

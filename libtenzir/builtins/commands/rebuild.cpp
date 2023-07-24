@@ -613,8 +613,8 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     self->system().config(), "tenzir.automatic-rebuild", size_t{1});
   if (self->state.automatic_rebuild > 0) {
     self->state.rebuild_interval
-      = caf::get_or(self->system().config(), "tenzir.active-partition-timeout",
-                    defaults::active_partition_timeout);
+      = caf::get_or(self->system().config(), "tenzir.rebuild-interval",
+                    defaults::rebuild_interval);
     self->state.schedule();
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {

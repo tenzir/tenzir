@@ -109,7 +109,8 @@ struct entry_data {
   template <class... Ts>
   explicit entry_data(std::string name, Ts&&... xs)
     : name{std::move(name)},
-      builder{std::forward<Ts>(xs)...},
+      builder{std::make_unique<adaptive_table_slice_builder>(
+        std::forward<Ts>(xs)...)},
       flushed{std::chrono::steady_clock::now()} {
   }
 
@@ -120,11 +121,12 @@ struct entry_data {
 
   auto flush() -> table_slice {
     flushed = std::chrono::steady_clock::now();
-    return builder.finish(name);
+    return builder->finish(name);
   }
 
   std::string name;
-  adaptive_table_slice_builder builder;
+  // TODO: This is only a `unique_ptr` because it is currently not movable.
+  std::unique_ptr<adaptive_table_slice_builder> builder;
   std::chrono::steady_clock::time_point flushed;
 };
 
@@ -328,7 +330,7 @@ private:
       report_parse_err(val, "a string");
       return;
     }
-    auto str = val.get_string().value_unsafe();
+    auto str = maybe_str.value_unsafe();
     using namespace parser_literals;
     static constexpr auto parser
       = parsers::time | parsers::duration | parsers::net | parsers::ip;
@@ -422,14 +424,14 @@ auto non_empty_entries(parser_state& state)
   -> generator<std::reference_wrapper<entry_data>> {
   if (state.preserve_order) {
     // In that case, only the active builder can be non-empty.
-    if (state.get_active_entry().builder.rows() > 0) {
+    if (state.get_active_entry().builder->rows() > 0) {
       co_yield std::ref(state.get_active_entry());
     }
   } else {
     // Otherwise, builders are not flushed when changing schema. Thus, we have
     // to take a look at every entry.
     for (auto& entry : state.entries) {
-      if (entry.builder.rows() > 0) {
+      if (entry.builder->rows() > 0) {
         co_yield std::ref(entry);
       }
     }
@@ -463,8 +465,7 @@ auto unflatten_if_needed(std::string_view separator, table_slice slice)
   if (auto idx = state.try_get_entry(unknown_entry_name)) {
     return state.activate(*idx);
   }
-  return state.activate(
-    state.add_entry(unknown_entry_name, adaptive_table_slice_builder{}));
+  return state.activate(state.add_entry(unknown_entry_name));
 }
 
 template <class FieldValidator>
@@ -487,8 +488,7 @@ protected:
   auto handle_schema_found(parser_state& state, const type& schema) const
     -> std::optional<table_slice> {
     // The case where this schema exists is already handled before.
-    return state.activate(state.add_entry(
-      schema.name(), adaptive_table_slice_builder{schema, infer_types_}));
+    return state.activate(state.add_entry(schema.name(), schema, infer_types_));
   }
 
   auto handle_no_matching_schema_found(parser_state& state,
@@ -563,8 +563,9 @@ protected:
 
   auto handle_max_rows(parser_state& state) const
     -> std::optional<table_slice> {
-    if (state.get_active_entry().builder.rows() < max_table_slice_rows_)
+    if (state.get_active_entry().builder->rows() < max_table_slice_rows_) {
       return std::nullopt;
+    }
     return state.get_active_entry().flush();
   }
 
@@ -610,16 +611,16 @@ public:
         TENZIR_ASSERT(slice);
         co_yield std::move(*slice);
     }
-    auto row = state.get_active_entry().builder.push_row();
+    auto row = state.get_active_entry().builder->push_row();
     doc_parser{this->field_validator_, json_line, this->ctrl_, lines_processed_}
       .parse_object(val.value_unsafe(), row);
     // After parsing one JSON object it is expected for the result to be at
     // the end. If it's otherwise then it means that a line contains more than
     // one object in which case we don't add any data and emit a warning.
     // It is also possible for a parsing failure to occurr in doc_parser. the
-    // is_alive() call ensures that the first object was parsed without errors.
-    // Calling at_end() when is_alive() returns false is unsafe and resulted in
-    // crashes.
+    // is_alive() call ensures that the first object was parsed without
+    // errors. Calling at_end() when is_alive() returns false is unsafe and
+    // resulted in crashes.
     if (doc.is_alive() and not doc.at_end()) {
       row.cancel();
       this->ctrl_.warn(caf::make_error(
@@ -680,7 +681,7 @@ public:
           TENZIR_ASSERT(slice);
           co_yield std::move(*slice);
       }
-      auto row = state.get_active_entry().builder.push_row();
+      auto row = state.get_active_entry().builder->push_row();
       doc_parser{this->field_validator_, doc_it.source(), this->ctrl_}
         .parse_object(doc.value_unsafe(), row);
       if (auto slice = this->handle_max_rows(state))
@@ -696,8 +697,8 @@ private:
       buffer_.reset();
       return;
     }
-    // Likely not needed, but should be harmless. Needs additional investigation
-    // in the future.
+    // Likely not needed, but should be harmless. Needs additional
+    // investigation in the future.
     if (truncated_bytes > buffer_.view().size()) {
       state.abort_requested = true;
       this->ctrl_.abort(caf::make_error(
@@ -709,7 +710,8 @@ private:
     buffer_.truncate(truncated_bytes);
   }
 
-  // The simdjson suggests to initialize the padding part to either 0s or spaces.
+  // The simdjson suggests to initialize the padding part to either 0s or
+  // spaces.
   detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'> buffer_;
   simdjson::ondemand::document_stream stream_;
 };

@@ -172,11 +172,11 @@ struct formatter<enum tenzir::query_processor::state_name> {
               FormatContext& ctx) const {
     switch (value) {
       case tenzir::query_processor::state_name::idle:
-        return format_to(ctx.out(), "idle");
+        return fmt::format_to(ctx.out(), "idle");
       case tenzir::query_processor::state_name::await_query_id:
-        return format_to(ctx.out(), "await_query_id");
+        return fmt::format_to(ctx.out(), "await_query_id");
       case tenzir::query_processor::state_name::await_results_until_done:
-        return format_to(ctx.out(), "await_results_until_done");
+        return fmt::format_to(ctx.out(), "await_results_until_done");
     }
     tenzir::die("unreachable");
   }

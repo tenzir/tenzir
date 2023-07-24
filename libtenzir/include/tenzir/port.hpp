@@ -93,6 +93,6 @@ struct fmt::formatter<tenzir::port> {
 
   template <class FormatContext>
   auto format(const tenzir::port& p, FormatContext& ctx) const {
-    return format_to(ctx.out(), "{}", p.number());
+    return fmt::format_to(ctx.out(), "{}", p.number());
   }
 };

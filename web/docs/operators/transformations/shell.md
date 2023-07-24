@@ -60,7 +60,7 @@ Using [user-defined operators](../user-defined.md), we can expose this
 ```yaml {0} title="tenzir.yaml"
 tenzir:
   operators:
-    jsonize: >
+    jsonize:
       write json | shell "jq -C" | save stdout
 ```
 
@@ -86,7 +86,7 @@ that:
 ```yaml {0} title="tenzir.yaml"
 tenzir:
   operators:
-    zeek: >
+    zeek:
       shell "zeek -r - LogAscii::output_to_stdout=T
              JSONStreaming::disable_default_logs=T
              JSONStreaming::enable_log_rotation=F

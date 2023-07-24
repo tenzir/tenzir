@@ -139,7 +139,7 @@ struct formatter<tenzir::module> {
     auto out = ctx.out();
     for (const auto& t : value) {
       auto f = [&]<tenzir::concrete_type T>(const T& x) {
-        out = format_to(out, "type {} = {}\n", t.name(), x);
+        out = fmt::format_to(out, "type {} = {}\n", t.name(), x);
       };
       caf::visit(f, t);
     }
