@@ -154,14 +154,11 @@ struct inspector
   }
 };
 
-///
+/// See `operator_base::optimize` for a description of this.
 enum class event_order {
-  ///
   ordered,
-  ///
   schema,
-  ///
-  unordered
+  unordered,
 };
 
 auto inspect(auto& f, event_order& x) -> bool {
