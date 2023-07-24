@@ -234,7 +234,10 @@ private:
 
 class file_loader final : public plugin_loader {
 public:
-  static constexpr auto max_chunk_size = size_t{16384};
+  // We use 2^20 for the upper bound of a chunk size, which exactly matches the
+  // upper limit defined by execution nodes for transporting events.
+  // TODO: Get the backpressure-adjusted value at runtime from the execution node.
+  static constexpr size_t max_chunk_size = 1 << 20;
 
   file_loader() = default;
 
@@ -262,12 +265,14 @@ public:
           if (eof_reached and current_data.empty() and not following) {
             break;
           }
-          auto chunk = chunk::make(std::exchange(current_data, {}));
-          co_yield std::move(chunk);
+          // Note that we copy and manually clear here rather than moving the
+          // buffer into the chunk and reserving again to avoid excess memory
+          // usage from unused capacity.
+          co_yield chunk::copy(current_data);
           if (eof_reached and not following) {
             break;
           }
-          current_data.reserve(max_chunk_size);
+          current_data.clear();
         }
       }
       co_return;
