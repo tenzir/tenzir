@@ -226,14 +226,6 @@ auto pipeline::optimize_if_closed() const -> pipeline {
     return *this;
   }
   return std::move(pipe);
-  // TODO: Do we want this?
-  // if (optimized->first != trivially_true_expression()) {
-  //   // Prepend where operator as a hacky way to handle pipelines without
-  //   source. auto where = pipeline::internal_parse_as_operator(
-  //     fmt::format("where {}", optimized->first));
-  //   VAST_ASSERT(where);
-  //   optimized->second.prepend(std::move(*where));
-  // }
 }
 
 auto pipeline::optimize_into_filter() const -> std::pair<expression, pipeline> {
