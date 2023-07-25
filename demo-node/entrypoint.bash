@@ -14,16 +14,20 @@ read -r -u "${NODE[0]}" DUMMY
 # of Tenzir processes.
 export TENZIR_CONSOLE_VERBOSITY="${TENZIR_CLIENT_CONSOLE_VERBOSITY:-"info"}"
 
-tenzir 'remote version | put version | write json'
-
 # Wait until the HTTP endpoint is listening.
 while ! timeout 100 bash -c "echo > /dev/tcp/127.0.0.1/5160"; do
   echo "Waiting for the HTTP service..."
   sleep 1
 done
 
+# The shell operator decompresses the data and writes it to `read suricata` on
+# the fly.
 suricata_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.zst | tar -x --zstd --to-stdout\\\"' | read suricata | where #schema != \\\"suricata.stats\\\" | import"
-zeek_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.zst | tar -x --zstd; cat Zeek/*.log\\\"' | read zeek-tsv | import"
+
+# The shell operator "streams" the data into a `Zeek/` directory on disk, calls
+# `sync` to flush the OS write buffers, and finally sends the concatenation of
+# the logs into `read zeek-tsv`.
+zeek_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.zst | tar -x --zstd; sync; cat Zeek/*.log\\\"' | read zeek-tsv | import"
 
 curl -X POST \
   -H "Content-Type: application/json" \
