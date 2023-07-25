@@ -78,7 +78,7 @@ Optional data structures for accelerating historical queries.
 
 Tenzir has *sparse* and *dense* indexes. Sparse indexes live in memory and point
 to [partitions](#partition), whereas dense indexes live within a partition and
-point to individual rows within the partition [store](#store).
+point to individual rows within the partition.
 
 - [Configure catalog and partition indexes](./setup-guides/tune-performance/README.md#configure-catalog-and-partition-indexes)
 
@@ -114,10 +114,15 @@ An operator is a [source](#source), [transformation](#transformation), or
 
 The horizontal scaling unit of the storage attached to a [node](#node).
 
-A partition contains a [store](#store) and optionally a set of indexes.
+A partition contains the raw data and optionally a set of indexes. Supported
+formats are [Parquet](https://parquet.apache.org) or
+[Feather](https://arrow.apache.org/docs/python/feather.html).
 
 - [Control the partition size](./setup-guides/tune-performance/README.md#control-the-partition-size)
 - [Configure catalog and partition indexes](./setup-guides/tune-performance/README.md#configure-catalog-and-partition-indexes)
+- [Select the store format](./setup-guides/tune-performance/README.md#select-the-store-format)
+- [Adjust the store
+  compression](./setup-guides/tune-performance/README.md#adjust-the-store-compression)
 - [Rebuild partitions](./setup-guides/tune-performance/README.md#rebuild-partitions)
 
 ## Pipeline
@@ -153,14 +158,6 @@ An [operator](#operator) consuming input, without producing any output.
 An [operator](#operator) producing output, without consuming any input.
 
 - See all available [sources](./operators/sources/README.md)
-
-## Store
-
-The raw data in a [partition](#partition) in Parquet or Feather.
-
-- [Select the store format](./setup-guides/tune-performance/README.md#select-the-store-format)
-- [Adjust the store
-  compression](./setup-guides/tune-performance/README.md#adjust-the-store-compression)
 
 ## TQL
 
