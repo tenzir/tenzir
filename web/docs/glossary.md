@@ -91,29 +91,34 @@ listens on TCP port 5158.
 
 - [Deploy a node](./setup-guides/deploy-a-node/README.md)
 - [Use the app](./setup-guides/use-the-app/README.md) to manage a node
-- Use the [REST API](./rest-api.md) to manage a node.
+- Use the [REST API](./rest-api.md) to manage a node
 - [Import into a node](./user-guides/import-into-a-node.md)
 - [Export from a node](./user-guides/export-from-a-node.md)
 
 ## Metrics
 
-Runtime statistics about pipeline and node execution.
+Runtime statistics about pipeline execution.
 
 - [Collect metrics](./setup-guides/collect-metrics.md)
-- See all available [metrics](./metrics.md) details
 
 ## Operator
 
-The atomic building block of a [pipeline](#pipeline).
+The building block of a [pipeline](#pipeline).
 
 An operator is a [source](#source), [transformation](#transformation), or
-[sink](#sink)
+[sink](#sink).
+
+- See all available [operators](./operators.md)
 
 ## Partition
 
 The horizontal scaling unit of the storage attached to a [node](#node).
 
 A partition contains a [store](#store) and optionally a set of indexes.
+
+- [Control the partition size](./setup-guides/tune-performance/README.md#control-the-partition-size)
+- [Configure catalog and partition indexes](./setup-guides/tune-performance/README.md#configure-catalog-and-partition-indexes)
+- [Rebuild partitions](./setup-guides/tune-performance/README.md#rebuild-partitions)
 
 ## Pipeline
 
@@ -133,7 +138,9 @@ Control plane for nodes and pipelines, accessible through [app](#app) at
 
 A named record type describing the top-level structure of a data frame.
 
-[Schemas](./data-model/schemas.md) 
+[Schemas](./data-model/schemas.md)
+
+- [Show available schemas](./user-guides/show-available-schemas.md)
 
 ## Sink
 
