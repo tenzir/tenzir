@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pytenzir"
-version = "4.0.0-rc9"
+version = "4.0.0-rc10"
 description = "A security telemetry engine for detection and response"
 authors = ["Tenzir <engineering@tenzir.com>"]
 maintainers = ["Tenzir <engineering@tenzir.com>"]
