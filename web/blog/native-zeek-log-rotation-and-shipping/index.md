@@ -188,8 +188,7 @@ This blog post shows how you can use Zeek's native log rotation feature to
 invoke an arbitrary command as soon as a log file gets rotated. This approach
 provides an attractive alternative that turns pull-based file monitoring into
 more flexible push-based delivery. With our Zeek package, you can launch
-pipelines directly from Zeek. Use it with care in live deployments, as this
-implies fate sharing of your log shipping with Zeek.
+pipelines directly from Zeek.
 
 Tenzir makes it easy to work with your Zeek logs. Read our [other Zeek
 blogs](/blog/tags/zeek) and [try it](/get-started) yourself.
