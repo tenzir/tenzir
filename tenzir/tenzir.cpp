@@ -84,14 +84,11 @@ int main(int argc, char** argv) {
   const auto app_name = last_slash == std::string_view::npos
                           ? app_path
                           : app_path.substr(last_slash + 1);
-  bool is_server = false;
-  if (app_name == "tenzir-node")
-    is_server = true;
+  bool is_server = (app_name == "tenzir-node");
+  // Allow `tenzir-ctl start` or `tenzir-ctl -N <cmd>` as alternative ways
+  // to start a node, as well as the legacy `vast` command.
   if (app_name == "vast" || app_name == "tenzir-ctl")
     is_server = invocation->full_name == "start"
-                || caf::get_or(cfg.content, "tenzir.node", false);
-  else if (app_name == "tenzir")
-    is_server = invocation->full_name == "exec"
                 || caf::get_or(cfg.content, "tenzir.node", false);
   std::string_view max_threads_key = "caf.scheduler.max-threads";
   if (!is_server
