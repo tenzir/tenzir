@@ -38,9 +38,9 @@
 namespace tenzir {
 
 caf::expected<caf::detail::scope_guard<void (*)()>>
-create_log_context(const tenzir::invocation& cmd_invocation,
+create_log_context(bool is_server, const tenzir::invocation& cmd_invocation,
                    const caf::settings& cfg_file) {
-  if (!tenzir::detail::setup_spdlog(cmd_invocation, cfg_file))
+  if (!tenzir::detail::setup_spdlog(is_server, cmd_invocation, cfg_file))
     return caf::make_error(tenzir::ec::unspecified);
   return {caf::detail::make_scope_guard(
     std::addressof(tenzir::detail::shutdown_spdlog))};
@@ -104,14 +104,12 @@ spdlog::level::level_enum tenzir_loglevel_to_spd(const int value) {
 
 namespace detail {
 
-bool setup_spdlog(const tenzir::invocation& cmd_invocation,
+bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
                   const caf::settings& cfg_file) try {
   if (tenzir::detail::logger()->name() != "/dev/null") {
     TENZIR_ERROR("Log already up");
     return false;
   }
-  bool is_server = cmd_invocation.full_name == "start"
-                   || caf::get_or(cmd_invocation.options, "tenzir.node", false);
   const auto& cfg_cmd = cmd_invocation.options;
   std::string console_verbosity = tenzir::defaults::logger::console_verbosity;
   auto cfg_console_verbosity

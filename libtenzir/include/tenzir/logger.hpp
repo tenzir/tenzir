@@ -153,7 +153,7 @@ namespace tenzir {
 int loglevel_to_int(std::string c, int default_value = TENZIR_LOG_LEVEL_QUIET);
 
 [[nodiscard]] caf::expected<caf::detail::scope_guard<void (*)()>>
-create_log_context(const tenzir::invocation& cmd_invocation,
+create_log_context(bool is_server, const tenzir::invocation& cmd_invocation,
                    const caf::settings& cfg_file);
 
 } // namespace tenzir
