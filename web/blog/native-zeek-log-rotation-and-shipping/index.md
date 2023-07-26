@@ -1,5 +1,5 @@
 ---
-title: Native Zeek log Rotation & Shipping
+title: Native Zeek Log Rotation & Shipping
 authors: mavam
 date: 2023-07-27
 tags: [zeek, logs, shipping, rotation, pipelines]
@@ -14,29 +14,32 @@ that you can do anything you want with a newly rotated batch of logs?
 <!-- truncate -->
 
 This blog post shows you how to use Zeek's native log rotation feature to
-conveniently invoke any post-processor, such as a log shipper. We illustrate how
-you can ingest data into Tenzir, but you can plug in any log shipper you want.
+conveniently invoke any post-processor, such as a log shipper. In our examples
+we show how to to ingest data into Tenzir, but you can plug in any downstream
+tooling.
 
 ## External Log Shipping (pull)
 
 In case you're not using Zeek's native log rotation trigger, you may observe a
-directory to which Zeek periodically writes files.
+directory to which Zeek periodically writes files. For example, the utility
+[zeek-archiver](https://github.com/zeek/zeek-archiver) does that.
 
-Log shippers can take care of that, but your mileage may vary. For example,
-[Filebeat][filebeat] works for stock Zeek only. Every log file is hard-coded. If
-you have custom scripts or extend some logs, you're left alone. Filebeat also
-uses the stock Zeek JSON output, which has no type information. Filebeat then
-brings the typing back manually later as it converts the logs to the Elastic
-Common Schema (ECS).
+Generic log shippers can take care of that as well. Your mileage may vary. For
+example, [Filebeat][filebeat] works for stock Zeek only. Every log file parsing
+logic is hard-coded. If you have custom scripts or extend some logs, you're left
+alone. Filebeat also uses the stock Zeek JSON output, which has no type
+information. Filebeat then brings the typing back manually later as it converts
+the logs to the Elastic Common Schema (ECS).
 
 [filebeat]: https://www.elastic.co/guide/en/beats/filebeat/current/filebeat-module-zeek.html
 
 ## Native Log Shipping (push)
 
-There's also a lesser known push-based option with [Zeek's logging
+There's also a lesser known, push-based option using [Zeek's logging
 framework](https://docs.zeek.org/en/master/frameworks/logging.html). You can
 provide a shell script that Zeek invokes *whenever it rotates file*. The shell
-script receives the new cut filename as argument, plus some additional metadata.
+script receives the filename of the rotated file as argument, plus some
+additional metadata.
 
 First, to activate log rotation, you need to set
 `Log::default_rotation_interval` to a non-zero value. The default of `0 secs`
@@ -55,8 +58,8 @@ zeek -r trace.pcap \
   Log::default_rotation_interval=10mins
 ```
 
-Let's take a look at the `ingest` shell script in more detail. Zeek always
-passes 6 arguments to the script:
+Let's take a look at this `ingest` shell script in more detail. Zeek always
+passes 6 arguments to the post-processing script:
 
 1. The filename of the log, e.g., `/path/to/conn.log`
 2. The type of the log (aka. `path`), such as `conn` or `http`
@@ -66,7 +69,7 @@ passes 6 arguments to the script:
 6. The format of the log, which is either `ascii` (=
    [`zeek-tsv`](/formats/zeek-tsv)) or [`json`](/formats/json)
 
-Here's a complete example that leverages (1), (2), and (6):
+Here's a complete example that uses (1), (2), and (6):
 
 ```bash title="ingest"
 #!/bin/sh
@@ -92,12 +95,12 @@ pipeline="from file $file_name read $format | import"
 tenzir "$pipeline"
 ```
 
-### Flexible pipelines
+### Post-processing with Tenzir pipelines
 
-When you run Zeek as above, the `ingest` script dynamically constructs the
-"right" ingestion pipeline based on the type of the Zeek log at hand. The
-pipelines may look like this for a `conn.log` file, based on whether you use TSV
-or JSON logging:
+When you run Zeek as above, the `ingest` script dynamically constructs an
+ingestion pipeline based on the type of the Zeek log at hand. Given your logging
+format (TSV or JSON), the pipelines for a rotated `conn.log` file may look like
+this:
 
 ```
 from file /path/to/conn.log read zeek-tsv | import
@@ -106,8 +109,8 @@ from file /path/to/conn.log read json --schema zeek.conn | import
 
 This pipeline reads the Zeek log and pipes it to the
 [`import`](/operators/sinks/import) operator, which stores all your logs at a
-Tenzir node. You could also use any other operator here. For example, use
-[`extend`](/operators/transformations/extend) if you want to include the
+running Tenzir node. You could also use the
+[`extend`](/operators/transformations/extend) operator to include the
 filename in the data:
 
 ```bash
@@ -122,8 +125,8 @@ ideas.
 
 ### Zeek package
 
-If you want Tenzir post-processing out of the box, use our official [Zeek
-package](https://github.com/tenzir/zeek-tenzir):
+If you want post-processing with Tenzir pipelines out of the box, use our
+official [Zeek package](https://github.com/tenzir/zeek-tenzir):
 
 ```bash
 zkg install zeek-tenzir
@@ -159,26 +162,23 @@ Zeek logs:
 
    The above Zeek script hooks up two pipelines via the function
    `Tenzir::postprocess`. Each pipeline executes upon log rotation and receives
-   the Zeek log file as input. The first simply imports all data via
+   the Zeek log file as input. The first imports all data via
    [`import`](/operators/sinks/import) and the second writes the logs as
    [`parquet`](/formats/parquet) files using [`to`](/operators/sinks/to).
 
 ## Fate sharing
 
-Zeek implements the above described log rotation logic by spawning a separate
-child process. When the (parent) Zeek process dies, e.g., due power loss or
-running out of memory, it takes all children down along with it.
+Zeek implements the log rotation logic by spawning a separate child process.
+When the (parent) Zeek process dies, the children become orphaned and keep
+running until completion.
 
-This may not be a problem for one-shot trace file analysis, but live deployments
-may require higher availability and consistency. For such scenarios, we
-recommend *the opposite* strategy: **do not run the post-processing within Zeek.
-Decouple it instead.** One way to achieve this is by observing side effects. For
-example, [zeek-archiver](https://github.com/zeek/zeek-archiver) watches a
-directory for new log files that Zeek rotates in there. Similarly, we have a
-dedicated [roadmap item](https://github.com/tenzir/public-roadmap/issues/51) for
-directory watching.
+The implication is that Zeek cannot re-trigger a failed post-processing command.
+So you have exactly one shot. This may not be a problem for trace file analysis,
+but live deployments may require higher reliability guarantees. For such
+scenarios, we recommend to use the post-processing script as a notifier, e.g.,
+to signal another tool that it can now process a file.
 
-Another approach is a dedciated [writer
+For ultimate control over logging, you can always develop your own [writer
 plugin](/blog/mobilizing-zeek-logs#writer-plugin) that immediately ship logs
 instead of going through the file system.
 
@@ -187,8 +187,16 @@ instead of going through the file system.
 This blog post shows how you can use Zeek's native log rotation feature to
 invoke an arbitrary command as soon as a log file gets rotated. This approach
 provides an attractive alternative that turns pull-based file monitoring into
-more flexible push-based delivery. With our Zeek package, you can launch
-pipelines directly from Zeek.
+more flexible push-based delivery.
 
-Tenzir makes it easy to work with your Zeek logs. Read our [other Zeek
-blogs](/blog/tags/zeek) and [try it](/get-started) yourself.
+|              |   Push   |     Pull     |
+| ------------ |:--------:|:------------:|
+| Trigger      | rotation | new file/dir |
+| Complexity   |   low    |    medium    |
+| Fate Sharing | coupled  |  decoupled   |
+
+If you are looking for an efficient way to get your Zeek logs flowing, [give
+Tenzir a try](/get-started). [Our Zeek
+package](https://github.com/tenzir/zeek-tenzir) makes it easy to launch
+post-processing pipelines natively from Zeek. And don't forget to check out our
+[other Zeek blogs](/blog/tags/zeek).
