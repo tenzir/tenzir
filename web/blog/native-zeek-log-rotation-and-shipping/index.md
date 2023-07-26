@@ -174,9 +174,9 @@ may require higher availability and consistency. For such scenarios, we
 recommend *the opposite* strategy: **do not run the post-processing within Zeek.
 Decouple it instead.** One way to achieve this is by observing side effects. For
 example, [zeek-archiver](https://github.com/zeek/zeek-archiver) watches a
-directory for new log files that Zeek rotates in there. We have a dedicated
-[roadmap item](https://github.com/tenzir/public-roadmap/issues/51) directory
-watching.
+directory for new log files that Zeek rotates in there. Similarly, we have a
+dedicated [roadmap item](https://github.com/tenzir/public-roadmap/issues/51) for
+directory watching.
 
 Another approach is a dedciated [writer
 plugin](/blog/mobilizing-zeek-logs#writer-plugin) that immediately ship logs
