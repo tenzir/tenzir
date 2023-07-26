@@ -6,8 +6,8 @@ tags: [zeek, logs, shipping, rotation, pipelines]
 comments: true
 ---
 
-Did you know that [Zeek](http://zeek.org) support log rotation triggers, so that
-you can do anything you want with a newly rotated batch of logs?
+Did you know that [Zeek](http://zeek.org) supports log rotation triggers, so
+that you can do anything you want with a newly rotated batch of logs?
 
 ![Zeek Log Rotation](zeek-log-rotation.excalidraw.svg)
 
@@ -42,11 +42,11 @@ First, to activate log rotation, you need to set
 `Log::default_rotation_interval` to a non-zero value. The default of `0 secs`
 means that log rotation is disabled.
 
-Second, to customize what's happening on rotation you can is redefine
+Second, to customize what's happening on rotation you can redefine
 [`Log::default_rotation_postprocessor_cmd`](https://docs.zeek.org/en/master/scripts/base/frameworks/logging/main.zeek.html#id-Log::default_rotation_postprocessor_cmd)
 to point to a shell script.
 
-For example, to rotate every log files every 10 minutes with a custom `ingest`
+For example, to rotate all log files every 10 minutes with a custom `ingest`
 script, you can invoke Zeek as follows:
 
 ```bash
@@ -55,11 +55,11 @@ zeek -r trace.pcap \
   Log::default_rotation_interval=10mins
 ```
 
-Let's take a look at the `ingest` shell script in more detail. Zeek always pass
-6 parameters to the script:
+Let's take a look at the `ingest` shell script in more detail. Zeek always
+passes 6 arguments to the script:
 
 1. The filename of the log, e.g., `/path/to/conn.log`
-2. The type of the log (aka. `path`), such as `conn` or `http`.
+2. The type of the log (aka. `path`), such as `conn` or `http`
 3. Timestamp when Zeek opened the log file
 4. Timestamp when Zeek closed (= rotated) the log file
 5. A flag that is true when rotation occurred due to Zeek terminating
@@ -158,14 +158,14 @@ Zeek logs:
    ```
 
    The above Zeek script hooks up two pipelines via the function
-   `Tenzir::postprocess`. Each pipelines executes upon log rotation and receives
+   `Tenzir::postprocess`. Each pipeline executes upon log rotation and receives
    the Zeek log file as input. The first simply imports all data via
    [`import`](/operators/sinks/import) and the second writes the logs as
    [`parquet`](/formats/parquet) files using [`to`](/operators/sinks/to).
 
 ## Fate sharing
 
-Zeek implements the above desribed log rotation logic by spawning a separate
+Zeek implements the above described log rotation logic by spawning a separate
 child process. When the (parent) Zeek process dies, e.g., due power loss or
 running out of memory, it takes all children down along with it.
 
