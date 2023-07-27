@@ -25,11 +25,11 @@ directory to which Zeek periodically writes files. For example, the utility
 [zeek-archiver](https://github.com/zeek/zeek-archiver) does that.
 
 Generic log shippers can take care of that as well. Your mileage may vary. For
-example, [Filebeat][filebeat] works for stock Zeek only. Every log file parsing
-logic is hard-coded. If you have custom scripts or extend some logs, you're left
-alone. Filebeat also uses the stock Zeek JSON output, which has no type
-information. Filebeat then brings the typing back manually later as it converts
-the logs to the Elastic Common Schema (ECS).
+example, [Filebeat][filebeat] works for stock Zeek only. The parsing logic is
+hard-coded for every log type. If you have custom scripts or extend some logs,
+you're left alone. Filebeat also uses the stock Zeek JSON output, which has no
+type information. Filebeat then brings the typing back manually later as it
+converts the logs to the Elastic Common Schema (ECS).
 
 [filebeat]: https://www.elastic.co/guide/en/beats/filebeat/current/filebeat-module-zeek.html
 
@@ -37,9 +37,9 @@ the logs to the Elastic Common Schema (ECS).
 
 There's also a lesser known, push-based option using [Zeek's logging
 framework](https://docs.zeek.org/en/master/frameworks/logging.html). You can
-provide a shell script that Zeek invokes *whenever it rotates file*. The shell
-script receives the filename of the rotated file as argument, plus some
-additional metadata.
+provide a shell script that Zeek invokes *whenever it rotates a file*. The shell
+script receives the filename of the rotated file plus some additional metadata
+as arguments.
 
 First, to activate log rotation, you need to set
 `Log::default_rotation_interval` to a non-zero value. The default of `0 secs`
@@ -166,7 +166,7 @@ Zeek logs:
    [`import`](/operators/sinks/import) and the second writes the logs as
    [`parquet`](/formats/parquet) files using [`to`](/operators/sinks/to).
 
-## Fate sharing
+## Reliability
 
 Zeek implements the log rotation logic by spawning a separate child process.
 When the (parent) Zeek process dies, the children become orphaned and keep
@@ -193,7 +193,7 @@ more flexible push-based delivery.
 | ------------ |:--------:|:------------:|
 | Trigger      | rotation | new file/dir |
 | Complexity   |   low    |    medium    |
-| Fate Sharing | coupled  |  decoupled   |
+| Reliability  |   low    |    high      |
 
 If you are looking for an efficient way to get your Zeek logs flowing, [give
 Tenzir a try](/get-started). [Our Zeek
