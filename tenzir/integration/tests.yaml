@@ -902,8 +902,8 @@ tests:
     steps:
       - command: exec 'read zeek-tsv | head 1 | write json -c | shell rev'
         input: data/zeek/conn.log.gz
-    # TODO: Reenable this test once the non-deterministic Shell operator echo behavior is fixed.
-    # - command: exec 'shell "echo foo"'
+        # TODO: Reenable this test once the non-deterministic Shell operator echo behavior is fixed.
+        # - command: exec 'shell "echo foo"'
 
   Top and Rare Operators:
     fixture: ServerTester
@@ -980,19 +980,19 @@ tests:
     steps:
       - command: exec 'read zeek-tsv | tail 10 | flatten | to stdout'
         input: data/zeek/dns.log.gz
-    # TODO: Reenable tests with only record flattening.
-    # - command: exec 'read zeek-tsv | tail 10 | flatten -l | to stdout'
-    #   input: data/zeek/dns.log.gz
+        # TODO: Reenable tests with only record flattening.
+        # - command: exec 'read zeek-tsv | tail 10 | flatten -l | to stdout'
+        #   input: data/zeek/dns.log.gz
       - command: exec 'read json | flatten | to stdout'
         input: data/json/nested-object.json
       - command: exec 'read json | flatten | to stdout'
         input: data/json/nested-structure.json
-    # - command: exec 'read json | flatten -l | to stdout'
-    #   input: data/json/nested-structure.json
+        # - command: exec 'read json | flatten -l | to stdout'
+        #   input: data/json/nested-structure.json
       - command: exec 'read json | flatten | to stdout'
         input: data/json/record-in-list.json
-    # - command: exec 'read json | flatten -l | to stdout'
-    #   input: data/json/record-in-list.json
+        # - command: exec 'read json | flatten -l | to stdout'
+        #   input: data/json/record-in-list.json
       - command: exec 'read suricata | flatten | to stdout'
         input: data/suricata/eve.json
       - command: exec 'read suricata | flatten | to stdout'

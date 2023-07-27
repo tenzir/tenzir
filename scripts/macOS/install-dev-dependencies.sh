@@ -15,6 +15,7 @@ brew install \
     librdkafka \
     libunwind-headers \
     llvm \
+    md5sha1sum \
     ninja \
     openssl \
     pandoc \
