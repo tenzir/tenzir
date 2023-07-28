@@ -37,7 +37,7 @@ teardown() {
   local zeek_imports=()
   # The `check' function must be called with -c "pipe | line" for shell pipes.
   check --bg zeek_imports -c \
-    "zcat \"$DATADIR/zeek/conn.log.gz\" \
+    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b zeek"
   # Simple input redirection can be done by wrapping the full invocation with
   # curly braces.
@@ -50,7 +50,7 @@ teardown() {
   check --bg suri_imports \
     tenzir-ctl import -b -r "$DATADIR/suricata/eve.json" suricata
   check --bg zeek_imports -c \
-    "zcat \"$DATADIR/zeek/conn.log.gz\" \
+    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b zeek"
   check --bg suri_imports \
     tenzir-ctl import -b -r "$DATADIR/suricata/eve.json" suricata
@@ -67,23 +67,23 @@ teardown() {
 
 @test "batch size" {
   check -c \
-    "zcat \"$DATADIR/zeek/conn.log.gz\" \
+    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b zeek"
 
   check tenzir-ctl export ascii 'resp_h == 192.168.1.104'
 
   # import some more to make sure accounting data is in the system.
   check -c \
-    "zcat \"$DATADIR/zeek/conn.log.gz\" \
+    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b --batch-size=10 zeek"
   check -c \
-    "zcat \"$DATADIR/zeek/conn.log.gz\" \
+    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b --batch-size=1000 zeek"
   check -c \
-    "zcat \"$DATADIR/zeek/conn.log.gz\" \
+    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b --batch-size=100000 zeek"
   check -c \
-    "zcat \"$DATADIR/zeek/conn.log.gz\" \
+    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b --batch-size=1 -n 242 zeek"
 
   check -c \
