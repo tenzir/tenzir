@@ -1,0 +1,316 @@
+---
+title: Tenzir for Splunk Users
+authors: mavam
+date: 2023-08-03
+tags: [zeek, threat hunting, pipelines, tql, splunk, spl]
+comments: true
+---
+
+The syntax of [Tenzir Query Language (TQL)](/language) looks remarkably similar
+to Splunk's [Search Processing Language (SPL)][spl]. This is by no means an
+accident. Having spoken with numerous security practitioners, we found a
+universally positive sentiment about the ease of use. In this blog post, we
+explain how the two languages differ using a threat hunting examples.
+
+[spl]: https://docs.splunk.com/Documentation/SplunkCloud/latest/Search/Aboutthesearchlanguage
+
+![SPL versus TQL](spl-vs-tql.excalidraw.svg)
+
+<!--truncate-->
+
+## Why not SQL?
+
+Splunk was the first tool that provided an integrated solution from interactive
+data exploration to management-grade dashboards-all powered by dataflow
+pipelines. The success of Splunk is not only resulting from their first-mover
+advantage in the market, but also because their UX truly resonated with users:
+their target audience *liked* the user experience. It was *easy* to get things
+done.
+
+At Tenzir, we have a very clear target audience: security practitioners. They
+are not necessarily data engineers and fluent in SQL and low-level data tools,
+but rather identify as blue teamers, incident responders, threat hunters,
+detection engineers, threat intelligence analysts, and other domain experts. Our
+goal is cater to these folks, without requiring them to have deep understanding
+of relational algebra.
+
+The reason why we opted for a dataflow language is that it simplifies the
+reasoning: one step at a time. At least conceptually, because a smart system
+optimizes the execution of the users intent so that the pipeline runs
+efficiently. Any declarative language has that property, SQL in particular. But
+the difference to SQL is that a sequential dataflow makes it easy to simply
+*append* your next operation, as opposed to editing a query in the middle to
+inject a complicated clause somewhere. Instead of having to understand the
+entire SQL query, you just need to append an operation at the end that does the
+next thing. This dataflow pipeline style is becoming more an more popular. Most
+SIEMs have a language of their own, like Splunk. [Kusto][kusto] is another great
+example with a wide user base in security.
+
+[kusto]: https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/
+
+In fact, there's often an isomorphic SQL expression because a lot of the
+underlying engines internally map to the same Volcano-style model of execution.
+This gives rise to [transpiling dataflow languages to other execution
+platforms][splunk-transpiler]. Ultimately, our goal is that security
+practitioners do not have to think *any* of this and stay in their happy place,
+which means avoiding context switches to lower-level data primitives.
+
+[splunk-transpiler]: https://www.databricks.com/blog/2022/12/16/accelerating-siem-migrations-spl-pyspark-transpiler.html
+
+Now that we got the SQL topic out of the way, let's dive into some hands-on
+examples that illustrate the similarities and differences of SPL and TQL.
+
+## Examples
+
+Back in 2020, Eric Ooi wrote about [threat hunting with
+Zeek](https://www.ericooi.com/zeekurity-zen-part-iv-threat-hunting-with-zeek/),
+providing a set of Splunk queries that are corner stones for threat hunting.
+
+### Connections to destination port > 1024
+
+Splunk:
+
+```splunk-spl
+index=zeek sourcetype=zeek_conn id.resp_p > 1024
+| chart count over service by id.resp_p
+```
+
+Tenzir:
+
+```kusto
+export
+| where #schema == "zeek.conn" && id.resp_p > 1024
+| summarize count(.) by id.resp_p
+```
+
+In Splunk, you typically start with an `index=X` to specify your dataset. In
+Tenzir, you start with a [source operator](/operators/sources). To run a query
+over historical data, we use the [`export`](/operators/sources/export) operator.
+
+The subsequent [`where`](/operators/transformations/where) operator is a
+transformation to filter the stream of events with the
+[expression](/language/expressions) `#schema == "zeek.conn" && id.resp_p >
+1024`. In SPL, you write that expression directly into `index`. In TQL we
+logically separate this because one operator should have exactly one purpose.
+Under the hood, the TQL optimizer does predicate pushdown to avoid first
+exporting the entire database and only then applying the filter.
+
+Why does this single responsibility principle matter? Because its critical for
+*composition*: we can now replace `export` with another data source, like
+[`from`](/operators/sources/from) [`kafka`](/connectors/kafka) and the rest of
+the pipeline stays the same.
+
+:::note charting
+Tenzir doesn't have charting capabilities (yet), so in this and subsequent
+examples, we end with the data, or replace a `chart` query with an aggregation.
+:::
+
+### Top 10 sources by number of connections
+
+Splunk:
+
+```splunk-spl
+index=zeek sourcetype=zeek_conn
+| top id.orig_h
+| head 10
+```
+
+Tenzir:
+
+```splunk-spl
+export
+| where #schema == "zeek.conn"
+| top id.orig_h
+| head 10
+```
+
+Note the similarity. Like SPL, we support
+[`top`](/operators/transformations/top) and
+[`rare`](/operators/transformations/rare) to make Splunk users feel at home.
+
+### Top 10 sources by bytes sent
+
+Splunk:
+
+```splunk-spl
+index=zeek sourcetype=zeek_conn
+| stats values(service) as Services sum(orig_bytes) as B by id.orig_h
+| sort -B
+| head 10
+| eval MB = round(B/1024/1024,2)
+| eval GB = round(MB/1024,2)
+| rename id.orig_h as Source
+| fields Source B MB GB Services
+```
+
+Tenzir:
+
+```splunk-spl
+export
+| where #schema == "zeek.conn"
+| summarize Services=distinct(service), B=sum(orig_bytes) by id.orig_h
+| sort B desc
+| head 10
+| extend MB=round(B/1024/1024,2)
+| extend GB=round(MB/1024,2)
+| put Source=id.orig_h, B, MB, GB, Services
+```
+
+This example is a bit more involved. Let's take it apart.
+
+- We opted for Kusto's syntax of sorting, by appending an `asc` or `desc`
+  qualifier after the field name. `sort -B` translates into `sort B desc`,
+  whereas `sort B` into `sort B asc`.
+
+- SPL's `eval` maps to [`extend`](/operators/transformations/extend).
+
+- The difference between `extend` and [`put`](/operators/transformations/put) is
+  that `extend` keeps all fields as is, whereas `put` reorders fields and
+  performs an explicit projection with the provided fields.
+
+### Bytes transferred over time by service
+
+Splunk:
+
+```splunk-spl
+index=zeek sourcetype="zeek_conn" OR sourcetype="zeek_conn_long"
+| eval orig_megabytes = round(orig_bytes/1024/1024,2)
+| eval resp_megabytes = round(resp_bytes/1024/1024,2)
+| eval orig_gigabytes = round(orig_megabytes/1024,2)
+| eval resp_gigabytes = round(resp_megabytes/1024,2)
+| timechart sum(orig_gigabytes) AS 'Outgoing Gigabytes',sum(resp_gigabytes) AS 'Incoming Gigabytes' by service span=1h
+```
+
+Tenzir:
+
+```splunk-spl
+export
+| where #schema == /zeek\.conn.*/
+| extend orig_megabytes=round(orig_bytes/1024/1024, 2)
+| extend resp_megabytes=round(orig_bytes/1024/1024, 2)
+| extend orig_gigabytes=round(orig_megabytes/1024, 2)
+| extend resp_gigabytes=round(orig_megabytes/1024, 2)
+| summarize 'Outgoing Gigabytes'=sum(orig_gigabytes), 'Incoming Gigabytes'=sum(resp_gigabytes) by service resolution 1h
+```
+
+This example also looks quite similar in structure.
+
+- This query spreads over two data sources: the event `zeek.conn` and
+  `zeek.conn_long`. The latter tracks long-running connections and is available
+  as [separate package](https://github.com/corelight/zeek-long-connections).
+
+- TQLs's `#schema` selector in an expression is responsible for filtering the
+  data sources. This is because all TQL pipelines are *multi-schema*, i.e., they
+  can process more than a single type of data.
+
+### Rare JA3 hashes
+
+Splunk:
+
+```splunk-spl
+index=zeek sourcetype=zeek_ssl
+| rare ja3
+```
+
+Tenzir:
+
+```splunk-spl
+export
+| where #schema == "zeek.ssl"
+| rare ja3
+| head 10
+```
+
+This example shows again how to select a specific data source and perform some
+"stack counting".
+
+### Expired certificates
+
+Splunk:
+
+```splunk-spl
+index=zeek sourcetype=zeek_x509
+| convert num(certificate.not_valid_after) AS cert_expire
+| eval current_time = now(), cert_expire_readable = strftime(cert_expire,"%Y-%m-%dT%H:%M:%S.%Q"), current_time_readable=strftime(current_time,"%Y-%m-%dT%H:%M:%S.%Q")
+| where current_time > cert_expire
+```
+
+Tenzir:
+
+```splunk-spl
+export
+| where certificate.not_valid_after > now()
+```
+
+This example shows the benefit of native time types (and Tenzir's rich type
+system in more generally).
+
+- TQL's [type system](/data-model/type-system) has first-class support for times
+  and durations.
+
+- TQL's [`zeek-tsv`](/formats/zeek-tsv) parser preserves `time` types natively,
+  so you don't have to massage strings at query time.
+
+### Large DNS queries
+
+Splunk:
+
+```splunk-spl
+index=zeek sourcetype=zeek_dns
+| eval query_length = len(query)
+| where query_length > 75
+| table _time id.orig_h id.resp_h proto query query_length answer
+```
+
+Tenzir:
+
+```splunk-spl
+export
+| extend query_length = length(zeek.dns.query)
+| where query_length > 75
+| select #timestamp, id.orig_h, id.resp_h, proto, query, query_length
+```
+
+We don't have functions in TQL. *Yet*. It's one of our most important roadmap
+items at the time of writing, so stay tuned.
+
+If we had functions, we would translate this query as shown above.
+Splunk's `len` would map to Tenzir's `length` function, and the `_time`
+field maps to the `#timestamp` selector.
+
+### Query responses with NXDOMAIN
+
+Splunk:
+
+```splunk-spl
+index=zeek sourcetype=zeek_dns rcode_name=NXDOMAIN
+| table _time id.orig_h id.resp_h proto query
+```
+
+Tenzir:
+
+```splunk-spl
+export
+| where zeek.dns.rcode_name == "NXDOMAIN"
+| select #timestamp, id.orig_h, id.resp_h, proto, query
+```
+
+The `table` operator in splunk outputs the data in tabular form. This is the
+default for our [app](/setup-guides/use-the-app). There's also an
+[upcoming](https://github.com/tenzir/tenzir/pull/3113) `write table` format to
+generate textual representation outside the app.
+
+## Summary
+
+In this blog we've juxtaposed the languages of Splunk (SPL) and Tenzir (TQL).
+They are remarkably similar—and that's not accidental. When we talked to
+security analysts we often heard that Splunk has a great UX. Even our own
+engineers that live on the command line find this mindset natural. But Splunk
+was not our only inspiration, we also drew inspiration from Kusto and others.
+
+As we created TQL, we wanted to learn from missed opportunities and
+bolt-on growth from past efforts, while at the same time doubling down on the
+successes others have confirmed.
+
+If you'd like to give TQL a spin, [try our community edition](/get-started) for
+free. A demo node with examples pipelines is waiting for you.
