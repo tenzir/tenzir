@@ -206,6 +206,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
       diagnostic::error("expected pipeline to end with a sink{}", suffix)
         .docs("https://docs.tenzir.com/next/operators/sinks")
         .done());
+    return start_rp;
   }
   if (not node) {
     for (const auto& op : pipe.operators()) {
