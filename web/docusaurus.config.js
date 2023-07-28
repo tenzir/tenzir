@@ -246,7 +246,7 @@ async function createConfig() {
         },
         announcementBar: {
           content:
-            'Zeekers & Suricats! Learn <a href="/blog/zeek-and-ye-shall-pipe">how to use the <code>shell</code> operator</a> to lift Zeek & Suricata into a Tenzir pipeline.',
+            'Splunk user? <a href="/blog/tenzir-for-splunk-users">Our latest blog</a> compares SPL to our own TQL.',
           backgroundColor: '#f1f2f2',
           isCloseable: true,
         },
