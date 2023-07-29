@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/collect.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/atoms.hpp>
@@ -31,7 +33,8 @@ auto connector_type() -> type {
     "tenzir.connector",
     record_type{
       {"name", string_type{}},
-      {"type", string_type{}},
+      {"loader", bool_type{}},
+      {"saver", bool_type{}},
     },
   };
 }
@@ -41,7 +44,8 @@ auto format_type() -> type {
     "tenzir.format",
     record_type{
       {"name", string_type{}},
-      {"type", string_type{}},
+      {"printer", bool_type{}},
+      {"parser", bool_type{}},
     },
   };
 }
@@ -51,7 +55,9 @@ auto operator_type() -> type {
     "tenzir.operator",
     record_type{
       {"name", string_type{}},
-      {"type", string_type{}},
+      {"source", bool_type{}},
+      {"transformation", bool_type{}},
+      {"sink", bool_type{}},
     },
   };
 }
@@ -89,19 +95,26 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    auto contains = [](const auto& plugins, const auto& name) -> bool {
+      auto f = [&](const auto& plugin) {
+        return plugin->name() == name;
+      };
+      return std::find_if(plugins.begin(), plugins.end(), f) != plugins.end();
+    };
     if (args_.aspect.inner == "connectors") {
-      auto builder = table_slice_builder{operator_type()};
-      for (const auto* plugin : plugins::get<loader_parser_plugin>()) {
-        if (not(builder.add(plugin->name()) && builder.add("loader"))) {
-          diagnostic::error("failed to add loader")
-            .note("from `show {}`", args_.aspect.inner)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-      }
-      for (const auto* plugin : plugins::get<saver_parser_plugin>()) {
-        if (not(builder.add(plugin->name()) && builder.add("saver"))) {
-          diagnostic::error("failed to add saver")
+      auto loaders = collect(plugins::get<loader_parser_plugin>());
+      auto savers = collect(plugins::get<saver_parser_plugin>());
+      auto connectors = std::set<std::string>{};
+      for (const auto* plugin : loaders)
+        connectors.insert(plugin->name());
+      for (const auto* plugin : savers)
+        connectors.insert(plugin->name());
+      auto builder = table_slice_builder{connector_type()};
+      for (const auto& connector : connectors) {
+        if (not(builder.add(connector)
+                && builder.add(contains(loaders, connector))
+                && builder.add(contains(savers, connector)))) {
+          diagnostic::error("failed to add connector")
             .note("from `show {}`", args_.aspect.inner)
             .emit(ctrl.diagnostics());
           co_return;
@@ -109,18 +122,18 @@ public:
       }
       co_yield builder.finish();
     } else if (args_.aspect.inner == "formats") {
+      auto parsers = collect(plugins::get<parser_parser_plugin>());
+      auto printers = collect(plugins::get<printer_parser_plugin>());
+      auto formats = std::set<std::string>{};
+      for (const auto* plugin : parsers)
+        formats.insert(plugin->name());
+      for (const auto* plugin : printers)
+        formats.insert(plugin->name());
       auto builder = table_slice_builder{format_type()};
-      for (const auto* plugin : plugins::get<parser_parser_plugin>()) {
-        if (not(builder.add(plugin->name()) && builder.add("parser"))) {
-          diagnostic::error("failed to add parser")
-            .note("from `show {}`", args_.aspect.inner)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-      }
-      for (const auto* plugin : plugins::get<printer_parser_plugin>()) {
-        if (not(builder.add(plugin->name()) && builder.add("printer"))) {
-          diagnostic::error("failed to add printer")
+      for (const auto& format : formats) {
+        if (not(builder.add(format) && builder.add(contains(parsers, format))
+                && builder.add(contains(printers, format)))) {
+          diagnostic::error("failed to add format")
             .note("from `show {}`", args_.aspect.inner)
             .emit(ctrl.diagnostics());
           co_return;
@@ -132,9 +145,9 @@ public:
       for (const auto* plugin : plugins::get<operator_parser_plugin>()) {
         // TODO: figure out how we can get the operator type. Ideally also it's
         // arguments.
-        if (not(builder.add(plugin->name())
-                && builder.add(std::string{"source|transformation|sink"}))) {
-          diagnostic::error("failed to add partition entry")
+        if (not(builder.add(plugin->name()) && builder.add(false)
+                && builder.add(false) && builder.add(false))) {
+          diagnostic::error("failed to add operator")
             .note("from `show {}`", args_.aspect.inner)
             .emit(ctrl.diagnostics());
           co_return;
