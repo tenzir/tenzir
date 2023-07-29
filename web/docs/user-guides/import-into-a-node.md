@@ -13,7 +13,7 @@ Consider this example that takes a Zeek conn.log from our M57 dataset:
 ```
 from file Zeek/conn.log read zeek-tsv
 | select id.orig_h, id.resp_h, orig_bytes, resp_bytes
-| where orig_bytes > 1 MiB
+| where orig_bytes > 1 Mi
 | import
 ```
 
