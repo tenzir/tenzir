@@ -26,15 +26,16 @@
 
 namespace tenzir::plugins::show {
 
-auto table_type() -> type {
+auto partition_type() -> type {
   return type{
-    "tenzir.table",
+    "tenzir.partition",
     record_type{
       {"uuid", string_type{}},
       {"memory_usage", uint64_type{}},
       {"min_import_time", time_type{}},
       {"max_import_time", time_type{}},
       {"version", uint64_type{}},
+      {"schema", string_type{}},
     },
   };
 }
@@ -58,7 +59,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    if (args_.aspect.inner == "tables") {
+    if (args_.aspect.inner == "partitions") {
       // TODO: Some of the the requests this operator makes are blocking, so we
       // have to create a scoped actor here; once the operator API uses async we
       // can offer a better mechanism here.
@@ -88,16 +89,17 @@ public:
         ctrl.abort(std::move(error));
         co_return;
       }
-      auto builder = table_slice_builder{table_type()};
+      auto builder = table_slice_builder{partition_type()};
       // FIXME: ensure that we do no use more most 2^15 rows.
       for (const auto& synopsis : synopses) {
-        // TODO: add schema
+        // TODO: add complete schema
         if (not(builder.add(fmt::to_string(synopsis.uuid))
-                && builder.add(synopsis.synopsis->memusage())
+                && builder.add(uint64_t{synopsis.synopsis->memusage()})
                 && builder.add(synopsis.synopsis->min_import_time)
                 && builder.add(synopsis.synopsis->max_import_time)
-                && builder.add(synopsis.synopsis->version))) {
-          diagnostic::error("failed to add table entry")
+                && builder.add(synopsis.synopsis->version)
+                && builder.add(synopsis.synopsis->schema.name()))) {
+          diagnostic::error("failed to add partition entry")
             .note("from `show`")
             .emit(ctrl.diagnostics());
           co_return;
@@ -144,7 +146,7 @@ public:
     operator_args args;
     parser.add(args.aspect, "<aspect>");
     parser.parse(p);
-    auto aspects = std::set<std::string_view>{"tables"};
+    auto aspects = std::set<std::string_view>{"partitions"};
     if (not aspects.contains(args.aspect.inner))
       diagnostic::error("aspect `{}` could not be found", args.aspect.inner)
         .primary(args.aspect.source)
