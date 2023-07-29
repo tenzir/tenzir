@@ -26,6 +26,36 @@
 
 namespace tenzir::plugins::show {
 
+auto connector_type() -> type {
+  return type{
+    "tenzir.connector",
+    record_type{
+      {"name", string_type{}},
+      {"type", string_type{}},
+    },
+  };
+}
+
+auto format_type() -> type {
+  return type{
+    "tenzir.format",
+    record_type{
+      {"name", string_type{}},
+      {"type", string_type{}},
+    },
+  };
+}
+
+auto operator_type() -> type {
+  return type{
+    "tenzir.operator",
+    record_type{
+      {"name", string_type{}},
+      {"type", string_type{}},
+    },
+  };
+}
+
 auto partition_type() -> type {
   return type{
     "tenzir.partition",
@@ -59,7 +89,59 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    if (args_.aspect.inner == "partitions") {
+    if (args_.aspect.inner == "connectors") {
+      auto builder = table_slice_builder{operator_type()};
+      for (const auto* plugin : plugins::get<loader_parser_plugin>()) {
+        if (not(builder.add(plugin->name()) && builder.add("loader"))) {
+          diagnostic::error("failed to add loader")
+            .note("from `show {}`", args_.aspect.inner)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+      }
+      for (const auto* plugin : plugins::get<saver_parser_plugin>()) {
+        if (not(builder.add(plugin->name()) && builder.add("saver"))) {
+          diagnostic::error("failed to add saver")
+            .note("from `show {}`", args_.aspect.inner)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+      }
+      co_yield builder.finish();
+    } else if (args_.aspect.inner == "formats") {
+      auto builder = table_slice_builder{format_type()};
+      for (const auto* plugin : plugins::get<parser_parser_plugin>()) {
+        if (not(builder.add(plugin->name()) && builder.add("parser"))) {
+          diagnostic::error("failed to add parser")
+            .note("from `show {}`", args_.aspect.inner)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+      }
+      for (const auto* plugin : plugins::get<printer_parser_plugin>()) {
+        if (not(builder.add(plugin->name()) && builder.add("printer"))) {
+          diagnostic::error("failed to add printer")
+            .note("from `show {}`", args_.aspect.inner)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+      }
+      co_yield builder.finish();
+    } else if (args_.aspect.inner == "operators") {
+      auto builder = table_slice_builder{operator_type()};
+      for (const auto* plugin : plugins::get<operator_parser_plugin>()) {
+        // TODO: figure out how we can get the operator type. Ideally also it's
+        // arguments.
+        if (not(builder.add(plugin->name())
+                && builder.add(std::string{"source|transformation|sink"}))) {
+          diagnostic::error("failed to add partition entry")
+            .note("from `show {}`", args_.aspect.inner)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+      }
+      co_yield builder.finish();
+    } else if (args_.aspect.inner == "partitions") {
       // TODO: Some of the the requests this operator makes are blocking, so we
       // have to create a scoped actor here; once the operator API uses async we
       // can offer a better mechanism here.
@@ -100,7 +182,7 @@ public:
                 && builder.add(synopsis.synopsis->version)
                 && builder.add(synopsis.synopsis->schema.name()))) {
           diagnostic::error("failed to add partition entry")
-            .note("from `show`")
+            .note("from `show {}`", args_.aspect.inner)
             .emit(ctrl.diagnostics());
           co_return;
         }
@@ -119,8 +201,11 @@ public:
     return true;
   }
 
+  // TODO: is it a good idea to make this function conditional?
   auto location() const -> operator_location override {
-    return operator_location::remote;
+    if (args_.aspect.inner == "partitions")
+      return operator_location::remote;
+    return operator_location::local;
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -146,7 +231,12 @@ public:
     operator_args args;
     parser.add(args.aspect, "<aspect>");
     parser.parse(p);
-    auto aspects = std::set<std::string_view>{"partitions"};
+    auto aspects = std::set<std::string_view>{
+      "connectors",
+      "formats",
+      "operators",
+      "partitions",
+    };
     if (not aspects.contains(args.aspect.inner))
       diagnostic::error("aspect `{}` could not be found", args.aspect.inner)
         .primary(args.aspect.source)
