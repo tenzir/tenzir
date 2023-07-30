@@ -23,6 +23,7 @@ Available aspects:
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).
 - `partitions`: shows all partitions of a (remote) node.
+- `types`: shows all known type definitions.
 
 ## Examples
 
