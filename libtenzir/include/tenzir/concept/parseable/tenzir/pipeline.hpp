@@ -13,6 +13,7 @@
 #include "tenzir/concept/parseable/core/plus.hpp"
 #include "tenzir/concept/parseable/string/char.hpp"
 #include "tenzir/concept/parseable/string/char_class.hpp"
+#include "tenzir/concept/parseable/string/string.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/concept/parseable/tenzir/identifier.hpp"
 #include "tenzir/detail/string.hpp"
@@ -56,7 +57,7 @@ const inline auto extractor_value_assignment_list
 const inline auto aggregation_function
   = -(extractor >> optional_ws_or_comment >> '=' >> optional_ws_or_comment)
     >> plugin_name >> optional_ws_or_comment >> '(' >> optional_ws_or_comment
-    >> extractor >> optional_ws_or_comment >> ')';
+    >> (extractor | str{"."}) >> optional_ws_or_comment >> ')';
 const inline auto aggregation_function_list
   = (aggregation_function % (',' >> optional_ws_or_comment));
 

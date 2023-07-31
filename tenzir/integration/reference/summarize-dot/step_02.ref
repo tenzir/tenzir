@@ -1,0 +1,7 @@
+error: could not parse `summarize` operator
+ --> <input>:1:18
+  |
+1 | read zeek-json | summarize x=count(_path) by .
+  |                  ^^^^^^^^^ 
+  |
+  = note: !! syntax_error: failed to parse summarize operator: ' x=count(_path) by .'

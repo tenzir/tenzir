@@ -1,0 +1,7 @@
+error: could not parse `summarize` operator
+ --> <input>:1:18
+  |
+1 | read zeek-json | summarize x=distinct(.)
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: !! syntax_error: the `.` extractor is currently not supported for `distinct`
