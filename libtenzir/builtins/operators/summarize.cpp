@@ -831,6 +831,13 @@ public:
     }
     config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
     config.time_resolution = std::move(std::get<2>(parsed_aggregations));
+    if (config.time_resolution and config.group_by_extractors.empty()) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, "found `resolution` specifier "
+                                          "without `by` clause"),
+      };
+    }
     return {
       std::string_view{f, l},
       std::make_unique<summarize_operator>(std::move(config)),
