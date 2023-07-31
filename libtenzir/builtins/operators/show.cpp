@@ -138,45 +138,6 @@ auto type_type() -> type {
   };
 }
 
-/// Adds data to a field or list guard.
-auto add(auto& guard, const data& x) -> caf::error {
-  auto f = detail::overload{
-    [&](const auto&) {
-      return guard.add(make_view(x));
-    },
-    [&](const list& values) -> caf::error {
-      auto nested = guard.push_list();
-      for (const auto& value : values)
-        if (auto err = add(nested, value))
-          return err;
-      return {};
-    },
-    [&](const map& values) -> caf::error {
-      auto nested = guard.push_list();
-      for (const auto& [key, value] : values) {
-        auto record = nested.push_record();
-        auto key_field = record.push_field("key");
-        if (auto err = add(key_field, key))
-          return err;
-        auto value_field = record.push_field("value");
-        if (auto err = add(key_field, value))
-          return err;
-      }
-      return {};
-    },
-    [&](const record& fields) -> caf::error {
-      auto nested = guard.push_record();
-      for (const auto& [key, value] : fields) {
-        auto nested_field = nested.push_field(key);
-        if (auto err = add(nested_field, value))
-          return err;
-      }
-      return {};
-    },
-  };
-  caf::visit(f, x);
-}
-
 /// Base class for aspects that users can show.
 class aspect {
 public:
@@ -390,18 +351,6 @@ public:
       ctrl.abort(std::move(error));
       co_return;
     }
-    // TODO: this would be the preferred way to render the data, but
-    // to_definition() does not provide a uniform schema.
-    /*
-    for (const auto& type : types) {
-      auto definition = type.to_definition();
-      auto builder = adaptive_table_slice_builder{type::infer(definition)};
-      auto row = builder.push_row();
-      auto field = row.push_field("type");
-      add(field, definition);
-      co_yield builder.finish();
-    }
-    */
     auto builder = adaptive_table_slice_builder{type_type()};
     for (const auto& type : types) {
       auto row = builder.push_row();
