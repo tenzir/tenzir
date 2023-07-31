@@ -27,6 +27,8 @@
 #include <string>
 #include <vector>
 
+using namespace tenzir::si_literals;
+
 namespace tenzir::plugins::show {
 
 namespace {
@@ -357,8 +359,9 @@ public:
       co_return;
     }
     auto builder = table_slice_builder{partition_type()};
-    // FIXME: ensure that we do no use more most 2^15 rows.
-    for (const auto& synopsis : synopses) {
+    constexpr auto max_rows = size_t{8_Ki};
+    for (auto i = 0u; i < synopses.size(); ++i) {
+      auto& synopsis = synopses[i];
       if (not(builder.add(fmt::to_string(synopsis.uuid))
               && builder.add(uint64_t{synopsis.synopsis->memusage()})
               && builder.add(synopsis.synopsis->min_import_time)
@@ -370,8 +373,13 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
+      if ((i + 1) % max_rows == 0) {
+        co_yield builder.finish();
+        builder = std::exchange(builder, table_slice_builder{partition_type()});
+      }
     }
-    co_yield builder.finish();
+    if (synopses.size() % max_rows != 0) // no empty slices
+      co_yield builder.finish();
   }
 };
 
