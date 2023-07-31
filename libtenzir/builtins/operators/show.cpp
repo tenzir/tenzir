@@ -138,40 +138,44 @@ auto type_type() -> type {
   };
 }
 
-/*
 /// Adds data to a field or list guard.
-void add(auto& guard, const data& x) {
+auto add(auto& guard, const data& x) -> caf::error {
   auto f = detail::overload{
     [&](const auto&) {
-      auto err = guard.add(make_view(x));
-      TENZIR_ASSERT_CHEAP(!err);
+      return guard.add(make_view(x));
     },
-    [&](const list& values) {
+    [&](const list& values) -> caf::error {
       auto nested = guard.push_list();
       for (const auto& value : values)
-        add(nested, value);
+        if (auto err = add(nested, value))
+          return err;
+      return {};
     },
-    [&](const map& entries) {
+    [&](const map& values) -> caf::error {
       auto nested = guard.push_list();
-      for (const auto& [key, value] : entries) {
+      for (const auto& [key, value] : values) {
         auto record = nested.push_record();
         auto key_field = record.push_field("key");
-        add(key_field, key);
+        if (auto err = add(key_field, key))
+          return err;
         auto value_field = record.push_field("value");
-        add(key_field, value);
+        if (auto err = add(key_field, value))
+          return err;
       }
+      return {};
     },
-    [&](const record& fields) {
+    [&](const record& fields) -> caf::error {
       auto nested = guard.push_record();
       for (const auto& [key, value] : fields) {
         auto nested_field = nested.push_field(key);
-        add(nested_field, value);
+        if (auto err = add(nested_field, value))
+          return err;
       }
+      return {};
     },
   };
   caf::visit(f, x);
 }
-*/
 
 /// Base class for aspects that users can show.
 class aspect {
