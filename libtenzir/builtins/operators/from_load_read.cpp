@@ -257,7 +257,7 @@ public:
 class read_plugin final : virtual public operator_plugin<read_operator> {
 public:
   auto signature() const -> operator_signature override {
-    return {.source = true};
+    return {.transformation = true};
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

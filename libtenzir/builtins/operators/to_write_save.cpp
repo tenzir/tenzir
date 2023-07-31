@@ -149,7 +149,7 @@ private:
 class write_plugin final : public virtual operator_plugin<write_operator> {
 public:
   auto signature() const -> operator_signature override {
-    return {.sink = true};
+    return {.transformation = true};
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
