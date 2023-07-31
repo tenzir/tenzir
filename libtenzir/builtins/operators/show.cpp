@@ -527,7 +527,7 @@ public:
     -> optimize_result override {
     (void)order;
     (void)filter;
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    return do_not_optimize(*this);
   }
 
   friend auto inspect(auto& f, show_operator& x) -> bool {
