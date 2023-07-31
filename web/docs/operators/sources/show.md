@@ -27,8 +27,8 @@ Available aspects:
 - `connectors`: shows all available [connectors](../../connectors.md).
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).
-- `partitions`: shows all partitions of a (remote) node.
-- `types`: shows all known type definitions.
+- `partitions`: shows all partitions of a remote node.
+- `types`: shows all known type at a remote node.
 
 ## Examples
 
