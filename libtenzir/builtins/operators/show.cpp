@@ -144,7 +144,7 @@ void add(auto& guard, const data& x) {
   auto f = detail::overload{
     [&](const auto&) {
       auto err = guard.add(make_view(x));
-      (void)err;
+      TENZIR_ASSERT_CHEAP(!err);
     },
     [&](const list& values) {
       auto nested = guard.push_list();
@@ -402,11 +402,12 @@ public:
     for (const auto& type : types) {
       auto row = builder.push_row();
       auto err = row.push_field("name").add(type.name());
+      TENZIR_ASSERT_CHEAP(!err);
       auto structure = row.push_field("structure").push_record();
       auto f = detail::overload{
         [&](const auto&) {
           auto err = structure.push_field("basic").add(fmt::to_string(type));
-          (void)err;
+          TENZIR_ASSERT_CHEAP(!err);
         },
         [&](const enumeration_type& e) {
           auto enum_field = structure.push_field("enum");
@@ -415,24 +416,26 @@ public:
             auto field_record = list.push_record();
             auto name = field_record.push_field("name");
             auto err = name.add(field.name);
+            TENZIR_ASSERT_CHEAP(!err);
             auto key = field_record.push_field("key");
             err = key.add(uint64_t{field.key});
-            (void)err;
+            TENZIR_ASSERT_CHEAP(!err);
           }
         },
         [&](const list_type& l) {
           auto list = structure.push_field("list");
           auto err = list.add(fmt::to_string(l.value_type()));
-          (void)err;
+          TENZIR_ASSERT_CHEAP(!err);
         },
         [&](const map_type& m) {
           auto map = structure.push_field("map");
           auto record = map.push_record();
           auto key_field = record.push_field("key");
           auto err = key_field.add(fmt::to_string(m.key_type()));
+          TENZIR_ASSERT_CHEAP(!err);
           auto value_field = record.push_field("value");
           err = value_field.add(fmt::to_string(m.value_type()));
-          (void)err;
+          TENZIR_ASSERT_CHEAP(!err);
         },
         [&](const record_type& r) {
           auto record = structure.push_field("record");
@@ -441,9 +444,10 @@ public:
             auto field_record = list.push_record();
             auto field_name = field_record.push_field("name");
             auto err = field_name.add(field.name);
+            TENZIR_ASSERT_CHEAP(!err);
             auto field_type = field_record.push_field("type");
             err = field_type.add(fmt::to_string(field.type));
-            (void)err;
+            TENZIR_ASSERT_CHEAP(!err);
           }
         },
       };
@@ -455,9 +459,10 @@ public:
       for (auto& attribute : attributes) {
         auto record = list.push_record();
         err = record.push_field("key").add(attribute.key);
+        TENZIR_ASSERT_CHEAP(!err);
         err = record.push_field("value").add(attribute.value);
+        TENZIR_ASSERT_CHEAP(!err);
       }
-      (void)err;
     }
     co_yield builder.finish();
   }
