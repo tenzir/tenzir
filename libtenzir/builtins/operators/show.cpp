@@ -204,6 +204,7 @@ auto add(auto& guard, const type& t) -> caf::error {
     err = record.push_field("value").add(attribute.value);
     TENZIR_ASSERT_CHEAP(!err);
   }
+  return {};
 }
 
 /// Base class for aspects that users can show.
