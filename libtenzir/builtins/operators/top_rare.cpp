@@ -26,6 +26,10 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
     return std::string{Name.str()};
   }
 
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{
       std::string{Name.str()}, fmt::format("https://docs.tenzir.com/docs/next/"

@@ -234,8 +234,10 @@ public:
       for (const auto* plugin : plugins::get<operator_parser_plugin>()) {
         // TODO: figure out how we can get the operator type. Ideally also
         // it's arguments.
-        if (not(builder.add(plugin->name()) && builder.add(false)
-                && builder.add(false) && builder.add(false))) {
+        auto signature = plugin->signature();
+        if (not(builder.add(plugin->name()) && builder.add(signature.source)
+                && builder.add(signature.transformation)
+                && builder.add(signature.sink))) {
           diagnostic::error("failed to add operator")
             .note("from `show {}`", args_.aspect.inner)
             .emit(ctrl.diagnostics());
@@ -399,10 +401,7 @@ public:
     return true;
   }
 
-  // TODO: is it a good idea to make this function conditional?
   auto location() const -> operator_location override {
-    if (args_.aspect.inner == "partitions" || args_.aspect.inner == "types")
-      return operator_location::remote;
     return operator_location::local;
   }
 
@@ -423,6 +422,10 @@ private:
 
 class plugin final : public virtual operator_plugin<show_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"show", "https://docs.tenzir.com/next/"
                                           "operators/sources/show"};

@@ -141,6 +141,10 @@ private:
 
 class plugin final : public virtual operator_plugin<measure_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     bool real_time = false;
     bool cumulative = false;

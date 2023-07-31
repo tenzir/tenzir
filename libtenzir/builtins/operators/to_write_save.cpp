@@ -148,6 +148,10 @@ private:
 
 class write_plugin final : public virtual operator_plugin<write_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "write <printer> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/transformations/write";
@@ -234,6 +238,10 @@ private:
 
 class save_plugin final : public virtual operator_plugin<save_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "save <saver> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sinks/save";
@@ -352,6 +360,10 @@ public:
   auto name() const -> std::string override {
     return "to";
   };
+
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
+  }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "to <saver> <args>... [write <printer> <args>...]";

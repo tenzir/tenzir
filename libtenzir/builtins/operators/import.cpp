@@ -142,6 +142,10 @@ public:
 
 class plugin final : public virtual operator_plugin<import_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"import", "https://docs.tenzir.com/next/"
                                             "operators/sinks/import"};

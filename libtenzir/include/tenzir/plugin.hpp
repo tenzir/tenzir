@@ -358,12 +358,23 @@ public:
 
 // -- operator plugin ----------------------------------------------------------
 
+/// Describes the signature of an operator.
+/// @relates operator_parser_plugin
+struct operator_signature {
+  bool source{false};
+  bool transformation{false};
+  bool sink{false};
+};
+
 /// Deriving from this plugin will add an operator with the name of this plugin
 /// to the pipeline parser. Derive from this class when you want to introduce an
 /// alias to existing operators. This plugin itself does not add a new operator,
 /// but only a parser for it. For most use cases: @see operator_plugin
 class operator_parser_plugin : public virtual plugin {
 public:
+  /// @returns the signature of the operator.
+  virtual auto signature() const -> operator_signature = 0;
+
   /// @throws diagnostic
   virtual auto parse_operator(parser_interface& p) const -> operator_ptr {
     // TODO: Remove this default implementation and adjust `parser.cpp`

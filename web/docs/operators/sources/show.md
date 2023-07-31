@@ -1,6 +1,11 @@
 # show
 
-Returns meta information about the system.
+Returns meta information about Tenzir and nodes.
+
+:::caution Experimental
+This operator is experimental and subject to change without notice, even in
+minor or patch releases.
+:::
 
 ## Synopsis
 
@@ -27,16 +32,21 @@ Available aspects:
 
 ## Examples
 
-Show all available connectors, formats, and operators:
+Show all available connectors and formats:
 
 ```
 show connectors
 show formats
-show operators
+```
+
+Show all transformations:
+
+```
+show operators | where transformation == true
 ```
 
 Show all partitions at a remote node:
 
 ```
-remote show partitions
+show partitions
 ```

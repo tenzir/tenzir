@@ -145,6 +145,10 @@ private:
 
 class plugin final : public virtual operator_plugin<export_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"export", "https://docs.tenzir.com/next/"
                                             "operators/sources/export"};

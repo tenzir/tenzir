@@ -42,6 +42,10 @@ public:
 
 class plugin final : public virtual operator_plugin<discard_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
+  }
+
   auto parse_operator(parser_interface&) const -> operator_ptr override {
     return std::make_unique<discard_operator>();
   }

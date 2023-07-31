@@ -904,6 +904,10 @@ public:
     return system.spawn(serve_handler, node);
   }
 
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto buffer_size = located<uint64_t>{1 << 16, location::unknown};
     auto id = located<std::string>{};
