@@ -236,8 +236,6 @@ public:
     -> generator<table_slice> override {
     auto builder = table_slice_builder{operator_type()};
     for (const auto* plugin : plugins::get<operator_parser_plugin>()) {
-      // TODO: figure out how we can get the operator type. Ideally also
-      // it's arguments.
       auto signature = plugin->signature();
       if (not(builder.add(plugin->name()) && builder.add(signature.source)
               && builder.add(signature.transformation)
