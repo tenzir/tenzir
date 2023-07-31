@@ -27,8 +27,9 @@ Available aspects:
 - `connectors`: shows all available [connectors](../../connectors.md).
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).
-- `partitions`: shows all partitions of a remote node.
-- `types`: shows all known type at a remote node.
+- `partitions`: shows all table partitions of a remote node.
+- `tables`: shows all table schemas at a remote node.
+- `types`: shows all known types at a remote node.
 
 ## Examples
 
@@ -45,8 +46,9 @@ Show all transformations:
 show operators | where transformation == true
 ```
 
-Show all partitions at a remote node:
+Show all tables and partitions at a node:
 
 ```
+show tables
 show partitions
 ```

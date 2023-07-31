@@ -138,6 +138,72 @@ auto type_type() -> type {
   };
 }
 
+/// Adds a type as row in a table slice.
+auto add(auto& guard, const type& t) -> caf::error {
+  auto err = guard.push_field("name").add(t.name());
+  TENZIR_ASSERT_CHEAP(!err);
+  auto structure = guard.push_field("structure").push_record();
+  auto f = detail::overload{
+    [&](const auto&) {
+      auto err = structure.push_field("basic").add(fmt::to_string(t));
+      TENZIR_ASSERT_CHEAP(!err);
+    },
+    [&](const enumeration_type& e) {
+      auto enum_field = structure.push_field("enum");
+      auto list = enum_field.push_list();
+      for (auto field : e.fields()) {
+        auto field_record = list.push_record();
+        auto name = field_record.push_field("name");
+        auto err = name.add(field.name);
+        TENZIR_ASSERT_CHEAP(!err);
+        auto key = field_record.push_field("key");
+        err = key.add(uint64_t{field.key});
+        TENZIR_ASSERT_CHEAP(!err);
+      }
+    },
+    [&](const list_type& l) {
+      auto list = structure.push_field("list");
+      auto err = list.add(fmt::to_string(l.value_type()));
+      TENZIR_ASSERT_CHEAP(!err);
+    },
+    [&](const map_type& m) {
+      auto map = structure.push_field("map");
+      auto record = map.push_record();
+      auto key_field = record.push_field("key");
+      auto err = key_field.add(fmt::to_string(m.key_type()));
+      TENZIR_ASSERT_CHEAP(!err);
+      auto value_field = record.push_field("value");
+      err = value_field.add(fmt::to_string(m.value_type()));
+      TENZIR_ASSERT_CHEAP(!err);
+    },
+    [&](const record_type& r) {
+      auto record = structure.push_field("record");
+      auto list = record.push_list();
+      for (const auto& field : r.fields()) {
+        auto field_record = list.push_record();
+        auto field_name = field_record.push_field("name");
+        auto err = field_name.add(field.name);
+        TENZIR_ASSERT_CHEAP(!err);
+        auto field_type = field_record.push_field("type");
+        err = field_type.add(fmt::to_string(field.type));
+        TENZIR_ASSERT_CHEAP(!err);
+      }
+    },
+  };
+  caf::visit(f, t);
+  auto attributes = collect(t.attributes());
+  if (attributes.empty())
+    return {};
+  auto list = guard.push_field("attributes").push_list();
+  for (auto& attribute : attributes) {
+    auto record = list.push_record();
+    err = record.push_field("key").add(attribute.key);
+    TENZIR_ASSERT_CHEAP(!err);
+    err = record.push_field("value").add(attribute.value);
+    TENZIR_ASSERT_CHEAP(!err);
+  }
+}
+
 /// Base class for aspects that users can show.
 class aspect {
 public:
@@ -309,6 +375,61 @@ public:
   }
 };
 
+class tables_aspect final : public aspect {
+public:
+  auto name() const -> std::string override {
+    return "tables";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::remote;
+  }
+
+  auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice> override {
+    // TODO: Some of the the requests this operator makes are blocking, so
+    // we have to create a scoped actor here; once the operator API uses
+    // async we can offer a better mechanism here.
+    auto blocking_self = caf::scoped_actor(ctrl.self().system());
+    auto components
+      = get_node_components<catalog_actor>(blocking_self, ctrl.node());
+    if (!components) {
+      ctrl.abort(std::move(components.error()));
+      co_return;
+    }
+    co_yield {};
+    auto [catalog] = std::move(*components);
+    auto synopses = std::vector<partition_synopsis_pair>{};
+    auto error = caf::error{};
+    ctrl.self()
+      .request(catalog, caf::infinite, atom::get_v)
+      .await(
+        [&synopses](std::vector<partition_synopsis_pair>& result) {
+          synopses = std::move(result);
+        },
+        [&error](caf::error err) {
+          error = std::move(err);
+        });
+    co_yield {};
+    if (error) {
+      ctrl.abort(std::move(error));
+      co_return;
+    }
+    auto schemas = std::set<type>{};
+    for (const auto& synopsis : synopses)
+      schemas.insert(synopsis.synopsis->schema);
+    auto builder = adaptive_table_slice_builder{type_type()};
+    for (const auto& schema : schemas) {
+      auto row = builder.push_row();
+      if (auto err = add(row, schema))
+        diagnostic::error("failed to add type to builder")
+          .note("full type: {}", fmt::to_string(schema))
+          .emit(ctrl.diagnostics());
+    }
+    co_yield builder.finish();
+  }
+};
+
 class types_aspect final : public aspect {
 public:
   auto name() const -> std::string override {
@@ -352,68 +473,10 @@ public:
     auto builder = adaptive_table_slice_builder{type_type()};
     for (const auto& type : types) {
       auto row = builder.push_row();
-      auto err = row.push_field("name").add(type.name());
-      TENZIR_ASSERT_CHEAP(!err);
-      auto structure = row.push_field("structure").push_record();
-      auto f = detail::overload{
-        [&](const auto&) {
-          auto err = structure.push_field("basic").add(fmt::to_string(type));
-          TENZIR_ASSERT_CHEAP(!err);
-        },
-        [&](const enumeration_type& e) {
-          auto enum_field = structure.push_field("enum");
-          auto list = enum_field.push_list();
-          for (auto field : e.fields()) {
-            auto field_record = list.push_record();
-            auto name = field_record.push_field("name");
-            auto err = name.add(field.name);
-            TENZIR_ASSERT_CHEAP(!err);
-            auto key = field_record.push_field("key");
-            err = key.add(uint64_t{field.key});
-            TENZIR_ASSERT_CHEAP(!err);
-          }
-        },
-        [&](const list_type& l) {
-          auto list = structure.push_field("list");
-          auto err = list.add(fmt::to_string(l.value_type()));
-          TENZIR_ASSERT_CHEAP(!err);
-        },
-        [&](const map_type& m) {
-          auto map = structure.push_field("map");
-          auto record = map.push_record();
-          auto key_field = record.push_field("key");
-          auto err = key_field.add(fmt::to_string(m.key_type()));
-          TENZIR_ASSERT_CHEAP(!err);
-          auto value_field = record.push_field("value");
-          err = value_field.add(fmt::to_string(m.value_type()));
-          TENZIR_ASSERT_CHEAP(!err);
-        },
-        [&](const record_type& r) {
-          auto record = structure.push_field("record");
-          auto list = record.push_list();
-          for (const auto& field : r.fields()) {
-            auto field_record = list.push_record();
-            auto field_name = field_record.push_field("name");
-            auto err = field_name.add(field.name);
-            TENZIR_ASSERT_CHEAP(!err);
-            auto field_type = field_record.push_field("type");
-            err = field_type.add(fmt::to_string(field.type));
-            TENZIR_ASSERT_CHEAP(!err);
-          }
-        },
-      };
-      caf::visit(f, type);
-      auto attributes = collect(type.attributes());
-      if (attributes.empty())
-        continue;
-      auto list = row.push_field("attributes").push_list();
-      for (auto& attribute : attributes) {
-        auto record = list.push_record();
-        err = record.push_field("key").add(attribute.key);
-        TENZIR_ASSERT_CHEAP(!err);
-        err = record.push_field("value").add(attribute.value);
-        TENZIR_ASSERT_CHEAP(!err);
-      }
+      if (auto err = add(row, type))
+        diagnostic::error("failed to add type to builder")
+          .note("full type: {}", fmt::to_string(type))
+          .emit(ctrl.diagnostics());
     }
     co_yield builder.finish();
   }
@@ -427,6 +490,7 @@ auto get() -> const std::vector<std::shared_ptr<aspect>>& {
     std::make_shared<formats_aspect>(),
     std::make_shared<operators_aspect>(),
     std::make_shared<partitions_aspect>(),
+    std::make_shared<tables_aspect>(),
     std::make_shared<types_aspect>(),
   };
   return instance;
