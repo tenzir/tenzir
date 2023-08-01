@@ -172,9 +172,7 @@ struct operator_measurement {
   uint64_t num_elements = {};
   uint64_t num_batches = {};
 
-  // TODO: Always 0 for now for events until we find a way
-  // to reliably measure this and always the same as
-  // num_elements for bytes.
+  // Approximate byte amount for events, exact byte amount for bytes.
   uint64_t num_approx_bytes = {};
 
   template <class Inspector>
@@ -183,18 +181,6 @@ struct operator_measurement {
       f.field("unit", x.unit), f.field("num_elements", x.num_elements),
       f.field("num_batches", x.num_batches),
       f.field("num_approx_bytes", x.num_approx_bytes));
-  }
-
-  auto average_rate_per_second(const duration& elapsed) const -> double {
-    if (elapsed.count() == 0) {
-      return 0;
-    }
-    const auto total = static_cast<double>(num_elements);
-    return total
-           / std::chrono::duration_cast<
-               std::chrono::duration<double, std::chrono::seconds::period>>(
-               elapsed)
-               .count();
   }
 };
 
@@ -206,9 +192,9 @@ struct [[nodiscard]] metric {
   operator_measurement inbound_measurement = {};
   operator_measurement outbound_measurement = {};
   duration time_starting = {};
-  duration time_running = {};
+  duration time_processing = {};
   duration time_scheduled = {};
-  duration time_elapsed = {};
+  duration time_total = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, metric& x) -> bool {
@@ -216,9 +202,9 @@ struct [[nodiscard]] metric {
       f.field("operator_index", x.operator_index),
       f.field("operator_name", x.operator_name),
       f.field("time_starting", x.time_starting),
-      f.field("time_running", x.time_running),
+      f.field("time_processing", x.time_processing),
       f.field("time_scheduled", x.time_scheduled),
-      f.field("time_elapsed", x.time_elapsed),
+      f.field("time_total", x.time_total),
       f.field("inbound_measurement", x.inbound_measurement),
       f.field("outbound_measurement", x.outbound_measurement));
   }

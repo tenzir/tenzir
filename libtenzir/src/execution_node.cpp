@@ -299,7 +299,7 @@ auto split(std::vector<chunk_ptr> chunks, uint64_t partition_point)
 
 struct metrics_state {
   auto emit() -> void {
-    values.time_elapsed = std::chrono::duration_cast<duration>(
+    values.time_total = std::chrono::duration_cast<duration>(
       std::chrono::steady_clock::now() - start_time);
     caf::anon_send(metrics_handler, values);
   }
@@ -456,7 +456,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // Instantiate the operator with its input type.
     {
       auto time_scheduled_guard
-        = make_timer_guard(metrics->values.time_running);
+        = make_timer_guard(metrics->values.time_processing);
       auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
       if (not output_generator) {
         TENZIR_VERBOSE("{} could not instantiate operator: {}", *self,
@@ -570,7 +570,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
   }
 
   auto advance_generator() -> bool {
-    auto time_running_guard = make_timer_guard(metrics->values.time_running);
+    auto time_running_guard = make_timer_guard(metrics->values.time_processing);
     TENZIR_ASSERT(instance);
     TENZIR_ASSERT(instance->it != instance->gen.end());
     bool empty = false;
