@@ -10,7 +10,7 @@ minor or patch releases.
 ## Synopsis
 
 ```
-show <aspect>
+show <aspect> [options]
 ```
 
 ## Description
@@ -25,6 +25,7 @@ Describes the part of Tenzir to look at.
 Available aspects:
 
 - `connectors`: shows all available [connectors](../../connectors.md).
+- `columns`: shows all columns of a given table.
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).
 - `partitions`: shows all table partitions of a remote node.

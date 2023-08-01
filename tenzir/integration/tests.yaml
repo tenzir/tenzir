@@ -218,14 +218,12 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: show schemas --expand
       - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'where resp_h == 192.168.1.104'
       - command: export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
       - command: 'count ":timestamp >= 1970-01-01 && #schema != \"tenzir.metrics\""'
       - command: count '#schema == "zeek.conn"'
-      - command: show schemas --yaml
 
   Query Operators:
     tags: [server, operator]
@@ -341,14 +339,6 @@ tests:
       - command: count "net.connection == <_, _, _, 80, _>"
       - command: count "net.connection != <_, _, _, 80, _>"
 
-  Show Taxonomies:
-    tags: [concepts, models]
-    fixture: ServerTester
-    steps:
-      - command: show concepts
-        transformation: jq '.[] | select(.concept.name == "net.app") | .concept.fields | map(split(".")[0]) | unique'
-      - command: show --yaml models
-      - command: show schemas
   Arrow Full Data Model:
     tags: [export, arrow]
     steps:
