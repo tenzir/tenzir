@@ -10,7 +10,7 @@ The syntax of [Tenzir Query Language (TQL)](/language) looks remarkably similar
 to Splunk's [Search Processing Language (SPL)][spl]. This is by no means an
 accident. Having spoken with numerous security practitioners, we found a
 universally positive sentiment about the ease of use. In this blog post, we
-explain how the two languages differ using a threat hunting examples.
+explain how the two languages differ using threat hunting examples.
 
 [spl]: https://docs.splunk.com/Documentation/SplunkCloud/latest/Search/Aboutthesearchlanguage
 
@@ -21,11 +21,10 @@ explain how the two languages differ using a threat hunting examples.
 ## Why not SQL?
 
 Splunk was the first tool that provided an integrated solution from interactive
-data exploration to management-grade dashboards-all powered by dataflow
+data exploration to management-grade dashboards—all powered by dataflow
 pipelines. The success of Splunk is not only resulting from their first-mover
-advantage in the market, but also because their UX truly resonated with users:
-their target audience *liked* the user experience. It was *easy* to get things
-done.
+advantage in the market, but also because their likable user experience: it is
+*easy* to get things done.
 
 At Tenzir, we have a very clear target audience: security practitioners. They
 are not necessarily data engineers and fluent in SQL and low-level data tools,
@@ -34,31 +33,31 @@ detection engineers, threat intelligence analysts, and other domain experts. Our
 goal is cater to these folks, without requiring them to have deep understanding
 of relational algebra.
 
-The reason why we opted for a dataflow language is that it simplifies the
-reasoning: one step at a time. At least conceptually, because a smart system
-optimizes the execution of the users intent so that the pipeline runs
-efficiently. Any declarative language has that property, SQL in particular. But
-the difference to SQL is that a sequential dataflow makes it easy to simply
-*append* your next operation, as opposed to editing a query in the middle to
-inject a complicated clause somewhere. Instead of having to understand the
-entire SQL query, you just need to append an operation at the end that does the
-next thing. This dataflow pipeline style is becoming more an more popular. Most
-SIEMs have a language of their own, like Splunk. [Kusto][kusto] is another great
-example with a wide user base in security.
+We opted for a dataflow language because it simplifies reasoning: one step at a
+time. At least conceptually, because a smart system optimizes the execution of
+the users intent so that the pipeline runs efficiently. Any declarative language
+has that property, SQL in particular. But the difference to SQL is that a
+sequential dataflow makes it easy to simply *append* your next operation, as
+opposed to editing a query in the middle to inject a complicated clause
+somewhere. Instead of having to understand the entire SQL query, you just need
+to append an operation at the end that does the next thing. This dataflow
+pipeline style is becoming more and more popular. Most SIEMs have a language of
+their own, like Splunk. [Kusto][kusto] is another great example with a wide user
+base in security.
 
 [kusto]: https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/
 
-In fact, there's often an isomorphic SQL expression because a lot of the
+In fact, there's often an equivalent SQL expression because a lot of the
 underlying engines internally map to the same Volcano-style model of execution.
 This gives rise to [transpiling dataflow languages to other execution
 platforms][splunk-transpiler]. Ultimately, our goal is that security
-practitioners do not have to think *any* of this and stay in their happy place,
-which means avoiding context switches to lower-level data primitives.
+practitioners do not have to think about *any* of this and stay in their happy
+place, which means avoiding context switches to lower-level data primitives.
 
 [splunk-transpiler]: https://www.databricks.com/blog/2022/12/16/accelerating-siem-migrations-spl-pyspark-transpiler.html
 
 Now that we got the SQL topic out of the way, let's dive into some hands-on
-examples that illustrate the similarities and differences of SPL and TQL.
+examples that illustrate the similarities and differences between SPL and TQL.
 
 ## Examples
 
@@ -90,14 +89,14 @@ over historical data, we use the [`export`](/operators/sources/export) operator.
 The subsequent [`where`](/operators/transformations/where) operator is a
 transformation to filter the stream of events with the
 [expression](/language/expressions) `#schema == "zeek.conn" && id.resp_p >
-1024`. In SPL, you write that expression directly into `index`. In TQL we
+1024`. In SPL, you write that expression directly into `index`. In TQL, we
 logically separate this because one operator should have exactly one purpose.
 Under the hood, the TQL optimizer does predicate pushdown to avoid first
 exporting the entire database and only then applying the filter.
 
-Why does this single responsibility principle matter? Because its critical for
+Why does this single responsibility principle matter? Because it's critical for
 *composition*: we can now replace `export` with another data source, like
-[`from`](/operators/sources/from) [`kafka`](/connectors/kafka) and the rest of
+[`from`](/operators/sources/from) [`kafka`](/connectors/kafka), and the rest of
 the pipeline stays the same.
 
 :::note charting
@@ -199,9 +198,9 @@ This example also looks quite similar in structure.
   `zeek.conn_long`. The latter tracks long-running connections and is available
   as [separate package](https://github.com/corelight/zeek-long-connections).
 
-- TQLs's `#schema` selector in an expression is responsible for filtering the
-  data sources. This is because all TQL pipelines are *multi-schema*, i.e., they
-  can process more than a single type of data.
+- TQLs's `#schema` is an expression that is responsible for filtering the data
+  sources. This is because all TQL pipelines are *multi-schema*, i.e., they can
+  process more than a single type of data.
 
 ### Rare JA3 hashes
 
@@ -221,8 +220,8 @@ export
 | head 10
 ```
 
-This example shows again how to select a specific data source and perform some
-"stack counting".
+This example shows again how to select a specific data source and perform "stack
+counting".
 
 ### Expired certificates
 
@@ -243,13 +242,13 @@ export
 ```
 
 This example shows the benefit of native time types (and Tenzir's rich type
-system in more generally).
+system in general).
 
 - TQL's [type system](/data-model/type-system) has first-class support for times
   and durations.
 
 - TQL's [`zeek-tsv`](/formats/zeek-tsv) parser preserves `time` types natively,
-  so you don't have to massage strings at query time.
+  so you don't have to massage strings at query-time.
 
 ### Large DNS queries
 
@@ -298,12 +297,12 @@ export
 The `table` operator in splunk outputs the data in tabular form. This is the
 default for our [app](/setup-guides/use-the-app). There's also an
 [upcoming](https://github.com/tenzir/tenzir/pull/3113) `write table` format to
-generate textual representation outside the app.
+generate a tabular representation outside the app.
 
 ## Summary
 
-In this blog we've juxtaposed the languages of Splunk (SPL) and Tenzir (TQL).
-They are remarkably similar—and that's not accidental. When we talked to
+In this blog post we've juxtaposed the languages of Splunk (SPL) and Tenzir
+(TQL). They are remarkably similar—and that's not accidental. When we talked to
 security analysts we often heard that Splunk has a great UX. Even our own
 engineers that live on the command line find this mindset natural. But Splunk
 was not our only inspiration, we also drew inspiration from Kusto and others.
@@ -313,4 +312,4 @@ bolt-on growth from past efforts, while at the same time doubling down on the
 successes others have confirmed.
 
 If you'd like to give TQL a spin, [try our community edition](/get-started) for
-free. A demo node with examples pipelines is waiting for you.
+free. A demo node with example pipelines is waiting for you.

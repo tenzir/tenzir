@@ -246,7 +246,7 @@ async function createConfig() {
         },
         announcementBar: {
           content:
-            'Splunk user? <a href="/blog/tenzir-for-splunk-users">Our latest blog</a> compares SPL to our own TQL.',
+            'Splunk user? <a href="/blog/tenzir-for-splunk-users">Our latest blog post</a> compares SPL to our own TQL.',
           backgroundColor: '#f1f2f2',
           isCloseable: true,
         },
