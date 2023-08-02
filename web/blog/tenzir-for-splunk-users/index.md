@@ -187,7 +187,7 @@ index=zeek sourcetype="zeek_conn" OR sourcetype="zeek_conn_long"
 | eval resp_megabytes = round(resp_bytes/1024/1024,2)
 | eval orig_gigabytes = round(orig_megabytes/1024,2)
 | eval resp_gigabytes = round(resp_megabytes/1024,2)
-| timechart sum(orig_gigabytes) AS 'Outgoing Gigabytes',sum(resp_gigabytes) AS 'Incoming Gigabytes' by service span=1h
+| timechart sum(orig_gigabytes) AS 'Outgoing',sum(resp_gigabytes) AS 'Incoming' by service span=1h
 ```
 
 Tenzir:
@@ -199,10 +199,14 @@ export
 | extend resp_megabytes=round(orig_bytes/1024/1024, 2)
 | extend orig_gigabytes=round(orig_megabytes/1024, 2)
 | extend resp_gigabytes=round(orig_megabytes/1024, 2)
-| summarize 'Outgoing Gigabytes'=sum(orig_gigabytes), 'Incoming Gigabytes'=sum(resp_gigabytes) by service resolution 1h
+| summarize Outgoing=sum(orig_gigabytes), Incoming=sum(resp_gigabytes) by :timestamp, service resolution 1h
 ```
 
 This example also looks quite similar in structure.
+
+- SPL's `timechart` does an implicit group by timestamp. As we TQL's
+  `summarize` operator, we need to explicitly provide the group field
+  `:timestamp`.
 
 - This query spreads over two data sources: the event `zeek.conn` and
   `zeek.conn_long`. The latter tracks long-running connections and is available
