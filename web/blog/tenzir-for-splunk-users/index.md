@@ -341,9 +341,10 @@ security analysts we often heard that Splunk has a great UX. Even our own
 engineers that live on the command line find this mindset natural. But Splunk
 was not our only inspiration, we also drew inspiration from Kusto and others.
 
-As we created TQL, we wanted to learn from missed opportunities and
-bolt-on growth from past efforts, while at the same time doubling down on the
-successes others have confirmed.
+As we created TQL, we wanted to learn from missed opportunities while doubling
+down on SPL's great user experience.
 
-If you'd like to give TQL a spin, [try our community edition](/get-started) for
-free. A demo node with example pipelines is waiting for you.
+If you'd like to give Tenzir a spin, [try our community edition](/get-started)
+for free. A demo node with example pipelines is waiting for you. For more
+details about TQL, head over to the [language
+documentation](/language/pipelines).
