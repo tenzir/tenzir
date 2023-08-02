@@ -215,7 +215,7 @@ export
 
 Analysis:
 
-- SPL's `timechart` does an implicit group by timestamp. As we TQL's
+- SPL's `timechart` does an implicit group by timestamp. As we use TQL's
   `summarize` operator, we need to explicitly provide the grouping field `ts`.
   In the future, you will be able to use `:timestamp` in a grouping expression,
   i.e., group by the field with the type named `timestamp`.
