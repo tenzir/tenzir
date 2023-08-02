@@ -108,6 +108,11 @@ Analysis:
   [`from`](/operators/sources/from) [`kafka`](/connectors/kafka), and the rest
   of the pipeline stays the same.
 
+- TQL's `#schema` is an expression that is responsible for filtering the data
+  sources. This is because all TQL pipelines are *multi-schema*, i.e., they can
+  process more than a single type of data. The ability to specify a regular
+  expression makes for a powerful way to select the desired input.
+
 - SPL's [`chart X by Y, Z`][chart] (or equivalently `chart X over Y by Z`)
   performs an implicit
   [pivot-wider](https://epirhandbook.com/en/pivoting-data.html) operation on
@@ -217,11 +222,6 @@ Analysis:
 - This query spreads over two data sources: the event `zeek.conn` and
   `zeek.conn_long`. The latter tracks long-running connections and is available
   as [separate package](https://github.com/corelight/zeek-long-connections).
-
-- TQLs's `#schema` is an expression that is responsible for filtering the data
-  sources. This is because all TQL pipelines are *multi-schema*, i.e., they can
-  process more than a single type of data. The ability to specify a regular
-  expression makes for a powerful way to select the desired input.
 
 ### Rare JA3 hashes
 
