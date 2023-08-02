@@ -29,7 +29,7 @@ Available aspects:
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).
 - `partitions`: shows all table partitions of a remote node.
-- `tables`: shows all table schemas at a remote node.
+- `tables`: shows all schemas of existing tables at a remote node.
 - `types`: shows all known types at a remote node.
 
 ## Examples
