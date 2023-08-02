@@ -174,7 +174,7 @@ struct schema_context {
 
 /// Yields all fields from a record type, with listness being a separate
 /// attribute.
-auto traverse(type t, field_context ctx = {}) -> generator<schema_context> {
+auto traverse(type t) -> generator<schema_context> {
   schema_context result;
   // Unpack lists. Note that we lose type metadata of lists.
   while (const auto* list = caf::get_if<list_type>(&t)) {
@@ -203,7 +203,7 @@ auto traverse(type t, field_context ctx = {}) -> generator<schema_context> {
       result.field.name = field.name;
       result.field.path.emplace_back(field.name);
       result.field.index.emplace_back(i);
-      for (const auto& inner : traverse(field.type, result.field)) {
+      for (const auto& inner : traverse(field.type)) {
         result.type = inner.type;
         auto nested = not inner.field.name.empty();
         if (nested) {
