@@ -7,7 +7,7 @@ comments: true
 ---
 
 Our [Tenzir Query Language (TQL)](/language) is a pipeline language that works
-by chaining operators into dataflows. When we designed TQL, we specifically
+by chaining operators into data flows. When we designed TQL, we specifically
 studied Splunk's [Search Processing Language (SPL)][spl], as it generally leaves
 a positive impression for security analysts that are not data engineers. Our
 goal was to take all the good things of SPL, but provide a more powerful
@@ -38,9 +38,9 @@ of relational algebra.
 We opted for a dataflow language because it simplifies reasoning—one step at a
 time. At least conceptually, because a smart system optimizes the execution
 under the hood. Any declarative language where users describe the desired
-outcome offers the exeuction engine to re-arrange the input, as long as it
-doesn't change the output. Particularly SQL has property, where relational
-algebra describes the *what* and not the *how*. A dataflow language is a bit
+outcome offers the execution engine to rearrange the input, as long as it
+doesn't change the output. Particularly SQL has this property, with relational
+algebra describing the *what* and not the *how*. A dataflow language is a bit
 more concrete in that it's closer to the *how*, but that's precisely the
 trade-off that simplifies the reasoning: the focus is on a single operation as
 opposed to an entire large expression.
