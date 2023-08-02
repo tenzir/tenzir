@@ -51,10 +51,10 @@ thinking.
 
 [kusto]: https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/
 
-In fact, there's often an equivalent SQL expression because a lot of the
-underlying engines internally map to the same Volcano-style model of execution.
-This gives rise to [transpiling dataflow languages to other execution
-platforms][splunk-transpiler]. Ultimately, our goal is that security
+In fact, for a given dataflow pipeline there's often an equivalent SQL
+expression, because a lot of the underlying engines internally map to the same
+execution model. This gives rise to [transpiling dataflow languages to other
+execution platforms][splunk-transpiler]. Ultimately, our goal is that security
 practitioners do not have to think about *any* of this and stay in their happy
 place, which means avoiding context switches to lower-level data primitives.
 
