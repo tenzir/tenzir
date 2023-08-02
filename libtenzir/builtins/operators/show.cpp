@@ -104,31 +104,24 @@ auto attribute_type() -> type {
   };
 }
 
-/// A type that describes a type within a schema.
+/// A type that describes all fields in a schema.
 auto field_type() -> type {
   return type{
-    "tenzir.field_type",
-    record_type{
-      {"kind", string_type{}},
-      {"category", string_type{}},
-      {"lists", uint64_type()},
-      {"name", string_type{}},
-      {"attributes", list_type{attribute_type()}},
-    },
-  };
-}
-
-/// A type that describes all fields in a schema.
-auto schema_type() -> type {
-  return type{
-    "tenzir.schema",
+    "tenzir.field",
     record_type{
       {"schema", string_type{}},
       {"schema_id", string_type{}},
       {"field", string_type{}},
       {"path", list_type{string_type{}}},
       {"index", list_type{uint64_type{}}},
-      {"type", field_type()},
+      {"type",
+       record_type{
+         {"kind", string_type{}},
+         {"category", string_type{}},
+         {"lists", uint64_type()},
+         {"name", string_type{}},
+         {"attributes", list_type{attribute_type()}},
+       }},
     },
   };
 }
@@ -147,10 +140,6 @@ auto type_type() -> type {
                     {"key", uint64_type{}},
                   }}},
          {"list", string_type{}},
-         {"map", list_type{list_type{record_type{
-                   {"key", string_type{}},
-                   {"value", string_type{}},
-                 }}}},
          {"record",
           list_type{
             record_type{
@@ -244,7 +233,7 @@ auto traverse(type t, field_context ctx = {}) -> generator<schema_context> {
 // TODO: this feels like it should be a generic function that works on any
 // inspectable type.
 /// Adds a schema (= named record type) to a builder, with one row per field.
-auto add_schema(auto& builder, const type& t) -> caf::error {
+auto add_field(auto& builder, const type& t) -> caf::error {
   for (const auto& ctx : traverse(t)) {
     auto row = builder.push_row();
     if (auto err = row.push_field("schema").add(t.name()))
@@ -313,17 +302,8 @@ auto add_type(auto& builder, const type& t) -> caf::error {
       auto list = layout.push_field("list");
       return list.add(fmt::to_string(l.value_type()));
     },
-    [&](const map_type& m) -> caf::error {
-      // TODO: recurse into nested records.
-      auto map = layout.push_field("map");
-      auto record = map.push_record();
-      auto key_field = record.push_field("key");
-      if (auto err = key_field.add(fmt::to_string(m.key_type())))
-        return err;
-      auto value_field = record.push_field("value");
-      if (auto err = value_field.add(fmt::to_string(m.value_type())))
-        return err;
-      return {};
+    [&](const map_type&) -> caf::error {
+      die("unreachable");
     },
     [&](const record_type& r) -> caf::error {
       auto record = layout.push_field("record");
@@ -402,6 +382,60 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
+    }
+    co_yield builder.finish();
+  }
+};
+
+class fields_aspect final : public aspect {
+public:
+  auto name() const -> std::string override {
+    return "fields";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::remote;
+  }
+
+  auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice> override {
+    // TODO: Some of the the requests this operator makes are blocking, so
+    // we have to create a scoped actor here; once the operator API uses
+    // async we can offer a better mechanism here.
+    auto blocking_self = caf::scoped_actor(ctrl.self().system());
+    auto components
+      = get_node_components<catalog_actor>(blocking_self, ctrl.node());
+    if (!components) {
+      ctrl.abort(std::move(components.error()));
+      co_return;
+    }
+    co_yield {};
+    auto [catalog] = std::move(*components);
+    auto synopses = std::vector<partition_synopsis_pair>{};
+    auto error = caf::error{};
+    ctrl.self()
+      .request(catalog, caf::infinite, atom::get_v)
+      .await(
+        [&synopses](std::vector<partition_synopsis_pair>& result) {
+          synopses = std::move(result);
+        },
+        [&error](caf::error err) {
+          error = std::move(err);
+        });
+    co_yield {};
+    if (error) {
+      ctrl.abort(std::move(error));
+      co_return;
+    }
+    auto schemas = std::set<type>{};
+    for (const auto& synopsis : synopses)
+      schemas.insert(synopsis.synopsis->schema);
+    auto builder = adaptive_table_slice_builder{field_type()};
+    for (const auto& schema : schemas) {
+      if (auto err = add_field(builder, schema))
+        diagnostic::error("failed to add type to builder")
+          .note("full type: {}", fmt::to_string(schema))
+          .emit(ctrl.diagnostics());
     }
     co_yield builder.finish();
   }
@@ -533,60 +567,6 @@ public:
   }
 };
 
-class tables_aspect final : public aspect {
-public:
-  auto name() const -> std::string override {
-    return "tables";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::remote;
-  }
-
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
-    // TODO: Some of the the requests this operator makes are blocking, so
-    // we have to create a scoped actor here; once the operator API uses
-    // async we can offer a better mechanism here.
-    auto blocking_self = caf::scoped_actor(ctrl.self().system());
-    auto components
-      = get_node_components<catalog_actor>(blocking_self, ctrl.node());
-    if (!components) {
-      ctrl.abort(std::move(components.error()));
-      co_return;
-    }
-    co_yield {};
-    auto [catalog] = std::move(*components);
-    auto synopses = std::vector<partition_synopsis_pair>{};
-    auto error = caf::error{};
-    ctrl.self()
-      .request(catalog, caf::infinite, atom::get_v)
-      .await(
-        [&synopses](std::vector<partition_synopsis_pair>& result) {
-          synopses = std::move(result);
-        },
-        [&error](caf::error err) {
-          error = std::move(err);
-        });
-    co_yield {};
-    if (error) {
-      ctrl.abort(std::move(error));
-      co_return;
-    }
-    auto schemas = std::set<type>{};
-    for (const auto& synopsis : synopses)
-      schemas.insert(synopsis.synopsis->schema);
-    auto builder = adaptive_table_slice_builder{schema_type()};
-    for (const auto& schema : schemas) {
-      if (auto err = add_schema(builder, schema))
-        diagnostic::error("failed to add type to builder")
-          .note("full type: {}", fmt::to_string(schema))
-          .emit(ctrl.diagnostics());
-    }
-    co_yield builder.finish();
-  }
-};
-
 class types_aspect final : public aspect {
 public:
   auto name() const -> std::string override {
@@ -646,7 +626,7 @@ auto get() -> const std::vector<std::shared_ptr<aspect>>& {
     std::make_shared<formats_aspect>(),
     std::make_shared<operators_aspect>(),
     std::make_shared<partitions_aspect>(),
-    std::make_shared<tables_aspect>(),
+    std::make_shared<fields_aspect>(),
     std::make_shared<types_aspect>(),
   };
   return instance;

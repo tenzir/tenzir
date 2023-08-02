@@ -25,11 +25,10 @@ Describes the part of Tenzir to look at.
 Available aspects:
 
 - `connectors`: shows all available [connectors](../../connectors.md).
-- `columns`: shows all columns of a given table.
+- `fields`: shows all fields of existing tables at a remote node.
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).
 - `partitions`: shows all table partitions of a remote node.
-- `tables`: shows all schemas of existing tables at a remote node.
 - `types`: shows all known types at a remote node.
 
 ## Examples
