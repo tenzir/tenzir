@@ -6,11 +6,13 @@ tags: [zeek, threat hunting, pipelines, tql, splunk, spl]
 comments: true
 ---
 
-The syntax of [Tenzir Query Language (TQL)](/language) looks remarkably similar
-to Splunk's [Search Processing Language (SPL)][spl]. This is by no means an
-accident. Having spoken with numerous security practitioners, we found a
-universally positive sentiment about the ease of use. In this blog post, we
-explain how the two languages differ using threat hunting examples.
+Our [Tenzir Query Language (TQL)](/language) is a pipeline language that works
+by chaining operators into dataflows. When we designed TQL, we specifically
+studied Splunk's [Search Processing Language (SPL)][spl], as it generally leaves
+a positive impression for security analysts that are not data engineers. Our
+goal was to take all the good things of SPL, but provide a more powerful
+language without compromising simplicity. In this blog post, we explain how the
+two languages differ using concrete threat hunting examples.
 
 [spl]: https://docs.splunk.com/Documentation/SplunkCloud/latest/Search/Aboutthesearchlanguage
 
