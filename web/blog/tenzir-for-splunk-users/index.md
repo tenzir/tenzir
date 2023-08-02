@@ -210,14 +210,15 @@ export
 | extend resp_megabytes=round(orig_bytes/1024/1024, 2)
 | extend orig_gigabytes=round(orig_megabytes/1024, 2)
 | extend resp_gigabytes=round(orig_megabytes/1024, 2)
-| summarize Outgoing=sum(orig_gigabytes), Incoming=sum(resp_gigabytes) by :timestamp, service resolution 1h
+| summarize Outgoing=sum(orig_gigabytes), Incoming=sum(resp_gigabytes) by ts, service resolution 1h
 ```
 
 Analysis:
 
 - SPL's `timechart` does an implicit group by timestamp. As we TQL's
-  `summarize` operator, we need to explicitly provide the group field
-  `:timestamp`.
+  `summarize` operator, we need to explicitly provide the grouping field `ts`.
+  In the future, you will be able to use `:timestamp` in a grouping expression,
+  i.e., group by the field with the type named `timestamp`.
 
 - This query spreads over two data sources: the event `zeek.conn` and
   `zeek.conn_long`. The latter tracks long-running connections and is available
