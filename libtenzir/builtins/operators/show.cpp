@@ -93,116 +93,262 @@ auto partition_type() -> type {
   };
 }
 
-auto key_value_pair() -> record_type {
-  return record_type{
-    {"key", string_type{}},
-    {"value", string_type{}},
-  };
-}
-
 /// A type that represents a type attribute.
-auto type_attribute_type() -> type {
+auto attribute_type() -> type {
   return type{
     "tenzir.attribute",
-    key_value_pair(),
-  };
-}
-
-/// A type that represents a record field.
-auto record_field_type() -> type {
-  return type{
-    "tenzir.record_field",
     record_type{
-      {"name", string_type{}},
-      {"type", string_type{}},
+      {"key", string_type{}},
+      {"value", string_type{}},
     },
   };
 }
 
-/// A type that represents a (Tenzir) type.
-/// The current record-based approach is a poorman's sum type approximation.
-/// With native union types, we'll be able to describe this more cleanly.
+/// A type that describes a type within a schema.
+auto field_type() -> type {
+  return type{
+    "tenzir.field_type",
+    record_type{
+      {"kind", string_type{}},
+      {"category", string_type{}},
+      {"lists", uint64_type()},
+      {"name", string_type{}},
+      {"attributes", list_type{attribute_type()}},
+    },
+  };
+}
+
+/// A type that describes all fields in a schema.
+auto schema_type() -> type {
+  return type{
+    "tenzir.schema",
+    record_type{
+      {"schema", string_type{}},
+      {"field", string_type{}},
+      {"path", list_type{string_type{}}},
+      {"index", list_type{uint64_type{}}},
+      {"type", field_type()},
+    },
+  };
+}
+
+/// A type describing a type without information loss.
 auto type_type() -> type {
   return type{
     "tenzir.type",
     record_type{
       {"name", string_type{}},
-      {"structure", record_type{{"basic", string_type{}},
-                                {"enum", list_type{record_type{
-                                           {"name", string_type{}},
-                                           {"key", uint64_type{}},
-                                         }}},
-                                {"list", string_type{}},
-                                {"map", list_type{key_value_pair()}},
-                                {"record", list_type{record_field_type()}}}},
-      {"attributes", list_type{type_attribute_type()}},
+      {"layout",
+       record_type{
+         {"basic", string_type{}},
+         {"enum", list_type{record_type{
+                    {"name", string_type{}},
+                    {"key", uint64_type{}},
+                  }}},
+         {"list", string_type{}},
+         {"map", list_type{list_type{record_type{
+                   {"key", string_type{}},
+                   {"value", string_type{}},
+                 }}}},
+         {"record",
+          list_type{
+            record_type{
+              {"name", string_type{}},
+              {"type", string_type()},
+            },
+          }},
+       }},
+      {"attributes", list_type{attribute_type()}},
     },
   };
 }
 
-/// Adds a type as row in a table slice.
-auto add(auto& guard, const type& t) -> caf::error {
-  auto err = guard.push_field("name").add(t.name());
+struct field_context {
+  std::string name{};
+  std::vector<std::string> path{};
+  offset index{};
+};
+
+struct type_context {
+  std::string kind{};
+  std::string category;
+  size_t lists{0};
+  std::string name{};
+  std::vector<std::pair<std::string, std::string>> attributes{};
+};
+
+struct schema_context {
+  field_context field;
+  type_context type;
+};
+
+/// Yields all fields from a record type, with listness being a separate
+/// attribute.
+auto traverse(type t, field_context ctx = {}) -> generator<schema_context> {
+  schema_context result;
+  // Unpack lists. Note that we lose type metadata of lists.
+  while (const auto* list = caf::get_if<list_type>(&t)) {
+    ++result.type.lists;
+    t = list->value_type();
+  }
+  result.type.name = t.name();
+  for (auto [key, value] : t.attributes())
+    result.type.attributes.emplace_back(key, value);
+  result.type.kind = fmt::to_string(t);
+  const auto* alphabet = "abcdefghijklmnopqrstuvwxyz";
+  auto i = result.type.kind.find_first_not_of(alphabet);
+  if (i != std::string::npos)
+    result.type.kind.resize(i);
+  // TODO: This categorization is somewhat arbitrary, and we probably want to
+  // think about this more.
+  if (result.type.kind == "list" || result.type.kind == "record")
+    result.type.category = "container";
+  else
+    result.type.category = "atomic";
+  TENZIR_ASSERT_CHEAP(not caf::holds_alternative<list_type>(t));
+  TENZIR_ASSERT_CHEAP(not caf::holds_alternative<map_type>(t));
+  if (const auto* record = caf::get_if<record_type>(&t)) {
+    auto i = size_t{0};
+    for (const auto& field : record->fields()) {
+      result.field.name = field.name;
+      result.field.path.emplace_back(field.name);
+      result.field.index.emplace_back(i);
+      for (const auto& inner : traverse(field.type, result.field)) {
+        result.type = inner.type;
+        auto nested = not inner.field.name.empty();
+        if (nested) {
+          result.field.name = inner.field.name;
+          for (const auto& p : inner.field.path)
+            result.field.path.push_back(p);
+          for (const auto& i : inner.field.index)
+            result.field.index.push_back(i);
+        }
+        co_yield result;
+        if (nested) {
+          auto delta = inner.field.path.size();
+          result.field.path.resize(result.field.path.size() - delta);
+          delta = inner.field.index.size();
+          result.field.index.resize(result.field.index.size() - delta);
+        }
+      }
+      result.field.index.pop_back();
+      result.field.path.pop_back();
+      ++i;
+    }
+  } else {
+    co_yield result;
+  }
+}
+
+// TODO: this feels like it should be a generic function that works on any
+// inspectable type.
+/// Adds a schema (= named record type) to a builder, with one row per field.
+auto add_schema(auto& builder, const type& t) -> caf::error {
+  for (const auto& ctx : traverse(t)) {
+    auto row = builder.push_row();
+    if (auto err = row.push_field("schema").add(t.name()))
+      return err;
+    if (auto err = row.push_field("field").add(ctx.field.name))
+      return err;
+    auto path = row.push_field("path").push_list();
+    for (const auto& p : ctx.field.path)
+      if (auto err = path.add(p))
+        return err;
+    auto index = row.push_field("index").push_list();
+    for (auto i : ctx.field.index)
+      if (auto err = index.add(uint64_t{i}))
+        return err;
+    auto type = row.push_field("type").push_record();
+    if (auto err = type.push_field("kind").add(ctx.type.kind))
+      return err;
+    if (auto err = type.push_field("category").add(ctx.type.category))
+      return err;
+    if (auto err = type.push_field("lists").add(ctx.type.lists))
+      return err;
+    if (auto err = type.push_field("name").add(ctx.type.name))
+      return err;
+    auto attrs = type.push_field("attributes").push_list();
+    for (const auto& [key, value] : ctx.type.attributes) {
+      auto attr = attrs.push_record();
+      if (auto err = attr.push_field("key").add(key))
+        return err;
+      if (auto err = attr.push_field("value").add(value))
+        return err;
+    }
+  }
+  return {};
+}
+
+// TODO: harmonize this with type::to_definition. The goal was to create a
+// single fixed schema, but it's still clunky due to nested records.
+/// Adds one type definition per row to a builder.
+auto add_type(auto& builder, const type& t) -> caf::error {
+  auto row = builder.push_row();
+  auto err = row.push_field("name").add(t.name());
   TENZIR_ASSERT_CHEAP(!err);
-  auto structure = guard.push_field("structure").push_record();
+  auto layout = row.push_field("layout").push_record();
   auto f = detail::overload{
-    [&](const auto&) {
-      auto err = structure.push_field("basic").add(fmt::to_string(t));
-      TENZIR_ASSERT_CHEAP(!err);
+    [&](const auto&) -> caf::error {
+      return layout.push_field("basic").add(fmt::to_string(t));
     },
-    [&](const enumeration_type& e) {
-      auto enum_field = structure.push_field("enum");
+    [&](const enumeration_type& e) -> caf::error {
+      auto enum_field = layout.push_field("enum");
       auto list = enum_field.push_list();
       for (auto field : e.fields()) {
         auto field_record = list.push_record();
         auto name = field_record.push_field("name");
-        auto err = name.add(field.name);
-        TENZIR_ASSERT_CHEAP(!err);
+        if (auto err = name.add(field.name))
+          return err;
         auto key = field_record.push_field("key");
-        err = key.add(uint64_t{field.key});
-        TENZIR_ASSERT_CHEAP(!err);
+        if (auto err = key.add(uint64_t{field.key}))
+          return err;
       }
+      return {};
     },
-    [&](const list_type& l) {
-      auto list = structure.push_field("list");
-      auto err = list.add(fmt::to_string(l.value_type()));
-      TENZIR_ASSERT_CHEAP(!err);
+    [&](const list_type& l) -> caf::error {
+      // TODO: recurse into nested records.
+      auto list = layout.push_field("list");
+      return list.add(fmt::to_string(l.value_type()));
     },
-    [&](const map_type& m) {
-      auto map = structure.push_field("map");
+    [&](const map_type& m) -> caf::error {
+      // TODO: recurse into nested records.
+      auto map = layout.push_field("map");
       auto record = map.push_record();
       auto key_field = record.push_field("key");
-      auto err = key_field.add(fmt::to_string(m.key_type()));
-      TENZIR_ASSERT_CHEAP(!err);
+      if (auto err = key_field.add(fmt::to_string(m.key_type())))
+        return err;
       auto value_field = record.push_field("value");
-      err = value_field.add(fmt::to_string(m.value_type()));
-      TENZIR_ASSERT_CHEAP(!err);
+      if (auto err = value_field.add(fmt::to_string(m.value_type())))
+        return err;
+      return {};
     },
-    [&](const record_type& r) {
-      auto record = structure.push_field("record");
+    [&](const record_type& r) -> caf::error {
+      auto record = layout.push_field("record");
       auto list = record.push_list();
       for (const auto& field : r.fields()) {
         auto field_record = list.push_record();
         auto field_name = field_record.push_field("name");
-        auto err = field_name.add(field.name);
-        TENZIR_ASSERT_CHEAP(!err);
+        if (auto err = field_name.add(field.name))
+          return err;
         auto field_type = field_record.push_field("type");
-        err = field_type.add(fmt::to_string(field.type));
-        TENZIR_ASSERT_CHEAP(!err);
+        if (auto err = field_type.add(fmt::to_string(field.type)))
+          return err;
       }
+      return {};
     },
   };
-  caf::visit(f, t);
+  if (auto err = caf::visit(f, t))
+    return err;
   auto attributes = collect(t.attributes());
   if (attributes.empty())
     return {};
-  auto list = guard.push_field("attributes").push_list();
+  auto list = row.push_field("attributes").push_list();
   for (auto& attribute : attributes) {
     auto record = list.push_record();
-    err = record.push_field("key").add(attribute.key);
-    TENZIR_ASSERT_CHEAP(!err);
-    err = record.push_field("value").add(attribute.value);
-    TENZIR_ASSERT_CHEAP(!err);
+    if (auto err = record.push_field("key").add(attribute.key))
+      return err;
+    if (auto err = record.push_field("value").add(attribute.value))
+      return err;
   }
   return {};
 }
@@ -427,10 +573,9 @@ public:
     auto schemas = std::set<type>{};
     for (const auto& synopsis : synopses)
       schemas.insert(synopsis.synopsis->schema);
-    auto builder = adaptive_table_slice_builder{type_type()};
+    auto builder = adaptive_table_slice_builder{schema_type()};
     for (const auto& schema : schemas) {
-      auto row = builder.push_row();
-      if (auto err = add(row, schema))
+      if (auto err = add_schema(builder, schema))
         diagnostic::error("failed to add type to builder")
           .note("full type: {}", fmt::to_string(schema))
           .emit(ctrl.diagnostics());
@@ -481,8 +626,7 @@ public:
     }
     auto builder = adaptive_table_slice_builder{type_type()};
     for (const auto& type : types) {
-      auto row = builder.push_row();
-      if (auto err = add(row, type))
+      if (auto err = add_type(builder, type))
         diagnostic::error("failed to add type to builder")
           .note("full type: {}", fmt::to_string(type))
           .emit(ctrl.diagnostics());
