@@ -52,9 +52,9 @@ thinking.
 [kusto]: https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/
 
 In fact, for a given dataflow pipeline there's often an equivalent SQL
-expression, because a lot of the underlying engines internally map to the same
-execution model. This gives rise to [transpiling dataflow languages to other
-execution platforms][splunk-transpiler]. Ultimately, our goal is that security
+expression, because the underlying engines frequently map to the same execution
+model. This gives rise to [transpiling dataflow languages to other execution
+platforms][splunk-transpiler]. Ultimately, our goal is that security
 practitioners do not have to think about *any* of this and stay in their happy
 place, which means avoiding context switches to lower-level data primitives.
 
@@ -80,10 +80,10 @@ index=zeek sourcetype=zeek_conn id.resp_p > 1024
 
 Tenzir:
 
-```kusto
+```
 export
 | where #schema == "zeek.conn" && id.resp_p > 1024
-| summarize count(.) by id.resp_p
+| summarize count(.) by service, id.resp_p
 ```
 
 In Splunk, you typically start with an `index=X` to specify your dataset. In
@@ -105,7 +105,8 @@ the pipeline stays the same.
 
 :::note charting
 Tenzir doesn't have charting capabilities (yet), so in this and subsequent
-examples, we end with the data, or replace a `chart` query with an aggregation.
+examples, we end with the data, or replace a `chart` query with an aggregation
+using `summarize`.
 :::
 
 ### Top 10 sources by number of connections
