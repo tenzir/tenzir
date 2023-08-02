@@ -88,29 +88,32 @@ export
 | summarize count(.) by service, id.resp_p
 ```
 
-In Splunk, you typically start with an `index=X` to specify your dataset. In
-Tenzir, you start with a [source operator](/operators/sources). To run a query
-over historical data, we use the [`export`](/operators/sources/export) operator.
+Analysis:
 
-The subsequent [`where`](/operators/transformations/where) operator is a
-transformation to filter the stream of events with the
-[expression](/language/expressions) `#schema == "zeek.conn" && id.resp_p >
-1024`. In SPL, you write that expression directly into `index`. In TQL, we
-logically separate this because one operator should have exactly one purpose.
-Under the hood, the TQL optimizer does predicate pushdown to avoid first
-exporting the entire database and only then applying the filter.
+- In SPL, you typically start with an `index=X` to specify your dataset. In
+  TQL, you start with a [source operator](/operators/sources). To run a query
+  over historical data, we use the [`export`](/operators/sources/export)
+  operator.
 
-Why does this single responsibility principle matter? Because it's critical for
-*composition*: we can now replace `export` with another data source, like
-[`from`](/operators/sources/from) [`kafka`](/connectors/kafka), and the rest of
-the pipeline stays the same.
+- The subsequent [`where`](/operators/transformations/where) operator is a
+  transformation to filter the stream of events with the
+  [expression](/language/expressions) `#schema == "zeek.conn" && id.resp_p >
+  1024`. In SPL, you write that expression directly into `index`. In TQL, we
+  logically separate this because one operator should have exactly one purpose.
+  Under the hood, the TQL optimizer does predicate pushdown to avoid first
+  exporting the entire database and only then applying the filter.
 
-SPL's [`chart X by Y, Z`][chart] (or equivalently `chart X over Y by Z`)
-performs an implicit
-[pivot-wider](https://epirhandbook.com/en/pivoting-data.html)
-operation on `Z`. This different tabular format has the same underlying data
-produced by `summarize X by Y, Z`, which is why we are replacing it accordingly
-in our examples.
+  Why does this single responsibility principle matter? Because it's critical
+  for *composition*: we can now replace `export` with another data source, like
+  [`from`](/operators/sources/from) [`kafka`](/connectors/kafka), and the rest
+  of the pipeline stays the same.
+
+- SPL's [`chart X by Y, Z`][chart] (or equivalently `chart X over Y by Z`)
+  performs an implicit
+  [pivot-wider](https://epirhandbook.com/en/pivoting-data.html) operation on
+  `Z`. This different tabular format has the same underlying data produced by
+  `summarize X by Y, Z`, which is why we are replacing it accordingly in our
+  examples.
 
 [chart]: https://www.splunk.com/en_us/blog/tips-and-tricks/search-commands-stats-chart-and-timechart.html
 
@@ -133,9 +136,8 @@ export
 | head 10
 ```
 
-Note the similarity. Like SPL, we support
-[`top`](/operators/transformations/top) and
-[`rare`](/operators/transformations/rare) to make Splunk users feel at home.
+Note the similarity. We opted to add [`top`](/operators/transformations/top) and
+[`rare`](/operators/transformations/rare) to make SPL users feel at home.
 
 ### Top 10 sources by bytes sent
 
@@ -165,12 +167,12 @@ export
 | put Source=id.orig_h, B, MB, GB, Services
 ```
 
-This example is a bit more involved. Let's take it apart.
+Analysis:
 
-- We opted for Kusto's syntax of sorting, by appending an `asc` or `desc`
-  qualifier after the field name. `sort -B` translates into `sort B desc`,
-  whereas `sort B` into `sort B asc`. However, we want to adopt the SPL syntax
-  in the future.
+- We opted for Kusto's syntax of sorting (for technical reasons), by appending
+  an `asc` or `desc` qualifier after the field name. `sort -B` translates into
+  `sort B desc`, whereas `sort B` into `sort B asc`. However, we want to adopt
+  the SPL syntax in the future.
 
 - SPL's `eval` maps to [`extend`](/operators/transformations/extend).
 
@@ -206,7 +208,7 @@ export
 | summarize Outgoing=sum(orig_gigabytes), Incoming=sum(resp_gigabytes) by :timestamp, service resolution 1h
 ```
 
-This example also looks quite similar in structure.
+Analysis:
 
 - SPL's `timechart` does an implicit group by timestamp. As we TQL's
   `summarize` operator, we need to explicitly provide the group field
@@ -239,12 +241,14 @@ export
 | head 10
 ```
 
-This example shows again how to select a specific data source and perform "stack
-counting". Unlike SPL, our version of `rare` does not limit the output to 10
-events by default, which is why add `head 10`. This goes back to the single
-responsibility principle: one operator should do exactly one thing. The act
-of limiting the output should always be associated with
-[`head`](/operators/transformations/head).
+Analysis:
+
+- This example shows again how to select a specific data source and perform
+  "stack counting". Unlike SPL, our version of `rare` does not limit the output
+  to 10 events by default, which is why add `head 10`. This goes back to the
+  single responsibility principle: one operator should do exactly one thing. The
+  act of limiting the output should always be associated with
+  [`head`](/operators/transformations/head).
 
 ### Expired certificates
 
@@ -264,8 +268,10 @@ export
 | where certificate.not_valid_after > now()
 ```
 
-This example shows the benefit of native time types (and Tenzir's rich type
-system in general).
+Analysis:
+
+- This example shows the benefit of native time types (and Tenzir's rich type
+  system in general).
 
 - TQL's [type system](/data-model/type-system) has first-class support for times
   and durations.
@@ -294,7 +300,7 @@ export
 | select :timestamp, id.orig_h, id.resp_h, proto, query, query_length, answer
 ```
 
-Comments:
+Analysis:
 
 - As mentioned above, we don't have functions in TQL yet. Once we have them,
   SPL's `len` will map to `length` in TQL.
@@ -319,10 +325,13 @@ export
 | select :timestamp, id.orig_h, id.resp_h, proto, query
 ```
 
-The `table` operator in splunk outputs the data in tabular form. This is the
-default for our [app](/setup-guides/use-the-app). There's also an
-[upcoming](https://github.com/tenzir/tenzir/pull/3113) `write table` format to
-generate a tabular representation outside the app.
+Analysis:
+
+- The `table` operator in splunk outputs the data in tabular form. This is the
+  default for our [app](/setup-guides/use-the-app).
+
+- There's also an [upcoming](https://github.com/tenzir/tenzir/pull/3113) `write
+  table` format to generate a tabular representation outside the app.
 
 ## Summary
 
