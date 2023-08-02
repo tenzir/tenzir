@@ -975,6 +975,18 @@ tests:
       - command: exec 'read zeek-json | summarize x=distinct(y)'
         input: data/zeek/zeek.json
 
+  Summarize Dot:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read zeek-json | summarize x=count(.)'
+        input: data/zeek/zeek.json
+      - command: exec 'read zeek-json | summarize x=distinct(.)'
+        input: data/zeek/zeek.json
+        expected_result: error
+      - command: exec 'read zeek-json | summarize x=count(_path) by .'
+        input: data/zeek/zeek.json
+        expected_result: error
+
   Flatten Operator:
     tags: [pipelines, zeek]
     steps:
