@@ -37,12 +37,12 @@ of relational algebra.
 
 We opted for a dataflow language because it simplifies reasoning—one step at a
 time. At least conceptually, because a smart system optimizes the execution
-under the hood. Any declarative language where users describe the desired
-outcome offers the execution engine to rearrange the input, as long as it
-doesn't change the output. Particularly SQL has this property, with relational
-algebra describing the *what* and not the *how*. A dataflow language is a bit
-more concrete in that it's closer to the *how*, but that's precisely the
-trade-off that simplifies the reasoning: the focus is on a single operation as
+under the hood. As long as the observable behavior remains the same, the
+underlying implementation can optimize the actual computation at will. This is
+especially noticeable with declarative languages, such as SQL, where the user
+describes the *what* instead of the *how*. A dataflow language is a bit more
+concrete in that it's closer to the *how*, but that's precisely the trade-off
+that simplifies the reasoning: the focus is on a single operation at a time as
 opposed to an entire large expression.
 
 This dataflow pipeline style is becoming more and more popular. Most SIEMs have
