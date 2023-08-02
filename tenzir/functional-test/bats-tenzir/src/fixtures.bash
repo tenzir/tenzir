@@ -12,9 +12,15 @@ teardown_db() {
 }
 
 setup_node() {
-  # The exec is needed so that signals to $NODE_PID actually reach the node.
-  coproc NODE { exec tenzir-node -e ":0" --print-endpoint; }
-  read -r -u "${NODE[0]}" TENZIR_ENDPOINT
+  export TENZIR_BARE_MODE=true
+  # The inner exec is needed so that signals to $NODE_PID actually reach the
+  # node.
+  exec {NODE}< <(exec tenzir-node -e ":0" --print-endpoint)
+  NODE_PID=$!
+  read -r -u "$NODE" TENZIR_ENDPOINT
+  # This closes the fd attached to stdout on the reading side, we don't need it
+  # any more.
+  exec {NODE}<&-
   export TENZIR_ENDPOINT
 }
 teardown_node() {
@@ -24,6 +30,9 @@ teardown_node() {
   { sleep ${seconds} && { debug 0 "killing the node after ${seconds} second shutdown timeout"; kill -9 "$NODE_PID"; }; } &
   local killerPid=$!
   wait "$NODE_PID"
+  # Some FS writes may still be buffered, and they would lead the subsequent
+  # cleanup logic astray, so we flush them out here.
+  sync
   # The sleep is a child process of the killer shell, so we have to use
   # `pkill -P`.
   pkill -P "$killerPid"
