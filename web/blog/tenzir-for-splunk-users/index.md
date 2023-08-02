@@ -282,7 +282,8 @@ Tenzir:
 
 ```splunk-spl
 export
-| extend query_length = length(zeek.dns.query)
+| where #schema == "zeek.dns"
+| extend query_length = length(query)
 | where query_length > 75
 | select :timestamp, id.orig_h, id.resp_h, proto, query, query_length
 ```
@@ -308,7 +309,7 @@ Tenzir:
 
 ```splunk-spl
 export
-| where zeek.dns.rcode_name == "NXDOMAIN"
+| where #schema == "zeek.dns" && rcode_name == "NXDOMAIN"
 | select :timestamp, id.orig_h, id.resp_h, proto, query
 ```
 
