@@ -217,7 +217,8 @@ This example also looks quite similar in structure.
 
 - TQLs's `#schema` is an expression that is responsible for filtering the data
   sources. This is because all TQL pipelines are *multi-schema*, i.e., they can
-  process more than a single type of data.
+  process more than a single type of data. The ability to specify a regular
+  expression makes for a powerful way to select the desired input.
 
 ### Rare JA3 hashes
 
