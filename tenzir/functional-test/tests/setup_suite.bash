@@ -5,9 +5,12 @@ setup_suite() {
 }
 
 teardown_suite() {
-  # coreutils rmdir has --ignore-fail-on-non-empty, but that is not portable.
-  # We simply assume that an error means the directory is not empty.
-  rmdir tenzir-functional-test-state || true
+  # Remove the state dir if all tests cleaned up after themselves.
+  if [ "$(ls -A tenzir-functional-test-state)" == "" ]; then
+    rmdir tenzir-functional-test-state
+  else
+    debug 0 "Keeping tenzir-functional-test-state directory."
+  fi
 }
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
