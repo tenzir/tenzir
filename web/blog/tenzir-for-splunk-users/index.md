@@ -33,17 +33,21 @@ detection engineers, threat intelligence analysts, and other domain experts. Our
 goal is cater to these folks, without requiring them to have deep understanding
 of relational algebra.
 
-We opted for a dataflow language because it simplifies reasoning: one step at a
-time. At least conceptually, because a smart system optimizes the execution of
-the users intent so that the pipeline runs efficiently. Any declarative language
-has that property, SQL in particular. But the difference to SQL is that a
-sequential dataflow makes it easy to simply *append* your next operation, as
-opposed to editing a query in the middle to inject a complicated clause
-somewhere. Instead of having to understand the entire SQL query, you just need
-to append an operation at the end that does the next thing. This dataflow
-pipeline style is becoming more and more popular. Most SIEMs have a language of
-their own, like Splunk. [Kusto][kusto] is another great example with a wide user
-base in security.
+We opted for a dataflow language because it simplifies reasoning—one step at a
+time. At least conceptually, because a smart system optimizes the execution
+under the hood. Any declarative language where users describe the desired
+outcome offers the exeuction engine to re-arrange the input, as long as it
+doesn't change the output. Particularly SQL has property, where relational
+algebra describes the *what* and not the *how*. A dataflow language is a bit
+more concrete in that it's closer to the *how*, but that's precisely the
+trade-off that simplifies the reasoning: the focus is on a single operation as
+opposed to an entire large expression.
+
+This dataflow pipeline style is becoming more and more popular. Most SIEMs have
+a language of their own, like Splunk. [Kusto][kusto] is another great example
+with a wide user base in security. Even in the data space,
+[PRQL](https://prql-lang.org) witnesses a strong support for this way of
+thinking.
 
 [kusto]: https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/
 
