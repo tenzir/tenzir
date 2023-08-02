@@ -124,7 +124,7 @@ auto schema_type() -> type {
     "tenzir.schema",
     record_type{
       {"schema", string_type{}},
-      {"fingerprint", string_type{}},
+      {"schema_id", string_type{}},
       {"field", string_type{}},
       {"path", list_type{string_type{}}},
       {"index", list_type{uint64_type{}}},
@@ -249,7 +249,7 @@ auto add_schema(auto& builder, const type& t) -> caf::error {
     auto row = builder.push_row();
     if (auto err = row.push_field("schema").add(t.name()))
       return err;
-    if (auto err = row.push_field("fingerprint").add(t.make_fingerprint()))
+    if (auto err = row.push_field("schema_id").add(t.make_fingerprint()))
       return err;
     if (auto err = row.push_field("field").add(ctx.field.name))
       return err;
