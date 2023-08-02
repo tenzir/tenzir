@@ -8,7 +8,6 @@
 
 #include "tenzir/table_slice_builder.hpp"
 
-#include "tenzir/arrow_compat.hpp"
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/numeric.hpp"
 #include "tenzir/config.hpp"
@@ -340,7 +339,7 @@ arrow::Status
 append_builder(const string_type&,
                type_to_arrow_builder_t<string_type>& builder,
                const view<type_to_data_t<string_type>>& view) noexcept {
-  return builder.Append(arrow_compat::string_view{view.data(), view.size()});
+  return builder.Append(std::string_view{view.data(), view.size()});
 }
 
 arrow::Status
@@ -348,7 +347,7 @@ append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
                const view<type_to_data_t<ip_type>>& view) noexcept {
   const auto bytes = as_bytes(view);
   TENZIR_ASSERT(bytes.size() == 16);
-  return builder.Append(arrow_compat::string_view{
+  return builder.Append(std::string_view{
     reinterpret_cast<const char*>(bytes.data()), bytes.size()});
 }
 
