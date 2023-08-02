@@ -177,6 +177,9 @@ This example is a bit more involved. Let's take it apart.
   that `extend` keeps all fields as is, whereas `put` reorders fields and
   performs an explicit projection with the provided fields.
 
+- We don't have functions in TQL. *Yet*. It's one of our most important roadmap
+  items at the time of writing, so stay tuned.
+
 ### Bytes transferred over time by service
 
 Splunk:
@@ -281,15 +284,16 @@ Tenzir:
 export
 | extend query_length = length(zeek.dns.query)
 | where query_length > 75
-| select #timestamp, id.orig_h, id.resp_h, proto, query, query_length
+| select :timestamp, id.orig_h, id.resp_h, proto, query, query_length
 ```
 
-We don't have functions in TQL. *Yet*. It's one of our most important roadmap
-items at the time of writing, so stay tuned.
+Comments:
 
-If we had functions, we would translate this query as shown above.
-Splunk's `len` would map to Tenzir's `length` function, and the `_time`
-field maps to the `#timestamp` selector.
+- As mentioned above, we don't have functions in TQL yet. Once we have them,
+  SPL's `len` will map to `length` in TQL.
+
+- The SPL-generated `_time` field maps to the `:timestamp` type extractor in
+  TQL.
 
 ### Query responses with NXDOMAIN
 
@@ -305,7 +309,7 @@ Tenzir:
 ```splunk-spl
 export
 | where zeek.dns.rcode_name == "NXDOMAIN"
-| select #timestamp, id.orig_h, id.resp_h, proto, query
+| select :timestamp, id.orig_h, id.resp_h, proto, query
 ```
 
 The `table` operator in splunk outputs the data in tabular form. This is the
