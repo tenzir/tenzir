@@ -268,6 +268,13 @@ private:
 
 class plugin final : public virtual operator_plugin<shell_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {
+      .source = true,
+      .transformation = true,
+    };
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto command = std::string{};
     auto parser = argument_parser{"shell", "https://docs.tenzir.com/next/"

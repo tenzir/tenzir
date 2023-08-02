@@ -172,6 +172,10 @@ auto parse_default_parser(std::string definition)
 
 class from_plugin final : public virtual operator_parser_plugin {
 public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
   auto name() const -> std::string override {
     return "from";
   };
@@ -225,6 +229,10 @@ public:
 
 class load_plugin final : virtual public operator_plugin<load_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "load <loader> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sources/load";
@@ -248,6 +256,10 @@ public:
 
 class read_plugin final : virtual public operator_plugin<read_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "read <parser> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/transformations/read";

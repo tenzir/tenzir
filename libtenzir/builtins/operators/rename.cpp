@@ -177,6 +177,10 @@ private:
 
 class plugin final : public virtual operator_plugin<rename_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto initialize(const record& plugin_config,
                   [[maybe_unused]] const record& global_config)
     -> caf::error override {

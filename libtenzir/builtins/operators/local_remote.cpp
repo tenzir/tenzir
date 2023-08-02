@@ -101,6 +101,14 @@ public:
     return {};
   }
 
+  auto signature() const -> operator_signature override {
+    return {
+      .source = true,
+      .transformation = true,
+      .sink = true,
+    };
+  }
+
   auto name() const -> std::string override {
     return std::string{Name.str()};
   };

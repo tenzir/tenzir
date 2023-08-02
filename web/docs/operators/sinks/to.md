@@ -48,7 +48,7 @@ to stdout write csv
 Write events to the file `path/to/eve.json` formatted as JSON.
 
 ```
-to file path/to/eve.json | write json
+to file path/to/eve.json write json
 ```
 
 [connectors]: ../../connectors.md
