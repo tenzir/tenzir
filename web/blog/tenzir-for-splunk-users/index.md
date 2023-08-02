@@ -238,7 +238,11 @@ export
 ```
 
 This example shows again how to select a specific data source and perform "stack
-counting".
+counting". Unlike SPL, our version of `rare` does not limit the output to 10
+events by default, which is why add `head 10`. This goes back to the single
+responsibility principle: one operator should do exactly one thing. The act
+of limiting the output should always be associated with
+[`head`](/operators/transformations/head).
 
 ### Expired certificates
 
