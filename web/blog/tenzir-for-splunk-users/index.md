@@ -169,7 +169,8 @@ This example is a bit more involved. Let's take it apart.
 
 - We opted for Kusto's syntax of sorting, by appending an `asc` or `desc`
   qualifier after the field name. `sort -B` translates into `sort B desc`,
-  whereas `sort B` into `sort B asc`.
+  whereas `sort B` into `sort B asc`. However, we want to adopt the SPL syntax
+  in the future.
 
 - SPL's `eval` maps to [`extend`](/operators/transformations/extend).
 
