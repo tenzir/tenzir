@@ -285,7 +285,7 @@ export
 | where #schema == "zeek.dns"
 | extend query_length = length(query)
 | where query_length > 75
-| select :timestamp, id.orig_h, id.resp_h, proto, query, query_length
+| select :timestamp, id.orig_h, id.resp_h, proto, query, query_length, answer
 ```
 
 Comments:
