@@ -24,5 +24,5 @@ export BATS_SUITE_DIRNAME
 unset "${!TENZIR@}"
 # Enable bare mode so settings in ~/.config/tenzir or the build configuration
 # have no effect.
-export TENZIR_BARE=1
+export TENZIR_BARE_MODE=1
 export TENZIR_PLUGINS="web"
