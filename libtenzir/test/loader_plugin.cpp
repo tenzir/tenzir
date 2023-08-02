@@ -180,6 +180,10 @@ TEST(file loader - parser deduction) {
   CHECK_EQUAL(make_loader("file", "--timeout 1s eve.json")->default_parser(),
               "suricata");
   CHECK_EQUAL(make_loader("file", "--timeout 1s -")->default_parser(), "json");
+  CHECK_EQUAL(make_loader("file", "--timeout 1s foo.txt")->default_parser(),
+              "json");
+  CHECK_EQUAL(make_loader("file", "--timeout 1s foo.")->default_parser(),
+              "json");
 }
 
 TEST(file loader - nonexistent file) {
