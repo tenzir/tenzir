@@ -103,11 +103,14 @@ Why does this single responsibility principle matter? Because it's critical for
 [`from`](/operators/sources/from) [`kafka`](/connectors/kafka), and the rest of
 the pipeline stays the same.
 
-:::note charting
-Tenzir doesn't have charting capabilities (yet), so in this and subsequent
-examples, we end with the data, or replace a `chart` query with an aggregation
-using `summarize`.
-:::
+SPL's [`chart X by Y, Z`][chart] (or equivalently `chart X over Y by Z`)
+performs an implicit
+[pivot-wider](https://epirhandbook.com/en/pivoting-data.html)
+operation on `Z`. This different tabular format has the same underlying data
+produced by `summarize X by Y, Z`, which is why we are replacing it accordingly
+in our examples.
+
+[chart]: https://www.splunk.com/en_us/blog/tips-and-tricks/search-commands-stats-chart-and-timechart.html
 
 ### Top 10 sources by number of connections
 
