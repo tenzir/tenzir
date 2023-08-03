@@ -14,12 +14,12 @@ subdirectory.
 To run the REST API as dedicated process, use the `web server` command:
 
 ```bash
-tenzir web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
+tenzir-ctl web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
 ```
 To run the server within the main Tenzir process, use a `start` command:
 
 ```bash
-tenzir start --commands="web server [...]"
+tenzir-node --commands="web server [...]"
 ```
 
 All requests must be authenticated by a valid authentication token, which is a
@@ -28,11 +28,11 @@ short string that must be sent in the `X-Tenzir-Token` request header.
 You can generate a valid token on the command line as follows:
 
 ```bash
-tenzir web generate-token
+tenzir-ctl web generate-token
 ```
 
 Use the "developer mode" to bypass encryption and token validation:
 
 ```bash
-tenzir web server --mode=dev
+tenzir-ctl web server --mode=dev
 ```

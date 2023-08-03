@@ -178,7 +178,7 @@ This API can be used to interact with a Tenzir Node in a RESTful manner.
 
 All API requests must be authenticated with a valid token, which must be
 supplied in the `X-Tenzir-Token` request header. The token can be generated
-on the command-line using the `tenzir rest generate-token` command.)_"},
+on the command-line using the `tenzir-ctl web generate-token` command.)_"},
      }},
     {"servers", list{{
       record{{"url", "https://tenzir.example.com/api/v0"}},

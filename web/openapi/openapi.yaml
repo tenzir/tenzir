@@ -3,7 +3,7 @@ openapi: 3.0.0
 info:
   title: Tenzir Rest API
   version: "\"0.1\""
-  description: "\nThis API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be\nsupplied in the `X-Tenzir-Token` request header. The token can be generated\non the command-line using the `tenzir rest generate-token` command."
+  description: "\nThis API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be\nsupplied in the `X-Tenzir-Token` request header. The token can be generated\non the command-line using the `tenzir-ctl web generate-token` command."
 servers:
   - url: https://tenzir.example.com/api/v0
 security:
