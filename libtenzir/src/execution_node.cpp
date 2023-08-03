@@ -98,12 +98,6 @@ auto make_timer_guard(Duration&... elapsed) {
 // of table slices, excluding the schema and disregarding any overlap or custom
 // information from extension types.
 auto num_approx_bytes(const std::vector<table_slice>& events) {
-#if ARROW_VERSION_MAJOR < 12
-  // arrow::util::ReferencedBufferSize is broken for Arrow before 12.0.0 and
-  // crashes for extension types.
-  (void)events;
-  return uint64_t{0};
-#else
   auto result = uint64_t{};
   for (const auto& batch : events) {
     if (batch.rows() == 0)
@@ -128,7 +122,6 @@ auto num_approx_bytes(const std::vector<table_slice>& events) {
       arrow::util::ReferencedBufferSize(*record_batch).ValueOr(0));
   }
   return result;
-#endif
 }
 
 template <class Input, class Output>
