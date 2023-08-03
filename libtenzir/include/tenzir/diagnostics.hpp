@@ -303,9 +303,10 @@ private:
   bool has_seen_error_ = false;
 };
 
-///
+enum class color_diagnostics { no, yes };
+
 auto make_diagnostic_printer(std::string filename, std::string source,
-                             bool color, std::ostream& stream)
+                             color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
 
 } // namespace tenzir
