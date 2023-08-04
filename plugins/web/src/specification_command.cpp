@@ -48,6 +48,7 @@ Metrics:
             num_batches:
               type: integer
               description: The total amount of batches that were generated during data processing in the pipeline source.
+              example: 2
             num_approx_bytes:
               type: integer
               description: The total amount of bytes that entered the pipeline source. For events, this value is an approximation.
@@ -78,6 +79,7 @@ Metrics:
             num_batches:
               type: integer
               description: The total amount of batches that were generated during data processing in the pipeline sink.
+              example: 1
             num_approx_bytes:
               type: integer
               description: The total amount of bytes that entered the pipeline sink. For events, this value is an approximation.
