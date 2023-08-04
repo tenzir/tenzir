@@ -42,7 +42,7 @@ tenzir 'from file path/to/conn.log read zeek-tsv | serve zeek-conn-logs'
 curl \
   -X POST \
   -H "Content-Type: application/json" \
-  -d '{"serve_id": "zeek-conn-logs", "continuation_token": null, "timeout": "1s", max_events": 100}' \
+  -d '{"serve_id": "zeek-conn-logs", "continuation_token": null, "timeout": "1s", "max_events": 100}' \
   http://localhost:5160/api/v0/serve
 ```
 
