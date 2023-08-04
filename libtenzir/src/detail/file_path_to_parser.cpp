@@ -8,6 +8,8 @@
 
 #include "tenzir/detail/file_path_to_parser.hpp"
 
+#include "tenzir/plugin.hpp"
+
 #include <array>
 
 namespace tenzir::detail {
@@ -32,11 +34,19 @@ auto file_path_to_parser(const std::filesystem::path& path) -> std::string {
       return parser;
     }
   }
-  auto fallback_ext = std::filesystem::path(path).extension();
+  auto fallback_ext = std::filesystem::path(path).extension().string();
   if (fallback_ext.empty()) {
     return fallback_parser;
   }
-  return fallback_ext.string().substr(1);
+  fallback_ext = fallback_ext.substr(1);
+  if (plugins::find<parser_parser_plugin>(fallback_ext)) {
+    return fallback_ext;
+  }
+  TENZIR_VERBOSE("Could not find default parser for path {} - falling back "
+                 "to "
+                 "{}",
+                 path, fallback_parser);
+  return fallback_parser;
 }
 
 } // namespace tenzir::detail
