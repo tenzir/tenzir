@@ -20,8 +20,8 @@ namespace tenzir {
 namespace {
 
 struct colors {
-  static auto make(bool color) -> colors {
-    if (!color) {
+  static auto make(color_diagnostics color) -> colors {
+    if (color == color_diagnostics::no) {
       return colors{};
     }
     return colors{
@@ -48,8 +48,8 @@ struct colors {
 
 class diagnostic_printer final : public diagnostic_handler, private colors {
 public:
-  diagnostic_printer(std::string filename, std::string source, bool color,
-                     std::ostream& stream)
+  diagnostic_printer(std::string filename, std::string source,
+                     color_diagnostics color, std::ostream& stream)
     : colors{colors::make(color)},
       storage_{std::move(source)},
       lines_{detail::split(storage_, "\n")},
@@ -160,7 +160,7 @@ private:
 } // namespace
 
 auto make_diagnostic_printer(std::string filename, std::string source,
-                             bool color, std::ostream& stream)
+                             color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
   return std::make_unique<diagnostic_printer>(std::move(filename),
                                               std::move(source), color, stream);

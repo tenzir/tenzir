@@ -243,8 +243,8 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
 void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
                                 std::string filename, std::string content) {
   // Replay diagnostics to reconstruct `stderr` on `stdout`.
-  auto printer = make_diagnostic_printer(std::move(filename),
-                                         std::move(content), false, std::cout);
+  auto printer = make_diagnostic_printer(
+    std::move(filename), std::move(content), color_diagnostics::no, std::cout);
   for (auto&& diag : diagnostics) {
     printer->emit(diag);
   }
@@ -339,7 +339,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
                                std::move(content));
     return result;
   }
-  auto printer = make_diagnostic_printer(filename, content, true, std::cerr);
+  auto printer = make_diagnostic_printer(filename, content,
+                                         color_diagnostics::yes, std::cerr);
   return exec_impl(std::move(content), std::move(printer), cfg, sys);
 }
 
@@ -371,7 +372,8 @@ public:
          auto result = exec_command(inv, sys);
          if (not result) {
            if (result != ec::silent) {
-             auto diag = make_diagnostic_printer("", "", true, std::cerr);
+             auto diag = make_diagnostic_printer("", "", color_diagnostics::yes,
+                                                 std::cerr);
              diag->emit(diagnostic::error("{}", result.error()).done());
            }
            return caf::make_message(ec::silent);
