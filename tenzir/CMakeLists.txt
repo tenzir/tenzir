@@ -114,7 +114,7 @@ add_custom_target(
   functional-test-core
   COMMAND
     ${CMAKE_COMMAND} -E env
-    PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:$ENV{PATH}:${CMAKE_CURRENT_SOURCE_DIR}/functional-test/bats/bin"
+    PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/functional-test/bats/bin"
     bats "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
   COMMENT "Executing functional tests..."
   USES_TERMINAL)

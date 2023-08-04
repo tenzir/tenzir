@@ -751,7 +751,7 @@ function (TenzirRegisterPlugin)
     endif ()
     add_custom_target(
       functional-test-${PLUGIN_TARGET}
-      COMMAND ${CMAKE_COMMAND} -E env PATH="${TENZIR_PATH}:${TENZIR_PATH}/../share/tenzir/functional-test/bats/bin:$ENV{PATH}" bats "-T"
+      COMMAND ${CMAKE_COMMAND} -E env PATH="${TENZIR_PATH}:${TENZIR_PATH}/../share/tenzir/functional-test/bats/bin:\$\$PATH" bats "-T"
               "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
       COMMENT "Executing ${PLUGIN_TARGET} functional tests..."
       USES_TERMINAL)
