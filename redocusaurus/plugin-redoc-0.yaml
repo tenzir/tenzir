@@ -45,6 +45,7 @@ components:
                 description: >-
                   The total amount of batches that were generated during data
                   processing in the pipeline source.
+                example: 2
               num_approx_bytes:
                 type: integer
                 description: >-
@@ -56,13 +57,13 @@ components:
                 description: >-
                   The total duration of the pipeline source operation in
                   seconds.
-                example: 1.233
+                example: 1.233998321
               processing_seconds:
                 type: number
                 description: >-
                   The total duration of the pipeline source data processing in
                   seconds.
-                example: 1.179
+                example: 1.179999992
             egress:
               type: object
               description: >-
@@ -85,6 +86,7 @@ components:
                 description: >-
                   The total amount of batches that were generated during data
                   processing in the pipeline sink.
+                example: 1
               num_approx_bytes:
                 type: integer
                 description: >-
@@ -94,13 +96,13 @@ components:
               total_seconds:
                 type: number
                 description: The total duration of the pipeline sink operation in seconds.
-                example: 2.945
+                example: 2.945935512
               processing_seconds:
                 type: number
                 description: >-
                   The total duration of the pipeline sink data processing in
                   seconds.
-                example: 1.452
+                example: 1.452123512
     Diagnostics:
       type: array
       items:
