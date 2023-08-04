@@ -1,6 +1,6 @@
 ---
 title: Introducing Tenzir Security Data Pipelines
-authors: mavam
+authors: oliverrochford
 date: 2023-08-09
 tags: [tenzir, pipelines]
 comments: true
