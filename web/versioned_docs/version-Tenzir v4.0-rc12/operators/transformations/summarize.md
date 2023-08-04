@@ -96,5 +96,5 @@ Create 1-hour groups and produce a summary of network traffic between host
 pairs:
 
 ```
-summarize sum(bytes_in), sum(bytes_out) by src_ip, dest_ip resolution 1 hour
+summarize sum(bytes_in), sum(bytes_out) by ts, src_ip, dest_ip resolution 1 hour
 ```
