@@ -6,12 +6,14 @@ tags: [tenzir, pipelines]
 comments: true
 ---
 
-We're overjoyed to announce our highly-anticipated security data pipeline
-platform at the renowned [BlackHat](https://www.blackhat.com/us-23) conference
-in Las Vegas. The launch marks a milestone in our journey to bring simplicity to
-data engineering for cybersecurity operations, and to bring a cost-efficient way
-to tackle the increasingly complex data engineering challenges that security
-teams confront daily.
+We're overjoyed to [announce][pr] our highly-anticipated security data pipeline
+platform at the renowned BlackHat conference in Las Vegas. The launch marks a
+milestone in our journey to bring simplicity to data engineering for
+cybersecurity operations, and to bring a cost-efficient way to tackle the
+increasingly complex data engineering challenges that security teams confront
+daily.
+
+[pr]: https://tenzir.com/press/tenzir-launches-security-data-pipeline-platform?utm_source=Blog&utm_campaign=launch
 
 ![Tenzir Launch](tenzir-launch.excalidraw.svg)
 
@@ -54,14 +56,14 @@ performance.
 This is where Tenzir's security data pipelines come in. Our unique platform
 instigates a shift from centralized security information and event management to
 a more adaptive and decentralized operating model more aligned with DevOps and
-data engineering principles: security data operations (**SecDataOps**). It
-transcends mere collection of events and logs, instead building resilient and
-robust data flows that optimize data for further use, whether for detection and
-correlation, threat hunting, or machine learning. Data pipelines are already
-common in data engineering and DevOps. They are designed to provide a seamless,
-efficient, and flexible way to manage and move data. But there are a number of
-reasons why data pipelines are also the ideal solution for today's cybersecurity
-challenges.
+data engineering principles: security data operations
+([SecDataOps](https://tenzir.com/secdataops?utm_source=Blog)). It transcends
+mere collection of events and logs, instead building resilient and robust data
+flows that optimize data for further use, whether for detection and correlation,
+threat hunting, or machine learning. Data pipelines are already common in data
+engineering and DevOps. They are designed to provide a seamless, efficient, and
+flexible way to manage and move data. But there are a number of reasons why data
+pipelines are also the ideal solution for today's cybersecurity challenges.
 
 - Firstly, security data pipelines optimize and formalize data management. They
   allow for the standardized collection, shaping, enrichment, and routing of
@@ -106,5 +108,5 @@ for security data pipelines isn't on the horizon, it's already here.
 Join us on this exciting journey to revamp cybersecurity operations.
 
 Start using Tenzir by visiting our website at
-[https://tenzir.com](https://tenzir.com/), or get in touch with us at
-[info@tenzir.com](mailto:info@tenzir.com).
+[https://tenzir.com](https://tenzir.com?utm_source=Blog), or get in touch with
+us at [info@tenzir.com](mailto:info@tenzir.com).
