@@ -125,8 +125,7 @@ add_dependencies(functional-test functional-test-core)
 # link the full
 add_custom_target(
   link-functional-test
-  COMMAND ${CMAKE_COMMAND} -E make_directory
-          "${CMAKE_BINARY_DIR}/share/tenzir"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/tenzir"
   COMMAND
     ${CMAKE_COMMAND} -E create_symlink
     "${CMAKE_CURRENT_SOURCE_DIR}/functional-test"
