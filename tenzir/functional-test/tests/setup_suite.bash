@@ -1,20 +1,16 @@
 setup_suite() {
   bats_require_minimum_version 1.8.0
 
-  mkdir -p tenzir-functional-test-state
+  bats_load_library bats-tenzir
+  setup_state_dir
 }
 
 teardown_suite() {
-  # Remove the state dir if all tests cleaned up after themselves.
-  if [ "$(ls -A tenzir-functional-test-state)" == "" ]; then
-    rmdir tenzir-functional-test-state
-  else
-    debug 0 "Keeping tenzir-functional-test-state directory."
-  fi
+  try_remove_state_dir
 }
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${SCRIPT_DIR}/../
+export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${SCRIPT_DIR}/..
 
 BATS_SUITE_DIRNAME="${BATS_TEST_DIRNAME}"
 export BATS_SUITE_DIRNAME

@@ -1,13 +1,12 @@
 setup_suite() {
   bats_require_minimum_version 1.8.0
 
-  mkdir -p functional-test-state
+  bats_load_library bats-tenzir
+  setup_state_dir
 }
 
 teardown_suite() {
-  # coreutils rmdir has --ignore-fail-on-non-empty, but that is not portable.
-  # We simply assume that an error means the directory is not empty.
-  rmdir functional-test-state || true
+  try_remove_state_dir
 }
 
 wait_for_http() {
@@ -15,7 +14,7 @@ wait_for_http() {
 }
 
 TENZIR_DIR="$(realpath "$(dirname "$(command -v tenzir)")")"
-export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${TENZIR_DIR}/../share/tenzir/functional-test/
+export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${TENZIR_DIR}/../share/tenzir/functional-test
 echo "$BATS_LIB_PATH"
 
 BATS_SUITE_DIRNAME="${BATS_TEST_DIRNAME}"

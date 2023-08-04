@@ -37,3 +37,16 @@ teardown_node() {
   # `pkill -P`.
   pkill -P "$killerPid"
 }
+
+setup_state_dir() {
+  mkdir -p tenzir-functional-test-state
+}
+
+try_remove_state_dir() {
+  # Remove the state dir if all tests cleaned up after themselves.
+  if [ "$(ls -A tenzir-functional-test-state)" == "" ]; then
+    rmdir tenzir-functional-test-state
+  else
+    debug 0 "Keeping tenzir-functional-test-state directory."
+  fi
+}
