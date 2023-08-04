@@ -30,7 +30,7 @@ Metrics:
       type: object
       description: Information about total pipeline metrics (e.g. total ingress/egress)
       properties:
-        in:
+        ingress:
           type: object
           description: Information about the total ingress. Contains no values when the source operator has not run.
           properties:
@@ -41,15 +41,26 @@ Metrics:
                 - events
               description: The unit of the input data.
               example: bytes
-            elements:
+            num_elements:
               type: integer
               description: The total amount of elements that entered the pipeline source.
               example: 109834
-            avg_rate:
+            num_batches:
+              type: integer
+              description: The total amount of batches that were generated during data processing in the pipeline source.
+            num_approx_bytes:
+              type: integer
+              description: The total amount of bytes that entered the pipeline source. For events, this value is an approximation.
+              example: 30414
+            total_seconds:
               type: number
-              description: The average rate of input elements per second.
-              example: 27450.345233
-        out:
+              description: The total duration of the pipeline source operation in seconds.
+              example: 1.233998321
+            processing_seconds:
+              type: number
+              description: The total duration of the pipeline source data processing in seconds.
+              example: 1.179999992
+        egress:
           type: object
           description: Information about the total egress. Contains no values when the sink operator has not run.
           properties:
@@ -60,14 +71,25 @@ Metrics:
                 - events
               description: The unit of the output data.
               example: bytes
-            elements:
+            num_elements:
               type: integer
               description: The total amount of elements that entered the pipeline sink.
               example: 30414
-            avg_rate:
+            num_batches:
+              type: integer
+              description: The total amount of batches that were generated during data processing in the pipeline sink.
+            num_approx_bytes:
+              type: integer
+              description: The total amount of bytes that entered the pipeline sink. For events, this value is an approximation.
+              example: 30414
+            total_seconds:
               type: number
-              description: The average rate of output elements per second.
-              example: 7603.599345
+              description: The total duration of the pipeline sink operation in seconds.
+              example: 2.945935512
+            processing_seconds:
+              type: number
+              description: The total duration of the pipeline sink data processing in seconds.
+              example: 1.452123512
 Diagnostics:
   type: array
   items:
