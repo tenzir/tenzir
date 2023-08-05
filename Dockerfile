@@ -223,6 +223,7 @@ COPY demo-node /demo-node
 RUN apt-get update && \
     apt install -y \
         curl \
+        procps \
         zstd && \
     rm -rf /var/lib/apt/lists/*
 
