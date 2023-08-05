@@ -6,6 +6,7 @@ setup_suite() {
 }
 
 teardown_suite() {
+  bats_load_library bats-tenzir
   try_remove_state_dir
 }
 
