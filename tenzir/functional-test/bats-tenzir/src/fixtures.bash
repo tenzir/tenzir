@@ -15,12 +15,9 @@ setup_node() {
   export TENZIR_BARE_MODE=true
   # The inner exec is needed so that signals to $NODE_PID actually reach the
   # node.
-  exec {NODE}< <(exec tenzir-node -e ":0" --print-endpoint)
+  exec {NODE_OUT}< <(exec tenzir-node -e ":0" --print-endpoint)
   NODE_PID=$!
-  read -r -u "$NODE" TENZIR_ENDPOINT
-  # This closes the fd attached to stdout on the reading side, we don't need it
-  # any more.
-  exec {NODE}<&-
+  read -r -u "$NODE_OUT" TENZIR_ENDPOINT
   export TENZIR_ENDPOINT
 }
 teardown_node() {
@@ -36,6 +33,8 @@ teardown_node() {
   # The sleep is a child process of the killer shell, so we have to use
   # `pkill -P`.
   pkill -P "$killerPid"
+  # This closes the fd attached to stdout on the reading side for good measure.
+  exec {NODE_OUT}<&-
 }
 
 setup_state_dir() {
