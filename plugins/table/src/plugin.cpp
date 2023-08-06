@@ -120,10 +120,6 @@ private:
 
 class plugin final : public virtual printer_plugin<table_printer> {
 public:
-  auto name() const -> std::string override {
-    return "table";
-  }
-
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
     auto parser

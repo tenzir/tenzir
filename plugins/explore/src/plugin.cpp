@@ -136,14 +136,20 @@ public:
     return operator_location::local;
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
 private:
   operator_args args_;
 };
 
 class plugin final : public virtual operator_plugin<explore_operator> {
 public:
-  auto name() const -> std::string override {
-    return "explore";
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
