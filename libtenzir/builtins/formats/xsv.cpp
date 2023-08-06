@@ -169,12 +169,13 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   auto header = std::optional<std::string_view>{};
   while (it != lines.end()) {
     header = *it;
-    if (header && !header->empty()) {
-      break;
+    ++it;
+    if (not header) {
+      co_yield {};
+      continue;
     }
-    co_yield {};
-    if (header and header->empty()) {
-      ++it;
+    if (not header->empty()) {
+      break;
     }
   }
   if (!header || header->empty())
@@ -216,7 +217,6 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
                                                    name)));
     co_return;
   }
-  ++it;
   auto b = adaptive_table_slice_builder{};
   for (; it != lines.end(); ++it) {
     auto line = *it;

@@ -40,6 +40,12 @@ public:
     return "load";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, load_operator& x) -> bool {
     return plugin_inspect(f, x.loader_);
   }
@@ -57,7 +63,7 @@ protected:
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
                            fmt::format("'{}' does not accept {} as input",
-                                       to_string(), operator_type_name(input)));
+                                       name(), operator_type_name(input)));
   }
 
 private:
@@ -74,6 +80,24 @@ public:
 
   auto name() const -> std::string override {
     return "read";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    if (order == event_order::ordered) {
+      return do_not_optimize(*this);
+    }
+    // TODO: We could also propagate `where #schema == "..."` to the parser.
+    auto parser_opt = parser_->optimize(order);
+    if (not parser_opt) {
+      return do_not_optimize(*this);
+    }
+    return optimize_result{
+      std::nullopt,
+      event_order::ordered,
+      std::make_unique<read_operator>(std::move(parser_opt)),
+    };
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {
@@ -99,7 +123,7 @@ protected:
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
                            fmt::format("'{}' does not accept {} as input",
-                                       to_string(), operator_type_name(input)));
+                                       name(), operator_type_name(input)));
   }
 
 private:
@@ -148,6 +172,10 @@ auto parse_default_parser(std::string definition)
 
 class from_plugin final : public virtual operator_parser_plugin {
 public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
   auto name() const -> std::string override {
     return "from";
   };
@@ -201,6 +229,10 @@ public:
 
 class load_plugin final : virtual public operator_plugin<load_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "load <loader> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sources/load";
@@ -224,6 +256,10 @@ public:
 
 class read_plugin final : virtual public operator_plugin<read_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "read <parser> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/transformations/read";

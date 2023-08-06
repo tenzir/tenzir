@@ -42,72 +42,6 @@ namespace tenzir::plugins::rebuild {
 
 namespace {
 
-/// The rebatch pipeline operator takes homogeneous table slices and if and only
-/// if necessary recreates the slices with a given desired batch size, with only
-/// the last slice potentially being undersized. This operator is intentionally
-/// not exposed to the user, as that allows for it to make stricter assumptions
-/// about its input, namely that an instance of the operator only takes input
-/// of a single schema. Rebatching is guaranteed not to change the order of
-/// events, just how they're grouped together.
-class rebatch_operator final : public crtp_operator<rebatch_operator> {
-public:
-  /// Constructs a rebatch pipeline operator with a given schema and desired
-  /// batch size.
-  /// @param schema The schema of the input and output table slices.
-  /// @param desired_batch_size The desired output batch size; guaranteed to be
-  /// exactly matched for all but the last output batch.
-  rebatch_operator(type schema, size_t desired_batch_size)
-    : schema_{std::move(schema)},
-      desired_batch_size_{desired_batch_size != 0
-                            ? desired_batch_size
-                            : defaults::import::table_slice_size} {
-    // nop
-  }
-
-  auto operator()(generator<table_slice> input) const
-    -> generator<table_slice> {
-    auto buffer = std::vector<table_slice>{};
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        continue;
-      }
-      const auto buffered_rows = rows(buffer);
-      TENZIR_ASSERT(buffered_rows < desired_batch_size_);
-      // We don't have enough yet.
-      if (buffered_rows + slice.rows() < desired_batch_size_) {
-        buffer.push_back(std::move(slice));
-        co_yield {};
-        continue;
-      }
-      // We've got enough, so we can now concatenate and yield.
-      const auto remainder = desired_batch_size_ - buffered_rows;
-      TENZIR_ASSERT(remainder <= slice.rows());
-      auto [head, tail] = split(slice, slice.rows() - remainder);
-      buffer.push_back(head);
-      co_yield concatenate(std::exchange(buffer, {}));
-      // In case the input slice was oversized, we may have to yield additional
-      // resized batches.
-      while (tail.rows() >= desired_batch_size_) {
-        std::tie(head, tail) = split(tail, desired_batch_size_);
-        co_yield std::move(head);
-      }
-      // Lastly, keep the undersized remainder for the next input or the end.
-      buffer.push_back(std::move(tail));
-    }
-    if (!buffer.empty()) {
-      co_yield concatenate(std::move(buffer));
-    }
-  }
-
-  auto name() const -> std::string override {
-    return "<rebatch>";
-  }
-
-private:
-  type schema_ = {};
-  size_t desired_batch_size_ = {};
-};
-
 /// The threshold at which to consider a partition undersized, relative to the
 /// configured 'tenzir.max-partition-size'.
 inline constexpr auto undersized_threshold = 0.8;
@@ -448,10 +382,9 @@ struct rebuilder_state {
     }
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
-    auto ops = std::vector<operator_ptr>{};
-    ops.push_back(std::make_unique<rebatch_operator>(
-      current_run_partitions[0].schema,
-      detail::narrow_cast<int64_t>(desired_batch_size)));
+    auto rebatch
+      = pipeline::internal_parse(fmt::format("batch {}", desired_batch_size));
+    TENZIR_ASSERT(rebatch);
     emit_telemetry();
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents
@@ -463,7 +396,7 @@ struct rebuilder_state {
               });
     const auto num_partitions = current_run_partitions.size();
     self
-      ->request(index, caf::infinite, atom::apply_v, pipeline{std::move(ops)},
+      ->request(index, caf::infinite, atom::apply_v, std::move(*rebatch),
                 std::move(current_run_partitions), keep_original_partition::no)
       .then(
         [this, rp, current_run_events, num_partitions,

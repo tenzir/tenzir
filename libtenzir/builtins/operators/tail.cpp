@@ -57,6 +57,12 @@ public:
     return "tail";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::ordered, copy()};
+  }
+
   friend auto inspect(auto& f, tail_operator& x) -> bool {
     return f.apply(x.limit_);
   }
@@ -67,6 +73,10 @@ private:
 
 class plugin final : public virtual operator_plugin<tail_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"tail", "https://docs.tenzir.com/next/"
                                           "operators/transformations/tail"};

@@ -98,23 +98,22 @@ public:
     return {};
   }
 
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override {
-    if (expr == trivially_true_expression()) {
-      return std::pair{expr_.inner, nullptr};
-    }
-    auto expr_conjunction = conjunction{expr_.inner, expr};
-    auto result = normalize_and_validate(expr_conjunction);
-    TENZIR_ASSERT(result);
-    return std::pair{std::move(*result), nullptr};
-  }
-
   auto to_string() const -> std::string override {
     return fmt::format("where {}", expr_.inner);
   };
 
   auto name() const -> std::string override {
     return "where";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    if (filter == trivially_true_expression()) {
+      return optimize_result{expr_.inner, order, nullptr};
+    }
+    auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
+    TENZIR_ASSERT_CHEAP(combined);
+    return optimize_result{std::move(*combined), order, nullptr};
   }
 
   friend auto inspect(auto& f, where_operator& x) -> bool {
@@ -127,6 +126,10 @@ private:
 
 class plugin final : public virtual operator_plugin<where_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"where", "https://docs.tenzir.com/next/"
                                            "operators/transformations/where"};

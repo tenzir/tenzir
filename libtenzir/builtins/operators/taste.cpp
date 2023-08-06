@@ -49,6 +49,14 @@ public:
     return "taste";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // Note: The `unordered` means that we do not necessarily return the first
+    // `limit_` events.
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::unordered, copy()};
+  }
+
   friend auto inspect(auto& f, taste_operator& x) -> bool {
     return f.apply(x.limit_);
   }
@@ -59,6 +67,10 @@ private:
 
 class plugin final : public virtual operator_plugin<taste_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"taste", "https://docs.tenzir.com/next/"
                                            "operators/transformations/taste"};

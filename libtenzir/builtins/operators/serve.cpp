@@ -842,6 +842,12 @@ public:
     return "serve";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, serve_operator& x) -> bool {
     return f.apply(x.serve_id_) && f.apply(x.buffer_size_);
   }
@@ -896,6 +902,10 @@ public:
   auto handler(caf::actor_system& system, node_actor node) const
     -> rest_handler_actor override {
     return system.spawn(serve_handler, node);
+  }
+
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

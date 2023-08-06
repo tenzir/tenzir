@@ -388,13 +388,13 @@ files = [
 
 [[package]]
 name = "ipykernel"
-version = "6.24.0"
+version = "6.25.0"
 description = "IPython Kernel for Jupyter"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "ipykernel-6.24.0-py3-none-any.whl", hash = "sha256:2f5fffc7ad8f1fd5aadb4e171ba9129d9668dbafa374732cf9511ada52d6547f"},
-    {file = "ipykernel-6.24.0.tar.gz", hash = "sha256:29cea0a716b1176d002a61d0b0c851f34536495bc4ef7dd0222c88b41b816123"},
+    {file = "ipykernel-6.25.0-py3-none-any.whl", hash = "sha256:f0042e867ac3f6bca1679e6a88cbd6a58ed93a44f9d0866aecde6efe8de76659"},
+    {file = "ipykernel-6.25.0.tar.gz", hash = "sha256:e342ce84712861be4b248c4a73472be4702c1b0dd77448bfd6bcfb3af9d5ddf9"},
 ]
 
 [package.dependencies]
@@ -815,13 +815,13 @@ test = ["black", "check-manifest", "flake8", "ipykernel", "ipython", "ipywidgets
 
 [[package]]
 name = "nbconvert"
-version = "7.7.1"
+version = "7.7.3"
 description = "Converting Jupyter Notebooks"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "nbconvert-7.7.1-py3-none-any.whl", hash = "sha256:c99158a98e2bd32c4877de425f008e149af28f4fffbcc8a898086dd83109c1de"},
-    {file = "nbconvert-7.7.1.tar.gz", hash = "sha256:b820b206bd16898d39198a732dac6fb7019e82a44a282f606d931b8113240295"},
+    {file = "nbconvert-7.7.3-py3-none-any.whl", hash = "sha256:3022adadff3f86578a47fab7c2228bb3ca9c56a24345642a22f917f6168b48fc"},
+    {file = "nbconvert-7.7.3.tar.gz", hash = "sha256:4a5996bf5f3cd16aa0431897ba1aa4c64842c2079f434b3dc6b8c4b252ef3355"},
 ]
 
 [package.dependencies]
@@ -1546,4 +1546,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "0046cfc601abe96e4ec2e9fc299084a6ac547aa47098dc320978a564df66866f"
+content-hash = "676323912c5b15485773bc58ffb90fef54b38db59bf5055aee1765dfdd22f2e7"

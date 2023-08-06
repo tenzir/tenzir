@@ -27,7 +27,7 @@ namespace tenzir::detail {
 /// Creates the log and the sinks, sets loglevels and format
 /// Must be called before using the logger, otherwise log messages will
 /// silently be discarded.
-bool setup_spdlog(const tenzir::invocation& cmd_invocation,
+bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
                   const caf::settings& cfg_file);
 
 /// Shuts down the logging system

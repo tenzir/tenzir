@@ -218,14 +218,12 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: show schemas --expand
       - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'where resp_h == 192.168.1.104'
       - command: export ascii 'where zeek.conn.id.resp_h == 192.168.1.104'
       - command: 'count ":timestamp >= 1970-01-01 && #schema != \"tenzir.metrics\""'
       - command: count '#schema == "zeek.conn"'
-      - command: show schemas --yaml
 
   Query Operators:
     tags: [server, operator]
@@ -341,14 +339,6 @@ tests:
       - command: count "net.connection == <_, _, _, 80, _>"
       - command: count "net.connection != <_, _, _, 80, _>"
 
-  Show Taxonomies:
-    tags: [concepts, models]
-    fixture: ServerTester
-    steps:
-      - command: show concepts
-        transformation: jq '.[] | select(.concept.name == "net.app") | .concept.fields | map(split(".")[0]) | unique'
-      - command: show --yaml models
-      - command: show schemas
   Arrow Full Data Model:
     tags: [export, arrow]
     steps:
@@ -773,6 +763,14 @@ tests:
       - command: exec 'load stdin | measure --real-time | summarize bytes=sum(bytes) | write json'
         input: data/json/conn.log.json.gz
 
+  Batch Events:
+    tags: [pipelines]
+    steps:
+      - command: exec 'version | repeat 10 | batch 5 | measure | select events'
+      - command: exec 'version | repeat 10 | batch 1 | measure | select events'
+      - command: exec 'version | repeat 10 | batch 3 | measure | select events'
+      - command: exec 'version | repeat 10 | batch 15 | measure | select events'
+
   Empty Record in Pipeline:
     tags: [pipelines]
     steps:
@@ -894,8 +892,8 @@ tests:
     steps:
       - command: exec 'read zeek-tsv | head 1 | write json -c | shell rev'
         input: data/zeek/conn.log.gz
-    # TODO: Reenable this test once the non-deterministic Shell operator echo behavior is fixed.
-    # - command: exec 'shell "echo foo"'
+        # TODO: Reenable this test once the non-deterministic Shell operator echo behavior is fixed.
+        # - command: exec 'shell "echo foo"'
 
   Top and Rare Operators:
     fixture: ServerTester
@@ -967,24 +965,36 @@ tests:
       - command: exec 'read zeek-json | summarize x=distinct(y)'
         input: data/zeek/zeek.json
 
+  Summarize Dot:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read zeek-json | summarize x=count(.)'
+        input: data/zeek/zeek.json
+      - command: exec 'read zeek-json | summarize x=distinct(.)'
+        input: data/zeek/zeek.json
+        expected_result: error
+      - command: exec 'read zeek-json | summarize x=count(_path) by .'
+        input: data/zeek/zeek.json
+        expected_result: error
+
   Flatten Operator:
     tags: [pipelines, zeek]
     steps:
       - command: exec 'read zeek-tsv | tail 10 | flatten | to stdout'
         input: data/zeek/dns.log.gz
-    # TODO: Reenable tests with only record flattening.
-    # - command: exec 'read zeek-tsv | tail 10 | flatten -l | to stdout'
-    #   input: data/zeek/dns.log.gz
+        # TODO: Reenable tests with only record flattening.
+        # - command: exec 'read zeek-tsv | tail 10 | flatten -l | to stdout'
+        #   input: data/zeek/dns.log.gz
       - command: exec 'read json | flatten | to stdout'
         input: data/json/nested-object.json
       - command: exec 'read json | flatten | to stdout'
         input: data/json/nested-structure.json
-    # - command: exec 'read json | flatten -l | to stdout'
-    #   input: data/json/nested-structure.json
+        # - command: exec 'read json | flatten -l | to stdout'
+        #   input: data/json/nested-structure.json
       - command: exec 'read json | flatten | to stdout'
         input: data/json/record-in-list.json
-    # - command: exec 'read json | flatten -l | to stdout'
-    #   input: data/json/record-in-list.json
+        # - command: exec 'read json | flatten -l | to stdout'
+        #   input: data/json/record-in-list.json
       - command: exec 'read suricata | flatten | to stdout'
         input: data/suricata/eve.json
       - command: exec 'read suricata | flatten | to stdout'

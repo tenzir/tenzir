@@ -154,6 +154,62 @@ struct inspector
   }
 };
 
+/// See `operator_base::optimize` for a description of this.
+enum class event_order {
+  ordered,
+  schema,
+  unordered,
+};
+
+auto inspect(auto& f, event_order& x) -> bool {
+  return detail::inspect_enum_str(f, x, {"ordered", "schema", "unordered"});
+}
+
+struct optimize_result;
+
+struct operator_measurement {
+  std::string unit = std::string{operator_type_name<void>()};
+  uint64_t num_elements = {};
+  uint64_t num_batches = {};
+
+  // Approximate byte amount for events, exact byte amount for bytes.
+  uint64_t num_approx_bytes = {};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, operator_measurement& x) -> bool {
+    return f.object(x).pretty_name("metric").fields(
+      f.field("unit", x.unit), f.field("num_elements", x.num_elements),
+      f.field("num_batches", x.num_batches),
+      f.field("num_approx_bytes", x.num_approx_bytes));
+  }
+};
+
+// Metrics that track the information about inbound and outbound elements that
+// pass through this operator.
+struct [[nodiscard]] metric {
+  uint64_t operator_index = {};
+  std::string operator_name = {};
+  operator_measurement inbound_measurement = {};
+  operator_measurement outbound_measurement = {};
+  duration time_starting = {};
+  duration time_processing = {};
+  duration time_scheduled = {};
+  duration time_total = {};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, metric& x) -> bool {
+    return f.object(x).pretty_name("metric").fields(
+      f.field("operator_index", x.operator_index),
+      f.field("operator_name", x.operator_name),
+      f.field("time_starting", x.time_starting),
+      f.field("time_processing", x.time_processing),
+      f.field("time_scheduled", x.time_scheduled),
+      f.field("time_total", x.time_total),
+      f.field("inbound_measurement", x.inbound_measurement),
+      f.field("outbound_measurement", x.outbound_measurement));
+  }
+};
+
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
 class operator_base {
 public:
@@ -187,17 +243,78 @@ public:
   /// parseable. The default implementation yields "<name> <stringification>".
   virtual auto to_string() const -> std::string;
 
-  /// Tries to perform predicate pushdown with the given expression.
+  /// Optimizes the operator for a given filter and event order.
   ///
-  /// Returns `std::nullopt` if predicate pushdown can not be performed.
-  /// Otherwise, returns `std::pair{expr2, this2}` such that `this | where expr`
-  /// is equivalent to `where expr2 | this2`, or alternatively `where expr2` if
-  /// `this2 == nullptr`.
-  virtual auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> {
-    (void)expr;
-    return {};
-  }
+  /// It is always valid to return `do_not_optimize(*this)`, but this would act
+  /// as an optimization barrier. In the following, we provide a semi-formal
+  /// description of the semantic guarantees that the operator implementation
+  /// must uphold if this function returns something else.
+  ///
+  /// # Implementation requirements
+  ///
+  /// We say that two pipelines are equivalent if they have the same observable
+  /// behavior. For open pipelines, this has to hold for all possible sources
+  /// (including infinite ones) and sinks. We write `A <=> B` if two pipelines
+  /// `A` and `B` are equivalent.
+  ///
+  /// In the following, we assume that the operator is `events -> events`. The
+  /// other case is discussed afterwards. Furthermore, we define the following
+  /// `events -> events` operators:
+  /// - `shuffle` randomizes the order of all events, no matter the schema.
+  /// - `interleave` randomizes the order, preserving the order inside schemas.
+  ///
+  /// Depending on the function parameter `order`, the implementation of this
+  /// function may assume the following equivalences for an otherwise unknown
+  /// pipeline `sink`.
+  /// ~~~
+  /// if order == ordered:
+  ///   sink <=> sink (trivial)
+  /// elif unordered:
+  ///   sink <=> shuffle | sink
+  /// elif order == schema:
+  ///   sink <=> interleave | sink
+  /// ~~~
+  ///
+  /// For the value `opt` returned by this function, we define an imaginary
+  /// operator `OPT`, where `opt.replacement == nullptr` would be `pass`:
+  /// ~~~
+  /// if opt.order == ordered:
+  ///   OPT = opt.replacement
+  /// elif opt.order == schema:
+  ///   OPT = interleave | opt.replacement
+  /// elif opt.order == unordered:
+  ///   OPT = shuffle | opt.replacement
+  /// ~~~
+  ///
+  /// The implementation must promise that the following equivalences hold:
+  /// ~~~
+  /// if opt.filter:
+  ///   this | where filter | sink
+  ///   <=> where opt.filter | OPT | sink
+  /// else:
+  ///   this | where filter | sink
+  ///   <=> OPT | where filter | sink
+  /// ~~~
+  ///
+  /// Now, let us assume that operator is not `events -> events`. If the output
+  /// type is not events, then the implementation may assume that it receives
+  /// `trivially_true_expression()` and `event_order::ordered`. If we define
+  /// `where true` to be `pass`, this can be seen as a corollary of the above,
+  /// as the pipeline would otherwise be ill-typed. Similarly, if the input type
+  /// is not events, we must return `event_order::ordered` and either
+  /// `std::nullopt` or `trivially_true_expression()`.
+  ///
+  /// # Example
+  ///
+  /// The `where expr` operator returns `opt.filter = expr && filter`,
+  /// `opt.order = order` and `opt.replacement == nullptr`. Thus we want to show
+  /// `where expr | where filter | sink <=> where expr && filter | OPT | sink`,
+  /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
+  /// resolves to `sink <=> interleave | pass | sink`, which follows from what
+  /// we may assume about `sink`.
+  virtual auto optimize(expression const& filter, event_order order) const
+    -> optimize_result
+    = 0;
 
   /// Returns the location of the operator.
   virtual auto location() const -> operator_location {
@@ -247,6 +364,32 @@ protected:
     -> caf::expected<operator_type>;
 };
 
+/// The result of calling `operator_base::optimize(...)`.
+///
+/// @see operator_base::optimize
+struct optimize_result {
+  std::optional<expression> filter;
+  event_order order;
+  operator_ptr replacement;
+
+  optimize_result(std::optional<expression> filter, event_order order,
+                  operator_ptr replacement)
+    : filter{std::move(filter)},
+      order{order},
+      replacement{std::move(replacement)} {
+  }
+
+  /// Always valid if the transformation performed by the operator does not
+  /// change based on the order in which the input events arrive in.
+  static auto order_invariant(const operator_base& op, event_order order)
+    -> optimize_result {
+    return optimize_result{std::nullopt, order, op.copy()};
+  }
+};
+
+/// Returns something that is valid for `op`, but probably not optimal.
+auto do_not_optimize(const operator_base& op) -> optimize_result;
+
 /// A pipeline is a sequence of pipeline operators.
 class pipeline final : public operator_base {
 public:
@@ -283,15 +426,26 @@ public:
   auto operators() const& -> std::span<const operator_ptr>;
   auto operators() && = delete;
 
-  /// Returns an optimized pipeline with pushed-down expressions.
-  auto optimize() const -> caf::expected<pipeline>;
+  /// Optimizes the pipeline if it is closed. Otherwise, it is returned as-is.
+  [[nodiscard]] auto optimize_if_closed() const -> pipeline;
+
+  /// Optimizes the pipeline, returning the filter for the left end.
+  ///
+  /// @deprecated
+  [[nodiscard]] auto optimize_into_filter() const
+    -> std::pair<expression, pipeline>;
+
+  /// Same as `optimize_into_filter()`, but allows a custom starting filter.
+  ///
+  /// @deprecated
+  [[nodiscard]] auto optimize_into_filter(expression const& filter) const
+    -> std::pair<expression, pipeline>;
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override;
 
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;
-
-  /// Same as `predicate_pushdown`, but returns a `pipeline` object directly.
-  auto predicate_pushdown_pipeline(expression const& expr) const
-    -> std::optional<std::pair<expression, pipeline>>;
 
   auto location() const -> operator_location override {
     die("pipeline::location() must not be called");
@@ -307,9 +461,6 @@ public:
   auto copy() const -> operator_ptr override;
 
   auto to_string() const -> std::string override;
-
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override;
 
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override;
@@ -463,10 +614,9 @@ public:
         } else if constexpr (gen_ctrl) {
           return convert_output(self()(std::move(input), ctrl));
         } else {
-          return caf::make_error(ec::type_clash,
-                                 fmt::format("'{}' does not accept {} as input",
-                                             to_string(),
-                                             operator_type_name<Input>()));
+          return caf::make_error(
+            ec::type_clash, fmt::format("'{}' does not accept {} as input",
+                                        name(), operator_type_name<Input>()));
         }
       },
     };

@@ -120,6 +120,10 @@ const sidebars = {
       id: 'configuration',
     },
     {
+      type: 'doc',
+      id: 'glossary',
+    },
+    {
       type: 'html',
       value: '<br><b>Developers<b/>',
     },

@@ -62,6 +62,14 @@ public:
     return "unique";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // TODO: We compare the *pruned* schemas above. Hence, returning
+    // `event_order::schema` here might be slightly incorrect.
+    (void)order;
+    return optimize_result{filter, event_order::schema, copy()};
+  }
+
   friend auto inspect(auto&, unique_operator&) -> bool {
     return true;
   }
@@ -82,6 +90,10 @@ private:
 
 class plugin final : public virtual operator_plugin<unique_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"unique", "https://docs.tenzir.com/next/"
                                             "operators/transformations/unique"};

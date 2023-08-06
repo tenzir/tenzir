@@ -116,6 +116,23 @@ public:
     stdin_.pipe().close();
   }
 
+  auto wait() -> caf::error {
+    auto ec = std::error_code{};
+    child_.wait(ec);
+    if (ec) {
+      return caf::make_error(ec::unspecified,
+                             fmt::format("waiting for child process failed: {}",
+                                         ec));
+    }
+    auto code = child_.exit_code();
+    if (code != 0) {
+      return caf::make_error(
+        ec::unspecified,
+        fmt::format("child process exited with exit-code {}", code));
+    }
+    return {};
+  }
+
 private:
   explicit child(std::string command) : command_{std::move(command)} {
     TENZIR_ASSERT(!command_.empty());
@@ -156,6 +173,9 @@ public:
         TENZIR_DEBUG("yielding chunk with {} bytes", chk->size());
         co_yield chk;
       }
+    }
+    if (auto error = child->wait()) {
+      ctrl.abort(std::move(error));
     }
   }
 
@@ -200,8 +220,7 @@ public:
         // Pass operator input to the child's stdin.
         if (auto err = child->write(as_bytes(*chunk))) {
           ctrl.abort(err);
-          co_yield {};
-          break;
+          co_return;
         }
         // Try yielding so far accumulated child output.
         std::unique_lock lock{chunks_mutex, std::try_to_lock};
@@ -231,6 +250,9 @@ public:
       co_yield chk;
       chunks.pop();
     }
+    if (auto error = child->wait()) {
+      ctrl.abort(std::move(error));
+    }
   }
 
   auto to_string() const -> std::string override {
@@ -252,6 +274,12 @@ public:
     return "shell";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, shell_operator& x) -> bool {
     return f.apply(x.command_);
   }
@@ -262,6 +290,13 @@ private:
 
 class plugin final : public virtual operator_plugin<shell_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {
+      .source = true,
+      .transformation = true,
+    };
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto command = std::string{};
     auto parser = argument_parser{"shell", "https://docs.tenzir.com/next/"

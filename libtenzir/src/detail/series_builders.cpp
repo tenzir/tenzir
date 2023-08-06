@@ -586,6 +586,12 @@ auto record_series_builder_base::append() -> void {
     std::visit(
       []<class Builder>(Builder& b) {
         if constexpr (std::is_base_of_v<record_series_builder_base, Builder>) {
+          // FIXME: The following line prevents the assertion above from
+          // triggering in the recursive call below. This can happen when a
+          // list<record> builder gets an entry that contains a new field.
+          // Unfortunately adding this line is not sufficient or not the correct
+          // fix, as the data won't be present in the resulting table slice.
+          b.get_arrow_builder();
           b.append();
         }
       },

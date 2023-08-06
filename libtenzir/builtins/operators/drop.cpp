@@ -99,12 +99,18 @@ public:
     return {};
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto to_string() const -> std::string override {
     return fmt::format("drop {}", fmt::join(config_.fields, ", "));
   }
 
   auto name() const -> std::string override {
     return "drop";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, drop_operator& x) -> bool {
@@ -118,6 +124,10 @@ private:
 
 class plugin final : public virtual operator_plugin<drop_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

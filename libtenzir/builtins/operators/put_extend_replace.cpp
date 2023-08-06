@@ -221,7 +221,7 @@ public:
     return result;
   }
 
-  [[nodiscard]] auto to_string() const noexcept -> std::string override {
+  auto to_string() const -> std::string override {
     auto result = std::string{operator_name(Mode)};
     bool first = true;
     for (const auto& [field, operand] : config_.extractor_to_operand) {
@@ -236,6 +236,12 @@ public:
     return result;
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result::order_invariant(*this, order);
+  }
+
   friend auto inspect(auto& f, put_extend_operator& x) -> bool {
     return f.apply(x.config_);
   }
@@ -248,6 +254,10 @@ private:
 template <mode Mode>
 class plugin final : public virtual operator_plugin<put_extend_operator<Mode>> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

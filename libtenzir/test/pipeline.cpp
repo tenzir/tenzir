@@ -93,6 +93,12 @@ struct command final : public crtp_operator<command> {
     MESSAGE("hello, world!");
     co_return;
   }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
 };
 
 struct source final : public crtp_operator<source> {
@@ -113,6 +119,12 @@ struct source final : public crtp_operator<source> {
       co_yield table_slice;
     }
     MESSAGE("source return");
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
   }
 
   std::vector<table_slice> events_;
@@ -143,6 +155,12 @@ struct sink final : public crtp_operator<sink> {
     MESSAGE("sink return");
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   std::function<void(table_slice)> callback_;
 };
 
@@ -153,14 +171,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   auto execute(pipeline p) -> caf::expected<void> {
     MESSAGE("executing pipeline: " << p.to_string());
+    auto operators = p.operators().size();
     auto self = caf::scoped_actor{sys};
     auto executor = self->spawn<caf::monitored>(
       pipeline_executor, std::move(p),
-      caf::actor_cast<receiver_actor<diagnostic>>(self), node_actor{}, false);
+      caf::actor_cast<receiver_actor<diagnostic>>(self),
+      caf::actor_cast<receiver_actor<metric>>(self), node_actor{}, false);
     self->send(executor, atom::start_v);
     auto start_result = std::optional<caf::error>{};
     auto down_result = std::optional<caf::error>{};
     auto diag_error = std::optional<caf::error>{};
+    auto op_metrics = std::vector<metric>{};
     self->receive_while([&] {
       run();
       return not down_result.has_value();
@@ -192,6 +213,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
         if (not diag_error and d.severity == severity::error) {
           diag_error = caf::make_error(ec::unspecified, fmt::to_string(d));
         }
+      },
+      [&](metric& m) {
+        MESSAGE("received metrics");
+        if (m.operator_index + 1 > op_metrics.size()) {
+          op_metrics.resize(m.operator_index + 1);
+        }
+        op_metrics[m.operator_index] = m;
       });
     MESSAGE("waiting for executor");
     self->wait_for(executor);
@@ -201,6 +229,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       REQUIRE(down_result == ec::silent);
       return std::move(*diag_error);
     }
+    REQUIRE_EQUAL(operators, op_metrics.size());
     if (start_result and *start_result) {
       return std::move(*start_result);
     }
@@ -247,6 +276,12 @@ TEST(actor executor execution error) {
       ctrl.abort(caf::make_error(ec::unspecified));
       co_return;
     }
+
+    auto optimize(expression const& filter, event_order order) const
+      -> optimize_result override {
+      (void)filter, (void)order;
+      return do_not_optimize(*this);
+    }
   };
 
   auto ops = std::vector<operator_ptr>{};
@@ -272,6 +307,12 @@ TEST(actor executor instantiation error) {
     auto operator()(generator<table_slice>, operator_control_plane&) const
       -> caf::expected<generator<table_slice>> {
       return caf::make_error(ec::unspecified);
+    }
+
+    auto optimize(expression const& filter, event_order order) const
+      -> optimize_result override {
+      (void)filter, (void)order;
+      return do_not_optimize(*this);
     }
   };
 
@@ -466,11 +507,9 @@ TEST(pipeline serialization) {
 TEST(predicate pushdown into empty pipeline) {
   auto pipeline
     = unbox(pipeline::internal_parse("where x == 1 | where y == 2"));
-  auto result
-    = pipeline.predicate_pushdown_pipeline(unbox(to<expression>("z == 3")));
-  REQUIRE(result);
-  auto [expr, op] = std::move(*result);
-  CHECK(std::move(op).unwrap().empty());
+  auto [expr, pipe]
+    = pipeline.optimize_into_filter(unbox(to<expression>("z == 3")));
+  CHECK(std::move(pipe).unwrap().empty());
   CHECK_EQUAL(unbox(normalize_and_validate(expr)),
               to<expression>("x == 1 && y == 2 && z == 3"));
 }
@@ -478,10 +517,9 @@ TEST(predicate pushdown into empty pipeline) {
 TEST(predicate pushdown select conflict) {
   auto pipeline = unbox(pipeline::internal_parse("where x == 0 | select x, z | "
                                                  "where y > 0 | where y < 5"));
-  auto result = pipeline.predicate_pushdown(unbox(to<expression>("z == 3")));
-  REQUIRE(result);
-  auto [expr, op] = std::move(*result);
-  CHECK_EQUAL(op->to_string(),
+  auto [expr, pipe]
+    = pipeline.optimize_into_filter(unbox(to<expression>("z == 3")));
+  CHECK_EQUAL(pipe.to_string(),
               "select x, z | where (y > 0 && y < 5 && z == 3)");
   auto expected_expr = unbox(to<expression>("x == 0"));
   CHECK_EQUAL(unbox(normalize_and_validate(expr)), expected_expr);

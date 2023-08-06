@@ -53,6 +53,12 @@ public:
     return fmt::format("head {}", limit_);
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::ordered, copy()};
+  }
+
 private:
   friend auto inspect(auto& f, head_operator& x) -> bool {
     return f.apply(x.limit_);
@@ -63,6 +69,10 @@ private:
 
 class plugin final : public virtual operator_plugin<head_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"head", "https://docs.tenzir.com/next/"
                                           "operators/transformations/head"};

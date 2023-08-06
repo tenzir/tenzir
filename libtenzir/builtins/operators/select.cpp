@@ -79,6 +79,12 @@ public:
     return "select";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result::order_invariant(*this, order);
+  }
+
   friend auto inspect(auto& f, select_operator& x) -> bool {
     return f.apply(x.config_);
   }
@@ -90,6 +96,10 @@ private:
 
 class plugin final : public virtual operator_plugin<select_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

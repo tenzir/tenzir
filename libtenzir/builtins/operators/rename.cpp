@@ -158,6 +158,12 @@ public:
     return "rename";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result::order_invariant(*this, order);
+  }
+
   friend auto inspect(auto& f, rename_operator& x) -> bool {
     return f.apply(x.config_);
   }
@@ -171,6 +177,10 @@ private:
 
 class plugin final : public virtual operator_plugin<rename_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto initialize(const record& plugin_config,
                   [[maybe_unused]] const record& global_config)
     -> caf::error override {

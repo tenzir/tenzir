@@ -120,6 +120,12 @@ public:
     return "write";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, write_operator& x) -> bool {
     return plugin_inspect(f, x.printer_);
   }
@@ -133,7 +139,7 @@ protected:
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
                            fmt::format("'{}' does not accept {} as input",
-                                       to_string(), operator_type_name(input)));
+                                       name(), operator_type_name(input)));
   }
 
 private:
@@ -142,6 +148,10 @@ private:
 
 class write_plugin final : public virtual operator_plugin<write_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "write <printer> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/transformations/write";
@@ -200,6 +210,12 @@ public:
     return "save";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
   friend auto inspect(auto& f, save_operator& x) -> bool {
     return plugin_inspect(f, x.saver_);
   }
@@ -213,7 +229,7 @@ protected:
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
                            fmt::format("'{}' does not accept {} as input",
-                                       to_string(), operator_type_name(input)));
+                                       name(), operator_type_name(input)));
   }
 
 private:
@@ -222,6 +238,10 @@ private:
 
 class save_plugin final : public virtual operator_plugin<save_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "save <saver> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sinks/save";
@@ -292,6 +312,12 @@ public:
     return "<write_and_save>";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::schema, copy()};
+  }
+
   friend auto inspect(auto& f, write_and_save_operator& x) -> bool {
     return plugin_inspect(f, x.printer_) && plugin_inspect(f, x.saver_);
   }
@@ -305,7 +331,7 @@ protected:
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
                            fmt::format("'{}' does not accept {} as input",
-                                       to_string(), operator_type_name(input)));
+                                       name(), operator_type_name(input)));
   }
 
 private:
@@ -334,6 +360,10 @@ public:
   auto name() const -> std::string override {
     return "to";
   };
+
+  auto signature() const -> operator_signature override {
+    return {.sink = true};
+  }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "to <saver> <args>... [write <printer> <args>...]";

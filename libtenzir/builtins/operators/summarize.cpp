@@ -240,8 +240,25 @@ struct binding {
       }
     }
     for (auto const& aggr : config.aggregations) {
-      if (auto offset = rt.resolve_key(aggr.input)) {
-        auto type = rt.field(*offset).type;
+      auto resolved
+        = std::invoke([&]() -> std::optional<std::pair<offset, type>> {
+            if (aggr.input == ".") {
+              // We already checked for `count` earlier. Note that we are using
+              // the "wrong type" here. The `.` extractor should have type
+              // `schema`, but we later on will use a `int64` array as we cannot
+              // resolve to the outermost record yet. Furthermore, this implies
+              // that `count(.)` works across multiple schemas.
+              TENZIR_ASSERT(aggr.function->name() == "count");
+              return {{{}, type{int64_type{}}}};
+            } else if (auto offset = rt.resolve_key(aggr.input)) {
+              auto type = rt.field(*offset).type;
+              return {{std::move(*offset), std::move(type)}};
+            } else {
+              return std::nullopt;
+            }
+          });
+      if (resolved) {
+        auto& [offset, type] = *resolved;
         // Check that the type of this field is compatible with the function
         // ahead of time. We only use this to emit a warning. We do not set the
         // column to `std::nullopt`, because we will have to differentiate the
@@ -254,7 +271,7 @@ struct binding {
             .emit(diag);
         }
         result.aggregation_columns.emplace_back(
-          column{std::move(*offset), std::move(type)});
+          column{std::move(offset), std::move(type)});
       } else {
         diagnostic::warning("aggregation column `{}` does not exist for schema "
                             "`{}`",
@@ -297,7 +314,20 @@ struct binding {
     result.reserve(aggregation_columns.size());
     for (const auto& column : aggregation_columns) {
       if (column) {
-        result.emplace_back(column->offset.get(batch));
+        if (column->offset.empty()) {
+          // This can currently only happen for `count(.)`. We cannot resolve an
+          // empty offset to an `arrow::Array`. Instead, we create a fake
+          // `int64` array with the right length. We want to remove this hack as
+          // part of the expression revamp.
+          auto builder = arrow::Int64Builder{};
+          auto status = builder.AppendEmptyValues(batch.num_rows());
+          TENZIR_ASSERT(status.ok());
+          auto array = builder.Finish();
+          TENZIR_ASSERT(array.ok());
+          result.emplace_back(array.MoveValueUnsafe());
+        } else {
+          result.emplace_back(column->offset.get(batch));
+        }
       } else {
         result.emplace_back(std::nullopt);
       }
@@ -763,6 +793,13 @@ public:
     return "summarize";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // Note: The `unordered` relies on commutativity of the aggregation functions.
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::unordered, copy()};
+  }
+
   friend auto inspect(auto& f, summarize_operator& x) -> bool {
     return f.apply(x.config_);
   }
@@ -775,6 +812,10 @@ private:
 /// The summarize pipeline operator plugin.
 class plugin final : public virtual operator_plugin<summarize_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
@@ -804,7 +845,17 @@ public:
     auto config = configuration{};
     for (const auto& [output, function_name, argument] :
          std::get<0>(parsed_aggregations)) {
-      configuration::aggregation new_aggregation{};
+      if (argument == ".") {
+        if (function_name != "count") {
+          return {
+            std::string_view{f, l},
+            caf::make_error(ec::syntax_error,
+                            fmt::format("the `.` extractor is currently not "
+                                        "supported for `{}`",
+                                        function_name)),
+          };
+        }
+      }
       auto const* function
         = plugins::find<aggregation_function_plugin>(function_name);
       if (!function) {
@@ -816,6 +867,7 @@ public:
                                                         function_name)),
         };
       }
+      auto new_aggregation = configuration::aggregation{};
       new_aggregation.function = function;
       new_aggregation.input = argument;
       new_aggregation.output
@@ -824,6 +876,13 @@ public:
     }
     config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
     config.time_resolution = std::move(std::get<2>(parsed_aggregations));
+    if (config.time_resolution and config.group_by_extractors.empty()) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, "found `resolution` specifier "
+                                          "without `by` clause"),
+      };
+    }
     return {
       std::string_view{f, l},
       std::make_unique<summarize_operator>(std::move(config)),

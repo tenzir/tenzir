@@ -57,6 +57,12 @@ public:
     return "flatten";
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result::order_invariant(*this, order);
+  }
+
   friend auto inspect(auto& f, flatten_operator& x) -> bool {
     return f.apply(x.separator_);
   }
@@ -67,6 +73,10 @@ private:
 
 class plugin final : public virtual operator_plugin<flatten_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser
       = argument_parser{"flatten", "https://docs.tenzir.com/next/operators/"

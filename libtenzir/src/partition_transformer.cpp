@@ -120,6 +120,12 @@ public:
     }
   }
 
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
 private:
   std::vector<table_slice> slices_;
 };
@@ -142,6 +148,12 @@ public:
         result_->push_back(std::move(slice));
       co_yield {};
     }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
   }
 
 private:

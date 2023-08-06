@@ -374,22 +374,10 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    // return fmt::format("decapsulate {}", "");
-    return "decapsulate";
-  }
-
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override {
-    auto pred = predicate{
-      meta_extractor{meta_extractor::kind::schema},
-      relational_operator::equal,
-      data{"pcap.packet"},
-    };
-    auto op = pipeline::internal_parse_as_operator(
-      fmt::format("decapsulate | where {}", expr));
-    TENZIR_ASSERT_CHEAP(op);
-    return std::pair{expression{std::move(pred)}, std::move(*op)};
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result::order_invariant(*this, order);
   }
 
   auto name() const -> std::string override {
@@ -399,7 +387,7 @@ public:
   friend auto inspect(auto& f, decapsulate_operator& x) -> bool {
     return f.object(x)
       .pretty_name("decapsulate_operator")
-      .fields(f.field("operator_args", x.args_));
+      .fields(f.field("args", x.args_));
   }
 
 private:
@@ -410,6 +398,10 @@ class plugin final : public operator_plugin<decapsulate_operator> {
 public:
   auto name() const -> std::string override {
     return "decapsulate";
+  }
+
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

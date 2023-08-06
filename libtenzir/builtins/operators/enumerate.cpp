@@ -125,6 +125,12 @@ public:
     return "enumerate";
   }
 
+  auto optimize(expression const& filter, event_order) const
+    -> optimize_result override {
+    (void)filter;
+    return optimize_result{std::nullopt, event_order::ordered, copy()};
+  }
+
 private:
   friend auto inspect(auto& f, enumerate_operator& x) -> bool {
     return f.apply(x.field_);
@@ -135,6 +141,10 @@ private:
 
 class plugin final : public virtual operator_plugin<enumerate_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto make_operator(std::string_view pipeline) const
     -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
     using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,

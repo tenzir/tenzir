@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/arrow_compat.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/detail/base64.hpp>
@@ -70,7 +69,7 @@ fix_enum_array(const enumeration_type& et,
         die("failed to reserve builder capacity for dict indices");
       for (auto v : *values) {
         if (v) {
-          if (!builder.Append(*et.resolve(arrow_compat::align_type(*v))).ok())
+          if (!builder.Append(*et.resolve(*v)).ok())
             die("unable to append dict value");
         } else {
           if (!builder.AppendNull().ok())

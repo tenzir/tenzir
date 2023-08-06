@@ -132,8 +132,9 @@ int main(int argc, char** argv) {
   caf::settings log_settings;
   put(log_settings, "tenzir.console-verbosity", tenzir_loglevel);
   put(log_settings, "tenzir.console-format", "%^[%s:%#] %v%$");
+  bool is_server = false;
   auto log_context
-    = tenzir::create_log_context(tenzir::invocation{}, log_settings);
+    = tenzir::create_log_context(is_server, tenzir::invocation{}, log_settings);
   // Initialize factories.
   [[maybe_unused]] auto config = tenzir::configuration{};
   // Run the unit tests.

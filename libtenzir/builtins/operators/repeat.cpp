@@ -67,13 +67,13 @@ public:
     return fmt::format("repeat {}", repetitions_);
   }
 
-  auto predicate_pushdown(expression const& expr) const
-    -> std::optional<std::pair<expression, operator_ptr>> override {
-    return std::pair{expr, std::make_unique<repeat_operator>(*this)};
-  }
-
   auto name() const -> std::string override {
     return "repeat";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    return optimize_result{filter, order, copy()};
   }
 
   friend auto inspect(auto& f, repeat_operator& x) -> bool {
@@ -86,6 +86,10 @@ private:
 
 class plugin final : public virtual operator_plugin<repeat_operator> {
 public:
+  auto signature() const -> operator_signature override {
+    return {.transformation = true};
+  }
+
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto repetitions = std::optional<uint64_t>{};
     auto parser = argument_parser{"repeat", "https://docs.tenzir.com/next/"

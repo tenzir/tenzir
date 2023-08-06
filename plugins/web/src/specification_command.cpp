@@ -22,6 +22,76 @@ auto openapi_record() -> record {
     return lhs.first < rhs.first;
   });
   auto schemas = from_yaml(R"_(
+Metrics:
+  type: object
+  description: Information about pipeline data ingress and egress.
+  properties:
+    total:
+      type: object
+      description: Information about total pipeline metrics (e.g. total ingress/egress)
+      properties:
+        ingress:
+          type: object
+          description: Information about the total ingress. Contains no values when the source operator has not run.
+          properties:
+            unit:
+              type: string
+              enum:
+                - bytes
+                - events
+              description: The unit of the input data.
+              example: bytes
+            num_elements:
+              type: integer
+              description: The total amount of elements that entered the pipeline source.
+              example: 109834
+            num_batches:
+              type: integer
+              description: The total amount of batches that were generated during data processing in the pipeline source.
+              example: 2
+            num_approx_bytes:
+              type: integer
+              description: The total amount of bytes that entered the pipeline source. For events, this value is an approximation.
+              example: 30414
+            total_seconds:
+              type: number
+              description: The total duration of the pipeline source operation in seconds.
+              example: 1.233998321
+            processing_seconds:
+              type: number
+              description: The total duration of the pipeline source data processing in seconds.
+              example: 1.179999992
+        egress:
+          type: object
+          description: Information about the total egress. Contains no values when the sink operator has not run.
+          properties:
+            unit:
+              type: string
+              enum:
+                - bytes
+                - events
+              description: The unit of the output data.
+              example: bytes
+            num_elements:
+              type: integer
+              description: The total amount of elements that entered the pipeline sink.
+              example: 30414
+            num_batches:
+              type: integer
+              description: The total amount of batches that were generated during data processing in the pipeline sink.
+              example: 1
+            num_approx_bytes:
+              type: integer
+              description: The total amount of bytes that entered the pipeline sink. For events, this value is an approximation.
+              example: 30414
+            total_seconds:
+              type: number
+              description: The total duration of the pipeline sink operation in seconds.
+              example: 2.945935512
+            processing_seconds:
+              type: number
+              description: The total duration of the pipeline sink data processing in seconds.
+              example: 1.452123512
 Diagnostics:
   type: array
   items:
@@ -116,6 +186,8 @@ PipelineInfo:
             description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
     diagnostics:
       $ref: '#/components/schemas/Diagnostics'
+    metrics:
+      $ref: '#/components/schemas/Metrics'
   )_");
   TENZIR_ASSERT_CHEAP(schemas);
   // clang-format off
@@ -130,7 +202,7 @@ This API can be used to interact with a Tenzir Node in a RESTful manner.
 
 All API requests must be authenticated with a valid token, which must be
 supplied in the `X-Tenzir-Token` request header. The token can be generated
-on the command-line using the `tenzir rest generate-token` command.)_"},
+on the command-line using the `tenzir-ctl web generate-token` command.)_"},
      }},
     {"servers", list{{
       record{{"url", "https://tenzir.example.com/api/v0"}},
