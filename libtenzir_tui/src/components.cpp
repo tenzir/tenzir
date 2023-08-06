@@ -87,7 +87,7 @@ auto colorize(auto make, view<data> value, const struct theme& theme) {
       return make(x, alignment::left, theme.palette.text);
     },
     [&](caf::none_t) {
-      return make("∅", alignment::center, theme.palette.muted);
+      return make("null", alignment::left, theme.palette.muted);
     },
     [&](view<bool> x) {
       return make(x, alignment::left, theme.palette.rose);
