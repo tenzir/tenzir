@@ -8,10 +8,8 @@
     tenzir-source,
     cmake,
     cmake-format,
-    poetry,
     pkg-config,
     git,
-    pandoc,
     boost,
     caf,
     libpcap,
@@ -81,10 +79,7 @@
 
         nativeBuildInputs = [
           cmake
-          cmake-format
           dpkg
-          pandoc
-          poetry
         ];
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
@@ -122,6 +117,7 @@
             }"
             "-DTENZIR_ENABLE_BACKTRACE=ON"
             "-DTENZIR_ENABLE_JEMALLOC=ON"
+            "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_PYTHON_BINDINGS=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
             "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
@@ -146,14 +142,6 @@
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
           ]
           ++ extraCmakeFlags;
-
-        # The executable is run to generate the man page as part of the build phase.
-        # libtenzir.{dyld,so} is put into the libtenzir subdir if relocatable installation
-        # is off, which is the case here.
-        preBuild = lib.optionalString (!isStatic) ''
-          export LD_LIBRARY_PATH="$PWD/libtenzir''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
-          export DYLD_LIBRARY_PATH="$PWD/libtenzir''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH"
-        '';
 
         hardeningDisable = lib.optional isStatic "pic";
 
