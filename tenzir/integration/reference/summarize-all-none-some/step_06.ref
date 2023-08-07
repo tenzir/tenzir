@@ -1,4 +1,8 @@
 {
+  "id.orig_h": "193.10.255.99",
+  "x": null
+}
+{
   "id.orig_h": "213.32.39.37",
   "x": [
     "dnp3"
@@ -27,23 +31,6 @@
   "id.orig_h": "152.136.69.32",
   "x": [
     "ftp"
-  ]
-}
-{
-  "id.orig_h": null,
-  "x": [
-    "corelight_metrics_bro",
-    "corelight_metrics_cpu",
-    "corelight_metrics_disk",
-    "corelight_metrics_iface",
-    "corelight_metrics_memory",
-    "corelight_metrics_system",
-    "dhcp",
-    "files",
-    "pe",
-    "reporter",
-    "software",
-    "weird.123.190"
   ]
 }
 {
@@ -131,10 +118,6 @@
   ]
 }
 {
-  "id.orig_h": "193.10.255.99",
-  "x": null
-}
-{
   "id.orig_h": "192.88.99.1",
   "x": [
     "tunnel"
@@ -144,6 +127,23 @@
   "id.orig_h": "106.75.22.216",
   "x": [
     "radius"
+  ]
+}
+{
+  "id.orig_h": null,
+  "x": [
+    "corelight_metrics_bro",
+    "corelight_metrics_cpu",
+    "corelight_metrics_disk",
+    "corelight_metrics_iface",
+    "corelight_metrics_memory",
+    "corelight_metrics_system",
+    "dhcp",
+    "files",
+    "pe",
+    "reporter",
+    "software",
+    "weird.123.190"
   ]
 }
 warning: aggregation column `_path` does not exist for schema `9940eae275d3b1fa`

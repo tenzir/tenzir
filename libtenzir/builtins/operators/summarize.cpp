@@ -538,80 +538,88 @@ public:
   /// Returns the summarization results after the input is done.
   auto finish(
     const configuration& config) && -> generator<caf::expected<table_slice>> {
-    // TODO: Must summarizations yield events with equal output schemas. The
-    // code below will create a single table slice for each group, but we could
-    // use this knowledge to create batches instead.
-    for (auto&& [group, bucket] : buckets) {
+    // Most summarizations yield events with equal output schemas. Hence, we
+    // first "group the groups" by their output schema, and then create one
+    // builder with potentially multiple rows for each output schema.
+    auto output_schemas
+      = tsl::robin_map<type, std::vector<decltype(buckets)::iterator>>{};
+    for (auto it = buckets.begin(); it != buckets.end(); ++it) {
+      const auto& bucket = it->second;
       TENZIR_ASSERT(config.aggregations.size() == bucket->aggregations.size());
       // When building the output schema, we use the `string` type if the
       // associated column was not present in the input schema. This is because
       // we have to pick a type for the `null` values.
-      auto output_schema = std::invoke([&]() -> type {
-        auto fields = std::vector<record_type::field_view>{};
-        fields.reserve(config.group_by_extractors.size()
-                       + config.aggregations.size());
-        for (auto&& [extractor, group] :
-             zip_equal(config.group_by_extractors, bucket->group_by_types)) {
-          // Since there is no `null` type, we use `string` as a fallback here.
-          fields.emplace_back(extractor, group.is_active()
-                                           ? group.get_active()
-                                           : type{string_type{}});
-        }
-        for (auto&& [aggr, cfg] :
-             zip_equal(bucket->aggregations, config.aggregations)) {
-          // Same as above.
-          fields.emplace_back(cfg.output, aggr.is_active()
-                                            ? aggr.get_active()->output_type()
-                                            : type{string_type{}});
-        }
-        return {"tenzir.summarize", record_type{fields}};
-      });
+      auto fields = std::vector<record_type::field_view>{};
+      fields.reserve(config.group_by_extractors.size()
+                     + config.aggregations.size());
+      for (auto&& [extractor, group] :
+           zip_equal(config.group_by_extractors, bucket->group_by_types)) {
+        // Since there is no `null` type, we use `string` as a fallback here.
+        fields.emplace_back(extractor, group.is_active() ? group.get_active()
+                                                         : type{string_type{}});
+      }
+      for (auto&& [aggr, cfg] :
+           zip_equal(bucket->aggregations, config.aggregations)) {
+        // Same as above.
+        fields.emplace_back(cfg.output, aggr.is_active()
+                                          ? aggr.get_active()->output_type()
+                                          : type{string_type{}});
+      }
+      auto output_schema = type{"tenzir.summarize", record_type{fields}};
+      // This creates a new entry if it does not exist yet.
+      output_schemas[std::move(output_schema)].push_back(it);
+    }
+    for (const auto& [output_schema, groups] : output_schemas) {
       auto builder = caf::get<record_type>(output_schema)
                        .make_arrow_builder(arrow::default_memory_pool());
       TENZIR_ASSERT(builder);
-      auto status = builder->Append();
-      if (!status.ok()) {
-        co_yield caf::make_error(ec::system_error,
-                                 fmt::format("failed to append row: {}",
-                                             status.ToString()));
-        co_return;
-      }
-      // Assign data of group-by fields.
-      for (auto i = size_t{0}; i < group.size(); ++i) {
-        auto col = detail::narrow<int>(i);
-        auto ty = caf::get<record_type>(output_schema).field(i).type;
-        status = append_builder(ty, *builder->field_builder(col),
-                                make_data_view(group[i]));
-        if (!status.ok()) {
-          co_yield caf::make_error(
-            ec::system_error,
-            fmt::format("failed to append group value: {}", status.ToString()));
-          co_return;
-        }
-      }
-      // Assign data of aggregations.
-      for (auto i = size_t{0}; i < bucket->aggregations.size(); ++i) {
-        auto col = detail::narrow<int>(group.size() + i);
-        if (bucket->aggregations[i].is_active()) {
-          auto& func = bucket->aggregations[i].get_active();
-          auto output_type = func->output_type();
-          auto value = std::move(*func).finish();
-          if (!value) {
-            // TODO: We could warn instead and insert `null`.
-            co_yield std::move(value.error());
-            co_return;
-          }
-          status = append_builder(output_type, *builder->field_builder(col),
-                                  make_data_view(*value));
-        } else {
-          status = builder->field_builder(col)->AppendNull();
-        }
+      for (auto it : groups) {
+        const auto& group = it->first;
+        const auto& bucket = it->second;
+        auto status = builder->Append();
         if (!status.ok()) {
           co_yield caf::make_error(ec::system_error,
-                                   fmt::format("failed to append aggregation "
-                                               "value: {}",
+                                   fmt::format("failed to append row: {}",
                                                status.ToString()));
           co_return;
+        }
+        // Assign data of group-by fields.
+        for (auto i = size_t{0}; i < group.size(); ++i) {
+          auto col = detail::narrow<int>(i);
+          auto ty = caf::get<record_type>(output_schema).field(i).type;
+          status = append_builder(ty, *builder->field_builder(col),
+                                  make_data_view(group[i]));
+          if (!status.ok()) {
+            co_yield caf::make_error(
+              ec::system_error, fmt::format("failed to append group value: {}",
+                                            status.ToString()));
+            co_return;
+          }
+        }
+        // Assign data of aggregations.
+        for (auto i = size_t{0}; i < bucket->aggregations.size(); ++i) {
+          auto col = detail::narrow<int>(group.size() + i);
+          if (bucket->aggregations[i].is_active()) {
+            auto& func = bucket->aggregations[i].get_active();
+            auto output_type = func->output_type();
+            auto value = std::move(*func).finish();
+            if (!value) {
+              // TODO: We could warn instead and insert `null`.
+              co_yield std::move(value.error());
+              co_return;
+            }
+            status = append_builder(output_type, *builder->field_builder(col),
+                                    make_data_view(*value));
+          } else {
+            status = builder->field_builder(col)->AppendNull();
+          }
+          if (!status.ok()) {
+            co_yield caf::make_error(ec::system_error,
+                                     fmt::format("failed to append aggregation "
+                                                 "value: {}",
+                                                 status.ToString()));
+            co_return;
+          }
         }
       }
       auto array = builder->Finish();
@@ -622,7 +630,7 @@ public:
         co_return;
       }
       auto batch = arrow::RecordBatch::Make(
-        output_schema.to_arrow_schema(), 1,
+        output_schema.to_arrow_schema(), detail::narrow<int64_t>(groups.size()),
         caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
           .fields());
       co_yield table_slice{batch, output_schema};

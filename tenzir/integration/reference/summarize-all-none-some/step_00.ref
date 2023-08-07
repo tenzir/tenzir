@@ -125,10 +125,6 @@
   ]
 }
 {
-  "_path": null,
-  "x": null
-}
-{
   "_path": "corelight_metrics_system",
   "x": [
     "corelight_metrics_system"
@@ -199,6 +195,10 @@
   "x": [
     "corelight_metrics_disk"
   ]
+}
+{
+  "_path": null,
+  "x": null
 }
 warning: group-by column `_path` does not exist for schema `9940eae275d3b1fa`
 warning: aggregation column `_path` does not exist for schema `9940eae275d3b1fa`
