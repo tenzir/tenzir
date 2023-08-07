@@ -209,11 +209,13 @@ COPY demo-node /demo-node
 RUN apt-get update && \
     apt install -y \
         curl \
-        bc \
+        procps \
         zstd && \
-        rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*
 
-ENTRYPOINT ["/demo-node/entrypoint.bash"]
+RUN /demo-node/load.bash
+RUN /demo-node/import.bash
+ENTRYPOINT ["/demo-node/entrypoint-noingest.bash"]
 
 # -- tenzir-ee -------------------------------------------------------------------
 
