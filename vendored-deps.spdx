@@ -1,0 +1,140 @@
+SPDXVersion: SPDX-2.2
+DataLicense: CC0-1.0
+SPDXID: SPDXRef-DOCUMENT
+DocumentName: Tenzir
+DocumentNamespace: https://github.com/tenzir/tenzir
+
+SPDXID: SPDXRef-File
+FileName: ./cmake/CodeCoverage.cmake
+FileChecksum: SHA256: e132107515504c614eeaf90141a49b45db21ac2cf36cbfd4753c8a2dab1f3697
+FileCopyrightText: Copyright (C) 2018-2020 by George Cave - gcave@stablecoder.ca
+LicenseConcluded: Apache-2.0
+
+SPDXID: SPDXRef-File
+FileName: ./cmake/Findre2.cmake
+FileChecksum: SHA256: 6b813b1d673fd101c22e957669f9bbcb3b97c2bd93dd68da194eb5a4afa9e462
+FileCopyrightText: Copyright (C) Apache Software Foundation
+LicenseConcluded: Apache-2.0
+LicenseComments: Adapated from the Apache Arrow library.
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/aux/robin-map/*
+FileChecksum: SHA256: 931e347cbfe4838680ef97e23a31bbfae190326be7704750f66b4a1223356c31
+FileCopyrightText: (c) 2017 Tessil
+LicenseConcluded: MIT
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/src/hash/crc.cpp
+FileChecksum: SHA256: f1dff0712a18e444b50cf7c2cf321e699e968eec52c795d1315b1a1c73fc78b0
+FileCopyrightText: (C) 1995-2013 Jean-loup Gailly and Mark Adler
+LicenseConcluded: Zlib
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/narrow.hpp
+FileChecksum: SHA256: 21f01658be9b2937e17946e4bba88c3e5ab9deec1d3b2f744e47b40275dd2cbf
+FileCopyrightText: (c) 2015 Microsoft Corporation
+LicenseConcluded: MIT
+LicenseComments: From the GSL library.
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/math.hpp
+FileChecksum: SHA256: 0fc495ac74e782250ae4da177efdab5cff838d84b7134ec228bb3d4b415dc746
+FileCopyrightText: (c) 2015 Orson Peters
+LicenseConcluded: Zlib
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/short_alloc.hpp
+FileChecksum: SHA256: be54b8e3aff2e4b548083c294ae57ca93a4f7b1ecbd64ffd9b287f8d5d0a018a
+FileCopyrightText: (c) 2015 Howard Hinnant
+LicenseConcluded: MIT
+LicenseComments: Adapted to fit Tenzir's coding style.
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/tracepoint.hpp
+FileChecksum: SHA256: 2937b8c2455c31c55481f411b4e7cd79e64c2e3d61aa7789a3ade785ec6531f3
+FileCopyrightText: (c) 2016 Facebook, Inc. and its affiliates
+LicenseConcluded: Apache-2.0
+LicenseComments: Modified from Folly with downstream changes documented in the file.
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/src/hash/sha1.cpp
+FileChecksum: SHA256: d89d57a0e4329b3704770e7728c562022c1e29b5b4bdff45f0a60ee46caad509
+LicenseConcluded: Unlicense
+LicenseComments: https://github.com/kerukuro/digestpp
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/zip_iterator.hpp
+FileChecksum: SHA256: 65e0536047c918c86cd1b016974c74312e422ceffac2a6ab5a92d996e5683244
+FileCopyrightText: (c) 2019 Dario Pellegrini <pellegrini.dario@gmail.com>
+LicenseConcluded: CC0
+LicenseComments: See https://codereview.stackexchange.com/questions/231352/ and https://github.com/dpellegr/ZipIterator/blob/master/LICENSE.md
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/lru_cache.hpp
+FileChecksum: SHA256: 39c65432243d48a5c4dba98a7f63b3040b523a94841a26a0f40d578046507013
+FileCopyrightText: (c) 2014, lamerman (Alexander Ponomarev)
+LicenseConcluded: BSD-3-clause
+LicenseComments: Adapted to fit Tenzir's code base.
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/src/detail/base64.cpp
+FileChecksum: SHA256: 2fcf23e6f8da5252371e9762f65e8636f55ec18bc330af016d65ed7fff1b4a08
+FileCopyrightText: (c) 2016-2019 Vinnie Falco (vinnie dot falco at gmail dot com)
+LicenseConcluded: Boost-1.0
+LicenseComment: Adapted to fit Tenzir's code base.
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/function.hpp
+FileChecksum: SHA256: 1b0d2706a2c9db9eee3493cfc7881a8457ba16b8a262910849bbac59be89bc8e
+FileCopyrightText: (c) 2015-2020 Denis Blank <denis.blank at outlook dot com>
+LicenseConcluded: Boost-1.0
+LicenseComment: Includes code from https://github.com/Naios/function2
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/absorb_line.hpp
+FileChecksum: SHA256: 845dcd0d5bb72195d2591e3d73eb200f7361594a263272db079dbfb714842e4f
+FileCopyrightText: (c) 2017 user763305 et al.
+LicenseConcluded: CC-BY-SA
+LicenseComment: See https://stackoverflow.com/a/6089413/92560
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/generator.hpp
+FileChecksum: SHA256: d07d7e8d34e6b72d51917cc1f8bb4d9278e9652db021250f6893960575d48bfd
+FileCopyrightText: (c) 2017 Lewis Baker
+LicenseConcluded: MIT
+LicenseComment: Includes code from https://github.com/lewissbaker/cppcoro
+
+SPDXID: SPDXRef-File
+FileName: ./scripts/clang-format-diff.py
+FileChecksum: SHA256: e38a916123daaaab8abe57765be6239900d47f67b3fb49b669e7d316d6dda528
+FileCopyrightText: (c) 2003-2017 University of Illinois at Urbana-Champaign
+LicenseConcluded: Apache-2.0-with-LLVM-exceptions
+LicenseComment: Taken from LLVM.
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/worm.hpp
+FileChecksum: SHA256: d50f682f240172d309c1c285467a5bc17dda6d22420e48b891138a829d80340c
+FileCopyrightText: (c) Peter C. Dillinger, (c) Facebook, Inc. and its affiliates.
+LicenseConcluded: MIT
+LicenseComment: https://github.com/pdillinger/wormhashing
+
+SPDXID: SPDXRef-File
+FileName: ./plugins/web/include/web/mime.hpp
+FileChecksum: SHA256: 7d5f296a6f8d8e5e77ffd6cedf6f71700eea379fdb11d1502a35b2ac0a72d918
+FileCopyrightText: Copyright (c) 2017-2022 Stiffstream <info@stiffstream.com>
+LicenseConcluded: BSD-3-Clause
+LicenseComment: https://github.com/Stiffstream/restinio
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/include/tenzir/detail/streambuf.hpp
+FileChecksum: SHA256: 2ae24006e57d1e061654bd552079f260c90a62f32b40d3444291d5ecd8059e48
+FileCopyrightText: Copyright 2011-2018 Dominik Charousset
+LicenseConcluded: BSD-3-Clause
+LicenseComment: Includes code from https://github.com/actor-framework/actor-framework
+
+SPDXID: SPDXRef-File
+FileName: ./libtenzir/test/detail/streambuf.cpp
+FileChecksum: SHA256: 396db3fa44cc2207ce2f3e3e654e013dde33900130b959d80838a548e856a4be
+FileCopyrightText: Copyright 2011-2018 Dominik Charousset
+LicenseConcluded: BSD-3-Clause
+LicenseComment: Includes code from https://github.com/actor-framework/actor-framework

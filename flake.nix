@@ -14,6 +14,8 @@
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.nix-filter.url = "github:numtide/nix-filter";
+  inputs.sbomnix.url = "github:tiiuae/sbomnix";
+  inputs.sbomnix.inputs.nixpkgs.follows = "nixpkgs";
 
   outputs = {
     self,
@@ -196,6 +198,18 @@
           tag = "latest-slim";
         };
         apps.default = self.apps.${system}.tenzir-static;
+        # Run with `nix run .#sbom`, output is created in sbom/.
+        apps.sbom = let
+          nix = nixpkgs.legacyPackages."${system}".nix;
+          sbomnix = inputs.sbomnix.packages.${system}.sbomnix;
+        in flake-utils.lib.mkApp { drv = pkgs.writeScriptBin "generate" ''
+            ${nix}/bin/nix-env -qa --meta --json -f ${nixpkgs} '.*' > meta.json
+            staticDrv="$(${nix}/bin/nix path-info --derivation ${self}#tenzir-static)"
+            mkdir sbom
+            cd sbom
+            ${sbomnix}/bin/sbomnix --meta=../meta.json --type=buildtime ''${staticDrv}
+          '';
+        };
         # Legacy aliases for backwards compatibility.
         apps.vast = self.apps.${system}.tenzir-de;
         apps.vast-static = self.apps.${system}.tenzir-de-static;
