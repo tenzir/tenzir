@@ -554,6 +554,12 @@ auto store_plugin::parse_printer(parser_interface& p) const
   return std::make_unique<store_printer>(this);
 }
 
+// -- aspect plugin ------------------------------------------------------------
+
+auto aspect_plugin::aspect_name() const -> std::string {
+  return name();
+}
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 caf::expected<plugin_ptr>

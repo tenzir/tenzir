@@ -722,6 +722,23 @@ private:
     -> std::unique_ptr<plugin_printer> final;
 };
 
+// -- aspect plugin ------------------------------------------------------------
+
+class aspect_plugin : public virtual plugin {
+public:
+  /// The name of the aspect that enables `show aspect`.
+  /// @note defaults to `plugin::name()`.
+  virtual auto aspect_name() const -> std::string;
+
+  /// The location of the show operator for this aspect.
+  virtual auto location() const -> operator_location = 0;
+
+  /// Produces the data to show.
+  virtual auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice>
+    = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
