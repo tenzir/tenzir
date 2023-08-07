@@ -19,10 +19,6 @@
   "x": null
 }
 {
-  "id.orig_h": null,
-  "x": null
-}
-{
   "id.orig_h": "223.149.205.1",
   "x": null
 }
@@ -88,6 +84,10 @@
 }
 {
   "id.orig_h": "106.75.22.216",
+  "x": null
+}
+{
+  "id.orig_h": null,
   "x": null
 }
 warning: aggregation column `y` does not exist for schema `9940eae275d3b1fa`
