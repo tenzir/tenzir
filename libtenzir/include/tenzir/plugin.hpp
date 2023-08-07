@@ -847,6 +847,32 @@ private:
 
 } // namespace tenzir
 
+namespace fmt {
+
+template <>
+struct formatter<enum tenzir::plugin_ptr::type> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(enum tenzir::plugin_ptr::type value, FormatContext& ctx) const {
+    auto out = ctx.out();
+    switch (value) {
+      case tenzir::plugin_ptr::type::builtin:
+        return fmt::format_to(ctx.out(), "builtin");
+      case tenzir::plugin_ptr::type::static_:
+        return fmt::format_to(ctx.out(), "static");
+      case tenzir::plugin_ptr::type::dynamic:
+        return fmt::format_to(ctx.out(), "dynamic");
+    }
+    return out;
+  }
+};
+
+} // namespace fmt
+
 // -- template function definitions -------------------------------------------
 
 namespace tenzir::plugins {
