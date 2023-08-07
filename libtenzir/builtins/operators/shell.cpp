@@ -108,12 +108,15 @@ public:
     return caf::none;
   }
 
-  void close_stdin() {
+  void close_stdinout() {
     // See https://github.com/boostorg/process/issues/125 for why we
     // seemingly double-close the pipe.
     TENZIR_DEBUG("sending EOF to child's stdin");
     stdin_.close();
     stdin_.pipe().close();
+    TENZIR_DEBUG("sending EOF to child's stdout");
+    stdout_.close();
+    stdout_.pipe().close();
   }
 
   auto wait() -> caf::error {
@@ -207,7 +210,7 @@ public:
     {
       // Coroutines require RAII-style exit handling.
       auto at_exit = caf::detail::make_scope_guard([&] {
-        child->close_stdin();
+        child->close_stdinout();
         TENZIR_DEBUG("joining thread");
         thread.join();
       });
