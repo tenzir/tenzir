@@ -359,11 +359,6 @@ public:
       .fields(f.field("args", x.args_));
   }
 
-  // Remove once the base class has this function removed.
-  auto to_string() const -> std::string override {
-    return "tcp";
-  }
-
 private:
   tcp_loader_args args_;
 };

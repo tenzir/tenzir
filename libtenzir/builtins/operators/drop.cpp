@@ -100,10 +100,6 @@ public:
     return {};
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("drop {}", fmt::join(config_.fields, ", "));
-  }
-
   auto name() const -> std::string override {
     return "drop";
   }

@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/connect_to_node.hpp>
+#include <tenzir/detail/default_formatter.hpp>
 #include <tenzir/detail/load_contents.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/logger.hpp>
@@ -101,7 +102,7 @@ auto add_implicit_source_and_sink(pipeline pipe, exec_config config)
   return pipe;
 }
 
-auto format_metric(const metric& metric) {
+auto format_metric(const metric& metric) -> std::string {
   auto result = std::string{};
   auto it = std::back_inserter(result);
   constexpr auto indent = std::string_view{"  "};
@@ -279,17 +280,7 @@ auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   if (cfg.dump_ast) {
     for (auto& op : *parsed) {
-      fmt::print("{}\n", op.inner);
-    }
-    fmt::print("-----\n");
-    for (auto& op : *parsed) {
-      auto str = std::string{};
-      auto writer = caf::detail::stringification_inspector{str};
-      if (writer.apply(op)) {
-        fmt::print("{}\n", str);
-      } else {
-        fmt::print("<error: {}>\n", writer.get_error());
-      }
+      fmt::print("{:#?}\n", op);
     }
     return {};
   }

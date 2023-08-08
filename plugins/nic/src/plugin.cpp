@@ -180,14 +180,6 @@ public:
     return make(ctrl, args_.iface.inner, snaplen, !!args_.emit_file_headers);
   }
 
-  auto to_string() const -> std::string override {
-    auto result = name();
-    result += fmt::format(" {}", args_.iface);
-    if (args_.snaplen)
-      result += fmt::format(" --snaplen {}", args_.snaplen->inner);
-    return result;
-  }
-
   auto name() const -> std::string override {
     return "nic";
   }

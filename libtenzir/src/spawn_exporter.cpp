@@ -77,7 +77,7 @@ auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
   auto handle
     = self->spawn(exporter, query_opts, std::move(pipe), std::move(index));
-  TENZIR_VERBOSE("{} spawned an exporter for '{}'", *self, pipe.to_string());
+  TENZIR_VERBOSE("{} spawned an exporter for '{:?}'", *self, pipe);
   // Wire the exporter to all components.
   if (accountant)
     self->send(handle, atom::set_v, accountant);

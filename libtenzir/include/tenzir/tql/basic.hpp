@@ -29,17 +29,7 @@ struct identifier {
   }
 };
 
-} // namespace tenzir
-
 template <>
-struct fmt::formatter<tenzir::identifier> {
-  constexpr auto parse(format_parse_context& ctx) {
-    return ctx.begin();
-  }
+struct enable_default_formatter<identifier> : std::true_type {};
 
-  template <typename FormatContext>
-  auto format(const tenzir::identifier& x, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "{{name: {}, source: {}}}", x.name,
-                          x.source);
-  }
-};
+} // namespace tenzir

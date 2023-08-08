@@ -245,9 +245,7 @@ public:
   }
 
   friend auto inspect(auto& f, compress_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("compress_operator")
-      .fields(f.field("args", x.args_));
+    return f.apply(x.args_);
   }
 
 private:
@@ -350,9 +348,7 @@ public:
   }
 
   friend auto inspect(auto& f, decompress_operator& x) -> bool {
-    return f.object(x)
-      .pretty_name("decompress_operator")
-      .fields(f.field("args", x.args_));
+    return f.apply(x.args_);
   }
 
 private:

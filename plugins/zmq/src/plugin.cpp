@@ -364,18 +364,6 @@ public:
       .fields(f.field("args", x.args_));
   }
 
-  auto to_string() const -> std::string override {
-    auto result = name();
-    result += fmt::format(" {}", args_.endpoint);
-    if (args_.filter)
-      result += fmt::format(" --filter {}", args_.filter->inner);
-    if (args_.listen)
-      result += " --listen";
-    if (args_.connect)
-      result += " --connect";
-    return result;
-  }
-
 private:
   loader_args args_;
 };

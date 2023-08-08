@@ -620,8 +620,8 @@ auto parse(std::string source, diagnostic_handler& diag)
 auto parse_internal(std::string source) -> caf::expected<pipeline> {
   auto [pipe, diags] = parse_internal_with_diags(std::move(source));
   if (not pipe) {
-    return caf::make_error(ec::parse_error,
-                           fmt::format("could not parse pipeline: {}", diags));
+    return caf::make_error(
+      ec::parse_error, fmt::format("could not parse pipeline: {::?}", diags));
   }
   return std::move(*pipe);
 }

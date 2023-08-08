@@ -365,8 +365,8 @@ public:
     return impl(to_lines(std::move(input)), ctrl);
   }
 
-  friend auto inspect(auto&, cef_parser&) -> bool {
-    return true;
+  friend auto inspect(auto& f, cef_parser& x) -> bool {
+    return f.object(x).fields();
   }
 };
 

@@ -73,14 +73,10 @@ public:
     return "batch";
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("batch {}", limit_);
-  }
-
   friend auto inspect(auto& f, batch_operator& x) -> bool {
     return f.object(x)
       .pretty_name("batch_operator")
-      .fields(f.field("desired_batch_size", x.limit_));
+      .fields(f.field("limit", x.limit_));
   }
 
 private:

@@ -52,10 +52,6 @@ public:
       co_yield std::move(slice);
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("tail {}", limit_);
-  }
-
   auto name() const -> std::string override {
     return "tail";
   }

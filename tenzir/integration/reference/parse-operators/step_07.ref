@@ -1,3 +1,1 @@
-head 42
------
-located("head", 42, location(0, 7))
+head 42 @ 0..7

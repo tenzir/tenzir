@@ -858,11 +858,6 @@ public:
     co_yield {};
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("serve --buffer-size {} {}", buffer_size_,
-                       escape_operator_arg(serve_id_));
-  }
-
   auto detached() const -> bool override {
     return true;
   }
