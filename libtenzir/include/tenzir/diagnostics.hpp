@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/inspect_enum_str.hpp"
 #include "tenzir/tql/basic.hpp"
 
@@ -66,6 +67,9 @@ struct diagnostic_annotation {
   }
 };
 
+template <>
+struct enable_default_formatter<diagnostic_annotation> : std::true_type {};
+
 enum class diagnostic_note_kind {
   /// Generic note, not further specified.
   note,
@@ -99,6 +103,9 @@ struct diagnostic_note {
       .fields(f.field("kind", x.kind), f.field("message", x.message));
   }
 };
+
+template <>
+struct enable_default_formatter<diagnostic_note> : std::true_type {};
 
 /// A structured representation of a compiler diagnostic.
 struct [[nodiscard]] diagnostic {
@@ -139,6 +146,9 @@ struct [[nodiscard]] diagnostic {
               f.field("annotations", x.annotations), f.field("notes", x.notes));
   }
 };
+
+template <>
+struct enable_default_formatter<diagnostic> : std::true_type {};
 
 /// Utility class to construct a `diagnostic`.
 class [[nodiscard]] diagnostic_builder {
@@ -356,48 +366,5 @@ struct fmt::formatter<tenzir::diagnostic_note_kind> {
                             }
                             TENZIR_UNREACHABLE();
                           }));
-  }
-};
-
-template <>
-struct fmt::formatter<tenzir::diagnostic_annotation> {
-  constexpr auto parse(format_parse_context& ctx) {
-    return ctx.begin();
-  }
-
-  template <typename FormatContext>
-  auto
-  format(const tenzir::diagnostic_annotation& x, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "{{primary: {}, text: {:?}, source: {}}}",
-                          x.primary, x.text, x.source);
-  }
-};
-
-template <>
-struct fmt::formatter<tenzir::diagnostic_note> {
-  constexpr auto parse(format_parse_context& ctx) {
-    return ctx.begin();
-  }
-
-  template <typename FormatContext>
-  auto format(const tenzir::diagnostic_note& x, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "{{kind: {}, message: {:?}}}", x.kind,
-                          x.message);
-  }
-};
-
-template <>
-struct fmt::formatter<tenzir::diagnostic> {
-  constexpr auto parse(format_parse_context& ctx) {
-    return ctx.begin();
-  }
-
-  template <typename FormatContext>
-  auto format(const tenzir::diagnostic& x, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(),
-                          "{{severity: {}, message: {:?}, annotations: [{}], "
-                          "notes: [{}]}}",
-                          x.severity, x.message, fmt::join(x.annotations, ", "),
-                          fmt::join(x.notes, ", "));
   }
 };

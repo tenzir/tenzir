@@ -230,21 +230,6 @@ public:
     return result;
   }
 
-  auto to_string() const -> std::string override {
-    auto result = std::string{operator_name(Mode)};
-    bool first = true;
-    for (const auto& [field, operand] : config_.extractor_to_operand) {
-      if (not std::exchange(first, false)) {
-        result += ',';
-      }
-      fmt::format_to(std::back_inserter(result), " {}", field);
-      if (operand) {
-        fmt::format_to(std::back_inserter(result), "={}", *operand);
-      }
-    }
-    return result;
-  }
-
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)filter;

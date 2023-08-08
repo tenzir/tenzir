@@ -70,7 +70,7 @@ public:
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
       if (!annotation.source) {
-        TENZIR_WARN("annotation does not have source: {}", annotation);
+        TENZIR_WARN("annotation does not have source: {:?}", annotation);
         continue;
       }
       auto [line, col] = line_col_indices(annotation.source.begin);

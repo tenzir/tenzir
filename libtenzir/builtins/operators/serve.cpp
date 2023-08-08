@@ -313,17 +313,16 @@ struct serve_manager_state {
     // We delay the actual removal because we support fetching the
     // last set of events again by reusing the last continuation token.
     found->done = true;
-    detail::weak_run_delayed(
-      self, defaults::api::serve::retention_time,
-      [this, source = msg.source]() {
-        const auto found
-          = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-              return op.source == source;
-            });
-        if (found != ops.end()) {
-          ops.erase(found);
-        }
-      });
+    detail::weak_run_delayed(self, defaults::api::serve::retention_time,
+                             [this, source = msg.source]() {
+                               const auto found = std::find_if(
+                                 ops.begin(), ops.end(), [&](const auto& op) {
+                                   return op.source == source;
+                                 });
+                               if (found != ops.end()) {
+                                 ops.erase(found);
+                               }
+                             });
   }
 
   auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {
@@ -810,11 +809,6 @@ public:
             fmt::format("failed to deregister at serve-manager: {}", err)));
         });
     co_yield {};
-  }
-
-  auto to_string() const -> std::string override {
-    return fmt::format("serve --buffer-size {} {}", buffer_size_,
-                       escape_operator_arg(serve_id_));
   }
 
   auto detached() const -> bool override {

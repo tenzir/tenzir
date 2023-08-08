@@ -132,7 +132,7 @@ public:
   }
 
   void emit(diagnostic d) override {
-    TENZIR_VERBOSE("emitting diagnostic: {}", d);
+    TENZIR_VERBOSE("emitting diagnostic: {:?}", d);
     self_->request(diagnostic_handler_, caf::infinite, std::move(d))
       .then([]() {},
             [](caf::error& e) {
@@ -179,7 +179,7 @@ public:
     TENZIR_ASSERT(error != caf::none);
     if (error != ec::silent) {
       diagnostic::error("{}", error)
-        .note("from `{}`", state_.op->to_string())
+        .note("from `{}`", state_.op->name())
         .emit(diagnostics());
     }
     if (not state_.abort) {
@@ -193,7 +193,7 @@ public:
   auto warn(caf::error error) noexcept -> void override {
     if (error != ec::silent) {
       diagnostic::warning("{}", error)
-        .note("from `{}`", state_.op->to_string())
+        .note("from `{}`", state_.op->name())
         .emit(diagnostics());
     }
   }
@@ -384,7 +384,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
   auto start(std::vector<caf::actor> previous) -> caf::result<void> {
     auto time_starting_guard = make_timer_guard(metrics->values.time_scheduled,
                                                 metrics->values.time_starting);
-    TENZIR_DEBUG("{} received start request for `{}`", *self, op->to_string());
+    TENZIR_DEBUG("{} received start request for `{}`", *self, op->name());
     detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
       auto time_scheduled_guard
         = make_timer_guard(metrics->values.time_scheduled);
@@ -445,7 +445,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
           ctrl->abort(caf::make_error(
             category, fmt::format("{} shuts down because of irregular "
                                   "exit of previous operator: {}",
-                                  op, msg.reason)));
+                                  op->name(), msg.reason)));
         }
       });
     }
@@ -471,7 +471,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       TENZIR_TRACE("{} calls begin on instantiated operator", *self);
       instance->it = instance->gen.begin();
       if (abort) {
-        TENZIR_DEBUG("{} was aborted during begin: {}", *self, op->to_string(),
+        TENZIR_DEBUG("{} was aborted during begin: {}", *self, op->name(),
                      abort);
         return abort;
       }
@@ -568,8 +568,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       // instead.
       if (this->previous) {
         diagnostic::warning("{}", error)
-          .note("`{}` failed to pull from previous execution node",
-                op->to_string())
+          .note("`{}` failed to pull from previous execution node", op->name())
           .emit(ctrl->diagnostics());
       }
     };
@@ -783,7 +782,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
         TENZIR_ASSERT(not this->current_demand);
         TENZIR_ASSERT(this->outbound_buffer_size == 0);
       }
-      TENZIR_VERBOSE("{} is done", op);
+      TENZIR_VERBOSE("{} is done", op->name());
       metrics->emit();
       self->quit();
       return;
@@ -978,7 +977,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
   if (not output_type) {
     return caf::make_error(ec::logic_error,
                            fmt::format("failed to spawn exec-node for '{}': {}",
-                                       op->to_string(), output_type.error()));
+                                       op->name(), output_type.error()));
   }
   auto f = [&]<caf::spawn_options SpawnOptions>() {
     return [&]<class Input, class Output>(tag<Input>,

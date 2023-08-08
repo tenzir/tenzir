@@ -49,10 +49,6 @@ public:
   // TODO: We could implement this (with `head -n` or `head -c` semantics).
   // auto operator()(generator<chunk_ptr> input) const -> generator<chunk_ptr> {}
 
-  auto to_string() const -> std::string override {
-    return fmt::format("head {}", limit_);
-  }
-
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)filter, (void)order;

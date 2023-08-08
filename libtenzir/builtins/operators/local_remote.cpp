@@ -73,11 +73,12 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "<local_remote>";
+    return "local_remote";
   }
 
   friend auto inspect(auto& f, local_remote_operator& x) -> bool {
-    return plugin_inspect(f, x.op_) && f.apply(x.location_);
+    return f.object(x).fields(f.field("op", x.op_),
+                              f.field("location", x.location_));
   }
 
 private:

@@ -41,10 +41,6 @@ public:
     return result;
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("taste {}", limit_);
-  }
-
   auto name() const -> std::string override {
     return "taste";
   }

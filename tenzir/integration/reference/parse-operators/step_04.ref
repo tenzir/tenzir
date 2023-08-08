@@ -1,3 +1,11 @@
-load "file", loader_args(located("a/b/c.json", location(10, 20)), null, null, null) | read "json", parser_args(null, null, "", null, false, true, false)
------
-located("<pipeline>", [[["load", "file", loader_args(located("a/b/c.json", location(10, 20)), null, null, null)]], [["read", "json", parser_args(null, null, "", null, false, true, false)]]], location(0, 20))
+pipeline [
+  load file {
+    path: "a/b/c.json" @ 10..20
+  },
+  read json {
+    unnest_separator: "",
+    use_ndjson_mode: false,
+    preserve_order: true,
+    raw: false
+  }
+] @ 0..20

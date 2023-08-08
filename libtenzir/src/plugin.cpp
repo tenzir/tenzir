@@ -563,46 +563,42 @@ auto store_plugin::parse_printer(parser_interface& p) const
   return std::make_unique<store_printer>(this);
 }
 
-auto store_plugin::serialize(inspector& f, const plugin_parser& x) const
+auto store_plugin::serialize(serializer f, const plugin_parser& x) const
   -> bool {
-  auto o = detail::overload{[&](auto g) {
+  auto o = [&](auto g) {
     return g.get().object(x).fields();
-  }};
-  auto obj = std::visit(o, f);
-  return f.apply(obj);
+  };
+  return std::visit(o, f);
 }
 
-auto store_plugin::deserialize(inspector& f,
+auto store_plugin::deserialize(deserializer f,
                                std::unique_ptr<plugin_parser>& x) const
   -> void {
-  auto o = detail::overload{[&](auto g) {
+  auto o = [&](auto g) {
     return g.get().object(x).fields();
-  }};
-  auto obj = std::visit(o, f);
-  if (f.apply(obj)) {
+  };
+  if (std::visit(o, f)) {
     x = std::make_unique<store_parser>(this);
   } else {
     x = nullptr;
   }
 }
 
-auto store_plugin::serialize(inspector& f, const plugin_printer& x) const
+auto store_plugin::serialize(serializer f, const plugin_printer& x) const
   -> bool {
-  auto o = detail::overload{[&](auto g) {
+  auto o = [&](auto g) {
     return g.get().object(x).fields();
-  }};
-  auto obj = std::visit(o, f);
-  return f.apply(obj);
+  };
+  return std::visit(o, f);
 }
 
-auto store_plugin::deserialize(inspector& f,
+auto store_plugin::deserialize(deserializer f,
                                std::unique_ptr<plugin_printer>& x) const
   -> void {
-  auto o = detail::overload{[&](auto g) {
+  auto o = [&](auto g) {
     return g.get().object(x).fields();
-  }};
-  auto obj = std::visit(o, f);
-  if (f.apply(obj)) {
+  };
+  if (std::visit(o, f)) {
     x = std::make_unique<store_printer>(this);
   } else {
     x = nullptr;

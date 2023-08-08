@@ -190,20 +190,6 @@ public:
     return make(args_, std::move(*client));
   }
 
-  auto to_string() const -> std::string override {
-    auto result = name();
-    result += fmt::format(" --topic {}", args_.topic);
-    if (args_.count)
-      result += fmt::format(" --count {}", args_.count->inner);
-    if (args_.exit)
-      result += "--exit";
-    if (args_.offset)
-      result += fmt::format(" --offset {}", args_.offset->inner);
-    if (args_.options)
-      result += fmt::format(" --set {}", args_.options->inner);
-    return result;
-  }
-
   auto name() const -> std::string override {
     return "kafka";
   }

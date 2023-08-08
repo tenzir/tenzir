@@ -616,7 +616,7 @@ auto parse_internal(std::string source) -> caf::expected<pipeline> {
   auto ops = parser{std::move(source), diag, true, recursed}.parse();
   if (!ops) {
     return caf::make_error(ec::parse_error,
-                           fmt::format("could not parse pipeline: {}",
+                           fmt::format("could not parse pipeline: {::?}",
                                        std::move(diag).collect()));
   }
   return to_pipeline(std::move(*ops));

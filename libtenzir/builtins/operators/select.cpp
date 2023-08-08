@@ -71,10 +71,6 @@ public:
     return select_columns(slice, state);
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("select {}", fmt::join(config_.fields, ", "));
-  }
-
   auto name() const -> std::string override {
     return "select";
   }

@@ -77,9 +77,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
                and op->location() == operator_location::remote) {
       spawn_remote = true;
     }
-    auto description = op->to_string();
+    auto description = fmt::format("{:?}", op);
     if (spawn_remote) {
-      TENZIR_DEBUG("{} spawns {} remotely", *self, description);
+      TENZIR_DEBUG("{} spawns {:?} remotely", *self, description);
       if (not node) {
         abort_start(caf::make_error(
           ec::invalid_argument, "encountered remote operator, but remote node "
@@ -149,7 +149,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
 }
 
 void pipeline_executor_state::abort_start(diagnostic reason) {
-  TENZIR_DEBUG("{} sends diagnostic due to start abort: {}", *self, reason);
+  TENZIR_DEBUG("{} sends diagnostic due to start abort: {:?}", *self, reason);
   self->request(diagnostics, caf::infinite, std::move(reason))
     .then(
       [this]() {

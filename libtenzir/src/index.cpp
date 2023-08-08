@@ -1321,39 +1321,36 @@ index(index_actor::stateful_pointer<index_state> self,
     self->send(self->state.accountant, atom::announce_v, self->name());
   if (self->state.accountant
       || self->state.active_partition_timeout.count() > 0) {
-    detail::weak_run_delayed_loop(
-      self, defaults::telemetry_rate, [self] {
-        if (self->state.accountant)
-          self->state.send_report();
-        if (self->state.active_partition_timeout.count() > 0) {
-          auto decommissioned = std::vector<type>{};
-          for (const auto& [schema, active_partition] :
-               self->state.active_partitions) {
-            if (active_partition.spawn_time
-                  + self->state.active_partition_timeout
-                < std::chrono::steady_clock::now()) {
-              decommissioned.push_back(schema);
-            }
-          }
-          if (!decommissioned.empty()) {
-            for (const auto& schema : decommissioned) {
-              auto active_partition
-                = self->state.active_partitions.find(schema);
-              TENZIR_ASSERT(active_partition
-                            != self->state.active_partitions.end());
-              TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events "
-                             "after {} timeout",
-                             *self, schema,
-                             self->state.partition_capacity
-                               - active_partition->second.capacity,
-                             self->state.partition_capacity,
-                             data{self->state.active_partition_timeout});
-              self->state.decommission_active_partition(schema, {});
-            }
-            self->state.flush_to_disk();
+    detail::weak_run_delayed_loop(self, defaults::telemetry_rate, [self] {
+      if (self->state.accountant)
+        self->state.send_report();
+      if (self->state.active_partition_timeout.count() > 0) {
+        auto decommissioned = std::vector<type>{};
+        for (const auto& [schema, active_partition] :
+             self->state.active_partitions) {
+          if (active_partition.spawn_time + self->state.active_partition_timeout
+              < std::chrono::steady_clock::now()) {
+            decommissioned.push_back(schema);
           }
         }
-      });
+        if (!decommissioned.empty()) {
+          for (const auto& schema : decommissioned) {
+            auto active_partition = self->state.active_partitions.find(schema);
+            TENZIR_ASSERT(active_partition
+                          != self->state.active_partitions.end());
+            TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events "
+                           "after {} timeout",
+                           *self, schema,
+                           self->state.partition_capacity
+                             - active_partition->second.capacity,
+                           self->state.partition_capacity,
+                           data{self->state.active_partition_timeout});
+            self->state.decommission_active_partition(schema, {});
+          }
+          self->state.flush_to_disk();
+        }
+      }
+    });
   }
   return {
     [self](atom::done, uuid partition_id) {
@@ -1730,8 +1727,8 @@ index(index_actor::stateful_pointer<index_state> self,
         if (self->state.persisted_partitions.contains(entry.uuid)) {
           return false;
         }
-        TENZIR_WARN("{} skips unknown partition {} for pipeline {}", *self,
-                    entry.uuid, pipe.to_string());
+        TENZIR_WARN("{} skips unknown partition {} for pipeline {:?}", *self,
+                    entry.uuid, pipe);
         return true;
       });
       auto corrected_partitions = catalog_lookup_result{};
@@ -1747,9 +1744,9 @@ index(index_actor::stateful_pointer<index_state> self,
           // TODO: Implement some synchronization mechanism for partition
           // erasure so rebuild, compaction, and aging can properly
           // synchronize.
-          TENZIR_WARN("{} refuses to apply transformation '{}' to partition {} "
-                      "because it is currently being transformed",
-                      *self, pipe.to_string(), partition.uuid);
+          TENZIR_WARN("{} refuses to apply transformation '{:?}' to partition "
+                      "{} because it is currently being transformed",
+                      *self, pipe, partition.uuid);
         }
       }
       if (corrected_partitions.empty())
@@ -1769,14 +1766,14 @@ index(index_actor::stateful_pointer<index_state> self,
         = tenzir::predicate{meta_extractor{meta_extractor::schema},
                             relational_operator::ni, data{""}};
       auto query_context = query_context::make_extract(
-        pipe.to_string(), partition_transfomer, match_everything);
+        fmt::format("{:?}", pipe), partition_transfomer, match_everything);
       auto transform_id = self->state.pending_queries.create_query_id();
       query_context.id = transform_id;
       // We set the query priority for partition transforms to zero so they
       // always get less priority than queries.
       query_context.priority = 0;
-      TENZIR_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
-                   pipe.to_string());
+      TENZIR_DEBUG("{} emplaces {} for pipeline {:?}", *self, query_context,
+                   pipe);
       auto query_contexts = query_state::type_query_context_map{};
       for (const auto& [type, _] : corrected_partitions.candidate_infos) {
         query_contexts[type] = query_context;

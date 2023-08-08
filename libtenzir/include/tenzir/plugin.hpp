@@ -268,13 +268,30 @@ template <class Base>
 class serialization_plugin : public virtual plugin {
 public:
   /// @pre `x.name() == name()`
-  [[nodiscard]] virtual auto serialize(inspector& f, const Base& x) const
+  [[nodiscard]] virtual auto serialize(serializer f, const Base& x) const
     -> bool
     = 0;
 
   /// @post `!x || x->name() == name()`
-  virtual void deserialize(inspector& f, std::unique_ptr<Base>& x) const = 0;
+  virtual void deserialize(deserializer f, std::unique_ptr<Base>& x) const = 0;
 };
+
+template <class Inspector, class Base>
+auto plugin_inspect_ref(Inspector& f, const Base& x) -> bool {
+  static_assert(not Inspector::is_loading);
+  auto name = x.name();
+  auto const* p = plugins::find<serialization_plugin<Base>>(name);
+  if (!p) {
+    f.set_error(caf::make_error(
+      ec::serialization_error,
+      fmt::format("serialization plugin `{}` for `{}` not found", name,
+                  caf::detail::pretty_type_name(typeid(Base)))));
+    return false;
+  }
+  return f.begin_associative_array(1) && f.begin_key_value_pair()
+         && f.value(name) && p->serialize(std::ref(f), x)
+         && f.end_key_value_pair() && f.end_associative_array();
+}
 
 /// Inspects a polymorphic object `x` by using the serialization plugin with the
 /// name that matches `x->name()`.
@@ -293,25 +310,11 @@ auto plugin_inspect(Inspector& f, std::unique_ptr<Base>& x) -> bool {
                     caf::detail::pretty_type_name(typeid(Base)))));
       return false;
     }
-    auto g = inspector{f};
-    p->deserialize(g, x);
+    p->deserialize(f, x);
     return x != nullptr;
   } else {
     TENZIR_ASSERT(x);
-    auto name = x->name();
-    if (!f.apply(name)) {
-      return false;
-    }
-    auto const* p = plugins::find<serialization_plugin<Base>>(name);
-    if (!p) {
-      f.set_error(caf::make_error(
-        ec::serialization_error,
-        fmt::format("serialization plugin `{}` for `{}` not found", name,
-                    caf::detail::pretty_type_name(typeid(Base)))));
-      return false;
-    }
-    auto g = inspector{f};
-    return p->serialize(g, *x);
+    return plugin_inspect_ref(f, *x);
   }
 }
 
@@ -328,33 +331,28 @@ public:
     return Concrete{}.name();
   }
 
-  auto serialize(inspector& f, const Base& op) const -> bool override {
+  auto serialize(serializer f, const Base& op) const -> bool override {
     TENZIR_ASSERT(op.name() == name());
     auto x = dynamic_cast<const Concrete*>(&op);
     TENZIR_ASSERT(x);
-    // TODO: Can probably remove this const_cast by splitting up `inspector`.
-    auto y = const_cast<Concrete*>(x);
-    return f.apply(*y);
+    return std::visit(
+      [&](auto& f) {
+        return f.get().apply(*x);
+      },
+      f);
   }
 
-  void deserialize(inspector& f, std::unique_ptr<Base>& x) const override {
+  void deserialize(deserializer f, std::unique_ptr<Base>& x) const override {
     x = std::visit(
-      [this]<class Inspector>(
-        std::reference_wrapper<Inspector> g) -> std::unique_ptr<Concrete> {
-        if constexpr (Inspector::is_loading) {
-          auto x = std::make_unique<Concrete>();
-          auto& f = g.get();
-          if (!f.apply(*x)) {
-            f.set_error(
-              caf::make_error(ec::serialization_error,
-                              fmt::format("inspector of `{}` failed: {}",
-                                          name(), f.get_error())));
-            return nullptr;
-          }
-          return x;
-        } else {
-          die("unreachable");
+      [&](auto& f) -> std::unique_ptr<Concrete> {
+        auto x = std::make_unique<Concrete>();
+        if (not f.get().apply(*x)) {
+          f.get().set_error(caf::make_error(
+            ec::serialization_error, fmt::format("inspector of `{}` failed: {}",
+                                                 name(), f.get().get_error())));
+          return nullptr;
         }
+        return x;
       },
       f);
   }
@@ -423,9 +421,6 @@ public:
   virtual auto default_parser() const -> std::string {
     return "json";
   }
-
-  // TODO: Consider adding a default implementation.
-  virtual auto to_string() const -> std::string = 0;
 };
 
 /// @see operator_parser_plugin
@@ -712,16 +707,16 @@ public:
   [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
   make_active_store() const = 0;
 
-  [[nodiscard]] auto serialize(inspector& f, const plugin_parser& x) const
+  [[nodiscard]] auto serialize(serializer f, const plugin_parser& x) const
     -> bool override;
 
-  auto deserialize(inspector& f, std::unique_ptr<plugin_parser>& x) const
+  auto deserialize(deserializer f, std::unique_ptr<plugin_parser>& x) const
     -> void override;
 
-  [[nodiscard]] auto serialize(inspector& f, const plugin_printer& x) const
+  [[nodiscard]] auto serialize(serializer f, const plugin_printer& x) const
     -> bool override;
 
-  auto deserialize(inspector& f, std::unique_ptr<plugin_printer>& x) const
+  auto deserialize(deserializer f, std::unique_ptr<plugin_printer>& x) const
     -> void override;
 
 private:

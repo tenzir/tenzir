@@ -38,8 +38,7 @@ public:
   }
 
   friend auto inspect(auto& f, pass_operator& x) -> bool {
-    (void)f, (void)x;
-    return true;
+    return f.object(x).fields();
   }
 };
 

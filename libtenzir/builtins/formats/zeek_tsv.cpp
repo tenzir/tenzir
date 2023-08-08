@@ -715,8 +715,8 @@ public:
     return parser_impl(to_lines(std::move(input)), ctrl);
   }
 
-  friend auto inspect(auto&, zeek_tsv_parser&) -> bool {
-    return true;
+  friend auto inspect(auto& f, zeek_tsv_parser& x) -> bool {
+    return f.object(x).fields();
   }
 };
 

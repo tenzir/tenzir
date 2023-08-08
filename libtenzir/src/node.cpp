@@ -686,9 +686,9 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         return caf::make_error(ec::logic_error,
                                fmt::format("{} cannot spawn local operator "
                                            "'{}' in remote node",
-                                           *self, op));
+                                           *self, op->name()));
       }
-      auto description = op->to_string();
+      auto description = fmt::format("{:?}", op);
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type,
                           static_cast<node_actor>(self), diagnostic_handler,
@@ -697,7 +697,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         return caf::make_error(ec::logic_error,
                                fmt::format("{} failed to spawn execution node "
                                            "for operator '{}': {}",
-                                           *self, op, spawn_result.error()));
+                                           *self, description,
+                                           spawn_result.error()));
       }
       // TODO: Check output type.
       return spawn_result->first;

@@ -1,3 +1,6 @@
-<local_remote> "pass", 0
------
-located("<local_remote>", "pass", 0, location(0, 23))
+local_remote {
+  op: pass {
+    
+  },
+  location: "local"
+} @ 0..23

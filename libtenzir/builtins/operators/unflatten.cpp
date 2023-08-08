@@ -40,10 +40,6 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("unflatten '{}'", separator_);
-  }
-
   auto name() const -> std::string override {
     return "unflatten";
   }

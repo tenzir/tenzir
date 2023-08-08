@@ -1,3 +1,1 @@
-show "version"
------
-located("show", "version", location(0, 12))
+show "version" @ 0..12

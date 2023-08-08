@@ -10,6 +10,9 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/detail/debug_writer.hpp"
+#include "tenzir/detail/default_formatter.hpp"
+
 #include <fmt/format.h>
 
 namespace tenzir {
@@ -35,6 +38,10 @@ struct location {
   auto operator<=>(const location&) const = default;
 
   friend auto inspect(auto& f, location& x) {
+    if (auto dbg = as_debug_writer(f)) {
+      dbg->add_fmt("{}..{}", x.begin, x.end);
+      return true;
+    }
     return f.object(x)
       .pretty_name("location")
       .fields(f.field("begin", x.begin), f.field("end", x.end));
@@ -42,6 +49,9 @@ struct location {
 };
 
 inline const location location::unknown = location{};
+
+template <>
+struct enable_default_formatter<location> : std::true_type {};
 
 /// Provides a `T` together with a `location`.
 template <class T>
@@ -56,35 +66,21 @@ struct located {
 
   auto operator<=>(const located&) const = default;
 
-  friend auto inspect(auto& f, located& x) {
+  template <class Inspector>
+  friend auto inspect(Inspector& f, located& x) {
+    if (auto dbg = as_debug_writer(f)) {
+      if (not dbg->apply(x.inner)) {
+        return false;
+      }
+      dbg->add_fmt(" @ {:?}", x.source);
+      return true;
+    }
     return f.object(x).pretty_name("located").fields(
       f.field("inner", x.inner), f.field("source", x.source));
   }
 };
 
-} // namespace tenzir
-
-template <>
-struct fmt::formatter<tenzir::location> {
-  constexpr auto parse(format_parse_context& ctx) {
-    return ctx.begin();
-  }
-
-  template <typename FormatContext>
-  auto format(const tenzir::location& x, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "{{begin: {}, end: {}}}", x.begin, x.end);
-  }
-};
-
 template <class T>
-struct fmt::formatter<tenzir::located<T>> {
-  constexpr auto parse(format_parse_context& ctx) {
-    return ctx.begin();
-  }
+struct enable_default_formatter<located<T>> : std::true_type {};
 
-  template <typename FormatContext>
-  auto format(const tenzir::located<T>& x, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "{{inner: {}, source: {}}}", x.inner,
-                          x.source);
-  }
-};
+} // namespace tenzir
