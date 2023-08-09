@@ -91,7 +91,19 @@ public:
     TENZIR_DEBUG("trying to read {} bytes", buffer.size());
     auto* data = reinterpret_cast<char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
-    stdout_.read(data, size);
+    // The `peek()` makes sure that we have at least some data in the
+    // buffer before we call `readsome()`. The second function by itself does
+    // not fill the underlying input buffer, and would never produce any data
+    // without the `peek()`.
+    // FIXME: This is still quite suboptimal, as `peek` could in theory put
+    // only a single character into the rdbuf, leading us to produce single byte
+    // chunks.
+    // This code used to call `stdout_.read` before, but that function is
+    // blocking and in turn blocks the pipeline from advancing until the buffer
+    // is filled, which is also not ideal for shell functions that produce
+    // output at a low rate.
+    stdout_.peek();
+    stdout_.readsome(data, size);
     auto bytes_read = stdout_.gcount();
     TENZIR_DEBUG("read {} bytes", bytes_read);
     return detail::narrow_cast<size_t>(bytes_read);
