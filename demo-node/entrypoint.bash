@@ -36,11 +36,12 @@ curl -X POST \
   http://127.0.0.1:5160/api/v0/pipeline/create
 
 # Ingest CVEs from https://services.nvd.nist.gov/rest/json/cves/2.0.
-cve_pipe="shell /demo-node/live_cve_feed.bash | read json --ndjson | replace #schema=\"nvd.cve\" | import"
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d "{\"name\": \"Live CVE Notifications from the NIST API\", \"definition\": \"${cve_pipe}\", \"start_when_created\": true}" \
-  http://127.0.0.1:5160/api/v0/pipeline/create
+# !! Currently disabled because of a scheduling bug.
+#cve_pipe="shell /demo-node/live_cve_feed.bash | read json --ndjson | replace #schema=\"nvd.cve\" | import"
+#curl -X POST \
+#  -H "Content-Type: application/json" \
+#  -d "{\"name\": \"Live CVE Notifications from the NIST API\", \"definition\": \"${cve_pipe}\", \"start_when_created\": true}" \
+#  http://127.0.0.1:5160/api/v0/pipeline/create
 
 # The shell operator decompresses the data and writes it to `read suricata` on
 # the fly.
