@@ -19,7 +19,7 @@ utilities][apache-arrow-compression] under the hood, and transparently supports
 all options that Apache Arrow supports for streaming compression.
 
 Besides the supported `brotli`, `bz2`, `gzip`, `lz4`, and `zstd`, Apache Arrow
-also ships with codecs for `lzo`, `lz4_raw`, lz4_hadoop` and `snappy`, which
+also ships with codecs for `lzo`, `lz4_raw`, `lz4_hadoop` and `snappy`, which
 only support oneshot compression. Support for them is not currently implemented.
 If you need support for them, let us know!
 :::
