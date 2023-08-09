@@ -137,9 +137,8 @@ public:
     if (slice.rows() == 0)
       return {};
     const auto& layout = caf::get<record_type>(slice.schema());
-    auto batch = to_record_batch(slice);
-    TENZIR_ASSERT(batch);
     auto transformations = std::vector<indexed_transformation>{};
+    auto replace_schema_name = std::optional<std::string>{};
     switch (Mode) {
       case mode::put: {
         // For `put` we drop all fields except for the last one, and then
@@ -177,6 +176,12 @@ public:
         auto index_to_operand
           = std::vector<std::pair<offset, const operand*>>{};
         for (const auto& [extractor, operand] : config_.extractor_to_operand) {
+          if (extractor == "#schema") {
+            TENZIR_ASSERT_CHEAP(operand);
+            replace_schema_name
+              = caf::get<std::string>(caf::get<data>(*operand));
+            continue;
+          }
           if (not operand) {
             ctrl.warn(caf::make_error(
               ec::logic_error,
@@ -213,6 +218,11 @@ public:
     }
     // Lastly, apply our transformation.
     auto result = transform_columns(slice, transformations);
+    if (replace_schema_name) {
+      result = table_slice{to_record_batch(result),
+                           type{*replace_schema_name,
+                                caf::get<record_type>(slice.schema())}};
+    }
     if (Mode == mode::put) {
       auto renamed_schema
         = type{"tenzir.put", caf::get<record_type>(result.schema())};
@@ -269,7 +279,7 @@ public:
     // clang-format off
     const auto p
        = required_ws_or_comment
-      >> ((extractor >> -(optional_ws_or_comment >> '=' >> optional_ws_or_comment >> operand))
+      >> (((extractor | parsers::str{"#schema"}) >> -(optional_ws_or_comment >> '=' >> optional_ws_or_comment >> operand))
         % (optional_ws_or_comment >> ',' >> optional_ws_or_comment))
       >> optional_ws_or_comment
       >> end_of_pipeline_operator;
@@ -282,6 +292,32 @@ public:
                         fmt::format("failed to parse {} operator: '{}'",
                                     operator_name(Mode), pipeline)),
       };
+    }
+    for (auto& [ex, op] : config.extractor_to_operand) {
+      if (ex == "#schema") {
+        if constexpr (Mode == mode::replace) {
+          auto* op_ptr = op ? &*op : nullptr;
+          // FIXME: Chaining `caf::get_if` leads to a segfault.
+          auto* data_ptr = op_ptr ? caf::get_if<data>(op_ptr) : nullptr;
+          auto* str_ptr
+            = data_ptr ? caf::get_if<std::string>(data_ptr) : nullptr;
+          if (not str_ptr) {
+            return {
+              std::string_view{f, l},
+              caf::make_error(ec::syntax_error,
+                              fmt::format("assignment to `#schema` must be a "
+                                          "string literal")),
+            };
+          }
+        } else {
+          return {
+            std::string_view{f, l},
+            caf::make_error(ec::syntax_error,
+                            fmt::format("`{}` does not support `#schema`",
+                                        operator_name(Mode))),
+          };
+        }
+      }
     }
     return {
       std::string_view{f, l},
