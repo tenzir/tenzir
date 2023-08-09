@@ -86,7 +86,7 @@ public:
         TENZIR_ASSERT(size == 0);
       },
       [&](std::vector<uint8_t>& buffer) {
-        TENZIR_ASSERT(size <= buffer.size());
+        TENZIR_ASSERT(size <= detail::narrow_cast<int64_t>(buffer.size()));
         if (size == detail::narrow_cast<int64_t>(buffer.size())) {
           buffer_ = {};
           return;
@@ -96,7 +96,7 @@ public:
       },
       [&](chunk_ptr& buffer) {
         TENZIR_ASSERT(buffer);
-        TENZIR_ASSERT(size <= buffer->size());
+        TENZIR_ASSERT(size <= detail::narrow_cast<int64_t>(buffer->size()));
         if (size == detail::narrow_cast<int64_t>(buffer->size())) {
           buffer_ = {};
           return;
@@ -195,7 +195,8 @@ public:
           in_buffer.drop_front_n(result->bytes_read);
         }
         if (result->bytes_written > 0) {
-          TENZIR_ASSERT(result->bytes_written < out_buffer.size());
+          TENZIR_ASSERT(result->bytes_written
+                        < detail::narrow_cast<int64_t>(out_buffer.size()));
           co_yield chunk::copy(
             as_bytes(out_buffer).subspan(0, result->bytes_written));
         } else {
@@ -294,7 +295,8 @@ public:
           out_buffer.resize(out_buffer.size() * 2);
         }
         if (result->bytes_written > 0) {
-          TENZIR_ASSERT(result->bytes_written < out_buffer.size());
+          TENZIR_ASSERT(result->bytes_written
+                        < detail::narrow_cast<int64_t>(out_buffer.size()));
           co_yield chunk::copy(
             as_bytes(out_buffer).subspan(0, result->bytes_written));
         } else {
