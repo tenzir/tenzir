@@ -58,10 +58,6 @@ a single event rendered as JSON:
       "version": "bundled"
     },
     {
-      "name": "inventory",
-      "version": "bundled"
-    },
-    {
       "name": "kafka",
       "version": "bundled"
     },

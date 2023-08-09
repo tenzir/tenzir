@@ -145,13 +145,13 @@ RUN cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
       rm -rf build-compaction
 
-FROM plugins-source AS inventory-plugin
-
-RUN cmake -S contrib/tenzir-plugins/inventory -B build-inventory -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-inventory --parallel && \
-      DESTDIR=/plugin/inventory cmake --install build-inventory --strip --component Runtime && \
-      rm -rf build-inventory
+# FROM plugins-source AS inventory-plugin
+#
+# RUN cmake -S contrib/tenzir-plugins/inventory -B build-inventory -G Ninja \
+#       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+#       cmake --build build-inventory --parallel && \
+#       DESTDIR=/plugin/inventory cmake --install build-inventory --strip --component Runtime && \
+#       rm -rf build-inventory
 
 FROM plugins-source AS matcher-plugin
 
