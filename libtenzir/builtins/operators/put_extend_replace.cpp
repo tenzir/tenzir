@@ -219,9 +219,8 @@ public:
     // Lastly, apply our transformation.
     auto result = transform_columns(slice, transformations);
     if (replace_schema_name) {
-      result = table_slice{to_record_batch(result),
-                           type{*replace_schema_name,
-                                caf::get<record_type>(slice.schema())}};
+      result = cast(result, type{*replace_schema_name,
+                                 caf::get<record_type>(slice.schema())});
     }
     if (Mode == mode::put) {
       auto renamed_schema
