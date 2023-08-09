@@ -32,4 +32,10 @@ curl -X POST \
   -d "{\"name\": \"Example vmstat import\", \"definition\": \"${stat_pipe}\", \"start_when_created\": false}" \
   http://127.0.0.1:5160/api/v0/pipeline/create
 
+cve_pipe="shell /demo-node/live_cve_feed.bash | read json --ndjson | import"
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d "{\"name\": \"Import published CVEs live from the NIST API\", \"definition\": \"${cve_pipe}\", \"start_when_created\": true}" \
+  http://127.0.0.1:5160/api/v0/pipeline/create
+
 wait "$NODE_PID"
