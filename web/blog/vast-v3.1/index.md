@@ -27,26 +27,26 @@ on the VAST Language.
 
 We introduced several new operators:
 
-- [`tail`](/next/operators/transformations/tail): limits the
+- [`tail`](/VAST%20v3.1/operators/transformations/tail): limits the
   input to the last N events.
-- [`unique`](/next/operators/transformations/unique): removes
+- [`unique`](/VAST%20v3.1/operators/transformations/unique): removes
   adjacent duplicates
-- [`measure`](/next/operators/transformations/measure): replaces
+- [`measure`](/VAST%20v3.1/operators/transformations/measure): replaces
   the input with incremental metrics describing the input.
-- [`version`](/next/operators/sources/version): returns a single
+- [`version`](/VAST%20v3.1/operators/sources/version): returns a single
   event displaying version information of VAST.
-- [`from`](/next/operators/sources/from): produces events by
+- [`from`](/VAST%20v3.1/operators/sources/from): produces events by
   combining a connector and a format.
-- [`read`](/VAST v3.1/understand/operators/sources/read): a short form of `from`
-  that allows for omitting the connector.
-- [`to`](/next/operators/sinks/to): consumes events by combining
+- [`read`](/VAST%20v3.1/understand/operators/sources/read): a short form of
+  `from` that allows for omitting the connector.
+- [`to`](/VAST%20v3.1/operators/sinks/to): consumes events by combining
   a connector and format.
-- [`write`](/VAST v3.1/understand/operators/sinks/write): a short form of `to`
+- [`write`](/VAST%20v3.1/understand/operators/sinks/write): a short form of `to`
   that allows for omitting the connector.
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
 work with selectors and extractors. Check out the [growing list of
-operators](/next/operators/).
+operators](/operators/).
 
 ## Operator Aliases
 
