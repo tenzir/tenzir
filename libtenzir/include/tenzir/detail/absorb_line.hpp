@@ -11,7 +11,7 @@
 //
 // - Site:       https://stackoverflow.com/a/6089413/92560
 // - Author:     user763305 et al.
-// - License:    CC-BY-SA
+// - License:    CC-BY-SA-3.0
 
 #pragma once
 
