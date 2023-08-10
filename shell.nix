@@ -17,6 +17,7 @@ in
           pkgs.cmake-format
           pkgs.pandoc
           pkgs.poetry
+          pkgs.spdx-tools
         ];
       # To build libcaf_openssl with bundled CAF.
       buildInputs = [pkgs.openssl];

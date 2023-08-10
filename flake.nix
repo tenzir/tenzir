@@ -199,15 +199,42 @@
         };
         apps.default = self.apps.${system}.tenzir-static;
         # Run with `nix run .#sbom`, output is created in sbom/.
-        apps.sbom = let
+        apps.generate-sbom = let
           nix = nixpkgs.legacyPackages."${system}".nix;
           sbomnix = inputs.sbomnix.packages.${system}.sbomnix;
+          # We use tenzir-de-static so we don't require proprietary plugins,
+          # they don't influence the final result.
         in flake-utils.lib.mkApp { drv = pkgs.writeScriptBin "generate" ''
-            ${nix}/bin/nix-env -qa --meta --json -f ${nixpkgs} '.*' > meta.json
-            staticDrv="$(${nix}/bin/nix path-info --derivation ${self}#tenzir-static)"
-            mkdir sbom
-            cd sbom
-            ${sbomnix}/bin/sbomnix --meta=../meta.json --type=buildtime ''${staticDrv}
+            echo "Writing intermediate files to $TMP"
+            echo "Generating nixpkgs based meta information"
+            ${nix}/bin/nix-env -qa --meta --json -f ${nixpkgs} '.*' > $TMP/meta.json
+            staticDrv="$(${nix}/bin/nix path-info --derivation ${self}#tenzir-de-static)"
+            echo "Converting vendored spdx info from KV to JSON"
+            ${pkgs.spdx-tools}/bin/pyspdxtools -i vendored.spdx -o $TMP/vendored.spdx.json
+            echo "Deriving SPDX from the Nix package"
+            ${sbomnix}/bin/sbomnix --meta=$TMP/meta.json --type=buildtime ''${staticDrv} \
+              --spdx=$TMP/nix.spdx.json \
+              --csv=/dev/null \
+              --cdx=/dev/null
+            echo "Replacing the inferred SPDXID for Tenzir with a static id"
+            name=''$(${pkgs.jq}/bin/jq -r '.name' $TMP/nix.spdx.json)
+            sed -i "s|$name|SPDXRef-Tenzir|g" $TMP/nix.spdx.json
+            echo "Removing the generated Tenzir package entry"
+            jq 'del(.packages[] | select(.SPDXID == "SPDXRef-Tenzir"))' $TMP/nix.spdx.json > $TMP/nix2.spdx.json
+            echo "Merging the SPDX JSON files"
+            ${pkgs.jq}/bin/jq -s 'def deepmerge(a;b):
+              reduce b[] as $item (a;
+                reduce ($item | keys_unsorted[]) as $key (.;
+                  $item[$key] as $val | ($val | type) as $type | .[$key] = if ($type == "object") then
+                    deepmerge({}; [if .[$key] == null then {} else .[$key] end, $val])
+                  elif ($type == "array") then
+                    (.[$key] + $val | unique)
+                  else
+                    $val
+                  end)
+                );
+              deepmerge({}; .)' $TMP/nix2.spdx.json $TMP/vendored.spdx.json > tenzir.spdx.json
+            echo "Wrote tenzir.spdx.json"
           '';
         };
         # Legacy aliases for backwards compatibility.
