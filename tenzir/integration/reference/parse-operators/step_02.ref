@@ -1,8 +1,8 @@
-error: unknown option `--tev`
- --> <input>:1:9
+error: unexpected positional argument
+ --> <input>:1:14
   |
-1 | version --tev
-  |         ^^^^^ 
+1 | show version 42
+  |              ^^ 
   |
-  = usage: version [--dev]
-  = docs: https://docs.tenzir.com/next/operators/sources/version
+  = usage: show <aspect>
+  = docs: https://docs.tenzir.com/next/operators/sources/show

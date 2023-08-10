@@ -1,8 +1,3 @@
-error: loader `a/b/c.json` could not be found
- --> <input>:1:6
-  |
-1 | from a/b/c.json read json
-  |      ^^^^^^^^^^ 
-  |
-  = hint: must be one of -, file, stdin
-  = docs: https://docs.tenzir.com/next/connectors
+load "file", loader_args(located("a/b/c.json", location(10, 20)), null, null, null) | read "json", parser_args(null, null, "", false, false, true)
+-----
+located("<pipeline>", [[["load", "file", loader_args(located("a/b/c.json", location(10, 20)), null, null, null)]], [["read", "json", parser_args(null, null, "", false, false, true)]]], location(0, 20))

@@ -63,11 +63,10 @@ tests:
   Parse operators:
     tags: [parser]
     steps:
-      - command: exec --dump-ast "version"
-      - command: exec --dump-ast "version --dev"
-      - command: exec "version --tev"
+      - command: exec --dump-ast "show version"
+      - command: exec "show version --tev"
         expected_result: error
-      - command: exec "version 42"
+      - command: exec "show version 42"
         expected_result: error
       - command: exec "from a/b/c.json read json"
         expected_result: error
@@ -576,7 +575,7 @@ tests:
     steps:
       - command: -N import zeek
         input: data/zeek/conn.log.gz
-      - command: exec version
+      - command: exec 'show version'
         transformation: "@./misc/scripts/break-sizelimit.sh"
       # We use an extra import step to trigger the repair because querying
       # directly would not wait for the repair step.
@@ -766,10 +765,10 @@ tests:
   Batch Events:
     tags: [pipelines]
     steps:
-      - command: exec 'version | repeat 10 | batch 5 | measure | select events'
-      - command: exec 'version | repeat 10 | batch 1 | measure | select events'
-      - command: exec 'version | repeat 10 | batch 3 | measure | select events'
-      - command: exec 'version | repeat 10 | batch 15 | measure | select events'
+      - command: exec 'show version | repeat 10 | batch 5 | measure | select events'
+      - command: exec 'show version | repeat 10 | batch 1 | measure | select events'
+      - command: exec 'show version | repeat 10 | batch 3 | measure | select events'
+      - command: exec 'show version | repeat 10 | batch 15 | measure | select events'
 
   Empty Record in Pipeline:
     tags: [pipelines]

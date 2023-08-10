@@ -1,3 +1,8 @@
-version --dev
------
-located("version", true, location(0, 13))
+error: unknown option `--tev`
+ --> <input>:1:14
+  |
+1 | show version --tev
+  |              ^^^^^ 
+  |
+  = usage: show <aspect>
+  = docs: https://docs.tenzir.com/next/operators/sources/show
