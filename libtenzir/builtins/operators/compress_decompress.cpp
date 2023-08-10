@@ -368,8 +368,8 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser
-      = argument_parser{"decompress", "https://docs.tenzir.com/next/operators/"
-                                      "transformations/compress"};
+      = argument_parser{"compress", "https://docs.tenzir.com/next/operators/"
+                                    "transformations/compress"};
     auto args = operator_args{};
     parser.add(args.type, "<type>");
     parser.add("--level", args.level, "<level>");
