@@ -37,11 +37,11 @@ We introduced several new operators:
   [`show`](/operators/sources/show).)
 - [`from`](/operators/sources/from): produces events by
   combining a connector and a format.
-- [`read`](/operators/sources/read): a short form of
+- [`read`](/operators/transformations/read): a short form of
   `from` that allows for omitting the connector.
 - [`to`](/operators/sinks/to): consumes events by combining
   a connector and format.
-- [`write`](/operators/sinks/write): a short form of `to`
+- [`write`](/operators/transformations/write): a short form of `to`
   that allows for omitting the connector.
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
