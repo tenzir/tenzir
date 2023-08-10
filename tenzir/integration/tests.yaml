@@ -1062,3 +1062,12 @@ tests:
       - command: exec 'read pcap -e | write pcap'
         input: data/pcap/example.pcap.gz
         transformation: md5sum | cut -f 1 -d ' '
+
+  Compression:
+    tags: [pipelines, compression]
+    steps:
+      # TODO: Also add tests for lz4, zstd, bz2, and brotli, and compression in
+      # general. The current integration testing framework does not support
+      # testing binary outputs very well, so we should implement more tests once
+      # we're completed the transition to bats (see tenzir/tenzir#2859).
+      - command: exec 'load file @./data/json/conn.log.json.gz | decompress gzip | read zeek-json | summarize num_events=count(.)'
