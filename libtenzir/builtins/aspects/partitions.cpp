@@ -31,6 +31,7 @@ auto partition_type() -> type {
       {"max_import_time", time_type{}},
       {"version", uint64_type{}},
       {"schema", string_type{}},
+      {"schema_id", string_type{}},
     },
   };
 }
@@ -85,7 +86,8 @@ public:
               && builder.add(synopsis.synopsis->min_import_time)
               && builder.add(synopsis.synopsis->max_import_time)
               && builder.add(synopsis.synopsis->version)
-              && builder.add(synopsis.synopsis->schema.name()))) {
+              && builder.add(synopsis.synopsis->schema.name())
+              && builder.add(synopsis.synopsis->schema.make_fingerprint()))) {
         diagnostic::error("failed to add partition entry")
           .emit(ctrl.diagnostics());
         co_return;
