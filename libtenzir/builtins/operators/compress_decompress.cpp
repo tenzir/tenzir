@@ -190,7 +190,13 @@ public:
         // that isn't enough we just double the size until the compressor
         // stops complaining.
         if (result->bytes_read == 0) [[unlikely]] {
-          out_buffer.resize(out_buffer.size() * 2);
+          if (out_buffer.size() == out_buffer.max_size()) [[unlikely]] {
+            diagnostic::error("failed to resize buffer")
+              .emit(ctrl.diagnostics());
+            co_return;
+          }
+          out_buffer.resize(
+            std::max(out_buffer.max_size(), out_buffer.size() * 2));
         } else {
           in_buffer.drop_front_n(result->bytes_read);
         }
@@ -211,7 +217,12 @@ public:
         detail::narrow_cast<int64_t>(out_buffer.size()), out_buffer.data());
       if (result->should_retry) {
         TENZIR_ASSERT(result->bytes_written == 0);
-        out_buffer.resize(out_buffer.size() * 2);
+        if (out_buffer.size() == out_buffer.max_size()) [[unlikely]] {
+          diagnostic::error("failed to resize buffer").emit(ctrl.diagnostics());
+          co_return;
+        }
+        out_buffer.resize(
+          std::max(out_buffer.max_size(), out_buffer.size() * 2));
         continue;
       }
       if (result->bytes_written > 0) {
@@ -292,7 +303,13 @@ public:
         // that isn't enough we just double the size until the decompressor
         // stops complaining.
         if (result->need_more_output) [[unlikely]] {
-          out_buffer.resize(out_buffer.size() * 2);
+          if (out_buffer.size() == out_buffer.max_size()) [[unlikely]] {
+            diagnostic::error("failed to resize buffer")
+              .emit(ctrl.diagnostics());
+            co_return;
+          }
+          out_buffer.resize(
+            std::max(out_buffer.max_size(), out_buffer.size() * 2));
         }
         if (result->bytes_written > 0) {
           TENZIR_ASSERT(result->bytes_written
@@ -351,8 +368,8 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser
-      = argument_parser{"decompress", "https://docs.tenzir.com/next/operators/"
-                                      "transformations/compress"};
+      = argument_parser{"compress", "https://docs.tenzir.com/next/operators/"
+                                    "transformations/compress"};
     auto args = operator_args{};
     parser.add(args.type, "<type>");
     parser.add("--level", args.level, "<level>");
