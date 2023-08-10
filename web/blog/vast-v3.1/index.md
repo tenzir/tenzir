@@ -27,21 +27,21 @@ on the VAST Language.
 
 We introduced several new operators:
 
-- [`tail`](/VAST%20v3.1/operators/transformations/tail): limits the
+- [`tail`](/operators/transformations/tail): limits the
   input to the last N events.
-- [`unique`](/VAST%20v3.1/operators/transformations/unique): removes
+- [`unique`](/operators/transformations/unique): removes
   adjacent duplicates
-- [`measure`](/VAST%20v3.1/operators/transformations/measure): replaces
+- [`measure`](/operators/transformations/measure): replaces
   the input with incremental metrics describing the input.
-- [`version`](/VAST%20v3.1/operators/sources/version): returns a single
-  event displaying version information of VAST.
-- [`from`](/VAST%20v3.1/operators/sources/from): produces events by
+- `version`: returns a single event displaying version information of VAST. (Now
+  [`show`](/operators/sources/show).)
+- [`from`](/operators/sources/from): produces events by
   combining a connector and a format.
-- [`read`](/VAST%20v3.1/understand/operators/sources/read): a short form of
+- [`read`](/operators/sources/read): a short form of
   `from` that allows for omitting the connector.
-- [`to`](/VAST%20v3.1/operators/sinks/to): consumes events by combining
+- [`to`](/operators/sinks/to): consumes events by combining
   a connector and format.
-- [`write`](/VAST%20v3.1/understand/operators/sinks/write): a short form of `to`
+- [`write`](/operators/sinks/write): a short form of `to`
   that allows for omitting the connector.
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
