@@ -50,10 +50,10 @@ Show all transformations:
 show operators | where transformation == true
 ```
 
-Show all tables and partitions at a node:
+Show all fields and partitions at a node:
 
 ```
-show tables
+show fields
 show partitions
 ```
 
@@ -61,5 +61,4 @@ Show the version of a remote node:
 
 ```
 remote show version
-```
 ```
