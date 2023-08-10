@@ -809,9 +809,9 @@ jobs:
           - name: Compaction
             target: compaction
             path: contrib/tenzir-plugins/compaction
-          - name: Inventory
-            target: inventory
-            path: contrib/tenzir-plugins/inventory
+          # - name: Inventory
+          #   target: inventory
+          #   path: contrib/tenzir-plugins/inventory
           - name: Matcher
             target: matcher
             path: contrib/tenzir-plugins/matcher

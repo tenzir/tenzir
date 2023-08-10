@@ -246,7 +246,7 @@ async function createConfig() {
         },
         announcementBar: {
           content:
-            'Splunk user? <a href="/blog/tenzir-for-splunk-users">Our latest blog post</a> compares SPL to our own TQL.',
+          'Tenzir is now <em>live</em>. Read our <a href="/blog/introducing-tenzir-security-data-pipelines">announcement blog</a> and be among the first to experience it at <a href="https://app.tenzir.com">app.tenzir.com</a>.',
           backgroundColor: '#f1f2f2',
           isCloseable: true,
         },
