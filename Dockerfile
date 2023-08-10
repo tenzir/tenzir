@@ -119,7 +119,7 @@ WORKDIR /var/lib/tenzir
 VOLUME ["/var/lib/tenzir"]
 
 # Verify that Tenzir starts up correctly.
-RUN tenzir version
+RUN tenzir 'show version'
 
 ENTRYPOINT ["tenzir"]
 CMD ["--help"]
