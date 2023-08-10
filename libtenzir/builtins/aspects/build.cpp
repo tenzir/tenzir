@@ -26,20 +26,22 @@ public:
 
   auto show(operator_control_plane&) const -> generator<table_slice> override {
     auto builder = adaptive_table_slice_builder{};
-    auto row = builder.push_row();
-    auto err = row.push_field("type").add(tenzir::version::build::type);
-    TENZIR_ASSERT_CHEAP(not err);
-    err = row.push_field("tree_hash").add(tenzir::version::build::tree_hash);
-    TENZIR_ASSERT_CHEAP(not err);
-    err
-      = row.push_field("assertions").add(tenzir::version::build::has_assertions);
-    TENZIR_ASSERT_CHEAP(not err);
-    auto sanitizers = row.push_field("sanitizers").push_record();
-    err = sanitizers.push_field("address").add(
-      tenzir::version::build::has_address_sanitizer);
-    TENZIR_ASSERT_CHEAP(not err);
-    err = sanitizers.push_field("undefined_behavior")
-            .add(tenzir::version::build::has_undefined_behavior_sanitizer);
+    {
+      auto row = builder.push_row();
+      auto err = row.push_field("type").add(tenzir::version::build::type);
+      TENZIR_ASSERT_CHEAP(not err);
+      err = row.push_field("tree_hash").add(tenzir::version::build::tree_hash);
+      TENZIR_ASSERT_CHEAP(not err);
+      err = row.push_field("assertions")
+              .add(tenzir::version::build::has_assertions);
+      TENZIR_ASSERT_CHEAP(not err);
+      auto sanitizers = row.push_field("sanitizers").push_record();
+      err = sanitizers.push_field("address").add(
+        tenzir::version::build::has_address_sanitizer);
+      TENZIR_ASSERT_CHEAP(not err);
+      err = sanitizers.push_field("undefined_behavior")
+              .add(tenzir::version::build::has_undefined_behavior_sanitizer);
+    }
     auto result = builder.finish();
     auto renamed_schema
       = type{"tenzir.build", caf::get<record_type>(result.schema())};
