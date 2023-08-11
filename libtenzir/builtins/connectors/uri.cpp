@@ -142,43 +142,44 @@ public:
 
     const auto parse_result = uri.Parse(args_.uri.inner);
     if (not parse_result.ok()) {
-      diagnostic::error("failed to parse URI `{}`: {}", args_.uri.inner,
-                        parse_result.ToString())
-        .primary(args_.uri.source)
-        .emit(ctrl.diagnostics());
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to parse URI `{}`: {}",
+                                         args_.uri.inner,
+                                         parse_result.ToString()));
     }
     auto fs = arrow::fs::FileSystemFromUri(uri.ToString());
     if (not fs.ok()) {
-      diagnostic::error("failed to create filesystem from URI "
-                        "`{}`: {}",
-                        args_.uri.inner, fs.status().ToString())
-        .primary(args_.uri.source)
-        .emit(ctrl.diagnostics());
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to create filesystem from URI "
+                                         "`{}`: {}",
+                                         args_.uri.inner,
+                                         fs.status().ToString()));
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(uri.path());
     if (not fs.ok()) {
-      diagnostic::error("failed to get file info from URI "
-                        "`{}`: {}",
-                        args_.uri.inner, file_info.status().ToString())
-        .primary(args_.uri.source)
-        .emit(ctrl.diagnostics());
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to get file info from URI "
+                                         "`{}`: {}",
+                                         args_.uri.inner,
+                                         file_info.status().ToString()));
     }
     auto output_stream = fs.ValueUnsafe()->OpenOutputStream(file_info->path());
     if (not output_stream.ok()) {
-      diagnostic::error("failed to open output stream for URI "
-                        "`{}`: {}",
-                        args_.uri.inner, output_stream.status().ToString())
-        .primary(args_.uri.source)
-        .emit(ctrl.diagnostics());
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to open output stream for URI "
+                                         "`{}`: {}",
+                                         args_.uri.inner,
+                                         output_stream.status().ToString()));
     }
     auto guard = caf::detail::make_scope_guard([this, &ctrl, output_stream]() {
       auto status = output_stream.ValueUnsafe()->Close();
       if (not output_stream.ok()) {
-        diagnostic::error("failed to close output stream for URI "
-                          "`{}`: {}",
-                          args_.uri.inner, status.ToString())
-          .primary(args_.uri.source)
-          .emit(ctrl.diagnostics());
+        ctrl.abort(
+          caf::make_error(ec::filesystem_error,
+                          fmt::format("failed to close output stream for "
+                                      "URI "
+                                      "`{}`: {}",
+                                      args_.uri.inner, status.ToString())));
       }
     });
     return [this, &ctrl, output_stream,
@@ -190,11 +191,11 @@ public:
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
-        diagnostic::error("failed to write to output stream for URI "
-                          "`{}`: {}",
-                          args_.uri.inner, status.ToString())
-          .primary(args_.uri.source)
-          .emit(ctrl.diagnostics());
+        ctrl.abort(caf::make_error(
+          ec::filesystem_error,
+          fmt::format("failed to write to output stream for URI "
+                      "`{}`: {}",
+                      args_.uri.inner, status.ToString())));
         return;
       }
     };
