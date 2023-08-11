@@ -31,6 +31,7 @@ Available aspects:
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).
 - `partitions`: shows all table partitions of a remote node.
+- `pipelines`: shows all managed pipelines of a remote node.
 - `plugins`: shows all loaded plugins.
 - `types`: shows all known types at a remote node.
 - `version`: shows the Tenzir version.
