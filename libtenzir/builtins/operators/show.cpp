@@ -33,7 +33,8 @@ class show_operator final : public crtp_operator<show_operator> {
 public:
   show_operator() = default;
 
-  explicit show_operator(operator_args args) : args_{std::move(args)} {
+  explicit show_operator(std::string aspect_plugin)
+    : aspect_plugin_{std::move(aspect_plugin)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
@@ -61,17 +62,17 @@ public:
   }
 
   friend auto inspect(auto& f, show_operator& x) -> bool {
-    return f.apply(x.args_);
+    return f.apply(x.aspect_plugin_);
   }
 
 private:
   auto get() const -> const aspect_plugin* {
-    const auto* aspect = plugins::find<aspect_plugin>(args_.aspect.inner);
-    TENZIR_ASSERT_CHEAP(aspect != nullptr);
-    return aspect;
+    const auto* plugin = plugins::find<aspect_plugin>(aspect_plugin_);
+    TENZIR_ASSERT_CHEAP(plugin != nullptr);
+    return plugin;
   }
 
-  operator_args args_;
+  std::string aspect_plugin_;
 };
 
 class plugin final : public virtual operator_plugin<show_operator> {
@@ -86,16 +87,19 @@ public:
     operator_args args;
     parser.add(args.aspect, "<aspect>");
     parser.parse(p);
-    auto available = std::set<std::string>{};
+    auto available = std::map<std::string, std::string>{};
     for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
-      available.insert(aspect->name());
+      available.emplace(aspect->aspect_name(), aspect->name());
     if (not available.contains(args.aspect.inner)) {
+      auto aspects = std::vector<std::string>{};
+      for (const auto& [aspect_name, plugin_name] : available)
+        aspects.push_back(aspect_name);
       diagnostic::error("aspect `{}` could not be found", args.aspect.inner)
         .primary(args.aspect.source)
-        .hint("must be one of {}", fmt::join(available, ", "))
+        .hint("must be one of {}", fmt::join(aspects, ", "))
         .throw_();
     }
-    return std::make_unique<show_operator>(std::move(args));
+    return std::make_unique<show_operator>(available[args.aspect.inner]);
   }
 };
 
