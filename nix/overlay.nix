@@ -170,7 +170,7 @@ in {
       ../CMakeLists.txt
       ../LICENSE
       ../README.md
-      ../Tenzir.spdx
+      ../tenzir.spdx.json
       ../VERSIONING.md
       ../tenzir.yaml.example
       ../version.json
