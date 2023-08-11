@@ -722,6 +722,23 @@ private:
     -> std::unique_ptr<plugin_printer> final;
 };
 
+// -- aspect plugin ------------------------------------------------------------
+
+class aspect_plugin : public virtual plugin {
+public:
+  /// The name of the aspect that enables `show aspect`.
+  /// @note defaults to `plugin::name()`.
+  virtual auto aspect_name() const -> std::string;
+
+  /// The location of the show operator for this aspect.
+  virtual auto location() const -> operator_location = 0;
+
+  /// Produces the data to show.
+  virtual auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice>
+    = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
@@ -829,6 +846,32 @@ private:
 };
 
 } // namespace tenzir
+
+namespace fmt {
+
+template <>
+struct formatter<enum tenzir::plugin_ptr::type> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(enum tenzir::plugin_ptr::type value, FormatContext& ctx) const {
+    auto out = ctx.out();
+    switch (value) {
+      case tenzir::plugin_ptr::type::builtin:
+        return fmt::format_to(ctx.out(), "builtin");
+      case tenzir::plugin_ptr::type::static_:
+        return fmt::format_to(ctx.out(), "static");
+      case tenzir::plugin_ptr::type::dynamic:
+        return fmt::format_to(ctx.out(), "dynamic");
+    }
+    return out;
+  }
+};
+
+} // namespace fmt
 
 // -- template function definitions -------------------------------------------
 

@@ -1,8 +1,8 @@
-error: unexpected positional argument
- --> <input>:1:9
+error: loader `a/b/c.json` could not be found
+ --> <input>:1:6
   |
-1 | version 42
-  |         ^^ 
+1 | from a/b/c.json read json
+  |      ^^^^^^^^^^ 
   |
-  = usage: version [--dev]
-  = docs: https://docs.tenzir.com/next/operators/sources/version
+  = hint: must be one of -, file, stdin
+  = docs: https://docs.tenzir.com/next/connectors

@@ -224,36 +224,11 @@ After initialization with the configuration options, the plugin is fully
 operational and Tenzir will call its functions at the plugin-specific
 customization points.
 
-### Show plugins
+### List plugins
 
-You can get a list of all plugins and their respective version by running
-`tenzir version`:
+You can get the list of available plugins using the
+[`show`](./operators/sources/show.md) operator:
 
-```json
-{
-  "version": "v4.0.0-rc6-0-gf193b51f1f",
-  "plugins": [
-    {
-      "name": "kafka",
-      "version": "bundled"
-    },
-    {
-      "name": "platform",
-      "version": "bundled"
-    },
-    {
-      "name": "web",
-      "version": "bundled"
-    }
-  ]
-}
+```bash
+tenzir 'show plugins'
 ```
-
-The version of a plugin consists of three optional parts, separated by dashes:
-
-1. The CMake project version of the plugin
-2. The Git revision of the last commit that touched the plugin
-3. A `dirty` suffix for uncommited changes to the plugin
-
-Plugins created with the recommended scaffolding use the above version number
-format.
