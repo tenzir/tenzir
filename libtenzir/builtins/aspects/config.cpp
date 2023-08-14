@@ -23,6 +23,9 @@ public:
     // We remove the CAF config section as it's prefilled with some config
     // settings that are irrelevant to users.
     config_.erase("caf");
+    // TODO: The config does not yet include the plugin configuration, which is
+    // a deficit in the `plugin::initialize` API. We should consider adding this
+    // information as well.
     return {};
   }
 
