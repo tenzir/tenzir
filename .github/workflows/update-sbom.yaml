@@ -1,0 +1,40 @@
+name: Update SBOM
+on:
+  workflow_dispatch
+
+permissions:
+  id-token: read
+  pull-requests: write
+
+jobs:
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Install Nix
+        uses: cachix/install-nix-action@v22
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v12
+        with:
+          name: tenzir
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: crazy-max/ghaction-import-gpg@v5
+        with:
+          gpg_private_key: ${{ secrets.TENZIR_BOT_GPG_SIGNING_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+      - name: Regenerate SBOM
+        run:
+          nix run .#generate-sbom
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+          committer: tenzir-bot <engineering@tenzir.com>
+          commit-message: update SBOM
+          title: Update SBOM
