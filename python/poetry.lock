@@ -195,13 +195,13 @@ cron = ["capturer (>=2.4)"]
 
 [[package]]
 name = "dynaconf"
-version = "3.2.0"
+version = "3.2.1"
 description = "The dynamic configurator for your Python Project"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "dynaconf-3.2.0-py2.py3-none-any.whl", hash = "sha256:791d8029c74548d57b0266aabd6557ebfff6540bffd7f58ba700f577c047c0f5"},
-    {file = "dynaconf-3.2.0.tar.gz", hash = "sha256:a28442d12860a44fad5fa1d9db918c710cbfc971e8b7694697429fb8f1c3c620"},
+    {file = "dynaconf-3.2.1-py2.py3-none-any.whl", hash = "sha256:a4af12524f1fc527c6c0cdd4bb38cf83992d5155ad516baa98d9d01b7a731d09"},
+    {file = "dynaconf-3.2.1.tar.gz", hash = "sha256:00dbd7541ca0f99bcb207cfc8aee0ac8f7d6b32bbb372e5b2865f0cb829b06c3"},
 ]
 
 [package.extras]
