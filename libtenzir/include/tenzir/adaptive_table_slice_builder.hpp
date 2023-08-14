@@ -51,6 +51,11 @@ public:
   /// returned object must be destroyed beforore calling this method again.
   auto push_row() -> row_guard;
 
+  /// @brief Inserts a row, with fields matching the given record.
+  /// @return An error if adding failed.
+  /// @note Automatically cancels the row on failure.
+  auto add_row(view<record> row) -> caf::error;
+
   /// @brief Combines all the pushed rows into a table slice. This can be safely
   /// called multipled times only when constructed with a fixed schema (no
   /// fields discovery)

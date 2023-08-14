@@ -25,6 +25,7 @@ Describes the part of Tenzir to look at.
 Available aspects:
 
 - `build`: shows compile-time build information.
+- `config`: shows all current configuration options.
 - `connectors`: shows all available [connectors](../../connectors.md).
 - `dependencies`: shows information about build-time dependencies.
 - `fields`: shows all fields of existing tables at a remote node.
