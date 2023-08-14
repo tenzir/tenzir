@@ -1,3 +1,7 @@
+---
+sidebar_class_name: events-to-events
+---
+
 # rename
 
 Renames fields and types.

@@ -1,3 +1,7 @@
+---
+sidebar_class_name: bytes-to-events
+---
+
 # read
 
 The `read` operator converts raw bytes into events.
