@@ -43,12 +43,20 @@ apt-get -y --no-install-recommends install \
     software-properties-common \
     wget
 
+codename="$(lsb_release --codename --short)"
+
 # Apache Arrow
-wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb"
-apt-get -y --no-install-recommends install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-${codename}.deb"
+apt-get -y --no-install-recommends install ./"apache-arrow-apt-source-latest-${codename}.deb"
 apt-get update
 apt-get -y --no-install-recommends install libarrow-dev=13.0.0-1 libprotobuf-dev libparquet-dev=13.0.0-1
-rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+rm ./"apache-arrow-apt-source-latest-${codename}.deb"
+
+# Fluent-bit
+wget -O - 'https://packages.fluentbit.io/fluentbit.key' | gpg --dearmor | tee /usr/share/keyrings/fluentbit.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/fluentbit.gpg] https://packages.fluentbit.io/debian/${codename} ${codename} main" | tee /etc/apt/sources.list.d/fluentbit.list
+apt-get update
+apt-get -y install fluent-bit
 
 # Node 18.x and Yarn
 NODE_MAJOR=18
