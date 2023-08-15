@@ -36,5 +36,5 @@ jobs:
         with:
           token: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
           committer: tenzir-bot <engineering@tenzir.com>
-          commit-message: update SBOM
+          commit-message: Update SBOM
           title: Update SBOM
