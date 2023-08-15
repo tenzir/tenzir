@@ -24,6 +24,7 @@
 #include <caf/error.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/exit_reason.hpp>
+#include <caf/policy/select_all.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
@@ -230,6 +231,40 @@ auto pipeline_executor_state::start() -> caf::result<void> {
   return start_rp;
 }
 
+auto pipeline_executor_state::pause() -> caf::result<void> {
+  if (start_rp.pending()) {
+    return caf::make_error(ec::logic_error,
+                           "cannot pause a pipeline before it was started");
+  }
+  auto rp = self->make_response_promise<void>();
+  self
+    ->fan_out_request<caf::policy::select_all>(exec_nodes, caf::infinite,
+                                               atom::pause_v)
+    .then(
+      [rp]() mutable {
+        rp.deliver();
+      },
+      [rp](caf::error& err) mutable {
+        rp.deliver(std::move(err));
+      });
+  return rp;
+}
+
+auto pipeline_executor_state::resume() -> caf::result<void> {
+  auto rp = self->make_response_promise<void>();
+  self
+    ->fan_out_request<caf::policy::select_all>(exec_nodes, caf::infinite,
+                                               atom::resume_v)
+    .then(
+      [rp]() mutable {
+        rp.deliver();
+      },
+      [rp](caf::error& err) mutable {
+        rp.deliver(std::move(err));
+      });
+  return rp;
+}
+
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
@@ -281,6 +316,12 @@ auto pipeline_executor(
   return {
     [self](atom::start) -> caf::result<void> {
       return self->state.start();
+    },
+    [self](atom::pause) -> caf::result<void> {
+      return self->state.pause();
+    },
+    [self](atom::resume) -> caf::result<void> {
+      return self->state.resume();
     },
   };
 }
