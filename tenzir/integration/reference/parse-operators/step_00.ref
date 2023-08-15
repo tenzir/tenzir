@@ -1,3 +1,3 @@
-show operator_args(located("version", location(5, 12)))
+show "version"
 -----
-located("show", operator_args(located("version", location(5, 12))), location(0, 12))
+located("show", "version", location(0, 12))
