@@ -17,6 +17,7 @@
     arrow-cpp,
     fast_float,
     flatbuffers,
+    fluent-bit,
     spdlog,
     libyamlcpp,
     simdjson,
@@ -90,6 +91,7 @@
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           fast_float
+          fluent-bit
           libpcap
           libunwind
           libyamlcpp

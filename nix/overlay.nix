@@ -128,6 +128,26 @@ in {
       "-DRDKAFKA_BUILD_TESTS=OFF"
     ];
   });
+  mkStub = name: prev.writeShellScriptBin name ''
+    echo "stub-${name}: $@" >&2
+  '';
+  fluent-bit =
+    if !isStatic
+    then prev.fluent-bit
+    else prev.fluent-bit.overrideAttrs (orig: {
+      outputs = ["out"];
+      nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")];
+      # Neither systemd nor postgresql have a working static build.
+      buildInputs = [ final.musl-fts final.openssl final.libyaml ];
+      propagatedBuildInputs = [ final.musl-fts final.openssl final.libyaml ];
+      cmakeFlags = [
+        "-DFLB_BINARY=OFF"
+        "-DFLB_SHARED_LIB=OFF"
+        "-DFLB_METRICS=ON"
+        "-DFLB_HTTP_SERVER=ON"
+        "-DFLB_LUAJIT=OFF"
+      ];
+    });
   restinio = final.callPackage ./restinio {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
