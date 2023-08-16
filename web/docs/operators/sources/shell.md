@@ -13,8 +13,9 @@ shell <command>
 Refer to [`shell` as transformation](../transformations/shell.md) for usage
 instructions.
 
-The difference to the transformation is that the source operator ignores the
-command's stdin.
+The difference to the transformation is that the source operator receives the
+standard input from the terminal where `tenzir` is executed from. If the
+pipeline was not spawned by a terminal, no standard input is provided.
 
 ## Examples
 

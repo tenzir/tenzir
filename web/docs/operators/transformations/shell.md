@@ -10,15 +10,11 @@ shell <command>
 
 ## Description
 
-The `shell` operator forks the process and executes the provided command.
-Thereafter, it connects the child's stdin to the operator's input, and the
-child's stdout to the operator's output. When `shell` receive new bytes as
-input, it writes them to the child's standard input. In parallel, `shell`
-attempts to read from the child's stdout and copies new bytes into the operator
-output.
+The `shell` operator executes the provided command by spawning a new process.
+The input of the operator is forwarded to the child's standard input. Similarly,
+the child's standard output is forwarded to the output of the operator.
 
-You can also use [`shell` as source operator](../sources/shell.md) if you want
-to ignore stdin.
+You can also use [`shell` as source operator](../sources/shell.md).
 
 ### `<command>`
 
@@ -26,7 +22,7 @@ The command to execute and hook into the pipeline processing.
 
 The value of `command` is a single string. If you would like to pass a command
 line as you would on the shell, use single or double quotes for escaping, e.g.,
-`shell 'jq -C'` or `shell "jq -C"`.
+`shell 'jq -C'` or `shell "jq -C"`. The command is interpreted by `/bin/sh -c`.
 
 ## Examples
 
