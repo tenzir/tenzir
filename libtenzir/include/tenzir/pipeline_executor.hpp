@@ -39,6 +39,8 @@ struct pipeline_executor_state {
   bool has_terminal = {};
 
   auto start() -> caf::result<void>;
+  auto pause() -> caf::result<void>;
+  auto resume() -> caf::result<void>;
 
   void start_nodes_if_all_spawned();
 
