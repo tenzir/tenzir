@@ -52,11 +52,23 @@ auto type_type() -> type {
   };
 }
 
+/// A type that describes a table in the catalog.
+auto table_type() -> type {
+  return type{
+    "tenzir.table",
+    record_type{
+      {"events", uint64_type{}},
+      {"min_import_time", time_type{}},
+      {"max_import_time", time_type{}},
+      {"schema", type_type()},
+    },
+  };
+}
+
 // TODO: harmonize this with type::to_definition. The goal was to create a
 // single fixed schema, but it's still clunky due to nested records.
 /// Adds one type definition per row to a builder.
-auto add_type(auto& builder, const type& t) -> caf::error {
-  auto row = builder.push_row();
+auto add_type(auto& row, const type& t) -> caf::error {
   auto err = row.push_field("name").add(t.name());
   TENZIR_ASSERT_CHEAP(!err);
   auto layout = row.push_field("layout").push_record();
@@ -116,7 +128,93 @@ auto add_type(auto& builder, const type& t) -> caf::error {
   }
   return {};
 }
-class plugin final : public virtual aspect_plugin {
+
+class tables_plugin final : public virtual aspect_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tables";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::remote;
+  }
+
+  auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice> override {
+    // TODO: Some of the the requests this operator makes are blocking, so
+    // we have to create a scoped actor here; once the operator API uses
+    // async we can offer a better mechanism here.
+    auto blocking_self = caf::scoped_actor(ctrl.self().system());
+    auto components
+      = get_node_components<catalog_actor>(blocking_self, ctrl.node());
+    if (!components) {
+      ctrl.abort(std::move(components.error()));
+      co_return;
+    }
+    co_yield {};
+    auto [catalog] = std::move(*components);
+    auto synopses = std::vector<partition_synopsis_pair>{};
+    auto error = caf::error{};
+    ctrl.self()
+      .request(catalog, caf::infinite, atom::get_v)
+      .await(
+        [&synopses](std::vector<partition_synopsis_pair>& result) {
+          synopses = std::move(result);
+        },
+        [&error](caf::error err) {
+          error = std::move(err);
+        });
+    co_yield {};
+    if (error) {
+      ctrl.abort(std::move(error));
+      co_return;
+    }
+    struct table_meta {
+      uint64_t events = 0;
+      time min_import_time = time::max();
+      time max_import_time = time::min();
+      type schema;
+    };
+    std::unordered_map<type, table_meta> acc = {};
+    for (const auto& syn : synopses) {
+      auto& s = acc[syn.synopsis->schema];
+      s.min_import_time
+        = std::min(s.min_import_time, syn.synopsis->min_import_time);
+      s.max_import_time
+        = std::max(s.max_import_time, syn.synopsis->max_import_time);
+      s.events += syn.synopsis->events;
+    }
+    auto builder = adaptive_table_slice_builder{table_type()};
+    for (const auto& [schema, meta] : acc) {
+      auto row = builder.push_row();
+      if (auto err = row.push_field("events").add(meta.events)) {
+        diagnostic::error("failed to add table event count to builder")
+          .emit(ctrl.diagnostics());
+      }
+      if (auto err
+          = row.push_field("min_import_time").add(meta.min_import_time)) {
+        diagnostic::error("failed to add table min_import_time to builder")
+          .emit(ctrl.diagnostics());
+      }
+      if (auto err
+          = row.push_field("max_import_time").add(meta.max_import_time)) {
+        diagnostic::error("failed to add table max_import_time to builder")
+          .emit(ctrl.diagnostics());
+      }
+      auto sch = row.push_field("schema").push_record();
+      if (auto err = add_type(sch, schema)) {
+        diagnostic::error("failed to add type to builder")
+          .note("full type: {}", fmt::to_string(schema))
+          .emit(ctrl.diagnostics());
+      }
+    }
+    if (builder.rows() != 0) {
+      co_yield builder.finish();
+    }
+  }
+};
+
+class types_plugin final : public virtual aspect_plugin {
 public:
   auto name() const -> std::string override {
     return "types";
@@ -158,7 +256,8 @@ public:
     }
     auto builder = adaptive_table_slice_builder{type_type()};
     for (const auto& type : types) {
-      if (auto err = add_type(builder, type))
+      auto row = builder.push_row();
+      if (auto err = add_type(row, type))
         diagnostic::error("failed to add type to builder")
           .note("full type: {}", fmt::to_string(type))
           .emit(ctrl.diagnostics());
@@ -171,4 +270,5 @@ public:
 
 } // namespace tenzir::plugins::types
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::types::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::types::tables_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::types::types_plugin)

@@ -34,6 +34,7 @@ Available aspects:
 - `partitions`: shows all table partitions of a remote node.
 - `pipelines`: shows all managed pipelines of a remote node.
 - `plugins`: shows all loaded plugins.
+- `tables`: shows schema and metadata of all tables at a remote catalog.
 - `types`: shows all known types at a remote node.
 - `version`: shows the Tenzir version.
 
