@@ -36,18 +36,67 @@ class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
 public:
   fluent_bit_operator() = default;
 
-  explicit fluent_bit_operator(operator_args args)
-    : args_{std::move(args)}, ctx_{flb_create()} {
-    TENZIR_ASSERT(ctx_ != nullptr);
-  }
-
-  ~fluent_bit_operator() final {
-    flb_destroy(ctx_);
+  explicit fluent_bit_operator(operator_args args) : args_{std::move(args)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    // TODO: implement
+    auto ctx = flb_create();
+    auto destroyer = caf::detail::make_scope_guard([ctx] {
+      flb_destroy(ctx);
+    });
+    if (ctx == nullptr)
+      diagnostic::error("failed to create fluent bit context")
+        .hint("flb_create returned nullptr")
+        .emit(ctrl.diagnostics());
+    // Set services properties.
+    auto result = flb_service_set(ctx, "flush", "1", "grace", "1", nullptr);
+    if (result != 0)
+      diagnostic::error("failed to set flush interval")
+        .hint("flb_service_set returned {}", result)
+        .emit(ctrl.diagnostics());
+    // FIXME: debugging only
+    // Enable input plugin.
+    auto in_ffd = flb_input(ctx, "random", nullptr);
+    if (in_ffd < 0)
+      diagnostic::error("failed to create input plugin descriptor")
+        .hint("flb_input returned {}", in_ffd)
+        .emit(ctrl.diagnostics());
+    // Set input properties.
+    result = flb_input_set(ctx, in_ffd, "tag", "tenzir", nullptr);
+    if (result != 0)
+      diagnostic::error("failed to set input properties")
+        .hint("flb_input_set returned {}", result)
+        .emit(ctrl.diagnostics());
+    // FIXME: debugging only
+    // Enable output plugin.
+    auto out_ffd = flb_output(ctx, "stdout", nullptr);
+    if (out_ffd < 0)
+      diagnostic::error("failed to create output plugin descriptor")
+        .hint("flb_output returned {}", in_ffd)
+        .emit(ctrl.diagnostics());
+    result = flb_output_set(ctx, out_ffd, "match", "tenzir", nullptr);
+    if (result != 0)
+      diagnostic::error("failed to set input properties")
+        .hint("flb_output_set returned {}", result)
+        .emit(ctrl.diagnostics());
+    // Start the engine.
+    result = flb_start(ctx);
+    if (result != 0)
+      diagnostic::error("failed to start fluent bit engine")
+        .hint("flb_start returned {}", result)
+        .emit(ctrl.diagnostics());
+    // Stop the engine.
+    auto stopper = caf::detail::make_scope_guard([ctx] {
+      auto result = flb_stop(ctx);
+      if (result != 0)
+        TENZIR_WARN("flb_stop returned {}", result);
+    });
+    // FIXME: keep us alive
+    while (true) {
+      co_yield {};
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
   }
 
   auto name() const -> std::string override {
@@ -75,7 +124,6 @@ public:
 
 private:
   operator_args args_;
-  flb_ctx_t* ctx_;
 };
 
 class plugin final : public operator_plugin<fluent_bit_operator> {
