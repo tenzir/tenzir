@@ -891,8 +891,8 @@ tests:
     steps:
       - command: exec 'read zeek-tsv | head 1 | write json -c | shell rev'
         input: data/zeek/conn.log.gz
-        # TODO: Reenable this test once the non-deterministic Shell operator echo behavior is fixed.
-        # - command: exec 'shell "echo foo"'
+      - command: exec 'shell "echo foo"'
+      - command: exec 'shell "{ echo \"#\"; seq 1 2 10; }" | read csv | write json -c'
 
   Top and Rare Operators:
     fixture: ServerTester
