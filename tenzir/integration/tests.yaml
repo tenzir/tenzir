@@ -736,6 +736,21 @@ tests:
     steps:
       - command: exec 'from file @./data/zeek/zeek.json read zeek-json | write json'
 
+  Read JSON from tshark output:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/pcap/tshark.json'
+
+  Read JSON with new field in record list:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/record-list-new-field.json'
+
+  Read JSON with differents fields in one record list:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/record-list-different-fields.json'
+
   Schema ID Extractor:
     tags: [pipelines, cef]
     steps:

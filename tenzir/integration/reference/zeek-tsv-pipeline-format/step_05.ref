@@ -2,7 +2,7 @@
 #set_separator	,
 #empty_field	(empty)
 #unset_field	-
-#path	fec3ebf4cec59e5e
+#path	tenzir.json
 #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	duration	version	community	get_requests	get_bulk_requests	get_responses	set_requests
 #types	time	string	addr	int	addr	int	double	string	string	int	int	int	int
 2011-08-12T13:37:34.363600	CPgWI34UJkULNbhbc4	147.32.84.79	38902	147.32.84.165	161	3.008566	1	public	4	0	0	0

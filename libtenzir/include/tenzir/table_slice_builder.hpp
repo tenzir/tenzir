@@ -133,6 +133,10 @@ using table_slice_builder_ptr = std::shared_ptr<table_slice_builder>;
 // -- column builder helpers --------------------------------------------------
 
 arrow::Status
+append_builder(const null_type&, type_to_arrow_builder_t<null_type>& builder,
+               const view<type_to_data_t<null_type>>& view) noexcept;
+
+arrow::Status
 append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,
                const view<type_to_data_t<bool_type>>& view) noexcept;
 

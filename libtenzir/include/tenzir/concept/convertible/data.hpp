@@ -146,10 +146,8 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
 
 template <class T>
 concept has_schema = requires {
-                       {
-                         T::schema()
-                         } noexcept -> concepts::sameish<record_type>;
-                     };
+  { T::schema() } noexcept -> concepts::sameish<record_type>;
+};
 
 // Overload for records.
 caf::error convert(const record& src, concepts::inspectable auto& dst,
@@ -518,7 +516,7 @@ public:
                                                             "field {} because "
                                                             "it has no type",
                                                             field));
-    return field.type ? caf::visit(f, value, field.type) : caf::none;
+    return caf::visit(f, value, field.type);
   }
 
   template <class T>

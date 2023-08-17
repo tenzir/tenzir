@@ -16,6 +16,7 @@
 #include "tenzir/generator.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/offset.hpp"
+#include "tenzir/tag.hpp"
 
 #include <arrow/builder.h>
 #include <arrow/extension_type.h>
@@ -49,10 +50,16 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<bool_type, int64_type, uint64_type, double_type,
-                           duration_type, time_type, string_type, ip_type,
-                           subnet_type, enumeration_type, list_type, map_type,
-                           record_type>;
+  = caf::detail::type_list<null_type, bool_type, int64_type, uint64_type,
+                           double_type, duration_type, time_type, string_type,
+                           ip_type, subnet_type, enumeration_type, list_type,
+                           map_type, record_type>;
+
+///
+using type_kind = caf::detail::tl_apply_t<concrete_types, tag_variant>;
+
+/// Returns a the name of type kind.
+auto to_string(type_kind x) -> std::string_view;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -62,7 +69,7 @@ concept concrete_type = requires(const T& value) {
   // The type must not be inherited from to avoid slicing issues.
   requires std::is_final_v<T>;
   // The type must offer a way to get a unique type index.
-  {T::type_index};
+  { T::type_index };
   // Values of the type must offer an `as_bytes` overload.
   { as_bytes(value) } -> std::same_as<std::span<const std::byte>>;
   // Values of the type must be able to construct the corresponding data type.
@@ -134,7 +141,7 @@ public:
   using arrow_type = arrow::DataType;
 
   /// Default-constructs a type, which is semantically equivalent to the
-  /// none type.
+  /// `null` type. TODO: Other docs?
   type() noexcept;
 
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.
@@ -243,7 +250,7 @@ public:
   [[nodiscard]] const fbs::Type&
   table(enum transparent transparent) const noexcept;
 
-  /// Returns whether the type contains a conrete type other than the none type.
+  /// Returns whether the type contains a conrete type other than the null type.
   [[nodiscard]] explicit operator bool() const noexcept;
 
   /// Compares the underlying representation of two types for equality.
@@ -255,6 +262,9 @@ public:
 
   /// Returns the concrete type index of this type.
   [[nodiscard]] uint8_t type_index() const noexcept;
+
+  /// Returns the kind of this type.
+  auto kind() const noexcept -> type_kind;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const type& x) noexcept;
@@ -423,6 +433,27 @@ std::strong_ordering operator<=>(const T& lhs, const U& rhs) noexcept {
 /// @relates type
 caf::error
 replace_if_congruent(std::initializer_list<type*> xs, const module& with);
+
+// -- null_type ---------------------------------------------------------------
+
+/// A monostate value that is always `null`.
+/// @relates type
+class null_type final {
+public:
+  static constexpr uint8_t type_index = 0;
+
+  using arrow_type = arrow::NullType;
+
+  friend auto as_bytes(const null_type&) noexcept -> std::span<const std::byte>;
+
+  [[nodiscard]] static auto construct() noexcept -> caf::none_t;
+
+  [[nodiscard]] static auto to_arrow_type() noexcept
+    -> std::shared_ptr<arrow_type>;
+
+  [[nodiscard]] static auto make_arrow_builder(arrow::MemoryPool* pool) noexcept
+    -> std::shared_ptr<typename arrow::TypeTraits<arrow_type>::BuilderType>;
+};
 
 // -- bool_type ---------------------------------------------------------------
 
@@ -1376,6 +1407,16 @@ struct type_to_data
 template <type_or_concrete_type T>
 using type_to_data_t = typename type_to_data<T>::type;
 
+template <class T>
+struct data_to_type
+  : caf::detail::tl_at<
+      concrete_types,
+      caf::detail::tl_index_of<
+        caf::detail::tl_map_t<concrete_types, type_to_data>, T>::value> {};
+
+template <class T>
+using data_to_type_t = typename data_to_type<T>::type;
+
 /// Maps type to corresponding Arrow DataType.
 /// @related type_from_arrow
 template <type_or_concrete_type T>
@@ -1557,21 +1598,20 @@ struct sum_type_access<tenzir::type> final {
   template <class Result, class Visitor, class... Args>
   static auto apply(const tenzir::type& x, Visitor&& v, Args&&... xs)
     -> Result {
-    TENZIR_ASSERT(x, "cannot visit a none type");
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
     static constexpr auto table =
       []<tenzir::concrete_type... Ts, uint8_t... Indices>(
         detail::type_list<Ts...>,
         std::integer_sequence<uint8_t, Indices...>) noexcept {
-        return std::array{+[](const tenzir::type& x, Visitor&& v,
-                              Args&&... xs) -> Result {
-          auto xs_as_tuple = std::forward_as_tuple(xs...);
-          auto indices = detail::get_indices(xs_as_tuple);
-          return detail::apply_args_suffxied(
-            std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
-            get(x, sum_type_token<Ts, Indices>{}));
-        }...};
+        return std::array{
+          +[](const tenzir::type& x, Visitor&& v, Args&&... xs) -> Result {
+            auto xs_as_tuple = std::forward_as_tuple(xs...);
+            auto indices = detail::get_indices(xs_as_tuple);
+            return detail::apply_args_suffxied(
+              std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
+              get(x, sum_type_token<Ts, Indices>{}));
+          }...};
       }(types{},
         std::make_integer_sequence<uint8_t, detail::tl_size<types>::value>());
     const auto dispatch = table[index_from_type(x)];
@@ -1874,19 +1914,20 @@ struct sum_type_access<arrow::ArrayBuilder> final {
     TENZIR_ASSERT(x.type());
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
-    static constexpr auto table = []<class... Ts, int... Indices>(
-      detail::type_list<Ts...>,
-      std::integer_sequence<int, Indices...>) noexcept {
-      return std::array{
-        +[](const arrow::ArrayBuilder& x, Visitor&& v, Args&&... xs) -> Result {
+    static constexpr auto table =
+      []<class... Ts, int... Indices>(
+        detail::type_list<Ts...>,
+        std::integer_sequence<int, Indices...>) noexcept {
+        return std::array{+[](const arrow::ArrayBuilder& x, Visitor&& v,
+                              Args&&... xs) -> Result {
           auto xs_as_tuple = std::forward_as_tuple(xs...);
           auto indices = detail::get_indices(xs_as_tuple);
           return detail::apply_args_suffxied(
             std::forward<decltype(v)>(v), std::move(indices), xs_as_tuple,
             get(x, sum_type_token<Ts, Indices>{}));
         }...};
-    }
-    (types{}, std::make_integer_sequence<int, detail::tl_size<types>::value>());
+      }(types{},
+        std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
     TENZIR_ASSERT(dispatch);
@@ -1957,8 +1998,6 @@ struct formatter<tenzir::type> {
     auto out = ctx.out();
     if (const auto& name = value.name(); !name.empty())
       out = fmt::format_to(out, "{}", name);
-    else if (!value)
-      out = fmt::format_to(out, "none");
     else
       caf::visit(
         [&](const auto& x) {
@@ -2001,6 +2040,12 @@ struct formatter<T> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
     return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const tenzir::null_type&, FormatContext& ctx) const
+    -> decltype(ctx.out()) {
+    return fmt::format_to(ctx.out(), "null");
   }
 
   template <class FormatContext>
@@ -2134,6 +2179,14 @@ struct formatter<tenzir::record_type::field_view> {
   format(const tenzir::record_type::field_view& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "{}: {}", value.name, value.type);
+  }
+};
+
+template <>
+struct formatter<tenzir::type_kind> : formatter<std::string_view> {
+  auto format(const tenzir::type_kind& x, format_context& ctx) const
+    -> format_context::iterator {
+    return formatter<std::string_view>::format(to_string(x), ctx);
   }
 };
 

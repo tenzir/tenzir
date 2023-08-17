@@ -15,6 +15,7 @@
   "request_path": [
     "SIP/2.0/UDP 127.0.0.1:5060"
   ],
+  "response_path": [],
   "user_agent": "friendly-scanner",
   "request_body_len": 0
 }
@@ -35,6 +36,7 @@
   "request_path": [
     "SIP/2.0/UDP 192.168.1.9:5060"
   ],
+  "response_path": [],
   "user_agent": "sundayddr",
   "request_body_len": 0
 }
@@ -55,6 +57,7 @@
   "request_path": [
     "SIP/2.0/UDP 192.168.1.9:5060"
   ],
+  "response_path": [],
   "user_agent": "sundayddr",
   "request_body_len": 0
 }
@@ -75,6 +78,7 @@
   "request_path": [
     "SIP/2.0/UDP 127.0.0.1:5070"
   ],
+  "response_path": [],
   "user_agent": "friendly-scanner",
   "request_body_len": 0
 }

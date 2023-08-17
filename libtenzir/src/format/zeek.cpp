@@ -94,6 +94,9 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
 
 std::string to_zeek_string(const type& t) {
   auto f = detail::overload{
+    [](const null_type&) -> std::string {
+      TENZIR_TODO();
+    },
     [](const bool_type&) -> std::string {
       return "bool";
     },

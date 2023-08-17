@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 namespace tenzir::plugins::build {
 
@@ -25,27 +25,19 @@ public:
   }
 
   auto show(operator_control_plane&) const -> generator<table_slice> override {
-    auto builder = adaptive_table_slice_builder{};
-    {
-      auto row = builder.push_row();
-      auto err = row.push_field("type").add(tenzir::version::build::type);
-      TENZIR_ASSERT_CHEAP(not err);
-      err = row.push_field("tree_hash").add(tenzir::version::build::tree_hash);
-      TENZIR_ASSERT_CHEAP(not err);
-      err = row.push_field("assertions")
-              .add(tenzir::version::build::has_assertions);
-      TENZIR_ASSERT_CHEAP(not err);
-      auto sanitizers = row.push_field("sanitizers").push_record();
-      err = sanitizers.push_field("address").add(
-        tenzir::version::build::has_address_sanitizer);
-      TENZIR_ASSERT_CHEAP(not err);
-      err = sanitizers.push_field("undefined_behavior")
-              .add(tenzir::version::build::has_undefined_behavior_sanitizer);
+    auto builder = series_builder{};
+    auto row = builder.record();
+    row.field("type").data(tenzir::version::build::type);
+    row.field("tree_hash").data(tenzir::version::build::tree_hash);
+    row.field("assertions").data(tenzir::version::build::has_assertions);
+    auto sanitizers = row.field("sanitizers").record();
+    sanitizers.field("address").data(
+      tenzir::version::build::has_address_sanitizer);
+    sanitizers.field("undefined_behavior")
+      .data(tenzir::version::build::has_undefined_behavior_sanitizer);
+    for (auto&& slice : builder.finish_as_table_slice("tenzir.build")) {
+      co_yield std::move(slice);
     }
-    auto result = builder.finish();
-    auto renamed_schema
-      = type{"tenzir.build", caf::get<record_type>(result.schema())};
-    co_yield cast(std::move(result), renamed_schema);
   }
 };
 

@@ -144,6 +144,10 @@ struct randomizer {
     // Do nothing.
   }
 
+  void operator()(const null_type&, caf::none_t&) {
+    // Do nothing.
+  }
+
   void operator()(const int64_type&, int64_t& x) {
     x = sample();
   }

@@ -1053,6 +1053,7 @@ auto make_flatten_transformation(
             },
           };
         }
+        // FIXME: This transformation changes the length.
         auto combined_offsets = combine_offsets(list_offsets);
         return {
           {

@@ -1337,11 +1337,6 @@
   "community_id": null,
   "_write_ts": null,
   "_path": "conn",
-  "_system_name": null,
-  "orig_cc": null,
-  "resp_cc": null,
-  "orig_l2_addr": null,
-  "resp_l2_addr": null,
   "id": null
 }
 {
@@ -1369,10 +1364,5 @@
   "community_id": null,
   "_write_ts": null,
   "_path": "conn",
-  "_system_name": null,
-  "orig_cc": null,
-  "resp_cc": null,
-  "orig_l2_addr": null,
-  "resp_l2_addr": null,
   "id": 0
 }

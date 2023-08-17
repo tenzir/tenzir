@@ -145,7 +145,10 @@ view<type_to_data_t<Type>>
 value_at([[maybe_unused]] const Type& type,
          const type_to_arrow_array_storage_t<Type>& arr, int64_t row) noexcept {
   TENZIR_ASSERT(!arr.IsNull(row));
-  if constexpr (detail::is_any_v<Type, bool_type, uint64_type, double_type>) {
+  if constexpr (std::is_same_v<Type, null_type>) {
+    return caf::none;
+  } else if constexpr (detail::is_any_v<Type, bool_type, uint64_type,
+                                        double_type>) {
     return arr.GetView(row);
   } else if constexpr (std::is_same_v<Type, int64_type>) {
     return int64_t{arr.GetView(row)};

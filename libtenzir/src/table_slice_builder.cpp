@@ -38,7 +38,6 @@ table_slice_builder::table_slice_builder(type schema,
     builder_{initial_buffer_size} {
   TENZIR_ASSERT(caf::holds_alternative<record_type>(schema_));
   TENZIR_ASSERT(!schema_.name().empty());
-  TENZIR_ASSERT(schema_);
   for (auto&& leaf : caf::get<record_type>(schema_).leaves())
     leaves_.push_back(std::move(leaf));
   current_leaf_ = leaves_.end();
@@ -295,6 +294,13 @@ bool table_slice_builder::add(data_view x) {
 }
 
 // -- column builder helpers --------------------------------------------------
+
+arrow::Status
+append_builder(const null_type&, type_to_arrow_builder_t<null_type>& builder,
+               const view<type_to_data_t<null_type>>& view) noexcept {
+  (void)view;
+  return builder.AppendNull();
+}
 
 arrow::Status
 append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,

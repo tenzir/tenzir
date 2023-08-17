@@ -112,7 +112,7 @@ struct unknown_schema_fixture {
 };
 
 auto make_expected_schema(const type& data_schema) -> type {
-  return type{data_schema.make_fingerprint(), data_schema};
+  return type{"tenzir.json", data_schema};
 }
 
 } // namespace
@@ -334,7 +334,7 @@ TEST(null in the input json results in the value being missing in the schema) {
     output_slices.push_back(std::move(slice));
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
-  CHECK_EQUAL(output_slices.front().rows(), 1u);
+  CHECK_EQUAL(output_slices.front().rows(), 2u);
   CHECK_EQUAL(output_slices.front().columns(), 1u);
   CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), int64_t{5u});
 }
@@ -499,7 +499,6 @@ TEST(simple slice) {
   for (auto slice : sut) {
     output_slices.push_back(std::move(slice));
   }
-
   REQUIRE_EQUAL(output_slices.size(), 1u);
   CHECK_EQUAL(output_slices.front().schema(), fixed_schema);
   CHECK_EQUAL(output_slices.front().rows(), 1u);
@@ -701,17 +700,15 @@ TEST(events with unknown schema->known schema->same unknown schema results
   auto expected_schema = tenzir::type{
     "modulee.no_schema_field",
     record_type{
-      {"d", list_type{int64_type{}}},
-      {"field_to_chose", string_type{}},
       {"g", string_type{}},
+      {"field_to_chose", string_type{}},
     },
   };
   CHECK_EQUAL(output_slices.at(2).schema(), expected_schema);
   CHECK_EQUAL(output_slices.at(2).rows(), 1u);
-  CHECK_EQUAL(output_slices.at(2).columns(), 3u);
-  CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 0u)), caf::none);
+  CHECK_EQUAL(output_slices.at(2).columns(), 2u);
+  CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 0u)), "some_str");
   CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 1u)), "no_schema_field");
-  CHECK_EQUAL(materialize(output_slices.at(2).at(0u, 2u)), "some_str");
 }
 
 FIXTURE_SCOPE_END()

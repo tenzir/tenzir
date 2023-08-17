@@ -200,5 +200,5 @@
   "_path": null,
   "x": null
 }
-warning: group-by column `_path` does not exist for schema `9940eae275d3b1fa`
-warning: aggregation column `_path` does not exist for schema `9940eae275d3b1fa`
+warning: group-by column `_path` does not exist for schema `tenzir.json`
+warning: aggregation column `_path` does not exist for schema `tenzir.json`

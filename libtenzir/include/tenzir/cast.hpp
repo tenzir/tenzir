@@ -27,6 +27,14 @@ template <class...>
 struct supported_casts;
 
 template <>
+struct supported_casts<null_type> {
+  // TODO: This is not accurate, as the null type can be cast to any other type.
+  // However, we leave this as is for now because this will probably be removed
+  // in the future.
+  using types = caf::detail::type_list<null_type>;
+};
+
+template <>
 struct supported_casts<bool_type> {
   using types = caf::detail::type_list<bool_type, uint64_type, int64_type,
                                        double_type, string_type>;
@@ -152,7 +160,7 @@ struct cast_helper<FromType, ToType> {
   }
 
   static auto
-  cast(const type& from_type,
+  cast(const FromType& from_type,
        const std::shared_ptr<type_to_arrow_array_t<type>>& from_array,
        const ToType& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
@@ -181,9 +189,9 @@ struct cast_helper<FromType, ToType> {
   }
 
   template <class InputType>
-    requires(std::same_as<std::remove_cvref_t<InputType>, data>
-             or std::same_as<std::remove_cvref_t<InputType>, data_view>)
-  static auto cast_value(const type& from_type, const InputType& data,
+    requires(std::same_as<type_to_data_t<FromType>, InputType>
+             || std::same_as<view<type_to_data_t<FromType>>, InputType>)
+  static auto cast_value(const FromType& from_type, const InputType& data,
                          const ToType& to_type) noexcept {
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
@@ -217,6 +225,17 @@ private:
   template <concrete_type To>
   static auto get_underlying_data(const data_view& d) {
     return caf::get<view<type_to_data_t<To>>>(d);
+  }
+
+  template <concrete_type To>
+  static auto get_underlying_data(const type_to_data_t<To>& d) {
+    return d;
+  }
+
+  template <concrete_type To>
+    requires(not std::same_as<view<type_to_data_t<To>>, type_to_data_t<To>>)
+  static auto get_underlying_data(const view<type_to_data_t<To>>& d) {
+    return d;
   }
 };
 
@@ -987,6 +1006,14 @@ struct cast_helper<string_type, ToType> {
       return ret;
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into ip", in));
+  }
+
+  static auto from_str(std::string_view in, const null_type&)
+    -> caf::expected<caf::none_t> {
+    if (parsers::lit{"null"}(in))
+      return caf::none;
+    return caf::make_error(ec::convert_error,
+                           fmt::format("unable to convert {} into a null", in));
   }
 
   static auto from_str(std::string_view in, const bool_type&)

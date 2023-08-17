@@ -23,6 +23,27 @@
 
 namespace tenzir {
 
+TEST(null_type) {
+  static_assert(concrete_type<null_type>);
+  // TODO: Rest.
+  auto t = type{};
+  auto n = null_type{};
+  auto tn = type{null_type{}};
+  CHECK_EQUAL(t, n);
+  CHECK_EQUAL(n, tn);
+  CHECK_EQUAL(t.to_arrow_type(), arrow::null());
+  CHECK_EQUAL(n.to_arrow_type(), arrow::null());
+  CHECK_EQUAL(tn.to_arrow_type(), arrow::null());
+  auto lt = list_type{t};
+  auto ln = list_type{n};
+  auto ltn = list_type{tn};
+  CHECK_EQUAL(lt, ln);
+  CHECK_EQUAL(ln, ltn);
+  CHECK_EQUAL(*lt.to_arrow_type(), *arrow::list(arrow::null()));
+  CHECK_EQUAL(*ln.to_arrow_type(), *arrow::list(arrow::null()));
+  CHECK_EQUAL(*ltn.to_arrow_type(), *arrow::list(arrow::null()));
+}
+
 TEST(bool_type) {
   static_assert(concrete_type<bool_type>);
   static_assert(basic_type<bool_type>);
@@ -258,7 +279,7 @@ TEST(list_type) {
   CHECK(t < tlit);
   CHECK(t <= tlit);
   CHECK_EQUAL(fmt::format("{}", tlit), "list<int64>");
-  CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<none>");
+  CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<null>");
   CHECK(!caf::holds_alternative<list_type>(t));
   CHECK(caf::holds_alternative<list_type>(tlit));
   CHECK_EQUAL(caf::get<list_type>(tlit).value_type(), type{int64_type{}});
@@ -283,7 +304,7 @@ TEST(map_type) {
   CHECK(t < tmsit);
   CHECK(t <= tmsit);
   CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int64>");
-  CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<none, none>");
+  CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<null, null>");
   CHECK(!caf::holds_alternative<map_type>(t));
   CHECK(caf::holds_alternative<map_type>(tmsit));
   CHECK_EQUAL(caf::get<map_type>(tmsit).key_type(), type{string_type{}});
@@ -910,7 +931,7 @@ TEST(sorting) {
   std::shuffle(ts.begin(), ts.end(), std::random_device());
   std::sort(ts.begin(), ts.end());
   const char* expected
-    = "none bool int64 custom_bool custom_none custom_integer";
+    = "null bool int64 custom_bool custom_none custom_integer";
   CHECK_EQUAL(fmt::format("{}", fmt::join(ts, " ")), expected);
 }
 

@@ -35,4 +35,4 @@
     "weird.123.190"
   ]
 }
-warning: aggregation column `_path` does not exist for schema `9940eae275d3b1fa`
+warning: aggregation column `_path` does not exist for schema `tenzir.json`

@@ -20,14 +20,8 @@
     "signature": "ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command",
     "category": "Potentially Bad Traffic",
     "severity": 2,
-    "source": {
-      "ip": null,
-      "port": null
-    },
-    "target": {
-      "ip": null,
-      "port": null
-    }
+    "source": null,
+    "target": null
   },
   "flow": {
     "pkts_toserver": 27,
@@ -71,34 +65,15 @@
     "signature": null,
     "category": null,
     "severity": null,
-    "source": {
-      "ip": null,
-      "port": null
-    },
-    "target": {
-      "ip": null,
-      "port": null
-    }
+    "source": null,
+    "target": null
   },
-  "flow": {
-    "pkts_toserver": null,
-    "pkts_toclient": null,
-    "bytes_toserver": null,
-    "bytes_toclient": null,
-    "start": null,
-    "end": null,
-    "age": null,
-    "state": null,
-    "reason": null,
-    "alerted": null
-  },
+  "flow": null,
   "payload": null,
   "payload_printable": null,
   "stream": null,
   "packet": null,
-  "packet_info": {
-    "linktype": null
-  }
+  "packet_info": null
 }
 {
   "timestamp": "2011-08-12T14:59:22.181050",
@@ -122,34 +97,15 @@
     "signature": null,
     "category": null,
     "severity": null,
-    "source": {
-      "ip": null,
-      "port": null
-    },
-    "target": {
-      "ip": null,
-      "port": null
-    }
+    "source": null,
+    "target": null
   },
-  "flow": {
-    "pkts_toserver": null,
-    "pkts_toclient": null,
-    "bytes_toserver": null,
-    "bytes_toclient": null,
-    "start": null,
-    "end": null,
-    "age": null,
-    "state": null,
-    "reason": null,
-    "alerted": null
-  },
+  "flow": null,
   "payload": null,
   "payload_printable": null,
   "stream": null,
   "packet": null,
-  "packet_info": {
-    "linktype": null
-  }
+  "packet_info": null
 }
 {
   "timestamp": "2011-08-14T05:38:53.914038",
@@ -173,14 +129,8 @@
     "signature": null,
     "category": null,
     "severity": null,
-    "source": {
-      "ip": null,
-      "port": null
-    },
-    "target": {
-      "ip": null,
-      "port": null
-    }
+    "source": null,
+    "target": null
   },
   "flow": {
     "pkts_toserver": 2,
@@ -198,9 +148,7 @@
   "payload_printable": null,
   "stream": null,
   "packet": null,
-  "packet_info": {
-    "linktype": null
-  }
+  "packet_info": null
 }
 {
   "timestamp": "2011-08-12T13:00:36.378914",
@@ -224,34 +172,15 @@
     "signature": null,
     "category": null,
     "severity": null,
-    "source": {
-      "ip": null,
-      "port": null
-    },
-    "target": {
-      "ip": null,
-      "port": null
-    }
+    "source": null,
+    "target": null
   },
-  "flow": {
-    "pkts_toserver": null,
-    "pkts_toclient": null,
-    "bytes_toserver": null,
-    "bytes_toclient": null,
-    "start": null,
-    "end": null,
-    "age": null,
-    "state": null,
-    "reason": null,
-    "alerted": null
-  },
+  "flow": null,
   "payload": null,
   "payload_printable": null,
   "stream": null,
   "packet": null,
-  "packet_info": {
-    "linktype": null
-  }
+  "packet_info": null
 }
 {
   "timestamp": "2011-08-14T05:38:55.549713",
@@ -275,34 +204,15 @@
     "signature": null,
     "category": null,
     "severity": null,
-    "source": {
-      "ip": null,
-      "port": null
-    },
-    "target": {
-      "ip": null,
-      "port": null
-    }
+    "source": null,
+    "target": null
   },
-  "flow": {
-    "pkts_toserver": null,
-    "pkts_toclient": null,
-    "bytes_toserver": null,
-    "bytes_toclient": null,
-    "start": null,
-    "end": null,
-    "age": null,
-    "state": null,
-    "reason": null,
-    "alerted": null
-  },
+  "flow": null,
   "payload": null,
   "payload_printable": null,
   "stream": null,
   "packet": null,
-  "packet_info": {
-    "linktype": null
-  }
+  "packet_info": null
 }
 {
   "timestamp": "2019-05-02T13:56:53.843674",
@@ -326,34 +236,15 @@
     "signature": null,
     "category": null,
     "severity": null,
-    "source": {
-      "ip": null,
-      "port": null
-    },
-    "target": {
-      "ip": null,
-      "port": null
-    }
+    "source": null,
+    "target": null
   },
-  "flow": {
-    "pkts_toserver": null,
-    "pkts_toclient": null,
-    "bytes_toserver": null,
-    "bytes_toclient": null,
-    "start": null,
-    "end": null,
-    "age": null,
-    "state": null,
-    "reason": null,
-    "alerted": null
-  },
+  "flow": null,
   "payload": null,
   "payload_printable": null,
   "stream": null,
   "packet": null,
-  "packet_info": {
-    "linktype": null
-  }
+  "packet_info": null
 }
 {
   "timestamp": "2018-03-02T15:20:26.274662",
@@ -377,32 +268,13 @@
     "signature": null,
     "category": null,
     "severity": null,
-    "source": {
-      "ip": null,
-      "port": null
-    },
-    "target": {
-      "ip": null,
-      "port": null
-    }
+    "source": null,
+    "target": null
   },
-  "flow": {
-    "pkts_toserver": null,
-    "pkts_toclient": null,
-    "bytes_toserver": null,
-    "bytes_toclient": null,
-    "start": null,
-    "end": null,
-    "age": null,
-    "state": null,
-    "reason": null,
-    "alerted": null
-  },
+  "flow": null,
   "payload": null,
   "payload_printable": null,
   "stream": null,
   "packet": null,
-  "packet_info": {
-    "linktype": null
-  }
+  "packet_info": null
 }

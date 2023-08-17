@@ -51,7 +51,7 @@ struct field_context {
 };
 
 struct type_context {
-  std::string kind{};
+  type_kind kind{};
   std::string category;
   size_t lists{0};
   std::string name{};
@@ -75,14 +75,10 @@ auto traverse(type t) -> generator<schema_context> {
   result.type.name = t.name();
   for (auto [key, value] : t.attributes())
     result.type.attributes.emplace_back(key, value);
-  result.type.kind = fmt::to_string(t);
-  const auto* alphabet = "abcdefghijklmnopqrstuvwxyz";
-  auto i = result.type.kind.find_first_not_of(alphabet);
-  if (i != std::string::npos)
-    result.type.kind.resize(i);
+  result.type.kind = t.kind();
   // TODO: This categorization is somewhat arbitrary, and we probably want to
   // think about this more.
-  if (result.type.kind == "list" || result.type.kind == "record")
+  if (result.type.kind.is<record_type>())
     result.type.category = "container";
   else
     result.type.category = "atomic";
@@ -142,7 +138,7 @@ auto add_field(auto& builder, const type& t) -> caf::error {
       if (auto err = index.add(uint64_t{i}))
         return err;
     auto type = row.push_field("type").push_record();
-    if (auto err = type.push_field("kind").add(ctx.type.kind))
+    if (auto err = type.push_field("kind").add(to_string(ctx.type.kind)))
       return err;
     if (auto err = type.push_field("category").add(ctx.type.category))
       return err;

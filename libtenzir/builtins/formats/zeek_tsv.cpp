@@ -250,6 +250,10 @@ struct zeek_printer {
 
   auto to_zeek_string(const type& t) const -> std::string {
     auto f = detail::overload{
+      [](const null_type&) -> std::string {
+        // TODO
+        return "null";
+      },
       [](const bool_type&) -> std::string {
         return "bool";
       },
