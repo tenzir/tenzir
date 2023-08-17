@@ -20,43 +20,56 @@
 
 namespace tenzir::experimental {
 
-class union_builder;
-class builder_base;
 template <class T>
 class atom_builder;
+class builder_base;
+class field_ref;
 class list_builder;
-class union_builder;
-class record_builder;
 class list_ref;
+class record_builder;
 class record_ref;
+class union_builder;
 
-class record_field_ref;
+/// Methods overwrite the field.
+class field_ref {
+public:
+  field_ref(record_builder* origin, std::string_view name)
+    : origin_{origin}, name_{name} {
+  }
 
-/// Methods overwrite.
+  void null();
+
+  void atom(int64_t value);
+
+  auto record() -> record_ref;
+
+  auto list() -> list_ref;
+
+private:
+  record_builder* origin_;
+  std::string_view name_;
+};
+
+/// Method has no immediate effect.
 class record_ref {
 public:
   explicit record_ref(record_builder* origin) : origin_{origin} {
   }
 
-  // TODO: Make this atom.
-  void null(std::string_view name);
-
-  void atom(std::string_view name, int64_t value);
-
-  auto record(std::string_view name) -> record_ref;
-
-  auto list(std::string_view name) -> list_ref;
-
-  // TODO: Remove this, or make it only interface?
-  auto field(std::string_view name) -> record_field_ref;
+  auto field(std::string_view name) -> field_ref {
+    return field_ref{origin_, name};
+  }
 
 private:
   record_builder* origin_;
 };
 
-/// Methods append.
+/// Methods append to the list.
 class list_ref {
 public:
+  explicit list_ref(list_builder* origin) : origin_{origin} {
+  }
+
   void null();
 
   void atom(int64_t value);
@@ -67,30 +80,6 @@ public:
 
 private:
   list_builder* origin_;
-};
-
-/// TODO
-class record_field_ref {
-public:
-  void null() {
-    return record_ref{origin_}.null(name);
-  }
-
-  void atom(int64_t value) {
-    return record_ref{origin_}.atom(name, value);
-  }
-
-  auto record() -> record_ref {
-    return record_ref{origin_}.record(name);
-  }
-
-  auto list() -> list_ref {
-    return record_ref{origin_}.list(name);
-  }
-
-private:
-  record_builder* origin_;
-  std::string_view name;
 };
 
 class builder_base {
@@ -142,7 +131,7 @@ class list_builder final : public builder_base {
 public:
   auto append() -> list_ref {
     (void)offsets_.Append(elements_->length());
-    return list_ref{};
+    return list_ref{this};
   }
 
   void fill(int64_t length) override {
@@ -264,7 +253,7 @@ private:
 };
 
 class record_builder final : public builder_base {
-  friend class record_ref;
+  friend class field_ref;
 
 public:
   auto append() -> record_ref {

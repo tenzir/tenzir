@@ -12,20 +12,20 @@
 
 namespace tenzir::experimental {
 
-void record_ref::null(std::string_view name) {
+void field_ref::null() {
   die("TODO");
 }
 
-void record_ref::atom(std::string_view name, int64_t value) {
-  origin_->prepare<atom_builder<arrow::Int64Type>>(name)->append(value);
+void field_ref::atom(int64_t value) {
+  origin_->prepare<atom_builder<arrow::Int64Type>>(name_)->append(value);
 }
 
-auto record_ref::record(std::string_view name) -> record_ref {
-  return origin_->prepare<record_builder>(name)->append();
+auto field_ref::record() -> record_ref {
+  return origin_->prepare<record_builder>(name_)->append();
 }
 
-auto record_ref::list(std::string_view name) -> list_ref {
-  return origin_->prepare<list_builder>(name)->append();
+auto field_ref::list() -> list_ref {
+  return origin_->prepare<list_builder>(name_)->append();
 }
 
 void list_ref::null() {
@@ -254,6 +254,7 @@ static void test() {
   {
     // {a: 42}, [], null, 43
     auto b = series_builder{};
+    b.record();
     b.record().field("a").atom(42);
     b.list();
     b.null();
