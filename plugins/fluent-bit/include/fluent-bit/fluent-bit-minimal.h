@@ -24,7 +24,7 @@
 
 // #include <fluent-bit/flb_macros.h>
 // #include <fluent-bit/flb_config.h>
-#define FLB_EXPORT extern
+#define FLB_EXPORT extern "C"
 
 /* Lib engine status */
 #define FLB_LIB_ERROR -1
