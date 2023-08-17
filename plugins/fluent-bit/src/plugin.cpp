@@ -21,102 +21,81 @@ namespace tenzir::plugins::fluentbit {
 
 namespace {
 
-class fluentbit_loader final : public plugin_loader {
-public:
-  fluentbit_loader() = default;
+struct operator_args {
+  located<std::vector<std::string>> args;
 
-  auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> override {
-    auto make = []() -> generator<chunk_ptr> {
-      while (true) {
-        // TODO: Implement
-        co_yield {};
-      }
-    };
-    return make();
-  }
-
-  auto to_string() const -> std::string override {
-    auto result = name();
-    return result;
-  }
-
-  auto name() const -> std::string override {
-    return "fluent-bit";
-  }
-
-  auto default_parser() const -> std::string override {
-    return "json";
-  }
-
-  friend auto inspect(auto& f, fluentbit_loader& x) -> bool {
-    return f.object(x).pretty_name("fluent-bit_loader").fields();
+  template <class Inspector>
+  friend auto inspect(Inspector& f, operator_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("operator_args")
+      .fields(f.field("args", x.args));
   }
 };
 
-class fluentbit_saver final : public plugin_saver {
+class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
 public:
-  fluentbit_saver() = default;
+  fluent_bit_operator() = default;
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
-    -> caf::expected<std::function<void(chunk_ptr)>> override {
-    return [](chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0)
-        return;
-      // TODO: Implement
-    };
+  explicit fluent_bit_operator(operator_args args)
+    : args_{std::move(args)}, ctx_{flb_create()} {
+    TENZIR_ASSERT(ctx_ != nullptr);
+  }
+
+  ~fluent_bit_operator() final {
+    flb_destroy(ctx_);
+  }
+
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    // TODO: implement
   }
 
   auto name() const -> std::string override {
-    return "fluent-bit";
+    return "fluentbit";
   }
 
-  auto default_printer() const -> std::string override {
-    return "json";
+  auto detached() const -> bool override {
+    return false;
   }
 
-  auto is_joining() const -> bool override {
-    return true;
+  auto location() const -> operator_location override {
+    return operator_location::local;
   }
 
-  friend auto inspect(auto& f, fluentbit_saver& x) -> bool {
-    return f.object(x).pretty_name("fluent-bit_saver").fields();
-  }
-};
-
-class plugin final : public virtual loader_plugin<fluentbit_loader>,
-                     public virtual saver_plugin<fluentbit_saver> {
-public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
-    config_ = config;
-    return caf::none;
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)order;
+    (void)filter;
+    return do_not_optimize(*this);
   }
 
-  auto parse_loader(parser_interface& p) const
-    -> std::unique_ptr<plugin_loader> override {
-    auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/next/connectors/{}", name())};
-    // TODO: Implement
-    return std::make_unique<fluentbit_loader>();
-  }
-
-  auto parse_saver(parser_interface& p) const
-    -> std::unique_ptr<plugin_saver> override {
-    auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/next/connectors/{}", name())};
-    // TODO: Implement
-    return std::make_unique<fluentbit_saver>();
-  }
-
-  auto name() const -> std::string override {
-    return "fluent-bit";
+  friend auto inspect(auto& f, fluent_bit_operator& x) -> bool {
+    return f.apply(x.args_);
   }
 
 private:
-  record config_;
+  operator_args args_;
+  flb_ctx_t* ctx_;
+};
+
+class plugin final : public operator_plugin<fluent_bit_operator> {
+public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{
+      name(),
+      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+    auto args = operator_args{};
+    parser.parse(p);
+    return std::make_unique<fluent_bit_operator>(std::move(args));
+  }
+
+  auto name() const -> std::string override {
+    return "fluentbit";
+  }
 };
 
 } // namespace
