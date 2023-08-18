@@ -15,15 +15,18 @@
 
 namespace tenzir::experimental {
 
-namespace detail {
-class typed_builder;
-class record_builder;
-class list_builder;
-} // namespace detail
-
+class series_builder;
 class field_ref;
 class list_ref;
 class record_ref;
+
+namespace detail {
+
+class typed_builder;
+class record_builder;
+class list_builder;
+
+} // namespace detail
 
 /// Methods overwrite the field.
 class field_ref {
@@ -101,9 +104,9 @@ public:
 
   auto length() -> int64_t;
 
-  auto finish() -> std::shared_ptr<arrow::Array>;
-
   auto type() -> std::shared_ptr<arrow::DataType>;
+
+  auto finish() -> std::shared_ptr<arrow::Array>;
 
   template <class Builder>
   auto prepare() -> Builder*;

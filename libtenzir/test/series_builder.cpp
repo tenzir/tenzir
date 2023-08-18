@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/adaptive_builder.hpp"
+#include "tenzir/series_builder.hpp"
 
 #include "tenzir/test/test.hpp"
 

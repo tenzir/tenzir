@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/adaptive_builder.hpp"
+#include "tenzir/series_builder.hpp"
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
@@ -65,10 +65,6 @@ public:
 
   void resize(int64_t length) override;
 
-  // void add_offset(int32_t x) {
-  //   (void)offsets_.Append(x);
-  // }
-
   auto finish() -> std::shared_ptr<arrow::Array> override {
     (void)offsets_.Append(detail::narrow<int32_t>(elements_.length()));
     return arrow::ListArray::FromArrays(*offsets_.Finish().ValueOrDie(),
@@ -83,8 +79,6 @@ public:
   auto length() -> int64_t override {
     return offsets_.length();
   }
-
-  // auto record() -> record_builder*;
 
 private:
   /// This only stores *beginning* indices.
@@ -202,21 +196,21 @@ namespace {
 
 class null_builder final : public detail::typed_builder {
 public:
-  auto finish() -> std::shared_ptr<arrow::Array> {
+  auto finish() -> std::shared_ptr<arrow::Array> override {
     auto builder = arrow::NullBuilder{};
     (void)builder.AppendNulls(length_);
     return builder.Finish().ValueOrDie();
   }
 
-  auto type() -> std::shared_ptr<arrow::DataType> {
+  auto type() -> std::shared_ptr<arrow::DataType> override {
     return std::make_shared<arrow::NullType>();
   }
 
-  auto length() -> int64_t {
+  auto length() -> int64_t override {
     return length_;
   }
 
-  void resize(int64_t length) {
+  void resize(int64_t length) override {
     length_ = length;
   }
 
@@ -442,7 +436,6 @@ auto series_builder::prepare() -> Builder* {
 
 template <class Builder>
 auto detail::record_builder::prepare(std::string_view name) -> Builder* {
-#if 1
   auto it = fields_.find(name);
   if (it == fields_.end()) {
     // Field does not exist yet.
@@ -456,133 +449,10 @@ auto detail::record_builder::prepare(std::string_view name) -> Builder* {
   auto& builder = builders_[it->second];
   builder.resize(length_ - 1);
   return builder.prepare<Builder>();
-#else
-  // TODO: Overwriting / non existing?!
-  auto it = fields_.find(name);
-  if (it == fields_.end()) {
-    // Field does not exist yet.
-    it = fields_.try_emplace(std::string{name}, builders_.size()).first;
-    builders_.push_back(std::make_unique<Builder>());
-    auto result = static_cast<Builder*>(builders_.back().get());
-    result->resize(length_ - 1);
-    return result;
-  }
-  // The field exists. Try to find an existing, compatible builder.
-  auto& builder = builders_[it->second];
-  builder->resize(length_ - 1);
-  if constexpr (std::same_as<Builder, null_builder>) {
-    // TODO!!
-    return builder.get();
-  }
-  if (auto* cast = dynamic_cast<Builder*>(builder.get())) {
-    // The field itself is ...
-    return cast;
-  }
-  if (auto* cast = dynamic_cast<union_builder*>(builder.get())) {
-    // The field is a union, which potentially contains a list builder.
-    auto index = 0;
-    for (auto& variant : cast->variants()) {
-      if (auto* inner = dynamic_cast<Builder*>(variant.get())) {
-        // We found an existing list builder within this union.
-        cast->begin_next(index);
-        return inner;
-      }
-      index += 1;
-    }
-    // There is no list builder in this union yet.
-    index = cast->add_variant(std::make_unique<Builder>());
-    cast->begin_next(index);
-    return static_cast<Builder*>(cast->variants().back().get());
-  }
-  // Otherwise, we have to upgrade this field into a union.
-  auto new_outer = std::make_unique<union_builder>(std::move(builder));
-  auto index = new_outer->add_variant(std::make_unique<Builder>());
-  new_outer->begin_next(index);
-  auto result = static_cast<Builder*>(new_outer->variants()[index].get());
-  builder = std::move(new_outer);
-  return result;
-#endif
 }
-
-// auto list_builder::record() -> record_builder* {
-//   add_offset(elements_->length());
-//   if (auto cast = dynamic_cast<record_builder*>(elements_.get())) {
-//     return cast;
-//   }
-//   if (auto cast = dynamic_cast<union_builder*>(elements_.get())) {
-//     auto index = 0;
-//     for (auto& variant : cast->variants()) {
-//       if (auto inner = dynamic_cast<record_builder*>(variant.get())) {
-//         cast->begin_next(index);
-//         return inner;
-//       }
-//       index += 1;
-//     }
-//   }
-// }
 
 auto series_builder::type() -> std::shared_ptr<arrow::DataType> {
   return builder_->type();
-}
-
-static void test() {
-  {
-    // <nothing>
-    auto b = series_builder{};
-  }
-  {
-    // {}
-    auto b = series_builder{};
-    b.record();
-  }
-  {
-    // {a: null}
-    auto b = series_builder{};
-    b.record().field("a").null();
-  }
-  {
-    // {}, {a: 42}, {}
-    auto b = series_builder{};
-    b.record();
-    b.record().field("a").atom(42);
-    b.record();
-  }
-  {
-    // {a: 1, a: 2}, {a: 3}
-    auto b = series_builder{};
-    auto r = b.record();
-    r.field("a").atom(1);
-    r.field("a").atom(2);
-    r = b.record();
-    r.field("a").atom(3);
-  }
-  {
-    // {a: [1, 2]}, {a: [], a: [{}]}
-    auto b = series_builder{};
-    auto l = b.record().field("a");
-    l.atom(1);
-    l.atom(2);
-    auto r = b.record();
-    r.field("a").list();
-    r.field("a").list().record();
-  }
-  {
-    // [1, 2], null, []
-    auto b = series_builder{};
-    auto l = b.list();
-    l.atom(1);
-    l.atom(2);
-    b.null();
-    b.list();
-  }
-  {
-    // {a: 42}, [], null, 43
-    auto b = series_builder{};
-    b.record().field("a").atom(42);
-    b.list();
-    b.null();
-    b.atom(43);
-  }
 }
 
 auto detail::list_builder::append() -> list_ref {
