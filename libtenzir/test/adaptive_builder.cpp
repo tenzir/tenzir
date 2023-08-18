@@ -10,61 +10,189 @@
 
 #include "tenzir/test/test.hpp"
 
+#include <arrow/api.h>
+
 namespace tenzir {
+
+using namespace experimental;
+
 namespace {
 
-auto test = R"__(
+void check(series_builder& b, int64_t length, std::string_view type,
+           std::string_view array) {
+  CHECK_EQUAL(b.length(), length);
+  auto a = b.finish();
+  CHECK_EQUAL(a->length(), length);
+  CHECK_EQUAL(a->type()->ToString(), type);
+  CHECK_EQUAL(a->ToString(), array);
+}
 
-{a: "hello"}
-{a: 42}
-{a: {b: 43}}
+TEST(empty) {
+  auto b = series_builder{};
+  check(b, 0, R"(null)", R"(0 nulls)");
+}
 
-Union all three??
+TEST(one empty record) {
+  auto b = series_builder{};
+  b.record();
+  check(b, 1, R"(struct<>)", R"(-- is_valid: all not null)");
+}
 
-{a: [{b: 42}, {b: {c: 43}}]}
+TEST(two empty records) {
+  auto b = series_builder{};
+  b.record();
+  b.record();
+  check(b, 2, R"(struct<>)", R"(-- is_valid: all not null)");
+}
 
-)__";
+TEST(one null) {
+  auto b = series_builder{};
+  b.null();
+  check(b, 1, R"(null)", R"(1 nulls)");
+}
 
-TEST(union builder) {
-  // [int64] -> [int64 | uint64]
-  auto b = std::make_shared<arrow::Int64Builder>();
-  auto x = arrow::ListBuilder{arrow::default_memory_pool(), b};
-  (void)x.Append();
-  (void)b->Append(123);
-  (void)b->Append(456);
-  (void)x.Append();
-  auto ub = union_builder{std::move(b)};
-  auto c = std::make_shared<arrow::UInt64Builder>();
-  ub.add_variant(c);
-  ub.add_next(1);
-  (void)c->Append(31413);
-  auto result = ub.finish();
-  CHECK_EQUAL(result->ToString(), R"(-- is_valid: all not null
+TEST(two nulls) {
+  auto b = series_builder{};
+  b.null();
+  b.null();
+  check(b, 2, R"(null)", R"(2 nulls)");
+}
+
+TEST(one empty record then one null) {
+  auto b = series_builder{};
+  b.record();
+  b.null();
+  check(b, 2, R"(struct<>)", R"(-- is_valid:
+  [
+    true,
+    false
+  ])");
+}
+
+TEST(one null then one empty record) {
+  auto b = series_builder{};
+  b.null();
+  b.record();
+  check(b, 2, R"(struct<>)", R"(-- is_valid:
+  [
+    false,
+    true
+  ])");
+}
+
+TEST(one record with one field) {
+  auto b = series_builder{};
+  b.record().field("a").atom(42);
+  check(b, 1, R"(struct<a: int64>)", R"(-- is_valid: all not null
+-- child 0 type: int64
+  [
+    42
+  ])");
+}
+
+TEST(one nested record then a null) {
+  auto b = series_builder{};
+  b.record().field("a").record().field("b").atom(42);
+  b.null();
+  check(b, 2, R"(struct<a: struct<b: int64>>)", R"(-- is_valid:
+  [
+    true,
+    false
+  ]
+-- child 0 type: struct<b: int64>
+  -- is_valid:
+      [
+      true,
+      false
+    ]
+  -- child 0 type: int64
+    [
+      42,
+      null
+    ])");
+}
+
+TEST(one nested record then one empty record) {
+  auto b = series_builder{};
+  b.record().field("a").record().field("b").atom(42);
+  b.record();
+  check(b, 2, R"(struct<a: struct<b: int64>>)", R"(-- is_valid: all not null
+-- child 0 type: struct<b: int64>
+  -- is_valid:
+      [
+      true,
+      false
+    ]
+  -- child 0 type: int64
+    [
+      42,
+      null
+    ])");
+}
+
+TEST(two nested records) {
+  auto b = series_builder{};
+  b.record().field("a").record().field("b").atom(42);
+  b.record().field("a").record().field("b").atom(43);
+  check(b, 2, R"(struct<a: struct<b: int64>>)", R"(-- is_valid: all not null
+-- child 0 type: struct<b: int64>
+  -- is_valid: all not null
+  -- child 0 type: int64
+    [
+      42,
+      43
+    ])");
+}
+
+TEST(challenge) {
+  auto b = series_builder{};
+  b.record().field("a").record();
+  b.record().field("a").atom(42);
+  b.list().atom(43);
+  b.record().field("a").atom(44);
+  check(
+    b, 4,
+    R"(dense_union<0: struct<a: dense_union<: struct<>=0, : int64=1>>=0, 1: list<item: int64>=1>)",
+    R"(-- is_valid: all not null
 -- type_ids:   [
     0,
-    0,
-    1
-  ]
--- value_offsets:   [
     0,
     1,
     0
   ]
--- child 0 type: int64
-  [
-    123,
-    456
+-- value_offsets:   [
+    0,
+    1,
+    0,
+    2
   ]
--- child 1 type: uint64
+-- child 0 type: struct<a: dense_union<: struct<>=0, : int64=1>>
+  -- is_valid: all not null
+  -- child 0 type: dense_union<0: struct<>=0, 1: int64=1>
+    -- is_valid: all not null
+    -- type_ids:       [
+        0,
+        1,
+        1
+      ]
+    -- value_offsets:       [
+        0,
+        0,
+        1
+      ]
+    -- child 0 type: struct<>
+      -- is_valid: all not null
+    -- child 1 type: int64
+      [
+        42,
+        44
+      ]
+-- child 1 type: list<item: int64>
   [
-    31413
+    [
+      43
+    ]
   ])");
-
-  // auto b = adaptive_builder{}; // list[?]
-  // auto row = b.push_row();
-  // row.set_field("yo", 42);
-  // row.set_field("ok", 43);
-  // auto result = b.finish();
 }
 
 } // namespace
