@@ -16,6 +16,7 @@
 
 #include <arrow/builder.h>
 #include <arrow/type.h>
+#include <sys/_types/_int32_t.h>
 #include <tsl/robin_map.h>
 
 #include <span>
@@ -25,7 +26,7 @@ namespace tenzir::experimental {
 namespace {
 
 template <class Builder>
-auto resize_arrow_builder(Builder& builder, int64_t length) {
+void resize_arrow_builder(Builder& builder, int64_t length) {
   auto current = builder.length();
   if (current < length) {
     (void)builder.AppendNulls(length - current);
@@ -41,6 +42,7 @@ auto resize_arrow_builder(Builder& builder, int64_t length) {
 namespace detail {
 
 // TODO: Remove.
+using tenzir::detail::heterogeneous_string_hashmap;
 using tenzir::detail::narrow;
 
 class typed_builder {
@@ -54,8 +56,152 @@ public:
   virtual auto length() -> int64_t = 0;
 
   /// @note If this removes elements, it can be very expensive.
-  virtual void resize(int64_t length) = 0;
+  virtual void resize(int64_t new_length) = 0;
 };
+
+namespace {
+
+class null_builder final : public detail::typed_builder {
+public:
+  auto finish() -> std::shared_ptr<arrow::Array> override {
+    auto builder = arrow::NullBuilder{};
+    (void)builder.AppendNulls(length_);
+    return builder.Finish().ValueOrDie();
+  }
+
+  auto type() -> std::shared_ptr<arrow::DataType> override {
+    return std::make_shared<arrow::NullType>();
+  }
+
+  auto length() -> int64_t override {
+    return length_;
+  }
+
+  void resize(int64_t new_length) override {
+    length_ = new_length;
+  }
+
+private:
+  int64_t length_ = 0;
+};
+
+template <class T>
+class atom_builder final : public detail::typed_builder {
+public:
+  auto finish() -> std::shared_ptr<arrow::Array> override {
+    return inner_.Finish().ValueOrDie();
+  }
+
+  auto type() -> std::shared_ptr<arrow::DataType> override {
+    return std::make_shared<T>();
+  }
+
+  auto length() -> int64_t override {
+    return inner_.length();
+  }
+
+  void resize(int64_t new_length) override {
+    resize_arrow_builder(inner_, new_length);
+  }
+
+  void append(arrow::TypeTraits<T>::CType value) {
+    (void)inner_.Append(value);
+  }
+
+private:
+  arrow::TypeTraits<T>::BuilderType inner_;
+};
+
+class union_builder final : public typed_builder {
+public:
+  explicit union_builder(std::unique_ptr<typed_builder> x) {
+    // TODO: Does this actually append zeroes?
+    (void)discriminants_.AppendEmptyValues(x->length());
+    (void)offsets_.Reserve(x->length());
+    for (auto i = 0; i < x->length(); ++i) {
+      offsets_.UnsafeAppend(i);
+    }
+    variants_.push_back(std::move(x));
+  }
+
+  void begin_next(int8_t idx) {
+    TENZIR_ASSERT_CHEAP(idx >= 0);
+    TENZIR_ASSERT_CHEAP(static_cast<size_t>(idx) < variants_.size());
+    (void)discriminants_.Append(idx);
+    (void)offsets_.Append(detail::narrow<int32_t>(variants_[idx]->length()));
+  }
+
+  auto add_variant(std::unique_ptr<typed_builder> child) -> int8_t {
+    TENZIR_ASSERT_CHEAP(child->length() == 0);
+    variants_.push_back(std::move(child));
+    return variants_.size() - 1;
+  }
+
+  auto finish() -> std::shared_ptr<arrow::Array> override {
+    auto variants = std::vector<std::shared_ptr<arrow::Array>>{};
+    variants.reserve(variants_.size());
+    for (auto& variant : variants_) {
+      variants.push_back(variant->finish());
+    }
+    // TODO: Check dereference.
+    return std::static_pointer_cast<arrow::DenseUnionArray>(
+      arrow::DenseUnionArray::Make(*discriminants_.Finish().ValueOrDie(),
+                                   *offsets_.Finish().ValueOrDie(),
+                                   std::move(variants))
+        .ValueOrDie());
+  }
+
+  auto type() -> std::shared_ptr<arrow::DataType> override {
+    auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
+    fields.reserve(variants_.size());
+    auto types = std::vector<int8_t>{};
+    types.reserve(variants_.size());
+    for (auto& variant : variants_) {
+      fields.push_back(arrow::field("", variant->type()));
+      types.push_back(detail::narrow<int8_t>(&variant - variants_.data()));
+    }
+    return arrow::DenseUnionType::Make(std::move(fields), std::move(types))
+      .ValueOrDie();
+  }
+
+  auto length() -> int64_t override {
+    return discriminants_.length();
+  }
+
+  void resize(int64_t length) override {
+    TENZIR_ASSERT_CHEAP(discriminants_.length() == offsets_.length());
+    if (length < discriminants_.length()) {
+      // TODO: Do we leave the old data in the variants?
+      resize_arrow_builder(discriminants_, length);
+      resize_arrow_builder(offsets_, length);
+    } else {
+      // A union itself does not have a validity map. But we know that there
+      // exists at least one variant, which we can append nulls for.
+      TENZIR_ASSERT_CHEAP(not variants_.empty());
+      auto count = length - discriminants_.length();
+      (void)discriminants_.Reserve(count);
+      (void)offsets_.Reserve(count);
+      auto variant_start = variants_[0]->length();
+      variants_[0]->resize(variant_start + count);
+      for (auto i = 0; i < count; ++i) {
+        (void)discriminants_.UnsafeAppend(0);
+        (void)offsets_.UnsafeAppend(detail::narrow<int32_t>(variant_start + i));
+      }
+    }
+  }
+
+  auto variants() -> std::span<std::unique_ptr<typed_builder>> {
+    return variants_;
+  }
+
+private:
+  // TODO: Use `TypedBufferBuilder` instead?
+  arrow::Int8Builder discriminants_;
+  arrow::Int32Builder offsets_;
+  std::vector<std::unique_ptr<typed_builder>> variants_;
+};
+
+} // namespace
 
 class list_builder final : public typed_builder {
   friend class tenzir::experimental::list_ref;
@@ -63,7 +209,7 @@ class list_builder final : public typed_builder {
 public:
   auto append() -> list_ref;
 
-  void resize(int64_t length) override;
+  void resize(int64_t new_length) override;
 
   auto finish() -> std::shared_ptr<arrow::Array> override {
     (void)offsets_.Append(detail::narrow<int32_t>(elements_.length()));
@@ -99,28 +245,23 @@ public:
     auto children = std::vector<std::shared_ptr<arrow::Array>>{};
     children.reserve(builders_.size());
     for (auto& builder : builders_) {
-      TENZIR_WARN("comparing {} and {}", builder.length(), length_);
       TENZIR_ASSERT_CHEAP(builder.length() <= length_);
       builder.resize(length_);
       children.push_back(builder.finish());
     }
     auto null_bitmap = std::shared_ptr<arrow::Buffer>{};
-    if (nulls_.length() > 0) {
-      TENZIR_WARN("adding nulls to struct");
+    if (valid_.length() > 0) {
       auto nulls = std::shared_ptr<arrow::BooleanArray>{};
-      auto count = length_ - nulls_.length();
+      auto count = length_ - valid_.length();
       TENZIR_ASSERT_CHEAP(count >= 0);
-      TENZIR_ASSERT_CHEAP(nulls_.Reserve(count).ok());
+      TENZIR_ASSERT_CHEAP(valid_.Reserve(count).ok());
       while (count > 0) {
-        TENZIR_ASSERT_CHEAP(nulls_.Append(true).ok());
+        TENZIR_ASSERT_CHEAP(valid_.Append(true).ok());
         count -= 1;
       }
-      TENZIR_ASSERT_CHEAP(nulls_.Finish(&nulls).ok());
+      TENZIR_ASSERT_CHEAP(valid_.Finish(&nulls).ok());
       TENZIR_ASSERT_CHEAP(nulls->data()->buffers.size() == 2);
-      null_bitmap = nulls->data()->buffers[1]; // TODO: ?
-      TENZIR_WARN("about to print hex of {} out of {}",
-                  (void*)null_bitmap.get(), nulls->data()->buffers.size());
-      TENZIR_WARN((*null_bitmap).ToHexString());
+      null_bitmap = nulls->data()->buffers[1]; // TODO: Check this.
     }
     return std::make_shared<arrow::StructArray>(type(), length(), children,
                                                 std::move(null_bitmap));
@@ -134,34 +275,31 @@ public:
     return length_;
   }
 
-  void resize(int64_t length) override {
-    TENZIR_WARN("resize: {} -> {}", length_, length);
-    if (length < length_) {
-      if (length < nulls_.length()) {
+  void resize(int64_t new_length) override {
+    if (new_length < length_) {
+      if (new_length < valid_.length()) {
         auto nulls = std::shared_ptr<arrow::BooleanArray>{};
-        (void)nulls_.Finish(&nulls);
-        (void)nulls_.AppendArraySlice(*nulls->data(), 0, length);
+        (void)valid_.Finish(&nulls);
+        (void)valid_.AppendArraySlice(*nulls->data(), 0, new_length);
       }
       for (auto& builder : builders_) {
-        builder.resize(length);
+        builder.resize(new_length);
       }
-    } else if (length > length_) {
-      // TODO
-      auto true_count = length_ - nulls_.length();
-      auto false_count = length - length_;
-      (void)nulls_.Reserve(true_count + false_count);
+    } else if (new_length > length_) {
+      // TODO: Check and optimize.
+      auto true_count = length_ - valid_.length();
+      auto false_count = new_length - length_;
+      (void)valid_.Reserve(true_count + false_count);
       while (true_count > 0) {
-        TENZIR_WARN("added a true");
-        (void)nulls_.Append(true);
+        valid_.UnsafeAppend(true);
         true_count -= 1;
       }
       while (false_count > 0) {
-        TENZIR_WARN("added a false");
-        (void)nulls_.Append(false);
+        valid_.UnsafeAppend(false);
         false_count -= 1;
       }
     }
-    length_ = length;
+    length_ = new_length;
   }
 
 private:
@@ -174,167 +312,48 @@ private:
     return fields;
   }
 
-  /// Prepares for overwriting.
+  // TODO: Do we want to make `null_builder -> typed_builder*`?
+  /// Prepares field for overwriting (i.e., erases value if already set).
   template <class Builder>
   auto prepare(std::string_view name) -> Builder*;
 
-  tsl::robin_map<std::string, size_t, tenzir::detail::heterogeneous_string_hash,
-                 tenzir::detail::heterogeneous_string_equal>
-    fields_;
+  auto builder(std::string_view name) -> series_builder* {
+    auto it = fields_.find(name);
+    if (it == fields_.end()) {
+      return nullptr;
+    }
+    return &builders_[it->second];
+  }
 
-  /// Lazy field builders. If not long enough, field is absent.
+  /// @pre Field does not exist yet.
+  template <class Builder>
+  auto insert_new_field(std::string name) -> Builder*;
+
+  /// ...
+  detail::heterogeneous_string_hashmap<size_t> fields_;
+
+  /// Missing values shall be considered null.
   std::vector<series_builder> builders_;
 
-  /// Lazy validity bitmap. If not long enough, value is present.
-  arrow::BooleanBuilder nulls_;
+  /// Missing values shall be considered true.
+  arrow::BooleanBuilder valid_;
 
   /// ...
   int64_t length_ = 0;
 };
 
-namespace {
-
-class null_builder final : public detail::typed_builder {
-public:
-  auto finish() -> std::shared_ptr<arrow::Array> override {
-    auto builder = arrow::NullBuilder{};
-    (void)builder.AppendNulls(length_);
-    return builder.Finish().ValueOrDie();
-  }
-
-  auto type() -> std::shared_ptr<arrow::DataType> override {
-    return std::make_shared<arrow::NullType>();
-  }
-
-  auto length() -> int64_t override {
-    return length_;
-  }
-
-  void resize(int64_t length) override {
-    length_ = length;
-  }
-
-private:
-  int64_t length_ = 0;
-};
-
-template <class T>
-class atom_builder final : public detail::typed_builder {
-public:
-  auto finish() -> std::shared_ptr<arrow::Array> override {
-    return inner_.Finish().ValueOrDie();
-  }
-
-  auto type() -> std::shared_ptr<arrow::DataType> override {
-    return std::make_shared<T>();
-  }
-
-  auto length() -> int64_t override {
-    return inner_.length();
-  }
-
-  void resize(int64_t length) override {
-    resize_arrow_builder(inner_, length);
-  }
-
-  void append(arrow::TypeTraits<T>::CType value) {
-    (void)inner_.Append(value);
-  }
-
-private:
-  arrow::TypeTraits<T>::BuilderType inner_;
-};
-
-class union_builder final : public typed_builder {
-public:
-  union_builder() = default;
-
-  explicit union_builder(std::unique_ptr<typed_builder> x) {
-    // TODO: Does this actually append zeroes?
-    (void)discriminants_.AppendEmptyValues(x->length());
-    (void)offsets_.Reserve(x->length());
-    for (auto i = 0; i < x->length(); ++i) {
-      offsets_.UnsafeAppend(i);
-    }
-    variants_.push_back(std::move(x));
-  }
-
-  void begin_next(int8_t idx) {
-    TENZIR_ASSERT_CHEAP(idx < variants_.size());
-    (void)discriminants_.Append(idx);
-    (void)offsets_.Append(detail::narrow<int32_t>(variants_[idx]->length()));
-  }
-
-  auto add_variant(std::unique_ptr<typed_builder> child) -> int8_t {
-    TENZIR_ASSERT_CHEAP(child->length() == 0);
-    variants_.push_back(std::move(child));
-    return variants_.size() - 1;
-  }
-
-  auto finish() -> std::shared_ptr<arrow::Array> override {
-    auto variants = std::vector<std::shared_ptr<arrow::Array>>{};
-    variants.reserve(variants_.size());
-    for (auto& variant : variants_) {
-      // fields.push_back(arrow::field("", variant->type()));
-      // types.push_back(detail::narrow<int8_t>(&variant - variants_.data()));
-      variants.push_back(variant->finish());
-    }
-
-    // TODO: dereference -> copy?
-    return std::static_pointer_cast<arrow::DenseUnionArray>(
-      arrow::DenseUnionArray::Make(*discriminants_.Finish().ValueOrDie(),
-                                   *offsets_.Finish().ValueOrDie(),
-                                   std::move(variants))
-        .ValueOrDie());
-  }
-
-  auto type() -> std::shared_ptr<arrow::DataType> override {
-    auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
-    fields.reserve(variants_.size());
-    auto types = std::vector<int8_t>{};
-    types.reserve(variants_.size());
-    for (auto& variant : variants_) {
-      fields.push_back(arrow::field("", variant->type()));
-      types.push_back(detail::narrow<int8_t>(&variant - variants_.data()));
-    }
-    return arrow::DenseUnionType::Make(std::move(fields), std::move(types))
-      .ValueOrDie();
-  }
-
-  auto length() -> int64_t override {
-    return discriminants_.length();
-  }
-
-  void resize(int64_t length) override {
-    if (length != discriminants_.length()) {
-      TENZIR_UNREACHABLE(); // TODO
-    }
-    // TODO: We can not append nulls here.
-    // resize_numeric_builder(discriminants_, length);
-    // resize_numeric_builder(offsets_, length);
-    // for (auto& variant : variants_) {
-    //   // TODO: Do we want to resize variants here?
-    //   (void)variant;
-    // }
-  }
-
-  auto variants() -> std::span<std::unique_ptr<typed_builder>> {
-    return variants_;
-  }
-
-private:
-  arrow::Int8Builder discriminants_;
-  arrow::Int32Builder offsets_;
-  std::vector<std::unique_ptr<typed_builder>> variants_;
-};
-
-} // namespace
-
 } // namespace detail
 
 void field_ref::null() {
-  // We already incremented the length of the origin.
-  origin_->resize(origin_->length());
+  // Note: We already incremented the length of the origin.
+  if (auto field = origin_->builder(name_)) {
+    // TODO: Can this be inefficient?
+    field->resize(origin_->length() - 1);
+    field->resize(origin_->length());
+  } else {
+    // TODO: Resize? Probably not.
+    origin_->insert_new_field<detail::null_builder>(std::string{name_});
+  }
 }
 
 void field_ref::atom(int64_t value) {
@@ -348,6 +367,10 @@ auto field_ref::record() -> record_ref {
 
 auto field_ref::list() -> list_ref {
   return origin_->prepare<detail::list_builder>(name_)->append();
+}
+
+auto field_ref::builder() -> series_builder* {
+  return origin_->builder(name_);
 }
 
 void list_ref::null() {
@@ -398,14 +421,13 @@ auto series_builder::finish() -> std::shared_ptr<arrow::Array> {
   return builder_->finish();
 }
 
+void series_builder::reset() {
+  builder_ = std::make_unique<detail::null_builder>();
+}
+
 template <class Builder>
 auto series_builder::prepare() -> Builder* {
-  if (auto cast = dynamic_cast<detail::null_builder*>(builder_.get())) {
-    auto length = builder_->length();
-    builder_ = std::make_unique<Builder>();
-    builder_->resize(length);
-    return static_cast<Builder*>(builder_.get());
-  }
+  static_assert(not std::same_as<Builder, detail::null_builder>);
   if (auto cast = dynamic_cast<Builder*>(builder_.get())) {
     return cast;
   }
@@ -425,6 +447,12 @@ auto series_builder::prepare() -> Builder* {
     cast->begin_next(index);
     return inner;
   }
+  if (auto cast = dynamic_cast<detail::null_builder*>(builder_.get())) {
+    auto length = builder_->length();
+    builder_ = std::make_unique<Builder>();
+    builder_->resize(length);
+    return static_cast<Builder*>(builder_.get());
+  }
   auto builder = std::make_unique<detail::union_builder>(std::move(builder_));
   auto variant = std::make_unique<Builder>();
   auto* ptr = variant.get();
@@ -436,19 +464,25 @@ auto series_builder::prepare() -> Builder* {
 
 template <class Builder>
 auto detail::record_builder::prepare(std::string_view name) -> Builder* {
+  static_assert(not std::same_as<Builder, detail::null_builder>);
   auto it = fields_.find(name);
   if (it == fields_.end()) {
-    // Field does not exist yet.
-    it = fields_.try_emplace(std::string{name}, builders_.size()).first;
-    auto new_builder = std::make_unique<Builder>();
-    auto pointer = new_builder.get();
-    builders_.emplace_back(std::move(new_builder));
-    pointer->resize(length_ - 1);
-    return pointer;
+    return insert_new_field<Builder>(std::string{name});
   }
   auto& builder = builders_[it->second];
   builder.resize(length_ - 1);
   return builder.prepare<Builder>();
+}
+
+template <class Builder>
+auto detail::record_builder::insert_new_field(std::string name) -> Builder* {
+  auto [it, inserted] = fields_.try_emplace(std::move(name), builders_.size());
+  TENZIR_ASSERT_CHEAP(inserted);
+  auto builder = std::make_unique<Builder>();
+  auto pointer = builder.get();
+  builders_.emplace_back(std::move(builder));
+  pointer->resize(length_ - 1);
+  return pointer;
 }
 
 auto series_builder::type() -> std::shared_ptr<arrow::DataType> {
@@ -470,8 +504,7 @@ void detail::list_builder::resize(int64_t length) {
     // Get ending offset of last element.
     elements_.resize(result->Value(length));
   } else if (length > current) {
-    // TODO: Optimize.
-    // TODO: Is this correct?
+    // TODO: Optimize and check that this is correct.
     auto count = length - offsets_.length();
     auto offset = elements_.length();
     while (count > 0) {
