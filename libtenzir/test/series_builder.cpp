@@ -272,19 +272,17 @@ TEST(set same field to multiple types) {
       0
     ]
   -- value_offsets:     [
-      2
+      1
     ]
   -- child 0 type: struct<bar: list<item: null>>
     -- is_valid:
           [
         true,
-        false,
         false
       ]
     -- child 0 type: list<item: null>
       [
 0 nulls,
-        null,
         null
       ]
   -- child 1 type: list<item: list<item: null>>

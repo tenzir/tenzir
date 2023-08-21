@@ -12,8 +12,6 @@
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/narrow.hpp"
 
-#include <tenzir/logger.hpp>
-
 #include <arrow/builder.h>
 #include <arrow/type.h>
 #include <sys/_types/_int32_t.h>
@@ -347,9 +345,12 @@ private:
 void field_ref::null() {
   // Note: We already incremented the length of the origin.
   if (auto field = origin_->builder(name_)) {
-    // TODO: Can this be inefficient?
-    field->resize(origin_->length() - 1);
-    field->resize(origin_->length());
+    // TODO: What's the best way to do this?
+    if (field->length() == origin_->length()) {
+      field->resize(origin_->length() - 1);
+    }
+    // field->resize(origin_->length() - 1);
+    // field->resize(origin_->length());
   } else {
     // TODO: Resize? Probably not.
     origin_->insert_new_field<detail::null_builder>(std::string{name_});
