@@ -1,7 +1,6 @@
 # serve
 
-Make events available under the [`/serve` REST API
-endpoint](/api#/paths/~1serve/post).
+Make events available under the [`/serve` REST API endpoint](/api#/paths/~1serve/post).
 
 ## Synopsis
 
