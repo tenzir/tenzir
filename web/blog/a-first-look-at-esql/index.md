@@ -1,4 +1,5 @@
 ---
+title: A First Look at ES|QL
 authors: mavam
 date: 2023-08-24
 tags: [esql, elastic, tql, kusto, spl, pipelines, language]
@@ -9,7 +10,12 @@ Elastic [just
 released](https://www.elastic.co/blog/elasticsearch-query-language-esql) their
 new pipeline query language called **ES|QL**. This is a conscious attempt to
 consolidate the language zoo in the Elastic ecosystem
-([queryDSL](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html), [EQL](https://www.elastic.co/guide/en/elasticsearch/reference/current/eql.html), [KQL](https://www.elastic.co/guide/en/kibana/current/kuery-query.html), [SQL](https://www.elastic.co/guide/en/elasticsearch/reference/current/xpack-sql.html), [Painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html), [Canvas/Timelion](https://www.elastic.co/guide/en/kibana/current/timelion.html)).
+([queryDSL](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html),
+[EQL](https://www.elastic.co/guide/en/elasticsearch/reference/current/eql.html),
+[KQL](https://www.elastic.co/guide/en/kibana/current/kuery-query.html),
+[SQL](https://www.elastic.co/guide/en/elasticsearch/reference/current/xpack-sql.html),
+[Painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html),
+[Canvas/Timelion](https://www.elastic.co/guide/en/kibana/current/timelion.html)).
 Elastic said that they worked on this effort for over a year, and we're just
 seeing the first shoots popping through the soil.  The
 [documentation](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql.html)
@@ -49,7 +55,7 @@ So,  ES|QL, how does it feel?
 
 This syntax reads very straight-forward. Splunk users will immediately grasp
 what it does, as there is a remarkable similarity in operator naming. Let's go
-through each pipeline operators individually:
+through each pipeline operator individually:
 
 - [`FROM`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-from.html):
   "returns a table with up to 10,000 documents from a data stream, index, or
@@ -58,7 +64,7 @@ through each pipeline operators individually:
   In TQL, we follow the single responsibility principle: one operator has
   exactly one job.
 - [`EVAL`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-eval.html):
-  TODO. We called this operator [`extend`](/operators/transformations/extend)
+  TODO. We named this operator [`extend`](/operators/transformations/extend)
   because it tells you more what it does: extending the input with another
   field. We took the name `extend` from Kusto.[^1]
 - [`WHERE`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-where.html):
@@ -67,7 +73,7 @@ through each pipeline operators individually:
 - [`STATS`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-stats-by.html):
   groups its input via `BY` and applies aggregation functions on select fields
   of each group.  Elastic went with Splunk nomenclature for this central
-  operations. Perhaps also to make the transition from Splunk to Elastic as easy
+  operation, perhaps also to make the transition from Splunk to Elastic as easy
   as possible.
 - [`ENRICH`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-enrich.html):
   adds data from existing indexes. It's effectively a join operation, and the
@@ -90,7 +96,7 @@ through each pipeline operators individually:
   and `NULLS LAST`. In TQL, we went Kusto-like with `nulls-first` and
   `nulls-last`.
 - [`LIMIT`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-limit.html):
-  restrict the number of output rows to a given number. In TQL, we have
+  restricts the number of output rows. In TQL, we have
   [`head`](/operators/transformations/head) and
   [`tail`](/operators/transformations/tail) for this purpose.
 
@@ -103,7 +109,7 @@ ES|QL differentiates two types of commands (aka operators):
 1. [Source commands](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-source-commands.html)
 2. [Processing commands](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-processing-commands.html)
 
-In TQL, an operator is a*source*, a *transformation*, or a *sink*. Some
+In TQL, an operator is a *source*, a *transformation*, or a *sink*. Some
 operators can be of multiple categories, like
 [`shell`](/operators/sources/shell).
 
@@ -142,7 +148,7 @@ dataflow.
 ## Engine
 
 ES|QL comes with its own executor, i.e., it's not transpiled into any of the
-existing engines.  A running pipelines is a *tasks* and there exists an
+existing engines.  A running pipelines is a *task* and there exists an
 [API](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-task-management.html)
 for querying their state, which may return something like:
 
@@ -204,7 +210,7 @@ new ones are mushrooming everywhere, e.g., [PRQL](https://prql-lang.org/),
 
 With our own TQL, we seek to bridge the data and security analytics world, by
 offering an intuitive language that is easy to grasp, but that internally maps
-to vectorized execution on top of data frames that can easily shared with other
+to vectorized execution on top of data frames that can be easily shared with other
 runtimes.
 
 If you want to look deeper at ES|QL, check out the branch
