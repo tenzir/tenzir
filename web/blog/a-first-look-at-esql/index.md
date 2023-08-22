@@ -59,10 +59,12 @@ This syntax reads very straight-forward. Splunk users will immediately grasp
 what it does, as there is a remarkable similarity in operator naming. Let's go
 through each pipeline operator individually:
 
-- [`FROM`][esql-from] "returns a table with up to 10,000 documents from a data
-  stream, index, or alias". Why is the 10k limit hard-baked? Shouldn't that be
-  the job of [`LIMIT`][esql-limit]? In TQL, we follow the single responsibility
-  principle: one operator has exactly one job.
+- [`FROM`][esql-from] generates a table with up to 10k rows from a data stream,
+  index, or alias. We asked ourselves why there is a hard-baked 10k limit?
+  Shouldn't that be the job of [`LIMIT`][esql-limit]? The limit feels a
+  technical limitation rather than a conscious design decision. In TQL, we have
+  unbounded streams but also follow the single responsibility principle: one
+  operator has exactly one job.
 - [`EVAL`][esql-eval] appends new or replaces existing columns. We named this
   operator [`extend`](/operators/transformations/extend) because we found the
   Splunk-inspired command name "eval" too generic for this use case.[^1]
