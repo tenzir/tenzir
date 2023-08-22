@@ -15,10 +15,9 @@ Elastic ecosystem
 [SQL](https://www.elastic.co/guide/en/elasticsearch/reference/current/xpack-sql.html),
 [Painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html),
 [Canvas/Timelion](https://www.elastic.co/guide/en/kibana/current/timelion.html)).
-Elastic said that they worked on this effort for over a year, and we're just
-seeing the first shoots popping through the soil. The [documentation][esql-docs]
-is still sparse, but we still tried to read between the lines to understand what
-this new pipeline language has to offer.
+Elastic said that they worked on this effort for over a year. The
+[documentation][esql-docs] is still sparse, but we still tried to read between
+the lines to understand what this new pipeline language has to offer.
 
 [esql-blog]: https://www.elastic.co/blog/elasticsearch-query-language-esql
 [esql-docs]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql.html
