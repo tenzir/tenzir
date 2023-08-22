@@ -105,9 +105,13 @@ public:
 
   auto list() -> list_ref;
 
+  // -----
+
   void resize(int64_t length);
 
   auto length() -> int64_t;
+
+  // -----
 
   auto type() -> std::shared_ptr<arrow::DataType>;
 

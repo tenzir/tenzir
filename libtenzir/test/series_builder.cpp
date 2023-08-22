@@ -300,6 +300,21 @@ TEST(set same field to multiple types) {
 
 // -- playground ------------------------------------------------
 
+// TEST(fixed type schema) {
+//   auto t = type{};
+//   auto b = series_builder{/*std::move(t)*/};
+//   auto foo = b.record().field("foo");
+//   if (not foo.exists()) {
+//     // skip field
+//   }
+//   auto d = data{42};
+//   if (foo.type() == d.type()) {
+//     foo.atom(d);
+//   } else {
+//     // type mismatch
+//   }
+// }
+
 TEST(maybe we want to change some values) {
   auto b = series_builder{};
   b.record().field("a").null();

@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/generator.hpp"
 
 #include <arrow/builder.h>
 #include <arrow/type.h>
@@ -31,6 +32,8 @@ void resize_arrow_builder(Builder& builder, int64_t length) {
   } else if (current > length) {
     auto result = std::shared_ptr<typename Builder::ArrayType>{};
     (void)builder.Finish(&result);
+    // TODO: Extension types.
+    // TODO: Optimize eventually very far in the future.
     (void)builder.AppendArraySlice(*result->data(), 0, length);
   }
 }
@@ -149,6 +152,26 @@ public:
         .ValueOrDie());
   }
 
+  auto finish2(bool preserve_order)
+    -> generator<std::shared_ptr<arrow::Array>> {
+    auto discriminants = std::shared_ptr<arrow::Int8Array>{};
+    TENZIR_ASSERT_CHEAP(discriminants_.Finish(&discriminants).ok());
+    TENZIR_ASSERT_CHEAP(discriminants->null_count() == 0);
+    if (not preserve_order) {
+    }
+    // Find runs.
+    auto it = discriminants->begin();
+    if (it == discriminants->end()) {
+      co_return;
+    }
+    auto last = **it;
+    for (; it != discriminants->end(); ++it) {
+      auto next = **it;
+      if (next != last) {
+      }
+    }
+  }
+
   auto type() -> std::shared_ptr<arrow::DataType> override {
     auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
     fields.reserve(variants_.size());
@@ -194,8 +217,11 @@ public:
 
 private:
   // TODO: Use `TypedBufferBuilder` instead?
+  arrow::TypedBufferBuilder<int8_t> dis;
   arrow::Int8Builder discriminants_;
   arrow::Int32Builder offsets_;
+
+  // TODO: Consider a map-type instead.
   std::vector<std::unique_ptr<typed_builder>> variants_;
 };
 
@@ -264,6 +290,60 @@ public:
     return std::make_shared<arrow::StructArray>(type(), length(), children,
                                                 std::move(null_bitmap));
   }
+
+  // auto finish2() -> generator<std::shared_ptr<arrow::Array>> {
+  //   // 0123456
+  //   // AAABBAA
+  //   // 0120134
+
+  //   // A A
+  //   //  B
+  //   //
+  //   // X X
+  //   //  Y
+  //   //
+  //   // [123, "hello"]
+
+  //   // Yield: [0..3, 5..7]       AAA  AA
+  //   //        [3..5]                BB
+  //   // Other: [0..2, 3..4, 5..6] XX X X
+  //   //        [2..3, 4..5, 6..7]   Y Y Y
+
+  //   // Result: AA    A
+  //   //         XX    X
+  //   //           A    A
+  //   //           Y    Y
+  //   //            B
+  //   //            X
+  //   //             B
+  //   //             Y
+
+  //   // # Single union
+  //   // ABA
+  //   // 001
+  //   //
+  //   // AA, B
+  //   // 01, 0
+  //   //
+  //   //
+  //   // # Record with unions
+  //   // ABA  XYY
+  //   // 001  001
+  //   //
+  //   // AA, B | X, YY
+  //   // 01, 0 | 0, 01
+  //   // Start indices A: 0, 2
+  //   // Start indices
+
+  //   // A X => (A, X)
+  //   // A Y => (A, Y)
+  //   // B Y => (B, Y)
+
+  //   // Assume unordered here.
+  //   for (auto& field : builders_) {
+  //     field.finish2();
+  //   }
+  // }
 
   auto type() -> std::shared_ptr<arrow::DataType> override {
     return std::make_shared<arrow::StructType>(make_fields());

@@ -165,7 +165,8 @@ void construct_enumeration_type(stateful_type_base& self, const T* begin,
 template <class T>
 void construct_record_type(stateful_type_base& self, const T& begin,
                            const T& end) {
-  TENZIR_ASSERT(begin != end, "A record type must not have zero fields.");
+  // TODO: Remove me.
+  // TENZIR_ASSERT(begin != end, "A record type must not have zero fields.");
   const auto reserved_size = [&]() noexcept {
     // By default the builder allocates 1024 bytes, which is much more than
     // what we require, and since we can easily calculate the exact amount we
