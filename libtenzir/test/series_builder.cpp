@@ -335,6 +335,30 @@ TEST(maybe we want to change some values) {
   auto test = b.finish();
 }
 
+// {
+//   ...,
+//   "foo": 42
+// },
+// {
+//   ...,
+//   "foo": {"bar": 42}
+// }
+
+// export | filter *.foo == 42
+
+// drop-null-fields
+
+TEST(playground) {
+  auto b = series_builder{};
+  auto r = b.record();
+  r.field("foo").atom(42);
+  r.field("bar").atom(43);
+  r = b.record();
+  r.field("foo").atom(44);
+  r.field("bar").record().field("baz").atom(45);
+  auto x = b.finish();
+}
+
 } // namespace
 
 } // namespace tenzir

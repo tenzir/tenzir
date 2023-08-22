@@ -13,6 +13,35 @@
 #include <memory>
 #include <string_view>
 
+// Things that we might want to support (not necessarily here):
+// - Schema initialization (keep field types?)
+// - No-infer mode with existing schema
+// - Physical and logical (number -> port)
+// - Casting (unsigned -> signed integer)
+// --------------------------------------------------------------
+// - Value type inference (e.g., string -> time)
+// - Reading with selector field (internally tagged)
+// - Unnest / unflatten
+// - Timeout flushing
+// - Batch size flushing
+
+// Problem:
+// - List with multiple types.
+// - Hostname & ip adresses
+
+// rr.data.json / suricata DNS   <ip -> hostname>
+
+// Consider:
+// - Create builder with unions (but not use them).
+// - Removing unions *after* building could be more efficient (no need to switch
+//   types multiple times), or less efficient (have to traverse unions multiple
+//   times instead of LRU logic).
+// - Might want rare variants to have their own timeout logic.
+// - https://github.com/tenzir/issues/issues/566 could have value-dependant
+//   solution
+// - Reset JSON parser after every flush to reduce impact of bad data.
+// - When `{"foo": {"bar": 42}}`, we could `{"foo": ""} -> {"foo": {}}`
+
 namespace tenzir::experimental {
 
 class series_builder;

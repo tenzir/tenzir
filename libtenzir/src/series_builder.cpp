@@ -152,22 +152,65 @@ public:
         .ValueOrDie());
   }
 
-  auto finish2(bool preserve_order)
-    -> generator<std::shared_ptr<arrow::Array>> {
+  // TODO: Consider generator.
+  auto finish2() -> std::vector<std::shared_ptr<arrow::Array>> {
+    auto variants = std::vector<std::vector<std::shared_ptr<arrow::Array>>>{};
+    for (auto& variant : variants_) {
+      variants.push_back(variant.finish2());
+      (void)variants.back().begin();
+      // offsets.push_back(0);
+    }
+
     auto discriminants = std::shared_ptr<arrow::Int8Array>{};
-    TENZIR_ASSERT_CHEAP(discriminants_.Finish(&discriminants).ok());
-    TENZIR_ASSERT_CHEAP(discriminants->null_count() == 0);
-    if (not preserve_order) {
+    (void)discriminants_.Finish(&discriminants);
+    // TODO: Assume that offsets can be inferred from discriminants.
+    // auto offsets = std::shared_ptr<arrow::Int32Array>{};
+    // (void)offsets_.Finish(&offsets);
+    auto last_offsets = std::vector<int64_t>(variants.size(), 0);
+
+    auto nested_unions = false;
+    if (not nested_unions) {
+      auto it = discriminants->begin();
+      // TODO
+      auto last = **it;
+      auto count = int64_t{0};
+      while (it != discriminants->end()) {
+        auto current = **it;
+        if (current == last) {
+          count += 1;
+          continue;
+        }
+        co_yield (*variants[last][0]).Slice(last_offsets[last], count);
+        last_offsets[last] += count;
+        last = current;
+      }
     }
-    // Find runs.
-    auto it = discriminants->begin();
-    if (it == discriminants->end()) {
-      co_return;
-    }
-    auto last = **it;
-    for (; it != discriminants->end(); ++it) {
-      auto next = **it;
-      if (next != last) {
+
+    if (nested_unions) {
+      auto it = discriminants->begin();
+      auto last = **it;
+      auto last_vectors = std::vector<size_t>(variants.size(), 0);
+      auto count = int64_t{0};
+      while (it != discriminants->end()) {
+        auto current = **it;
+        // We must emit an array if:
+        // 1) Our discriminant changes, OR
+        // 2) The active variant array is exhausted.
+        // TODO: Off-by-ones, everywhere!
+        auto& active = variants[last][last_vectors[last]];
+        if (current == last) {
+          auto exhausted = active->length() <= last_offsets[last] + count;
+          if (not exhausted) {
+            count += 1;
+            continue;
+          }
+          // TODO: exhausted
+        }
+        co_yield active->Slice(last_offsets[last], count);
+        last_offsets[last] += count;
+        if (active->length() < last_offsets[last]) {
+          last_offsets[last] = 0;
+        }
       }
     }
   }
@@ -291,6 +334,9 @@ public:
                                                 std::move(null_bitmap));
   }
 
+  auto finish2() -> std::vector<std::shared_ptr<arrow::Array>> {
+  }
+
   // auto finish2() -> generator<std::shared_ptr<arrow::Array>> {
   //   // 0123456
   //   // AAABBAA
@@ -339,10 +385,6 @@ public:
   //   // A Y => (A, Y)
   //   // B Y => (B, Y)
 
-  //   // Assume unordered here.
-  //   for (auto& field : builders_) {
-  //     field.finish2();
-  //   }
   // }
 
   auto type() -> std::shared_ptr<arrow::DataType> override {
@@ -426,12 +468,12 @@ void field_ref::null() {
   // Note: We already incremented the length of the origin.
   if (auto field = origin_->builder(name_)) {
     // TODO: What's the best way to do this?
+    TENZIR_ASSERT_CHEAP(field->length() <= origin_->length());
     if (field->length() == origin_->length()) {
       field->resize(origin_->length() - 1);
     }
-    // field->resize(origin_->length() - 1);
-    // field->resize(origin_->length());
   } else {
+    // TODO: Consider doing nothing here.
     // TODO: Resize? Probably not.
     origin_->insert_new_field<detail::null_builder>(std::string{name_});
   }
