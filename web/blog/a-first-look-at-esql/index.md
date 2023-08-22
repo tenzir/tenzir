@@ -6,10 +6,9 @@ tags: [esql, elastic, tql, kusto, spl, pipelines, language]
 comments: true
 ---
 
-Elastic [just
-released](https://www.elastic.co/blog/elasticsearch-query-language-esql) their
-new pipeline query language called **ES|QL**. This is a conscious attempt to
-consolidate the language zoo in the Elastic ecosystem
+Elastic [just released][esql-blog] their new pipeline query language called
+**ES|QL**. This is a conscious attempt to consolidate the language zoo in the
+Elastic ecosystem
 ([queryDSL](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html),
 [EQL](https://www.elastic.co/guide/en/elasticsearch/reference/current/eql.html),
 [KQL](https://www.elastic.co/guide/en/kibana/current/kuery-query.html),
@@ -17,10 +16,12 @@ consolidate the language zoo in the Elastic ecosystem
 [Painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html),
 [Canvas/Timelion](https://www.elastic.co/guide/en/kibana/current/timelion.html)).
 Elastic said that they worked on this effort for over a year, and we're just
-seeing the first shoots popping through the soil.  The
-[documentation](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql.html)
+seeing the first shoots popping through the soil. The [documentation][esql-docs]
 is still sparse, but we still tried to read between the lines to understand what
 this new pipeline language has to offer.
+
+[esql-blog]: https://www.elastic.co/blog/elasticsearch-query-language-esql
+[esql-docs]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql.html
 
 <!--truncate-->
 
@@ -37,7 +38,7 @@ ES|QL to compare and reflect on our own [Tenzir Query Language
 
 ## Walk-through by Example
 
-So,  ES|QL, how does it feel?
+So, ES|QL, how does it feel?
 
 ```
   FROM employees
@@ -57,50 +58,50 @@ This syntax reads very straight-forward. Splunk users will immediately grasp
 what it does, as there is a remarkable similarity in operator naming. Let's go
 through each pipeline operator individually:
 
-- [`FROM`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-from.html):
-  "returns a table with up to 10,000 documents from a data stream, index, or
-  alias".  Why is the 10k limit hard-baked? Shouldn't that be the job of
-  [`LIMIT`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-limit.html)?
-  In TQL, we follow the single responsibility principle: one operator has
-  exactly one job.
-- [`EVAL`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-eval.html):
-  TODO. We named this operator [`extend`](/operators/transformations/extend)
-  because it tells you more what it does: extending the input with another
-  field. We took the name `extend` from Kusto.[^1]
-- [`WHERE`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-where.html):
-  filters the input with an expression. We have the same
+- [`FROM`][esql-from]: "returns a table with up to 10,000 documents from a data
+  stream, index, or alias". Why is the 10k limit hard-baked? Shouldn't that be
+  the job of [`LIMIT`][esql-limit]? In TQL, we follow the single responsibility
+  principle: one operator has exactly one job.
+- [`EVAL`][esql-eval]: TODO. We named this operator
+  [`extend`](/operators/transformations/extend) because it tells you more what
+  it does: extending the input with another field. We took the name `extend`
+  from Kusto.[^1]
+- [`WHERE`][esql-where]: filters the input with an expression. We have the same
   [`where`](/operators/transformations/where) in TQL.
-- [`STATS`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-stats-by.html):
-  groups its input via `BY` and applies aggregation functions on select fields
-  of each group.  Elastic went with Splunk nomenclature for this central
-  operation, perhaps also to make the transition from Splunk to Elastic as easy
-  as possible.
-- [`ENRICH`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-enrich.html):
-  adds data from existing indexes. It's effectively a join operation, and the
-  `ON` keywords makes it possible to select the join field. Interestingly, the
-  word "join" doesn't appear on the documentation. We hypothesize that this was
-  a conscious choice, as a database join may feel intimidating for beginning and
-  intermediate users.
-- [`KEEP`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-keep.html):
-  selects a set of columns from the input and drops all others. It is the
-  inverse of
-  [`DROP`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-drop.html).
-  In TQL, we call these projection operators
-  [`select`](/operators/transformations/select) and also
+- [`STATS`][esql-stats]: groups its input via `BY` and applies aggregation
+  functions on select fields of each group.  Elastic went with Splunk
+  nomenclature for this central operation, perhaps also to make the transition
+  from Splunk to Elastic as easy as possible.
+- [`ENRICH`][esql-enrich]: adds data from existing indexes. It's effectively a
+  join operation, and the `ON` keywords makes it possible to select the join
+  field. Interestingly, the word "join" doesn't appear on the documentation. We
+  hypothesize that this was a conscious choice, as a database join may feel
+  intimidating for beginning and intermediate users.
+- [`KEEP`][esql-keep]: selects a set of columns from the input and drops all
+  others. It is the inverse of [`DROP`][esql-drop]. In TQL, we call these
+  projection operators [`select`](/operators/transformations/select) and also
   [`drop`](/operators/transformations/drop).
-- [`SORT`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-sort.html):
+- [`SORT`][esql-sort]:
   sorts rows by one or more fields. `SORT height DESC, first_name ASC` sorts the
   field `height` in descending order and the field `first_name` in ascending
   order. The syntax of our [`sort`](/operators/transformations/sort) is
   identical. Controlling the position of null values works with `NULLS FIRST`
   and `NULLS LAST`. In TQL, we went Kusto-like with `nulls-first` and
   `nulls-last`.
-- [`LIMIT`](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-limit.html):
-  restricts the number of output rows. In TQL, we have
+- [`LIMIT`][esql-limit]: restricts the number of output rows. In TQL, we have
   [`head`](/operators/transformations/head) and
   [`tail`](/operators/transformations/tail) for this purpose.
 
-[^1]:  In general, we find that Kusto has very self-descriptive operator names. During the design of TQL, we compared many different languages and often favored Kusto's choice of name.
+[esql-from]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-from.html
+[esql-eval]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-eval.html
+[esql-where]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-where.html
+[esql-stats]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-stats-by.html
+[esql-enrich]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-enrich.html
+[esql-keep]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-keep.html
+[esql-drop]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-drop.html
+[esql-sort]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-sort.html
+[esql-limit]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-limit.html
+[^1]: In general, we find that Kusto has very self-descriptive operator names. During the design of TQL, we compared many different languages and often favored Kusto's choice of name.
 
 ## Sources, Transformations, ... but Sinks?
 
@@ -119,11 +120,12 @@ a REST API.
 
 ## Syntax
 
-Syntactically, the [ES|QL
-language](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-syntax.html)
-is similar to TQL: the `|` (pipe) symbol separates commands describe the
-dataflow.
+Syntactically, the [ES|QL language][esql-syntax] is similar to TQL. The
+following points stood out:
 
+[esql-syntax]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-syntax.html
+
+- The `|` (pipe) symbol separates commands describe the dataflow.
 - Comments work as in C++: `//` for single line and `/*` and `*/` for multi-line
   comments.
 - Expressions can occur in `WHERE`, `STATS`, and other commands. The following
@@ -137,20 +139,22 @@ dataflow.
   multiple orders of magnitude is common, e.g., when dealing with GBs. This is
   why we also offer SI literals in TQL, allowing you to write large numbers as
   `1 Mi` or `1 M`.
-- ES|QL features multiple scalar
-  [functions](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-functions.html)
+- ES|QL features multiple scalar [functions][esql-funcs].
   that perform value-to-value transformations. Functions can occur in `ROW`,
   `EVAL`, and `WHERE`.
-- Similarly, [aggregation
-  functions](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-agg-functions.html)
-  perform a vector-to-scalar transformation per group in `STATS`.
+- Similarly, [aggregation functions][esql-agg-funcs] perform a vector-to-scalar
+  transformation per group in `STATS`.
+
+[esql-funcs]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-functions.html
+[esql-agg-funcs]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-agg-functions.html
 
 ## Engine
 
 ES|QL comes with its own executor, i.e., it's not transpiled into any of the
-existing engines.  A running pipelines is a *task* and there exists an
-[API](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-task-management.html)
-for querying their state, which may return something like:
+existing engines. A running pipelines is a *task* and there exists an
+[API][esql-api] for querying their state, which may return something like:
+
+[esql-api]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-task-management.html
 
 ```json
 {
@@ -171,13 +175,13 @@ for querying their state, which may return something like:
 
 ## Data Model
 
-The concept of [multi-valued
-fields](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-multivalued-fields.html)
-exists to bridge the world between JSON records and 2D tables. This shows the
-heritage of the type system, which evolved from document stores as opposed to
-structured data stores. In document land, every record may have a different
-shape (or schema). The term *multi-valued* effectively means *list*, e.g.,
-`[1, 2, 3]`.
+The concept of [multi-valued fields][esql-mv-fields] exists to bridge the world
+between JSON records and 2D tables. This shows the heritage of the type system,
+which evolved from document stores as opposed to structured data stores. In
+document land, every record may have a different shape (or schema). The term
+*multi-valued* effectively means *list*, e.g., `[1, 2, 3]`.
+
+[esql-mv-fields]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-multivalued-fields.html
 
 Noteworthy:
 
@@ -214,6 +218,7 @@ to vectorized execution on top of data frames that can be easily shared with oth
 runtimes.
 
 If you want to look deeper at ES|QL, check out the branch
-[`feature/esql`](https://github.com/elastic/elasticsearch/tree/feature/esql/x-pack/plugin/esql).
-Find something interesting about pipelines to discuss? Swing by our
-[Discord](/discord) and start a conversation.
+[`feature/esql`][esql-branch]. Find something interesting about pipelines to
+discuss? Swing by our [Discord](/discord) and start a conversation.
+
+[esql-branch]: https://github.com/elastic/elasticsearch/tree/feature/esql/x-pack/plugin/esql
