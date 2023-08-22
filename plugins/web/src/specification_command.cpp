@@ -159,9 +159,7 @@ PipelineInfo:
     state:
       type: string
       enum:
-        - starting
         - running
-        - stopping
         - stopped
     error:
       type: string
