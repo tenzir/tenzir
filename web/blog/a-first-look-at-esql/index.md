@@ -62,10 +62,9 @@ through each pipeline operator individually:
   stream, index, or alias". Why is the 10k limit hard-baked? Shouldn't that be
   the job of [`LIMIT`][esql-limit]? In TQL, we follow the single responsibility
   principle: one operator has exactly one job.
-- [`EVAL`][esql-eval]: TODO. We named this operator
-  [`extend`](/operators/transformations/extend) because it tells you more what
-  it does: extending the input with another field. We took the name `extend`
-  from Kusto.[^1]
+- [`EVAL`][esql-eval]: appends new or replaces existing columns. We named this
+  operator [`extend`](/operators/transformations/extend) because we found the
+  Splunk-inspired command name "eval" too generic for this use case.[^1]
 - [`WHERE`][esql-where]: filters the input with an expression. We have the same
   [`where`](/operators/transformations/where) in TQL.
 - [`STATS`][esql-stats]: groups its input via `BY` and applies aggregation
@@ -101,7 +100,9 @@ through each pipeline operator individually:
 [esql-drop]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-drop.html
 [esql-sort]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-sort.html
 [esql-limit]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-limit.html
-[^1]: In general, we find that Kusto has very self-descriptive operator names. During the design of TQL, we compared many different languages and often favored Kusto's choice of name.
+[^1]: We took the name `extend` from Kusto. In general, we find that Kusto has
+    very self-descriptive operator names. During the design of TQL, we compared
+    many different languages and often favored Kusto's choice of name.
 
 ## Sources, Transformations, ... but Sinks?
 
