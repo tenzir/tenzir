@@ -105,7 +105,7 @@ through each pipeline operator individually:
 
 ## Sources, Transformations, ... but Sinks?
 
-ES|QL differentiates two types of commands (aka operators):
+ES|QL differentiates two types of commands (which we call *operators* in TQL):
 
 1. [Source commands](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-source-commands.html)
 2. [Processing commands](https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-processing-commands.html)
@@ -125,7 +125,7 @@ following points stood out:
 
 [esql-syntax]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql-syntax.html
 
-- The `|` (pipe) symbol separates commands describe the dataflow.
+- The `|` (pipe) symbol separates commands that describe the dataflow.
 - Comments work as in C++: `//` for single line and `/*` and `*/` for multi-line
   comments.
 - Expressions can occur in `WHERE`, `STATS`, and other commands. The following
