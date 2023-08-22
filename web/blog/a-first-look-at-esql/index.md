@@ -2,7 +2,7 @@
 title: A First Look at ES|QL
 authors: mavam
 date: 2023-08-24
-tags: [esql, elastic, tql, kusto, spl, pipelines, language]
+tags: [esql, elastic, tql, kusto, splunk, spl, pipelines, language]
 comments: true
 ---
 
@@ -192,11 +192,36 @@ Noteworthy:
   this type causes duplicate removal on ingest.
 - Other types, like `long`, do not cause removal of duplicates on ingest.
 
+The output is still semi-structured in that listness is something dynamic on a
+per-value basis. Consider this output:
+
+```json
+{
+  "columns": [
+    { "name": "a", "type": "long"},
+    { "name": "b", "type": "long"}
+  ],
+  "values": [
+    [1, [1, 2]],
+    [2,      3]
+  ]
+}
+```
+
+The column `b` has the list value `[1, 2]` in the first row and `3` in the
+second. In a strict type system (like TQL), the type of `b` could be
+`list<long>` but then the second row would have value `[3]` instead of `3`. Sum
+types (called `union` or `variant` in many languages) are another way to
+represent heterogeneous data as in the above example. If we described `b` with
+the type `union<long, list<long>>` instead of `long`, then it would be perfectly
+fine for `b` to take one value `[1, 2]` in one row and `3` in another.
+
 For TQL, we built our data model on top of data frames. We express structure in
 terms of *records* and *lists*, and arbitrarily nested combinations of them. It
-would be up the user to define set semantics that ensures unique values. We may
-add such a type in the future as we gain more complete support of the underlying
-Arrow type system.
+would be up the user to define set semantics that ensures unique values. We
+consider adding such a set type in the future (possible as type constraint or
+attribute) as we gain more complete support of the underlying Arrow type system.
+Similarly, we plan on adding sum types in the near future.
 
 ## Summary
 
