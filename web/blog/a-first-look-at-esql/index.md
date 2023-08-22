@@ -59,36 +59,36 @@ This syntax reads very straight-forward. Splunk users will immediately grasp
 what it does, as there is a remarkable similarity in operator naming. Let's go
 through each pipeline operator individually:
 
-- [`FROM`][esql-from]: "returns a table with up to 10,000 documents from a data
+- [`FROM`][esql-from] "returns a table with up to 10,000 documents from a data
   stream, index, or alias". Why is the 10k limit hard-baked? Shouldn't that be
   the job of [`LIMIT`][esql-limit]? In TQL, we follow the single responsibility
   principle: one operator has exactly one job.
-- [`EVAL`][esql-eval]: appends new or replaces existing columns. We named this
+- [`EVAL`][esql-eval] appends new or replaces existing columns. We named this
   operator [`extend`](/operators/transformations/extend) because we found the
   Splunk-inspired command name "eval" too generic for this use case.[^1]
-- [`WHERE`][esql-where]: filters the input with an expression. We have the same
+- [`WHERE`][esql-where] filters the input with an expression. We have the same
   [`where`](/operators/transformations/where) in TQL.
-- [`STATS`][esql-stats]: groups its input via `BY` and applies aggregation
+- [`STATS`][esql-stats] groups its input via `BY` and applies aggregation
   functions on select fields of each group.  Elastic went with Splunk
   nomenclature for this central operation, perhaps also to make the transition
   from Splunk to Elastic as easy as possible.
-- [`ENRICH`][esql-enrich]: adds data from existing indexes. It's effectively a
+- [`ENRICH`][esql-enrich] adds data from existing indexes. It's effectively a
   join operation, and the `ON` keywords makes it possible to select the join
   field. Interestingly, the word "join" doesn't appear on the documentation. We
   hypothesize that this was a conscious choice, as a database join may feel
   intimidating for beginning and intermediate users.
-- [`KEEP`][esql-keep]: selects a set of columns from the input and drops all
+- [`KEEP`][esql-keep] selects a set of columns from the input and drops all
   others. It is the inverse of [`DROP`][esql-drop]. In TQL, we call these
   projection operators [`select`](/operators/transformations/select) and also
   [`drop`](/operators/transformations/drop).
-- [`SORT`][esql-sort]:
+- [`SORT`][esql-sort]
   sorts rows by one or more fields. `SORT height DESC, first_name ASC` sorts the
   field `height` in descending order and the field `first_name` in ascending
   order. The syntax of our [`sort`](/operators/transformations/sort) is
   identical. Controlling the position of null values works with `NULLS FIRST`
   and `NULLS LAST`. In TQL, we went Kusto-like with `nulls-first` and
   `nulls-last`.
-- [`LIMIT`][esql-limit]: restricts the number of output rows. In TQL, we have
+- [`LIMIT`][esql-limit] restricts the number of output rows. In TQL, we have
   [`head`](/operators/transformations/head) and
   [`tail`](/operators/transformations/tail) for this purpose.
 
