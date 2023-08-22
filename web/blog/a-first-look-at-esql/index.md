@@ -22,6 +22,8 @@ the lines to understand what this new pipeline language has to offer.
 [esql-blog]: https://www.elastic.co/blog/elasticsearch-query-language-esql
 [esql-docs]: https://esql-latest.docs-preview.app.elstc.co/guide/en/elasticsearch/reference/master/esql.html
 
+![ESQL](esql.excalidraw.svg)
+
 <!--truncate-->
 
 The reason why we are excited about this announcement is because we have *also*
