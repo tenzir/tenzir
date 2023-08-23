@@ -402,8 +402,13 @@ using exec_node_sink_actor = typed_actor_fwd<
 
 /// The interface of a EXEC NODE actor.
 using exec_node_actor = typed_actor_fwd<
-  // TODO
+  // Start an execution node. Returns after the operator has yielded for the
+  // first time.
   auto(atom::start, std::vector<caf::actor> previous)->caf::result<void>,
+  // Pause the execution node. No-op if it was already paused.
+  auto(atom::pause)->caf::result<void>,
+  // Resume the execution node. No-op if it was not paused.
+  auto(atom::resume)->caf::result<void>,
   // Uodate demand.
   auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size,
        duration batch_timeout)
@@ -447,7 +452,12 @@ using node_actor = typed_actor_fwd<
 using pipeline_executor_actor = typed_actor_fwd<
   // Execute a pipeline, returning the result asynchronously. This must be
   // called at most once per executor.
-  auto(atom::start)->caf::result<void>>::unwrap;
+  auto(atom::start)->caf::result<void>,
+  // Pause the pipeline execution. No-op if it was already paused. Must not be
+  // called before the pipeline was started.
+  auto(atom::pause)->caf::result<void>,
+  // Resume the pipeline execution. No-op if it was not paused.
+  auto(atom::resume)->caf::result<void>>::unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.

@@ -25,7 +25,7 @@ The diagram below illustrates these mechanics:
 
 ![Pipeline in the Browser](pipeline-browser.excalidraw.svg)
 
-For example, write [`version`](../../operators/sources/version.md) and click
+For example, write [`show version`](../../operators/sources/show.md) and click
 *Run* to see a single event arrive.
 
 ## On the command line
@@ -43,70 +43,23 @@ The diagram below illustrates these mechanics:
 
 ![Pipeline on the command line](pipeline-cli.excalidraw.svg)
 
-For example, run [`tenzir 'version'`](../../operators/sources/version.md) to see
-a single event rendered as JSON:
-
-<details>
-<summary>Output</summary>
+For example, run [`tenzir 'show version'`](../../operators/sources/show.md) to
+see a single event rendered as JSON:
 
 ```json
 {
-  "version": "v4.0.0-rc2-34-g9197f7355e",
-  "plugins": [
-    {
-      "name": "compaction",
-      "version": "bundled"
-    },
-    {
-      "name": "inventory",
-      "version": "bundled"
-    },
-    {
-      "name": "kafka",
-      "version": "bundled"
-    },
-    {
-      "name": "matcher",
-      "version": "bundled"
-    },
-    {
-      "name": "netflow",
-      "version": "bundled"
-    },
-    {
-      "name": "parquet",
-      "version": "bundled"
-    },
-    {
-      "name": "pcap",
-      "version": "bundled"
-    },
-    {
-      "name": "pipeline-manager",
-      "version": "bundled"
-    },
-    {
-      "name": "platform",
-      "version": "bundled"
-    },
-    {
-      "name": "web",
-      "version": "bundled"
-    }
-  ]
+  "version": "v4.0.0-rc12-8-g6d49fd95d1"
 }
 ```
-
-</details>
 
 You could also render it differently by passing a different
 [format](../../formats.md) to the [`write`](../../operators/transformations/write.md)
 operator, or by inferring the format from the file extension:
 
 ```bash
-tenzir 'version | write csv'
-tenzir 'version | to file /tmp/version.ssv'
-tenzir 'version | to file /tmp/version.parquet'
+tenzir 'show version | write csv'
+tenzir 'show version | to file /tmp/version.ssv'
+tenzir 'show version | to file /tmp/version.parquet'
 ```
 
 Instead of passing the pipeline description to the `tenzir` executable, you can

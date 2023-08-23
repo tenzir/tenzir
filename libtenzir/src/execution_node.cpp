@@ -377,6 +377,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
   /// The next run of this actor's internal run loop.
   bool run_scheduled = {};
 
+  /// Whether this execution node is paused.
+  bool paused = {};
+
   /// Set by `ctrl.abort(...)`, to be checked by `start()` and `run()`.
   caf::error abort;
 
@@ -504,6 +507,21 @@ struct exec_node_state : inbound_state_mixin<Input>,
     return {};
   }
 
+  auto pause() -> caf::result<void> {
+    auto time_scheduled_guard
+      = make_timer_guard(metrics->values.time_scheduled);
+    paused = true;
+    return {};
+  }
+
+  auto resume() -> caf::result<void> {
+    auto time_scheduled_guard
+      = make_timer_guard(metrics->values.time_scheduled);
+    paused = false;
+    schedule_run();
+    return {};
+  }
+
   auto request_more_input() -> void
     requires(not std::is_same_v<Input, std::monostate>)
   {
@@ -620,7 +638,17 @@ struct exec_node_state : inbound_state_mixin<Input>,
   }
 
   auto schedule_run() -> void {
-    if (not instance or run_scheduled) {
+    // TODO: We can make pausing more efficient by pausing execution nodes from
+    // left-to-right, and only pausing the next one after the current one's
+    // outbound buffer has emptied. However, that's a lot of code to write
+    // compared to this single check, so let's stick has an issue with a paused
+    // pipeline's memory usage.
+    if (paused) {
+      return;
+    }
+    // Check whether we're already scheduled to run, or are no longer allowed to
+    // rum.
+    if (run_scheduled or not instance) {
       return;
     }
     run_scheduled = true;
@@ -900,6 +928,12 @@ auto exec_node(
     [self](atom::start,
            std::vector<caf::actor>& previous) -> caf::result<void> {
       return self->state.start(std::move(previous));
+    },
+    [self](atom::pause) -> caf::result<void> {
+      return self->state.pause();
+    },
+    [self](atom::resume) -> caf::result<void> {
+      return self->state.resume();
     },
     [self](atom::push, std::vector<table_slice>& events) -> caf::result<void> {
       if constexpr (std::is_same_v<Input, table_slice>) {

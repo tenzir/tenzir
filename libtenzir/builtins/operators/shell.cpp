@@ -43,6 +43,8 @@ public:
   static auto make(std::string command, stdin_mode mode)
     -> caf::expected<child> {
     auto result = child{std::move(command)};
+    // We use `/bin/sh -c "${command}"` to interpret the command.
+    auto shell = "/bin/sh";
     try {
       auto exit_handler = [](int exit, std::error_code ec) {
         TENZIR_DEBUG("child exited with code {}: {}", exit, ec.message());
@@ -50,6 +52,8 @@ public:
       switch (mode) {
         case stdin_mode::none:
           result.child_ = bp::child{
+            shell,
+            "-c",
             result.command_,
             bp::std_out > result.stdout_,
             bp::std_in < bp::close,
@@ -58,6 +62,8 @@ public:
           break;
         case stdin_mode::inherit:
           result.child_ = bp::child{
+            shell,
+            "-c",
             result.command_,
             bp::std_out > result.stdout_,
             bp::on_exit(exit_handler),
@@ -65,6 +71,8 @@ public:
           break;
         case stdin_mode::pipe:
           result.child_ = bp::child{
+            shell,
+            "-c",
             result.command_,
             bp::std_out > result.stdout_,
             bp::std_in < result.stdin_,
@@ -78,23 +86,14 @@ public:
     return result;
   }
 
-  auto reading() -> bool {
-    return child_.running() && not stdout_.eof();
-  }
-
-  auto writing() -> bool {
-    return child_.running() && not stdin_.eof();
-  }
-
   auto read(std::span<std::byte> buffer) -> caf::expected<size_t> {
     TENZIR_ASSERT(!buffer.empty());
     TENZIR_DEBUG("trying to read {} bytes", buffer.size());
     auto* data = reinterpret_cast<char*>(buffer.data());
-    auto size = detail::narrow_cast<std::streamsize>(buffer.size());
-    stdout_.read(data, size);
-    auto bytes_read = stdout_.gcount();
+    auto size = detail::narrow<int>(buffer.size());
+    auto bytes_read = stdout_.read(data, size);
     TENZIR_DEBUG("read {} bytes", bytes_read);
-    return detail::narrow_cast<size_t>(bytes_read);
+    return detail::narrow<size_t>(bytes_read);
   }
 
   auto write(std::span<const std::byte> buffer) -> caf::error {
@@ -109,11 +108,8 @@ public:
   }
 
   void close_stdin() {
-    // See https://github.com/boostorg/process/issues/125 for why we
-    // seemingly double-close the pipe.
     TENZIR_DEBUG("sending EOF to child's stdin");
     stdin_.close();
-    stdin_.pipe().close();
   }
 
   auto wait() -> caf::error {
@@ -133,6 +129,14 @@ public:
     return {};
   }
 
+  void terminate() {
+    auto ec = std::error_code{};
+    child_.terminate(ec);
+    if (ec) {
+      TENZIR_WARN("failed to terminate child process: {}", ec);
+    }
+  }
+
 private:
   explicit child(std::string command) : command_{std::move(command)} {
     TENZIR_ASSERT(!command_.empty());
@@ -140,8 +144,8 @@ private:
 
   std::string command_;
   bp::child child_;
-  bp::ipstream stdout_;
-  bp::opstream stdin_;
+  bp::pipe stdout_;
+  bp::pipe stdin_;
 };
 
 class shell_operator final : public crtp_operator<shell_operator> {
@@ -161,18 +165,20 @@ public:
     // We yield once because reading below is blocking, but we want to
     // directly signal that our initialization is complete.
     co_yield {};
-    while (child->reading()) {
-      std::vector<char> buffer(block_size);
-      if (auto bytes_read = child->read(as_writeable_bytes(buffer))) {
-        if (bytes_read == 0) {
-          co_yield {};
-          continue;
-        }
-        buffer.resize(*bytes_read);
-        auto chk = chunk::make(std::exchange(buffer, {}));
-        TENZIR_DEBUG("yielding chunk with {} bytes", chk->size());
-        co_yield chk;
+    auto buffer = std::vector<char>(block_size);
+    while (true) {
+      auto bytes_read = child->read(as_writeable_bytes(buffer));
+      if (not bytes_read) {
+        ctrl.abort(std::move(bytes_read.error()));
+        co_return;
       }
+      if (*bytes_read == 0) {
+        // Reading 0 bytes indicates EOF.
+        break;
+      }
+      auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
+      TENZIR_DEBUG("yielding chunk with {} bytes", chk->size());
+      co_yield chk;
     }
     if (auto error = child->wait()) {
       ctrl.abort(std::move(error));
@@ -181,6 +187,7 @@ public:
 
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    // TODO: Handle exceptions from `boost::process`.
     auto child = child::make(command_, stdin_mode::pipe);
     if (!child) {
       ctrl.abort(child.error());
@@ -189,69 +196,81 @@ public:
     // Read from child in separate thread because coroutine-based async
     // I/O is not (yet) feasible. The thread writes the chunks into a
     // queue such that to this coroutine can yield them.
-    std::queue<chunk_ptr> chunks;
-    std::mutex chunks_mutex;
-    auto thread = std::thread([&child, &chunks, &chunks_mutex] {
-      while (child->reading()) {
-        std::vector<char> buffer(block_size);
-        if (auto bytes_read = child->read(as_writeable_bytes(buffer))) {
-          if (*bytes_read > 0) {
-            buffer.resize(*bytes_read);
-            auto chk = chunk::make(std::exchange(buffer, {}));
-            std::lock_guard lock{chunks_mutex};
-            chunks.push(std::move(chk));
-          }
+    auto chunks = std::queue<chunk_ptr>{};
+    auto chunks_mutex = std::mutex{};
+    auto thread = std::thread([&child, &chunks, &chunks_mutex, &ctrl] {
+      auto buffer = std::vector<char>(block_size);
+      while (true) {
+        auto bytes_read = child->read(as_writeable_bytes(buffer));
+        if (not bytes_read) {
+          ctrl.abort(std::move(bytes_read.error()));
+          return;
         }
+        if (*bytes_read == 0) {
+          // Reading 0 bytes indicates EOF.
+          break;
+        }
+        auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
+        auto lock = std::lock_guard{chunks_mutex};
+        chunks.push(std::move(chk));
       }
     });
     {
       // Coroutines require RAII-style exit handling.
-      auto at_exit = caf::detail::make_scope_guard([&] {
-        child->close_stdin();
+      auto unplanned_exit = caf::detail::make_scope_guard([&] {
+        child->terminate();
         TENZIR_DEBUG("joining thread");
         thread.join();
       });
       // Loop over input chunks.
       for (auto&& chunk : input) {
-        if (not chunk || chunk->size() == 0 || not child->writing()) {
-          co_yield {};
-          continue;
-        }
-        // Pass operator input to the child's stdin.
-        if (auto err = child->write(as_bytes(*chunk))) {
-          ctrl.abort(err);
-          co_return;
+        auto stalled = not chunk or chunk->size() == 0;
+        if (not stalled) {
+          // Pass operator input to the child's stdin.
+          // TODO: If the reading end of the pipe to the child's stdin is
+          // already closed, this will generate a SIGPIPE.
+          if (auto err = child->write(as_bytes(*chunk))) {
+            ctrl.abort(err);
+            co_return;
+          }
         }
         // Try yielding so far accumulated child output.
-        std::unique_lock lock{chunks_mutex, std::try_to_lock};
+        auto lock = std::unique_lock{chunks_mutex, std::try_to_lock};
         if (lock.owns_lock()) {
-          size_t i = 0;
+          auto i = size_t{0};
           auto total = chunks.size();
           while (not chunks.empty()) {
             auto chk = chunks.front();
-            chunks.pop();
             TENZIR_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total,
                          chk->size());
-            co_yield chk;
+            co_yield std::move(chk);
+            chunks.pop();
+          }
+          if (stalled) {
+            co_yield {};
           }
         } else {
           co_yield {};
         }
       }
+      unplanned_exit.disable();
+      child->close_stdin();
+      thread.join();
+      if (auto error = child->wait()) {
+        ctrl.abort(std::move(error));
+        co_return;
+      }
     }
     // Yield all accumulated child output.
-    std::lock_guard lock{chunks_mutex};
-    size_t i = 0;
+    auto lock = std::lock_guard{chunks_mutex};
+    auto i = size_t{0};
     auto total = chunks.size();
     while (not chunks.empty()) {
-      auto chk = chunks.front();
+      auto& chk = chunks.front();
       TENZIR_DEBUG("yielding chunk {}/{} with {} bytes", ++i, total,
                    chk->size());
-      co_yield chk;
+      co_yield std::move(chk);
       chunks.pop();
-    }
-    if (auto error = child->wait()) {
-      ctrl.abort(std::move(error));
     }
   }
 

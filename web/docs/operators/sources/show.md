@@ -24,12 +24,18 @@ Describes the part of Tenzir to look at.
 
 Available aspects:
 
+- `build`: shows compile-time build information.
+- `config`: shows all current configuration options.
 - `connectors`: shows all available [connectors](../../connectors.md).
+- `dependencies`: shows information about build-time dependencies.
 - `fields`: shows all fields of existing tables at a remote node.
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).
 - `partitions`: shows all table partitions of a remote node.
+- `pipelines`: shows all managed pipelines of a remote node.
+- `plugins`: shows all loaded plugins.
 - `types`: shows all known types at a remote node.
+- `version`: shows the Tenzir version.
 
 ## Examples
 
@@ -46,9 +52,15 @@ Show all transformations:
 show operators | where transformation == true
 ```
 
-Show all tables and partitions at a node:
+Show all fields and partitions at a node:
 
 ```
-show tables
+show fields
 show partitions
+```
+
+Show the version of a remote node:
+
+```
+remote show version
 ```

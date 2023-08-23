@@ -21,8 +21,8 @@ public:
     return "discard";
   }
 
-  auto operator()(generator<table_slice> input) const
-    -> generator<std::monostate> {
+  template <operator_input_batch Batch>
+  auto operator()(generator<Batch> input) const -> generator<std::monostate> {
     for (auto&& slice : input) {
       (void)slice;
       co_yield {};

@@ -16,6 +16,7 @@
 namespace tenzir {
 
 namespace {
+
 auto init_root_builder(const type& start_schema, bool allow_fields_discovery)
   -> detail::adaptive_builder_root {
   TENZIR_ASSERT(caf::holds_alternative<record_type>(start_schema));
@@ -28,6 +29,56 @@ auto init_root_builder(const type& start_schema, bool allow_fields_discovery)
     std::in_place_type<detail::fixed_fields_record_builder>,
     std::move(caf::get<record_type>(start_schema))};
 }
+
+template <class Guard>
+struct recursive_add {
+  explicit recursive_add(Guard& guard) noexcept : guard{guard} {
+  }
+
+  auto operator()(const view<record>& x) -> caf::error {
+    auto r = guard.push_record();
+    for (const auto& [key, value] : x) {
+      auto field = r.push_field(key);
+      if (auto err = caf::visit(recursive_add<detail::field_guard>{field},
+                                value)) [[unlikely]] {
+        return err;
+      }
+    }
+    return {};
+  }
+
+  auto operator()(const view<list>& x) -> caf::error {
+    auto l = guard.push_list();
+    auto add = recursive_add<detail::list_guard>{l};
+    for (const auto& value : x) {
+      if (auto err = caf::visit(add, value)) [[unlikely]] {
+        return err;
+      }
+    }
+    return {};
+  }
+
+  auto operator()(caf::none_t) -> caf::error {
+    return {};
+  }
+
+  auto operator()(const view<pattern>&) -> caf::error {
+    TENZIR_UNREACHABLE();
+  }
+
+  auto operator()(const view<map>&) -> caf::error {
+    TENZIR_UNREACHABLE();
+  }
+
+  template <class T>
+    requires(not std::is_same_v<T, view<data>>)
+  auto operator()(const T& x) -> caf::error {
+    return guard.add(x);
+  }
+
+  Guard& guard;
+};
+
 } // namespace
 
 adaptive_table_slice_builder::adaptive_table_slice_builder(
@@ -38,6 +89,18 @@ adaptive_table_slice_builder::adaptive_table_slice_builder(
 
 auto adaptive_table_slice_builder::push_row() -> row_guard {
   return row_guard{*this};
+}
+
+auto adaptive_table_slice_builder::add_row(view<record> row) -> caf::error {
+  auto guard = push_row();
+  for (const auto& [key, value] : row) {
+    auto field = guard.push_field(key);
+    if (auto err = caf::visit(recursive_add{field}, value)) [[unlikely]] {
+      guard.cancel();
+      return err;
+    }
+  }
+  return {};
 }
 
 auto adaptive_table_slice_builder::finish(std::string_view slice_schema_name)

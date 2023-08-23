@@ -185,7 +185,7 @@ target_link_libraries(libtenzir PRIVATE libtenzir_internal)
 target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
 set_target_properties(libtenzir PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
-                                         ON)
+                                           ON)
 
 # Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to indicate
 # that libtenzir is considered to have an unstable API and ABI. The +7 is a
@@ -224,8 +224,13 @@ dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)
-target_link_libraries(libtenzir PRIVATE yaml-cpp)
-dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
+if (yaml-cpp_VERSION VERSION_GREATER_EQUAL 0.8)
+  target_link_libraries(libtenzir PRIVATE yaml-cpp::yaml-cpp)
+  dependency_summary("yaml-cpp" yaml-cpp::yaml-cpp "Dependencies")
+else ()
+  target_link_libraries(libtenzir PRIVATE yaml-cpp)
+  dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
+endif ()
 
 # Link against xxHash.
 target_compile_definitions(

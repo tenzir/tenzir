@@ -114,7 +114,7 @@ from kafka -t zeek -o beginning read zeek-json
 Write the Tenzir version to topic `tenzir` with timestamp from the past:
 
 ```
-version | to kafka -T 1984-01-01
+show version | to kafka -T 1984-01-01
 ```
 
 Follow a CSV file and publish it to topic `data`:
