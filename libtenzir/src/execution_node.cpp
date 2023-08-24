@@ -34,15 +34,10 @@ using namespace si_literals;
 
 template <class Element = void>
 struct defaults {
-  /// Defines the upper bound for the batch timeout used when requesting a batch
-  /// from the the previous execution node in the pipeline.
-  inline static constexpr duration max_batch_timeout = 250ms;
-
-  /// Defines the upper bound for how often an operator's generator may be
-  /// advanced within one run before yielding to the scheduler.
-  // TODO: Setting this to a higher value than 1 breaks request/await for
-  // operators.
-  inline static constexpr int max_advances_per_run = 1;
+  /// Defines the lower and upper bound for the batch timeout used when
+  /// requesting a batch from the the previous execution node in the pipeline.
+  inline static constexpr duration min_batch_timeout = 10ms;
+  inline static constexpr duration max_batch_timeout = 2s;
 
   /// Defines the time interval for sending metrics of the currently running
   /// pipeline operator.
@@ -309,7 +304,8 @@ template <class Input>
 struct inbound_state_mixin {
   /// A handle to the previous execution node.
   exec_node_actor previous = {};
-  bool signaled_demand = {};
+  uint64_t signaled_demand = {};
+  uint64_t fulfilled_demand = {};
 
   std::vector<Input> inbound_buffer = {};
   uint64_t inbound_buffer_size = {};
@@ -363,9 +359,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
   /// metrics after this actor has quit.
   std::shared_ptr<metrics_state> metrics = {};
 
-  // Indicates whether the operator has stalled, i.e., the generator should not
-  // be advanced.
-  bool stalled = {};
+  // Indicates whether the operator input has stalled, i.e., the generator
+  // should not be advanced.
+  bool input_stalled = {};
+  duration batch_timeout = defaults<>::min_batch_timeout;
 
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.
@@ -374,7 +371,8 @@ struct exec_node_state : inbound_state_mixin<Input>,
   /// A weak handle to the node actor.
   detail::weak_handle<node_actor> weak_node = {};
 
-  /// The next run of this actor's internal run loop.
+  /// Whether the next run of the internal run loop for this execution node has
+  /// already been scheduled.
   bool run_scheduled = {};
 
   /// Whether this execution node is paused.
@@ -437,7 +435,9 @@ struct exec_node_state : inbound_state_mixin<Input>,
         // previous execution node in a different actor system, but do not get
         // an error response to our demand request. To be able to shutdown
         // correctly, we must set `signaled_demand` to false as a workaround.
-        this->signaled_demand = false;
+        this->signaled_demand = 0;
+        this->fulfilled_demand = 0;
+        batch_timeout = defaults<>::min_batch_timeout;
         schedule_run();
         if (msg.reason) {
           auto category
@@ -518,6 +518,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto time_scheduled_guard
       = make_timer_guard(metrics->values.time_scheduled);
     paused = false;
+    batch_timeout = defaults<>::min_batch_timeout;
     schedule_run();
     return {};
   }
@@ -533,26 +534,28 @@ struct exec_node_state : inbound_state_mixin<Input>,
     const auto batch_size
       = std::min(defaults<Input>::max_buffered - this->inbound_buffer_size,
                  defaults<Input>::max_batch_size);
-    if (not this->previous or this->signaled_demand
+    if (not this->previous or this->signaled_demand > 0
         or batch_size < defaults<Input>::min_batch_size) {
       return;
     }
     /// Issue the actual request. If the inbound buffer is empty, we await the
     /// response, causing this actor to be suspended until the events have
     /// arrived.
-    auto handle_result = [this]() mutable {
-      TENZIR_TRACE("pull from {} was successful", op->name());
+    auto handle_result_or_error = [this]() {
       auto time_scheduled_guard
         = make_timer_guard(metrics->values.time_scheduled);
-      this->signaled_demand = false;
+      if (this->signaled_demand > this->fulfilled_demand) {
+        batch_timeout
+          = std::min(batch_timeout * 2, defaults<>::max_batch_timeout);
+      } else {
+        batch_timeout = defaults<>::min_batch_timeout;
+      }
+      this->signaled_demand = 0;
+      this->fulfilled_demand = 0;
       schedule_run();
     };
-    auto handle_error = [this](caf::error& error) {
-      TENZIR_TRACE("pull from {} failed: {}", op->name(), error);
-      auto time_scheduled_guard
-        = make_timer_guard(metrics->values.time_scheduled);
-      this->signaled_demand = false;
-      schedule_run();
+    auto handle_error = [handle_result_or_error, this](caf::error& error) {
+      handle_result_or_error();
       // TODO: We currently have to use `caf::exit_reason::kill` in
       // `pipeline_executor.cpp` to work around a CAF bug. However, this implies
       // that we might receive a `caf::sec::broken_promise` error here.
@@ -570,40 +573,35 @@ struct exec_node_state : inbound_state_mixin<Input>,
           .emit(ctrl->diagnostics());
       }
     };
-    this->signaled_demand = true;
+    this->signaled_demand = batch_size;
     TENZIR_TRACE("sending pull from {}", op->name());
     auto response_handle
       = self->request(this->previous, caf::infinite, atom::pull_v,
                       static_cast<exec_node_sink_actor>(self), batch_size,
-                      defaults<Input>::max_batch_timeout);
+                      batch_timeout);
     std::move(response_handle)
-      .then(std::move(handle_result), std::move(handle_error));
+      .then(std::move(handle_result_or_error), std::move(handle_error));
   }
 
   auto advance_generator() -> bool {
     auto time_running_guard = make_timer_guard(metrics->values.time_processing);
     TENZIR_ASSERT(instance);
     TENZIR_ASSERT(instance->it != instance->gen.end());
-    bool empty = false;
     if constexpr (not std::is_same_v<Output, std::monostate>) {
       if (this->outbound_buffer_size >= defaults<Output>::max_buffered) {
         return false;
       }
       auto next = std::move(*instance->it);
       ++instance->it;
-      if (size(next) > 0) {
-        empty = true;
-        this->outbound_buffer_size += size(next);
-        this->outbound_buffer.push_back(std::move(next));
+      if (size(next) == 0) {
+        return this->current_demand.has_value();
       }
+      this->outbound_buffer_size += size(next);
+      this->outbound_buffer.push_back(std::move(next));
     } else {
       ++instance->it;
     }
-    if (abort) {
-      self->quit(abort);
-      return false;
-    }
-    return not empty and instance->it != instance->gen.end();
+    return true;
   }
 
   auto make_input_adapter() -> std::monostate
@@ -616,13 +614,19 @@ struct exec_node_state : inbound_state_mixin<Input>,
     requires(not std::is_same_v<Input, std::monostate>)
   {
     auto stall_guard = caf::detail::make_scope_guard([this] {
-      stalled = false;
+      TENZIR_TRACE("{} exhausted input", op->name());
+      input_stalled = false;
+      schedule_run();
     });
     while (this->previous or this->inbound_buffer_size > 0
            or this->signaled_demand) {
       if (this->inbound_buffer_size == 0) {
         TENZIR_ASSERT(this->inbound_buffer.empty());
-        stalled = true;
+        // TODO: Some operators (most notably `shell`) may produce events from
+        // side effects, which means that their input can never be consider
+        // stalled. We need to add an option to the operator API that controls
+        // whether the operator can ever be considered stalled.
+        input_stalled = true;
         co_yield {};
         continue;
       }
@@ -631,27 +635,23 @@ struct exec_node_state : inbound_state_mixin<Input>,
         TENZIR_ASSERT(size(next) != 0);
         this->inbound_buffer_size -= size(next);
         this->inbound_buffer.erase(this->inbound_buffer.begin());
-        stalled = false;
+        input_stalled = false;
         co_yield std::move(next);
       }
     }
   }
 
   auto schedule_run() -> void {
+    // Check whether we're already scheduled to run, or are no longer allowed to
+    // rum.
     // TODO: We can make pausing more efficient by pausing execution nodes from
     // left-to-right, and only pausing the next one after the current one's
     // outbound buffer has emptied. However, that's a lot of code to write
     // compared to this single check, so let's stick has an issue with a paused
     // pipeline's memory usage.
-    if (paused) {
+    if (paused or run_scheduled or not instance) {
       return;
     }
-    // Check whether we're already scheduled to run, or are no longer allowed to
-    // rum.
-    if (run_scheduled or not instance) {
-      return;
-    }
-    run_scheduled = true;
     // We *always* use the delayed variant here instead of scheduling
     // immediately as that has two distinct advantages:
     // - It allows for using a weak actor pointer on the click, i.e., it does
@@ -661,10 +661,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
     auto action = [this] {
       auto time_scheduled_guard
         = make_timer_guard(metrics->values.time_scheduled);
-      TENZIR_ASSERT(run_scheduled);
       run_scheduled = false;
       run();
     };
+    run_scheduled = true;
     self->clock().schedule(self->clock().now(),
                            caf::make_action(std::move(action),
                                             caf::action::state::waiting),
@@ -706,7 +706,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
       if constexpr (std::is_same_v<Output, chunk_ptr>) {
         metrics->values.outbound_measurement.num_approx_bytes
           = metrics->values.outbound_measurement.num_elements;
-      } else if constexpr (std::is_same_v<Output, table_slice>) {
+      } else {
         metrics->values.outbound_measurement.num_approx_bytes
           = num_approx_bytes(lhs);
       }
@@ -800,35 +800,24 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // next run. For sinks, this happens delayed when there is no input. For
     // everything else, it needs to happen only when there's enough space in the
     // outbound buffer.
-    for (auto i = 0; i < defaults<Output>::max_advances_per_run; ++i) {
-      if (not advance_generator()) {
-        break;
-      }
+    const auto output_stalled = not advance_generator();
+    // Check if we need to quit.
+    if (abort) {
+      self->quit(abort);
     }
-    if constexpr (std::is_same_v<Output, std::monostate>) {
-      if (not stalled) {
-        schedule_run();
-      } else {
-        TENZIR_ASSERT(this->signaled_demand);
-      }
-    } else if constexpr (std::is_same_v<Input, std::monostate>) {
-      if (not stalled
-          and (this->current_demand
-               or (this->outbound_buffer_size < defaults<Output>::max_buffered
-                   and instance->it != instance->gen.end()))) {
-        schedule_run();
-      }
-    } else {
-      auto can_generate
-        = this->outbound_buffer_size < defaults<Output>::max_buffered
-          and instance->it != instance->gen.end();
-      auto should_produce = this->current_demand.has_value();
-      auto is_previous_dead = not this->previous;
-      if (is_previous_dead
-          or (not stalled and (should_produce or can_generate))) {
-        schedule_run();
-      }
+    // Check whether we should eagerly schedule the operator again. We usually
+    // consider this the case when neither the input nor the output have
+    // stalled, i.e., when there is more input to be consumed and room for
+    // output to be produced or further output desired.
+    if (not input_stalled and not output_stalled) {
+      schedule_run();
     }
+    // Adjust performance counters for this run.
+    metrics->values.num_runs += 1;
+    metrics->values.num_runs_processing
+      += input_stalled and output_stalled ? 0 : 1;
+    metrics->values.num_runs_processing_input += input_stalled ? 0 : 1;
+    metrics->values.num_runs_processing_output += output_stalled ? 0 : 1;
   }
 
   auto
@@ -858,6 +847,10 @@ struct exec_node_state : inbound_state_mixin<Input>,
   auto push(std::vector<Input> input) -> caf::result<void>
     requires(not std::is_same_v<Input, std::monostate>)
   {
+    if (this->signaled_demand == 0) {
+      return caf::make_error(ec::logic_error,
+                             "received batches without demand");
+    }
     auto time_scheduled_guard
       = make_timer_guard(metrics->values.time_scheduled);
     schedule_run();
@@ -869,6 +862,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     if (input_size == 0) {
       return caf::make_error(ec::logic_error, "received empty batch");
     }
+    this->fulfilled_demand = input_size;
     if (this->inbound_buffer_size + input_size
         > defaults<Input>::max_buffered) {
       return caf::make_error(ec::logic_error, "inbound buffer full");
@@ -878,13 +872,14 @@ struct exec_node_state : inbound_state_mixin<Input>,
     if constexpr (std::is_same_v<Input, chunk_ptr>) {
       metrics->values.inbound_measurement.num_approx_bytes
         = metrics->values.inbound_measurement.num_elements;
-    } else if constexpr (std::is_same_v<Input, table_slice>) {
+    } else {
       metrics->values.inbound_measurement.num_approx_bytes
         = num_approx_bytes(input);
     }
     this->inbound_buffer.insert(this->inbound_buffer.end(),
                                 std::make_move_iterator(input.begin()),
                                 std::make_move_iterator(input.end()));
+    schedule_run();
     return {};
   }
 };
