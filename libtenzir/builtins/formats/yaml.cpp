@@ -193,8 +193,7 @@ public:
   }
 
   friend auto inspect(auto& f, yaml_parser& x) -> bool {
-    (void)f;
-    (void)x;
+    return f.object(x).fields();
     return true;
   }
 };
@@ -253,8 +252,7 @@ public:
   };
 
   friend auto inspect(auto& f, yaml_printer& x) -> bool {
-    (void)f;
-    (void)x;
+    return f.object(x).fields();
     return true;
   }
 };
