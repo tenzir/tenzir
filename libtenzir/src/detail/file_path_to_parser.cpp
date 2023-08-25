@@ -24,7 +24,7 @@ const auto filename_to_parser_list
 const auto extension_to_parser_list
   = std::array<std::pair<std::string, std::string>, 2>{{
     {".ndjson", "json"},
-    {".yml", "yml"},
+    {".yml", "yaml"},
   }};
 
 auto file_path_to_parser(const std::filesystem::path& path) -> std::string {
