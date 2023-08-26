@@ -223,7 +223,7 @@ terms of *records* and *lists*, and arbitrarily nested combinations of them. It
 would be up the user to define set semantics that ensures unique values. We
 consider adding such a set type in the future (possible as type constraint or
 attribute) as we gain more complete support of the underlying Arrow type system.
-Similarly, we plan on adding sum types in the near future.
+Similarly, we plan on adding sum types in the future.
 
 ## Summary
 
