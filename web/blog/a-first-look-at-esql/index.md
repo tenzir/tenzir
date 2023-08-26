@@ -1,7 +1,7 @@
 ---
 title: A First Look at ES|QL
 authors: mavam
-date: 2023-08-24
+date: 2023-08-29
 tags: [esql, elastic, tql, kusto, splunk, spl, pipelines, language]
 comments: true
 ---
