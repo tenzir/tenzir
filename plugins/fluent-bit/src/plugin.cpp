@@ -153,6 +153,16 @@ public:
     }
   }
 
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    // TODO: implement
+    for (auto&& slice : input) {
+      (void)slice;
+      co_yield {};
+    }
+  }
+
   auto name() const -> std::string override {
     return "fluentbit";
   }
