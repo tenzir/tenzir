@@ -42,37 +42,57 @@ public:
   }
 
   struct monitor_state {
-    [[nodiscard]] auto update(const std::filesystem::path& path)
-      -> caf::expected<void> {
+    auto update(const std::filesystem::path& path, operator_control_plane& ctrl)
+      -> void {
+      auto old_rules = std::exchange(rules, {});
       if (std::filesystem::is_directory(path)) {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
-          auto status = update(entry.path());
-          if (not status)
-            return status;
+          update(entry.path(), ctrl);
         }
-        return {};
+        return;
       }
       if (path.extension() != ".yml" && path.extension() != ".yaml") {
         // We silently ignore non-yaml files.
-        return {};
+        return;
       }
       auto query = tenzir::io::read(path);
       if (not query) {
-        return std::move(query.error());
+        diagnostic::warning("sigma operator ignores rule '{}'", path.string())
+          .note("failed to read file: {}", query.error())
+          .emit(ctrl.diagnostics());
       }
       auto query_str = std::string_view{
         reinterpret_cast<const char*>(query->data()),
         reinterpret_cast<const char*>(query->data() + query->size())}; // NOLINT
       auto yaml = from_yaml(query_str);
       if (not yaml) {
-        return std::move(yaml.error());
+        diagnostic::warning("sigma operator ignores rule '{}'", path.string())
+          .note("failed to parse yaml: {}", yaml.error())
+          .emit(ctrl.diagnostics());
+        return;
       }
       auto rule = parse_rule(*yaml);
       if (not rule) {
-        return std::move(rule.error());
+        diagnostic::warning("sigma operator ignores rule '{}'", path.string())
+          .note("failed to parse sigma rule: {}", rule.error())
+          .emit(ctrl.diagnostics());
+        return;
       }
       rules[path.string()] = {std::move(*yaml), std::move(*rule)};
-      return {};
+      for (const auto& [path, rule] : rules) {
+        const auto old_rule = old_rules.find(path);
+        if (old_rule == old_rules.end()) {
+          TENZIR_VERBOSE("added Sigma rule {}", path);
+        } else if (old_rule->second != rule) {
+          TENZIR_VERBOSE("updated Sigma rule {}", path);
+        }
+      }
+      for (const auto& [path, _] : old_rules) {
+        if (not rules.contains(path)) {
+          TENZIR_VERBOSE("removed Sigma rule {}", path);
+        }
+      }
+      return;
     }
 
     std::filesystem::path path;
@@ -84,10 +104,7 @@ public:
     -> generator<table_slice> {
     auto state = monitor_state{};
     state.path = path_;
-    if (auto ok = state.update(state.path); not ok) {
-      diagnostic::error("failed to load sigma rules: {}", ok.error())
-        .emit(ctrl.diagnostics());
-    }
+    state.update(state.path, ctrl);
     auto last_update = std::chrono::steady_clock::now();
     co_yield {}; // signal that we're done initializing
     for (auto&& slice : input) {
@@ -96,10 +113,7 @@ public:
         continue;
       }
       if (last_update + refresh_interval_ < std::chrono::steady_clock::now()) {
-        if (auto ok = state.update(state.path); not ok) {
-          diagnostic::warning("failed to update sigma rules: {}", ok.error())
-            .emit(ctrl.diagnostics());
-        }
+        state.update(state.path, ctrl);
         last_update = std::chrono::steady_clock::now();
       }
       for (const auto& [path, entry] : state.rules) {

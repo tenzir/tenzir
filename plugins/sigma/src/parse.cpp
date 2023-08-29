@@ -32,6 +32,9 @@ namespace tenzir::plugins::sigma {
 
 namespace {
 
+caf::expected<pattern>
+transform_sigma_string(std::string_view str, std::string_view fmt);
+
 using expression_map = std::map<std::string, expression>;
 
 /// A symbol-table-like parser for Sigma search identifers. In addition to the
@@ -95,7 +98,7 @@ struct search_id_symbol_table : parser_base<search_id_symbol_table> {
     auto pattern = +(parsers::any - parsers::space);
     auto selection
       = "them"_p ->* [this] { return search("*"); }
-      | pattern ->* [this](std::string str) { return search(str); }
+      | pattern ->* [this](std::string str) { return search(transform_sigma_string(str, {})->string()); }
       ;
     auto expr
       = "all of"_p >> ws >> id ->* force<conjunction>
@@ -184,7 +187,8 @@ struct detection_parser : parser_base<detection_parser> {
 /// Transforms a string that may contain Sigma glob wildcards into a pattern
 /// with respective regular expression metacharacters. Sigma patterns are always
 /// case-insensitive.
-caf::expected<pattern> transform_sigma_string(std::string_view str) {
+caf::expected<pattern>
+transform_sigma_string(std::string_view str, std::string_view fmt) {
   // The following invariants apply according to the Sigma spec:
   // - All values are treated as case-insensitive strings
   // - You can use wildcard characters '*' and '?' in strings
@@ -200,33 +204,37 @@ caf::expected<pattern> transform_sigma_string(std::string_view str) {
   // to a valid regex. We need to revisit this once we have actual pattern
   // support in the query language.
   while (f != l) {
-    auto c = *f++;
-    if (c == '\\') {
-      if (f == l) {
-        rx += '\\'; // A single backslash at the end is a literal backslash.
+    const auto c = *f++;
+    switch (c) {
+      case '*':
+        rx += ".*";
         break;
-      }
-      auto w = *f++;
-      if (w == '*') {
-        // Escaped wildcard
-        rx += '*';
-      } else if (w == '?') {
-        // Escaped wildcard
-        rx += '?';
-      } else {
-        // Do nothing by default;
+      case '?':
+        rx += '.';
+        break;
+      case '.':
+      case '[':
+      case ']':
+      case '(':
+      case ')':
+      case '{':
+      case '}':
+      case '^':
+      case '$':
+      case '\\':
         rx += '\\';
-        rx += w;
-      }
-    } else if (c == '*') {
-      rx += ".*";
-    } else if (c == '?') {
-      rx += ".";
-    } else {
-      rx += c;
+        rx += c;
     }
-  };
-  return pattern::make(std::move(rx), {.case_insensitive = true});
+  }
+  auto result = pattern::make(rx, {.case_insensitive = true});
+  if (not result) {
+    return result;
+  }
+  if (fmt.empty()) {
+    return result;
+  }
+  return transform_sigma_string(
+    fmt::format(TENZIR_FMT_RUNTIME(fmt), result->string()), {});
 }
 
 } // namespace
@@ -257,7 +265,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
-              auto result = transform_sigma_string(fmt::format("*{}*", str));
+              auto result = transform_sigma_string(str, "*{}*");
               if (!result)
                 return std::move(result.error());
               return std::move(*result);
@@ -321,7 +329,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
-              auto result = transform_sigma_string(fmt::format("^{}*", str));
+              auto result = transform_sigma_string(str, "^{}*");
               if (!result)
                 return std::move(result.error());
               return std::move(*result);
@@ -334,7 +342,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
-              auto result = transform_sigma_string(fmt::format("*{}$", str));
+              auto result = transform_sigma_string(str, "*{}$");
               if (!result)
                 return std::move(result.error());
               return std::move(*result);
@@ -348,7 +356,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             auto f = detail::overload{
               [](const auto& x) -> caf::expected<data> {
                 auto str = to_string(x);
-                auto result = transform_sigma_string(str);
+                auto result = transform_sigma_string(str, {});
                 if (!result)
                   return std::move(result.error());
                 if (str == result->string()) {
@@ -357,6 +365,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                 return std::move(*result);
               },
               [](const std::string& x) -> caf::expected<data> {
+                TENZIR_WARN("making pattern: {}", __LINE__);
                 auto result = pattern::make(x);
                 if (!result)
                   return std::move(result.error());
@@ -393,7 +402,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       auto make_predicate_expr = [&](const data& value) -> expression {
         // Convert strings to case-insensitive patterns.
         if (auto str = caf::get_if<std::string>(&value))
-          if (auto pat = transform_sigma_string(*str))
+          if (auto pat = transform_sigma_string(*str, {}))
             return predicate{extractor, op, data{std::move(*pat)}};
         // The modifier 'base64offset' is unique in that it creates
         // multiple values represented as list. If followed by 'contains', then
@@ -445,8 +454,11 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       else
         return expr.error();
     return result.size() == 1 ? result[0] : result;
+    // } else if (auto x = caf::get_if<std::string>(&yaml)) {
+    //   return parse_search_id(*x);
   } else {
-    return caf::make_error(ec::type_clash, "search id not a list or record");
+    return caf::make_error(
+      ec::type_clash, fmt::format("search id '{}' not a list or record", yaml));
   }
 }
 
