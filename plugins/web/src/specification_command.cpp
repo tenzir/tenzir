@@ -113,6 +113,9 @@ Diagnostic:
       type: array
       items:
         $ref: '#/components/schemas/Note'
+    rendered:
+      type: string
+      example: "\u001b[1m\u001b[31merror\u001b[39m: unknown option `--frobnify`\u001b[0m\n"
 Annotation:
   type: object
   properties:
@@ -162,6 +165,7 @@ PipelineInfo:
         - created
         - running
         - paused
+        - failed
         - stopped
     error:
       type: string
