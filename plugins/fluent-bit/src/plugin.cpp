@@ -7,22 +7,40 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/si_literals.hpp>
+
+#include <arrow/record_batch.h>
+
+#include <cstring>
 
 #include <fluent-bit/fluent-bit-minimal.h>
 
 using namespace std::chrono_literals;
+using namespace tenzir::si_literals;
 
 namespace tenzir::plugins::fluentbit {
 
 namespace {
 
+/* Shared state between Tenzir and Fluent Bit.
+ * WARNING: keep in sync with the respective code bases.
+ */
+struct shared_state {
+  char* buf;
+  int buf_len;
+  size_t buf_size;
+  pthread_mutex_t lock;
+};
+
 struct operator_args {
-  located<std::vector<std::string>> args;
+  std::vector<std::string> args;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_args& x) -> bool {
@@ -35,18 +53,62 @@ struct operator_args {
 /// A RAII-style wrapper around the Fluent Bit engine.
 class engine {
 public:
-  static auto make() -> std::optional<engine> {
-    auto* ctx = flb_create();
-    if (ctx == nullptr)
-      return std::nullopt;
-    return engine{ctx};
+  static auto make_source(std::string input) -> std::unique_ptr<engine> {
+    auto result = make();
+    if (!result)
+      return nullptr;
+    // Set the desired input plugin.
+    auto ret = flb_input(result->ctx_, input.c_str(), nullptr);
+    if (ret < 0) {
+      TENZIR_ERROR("failed to setup {} input plugin ({})", input, ret);
+      return nullptr;
+    }
+    // Set ourselves as output plugin.
+    ret = flb_output(result->ctx_, "tenzir", nullptr);
+    if (ret < 0) {
+      TENZIR_ERROR("failed to setup tenzir output plugin ({})", ret);
+      return nullptr;
+    }
+    if (not result->start()) {
+      TENZIR_ERROR("failed to start engine");
+      return nullptr;
+    }
+    return result;
+  }
+
+  static auto make_sink(std::string output) -> std::unique_ptr<engine> {
+    auto result = make();
+    if (!result)
+      return nullptr;
+    // Set ourselves as input plugin.
+    auto ret = flb_input(result->ctx_, "tenzir", result->state());
+    if (ret < 0) {
+      TENZIR_ERROR("failed to setup tenzir input plugin ({})", ret);
+      return nullptr;
+    }
+    // Set the desired output plugin.
+    ret = flb_output(result->ctx_, output.c_str(), nullptr);
+    if (ret < 0) {
+      TENZIR_ERROR("failed to setup {} output plugin ({})", output, ret);
+      return nullptr;
+    }
+    if (not result->start()) {
+      TENZIR_ERROR("failed to start engine");
+      return nullptr;
+    }
+    return result;
   }
 
   ~engine() {
+    // We must release all Fluent Bit resources prior to destroying the shared
+    // state.
     stop();
     TENZIR_ASSERT(ctx_ != nullptr);
     // FIXME: destroying the library context currently yields a segfault.
     // flb_destroy(ctx_);
+    auto ret = pthread_mutex_destroy(&state_.lock);
+    if (ret != 0)
+      TENZIR_ERROR("failed to destroy mutex: {}", std::strerror(ret));
   }
 
   // The engine is a move-only handle type.
@@ -54,6 +116,35 @@ public:
   auto operator=(engine&&) -> engine& = default;
   engine(const engine&) = delete;
   auto operator=(const engine&) -> engine& = delete;
+
+  auto state() -> shared_state* {
+    return &state_;
+  }
+
+private:
+  static auto make() -> std::unique_ptr<engine> {
+    auto* ctx = flb_create();
+    if (ctx == nullptr)
+      return nullptr;
+    // TODO: make these parameters configurable.
+    auto result = flb_service_set(ctx, "flush", "1", "grace", "5", nullptr);
+    if (result != 0)
+      return nullptr;
+    auto buffer_size = 16_Mi;
+    return std::unique_ptr<engine>(new engine{ctx, buffer_size});
+  }
+
+  engine(flb_ctx_t* ctx, size_t buffer_size) : ctx_{ctx} {
+    TENZIR_ASSERT(ctx != nullptr);
+    TENZIR_ASSERT(buffer_size > 0);
+    buffer_.resize(buffer_size);
+    pthread_mutex_init(&state_.lock, nullptr);
+    state_ = {
+      .buf = buffer_.data(),
+      .buf_len = 0,
+      .buf_size = buffer_.size(),
+    };
+  }
 
   auto start() -> bool {
     if (running_)
@@ -70,17 +161,10 @@ public:
     return flb_stop(ctx_) == 0;
   }
 
-  auto context() -> flb_ctx_t* {
-    return ctx_;
-  }
-
-private:
-  explicit engine(flb_ctx_t* ctx) : ctx_{ctx} {
-    TENZIR_ASSERT(ctx != nullptr);
-  }
-
   flb_ctx_t* ctx_{nullptr};
   bool running_{false};
+  std::vector<char> buffer_;
+  shared_state state_;
 };
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
@@ -92,63 +176,20 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto engine = engine::make();
+    TENZIR_ASSERT(!args_.args.empty());
+    auto engine = engine::make_source(args_.args[0]);
     if (not engine) {
-      diagnostic::error("failed to create fluent bit context")
-        .hint("flb_create returned nullptr")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    // Set services properties.
-    auto result
-      = flb_service_set(engine->context(), "flush", "1", "grace", "1", nullptr);
-    if (result != 0) {
-      diagnostic::error("failed to set flush interval")
-        .hint("flb_service_set returned {}", result)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    // Enable an input plugin.
-    auto in_ffd = flb_input(engine->context(), "random", nullptr);
-    if (in_ffd < 0) {
-      diagnostic::error("failed to create input plugin descriptor")
-        .hint("flb_input returned {}", in_ffd)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    result = flb_input_set(engine->context(), in_ffd, "tag", "tenzir", nullptr);
-    if (result != 0) {
-      diagnostic::error("failed to set input properties")
-        .hint("flb_input_set returned {}", result)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    // Enable an output plugin.
-    auto out_ffd = flb_output(engine->context(), "stdout", nullptr);
-    if (out_ffd < 0) {
-      diagnostic::error("failed to create output plugin descriptor")
-        .hint("flb_output returned {}", in_ffd)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    result
-      = flb_output_set(engine->context(), out_ffd, "match", "tenzir", nullptr);
-    if (result != 0) {
-      diagnostic::error("failed to set input properties")
-        .hint("flb_output_set returned {}", result)
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    // Start the engine.
-    if (not engine->start()) {
-      diagnostic::error("failed to start fluent bit engine")
-        .hint("flb_start", result)
+      diagnostic::error("failed to create Fluent Bit engine")
         .emit(ctrl.diagnostics());
       co_return;
     }
     // Keep the executor pumping.
+    auto* state = engine->state();
     while (true) {
+      pthread_mutex_lock(&state->lock);
+      // TODO: process shared buffer
       co_yield {};
+      pthread_mutex_unlock(&state->lock);
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
   }
@@ -156,10 +197,54 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    // TODO: implement
+    TENZIR_ASSERT(!args_.args.empty());
+    auto engine = engine::make_sink(args_.args[0]);
+    if (not engine) {
+      diagnostic::error("failed to create Fluent Bit engine")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    auto* state = engine->state();
+    auto printer = tenzir::json_printer{{
+      .oneline = true,
+    }};
+    auto json_buffer = std::vector<char>{};
     for (auto&& slice : input) {
-      (void)slice;
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      TENZIR_INFO("processing slice");
+      // Print table slice as JSON.
+      auto resolved_slice = resolve_enumerations(slice);
+      auto array
+        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto it = std::back_inserter(json_buffer);
+      for (const auto& row :
+           values(caf::get<record_type>(resolved_slice.schema()), *array)) {
+        TENZIR_ASSERT_CHEAP(row);
+        const auto ok = printer.print(it, *row);
+        TENZIR_ASSERT_CHEAP(ok);
+        it = fmt::format_to(it, "\n");
+      }
+      json_buffer.pop_back(); // Remove trailing '\n'.
+      // Mutate shared state: copy generated JSON into buffer.
+      pthread_mutex_lock(&state->lock);
+      if (json_buffer.size() > state->buf_size - state->buf_len - 1)
+        // FIXME: resize buffer instead of dying
+        die("not enough buffer capa");
+      std::memcpy(state->buf + state->buf_len, json_buffer.data(),
+                  json_buffer.size());
+      state->buf_len += json_buffer.size();
+      state->buf[state->buf_len] = '\0';
+      pthread_mutex_unlock(&state->lock);
       co_yield {};
+    }
+    // FIXME: we're keeping things alive just for testing.
+    while (true) {
+      co_yield {};
+      std::this_thread::sleep_for(std::chrono::milliseconds(250));
+      TENZIR_INFO("yielding...");
     }
   }
 
@@ -167,11 +252,17 @@ public:
     return "fluentbit";
   }
 
+  // FIXME: because we're sleeping here for early testing, we detach
+  // ourselves. Otherwise we'd hold up the entire pipeline execution.
   auto detached() const -> bool override {
-    // Fluent Bit comes with its own threaded context, no need to add another
-    // thread on our end.
-    return false;
+    return true;
   }
+
+  // auto detached() const -> bool override {
+  //   // Fluent Bit comes with its own threaded context, no need to add another
+  //   // thread on our end.
+  //   return false;
+  // }
 
   auto location() const -> operator_location override {
     return operator_location::local;
@@ -195,15 +286,26 @@ private:
 class plugin final : public operator_plugin<fluent_bit_operator> {
 public:
   auto signature() const -> operator_signature override {
-    return {.source = true};
+    return {
+      .source = true,
+      .sink = true,
+    };
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
     auto args = operator_args{};
-    parser.parse(p);
+    // auto parser = argument_parser{
+    //   name(),
+    //   fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+    // parser.parse(p);
+    while (true) {
+      auto arg = p.accept_shell_arg();
+      if (arg == std::nullopt)
+        break;
+      args.args.push_back(std::move(arg->inner));
+    }
+    if (args.args.empty())
+      diagnostic::error("missing fluentbit arguments").throw_();
     return std::make_unique<fluent_bit_operator>(std::move(args));
   }
 
