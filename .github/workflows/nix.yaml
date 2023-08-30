@@ -109,7 +109,7 @@ jobs:
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
           RCLONE_GCS_BUCKET_POLICY_ONLY: True
         run: |
-          nix shell \
+          nix shell --inputs-from ./. \
             nixpkgs#git \
             nixpkgs#nushell \
             nixpkgs#rclone \
