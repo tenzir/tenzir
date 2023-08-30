@@ -54,58 +54,73 @@ struct operator_args {
 class engine {
 public:
   static auto make_source(std::string input) -> std::unique_ptr<engine> {
-    auto result = make();
+    auto buffer_size = 16_Mi;
+    auto result = make_engine(buffer_size);
     if (!result)
       return nullptr;
+    auto* ctx = make_fluentbit_context();
+    if (not ctx)
+      return nullptr;
+    result->ctx_ = ctx;
     // Set the desired input plugin.
-    auto ret = flb_input(result->ctx_, input.c_str(), nullptr);
+    auto ret = flb_input(ctx, input.c_str(), nullptr);
     if (ret < 0) {
       TENZIR_ERROR("failed to setup {} input plugin ({})", input, ret);
       return nullptr;
     }
     // Set ourselves as output plugin.
-    ret = flb_output(result->ctx_, "tenzir", nullptr);
+    ret = flb_output(ctx, "tenzir", nullptr);
     if (ret < 0) {
       TENZIR_ERROR("failed to setup tenzir output plugin ({})", ret);
       return nullptr;
     }
-    if (not result->start()) {
-      TENZIR_ERROR("failed to start engine");
+    ret = flb_start(ctx);
+    if (ret < 0) {
+      TENZIR_ERROR("failed to start engine ({})", ret);
       return nullptr;
     }
     return result;
   }
 
   static auto make_sink(std::string output) -> std::unique_ptr<engine> {
-    auto result = make();
+    auto buffer_size = 16_Mi;
+    auto result = make_engine(buffer_size);
     if (!result)
       return nullptr;
+    auto* ctx = make_fluentbit_context();
+    if (not ctx)
+      return nullptr;
+    result->ctx_ = ctx;
     // Set ourselves as input plugin.
-    auto ret = flb_input(result->ctx_, "tenzir", result->state());
+    auto ret = flb_input(ctx, "tenzir", result->state());
     if (ret < 0) {
       TENZIR_ERROR("failed to setup tenzir input plugin ({})", ret);
       return nullptr;
     }
     // Set the desired output plugin.
-    ret = flb_output(result->ctx_, output.c_str(), nullptr);
+    ret = flb_output(ctx, output.c_str(), nullptr);
     if (ret < 0) {
       TENZIR_ERROR("failed to setup {} output plugin ({})", output, ret);
       return nullptr;
     }
-    if (not result->start()) {
-      TENZIR_ERROR("failed to start engine");
+    ret = flb_start(ctx);
+    if (ret < 0) {
+      TENZIR_ERROR("failed to start engine ({})", ret);
       return nullptr;
     }
     return result;
   }
 
   ~engine() {
-    // We must release all Fluent Bit resources prior to destroying the shared
-    // state.
-    stop();
-    TENZIR_ASSERT(ctx_ != nullptr);
-    // FIXME: destroying the library context currently yields a segfault.
-    // flb_destroy(ctx_);
+    if (ctx_ != nullptr) {
+      // We must release all Fluent Bit resources prior to destroying the shared
+      // state.
+      auto ret = flb_stop(ctx_);
+      if (ret != 0)
+        TENZIR_ERROR("failed to stop engine ({})", ret);
+      // FIXME: destroying the library context currently yields a segfault.
+      // flb_destroy(ctx_);
+    }
     auto ret = pthread_mutex_destroy(&state_.lock);
     if (ret != 0)
       TENZIR_ERROR("failed to destroy mutex: {}", std::strerror(ret));
@@ -122,7 +137,7 @@ public:
   }
 
 private:
-  static auto make() -> std::unique_ptr<engine> {
+  static auto make_fluentbit_context() -> flb_ctx_t* {
     auto* ctx = flb_create();
     if (ctx == nullptr)
       return nullptr;
@@ -130,12 +145,14 @@ private:
     auto result = flb_service_set(ctx, "flush", "1", "grace", "5", nullptr);
     if (result != 0)
       return nullptr;
-    auto buffer_size = 16_Mi;
-    return std::unique_ptr<engine>(new engine{ctx, buffer_size});
+    return ctx;
   }
 
-  engine(flb_ctx_t* ctx, size_t buffer_size) : ctx_{ctx} {
-    TENZIR_ASSERT(ctx != nullptr);
+  static auto make_engine(size_t buffer_size) -> std::unique_ptr<engine> {
+    return std::unique_ptr<engine>(new engine{buffer_size});
+  }
+
+  explicit engine(size_t buffer_size) {
     TENZIR_ASSERT(buffer_size > 0);
     buffer_.resize(buffer_size);
     pthread_mutex_init(&state_.lock, nullptr);
@@ -146,25 +163,9 @@ private:
     };
   }
 
-  auto start() -> bool {
-    if (running_)
-      return true;
-    auto success = flb_start(ctx_) == 0;
-    if (success)
-      running_ = true;
-    return success;
-  }
-
-  auto stop() -> bool {
-    if (not running_)
-      return false;
-    return flb_stop(ctx_) == 0;
-  }
-
   flb_ctx_t* ctx_{nullptr};
-  bool running_{false};
+  shared_state state_{};
   std::vector<char> buffer_;
-  shared_state state_;
 };
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
@@ -184,11 +185,10 @@ public:
       co_return;
     }
     // Keep the executor pumping.
-    auto* state = engine->state();
     while (true) {
+      auto* state = engine->state();
       pthread_mutex_lock(&state->lock);
-      // TODO: process shared buffer
-      co_yield {};
+      co_yield {}; // TODO
       pthread_mutex_unlock(&state->lock);
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
@@ -204,7 +204,6 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto* state = engine->state();
     auto printer = tenzir::json_printer{{
       .oneline = true,
     }};
@@ -214,7 +213,6 @@ public:
         co_yield {};
         continue;
       }
-      TENZIR_INFO("processing slice");
       // Print table slice as JSON.
       auto resolved_slice = resolve_enumerations(slice);
       auto array
@@ -229,6 +227,7 @@ public:
       }
       json_buffer.pop_back(); // Remove trailing '\n'.
       // Mutate shared state: copy generated JSON into buffer.
+      auto* state = engine->state();
       pthread_mutex_lock(&state->lock);
       if (json_buffer.size() > state->buf_size - state->buf_len - 1)
         // FIXME: resize buffer instead of dying
@@ -243,8 +242,8 @@ public:
     // FIXME: we're keeping things alive just for testing.
     while (true) {
       co_yield {};
-      std::this_thread::sleep_for(std::chrono::milliseconds(250));
-      TENZIR_INFO("yielding...");
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+      TENZIR_WARN("yielding...");
     }
   }
 
@@ -252,17 +251,9 @@ public:
     return "fluentbit";
   }
 
-  // FIXME: because we're sleeping here for early testing, we detach
-  // ourselves. Otherwise we'd hold up the entire pipeline execution.
   auto detached() const -> bool override {
     return true;
   }
-
-  // auto detached() const -> bool override {
-  //   // Fluent Bit comes with its own threaded context, no need to add another
-  //   // thread on our end.
-  //   return false;
-  // }
 
   auto location() const -> operator_location override {
     return operator_location::local;
