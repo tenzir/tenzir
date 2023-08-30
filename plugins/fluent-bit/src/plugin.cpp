@@ -9,6 +9,8 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/concept/parseable/string.hpp>
+#include <tenzir/concept/parseable/tenzir/option_set.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/error.hpp>
@@ -43,42 +45,59 @@ struct shared_state {
 using config_map = std::map<std::string, std::string>;
 
 struct operator_args {
-  std::string plugin_name; ///< The Fluent Bit plugin name.
-  config_map plugin_args;  ///< The plugin arguments.
+  std::string plugin; ///< The Fluent Bit plugin name.
+  config_map options; ///< The global service options.
+  config_map args;    ///< The plugin arguments.
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
-      .fields(f.field("plugin_name", x.plugin_name),
-              f.field("plugin_args", x.plugin_args));
+      .fields(f.field("plugin", x.plugin), f.field("options", x.options),
+              f.field("args", x.args));
   }
 };
 
 /// A RAII-style wrapper around the Fluent Bit engine.
 class engine {
 public:
-  static auto make_source(const std::string& plugin, const config_map& config)
+  static auto make_source(const operator_args& args, const record& config)
     -> std::unique_ptr<engine> {
     auto buffer_size = 16_Mi;
     auto result = make_engine(buffer_size);
     if (!result)
       return nullptr;
-    auto* ctx = make_fluentbit_context();
-    if (not ctx)
+    auto* ctx = flb_create();
+    if (ctx == nullptr)
       return nullptr;
     result->ctx_ = ctx;
+    for (const auto& [key, value] : config) {
+      auto str_value = to_string(value);
+      TENZIR_INFO("setting global service option: {}={}", key, str_value);
+      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set global service option: {}={}", key,
+                     str_value);
+        return nullptr;
+      }
+    }
+    for (const auto& [key, value] : args.options) {
+      TENZIR_INFO("setting local service option: {}={}", key, value);
+      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set local service option: {}={}", key, value);
+        return nullptr;
+      }
+    }
     // Set the desired input plugin.
-    auto ffd = flb_input(ctx, plugin.c_str(), nullptr);
+    auto ffd = flb_input(ctx, args.plugin.c_str(), nullptr);
     if (ffd < 0) {
-      TENZIR_ERROR("failed to setup {} input plugin ({})", plugin, ffd);
+      TENZIR_ERROR("failed to setup {} input plugin ({})", args.plugin, ffd);
       return nullptr;
     }
-    // Apply user-provided config.
-    for (const auto& [key, value] : config) {
-      TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
+    // Apply user-provided plugin properties.
+    for (const auto& [key, value] : args.args) {
+      TENZIR_DEBUG("setting {} plugin option: {}={}", args.plugin, key, value);
       if (flb_input_set(ctx, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
+        TENZIR_ERROR("failed to set {} plugin option: {}={}", args.plugin, key,
                      value);
         return nullptr;
       }
@@ -97,16 +116,32 @@ public:
     return result;
   }
 
-  static auto make_sink(const std::string& plugin, const config_map& config)
+  static auto make_sink(const operator_args& args, const record& config)
     -> std::unique_ptr<engine> {
     auto buffer_size = 16_Mi;
     auto result = make_engine(buffer_size);
     if (!result)
       return nullptr;
-    auto* ctx = make_fluentbit_context();
-    if (not ctx)
+    auto* ctx = flb_create();
+    if (ctx == nullptr)
       return nullptr;
     result->ctx_ = ctx;
+    for (const auto& [key, value] : config) {
+      auto str_value = to_string(value);
+      TENZIR_INFO("setting global service option: {}={}", key, str_value);
+      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set global service option: {}={}", key,
+                     str_value);
+        return nullptr;
+      }
+    }
+    for (const auto& [key, value] : args.options) {
+      TENZIR_INFO("setting local service option: {}={}", key, value);
+      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set local service option: {}={}", key, value);
+        return nullptr;
+      }
+    }
     // Set ourselves as input plugin.
     auto ret = flb_input(ctx, "tenzir", result->state());
     if (ret < 0) {
@@ -114,16 +149,16 @@ public:
       return nullptr;
     }
     // Set the desired output plugin.
-    auto ffd = flb_output(ctx, plugin.c_str(), nullptr);
+    auto ffd = flb_output(ctx, args.plugin.c_str(), nullptr);
     if (ffd < 0) {
-      TENZIR_ERROR("failed to setup {} output plugin ({})", plugin, ffd);
+      TENZIR_ERROR("failed to setup {} output plugin ({})", args.plugin, ffd);
       return nullptr;
     }
     // Apply user-provided config.
-    for (const auto& [key, value] : config) {
-      TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
+    for (const auto& [key, value] : args.args) {
+      TENZIR_DEBUG("setting {} plugin option: {}={}", args.plugin, key, value);
       if (flb_output_set(ctx, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
+        TENZIR_ERROR("failed to set {} plugin option: {}={}", args.plugin, key,
                      value);
         return nullptr;
       }
@@ -162,17 +197,6 @@ public:
   }
 
 private:
-  static auto make_fluentbit_context() -> flb_ctx_t* {
-    auto* ctx = flb_create();
-    if (ctx == nullptr)
-      return nullptr;
-    // TODO: make these parameters configurable.
-    auto result = flb_service_set(ctx, "flush", "1", "grace", "5", nullptr);
-    if (result != 0)
-      return nullptr;
-    return ctx;
-  }
-
   static auto make_engine(size_t buffer_size) -> std::unique_ptr<engine> {
     return std::unique_ptr<engine>(new engine{buffer_size});
   }
@@ -197,12 +221,13 @@ class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
 public:
   fluent_bit_operator() = default;
 
-  explicit fluent_bit_operator(operator_args args) : args_{std::move(args)} {
+  fluent_bit_operator(operator_args args, record config)
+    : args_{std::move(args)}, config_{std::move(config)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto engine = engine::make_source(args_.plugin_name, args_.plugin_args);
+    auto engine = engine::make_source(args_, config_);
     if (not engine) {
       diagnostic::error("failed to create Fluent Bit engine")
         .emit(ctrl.diagnostics());
@@ -221,7 +246,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    auto engine = engine::make_sink(args_.plugin_name, args_.plugin_args);
+    auto engine = engine::make_sink(args_, config_);
     if (not engine) {
       diagnostic::error("failed to create Fluent Bit engine")
         .emit(ctrl.diagnostics());
@@ -295,10 +320,28 @@ public:
 
 private:
   operator_args args_;
+  record config_;
 };
+
+// FIXME: Shamelessly copied from the Kafka plugin. Factor it into libtenzir.
+auto kvp_parser() {
+  using namespace parsers;
+  using namespace parser_literals;
+  using parsers::printable;
+  auto key = *(printable - '=');
+  auto value = *(printable - ',');
+  auto kvp = key >> '=' >> value;
+  return kvp % ',';
+}
 
 class plugin final : public operator_plugin<fluent_bit_operator> {
 public:
+  auto initialize(const record& config, const record& /* global_config */)
+    -> caf::error override {
+    config_ = config;
+    return caf::none;
+  }
+
   auto signature() const -> operator_signature override {
     return {
       .source = true,
@@ -308,11 +351,27 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto args = operator_args{};
-    // The operator syntax is: fluentbit <plugin> [key=value...]
+    auto parser = argument_parser{
+      name(),
+      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+    auto options = std::optional<located<std::string>>{};
+    parser.add("-X,--set", options, "<key=value>,...");
+    parser.parse(p);
+    // Translate config options.
+    if (options) {
+      std::vector<std::pair<std::string, std::string>> kvps;
+      if (!kvp_parser()(options->inner, kvps))
+        diagnostic::error("invalid list of key=value pairs")
+          .primary(options->source)
+          .throw_();
+      for (auto& [key, value] : kvps)
+        args.options.emplace(std::move(key), std::move(value));
+    }
+    // Parse the remainder: <plugin> [<key=value>...]
     auto plugin = p.accept_shell_arg();
     if (plugin == std::nullopt)
       diagnostic::error("missing fluentbit plugin").throw_();
-    args.plugin_name = std::move(plugin->inner);
+    args.plugin = std::move(plugin->inner);
     while (true) {
       auto arg = p.accept_shell_arg();
       if (arg == std::nullopt)
@@ -323,14 +382,17 @@ public:
         diagnostic::error("invalid key-value pair: {}", arg->inner)
           .hint("{} operator arguments have the form key=value", name())
           .throw_();
-      args.plugin_args.emplace(kvp[0], kvp[1]);
+      args.args.emplace(kvp[0], kvp[1]);
     }
-    return std::make_unique<fluent_bit_operator>(std::move(args));
+    return std::make_unique<fluent_bit_operator>(std::move(args), config_);
   }
 
   auto name() const -> std::string override {
     return "fluentbit";
   }
+
+private:
+  record config_;
 };
 
 } // namespace

@@ -6,7 +6,7 @@ Bit](https://docs.fluentbit.io/).
 ## Synopsis
 
 ```
-fluentbit <plugin> [<key=value>...]
+fluentbit [-X|--set <key=value>,...] <plugin> [<key=value>...]
 ```
 
 ## Description
@@ -28,6 +28,19 @@ translates to our `fluentbit` operator as follows:
 ```bash
 fluentbit plugin key1=value1 key2=value2 ...
 ```
+
+### `-X|--set <key=value>`
+
+A comma-separated list of key-value pairs that represent the global properties
+of the Fluent Bit service., e.g., `-X flush=1,grace=3`.
+
+Consult the list of available [key-value pairs][service-properties] to configure
+Fluent Bit according to your needs.
+
+[service-properties]: https://docs.fluentbit.io/manual/administration/configuring-fluent-bit/classic-mode/configuration-file#config_section
+
+We recommand factoring these options into the plugin-specific `fluentbit.yaml`
+so that they are indpendent of the `fluentbit` operator arguments.
 
 ### `<plugin>`
 
