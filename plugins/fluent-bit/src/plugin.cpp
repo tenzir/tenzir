@@ -39,21 +39,27 @@ struct shared_state {
   pthread_mutex_t lock;
 };
 
+/// A map of key-value pairs of Fluent Bit plugin configuration options.
+using config_map = std::map<std::string, std::string>;
+
 struct operator_args {
-  std::vector<std::string> args;
+  std::string plugin_name; ///< The Fluent Bit plugin name.
+  config_map plugin_args;  ///< The plugin arguments.
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
-      .fields(f.field("args", x.args));
+      .fields(f.field("plugin_name", x.plugin_name),
+              f.field("plugin_args", x.plugin_args));
   }
 };
 
 /// A RAII-style wrapper around the Fluent Bit engine.
 class engine {
 public:
-  static auto make_source(std::string input) -> std::unique_ptr<engine> {
+  static auto make_source(const std::string& plugin, const config_map& config)
+    -> std::unique_ptr<engine> {
     auto buffer_size = 16_Mi;
     auto result = make_engine(buffer_size);
     if (!result)
@@ -63,13 +69,22 @@ public:
       return nullptr;
     result->ctx_ = ctx;
     // Set the desired input plugin.
-    auto ret = flb_input(ctx, input.c_str(), nullptr);
-    if (ret < 0) {
-      TENZIR_ERROR("failed to setup {} input plugin ({})", input, ret);
+    auto ffd = flb_input(ctx, plugin.c_str(), nullptr);
+    if (ffd < 0) {
+      TENZIR_ERROR("failed to setup {} input plugin ({})", plugin, ffd);
       return nullptr;
     }
+    // Apply user-provided config.
+    for (const auto& [key, value] : config) {
+      TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
+      if (flb_input_set(ctx, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
+                     value);
+        return nullptr;
+      }
+    }
     // Set ourselves as output plugin.
-    ret = flb_output(ctx, "tenzir", nullptr);
+    auto ret = flb_output(ctx, "tenzir", nullptr);
     if (ret < 0) {
       TENZIR_ERROR("failed to setup tenzir output plugin ({})", ret);
       return nullptr;
@@ -82,7 +97,8 @@ public:
     return result;
   }
 
-  static auto make_sink(std::string output) -> std::unique_ptr<engine> {
+  static auto make_sink(const std::string& plugin, const config_map& config)
+    -> std::unique_ptr<engine> {
     auto buffer_size = 16_Mi;
     auto result = make_engine(buffer_size);
     if (!result)
@@ -98,10 +114,19 @@ public:
       return nullptr;
     }
     // Set the desired output plugin.
-    ret = flb_output(ctx, output.c_str(), nullptr);
-    if (ret < 0) {
-      TENZIR_ERROR("failed to setup {} output plugin ({})", output, ret);
+    auto ffd = flb_output(ctx, plugin.c_str(), nullptr);
+    if (ffd < 0) {
+      TENZIR_ERROR("failed to setup {} output plugin ({})", plugin, ffd);
       return nullptr;
+    }
+    // Apply user-provided config.
+    for (const auto& [key, value] : config) {
+      TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
+      if (flb_output_set(ctx, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
+                     value);
+        return nullptr;
+      }
     }
     ret = flb_start(ctx);
     if (ret < 0) {
@@ -177,8 +202,7 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    TENZIR_ASSERT(!args_.args.empty());
-    auto engine = engine::make_source(args_.args[0]);
+    auto engine = engine::make_source(args_.plugin_name, args_.plugin_args);
     if (not engine) {
       diagnostic::error("failed to create Fluent Bit engine")
         .emit(ctrl.diagnostics());
@@ -197,8 +221,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    TENZIR_ASSERT(!args_.args.empty());
-    auto engine = engine::make_sink(args_.args[0]);
+    auto engine = engine::make_sink(args_.plugin_name, args_.plugin_args);
     if (not engine) {
       diagnostic::error("failed to create Fluent Bit engine")
         .emit(ctrl.diagnostics());
@@ -285,18 +308,23 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto args = operator_args{};
-    // auto parser = argument_parser{
-    //   name(),
-    //   fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
-    // parser.parse(p);
+    // The operator syntax is: fluentbit <plugin> [key=value...]
+    auto plugin = p.accept_shell_arg();
+    if (plugin == std::nullopt)
+      diagnostic::error("missing fluentbit plugin").throw_();
+    args.plugin_name = std::move(plugin->inner);
     while (true) {
       auto arg = p.accept_shell_arg();
       if (arg == std::nullopt)
         break;
-      args.args.push_back(std::move(arg->inner));
+      // Try parsing as key-value pair
+      auto kvp = detail::split(arg->inner, "=");
+      if (kvp.size() != 2)
+        diagnostic::error("invalid key-value pair: {}", arg->inner)
+          .hint("{} operator arguments have the form key=value", name())
+          .throw_();
+      args.plugin_args.emplace(kvp[0], kvp[1]);
     }
-    if (args.args.empty())
-      diagnostic::error("missing fluentbit arguments").throw_();
     return std::make_unique<fluent_bit_operator>(std::move(args));
   }
 
