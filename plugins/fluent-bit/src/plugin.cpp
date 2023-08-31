@@ -147,6 +147,11 @@ private:
     auto* ctx = flb_create();
     if (ctx == nullptr)
       return nullptr;
+    // Start with a less noisy log level.
+    if (flb_service_set(ctx, "log_level", "error", nullptr) != 0) {
+      TENZIR_ERROR("failed to adjust default log_level");
+      return nullptr;
+    }
     for (const auto& [key, value] : global_properties) {
       auto str_value = to_string(value);
       TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
