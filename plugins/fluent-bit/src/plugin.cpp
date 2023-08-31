@@ -16,7 +16,6 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/si_literals.hpp>
 
 #include <arrow/record_batch.h>
 
@@ -25,35 +24,34 @@
 #include <fluent-bit/fluent-bit-minimal.h>
 
 using namespace std::chrono_literals;
-using namespace tenzir::si_literals;
 
 namespace tenzir::plugins::fluentbit {
 
 namespace {
 
-/* Shared state between Tenzir and Fluent Bit.
- * WARNING: keep in sync with the respective code bases.
- */
+// Shared state between this operator and the Fluent Bit plugins.
+// WARNING: keep in sync with the respective code bases.
 struct shared_state {
   char* buf;
-  int buf_len;
-  size_t buf_size;
+  int len;
   pthread_mutex_t lock;
 };
 
 /// A map of key-value pairs of Fluent Bit plugin configuration options.
-using config_map = std::map<std::string, std::string>;
+using property_map = std::map<std::string, std::string>;
 
+/// The arguments passed to the operator.
 struct operator_args {
-  std::string plugin; ///< The Fluent Bit plugin name.
-  config_map options; ///< The global service options.
-  config_map args;    ///< The plugin arguments.
+  std::string plugin;              ///< The Fluent Bit plugin name.
+  property_map service_properties; ///< The global service options.
+  property_map args;               ///< The plugin arguments.
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
-      .fields(f.field("plugin", x.plugin), f.field("options", x.options),
+      .fields(f.field("plugin", x.plugin),
+              f.field("service_properties", x.service_properties),
               f.field("args", x.args));
   }
 };
@@ -61,113 +59,34 @@ struct operator_args {
 /// A RAII-style wrapper around the Fluent Bit engine.
 class engine {
 public:
-  static auto make_source(const operator_args& args, const record& config)
+  /// Constructs a Fluent Bit engine for use as "source" in a pipeline.
+  static auto
+  make_source(const operator_args& args, const record& plugin_config)
     -> std::unique_ptr<engine> {
-    auto buffer_size = 16_Mi;
-    auto result = make_engine(buffer_size);
-    if (!result)
+    auto result = make_engine(plugin_config, args.service_properties);
+    if (not result)
       return nullptr;
-    auto* ctx = flb_create();
-    if (ctx == nullptr)
+    if (not result->input(args.plugin, args.args))
       return nullptr;
-    result->ctx_ = ctx;
-    for (const auto& [key, value] : config) {
-      auto str_value = to_string(value);
-      TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
-      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set global service option: {}={}", key,
-                     str_value);
-        return nullptr;
-      }
-    }
-    for (const auto& [key, value] : args.options) {
-      TENZIR_DEBUG("setting local service option: {}={}", key, value);
-      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set local service option: {}={}", key, value);
-        return nullptr;
-      }
-    }
-    // Set the desired input plugin.
-    auto ffd = flb_input(ctx, args.plugin.c_str(), nullptr);
-    if (ffd < 0) {
-      TENZIR_ERROR("failed to setup {} input plugin ({})", args.plugin, ffd);
+    if (not result->output("tenzir"))
       return nullptr;
-    }
-    // Apply user-provided plugin properties.
-    for (const auto& [key, value] : args.args) {
-      TENZIR_DEBUG("setting {} plugin option: {}={}", args.plugin, key, value);
-      if (flb_input_set(ctx, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set {} plugin option: {}={}", args.plugin, key,
-                     value);
-        return nullptr;
-      }
-    }
-    // Set ourselves as output plugin.
-    auto ret = flb_output(ctx, "tenzir", nullptr);
-    if (ret < 0) {
-      TENZIR_ERROR("failed to setup tenzir output plugin ({})", ret);
+    if (not result->start())
       return nullptr;
-    }
-    ret = flb_start(ctx);
-    if (ret < 0) {
-      TENZIR_ERROR("failed to start engine ({})", ret);
-      return nullptr;
-    }
     return result;
   }
 
-  static auto make_sink(const operator_args& args, const record& config)
+  /// Constructs a Fluent Bit engine for use as "sink" in a pipeline.
+  static auto make_sink(const operator_args& args, const record& plugin_config)
     -> std::unique_ptr<engine> {
-    auto buffer_size = 16_Mi;
-    auto result = make_engine(buffer_size);
-    if (!result)
+    auto result = make_engine(plugin_config, args.service_properties);
+    if (not result)
       return nullptr;
-    auto* ctx = flb_create();
-    if (ctx == nullptr)
+    if (not result->input("tenzir"))
       return nullptr;
-    result->ctx_ = ctx;
-    for (const auto& [key, value] : config) {
-      auto str_value = to_string(value);
-      TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
-      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set global service option: {}={}", key,
-                     str_value);
-        return nullptr;
-      }
-    }
-    for (const auto& [key, value] : args.options) {
-      TENZIR_DEBUG("setting local service option: {}={}", key, value);
-      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set local service option: {}={}", key, value);
-        return nullptr;
-      }
-    }
-    // Set ourselves as input plugin.
-    auto ret = flb_input(ctx, "tenzir", result->state());
-    if (ret < 0) {
-      TENZIR_ERROR("failed to setup tenzir input plugin ({})", ret);
+    if (not result->output(args.plugin, args.args))
       return nullptr;
-    }
-    // Set the desired output plugin.
-    auto ffd = flb_output(ctx, args.plugin.c_str(), nullptr);
-    if (ffd < 0) {
-      TENZIR_ERROR("failed to setup {} output plugin ({})", args.plugin, ffd);
+    if (not result->start())
       return nullptr;
-    }
-    // Apply user-provided config.
-    for (const auto& [key, value] : args.args) {
-      TENZIR_DEBUG("setting {} plugin option: {}={}", args.plugin, key, value);
-      if (flb_output_set(ctx, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set {} plugin option: {}={}", args.plugin, key,
-                     value);
-        return nullptr;
-      }
-    }
-    ret = flb_start(ctx);
-    if (ret < 0) {
-      TENZIR_ERROR("failed to start engine ({})", ret);
-      return nullptr;
-    }
     return result;
   }
 
@@ -202,29 +121,106 @@ public:
   engine(const engine&) = delete;
   auto operator=(const engine&) -> engine& = delete;
 
-  auto state() -> shared_state* {
-    return &state_;
+  /// Copies data into the shared buffer with the Tenzir Fluent Bit plugin.
+  void append(const auto& buffer) {
+    pthread_mutex_lock(&state_.lock);
+    TENZIR_ASSERT(state_.len >= 0);
+    TENZIR_ASSERT(static_cast<size_t>(state_.len) <= buffer.size());
+    // When we enter here, Fluent Bit may have futzed with our buffer and
+    // partially processed it. So we must adjust our own buffer accordingly.
+    // Fluent Bit assuems that the last writeable byte is at position `len` and
+    // may write a NUL byte at `len + 1` to produce a NUL-terminated C-string.
+    buffer_.resize(detail::narrow_cast<size_t>(state_.len));
+    // Now we're ready to write new data.
+    buffer_.insert(buffer_.end(), buffer.begin(), buffer.end());
+    // Finally, we update the shared state to allow Fluent Bit to wield freely.
+    // Fluent Bit expects that it can freely within the buffer bounds.
+    state_.buf = buffer_.data();
+    state_.len = detail::narrow_cast<int>(buffer_.size());
+    pthread_mutex_unlock(&state_.lock);
   }
 
 private:
-  static auto make_engine(size_t buffer_size) -> std::unique_ptr<engine> {
-    return std::unique_ptr<engine>(new engine{buffer_size});
+  static auto make_engine(const record& global_properties,
+                          const property_map& local_properties)
+    -> std::unique_ptr<engine> {
+    auto* ctx = flb_create();
+    if (ctx == nullptr)
+      return nullptr;
+    for (const auto& [key, value] : global_properties) {
+      auto str_value = to_string(value);
+      TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
+      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set global service option: {}={}", key,
+                     str_value);
+        return nullptr;
+      }
+    }
+    for (const auto& [key, value] : local_properties) {
+      TENZIR_DEBUG("setting local service option: {}={}", key, value);
+      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set local service option: {}={}", key, value);
+        return nullptr;
+      }
+    }
+    return std::unique_ptr<engine>(new engine{ctx});
   }
 
-  explicit engine(size_t buffer_size) {
-    TENZIR_ASSERT(buffer_size > 0);
-    buffer_.resize(buffer_size);
-    state_ = {
-      .buf = buffer_.data(),
-      .buf_len = 0,
-      .buf_size = buffer_.size(),
-    };
+  explicit engine(flb_ctx_t* ctx)
+    : ctx_{ctx}, state_{.buf = nullptr, .len = 0} {
+    TENZIR_ASSERT(ctx != nullptr);
     pthread_mutex_init(&state_.lock, nullptr);
+  }
+
+  auto input(const std::string& plugin, const property_map& properties = {})
+    -> bool {
+    auto ffd = flb_input(ctx_, plugin.c_str(), &state_);
+    if (ffd < 0) {
+      TENZIR_ERROR("failed to setup {} input plugin ({})", plugin, ffd);
+      return false;
+    }
+    // Apply user-provided plugin properties.
+    for (const auto& [key, value] : properties) {
+      TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
+      if (flb_input_set(ctx_, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
+                     value);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  auto output(const std::string& plugin, const property_map& properties = {})
+    -> bool {
+    auto ffd = flb_output(ctx_, plugin.c_str(), nullptr);
+    if (ffd < 0) {
+      TENZIR_ERROR("failed to setup {} output plugin ({})", plugin, ffd);
+      return false;
+    }
+    // Apply user-provided plugin properties.
+    for (const auto& [key, value] : properties) {
+      TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
+      if (flb_output_set(ctx_, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
+        TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
+                     value);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  auto start() -> bool {
+    auto ret = flb_start(ctx_);
+    if (ret == 0)
+      return true;
+    TENZIR_ERROR("failed to start engine ({})", ret);
+    return false;
   }
 
   flb_ctx_t* ctx_{nullptr};
   shared_state state_{};
-  std::vector<char> buffer_;
+  std::string buffer_;
 };
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
@@ -245,10 +241,7 @@ public:
     }
     // Keep the executor pumping.
     while (true) {
-      auto* state = engine->state();
-      pthread_mutex_lock(&state->lock);
-      co_yield {}; // TODO
-      pthread_mutex_unlock(&state->lock);
+      co_yield {}; // TODO: implement source
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
   }
@@ -262,9 +255,6 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto printer = tenzir::json_printer{{
-      .oneline = true,
-    }};
     auto json_buffer = std::vector<char>{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -279,22 +269,16 @@ public:
       for (const auto& row :
            values(caf::get<record_type>(resolved_slice.schema()), *array)) {
         TENZIR_ASSERT_CHEAP(row);
+        auto printer = json_printer{{
+          .oneline = true,
+        }};
         const auto ok = printer.print(it, *row);
         TENZIR_ASSERT_CHEAP(ok);
         it = fmt::format_to(it, "\n");
       }
       json_buffer.pop_back(); // Remove trailing '\n'.
-      // Mutate shared state: copy generated JSON into buffer.
-      auto* state = engine->state();
-      pthread_mutex_lock(&state->lock);
-      if (json_buffer.size() > state->buf_size - state->buf_len - 1)
-        // FIXME: resize buffer instead of dying
-        die("not enough buffer capa");
-      std::memcpy(state->buf + state->buf_len, json_buffer.data(),
-                  json_buffer.size());
-      state->buf_len += json_buffer.size();
-      state->buf[state->buf_len] = '\0';
-      pthread_mutex_unlock(&state->lock);
+      // Copy generated JSON into shared buffer.
+      engine->append(json_buffer);
       co_yield {};
     }
   }
@@ -370,7 +354,7 @@ public:
           .primary(arg->source)
           .throw_();
       for (auto& [key, value] : kvps)
-        args.options.emplace(std::move(key), std::move(value));
+        args.service_properties.emplace(std::move(key), std::move(value));
     }
     // Parse the remainder: <plugin> [<key=value>...]
     if (have_options) {
