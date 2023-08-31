@@ -1,6 +1,6 @@
 #! /usr/bin/env zsh
 
-set -euo pipefail
+set -eu -o pipefail -o null_glob
 
 # Check if exactly one argument was passed: the new version.
 if (( $# != 1 )) || [[ "$1" == "--help" ]]; then
