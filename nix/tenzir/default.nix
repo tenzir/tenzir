@@ -60,6 +60,7 @@
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"
+        "plugins/sigma"
         "plugins/web"
       ]
       ++ extraPlugins';

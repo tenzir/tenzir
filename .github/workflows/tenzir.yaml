@@ -827,6 +827,9 @@ jobs:
           - name: Platform
             target: platform
             path: contrib/tenzir-plugins/platform
+          - name: Sigma
+            target: sigma
+            path: plugins/sigma
         exclude:
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
@@ -842,6 +845,7 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Matcher}}
           - {setup: {os: macos-latest}, plugin: {name: Netflow}}
           - {setup: {os: macos-latest}, plugin: {name: Pipeline Manager}}
+          - {setup: {os: macos-latest}, plugin: {name: Sigma}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"

@@ -32,8 +32,9 @@ auto pattern::make(std::string str, pattern_options options) noexcept
   result.options_ = options;
   result.regex_ = std::make_shared<regex_impl>(result.str_, opts);
   if (!result.regex_->ok())
-    return caf::make_error(
-      ec::syntax_error, fmt::format("failed to create regex from '{}'", str));
+    return caf::make_error(ec::syntax_error,
+                           fmt::format("failed to create regex from '{}'",
+                                       result.str_));
   return result;
 }
 
