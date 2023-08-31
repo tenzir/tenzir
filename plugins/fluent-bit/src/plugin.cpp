@@ -73,7 +73,7 @@ public:
     result->ctx_ = ctx;
     for (const auto& [key, value] : config) {
       auto str_value = to_string(value);
-      TENZIR_INFO("setting global service option: {}={}", key, str_value);
+      TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
       if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
         TENZIR_ERROR("failed to set global service option: {}={}", key,
                      str_value);
@@ -81,7 +81,7 @@ public:
       }
     }
     for (const auto& [key, value] : args.options) {
-      TENZIR_INFO("setting local service option: {}={}", key, value);
+      TENZIR_DEBUG("setting local service option: {}={}", key, value);
       if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
         TENZIR_ERROR("failed to set local service option: {}={}", key, value);
         return nullptr;
@@ -128,7 +128,7 @@ public:
     result->ctx_ = ctx;
     for (const auto& [key, value] : config) {
       auto str_value = to_string(value);
-      TENZIR_INFO("setting global service option: {}={}", key, str_value);
+      TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
       if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
         TENZIR_ERROR("failed to set global service option: {}={}", key,
                      str_value);
@@ -136,7 +136,7 @@ public:
       }
     }
     for (const auto& [key, value] : args.options) {
-      TENZIR_INFO("setting local service option: {}={}", key, value);
+      TENZIR_DEBUG("setting local service option: {}={}", key, value);
       if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
         TENZIR_ERROR("failed to set local service option: {}={}", key, value);
         return nullptr;
@@ -173,13 +173,23 @@ public:
 
   ~engine() {
     if (ctx_ != nullptr) {
-      // We must release all Fluent Bit resources prior to destroying the shared
-      // state.
+      TENZIR_DEBUG("waiting until Fluent Bit context is in state FLB_LIB_OK");
+      // This function does this internally:
+      //
+      //     while (ctx->status == FLB_LIB_OK) {
+      //         sleep(1);
+      //     }
+      //
+      // We may want to control the sleeping interval. But since `ctx` is opaque
+      // from our end, this would require upstream changes to include add
+      // timeout parameter to `flb_loop`, for which we'd have to ask the devs.
+      flb_loop(ctx_);
+      TENZIR_DEBUG("stopping Fluent Bit engine");
       auto ret = flb_stop(ctx_);
       if (ret != 0)
         TENZIR_ERROR("failed to stop engine ({})", ret);
-      // FIXME: destroying the library context currently yields a segfault.
-      // flb_destroy(ctx_);
+      TENZIR_DEBUG("destroying Fluent Bit engine");
+      flb_destroy(ctx_);
     }
     auto ret = pthread_mutex_destroy(&state_.lock);
     if (ret != 0)
@@ -204,12 +214,12 @@ private:
   explicit engine(size_t buffer_size) {
     TENZIR_ASSERT(buffer_size > 0);
     buffer_.resize(buffer_size);
-    pthread_mutex_init(&state_.lock, nullptr);
     state_ = {
       .buf = buffer_.data(),
       .buf_len = 0,
       .buf_size = buffer_.size(),
     };
+    pthread_mutex_init(&state_.lock, nullptr);
   }
 
   flb_ctx_t* ctx_{nullptr};
@@ -286,12 +296,6 @@ public:
       state->buf[state->buf_len] = '\0';
       pthread_mutex_unlock(&state->lock);
       co_yield {};
-    }
-    // FIXME: we're keeping things alive just for testing.
-    while (true) {
-      co_yield {};
-      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-      TENZIR_WARN("yielding...");
     }
   }
 
