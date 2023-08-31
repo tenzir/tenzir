@@ -351,29 +351,32 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto args = operator_args{};
-    auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
-    auto options = std::optional<located<std::string>>{};
-    parser.add("-X,--set", options, "<key=value>,...");
-    parser.parse(p);
-    // Translate config options.
-    if (options) {
+    auto arg = p.accept_shell_arg();
+    if (arg == std::nullopt)
+      diagnostic::error("missing fluentbit plugin").throw_();
+    auto have_options = false;
+    if (arg->inner == "-X" || arg->inner == "--set") {
+      have_options = true;
+      arg = p.accept_shell_arg();
+      if (arg == std::nullopt)
+        diagnostic::error("-X|--set requires values").throw_();
       std::vector<std::pair<std::string, std::string>> kvps;
-      if (!kvp_parser()(options->inner, kvps))
+      if (!kvp_parser()(arg->inner, kvps))
         diagnostic::error("invalid list of key=value pairs")
-          .primary(options->source)
+          .primary(arg->source)
           .throw_();
       for (auto& [key, value] : kvps)
         args.options.emplace(std::move(key), std::move(value));
     }
     // Parse the remainder: <plugin> [<key=value>...]
-    auto plugin = p.accept_shell_arg();
-    if (plugin == std::nullopt)
-      diagnostic::error("missing fluentbit plugin").throw_();
-    args.plugin = std::move(plugin->inner);
+    if (have_options) {
+      arg = p.accept_shell_arg();
+      if (arg == std::nullopt)
+        diagnostic::error("missing fluentbit plugin").throw_();
+    }
+    args.plugin = std::move(arg->inner);
     while (true) {
-      auto arg = p.accept_shell_arg();
+      arg = p.accept_shell_arg();
       if (arg == std::nullopt)
         break;
       // Try parsing as key-value pair
