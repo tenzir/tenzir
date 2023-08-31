@@ -10,7 +10,7 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/string.hpp>
-#include <tenzir/concept/parseable/tenzir/option_set.hpp>
+#include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/error.hpp>
@@ -311,17 +311,6 @@ private:
   record config_;
 };
 
-// FIXME: Shamelessly copied from the Kafka plugin. Factor it into libtenzir.
-auto kvp_parser() {
-  using namespace parsers;
-  using namespace parser_literals;
-  using parsers::printable;
-  auto key = *(printable - '=');
-  auto value = *(printable - ',');
-  auto kvp = key >> '=' >> value;
-  return kvp % ',';
-}
-
 class plugin final : public operator_plugin<fluent_bit_operator> {
 public:
   auto initialize(const record& config, const record& /* global_config */)
@@ -349,7 +338,7 @@ public:
       if (arg == std::nullopt)
         diagnostic::error("-X|--set requires values").throw_();
       std::vector<std::pair<std::string, std::string>> kvps;
-      if (!kvp_parser()(arg->inner, kvps))
+      if (!parsers::kvp_list(arg->inner, kvps))
         diagnostic::error("invalid list of key=value pairs")
           .primary(arg->source)
           .throw_();
