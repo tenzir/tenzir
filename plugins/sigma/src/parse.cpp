@@ -221,9 +221,21 @@ transform_sigma_string(std::string_view str, std::string_view fmt) {
       case '}':
       case '^':
       case '$':
-      case '\\':
         rx += '\\';
         rx += c;
+        break;
+      case '\\':
+        if (f != l and (*f == '?' or *f == '*' or *f == '\\')) {
+          // Edge-case: The user intended to escape the glob character.
+          rx += '\\';
+          rx += *f++;
+          break;
+        }
+        rx += "\\\\";
+        break;
+      default:
+        rx += c;
+        break;
     }
   }
   auto result = pattern::make(rx, {.case_insensitive = true});
@@ -233,8 +245,8 @@ transform_sigma_string(std::string_view str, std::string_view fmt) {
   if (fmt.empty()) {
     return result;
   }
-  return transform_sigma_string(
-    fmt::format(TENZIR_FMT_RUNTIME(fmt), result->string()), {});
+  return pattern::make(fmt::format(TENZIR_FMT_RUNTIME(fmt), result->string()),
+                       result->options());
 }
 
 } // namespace
@@ -262,14 +274,22 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "gte") {
           op = relational_operator::greater_equal;
         } else if (*i == "contains") {
-          auto to_re = [](const data& d) -> caf::expected<data> {
-            auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
-              auto str = detail::control_char_escape(to_string(x));
-              auto result = transform_sigma_string(str, "*{}*");
-              if (!result)
-                return std::move(result.error());
-              return std::move(*result);
-            }};
+          auto to_re = [&](const data& d) -> caf::expected<data> {
+            auto f = detail::overload{
+              [&]<class T>(const T& x) -> caf::expected<data> {
+                if constexpr (std::is_same_v<T, std::string>) {
+                  auto result = transform_sigma_string(
+                    detail::control_char_escape(x), ".*{}.*");
+                  if (!result)
+                    return std::move(result.error());
+                  return std::move(*result);
+                } else if constexpr (detail::is_any_v<T, subnet, list>) {
+                  op = relational_operator::ni;
+                  return x;
+                } else {
+                  return x;
+                }
+              }};
             return caf::visit(f, d);
           };
           transforms.emplace_back(to_re);
@@ -329,7 +349,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
-              auto result = transform_sigma_string(str, "^{}*");
+              auto result = transform_sigma_string(str, "^{}.*");
               if (!result)
                 return std::move(result.error());
               return std::move(*result);
@@ -342,7 +362,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
               auto str = detail::control_char_escape(to_string(x));
-              auto result = transform_sigma_string(str, "*{}$");
+              auto result = transform_sigma_string(str, ".*{}$");
               if (!result)
                 return std::move(result.error());
               return std::move(*result);
@@ -365,7 +385,6 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                 return std::move(*result);
               },
               [](const std::string& x) -> caf::expected<data> {
-                TENZIR_WARN("making pattern: {}", __LINE__);
                 auto result = pattern::make(x);
                 if (!result)
                   return std::move(result.error());

@@ -54,10 +54,10 @@ TEST(wildcard unescaping) {
   check_pattern_equality("x: 'f?'", "x == /f./");
   check_pattern_equality("x: 'f*bar'", "x == /f.*bar/");
   check_pattern_equality("x: 'f?bar'", "x == /f.bar/");
-  check_pattern_equality("x: 'f\\*bar'", "x == /f*bar/");
-  check_pattern_equality("x: 'f\\?bar'", "x == /f?bar/");
-  check_pattern_equality("x: 'f\\\\*bar'", "x == /f\\.*bar/");
-  check_pattern_equality("x: 'f\\\\?bar'", "x == /f\\.bar/");
+  check_pattern_equality("x: 'f\\*bar'", "x == /f\\*bar/");
+  check_pattern_equality("x: 'f\\?bar'", "x == /f\\?bar/");
+  check_pattern_equality("x: 'f\\\\*bar'", "x == /f\\\\.*bar/");
+  check_pattern_equality("x: 'f\\\\?bar'", "x == /f\\\\.bar/");
 }
 
 TEST(maps - single value) {
@@ -195,10 +195,10 @@ TEST(modifier - startswith - proper backslash escaping) {
     foo|startswith: "C:\rundll32"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr(R"(foo == /^C:\rundll32.*/i)");
+  auto expected = to_expr(R"(foo == /^C:\\rundll32.*/i)");
   CHECK_EQUAL(search_id, expected);
   auto str = to_string(expected);
-  CHECK_EQUAL(str, R"(foo == /^C:\rundll32.*/i)");
+  CHECK_EQUAL(str, R"(foo == /^C:\\rundll32.*/i)");
 }
 
 TEST(modifier - startswith - wildcards) {
@@ -224,10 +224,10 @@ TEST(modifier - endswith - proper backslash escaping) {
     foo|endswith: "\rundll32.exe"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr(R"(foo == /.*\rundll32.exe$/i)");
+  auto expected = to_expr(R"(foo == /.*\\rundll32\.exe$/i)");
   CHECK_EQUAL(search_id, expected);
   auto str = to_string(expected);
-  CHECK_EQUAL(str, R"(foo == /.*\rundll32.exe$/i)");
+  CHECK_EQUAL(str, R"(foo == /.*\\rundll32\.exe$/i)");
 }
 
 TEST(modifier - endswith - wildcards) {
@@ -517,12 +517,12 @@ level: critical
 TEST(real example) {
   auto expr = to_rule(unc2452);
   // clang-format off
-  auto selection1 = R"__(CommandLine == /7z.exe a -v500m -mx9 -r0 -p/i)__"s;
-  auto selection2a = R"__(ParentCommandLine == /wscript.exe/i && ParentCommandLine == /.vbs/i)__"s;
-  auto selection2b = R"__(CommandLine == /rundll32.exe/i && CommandLine == /C:\Windows/i && CommandLine == /.dll,Tk_/i)__"s;
-  auto selection3 = R"__(ParentImage == /.*\rundll32.exe$/i && ParentCommandLine == /C:\Windows/i && CommandLine == /cmd.exe \/C /i)__"s;
-  auto selection4 = R"__(CommandLine == /rundll32 c:\windows\\/i && CommandLine == /.dll /i)__"s;
-  auto specific1 = R"__(ParentImage == /.*\rundll32.exe$/i && Image == /.*\dllhost.exe$/i)__"s;
+  auto selection1 = R"__(CommandLine == /.*7z\.exe a -v500m -mx9 -r0 -p.*/i)__"s;
+  auto selection2a = R"__(ParentCommandLine == /.*wscript\.exe.*/i && ParentCommandLine == /.*\.vbs.*/i)__"s;
+  auto selection2b = R"__(CommandLine == /.*rundll32\.exe.*/i && CommandLine == /.*C:\\Windows.*/i && CommandLine == /.*\.dll,Tk_.*/i)__"s;
+  auto selection3 = R"__(ParentImage == /.*\\rundll32\.exe$/i && ParentCommandLine == /.*C:\\Windows.*/i && CommandLine == /.*cmd\.exe \/C .*/i)__"s;
+  auto selection4 = R"__(CommandLine == /.*rundll32 c:\\windows\\.*/i && CommandLine == /.*\.dll .*/i)__"s;
+  auto specific1 = R"__(ParentImage == /.*\\rundll32\.exe$/i && Image == /.*\\dllhost\.exe$/i)__"s;
   auto filter1 = R"__(CommandLine == / /i || CommandLine == //i)__"s;
   // clang-format on
   conjunction selection2;
