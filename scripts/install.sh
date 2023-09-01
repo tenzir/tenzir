@@ -192,7 +192,7 @@ fi
 # Test the installation.
 action "Checking version"
 PATH="${prefix}/bin:$PATH"
-tenzir -q 'version | select version | write json'
+tenzir -q 'show version | write json'
 
 # Inform about next steps.
 action "Providing guidance"
