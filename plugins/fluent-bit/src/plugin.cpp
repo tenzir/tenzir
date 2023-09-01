@@ -20,10 +20,9 @@
 #include <arrow/record_batch.h>
 
 #include <cstring>
+// #include <msgpack.h>
 
 #include <fluent-bit/fluent-bit-minimal.h>
-
-using namespace std::chrono_literals;
 
 namespace tenzir::plugins::fluentbit {
 
@@ -42,15 +41,17 @@ using property_map = std::map<std::string, std::string>;
 
 /// The arguments passed to the operator.
 struct operator_args {
-  std::string plugin;              ///< The Fluent Bit plugin name.
-  property_map service_properties; ///< The global service options.
-  property_map args;               ///< The plugin arguments.
+  std::string plugin;                           ///< Fluent Bit plugin name.
+  std::chrono::milliseconds poll_interval{250}; ///< Engine poll interval.
+  property_map service_properties;              ///< The global service options.
+  property_map args;                            ///< The plugin arguments.
 
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
       .fields(f.field("plugin", x.plugin),
+              f.field("poll_interval", x.poll_interval),
               f.field("service_properties", x.service_properties),
               f.field("args", x.args));
   }
@@ -58,17 +59,39 @@ struct operator_args {
 
 /// A RAII-style wrapper around the Fluent Bit engine.
 class engine {
+  /// Callback that the Fluent Bit `lib` output invokes per record. We use when
+  /// the engine acts as source. Since we don't want to do any memory
+  /// management within Fluent Bit, we just make a copy of the data into our
+  /// shared buffer that we then process later with the source operator.
+  static auto handle_lib_output(void* record, size_t size, void* data) -> int {
+    auto str = std::string_view{reinterpret_cast<char*>(record), size};
+    auto* self = reinterpret_cast<engine*>(data);
+    self->append(str);
+    self->append(std::string{'\n'}); // ensures valid JSONL
+    flb_lib_free(record);
+    return 0;
+  }
+
 public:
   /// Constructs a Fluent Bit engine for use as "source" in a pipeline.
   static auto
   make_source(const operator_args& args, const record& plugin_config)
     -> std::unique_ptr<engine> {
-    auto result = make_engine(plugin_config, args.service_properties);
+    auto result
+      = make_engine(plugin_config, args.poll_interval, args.service_properties);
     if (not result)
       return nullptr;
     if (not result->input(args.plugin, args.args))
       return nullptr;
-    if (not result->output("tenzir"))
+    auto callback = flb_lib_out_cb{
+      .cb = handle_lib_output,
+      .data = result.get(),
+    };
+    // There are two options for the `lib` output:
+    // - format: "msgpack" or "json"
+    // - max_records: integer representing the maximum number of records to
+    //   process per single flush call.
+    if (not result->output("lib", {{"format", "json"}}, &callback))
       return nullptr;
     if (not result->start())
       return nullptr;
@@ -78,7 +101,8 @@ public:
   /// Constructs a Fluent Bit engine for use as "sink" in a pipeline.
   static auto make_sink(const operator_args& args, const record& plugin_config)
     -> std::unique_ptr<engine> {
-    auto result = make_engine(plugin_config, args.service_properties);
+    auto result
+      = make_engine(plugin_config, args.poll_interval, args.service_properties);
     if (not result)
       return nullptr;
     if (not result->input("tenzir"))
@@ -92,17 +116,10 @@ public:
 
   ~engine() {
     if (ctx_ != nullptr) {
-      TENZIR_DEBUG("waiting until Fluent Bit context is in state FLB_LIB_OK");
-      // This function does this internally:
-      //
-      //     while (ctx->status == FLB_LIB_OK) {
-      //         sleep(1);
-      //     }
-      //
-      // We may want to control the sleeping interval. But since `ctx` is opaque
-      // from our end, this would require upstream changes to include add
-      // timeout parameter to `flb_loop`, for which we'd have to ask the devs.
-      flb_loop(ctx_);
+      while (ctx_->status == FLB_LIB_OK) {
+        TENZIR_DEBUG("sleeping until Fluent Bit context is alive");
+        std::this_thread::sleep_for(poll_interval_);
+      }
       TENZIR_DEBUG("stopping Fluent Bit engine");
       auto ret = flb_stop(ctx_);
       if (ret != 0)
@@ -122,10 +139,11 @@ public:
   auto operator=(const engine&) -> engine& = delete;
 
   /// Copies data into the shared buffer with the Tenzir Fluent Bit plugin.
+  /// @note This function is thread-safe.
   void append(const auto& buffer) {
     pthread_mutex_lock(&state_.lock);
     TENZIR_ASSERT(state_.len >= 0);
-    TENZIR_ASSERT(static_cast<size_t>(state_.len) <= buffer.size());
+    TENZIR_ASSERT(static_cast<size_t>(state_.len) == buffer_.size());
     // When we enter here, Fluent Bit may have futzed with our buffer and
     // partially processed it. So we must adjust our own buffer accordingly.
     // Fluent Bit assuems that the last writeable byte is at position `len` and
@@ -140,8 +158,33 @@ public:
     pthread_mutex_unlock(&state_.lock);
   }
 
+  /// Tries to consume the shared buffer with a function.
+  /// @note This function is thread-safe.
+  auto try_consume(auto f) -> bool {
+    if (pthread_mutex_trylock(&state_.lock) != 0)
+      return false;
+    auto guard = caf::detail::make_scope_guard([&] {
+      pthread_mutex_unlock(&state_.lock);
+    });
+    if (state_.len == 0)
+      return false;
+    auto str = std::string_view{state_.buf, static_cast<size_t>(state_.len)};
+    if (f(str)) {
+      buffer_.clear();
+      state_.buf = nullptr;
+      state_.len = 0;
+    }
+    return true;
+  }
+
+  /// Checks whether the Fluent Bit engine is still running.
+  auto running() -> bool {
+    return ctx_->status == FLB_LIB_OK;
+  }
+
 private:
   static auto make_engine(const record& global_properties,
+                          std::chrono::milliseconds poll_interval,
                           const property_map& local_properties)
     -> std::unique_ptr<engine> {
     auto* ctx = flb_create();
@@ -168,11 +211,11 @@ private:
         return nullptr;
       }
     }
-    return std::unique_ptr<engine>(new engine{ctx});
+    return std::unique_ptr<engine>(new engine{ctx, poll_interval});
   }
 
-  explicit engine(flb_ctx_t* ctx)
-    : ctx_{ctx}, state_{.buf = nullptr, .len = 0} {
+  explicit engine(flb_ctx_t* ctx, std::chrono::milliseconds poll_interval)
+    : ctx_{ctx}, poll_interval_{poll_interval} {
     TENZIR_ASSERT(ctx != nullptr);
     pthread_mutex_init(&state_.lock, nullptr);
   }
@@ -196,9 +239,9 @@ private:
     return true;
   }
 
-  auto output(const std::string& plugin, const property_map& properties = {})
-    -> bool {
-    auto ffd = flb_output(ctx_, plugin.c_str(), nullptr);
+  auto output(const std::string& plugin, const property_map& properties = {},
+              struct flb_lib_out_cb* callback = nullptr) -> bool {
+    auto ffd = flb_output(ctx_, plugin.c_str(), callback);
     if (ffd < 0) {
       TENZIR_ERROR("failed to setup {} output plugin ({})", plugin, ffd);
       return false;
@@ -224,8 +267,9 @@ private:
   }
 
   flb_ctx_t* ctx_{nullptr};
-  shared_state state_{};
-  std::string buffer_;
+  std::chrono::milliseconds poll_interval_{};
+  shared_state state_{.buf = nullptr, .len = 0};
+  std::string buffer_{};
 };
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
@@ -244,10 +288,26 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    // Keep the executor pumping.
-    while (true) {
-      co_yield {}; // TODO: implement source
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    while (engine->running()) {
+      auto result = table_slice{};
+      auto parse_fluentbit = [&result](std::string_view data) {
+        // TODO: create table slices from JSON. The alternative would be
+        // switching the format to MsgPack, but this is perhaps v2 when things
+        // are too slow.
+        //
+        // Speaking with Dominik, we could use simdjson directly here to get the
+        // second array element of the Fluent Bit message [timestamp, {..}],
+        // using something like on_demand::dom::parse. Once we're ready to
+        // extract the contained object, we should go to Jannis as he's
+        // currently reworking the JSON parser. What we need is a library
+        // utility that bakes us a table slice given a JSON object and builder.
+        result = {};
+        return true;
+      };
+      // Poll the engine and process data that Fluent Bit already handed over.
+      if (not engine->try_consume(parse_fluentbit))
+        std::this_thread::sleep_for(args_.poll_interval);
+      co_yield result;
     }
   }
 

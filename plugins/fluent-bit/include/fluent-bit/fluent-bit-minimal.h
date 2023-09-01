@@ -32,7 +32,12 @@
 #define FLB_LIB_OK 1
 #define FLB_LIB_NO_CONFIG_MAP 2
 
-struct flb_lib_ctx;
+struct flb_lib_ctx {
+    int status;
+    void *event_loop;
+    void *event_channel;
+    void *config;
+};
 
 /* Used on out_lib to define a callback and further opaque data */
 struct flb_lib_out_cb {
