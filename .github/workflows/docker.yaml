@@ -91,7 +91,7 @@ jobs:
             echo "::info Building ${name}"
             docker buildx build . \
               -t "tenzir/${name}:latest" --target "${target}" \
-              --load --platform linux/amd64 \
+              --load --platform linux/amd64,linux/arm64 \
               --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}"
           done
       - name: Login to Docker Hub
