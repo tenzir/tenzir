@@ -81,7 +81,7 @@ jobs:
           echo "::info Building the Developer Edition Image"
           docker buildx build . \
             -t "tenzir/tenzir-de:latest" --target "tenzir-de" \
-            --load --platform linux/amd64 \
+            --load --platform linux/amd64,linux/arm64 \
             --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
             --cache-from "type=registry,ref=${CACHE_TAG}" \
             --cache-to "type=registry,mode=max,ref=${CACHE_TAG}"
