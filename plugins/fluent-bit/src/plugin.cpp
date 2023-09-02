@@ -105,7 +105,7 @@ public:
       = make_engine(plugin_config, args.poll_interval, args.service_properties);
     if (not result)
       return nullptr;
-    if (not result->input("tenzir"))
+    if (not result->input("lib"))
       return nullptr;
     if (not result->output(args.plugin, args.args))
       return nullptr;
@@ -116,15 +116,7 @@ public:
 
   ~engine() {
     if (ctx_ != nullptr) {
-      while (ctx_->status == FLB_LIB_OK) {
-        TENZIR_DEBUG("sleeping until Fluent Bit context is alive");
-        std::this_thread::sleep_for(poll_interval_);
-      }
-      TENZIR_DEBUG("stopping Fluent Bit engine");
-      auto ret = flb_stop(ctx_);
-      if (ret != 0)
-        TENZIR_ERROR("failed to stop engine ({})", ret);
-      TENZIR_DEBUG("destroying Fluent Bit engine");
+      stop();
       flb_destroy(ctx_);
     }
     auto ret = pthread_mutex_destroy(&state_.lock);
@@ -177,9 +169,26 @@ public:
     return true;
   }
 
+  /// Provides an upper bound on sleep time before stopping the engine. This is
+  /// important when using the engine as sink, because pushing data into Fluent
+  /// Bit is not preventing a teardown, i.e., pushed data may not be processed
+  /// at all. Since there are no delivery guarantees, the best we can do is
+  /// wait by sleeping.
+  void max_wait_before_stop(std::chrono::milliseconds wait_time) {
+    num_stop_polls_ = wait_time / poll_interval_;
+  }
+
   /// Checks whether the Fluent Bit engine is still running.
   auto running() -> bool {
+    TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
     return ctx_->status == FLB_LIB_OK;
+  }
+
+  /// Pushes data into Fluent Bit.
+  auto push(std::string_view data) -> bool {
+    TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
+    TENZIR_ASSERT_CHEAP(ffd_ >= 0);
+    return flb_lib_push(ctx_, ffd_, data.data(), data.size()) != 0;
   }
 
 private:
@@ -222,15 +231,15 @@ private:
 
   auto input(const std::string& plugin, const property_map& properties = {})
     -> bool {
-    auto ffd = flb_input(ctx_, plugin.c_str(), &state_);
-    if (ffd < 0) {
-      TENZIR_ERROR("failed to setup {} input plugin ({})", plugin, ffd);
+    ffd_ = flb_input(ctx_, plugin.c_str(), &state_);
+    if (ffd_ < 0) {
+      TENZIR_ERROR("failed to setup {} input plugin ({})", plugin, ffd_);
       return false;
     }
     // Apply user-provided plugin properties.
     for (const auto& [key, value] : properties) {
       TENZIR_DEBUG("setting {} plugin option: {}={}", plugin, key, value);
-      if (flb_input_set(ctx_, ffd, key.c_str(), value.c_str(), nullptr) != 0) {
+      if (flb_input_set(ctx_, ffd_, key.c_str(), value.c_str(), nullptr) != 0) {
         TENZIR_ERROR("failed to set {} plugin option: {}={}", plugin, key,
                      value);
         return false;
@@ -259,6 +268,8 @@ private:
   }
 
   auto start() -> bool {
+    TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
+    TENZIR_DEBUG("starting Fluent Bit engine");
     auto ret = flb_start(ctx_);
     if (ret == 0)
       return true;
@@ -266,10 +277,27 @@ private:
     return false;
   }
 
-  flb_ctx_t* ctx_{nullptr};
-  std::chrono::milliseconds poll_interval_{};
-  shared_state state_{.buf = nullptr, .len = 0};
-  std::string buffer_{};
+  /// Stops the engine.
+  auto stop() -> bool {
+    TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
+    TENZIR_DEBUG("stopping Fluent Bit engine");
+    for (size_t i = 0; ctx_->status == FLB_LIB_OK && i < num_stop_polls_; ++i) {
+      TENZIR_DEBUG("sleeping while Fluent Bit context is okay");
+      std::this_thread::sleep_for(poll_interval_);
+    }
+    auto ret = flb_stop(ctx_);
+    if (ret == 0)
+      return true;
+    TENZIR_ERROR("failed to stop engine ({})", ret);
+    return false;
+  }
+
+  flb_ctx_t* ctx_{nullptr}; ///< Fluent Bit context
+  int ffd_{-1};             ///< Fluent Bit handle for pushing data
+  std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
+  size_t num_stop_polls_{0}; ///< Number of polls in the destructor
+  shared_state state_{.buf = nullptr, .len = 0}; ///< Shared state with FB
+  std::string buffer_{};                         ///< Buffer for shred state
 };
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
@@ -320,7 +348,8 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto json_buffer = std::vector<char>{};
+    engine->max_wait_before_stop(std::chrono::seconds(1));
+    auto event = std::string{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -330,7 +359,7 @@ public:
       auto resolved_slice = resolve_enumerations(slice);
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto it = std::back_inserter(json_buffer);
+      auto it = std::back_inserter(event);
       for (const auto& row :
            values(caf::get<record_type>(resolved_slice.schema()), *array)) {
         TENZIR_ASSERT_CHEAP(row);
@@ -339,11 +368,12 @@ public:
         }};
         const auto ok = printer.print(it, *row);
         TENZIR_ASSERT_CHEAP(ok);
-        it = fmt::format_to(it, "\n");
+        // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
+        auto message = fmt::format("[{}, {}]", flb_time_now(), event);
+        if (not engine->push(message))
+          TENZIR_ERROR("failed to push data into Fluent Bit engine");
+        event.clear();
       }
-      json_buffer.pop_back(); // Remove trailing '\n'.
-      // Copy generated JSON into shared buffer.
-      engine->append(json_buffer);
       co_yield {};
     }
   }
@@ -403,7 +433,7 @@ public:
       if (arg == std::nullopt)
         diagnostic::error("-X|--set requires values").throw_();
       std::vector<std::pair<std::string, std::string>> kvps;
-      if (!parsers::kvp_list(arg->inner, kvps))
+      if (not parsers::kvp_list(arg->inner, kvps))
         diagnostic::error("invalid list of key=value pairs")
           .primary(arg->source)
           .throw_();
