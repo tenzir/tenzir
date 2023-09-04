@@ -70,7 +70,28 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "nix-filter": "nix-filter",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "sbomnix": "sbomnix"
+      }
+    },
+    "sbomnix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1691143226,
+        "narHash": "sha256-tz+qE/oLgqG9E2/me07D34KC+x/1/Ve3lEdoVyonUt0=",
+        "owner": "tiiuae",
+        "repo": "sbomnix",
+        "rev": "41c5d3a692a98d8dccc7a6df7d27d916cd27ad4f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tiiuae",
+        "repo": "sbomnix",
+        "type": "github"
       }
     },
     "systems": {

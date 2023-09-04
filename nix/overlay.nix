@@ -170,7 +170,7 @@ in {
       ../CMakeLists.txt
       ../LICENSE
       ../README.md
-      ../Tenzir.spdx
+      ../tenzir.spdx.json
       ../VERSIONING.md
       ../tenzir.yaml.example
       ../version.json
@@ -225,6 +225,41 @@ in {
         schema
       ]);
   in [py3 final.jq final.tcpdump];
+  # TODO: Drop after the next nixpkgs bump.
+  # https://github.com/NixOS/nixpkgs/pull/248286
+  spdx-tools = let
+    pythonPackagesOverlays = (prev.pythonPackagesOverlays or [ ]) ++ [
+      (python-final: python-prev: {
+        spdx-tools = python-prev.spdx-tools.overridePythonAttrs (orig: rec {
+          version = "0.8.0";
+          src = python-prev.fetchPypi {
+            inherit (orig) pname;
+            inherit version;
+            hash = "sha256-ZoCb94eDtHFH3K9ppju51WHrReay7BXC6P4VUOJK4c0=";
+          };
+          propagatedBuildInputs = orig.propagatedBuildInputs ++ [
+            python-prev.beartype
+            python-prev.license-expression
+            python-prev.semantic-version
+          ];
+           pythonImportsCheck = [
+             "spdx_tools.spdx"
+           ];
+           disabledTestPaths = [
+             # Depends on the currently not packaged pyshacl module.
+             "tests/spdx3/validation/json_ld/test_shacl_validation.py"
+           ];
+        });
+      })
+    ];
+    python3 =
+      let
+        self = prev.python3.override {
+          inherit self;
+          packageOverrides = prev.lib.composeManyExtensions pythonPackagesOverlays;
+        }; in
+      self;
+    in python3.pkgs.spdx-tools;
   speeve = final.buildGoModule rec {
     pname = "speeve";
     version = "0.1.3";
