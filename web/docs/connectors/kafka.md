@@ -21,7 +21,7 @@ kafka [-t <topic>] [-k|--key <key>] [-T|--timestamp <time>]
 
 ## Description
 
-The `kafka` loaders reads bytes from a Kafka topic. The `kafka` saver writes
+The `kafka` loader reads bytes from a Kafka topic. The `kafka` saver writes
 bytes to a Kafka topic.
 
 The implementation uses the official [librdkafka][librdkafka] from Confluent and
