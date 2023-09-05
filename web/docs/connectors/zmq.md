@@ -32,7 +32,7 @@ Connect to the ZeroMQ socket.
 
 By default, the loader connects and the saver binds.
 
-### `<endpoint>
+### `<endpoint>`
 
 The endpoint for connecting and binding to a ZeroMQ socket.
 

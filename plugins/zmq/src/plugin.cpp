@@ -271,16 +271,11 @@ private:
   monitor monitor_;
 };
 
-class source {};
-
-class sink {};
-
 class zmq_loader final : public plugin_loader {
 public:
   zmq_loader() = default;
 
-  zmq_loader(connector_args args, record config)
-    : args_{std::move(args)}, config_{std::move(config)} {
+  zmq_loader(connector_args args) : args_{std::move(args)} {
   }
 
   auto instantiate(operator_control_plane& ctrl) const
@@ -310,7 +305,7 @@ public:
   friend auto inspect(auto& f, zmq_loader& x) -> bool {
     return f.object(x)
       .pretty_name("zmq_loader")
-      .fields(f.field("args", x.args_), f.field("config", x.config_));
+      .fields(f.field("args", x.args_));
   }
 
   auto to_string() const -> std::string override {
@@ -325,15 +320,13 @@ public:
 
 private:
   connector_args args_;
-  record config_;
 };
 
 class zmq_saver final : public plugin_saver {
 public:
   zmq_saver() = default;
 
-  zmq_saver(connector_args args, record config)
-    : args_{std::move(args)}, config_{std::move(config)} {
+  zmq_saver(connector_args args) : args_{std::move(args)} {
   }
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
@@ -366,37 +359,28 @@ public:
   }
 
   friend auto inspect(auto& f, zmq_saver& x) -> bool {
-    return f.object(x)
-      .pretty_name("zmq_saver")
-      .fields(f.field("args", x.args_), f.field("config", x.config_));
+    return f.object(x).pretty_name("zmq_saver").fields(f.field("args", x.args_));
   }
 
 private:
   connector_args args_;
-  record config_;
 };
 
 class plugin final : public virtual loader_plugin<zmq_loader>,
                      public virtual saver_plugin<zmq_saver> {
 public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
-    config_ = config;
-    return caf::none;
-  }
-
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
     auto args = connector_args{};
     parse(p, args);
-    return std::make_unique<zmq_loader>(std::move(args), config_);
+    return std::make_unique<zmq_loader>(std::move(args));
   }
 
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
     auto args = connector_args{};
     parse(p, args);
-    return std::make_unique<zmq_saver>(std::move(args), config_);
+    return std::make_unique<zmq_saver>(std::move(args));
   }
 
   auto name() const -> std::string override {
@@ -422,8 +406,6 @@ private:
         .hint("--bind and --connect are mutually exclusive")
         .throw_();
   }
-
-  record config_;
 };
 
 } // namespace
