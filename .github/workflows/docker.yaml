@@ -70,30 +70,6 @@ jobs:
           registry: ghcr.io
           username: tenzir-bot
           password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Build Docker Images
-        env:
-          BUILDX_GIT_LABELS: full
-          CACHE_TAG: ghcr.io/tenzir/tenzir:build-cache
-        run: |
-          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${{ fromJSON(inputs.config).version }}"
-          echo "::info Building the Developer Edition Image"
-          docker buildx build . \
-            -t "tenzir/tenzir-de:latest" --target "tenzir-de" \
-            --load --platform linux/amd64,linux/arm64 \
-            --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
-            --cache-from "type=registry,ref=${CACHE_TAG}" \
-            --cache-to "type=registry,mode=max,ref=${CACHE_TAG}"
-          jq -r '.editions[] | [.name, .target] | join (" ")' <<< '${{ inputs.config }}' | while read -r name target; do
-            # We always build 'tenzir-de', so we can skip over here.
-            [[ "${name}" == "tenzir-de" ]] && continue
-            echo "::info Building ${name}"
-            docker buildx build . \
-              -t "tenzir/${name}:latest" --target "${target}" \
-              --load --platform linux/amd64,linux/arm64 \
-              --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}"
-          done
       - name: Login to Docker Hub
         if: steps.cfg.outputs.needs-docker-hub
         uses: docker/login-action@v2
@@ -109,14 +85,34 @@ jobs:
       - name: Login to AWS ECR
         if: steps.cfg.outputs.needs-ecr
         uses: aws-actions/amazon-ecr-login@v1
-      - name: Publish Docker Images
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build Docker Images
+        env:
+          BUILDX_GIT_LABELS: full
+          CACHE_TAG: ghcr.io/tenzir/tenzir:build-cache
         run: |
-          # Expand the registries arrays and output each entry together with
-          # the corresponding edition.
-          jq -r '.editions[] | .name as $name | .registries[]? | [ $name, . ] | join(" ")' \
-            <<< '${{ inputs.config }}' | while read -r name registry; do
-            for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
-              docker tag "tenzir/${name}:latest" "${registry}/tenzir/${name}:${tag}"
-              docker push "${registry}/tenzir/${name}:${tag}"
+          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${{ fromJSON(inputs.config).version }}"
+          echo "::info Building the Developer Edition Image"
+          docker buildx build . \
+            -t "tenzir/tenzir-de:latest" --target "tenzir-de" \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}" \
+            --cache-from "type=registry,ref=${CACHE_TAG}" \
+            --cache-to "type=registry,mode=max,ref=${CACHE_TAG}"
+          jq -r '.editions[] | [.name, .target, .registries[]] | join (" ")' <<< '${{ inputs.config }}' | while read -r name target registries; do
+            tagopt=
+            for registry in $registries; do
+              tagopt="--push"
+              for tag in ${{ join(fromJSON(inputs.config).tags, ' ') }}; do
+                tagopt="$tagopt -t ${registry}/tenzir/${name}:${tag}"
+              done
             done
+            echo "::info Building ${name}"
+            docker buildx build . ${tagopt} \
+              --target "${target}" \
+              --platform linux/amd64,linux/arm64 \
+              --build-arg "TENZIR_BUILD_OPTIONS=${cmake_version_args}"
           done
