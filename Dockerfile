@@ -101,6 +101,7 @@ RUN apt-get update && \
       libunwind8 \
       libxxhash-dev \
       libyaml-cpp0.7 \
+      libzmq5 \
       lsb-release \
       openssl \
       robin-map-dev \
