@@ -110,7 +110,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1200 libparquet1200 && \
+    apt-get -y --no-install-recommends install libarrow1300 libparquet1300 && \
     rm -rf /var/lib/apt/lists/*
 
 USER tenzir:tenzir

@@ -227,6 +227,8 @@ int main(int argc, char** argv) {
     TENZIR_ERROR("failed to cancel signal monitoring thread");
   signal_monitoring_thread.join();
   pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
+  // Deinitialize all plugins. Needed for timely S3 deinitialization.
+  plugins::get_mutable().clear();
   if (run_error) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;

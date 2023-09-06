@@ -6,17 +6,88 @@ tags: [release, pipelines, connectors, s3, zmq]
 draft: true
 ---
 
-We've just released Tenzir v4.2 that introduces two new connectors: S3 for
+We've just released Tenzir v4.2 that introduces two new connectors: [S3][s3] for
 interacting with blob storage and [ZeroMQ][zeromq] for writing distributed
 multi-hop pipelines.
 
+[s3]: https://aws.amazon.com/s3/
+[marketplace]: https://aws.amazon.com/marketplace/search/results?trk=8384929b-0eb1-4af3-8996-07aa409646bc&sc_channel=el&FULFILLMENT_OPTION_TYPE=DATA_EXCHANGE&CONTRACT_TYPE=OPEN_DATA_LICENSES&DATA_AVAILABLE_THROUGH=S3_OBJECTS&PRICING_MODEL=FREE&filters=FULFILLMENT_OPTION_TYPE%2CCONTRACT_TYPE%2CDATA_AVAILABLE_THROUGH%2CPRICING_MODEL
+[density]: https://aws.amazon.com/marketplace/pp/prodview-jf2hjpr2mrj4m?sr=0-2&ref_=beagle&applicationId=AWSMPContessa#overview
+[humor]: https://aws.amazon.com/marketplace/pp/prodview-b53zm25dl3jcc?sr=0-3&ref_=beagle&applicationId=AWSMPContessa#overview
+[uri]: https://arrow.apache.org/docs/10.0/r/articles/fs.html#uri-options
 [zeromq]: https://zeromq.org/
 
 <!--truncate-->
 
 ## S3 Saver & Loader
 
-TODO
+The new [`s3`](connectors/s3) connector hooks up Tenzir to the vast data masses
+on [Amazon S3](https://aws.amazon.com/s3/) and S3-compatible object storage
+systems.
+We are using Arrow's filesystem abstraction for establishing connections to
+these systems. This abstraction already handles AWS's default credentials
+provider chain. If you have set up your AWS account in this chain, then you
+don't need to worry about setting it up again in config files or similar
+formats.
+
+With the `s3` loader, you can access objects on S3 buckets, assuming you have
+the proper credentials:
+
+```bash
+tenzir 'from s3 s3://bucket/mystuff/file.json'
+```
+
+S3 buckets can also be public, meaning you don't need any specific credentials
+to access the objects therein.
+AWS offers tons of such public (read-only) buckets with scientific data on
+their [Marketplace][marketplace].
+Tenzir, of course, can also import public read-only data - for example, some
+[population density & demographic estimate data][density]:
+
+```bash
+tenzir "load s3
+s3://dataforgood-fb-data/csv/month=2019-06/country=VGB/type=children_under_five/
+VGB_children_under_five.csv.gz | decompress gzip | read csv"
+```
+
+Now, let's combine this with `aws s3 ls` to receive all [Amazon product Q&A
+humor detection data][humor]:
+
+```bash
+aws s3 ls --no-sign-request --recursive s3://humor-detection-pds/ | awk '{print
+$4}' | grep "\.csv" | xargs -I {} tenzir "from s3 s3://humor-detection-pds/{}
+read csv"
+```
+
+The original .csv data is a bit unpolished (for example, there are line breaks
+and superfluous commas in the middle of some values) - Tenzir's `csv` parser
+will ignore those lines, and the rest of the data will be there at your
+fingertips.
+
+The `s3` writer uploads the pipeline output to an object in the bucket:
+
+```bash
+tenzir "export | to s3 s3://mybucket/folder/ok.json"
+```
+
+Arrow has URI option capabilities, as [this blog post][uri] describes in
+detail. The most relevant info for the S3 connector:
+
+> For S3, the options that can be included in the URI as query parameters are
+`region`, `scheme`, `endpoint_override`, `access_key`, `secret_key`,
+`allow_bucket_creation`, and `allow_bucket_deletion`.
+
+The most exciting of these options would be `endpoint_override` - it allows you
+to connect to different endpoints of other, S3-compatible storage systems:
+
+```
+from s3
+s3://examplebucket/test.json?endpoint_override=s3.us-west.mycloudservice.com
+```
+
+The `s3` connector is a huge step for Tenzir's data accessibility. It already
+covers a lot of ground, but it is the first of many connectors that will
+cover a lot more: More connections, more data, more information, more value.
 
 ## ZeroMQ Saver & Loader
 
