@@ -812,6 +812,9 @@ jobs:
           # - name: Inventory
           #   target: inventory
           #   path: contrib/tenzir-plugins/inventory
+          - name: Kafka
+            target: kafka
+            path: plugins/kafka
           - name: Matcher
             target: matcher
             path: contrib/tenzir-plugins/matcher
@@ -830,9 +833,6 @@ jobs:
           - name: Sigma
             target: sigma
             path: plugins/sigma
-          - name: Kafka
-            target: kafka
-            path: plugins/kafka
           - name: ZeroMQ
             target: zmq
             path: plugins/zmq
