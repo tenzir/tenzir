@@ -19,6 +19,38 @@ namespace tenzir::plugins::zmq {
 
 namespace {
 
+/// The default ZeroMQ socket endpoint.
+constexpr auto default_endpoint = "tcp://127.0.0.1:5555";
+
+struct saver_args {
+  std::optional<located<std::string>> endpoint;
+  std::optional<location> connect;
+  std::optional<location> bind;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, saver_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("saver_args")
+      .fields(f.field("endpoint", x.endpoint), f.field("bind", x.bind),
+              f.field("connect", x.connect));
+  }
+};
+
+struct loader_args {
+  std::optional<located<std::string>> endpoint;
+  std::optional<located<std::string>> filter;
+  std::optional<location> connect;
+  std::optional<location> bind;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, loader_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("loader_args")
+      .fields(f.field("endpoint", x.endpoint), f.field("filter", x.filter),
+              f.field("bind", x.bind), f.field("connect", x.connect));
+  }
+};
+
 auto render_event(uint16_t event) -> std::string_view {
   switch (event) {
     default:
@@ -55,20 +87,6 @@ auto render_event(uint16_t event) -> std::string_view {
       return "ZMQ_EVENT_HANDSHAKE_SUCCEEDED";
   }
 }
-
-struct connector_args {
-  std::string endpoint = "tcp://127.0.0.1:5555";
-  std::optional<location> connect;
-  std::optional<location> bind;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, connector_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("connector_args")
-      .fields(f.field("endpoint", x.endpoint), f.field("bind", x.bind),
-              f.field("connect", x.connect));
-  }
-};
 
 /// A 0mq utility for use as source or sink operator.
 class engine {
@@ -128,28 +146,30 @@ class engine {
   };
 
 public:
-  static auto make_source(const connector_args& args) -> caf::expected<engine> {
+  static auto make_source(const loader_args& args) -> caf::expected<engine> {
     try {
       auto result = engine{::zmq::socket_type::sub};
+      auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
       if (args.bind)
-        result.bind(args.endpoint);
+        result.bind(endpoint);
       else
-        result.connect(args.endpoint);
-      const auto* everything = "";
-      result.socket_.set(::zmq::sockopt::subscribe, everything);
+        result.connect(endpoint);
+      auto filter = args.filter ? args.filter->inner : "";
+      result.socket_.set(::zmq::sockopt::subscribe, filter);
       return result;
     } catch (const ::zmq::error_t& e) {
       return make_error(e);
     }
   }
 
-  static auto make_sink(const connector_args& args) -> caf::expected<engine> {
+  static auto make_sink(const saver_args& args) -> caf::expected<engine> {
     try {
       auto result = engine{::zmq::socket_type::pub};
+      auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
       if (args.connect)
-        result.connect(args.endpoint);
+        result.connect(endpoint);
       else
-        result.bind(args.endpoint);
+        result.bind(endpoint);
       return result;
     } catch (const ::zmq::error_t& e) {
       return make_error(e);
@@ -276,7 +296,7 @@ class zmq_loader final : public plugin_loader {
 public:
   zmq_loader() = default;
 
-  zmq_loader(connector_args args) : args_{std::move(args)} {
+  zmq_loader(loader_args args) : args_{std::move(args)} {
   }
 
   auto instantiate(operator_control_plane& ctrl) const
@@ -312,6 +332,8 @@ public:
   auto to_string() const -> std::string override {
     auto result = name();
     result += fmt::format(" {}", args_.endpoint);
+    if (args_.filter)
+      result += fmt::format(" --filter {}", args_.filter->inner);
     if (args_.bind)
       result += " --bind";
     if (args_.connect)
@@ -320,14 +342,14 @@ public:
   }
 
 private:
-  connector_args args_;
+  loader_args args_;
 };
 
 class zmq_saver final : public plugin_saver {
 public:
   zmq_saver() = default;
 
-  zmq_saver(connector_args args) : args_{std::move(args)} {
+  zmq_saver(saver_args args) : args_{std::move(args)} {
   }
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
@@ -364,7 +386,7 @@ public:
   }
 
 private:
-  connector_args args_;
+  saver_args args_;
 };
 
 class plugin final : public virtual loader_plugin<zmq_loader>,
@@ -372,39 +394,44 @@ class plugin final : public virtual loader_plugin<zmq_loader>,
 public:
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
-    auto args = connector_args{};
-    parse(p, args);
-    return std::make_unique<zmq_loader>(std::move(args));
-  }
-
-  auto parse_saver(parser_interface& p) const
-    -> std::unique_ptr<plugin_saver> override {
-    auto args = connector_args{};
-    parse(p, args);
-    return std::make_unique<zmq_saver>(std::move(args));
-  }
-
-  auto name() const -> std::string override {
-    return "zmq";
-  }
-
-private:
-  static void parse(parser_interface& p, connector_args& args) {
-    auto parser
-      = argument_parser{"zmq", "https://docs.tenzir.com/docs/connectors/zmq"};
-    auto endpoint = std::optional<located<std::string>>{};
-    parser.add(endpoint, "<endpoint>");
+    auto parser = argument_parser{
+      name(),
+      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+    auto args = loader_args{};
+    parser.add(args.endpoint, "<endpoint>");
+    parser.add("-f,--filter", args.filter, "<prefix>");
     parser.add("-b,--bind", args.bind);
     parser.add("-c,--connect", args.connect);
     parser.parse(p);
-    if (endpoint)
-      args.endpoint = std::move(endpoint->inner);
     if (args.bind && args.connect)
       diagnostic::error("both --bind and --connect provided")
         .primary(*args.bind)
         .primary(*args.connect)
         .hint("--bind and --connect are mutually exclusive")
         .throw_();
+    return std::make_unique<zmq_loader>(std::move(args));
+  }
+
+  auto parse_saver(parser_interface& p) const
+    -> std::unique_ptr<plugin_saver> override {
+    auto parser = argument_parser{
+      name(),
+      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+    auto args = saver_args{};
+    parser.add("-b,--bind", args.bind);
+    parser.add("-c,--connect", args.connect);
+    parser.parse(p);
+    if (args.bind && args.connect)
+      diagnostic::error("both --bind and --connect provided")
+        .primary(*args.bind)
+        .primary(*args.connect)
+        .hint("--bind and --connect are mutually exclusive")
+        .throw_();
+    return std::make_unique<zmq_saver>(std::move(args));
+  }
+
+  auto name() const -> std::string override {
+    return "zmq";
   }
 };
 

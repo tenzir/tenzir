@@ -30,7 +30,7 @@ is independent of the socket type. So either end can bind or connect. We opted
 for the subscriber to connect by default, and the publisher to bind. You can
 override this with the `--bind` and `--connect` flags.
 
-Even though we're using a lossy `PUB`/`SUB` socket pair, we've added a thin
+Even though we're using a lossy `PUB`-`SUB` socket pair, we've added a thin
 layer of reliability in that a Tenzir pipeline won't send or receive ZeroMQ
 messages before it has at least one connected socket.
 
@@ -65,9 +65,3 @@ tenzir 'from zmq --bind'
 These examples show the power of composability: Tenzir operators can work with
 bytes but also events, allowing for in-flight reshaping, format conversation, or
 simply flexibling data shipping.
-
-One very specific security use case that the ZeroMQ loader enables is attaching
-to the [MISP ZeroMQ](https://www.circl.lu/doc/misp/misp-zmq/) firehose that
-publishes events, attributes, sightings, and more. The ZeroMQ connector paved
-the way for pipeline-native threat intelligence processing. Stay tuned for the
-easy button to live and retro match indicators.

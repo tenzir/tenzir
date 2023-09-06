@@ -20,6 +20,13 @@ existing ZeroMQ applications.
 
 The default format for the `zmq` connector is [`json`](../formats/json.md).
 
+### `-f|--filter <prefix>` (Loader)
+
+Installs a filter for the ZeroMQ `SUB` socket at the source. Filting in ZeroMQ
+means performing a prefix-match on the raw bytes of the entire message.
+
+Defaults to the empty string, which is equivalent to no filtering.
+
 ### `-b|--bind`
 
 Bind to the ZeroMQ socket.
