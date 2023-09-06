@@ -395,7 +395,6 @@ private:
     parser.add(endpoint, "<endpoint>");
     parser.add("-b,--bind", args.bind);
     parser.add("-c,--connect", args.connect);
-    parser.add(endpoint, "<endpoint>");
     parser.parse(p);
     if (endpoint)
       args.endpoint = std::move(endpoint->inner);
