@@ -204,7 +204,8 @@ private:
     auto items = std::array<::zmq::pollitem_t, 1>{
       {{socket.handle(), 0, flags, 0}},
     };
-    auto ms = timeout ? *timeout : std::chrono::milliseconds(-1);
+    auto infinite = std::chrono::milliseconds(-1);
+    auto ms = timeout ? *timeout : infinite;
     auto num_events_signaled = ::zmq::poll(items.data(), items.size(), ms);
     if (num_events_signaled == 0)
       return false;
