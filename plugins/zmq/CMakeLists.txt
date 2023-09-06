@@ -20,7 +20,6 @@ TenzirRegisterPlugin(
 
 find_package(cppzmq QUIET)
 
-dependency_summary("cppzmq" cppzmq "Dependencies")
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   target_link_libraries(zmq PUBLIC cppzmq-static)
 else ()
