@@ -251,6 +251,15 @@ if (TENZIR_ENABLE_JOURNALD_LOGGING)
   dependency_summary("libsystemd" systemd::systemd "Dependencies")
 endif ()
 
+# Link against curl.
+find_package(CURL REQUIRED)
+if (NOT CURL_FOUND)
+  message(FATAL_ERROR "CURL >= 3.1 required")
+endif ()
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(CURL)")
+target_link_libraries(libtenzir PUBLIC CURL::libcurl)
+dependency_summary("CURL" CURL::libcurl "Dependencies")
+
 # Link against fmt.
 find_package(fmt 7.1.3 REQUIRED)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(fmt 7.1.3 REQUIRED)")
