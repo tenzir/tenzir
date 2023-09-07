@@ -409,6 +409,8 @@ public:
         .primary(*args.connect)
         .hint("--bind and --connect are mutually exclusive")
         .throw_();
+    if (args.endpoint && args.endpoint->inner.find("://") == std::string::npos)
+      args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
     return std::make_unique<zmq_loader>(std::move(args));
   }
 
@@ -418,6 +420,7 @@ public:
       name(),
       fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
     auto args = saver_args{};
+    parser.add(args.endpoint, "<endpoint>");
     parser.add("-b,--bind", args.bind);
     parser.add("-c,--connect", args.connect);
     parser.parse(p);
@@ -427,6 +430,8 @@ public:
         .primary(*args.connect)
         .hint("--bind and --connect are mutually exclusive")
         .throw_();
+    if (args.endpoint && args.endpoint->inner.find("://") == std::string::npos)
+      args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
     return std::make_unique<zmq_saver>(std::move(args));
   }
 

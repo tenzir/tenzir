@@ -62,5 +62,5 @@ show operators | to zmq -c write csv
 Subscribe to a specific ZeroMQ endpoint:
 
 ```
-from zmq tcp://1.2.3.4:56789
+from zmq 1.2.3.4:56789
 ```
