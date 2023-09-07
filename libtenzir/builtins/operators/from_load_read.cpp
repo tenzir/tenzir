@@ -16,6 +16,82 @@
 namespace tenzir::plugins::from {
 namespace {
 
+class prepend_token final : public parser_interface {
+public:
+  prepend_token(located<std::string> token, parser_interface& next)
+    : token_{std::move(token)}, next_{next} {
+  }
+
+  auto accept_shell_arg() -> std::optional<located<std::string>> override {
+    if (token_) {
+      return std::exchange(token_, std::nullopt);
+    }
+    return next_.accept_shell_arg();
+  }
+
+  auto peek_shell_arg() -> std::optional<located<std::string>> override {
+    if (token_) {
+      return token_;
+    }
+    return next_.peek_shell_arg();
+  }
+
+  auto accept_identifier() -> std::optional<identifier> override {
+    TENZIR_ASSERT(not token_);
+    return next_.accept_identifier();
+  }
+
+  auto peek_identifier() -> std::optional<identifier> override {
+    TENZIR_ASSERT(not token_);
+    return next_.peek_identifier();
+  }
+
+  auto accept_equals() -> std::optional<location> override {
+    TENZIR_ASSERT(not token_);
+    return next_.accept_equals();
+  }
+
+  auto accept_char(char c) -> std::optional<location> override {
+    TENZIR_ASSERT(not token_);
+    return next_.accept_char(c);
+  }
+
+  auto parse_operator() -> located<operator_ptr> override {
+    TENZIR_ASSERT(not token_);
+    return next_.parse_operator();
+  }
+
+  auto parse_expression() -> tql::expression override {
+    TENZIR_ASSERT(not token_);
+    return next_.parse_expression();
+  }
+
+  auto parse_legacy_expression() -> located<expression> override {
+    TENZIR_ASSERT(not token_);
+    return next_.parse_legacy_expression();
+  }
+
+  auto parse_extractor() -> tql::extractor override {
+    TENZIR_ASSERT(not token_);
+    return next_.parse_extractor();
+  }
+
+  auto at_end() -> bool override {
+    return not token_ && next_.at_end();
+  }
+
+  auto current_span() -> location override {
+    if (token_) {
+      return token_->source;
+    }
+    return next_.current_span();
+  }
+
+private:
+  std::optional<located<std::string>> token_;
+  parser_interface& next_;
+};
+
 class load_operator final : public crtp_operator<load_operator> {
 public:
   load_operator() = default;
@@ -183,20 +259,44 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "from <loader> <args>... [read <parser> <args>...]";
     auto docs = "https://docs.tenzir.com/next/operators/sources/from";
-    auto l_name = p.accept_shell_arg();
-    if (!l_name) {
+    auto q = until_keyword_parser{"read", p};
+    auto l_name = q.accept_shell_arg();
+    if (not l_name) {
       diagnostic::error("expected loader name")
-        .primary(p.current_span())
+        .primary(q.current_span())
         .usage(usage)
         .docs(docs)
         .throw_();
     }
-    auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner);
-    if (!l_plugin) {
-      throw_loader_not_found(*l_name);
+    auto loader = std::unique_ptr<plugin_loader>{};
+    if (auto split = l_name->inner.find("://"); split != std::string::npos) {
+      auto substr
+        = [](located<std::string> x, size_t pos,
+             size_t count = std::string::npos) -> located<std::string> {
+        auto sub = x.inner.substr(pos, count);
+        auto sub_source = location::unknown;
+        if (x.source && (x.source.end - x.source.begin) == x.inner.size()) {
+          sub_source.begin = x.source.begin + pos;
+          sub_source.end = sub_source.begin + sub.length();
+        }
+        return {std::move(sub), sub_source};
+      };
+      auto scheme = substr(*l_name, 0, split);
+      auto path = substr(*l_name, split + 3);
+      auto l_plugin = plugins::find<loader_parser_plugin>(scheme.inner);
+      if (!l_plugin) {
+        throw_loader_not_found(scheme);
+      }
+      auto r = prepend_token{std::move(path), q};
+      loader = l_plugin->parse_loader(r);
+      TENZIR_DIAG_ASSERT(r.at_end());
+    } else {
+      auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner);
+      if (!l_plugin) {
+        throw_loader_not_found(*l_name);
+      }
+      loader = l_plugin->parse_loader(q);
     }
-    auto q = until_keyword_parser{"read", p};
-    auto loader = l_plugin->parse_loader(q);
     TENZIR_DIAG_ASSERT(loader);
     TENZIR_DIAG_ASSERT(q.at_end());
     auto parser = std::unique_ptr<plugin_parser>{};
