@@ -71,8 +71,7 @@ public:
   auto operator=(curl&&) -> curl& = default;
 
   ~curl() {
-    if (auto err = to_error(curl_multi_remove_handle(multi_, easy_)))
-      TENZIR_WARN(err);
+    curl_multi_remove_handle(multi_, easy_);
     curl_easy_cleanup(easy_);
     curl_multi_cleanup(multi_);
   }
