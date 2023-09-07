@@ -338,7 +338,7 @@ public:
   }
 
   auto to_string() const -> std::string override {
-    auto result = std::string{"file"};
+    auto result = std::string{"file "};
     result += escape_operator_arg(args_.path.inner);
     if (args_.follow) {
       result += " --follow";
