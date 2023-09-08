@@ -391,7 +391,7 @@ void check_to_json(Printer& p, const T& value, const char* expected) {
 }
 
 TEST(JSON - omit nulls) {
-  auto p = json_printer{json_printer::options{
+  auto p = json_printer{json_printer_options{
     .oneline = true,
     .omit_nulls = true,
   }};
@@ -412,7 +412,7 @@ TEST(JSON - omit nulls) {
 }
 
 TEST(JSON - omit empty records) {
-  auto p = json_printer{json_printer::options{
+  auto p = json_printer{json_printer_options{
     .oneline = true,
     .omit_nulls = true,
     .omit_empty_records = true,
@@ -435,7 +435,7 @@ TEST(JSON - omit empty records) {
 
 TEST(JSON - omit empty lists) {
   {
-    auto p = json_printer{json_printer::options{
+    auto p = json_printer{json_printer_options{
       .oneline = true,
       .omit_empty_records = true,
       .omit_empty_lists = true,
@@ -461,7 +461,7 @@ TEST(JSON - omit empty lists) {
       R"__({"a": 42, "b": {"c": null, "d": null}, "e": {"f": [{"g": null}]}})__");
   }
   {
-    auto p = json_printer{json_printer::options{
+    auto p = json_printer{json_printer_options{
       .oneline = true,
       .omit_nulls = true,
       .omit_empty_records = true,
@@ -490,7 +490,7 @@ TEST(JSON - omit empty lists) {
 }
 
 TEST(JSON - remove trailing zeroes) {
-  auto p = json_printer{json_printer::options{
+  auto p = json_printer{json_printer_options{
     .oneline = true,
     .omit_nulls = true,
   }};
