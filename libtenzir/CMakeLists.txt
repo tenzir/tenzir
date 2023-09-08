@@ -252,10 +252,12 @@ if (TENZIR_ENABLE_JOURNALD_LOGGING)
 endif ()
 
 # Link against curl.
-find_package(CURL REQUIRED)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(CURL)")
-target_link_libraries(libtenzir PUBLIC CURL::libcurl)
-dependency_summary("CURL" CURL::libcurl "Dependencies")
+# The FindCURL module from CMake doesn't expose the link dependencies of libcurl.a
+# correctly, so we use pkg-config instead.
+pkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\npkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)")
+target_link_libraries(libtenzir PUBLIC PkgConfig::PC_CURL)
+dependency_summary("CURL" PkgConfig::PC_CURL "Dependencies")
 
 # Link against fmt.
 find_package(fmt 7.1.3 REQUIRED)
