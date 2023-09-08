@@ -744,8 +744,8 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
 
 } // end namespace
 
-caf::expected<std::string> to_json(const data& x) {
-  static const auto p = json_printer{json_printer::options{}};
+caf::expected<std::string> to_json(const data& x, json_printer_options opts) {
+  auto p = json_printer{opts};
   std::string str;
   auto out = std::back_inserter(str);
   if (p.print(out, x))

@@ -10,101 +10,27 @@
 
 #include "tenzir/concept/printable/core/operators.hpp"
 #include "tenzir/concept/printable/core/printer.hpp"
+#include "tenzir/concept/printable/tenzir/json_printer_options.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/view.hpp"
 
-#include <fmt/color.h>
 #include <fmt/format.h>
 
 #include <optional>
 
 namespace tenzir {
 
-struct json_style {
-  fmt::text_style null_;
-  fmt::text_style false_;
-  fmt::text_style true_;
-  fmt::text_style number;
-  fmt::text_style string;
-  fmt::text_style array;
-  fmt::text_style object;
-  fmt::text_style field;
-  fmt::text_style comma;
-};
-
-// Defined in
-// https://github.com/jqlang/jq/blob/c99981c5b2e7e7d4d6d1463cf564bb99e9f18ed9/src/jv_print.c#L27
-inline auto jq_style() -> json_style {
-  return {
-    .null_ = fmt::emphasis::bold | fg(fmt::terminal_color::black),
-    .false_ = fg(fmt::terminal_color::white),
-    .true_ = fg(fmt::terminal_color::white),
-    .number = fg(fmt::terminal_color::white),
-    .string = fg(fmt::terminal_color::green),
-    .array = fmt::emphasis::bold | fg(fmt::terminal_color::white),
-    .object = fmt::emphasis::bold | fg(fmt::terminal_color::white),
-    .field = fmt::emphasis::bold | fg(fmt::terminal_color::blue),
-    .comma = fmt::emphasis::bold | fg(fmt::terminal_color::white),
-  };
-}
-
-inline auto no_style() -> json_style {
-  return {};
-}
-
-inline auto default_style() -> json_style {
-  // See https://no-color.org.
-  if (detail::getenv("NO_COLOR").value_or(std::string_view{}).empty()) {
-    return no_style();
-  }
-  // TODO: Let the saver detect a default style, depending on
-  // whether we're outputting data in a TTY or not.
-  return no_style();
-}
-
 struct json_printer : printer_base<json_printer> {
-  struct options {
-    /// The number of spaces used for indentation.
-    uint8_t indentation = 2;
-
-    /// Colorize the output like `jq`.
-    json_style style = default_style();
-
-    /// Print NDJSON rather than JSON.
-    bool oneline = false;
-
-    /// Print nested objects as flattened.
-    /// TODO: Remove this when removing the import command.
-    bool flattened = false;
-
-    /// Print numeric rather than human-readable durations.
-    bool numeric_durations = false;
-
-    /// Omit null values when printing.
-    bool omit_nulls = false;
-
-    /// Omit empty records when printing.
-    bool omit_empty_records = false;
-
-    /// Omit empty lists when printing.
-    bool omit_empty_lists = false;
-
-    /// Omit empty maps when printing.
-    /// TODO: Remove this when removing the import command.
-    bool omit_empty_maps = false;
-  };
-
-  explicit json_printer(struct options options) noexcept
+  explicit json_printer(json_printer_options options) noexcept
     : printer_base(), options_{options} {
     // nop
   }
 
   template <class Iterator>
   struct print_visitor {
-    print_visitor(Iterator& out, const options& options) noexcept
+    print_visitor(Iterator& out, const json_printer_options& options) noexcept
       : out_{out}, options_{options} {
       // nop
     }
@@ -354,7 +280,7 @@ struct json_printer : printer_base<json_printer> {
     }
 
     Iterator& out_;
-    const options& options_;
+    const json_printer_options& options_;
     uint32_t indentation_ = 0;
   };
 
@@ -382,7 +308,7 @@ struct json_printer : printer_base<json_printer> {
   }
 
 private:
-  options options_ = {};
+  json_printer_options options_ = {};
 };
 
 } // namespace tenzir
