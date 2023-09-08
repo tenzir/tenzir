@@ -167,9 +167,8 @@ class plugin final : public virtual loader_plugin<curl_loader<Protocol>> {
 public:
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
-    auto args = connector_args{
-      .options = {.default_protocol = name()},
-    };
+    auto args = connector_args{};
+    args.options.default_protocol = name();
     auto make = [&]() {
       return std::make_unique<curl_loader<Protocol>>(std::move(args));
     };
