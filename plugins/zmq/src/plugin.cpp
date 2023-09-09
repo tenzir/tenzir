@@ -15,6 +15,8 @@
 #include <string>
 #include <zmq.hpp>
 
+using namespace std::chrono_literals;
+
 namespace tenzir::plugins::zmq {
 
 namespace {
@@ -116,26 +118,31 @@ class engine {
       monitor_socket_.connect(endpoint);
     }
 
-    /// Waits for one monitoring event consisting of two messages.
-    auto get() -> monitor_event {
-      auto poll_result = engine::poll(monitor_socket_, ZMQ_POLLIN);
-      TENZIR_ASSERT(poll_result == true); // we wait indefinitely.
-      monitor_event result;
-      auto event_msg = ::zmq::message_t{};
-      auto flags = ::zmq::recv_flags::none;
-      auto bytes = monitor_socket_.recv(event_msg, flags);
-      TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.
-      const auto* ptr = event_msg.data<char>();
-      std::memcpy(&result.event, ptr, sizeof(uint16_t));
-      std::memcpy(&result.value, ptr + sizeof(uint16_t), sizeof(int32_t));
-      TENZIR_DEBUG("got monitor event message: <{}, {}>",
-                   render_event(result.event), result.value);
-      auto addr_msg = ::zmq::message_t{};
-      bytes = monitor_socket_.recv(addr_msg, flags);
-      TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.
-      result.address = addr_msg.to_string();
-      TENZIR_DEBUG("got monitor address message: {}", result.address);
-      return result;
+    /// Blocks and retrieves all available monitoring events.
+    /// @param tiemout An upper bound on the block time of the monitoring
+    /// socket.
+    /// @returns all available monitoring events or an empty generator if non
+    /// are available within the polling window.
+    auto events(std::optional<std::chrono::milliseconds> timeout = {})
+      -> generator<monitor_event> {
+      auto ready = engine::poll(monitor_socket_, ZMQ_POLLIN, timeout);
+      if (not ready)
+        co_return;
+      do {
+        monitor_event result;
+        auto event_msg = ::zmq::message_t{};
+        auto flags = ::zmq::recv_flags::none;
+        auto bytes = monitor_socket_.recv(event_msg, flags);
+        TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.
+        const auto* ptr = event_msg.data<char>();
+        std::memcpy(&result.event, ptr, sizeof(uint16_t));
+        std::memcpy(&result.value, ptr + sizeof(uint16_t), sizeof(int32_t));
+        auto addr_msg = ::zmq::message_t{};
+        bytes = monitor_socket_.recv(addr_msg, flags);
+        TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.
+        result.address = addr_msg.to_string();
+        co_yield result;
+      } while (engine::poll(monitor_socket_, ZMQ_POLLIN, 0ms));
     }
 
   private:
@@ -176,10 +183,11 @@ public:
     }
   }
 
-  auto send(chunk_ptr chunk) -> caf::error {
+  auto send(chunk_ptr chunk, std::optional<std::chrono::milliseconds> timeout
+                             = {}) -> caf::error {
     try {
       TENZIR_DEBUG("waiting until socket is ready to send");
-      if (not poll(socket_, ZMQ_POLLOUT))
+      if (not poll(socket_, ZMQ_POLLOUT, timeout))
         return caf::make_error(ec::timeout, "timed out while polling socket");
       auto message = ::zmq::message_t{*chunk};
       auto flags = ::zmq::send_flags::none;
@@ -192,10 +200,11 @@ public:
     }
   }
 
-  auto receive() -> caf::expected<chunk_ptr> {
+  auto receive(std::optional<std::chrono::milliseconds> timeout = {})
+    -> caf::expected<chunk_ptr> {
     try {
       TENZIR_DEBUG("waiting until socket is ready to receive");
-      if (not poll(socket_, ZMQ_POLLIN))
+      if (not poll(socket_, ZMQ_POLLIN, timeout))
         return caf::make_error(ec::timeout, "timed out while polling socket");
       auto message = std::make_shared<::zmq::message_t>();
       auto flags = ::zmq::recv_flags::none;
@@ -211,11 +220,46 @@ public:
     }
   }
 
+  /// Returns the number of processed monitoring events.
+  auto poll_monitor(std::optional<std::chrono::milliseconds> timeout = {})
+    -> size_t {
+    auto num_events = size_t{0};
+    for (auto&& event : monitor_.events(timeout)) {
+      ++num_events;
+      TENZIR_DEBUG("got monitor event: {}", render_event(event.event));
+      switch (event.event) {
+        default:
+          break;
+        case ZMQ_EVENT_HANDSHAKE_SUCCEEDED:
+          ++num_peers_;
+          break;
+        case ZMQ_EVENT_DISCONNECTED:
+          if (num_peers_ == 0)
+            TENZIR_WARN("logic error: disconnect while no one is connected");
+          else
+            --num_peers_;
+          break;
+      }
+    }
+    return num_events;
+  }
+
+  auto num_peers() const -> size_t {
+    return num_peers_;
+  }
+
 private:
   static auto make_error(const ::zmq::error_t& error) -> caf::error {
     return caf::make_error(ec::unspecified,
-                           fmt::format("ZeroMQ: {} ({})", error.what(),
-                                       error.num()));
+                           fmt::format("ZeroMQ: {}", error.what()));
+  }
+
+  static auto make_error(int error_number) -> caf::error {
+    return make_error(::zmq::error_t{error_number});
+  }
+
+  static auto make_error() -> caf::error {
+    return make_error(zmq_errno());
   }
 
   static auto poll(::zmq::socket_t& socket, short flags,
@@ -240,56 +284,23 @@ private:
     : socket_{ctx_, socket_type}, monitor_{ctx_, socket_} {
   }
 
-  auto bind(const std::string& endpoint) -> bool {
+  void bind(const std::string& endpoint) {
     TENZIR_VERBOSE("binding to endpoint {}", endpoint);
     socket_.bind(endpoint);
-    while (true) {
-      auto event = monitor_.get();
-      TENZIR_DEBUG("got monitor event: {}", render_event(event.event));
-      switch (event.event) {
-        default:
-          break;
-        case ZMQ_EVENT_ACCEPTED:
-          return true;
-        case ZMQ_EVENT_ACCEPT_FAILED:
-        case ZMQ_EVENT_HANDSHAKE_FAILED_AUTH:
-        case ZMQ_EVENT_HANDSHAKE_FAILED_PROTOCOL:
-        case ZMQ_EVENT_HANDSHAKE_FAILED_NO_DETAIL:
-          return false;
-      }
-    }
-    return true;
   }
 
-  auto connect(const std::string& endpoint) -> bool {
-    TENZIR_VERBOSE("binding to endpoint {}", endpoint);
-    socket_.set(::zmq::sockopt::reconnect_ivl, 250);
+  void connect(const std::string& endpoint,
+               std::chrono::milliseconds reconnect_interval = 1s) {
+    TENZIR_VERBOSE("connecting to endpoint {}", endpoint);
+    auto ms = detail::narrow_cast<int>(reconnect_interval.count());
+    socket_.set(::zmq::sockopt::reconnect_ivl, ms);
     socket_.connect(endpoint);
-    // The sequence of events we receive when 0mq polls during connecting is as
-    // follows:
-    //     1. ZMQ_EVENT_CONNECT_DELAYED
-    //     2. ZMQ_EVENT_CLOSED
-    //     3. ZMQ_EVENT_CONNECT_RETRIED
-    while (true) {
-      auto event = monitor_.get();
-      TENZIR_DEBUG("got monitor event: {}", render_event(event.event));
-      switch (event.event) {
-        default:
-          break;
-        case ZMQ_EVENT_CONNECTED:
-          return true;
-        case ZMQ_EVENT_HANDSHAKE_FAILED_AUTH:
-        case ZMQ_EVENT_HANDSHAKE_FAILED_PROTOCOL:
-        case ZMQ_EVENT_HANDSHAKE_FAILED_NO_DETAIL:
-          return false;
-      }
-    }
-    return true;
   }
 
   ::zmq::context_t ctx_;
   ::zmq::socket_t socket_;
   monitor monitor_;
+  size_t num_peers_{0};
 };
 
 class zmq_loader final : public plugin_loader {
@@ -307,10 +318,24 @@ public:
       return std::nullopt;
     }
     auto make = [&ctrl](class engine engine) mutable -> generator<chunk_ptr> {
-      if (auto message = engine.receive())
-        co_yield *message;
-      else
-        ctrl.abort(message.error());
+      while (true) {
+        // Poll in larger strides when we have no peers. If we have at least one
+        // peer, there is no need to wait on the monitor.
+        auto timeout = engine.num_peers() == 0 ? 500ms : 0ms;
+        engine.poll_monitor(timeout);
+        if (engine.num_peers() == 0) {
+          co_yield {};
+          continue;
+        }
+        if (auto message = engine.receive(250ms)) {
+          co_yield *message;
+        } else if (message == ec::timeout) {
+          co_yield {};
+        } else {
+          ctrl.abort(message.error());
+          break;
+        }
+      }
     };
     return make(std::move(*engine));
   }
@@ -364,6 +389,12 @@ public:
              chunk_ptr chunk) mutable {
       if (not chunk || chunk->size() == 0)
         return;
+      // Block until we have at least one peer, or fast-track with a zero
+      // timeout when in steady state.
+      do {
+        auto timeout = engine->num_peers() == 0 ? 500ms : 0ms;
+        engine->poll_monitor(timeout);
+      } while (engine->num_peers() == 0);
       if (auto error = engine->send(chunk))
         ctrl.abort(error);
     };
