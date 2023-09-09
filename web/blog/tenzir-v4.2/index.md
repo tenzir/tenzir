@@ -1,6 +1,6 @@
 ---
 title: Tenzir v4.2
-authors: [Dakostu, mavam]
+authors: [dakostu, mavam]
 date: 2023-09-07
 tags: [release, pipelines, connectors, s3, zmq]
 draft: true
