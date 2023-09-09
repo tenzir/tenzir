@@ -13,6 +13,8 @@ zmq [-b|--bind] [-c|--connect] [<endpoint>]
 The `zmq` loader processes the bytes in a ZeroMQ message received by a `SUB`
 socket. The `zmq` saver sends bytes as a ZeroMQ message via a `PUB` socket.
 
+![ZeroMQ Connector](zeromq-connector.excalidraw.svg)
+
 Indpendent of the socket type, the `zmq` connector supports specfiying the
 direction of connection establishment with `--bind` and `--connect`. This can be
 helpful to work around firewall restrictions and fit into broader set of
