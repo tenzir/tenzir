@@ -80,8 +80,11 @@ A HTTP request item in the form of a key-value pair.
 The character separating the key-value pair determines the semantics of the
 item:
 
-- `key:value` set a the HTTP header name `key` with value `value`
-- `key=value` sets a data field in the HTTP request body
+- `key:value` a HTTP header with name `key` and value `value`
+- `key=value` a data field in the HTTP request body with `key` as string key and
+  `value` as string value
+- `key:=value` a data field in the HTTP request body with `key` as string key and
+  `value` as JSON value
 
 Use `\` to escape characters that shouldn't be treated as separators.
 

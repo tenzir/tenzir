@@ -92,27 +92,27 @@ struct request_item {
 
 /// Parses a request item like HTTPie.
 auto parse_request_item(std::string_view str) -> std::optional<request_item> {
-  auto xs = detail::split(str, ":", "\\");
+  auto xs = detail::split(str, ":=@", "\\");
   if (xs.size() == 2)
-    return request_item{.type = "header", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, "==", "\\");
-  if (xs.size() == 2)
-    return request_item{.type = "url-param", .key = xs[0], .value = xs[1]};
+    return request_item{.type = "file-data-json", .key = xs[0], .value = xs[1]};
   xs = detail::split(str, ":=", "\\");
   if (xs.size() == 2)
     return request_item{.type = "data-json", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, "@", "\\");
+  xs = detail::split(str, "==", "\\");
   if (xs.size() == 2)
-    return request_item{.type = "file-form", .key = xs[0], .value = xs[1]};
+    return request_item{.type = "url-param", .key = xs[0], .value = xs[1]};
   xs = detail::split(str, "=@", "\\");
   if (xs.size() == 2)
     return request_item{.type = "file-data", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, ":=@", "\\");
+  xs = detail::split(str, "@", "\\");
   if (xs.size() == 2)
-    return request_item{.type = "file-data-json", .key = xs[0], .value = xs[1]};
+    return request_item{.type = "file-form", .key = xs[0], .value = xs[1]};
   xs = detail::split(str, "=", "\\");
   if (xs.size() == 2)
     return request_item{.type = "data", .key = xs[0], .value = xs[1]};
+  xs = detail::split(str, ":", "\\");
+  if (xs.size() == 2)
+    return request_item{.type = "header", .key = xs[0], .value = xs[1]};
   return {};
 }
 
@@ -133,6 +133,14 @@ auto parse_http_options(std::vector<located<std::string>>& request_items)
     } else if (item->type == "data") {
       result.method = "POST";
       body[std::string{item->key}] = std::string{item->value};
+    } else if (item->type == "data-json") {
+      result.method = "POST";
+      auto data = from_json(item->value);
+      if (not data)
+        diagnostic::error("invalid JSON value")
+          .primary(request_item.source)
+          .throw_();
+      body[std::string{item->key}] = std::move(*data);
     } else {
       diagnostic::error("unsupported request item type")
         .primary(request_item.source)
