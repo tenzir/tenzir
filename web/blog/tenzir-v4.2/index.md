@@ -62,6 +62,6 @@ connecting socket? No problem:
 tenzir 'from zmq --bind'
 ```
 
-These examples show the power of composability: Tenzir operators can work with
-bytes but also events, allowing for in-flight reshaping, format conversation, or
-simply flexibling data shipping.
+These examples show the power of composability: Tenzir operators work with
+both bytes and events, enabling in-flight reshaping, format conversation, or
+simply data shipping at ease.
