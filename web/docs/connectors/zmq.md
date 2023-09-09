@@ -59,8 +59,10 @@ Publish the list of TQL operators as CSV and switch from binding to connecting:
 show operators | to zmq -c write csv
 ```
 
-Subscribe to a specific ZeroMQ endpoint:
+Interpret ZeroMQ messages as [JSON](../formats/json.md):
 
 ```
-from zmq 1.2.3.4:56789
+from zmq 1.2.3.4:56789 read json
 ```
+
+You could drop `read json` above since `json` is the default format for `zmq`.
