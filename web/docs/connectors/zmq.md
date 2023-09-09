@@ -55,7 +55,8 @@ Publish query results to a ZeroMQ socket:
 export | where x == 42 | to zmq
 ```
 
-Publish the list of TQL operators as CSV and switch from binding to connecting:
+Publish the list of TQL operators as [CSV](../formats/csv.md), also connect
+instead of bind to the ZeroMQ socket:
 
 ```
 show operators | to zmq -c write csv
