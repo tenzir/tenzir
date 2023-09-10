@@ -3,7 +3,7 @@
 <img src="./web/static/img/tenzir-black.svg#gh-light-mode-only" width="60%" alt="Tenzir">
 </p>
 <h3 align="center">
-Easy Data Pipelines for Security Teams
+Open Source Data Pipelines for Security Teams
 </h3>
 </p>
 
