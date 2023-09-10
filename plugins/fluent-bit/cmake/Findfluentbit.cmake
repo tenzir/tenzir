@@ -1,9 +1,12 @@
 find_library(
   FLUENT_BIT_LIB
+  HINTS /opt/fluent/lib /opt/fluent-bit/lib
   NAMES fluent-bit
   PATH_SUFFIXES fluent-bit)
 
-find_path(FLUENT_BIT_INCLUDE_DIR fluent-bit.h HINTS /opt/fluent-bit/include)
+find_path(
+  FLUENT_BIT_INCLUDE_DIR fluent-bit.h
+  HINTS /opt/fluent/include /opt/fluent-bit/include)
 
 include(FindPackageHandleStandardArgs)
 
