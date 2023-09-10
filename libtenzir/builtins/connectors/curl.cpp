@@ -92,25 +92,25 @@ struct request_item {
 
 /// Parses a request item like HTTPie.
 auto parse_request_item(std::string_view str) -> std::optional<request_item> {
-  auto xs = detail::split(str, ":=@", "\\");
+  auto xs = detail::split(str, ":=@", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = "file-data-json", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, ":=", "\\");
+  xs = detail::split(str, ":=", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = "data-json", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, "==", "\\");
+  xs = detail::split(str, "==", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = "url-param", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, "=@", "\\");
+  xs = detail::split(str, "=@", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = "file-data", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, "@", "\\");
+  xs = detail::split(str, "@", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = "file-form", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, "=", "\\");
+  xs = detail::split(str, "=", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = "data", .key = xs[0], .value = xs[1]};
-  xs = detail::split(str, ":", "\\");
+  xs = detail::split(str, ":", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = "header", .key = xs[0], .value = xs[1]};
   return {};
