@@ -52,7 +52,7 @@ apt-get update
 apt-get -y --no-install-recommends install libarrow-dev=13.0.0-1 libprotobuf-dev libparquet-dev=13.0.0-1
 rm ./"apache-arrow-apt-source-latest-${codename}.deb"
 
-# Fluent-bit
+# Fluent-bit (single binary only, installed in /opt/fluent-bit/bin)
 wget -O - 'https://packages.fluentbit.io/fluentbit.key' | gpg --dearmor | tee /usr/share/keyrings/fluentbit.gpg >/dev/null
 echo "deb [signed-by=/usr/share/keyrings/fluentbit.gpg] https://packages.fluentbit.io/debian/${codename} ${codename} main" | tee /etc/apt/sources.list.d/fluentbit.list
 apt-get update
