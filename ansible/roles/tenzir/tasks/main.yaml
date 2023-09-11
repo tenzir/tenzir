@@ -1,21 +1,17 @@
 # We install the config file first, because the Debian Package
 # will restart the Tenzir node upon installation, and we want to
 # avoid another restart because the config file changed.
-- name: Ensure directory /opt/tenzir/etc/tenzir exists
-  ansible.builtin.file:
-    path: "/opt/tenzir/etc/tenzir"
-    state: directory
-    mode: '0755'
-    owner: root
-    group: root
+- name: Install rsync
+  ansible.builtin.package:
+    name: rsync
+    state: present
 
-- name: Copy tenzir.yaml
-  ansible.builtin.copy:
-    src: "{{ config_file }}"
-    dest: /opt/tenzir/etc/tenzir/tenzir.yaml
-    mode: '0644'
-    owner: root
-    group: root
+- name: Copy tenzir config directory
+  ansible.posix.synchronize:
+    src: "{{ config_dir }}/"
+    dest: /opt/tenzir/etc/tenzir
+    archive: true
+    delete: true
   register: tenzir_config
 
 - name: Ensure directory /etc/systemd/system/tenzir-node.service.d exists
@@ -49,14 +45,14 @@
   # Handler notification can't express conjuncion or negation, so we use a task.
   when: tenzir_config.changed or tenzir_node_overrides.changed and not tenzir_package.changed  # noqa no-handler
   ansible.builtin.systemd:
-    name: tenzir
+    name: tenzir-node
     state: restarted
 
 - name: Start if not running
   # In case the service was stopped before it would still be at this point, but
   # we want it to run in any case.
   ansible.builtin.systemd:
-    name: tenzir
+    name: tenzir-node
     state: started
 
 - name: Propagate variables to the calling context
