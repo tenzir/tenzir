@@ -24,6 +24,7 @@
     libunwind,
     xxHash,
     rdkafka,
+    cppzmq,
     re2,
     dpkg,
     restinio,
@@ -60,6 +61,7 @@
         "plugins/parquet"
         "plugins/sigma"
         "plugins/web"
+        "plugins/zmq"
       ]
       ++ extraPlugins';
   in
@@ -90,6 +92,7 @@
           libunwind
           libyamlcpp
           rdkafka
+          cppzmq
           re2
           restinio
         ];

@@ -64,7 +64,7 @@ docker compose logs
 
 # Assert that all containers that exited have exited cleanly.
 docker compose ps --format json --all --status exited |
-  jq -re 'map(.ExitCode != 0) | index(false)'
+  jq -sre 'map(.ExitCode != 0) | index(false)'
 
 docker compose down --volumes
 

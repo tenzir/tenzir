@@ -33,6 +33,17 @@ in {
         doCheck = false;
         doInstallCheck = false;
       });
+  zeromq =
+    if !isStatic
+    then prev.zeromq
+    else
+    prev.zeromq.overrideAttrs (orig: {
+      cmakeFlags = orig.cmakeFlags ++ [
+        "-DBUILD_SHARED=OFF"
+        "-DBUILD_STATIC=ON"
+        "-DBUILD_TESTS=OFF"
+      ];
+    });
   grpc =
     if !isStatic
     then prev.grpc
