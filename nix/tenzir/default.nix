@@ -144,7 +144,10 @@
           ]
           ++ extraCmakeFlags;
 
-        hardeningDisable = lib.optional isStatic "pic";
+        hardeningDisable = lib.optionals isStatic [
+          "fortify"
+          "pic"
+        ];
 
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*
