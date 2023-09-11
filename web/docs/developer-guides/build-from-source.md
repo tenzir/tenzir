@@ -23,7 +23,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 [SPDX](https://spdx.dev) format that lists all dependencies and their versions.
 
 <div align="center" class="padding-bottom--md">
-  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/tenzir/releases/latest/download/Tenzir.spdx">Latest SBOM</a>
+  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/tenzir/releases/latest/download/tenzir.spdx.json">Latest SBOM</a>
 </div>
 
 |Required|Dependency|Version|Description|

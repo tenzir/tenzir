@@ -10,17 +10,13 @@
     then final.llvmPackages_16.stdenv
     else final.stdenv;
 in {
-  abseil-cpp =
-    if !isStatic
-    then prev.abseil-cpp
-    else prev.abseil-cpp_202206;
   arrow-cpp =
     if !isStatic
     then prev.arrow-cpp
     else
       (prev.arrow-cpp.override {
         enableShared = false;
-        enableS3 = false;
+        enableS3 = true;
         enableGcs = false;
       })
       .overrideAttrs (old: {
@@ -32,18 +28,11 @@ in {
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
             # Backtrace doesn't build in static mode, need to investigate.
             "-DARROW_WITH_BACKTRACE=OFF"
+            "-DARROW_BUILD_TESTS=OFF"
           ];
         doCheck = false;
         doInstallCheck = false;
       });
-  # spdlog in nixpkgs uses `fmt_8` directly, but we want version 9, so we use a
-  # little hack here.
-  fmt_8 = prev.fmt;
-  # We need boost 1.8.1 at minimum for URL.
-  boost = prev.boost18x;
-  rapidjson = prev.rapidjson.overrideAttrs (_: {
-    doCheck = false;
-  });
   zeromq =
     if !isStatic
     then prev.zeromq
@@ -147,21 +136,28 @@ in {
           ++ [
             "-DCAF_BUILD_STATIC=ON"
             "-DCAF_BUILD_STATIC_ONLY=ON"
+            "-DCAF_ENABLE_TESTING=OFF"
             "-DOPENSSL_USE_STATIC_LIBS=TRUE"
             "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCMAKE_POLICY_DEFAULT_CMP0069=NEW"
           ];
         hardeningDisable = [
+          "fortify"
           "pic"
         ];
         dontStrip = true;
+        doCheck = false;
       });
   fast_float = final.callPackage ./fast_float {};
-  jemalloc = prev.jemalloc.overrideAttrs (old: {
-    EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
-    configureFlags = old.configureFlags ++ ["--enable-prof" "--enable-stats"];
-    doCheck = !isStatic;
-  });
+  jemalloc =
+    if !isStatic
+    then prev.jemalloc
+    else
+      prev.jemalloc.overrideAttrs (old: {
+        EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
+        configureFlags = old.configureFlags ++ ["--enable-prof" "--enable-stats"];
+        doCheck = !isStatic;
+      });
   tenzir-source = inputs.nix-filter.lib.filter {
     root = ./..;
     include = [
@@ -181,7 +177,7 @@ in {
       ../CMakeLists.txt
       ../LICENSE
       ../README.md
-      ../Tenzir.spdx
+      ../tenzir.spdx.json
       ../VERSIONING.md
       ../tenzir.yaml.example
       ../version.json

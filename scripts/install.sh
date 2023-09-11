@@ -92,7 +92,7 @@ elif [ "${platform}" = "NixOS" ]
 then
   echo "Try Tenzir with our ${bold}flake.nix${normal}:"
   echo
-  echo "    ${bold}nix run github:tenzir/tenzir/latest${normal}"
+  echo "    ${bold}nix shell github:tenzir/tenzir/latest -c tenzir-node${normal}"
   echo
   echo "Install Tenzir by adding" \
     "${bold}github:tenzir/tenzir/latest${normal} to your"
