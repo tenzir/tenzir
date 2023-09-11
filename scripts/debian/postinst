@@ -67,9 +67,11 @@ if [ "$1" = "configure" ] ; then
 	if ! [ -d /var/log/vast ]; then
 		sed -i '/\/var\/log\/vast/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
 	fi
-	# Link the service into systemd's default service directory to make
-	# it known.
-	/usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
+  if [ -d /run/systemd/system ]; then
+    # Link the service into systemd's default service directory to make
+    # it known.
+	  /usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
+  fi
 fi
 
 # Automatically added by dh_installsystemd/13.3.4
