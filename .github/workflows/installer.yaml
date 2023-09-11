@@ -1,0 +1,38 @@
+name: Tenzir Installer
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 2 * * *'  # everyday at 2:20
+  # TODO remove on pull request
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  stock-linux:
+    name: Provided linux runners
+    strategy:
+      matrix:
+        image: [ubuntu-20.04, ubuntu-22.04]
+    runs-on: ${{ matrix.image }}
+    steps:
+      - name: Setup dependencies
+        run: apt update && apt install -y curl sudo
+      - name: Run installer
+        run: curl https://get.tenzir.app | sh
+  container-debian-based:
+    name: Debian based distros in containers
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [ubuntu:20.04, ubuntu:22.04, ubuntu:23.04, ubuntu:23.10, debian:12, debian:11, debian:10]
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Setup dependencies
+        run: apt update && apt install -y curl sudo
+      - name: Run installer
+        run: curl https://get.tenzir.app | sh
+  # TODO:
+  # test with macos
