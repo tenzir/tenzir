@@ -19,6 +19,15 @@ jobs:
     steps:
       - name: Run installer
         run: curl https://get.tenzir.app | sh
+  stock-macos:
+    name: Provided MacOS runners
+    strategy:
+      matrix:
+        image: [macos-12, macos-13]
+    runs-on: ${{ matrix.image }}
+    steps:
+      - name: Run installer
+        run: curl https://get.tenzir.app | sh
   container-debian-based:
     name: Debian based distros in containers
     runs-on: ubuntu-latest
@@ -32,5 +41,16 @@ jobs:
         run: apt update && apt install -y curl sudo
       - name: Run installer
         run: curl https://get.tenzir.app | sh
-  # TODO:
-  # test with macos
+  container-redhat-based:
+    name: Red Hat based distros in containers
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: ["fedora:39", "fedora:38", "fedora:37", "amazonlinux:2023", "amazonlinux:2"]
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Setup dependencies
+        run: yum install -y tar sudo
+      - name: Run installer
+        run: curl https://get.tenzir.app | sh
