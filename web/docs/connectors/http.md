@@ -26,16 +26,12 @@ http PUT pie.dev/put X-API-Token:123 foo=bar
 
 becomes
 
-```bash
-tenzir 'from http PUT pie.dev/put X-API-Token:123 foo=bar'
+```
+from http PUT pie.dev/put X-API-Token:123 foo=bar
 ```
 
 More generally, if your HTTPie command line is `http X` then you can write `from
-http X` to obtain an event stream or `load http X` for a byte stream. Note that
-we have only the parts of the HTTPie syntax most relevant to our users. Please
-[reach out](/discord) if you have use cases that the current implementation does
-not support. Internally, we rely on [libcurl](https://curl.se/libcurl/) to
-perform the actual file transfer.
+http X` to obtain an event stream or `load http X` for a byte stream.
 
 ### `<method>`
 
