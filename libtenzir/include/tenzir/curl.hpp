@@ -64,8 +64,6 @@ class curl {
                              void* user_data) -> size_t;
 
 public:
-  static auto parse_url(const std::string& str) -> bool;
-
   explicit curl();
 
   curl(curl&) = delete;

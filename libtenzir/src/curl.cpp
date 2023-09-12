@@ -56,13 +56,6 @@ auto curl::write_callback(void* ptr, size_t size, size_t nmemb, void* user_data)
   return nmemb;
 }
 
-auto curl::parse_url(const std::string& str) -> bool {
-  auto* h = curl_url();
-  auto result = curl_url_set(h, CURLUPART_URL, str.c_str(), 0) == CURLUE_OK;
-  curl_url_cleanup(h);
-  return result;
-}
-
 curl::curl() : easy_{curl_easy_init()}, multi_{curl_multi_init()} {
   auto err = set(CURLOPT_FOLLOWLOCATION, 1L);
   TENZIR_ASSERT(not err);
