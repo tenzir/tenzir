@@ -3,11 +3,11 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '20 2 * * *'  # everyday at 2:20
-  # TODO remove on pull request
-  pull_request:
-    types:
-      - opened
-      - synchronize
+
+# IMPORTANT NOTE: The distros that are tested here were chosen to maximize test
+# coverage of the installer script. That doesn't imply that we commit to support
+# them. We might just comment out distros with failing checks from the matrix on
+# an adhoc basis.
 
 jobs:
   stock-linux:
@@ -19,21 +19,21 @@ jobs:
     steps:
       - name: Run installer
         run: curl https://get.tenzir.app | sh
-  stock-macos:
-    name: Provided MacOS runners
-    strategy:
-      matrix:
-        image: [macos-12, macos-13]
-    runs-on: ${{ matrix.image }}
-    steps:
-      - name: Run installer
-        run: curl https://get.tenzir.app | sh
+  # stock-macos:
+  #   name: Provided MacOS runners
+  #   strategy:
+  #     matrix:
+  #       image: [macos-12, macos-13]
+  #   runs-on: ${{ matrix.image }}
+  #   steps:
+  #     - name: Run installer
+  #       run: curl https://get.tenzir.app | sh
   container-debian-based:
     name: Debian based distros in containers
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: ["ubuntu:20.04", "ubuntu:22.04", "ubuntu:23.04", "ubuntu:23.10", "debian:12", "debian:11", "debian:10"]
+        image: ["ubuntu:22.04", "ubuntu:23.04", "ubuntu:23.10", "debian:11", "debian:12"]
     container:
       image: ${{ matrix.image }}
     steps:
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: ["fedora:39", "fedora:38", "fedora:37", "amazonlinux:2023", "amazonlinux:2"]
+        image: ["fedora:37", "fedora:38", "fedora:39", "amazonlinux:2", "amazonlinux:2023"]
     container:
       image: ${{ matrix.image }}
     steps:
