@@ -1,4 +1,4 @@
-# ftp
+# ftps
 
 Loads bytes via FTPS.
 
