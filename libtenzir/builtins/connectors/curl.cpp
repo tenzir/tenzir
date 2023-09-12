@@ -54,8 +54,15 @@ public:
       if (auto err = handle.set(args.options))
         ctrl.abort(err);
       co_yield {};
-      for (auto&& chunk : handle.download(args.poll_timeout))
-        co_yield chunk;
+      for (auto&& chunk : handle.download(args.poll_timeout)) {
+        if (not chunk) {
+          diagnostic::error("failed to download {}", args.options.url)
+            .hint(fmt::format("{}", chunk.error()))
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+        co_yield *chunk;
+      }
     };
     return make(args_);
   }

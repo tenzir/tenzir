@@ -13,6 +13,7 @@
 #include "tenzir/generator.hpp"
 
 #include <caf/error.hpp>
+#include <caf/expected.hpp>
 #include <curl/curl.h>
 
 #include <chrono>
@@ -76,7 +77,8 @@ public:
 
   auto set(const curl_options& opts) -> caf::error;
 
-  auto download(std::chrono::milliseconds timeout) -> generator<chunk_ptr>;
+  auto download(std::chrono::milliseconds timeout)
+    -> generator<caf::expected<chunk_ptr>>;
 
 private:
   auto set(CURLoption option, auto parameter) -> caf::error;

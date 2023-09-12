@@ -146,7 +146,8 @@ auto curl::set(const curl_options& opts) -> caf::error {
   return {};
 }
 
-auto curl::download(std::chrono::milliseconds timeout) -> generator<chunk_ptr> {
+auto curl::download(std::chrono::milliseconds timeout)
+  -> generator<caf::expected<chunk_ptr>> {
   std::vector<chunk_ptr> chunks;
   auto err = set(CURLOPT_WRITEDATA, &chunks);
   TENZIR_ASSERT(not err);
@@ -157,11 +158,11 @@ auto curl::download(std::chrono::milliseconds timeout) -> generator<chunk_ptr> {
     if (mc == CURLM_OK && still_running != 0)
       mc = curl_multi_poll(multi_, nullptr, 0u, ms, nullptr);
     if (mc != CURLM_OK) {
-      TENZIR_ERROR(to_error(mc));
+      co_yield caf::make_error(ec::unspecified, to_error(mc));
       co_return;
     }
     if (chunks.empty())
-      co_yield {};
+      co_yield chunk_ptr{};
     for (auto&& chunk : chunks)
       co_yield chunk;
     chunks.clear();
