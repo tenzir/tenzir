@@ -18,7 +18,7 @@ with an expressive and intuitive command-line syntax. We recommend to study the
 [HTTPie documentation](https://httpie.io/docs/cli/examples) to understand the
 full extent of the command-line interface. In many cases, you can perform an
 *exact* copy of the HTTPie command line and use it drop-in with the HTTP loader,
-e.g..,  the invocation
+e.g.,  the invocation
 
 ```bash
 http PUT pie.dev/put X-API-Token:123 foo=bar
@@ -30,7 +30,7 @@ becomes
 tenzir 'from http PUT pie.dev/put X-API-Token:123 foo=bar'
 ```
 
-More generally, if you HTTPie command line is `http X` then you can write `from
+More generally, if your HTTPie command line is `http X` then you can write `from
 http X` to obtain an event stream or `load http X` for a byte stream. Note that
 we have only the parts of the HTTPie syntax most relevant to our users. Please
 [reach out](/discord) if you have use cases that the current implementation does
