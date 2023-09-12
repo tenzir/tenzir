@@ -4,7 +4,7 @@
   fetchFromGitHub,
   cmake,
   http-parser,
-  fmt_8,
+  fmt,
   asio,
   openssl,
 }: let
@@ -40,7 +40,7 @@ in
     ];
     propagatedBuildInputs = [
       http-parser
-      fmt_8
+      fmt
       asio
       openssl
     ];

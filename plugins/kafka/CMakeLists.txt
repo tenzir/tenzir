@@ -25,5 +25,4 @@ if (NOT RdKafka_FOUND)
   list(POP_BACK CMAKE_MODULE_PATH)
 endif ()
 
-dependency_summary("librdkafka" RdKafka::rdkafka++ "Dependencies")
 target_link_libraries(kafka PUBLIC RdKafka::rdkafka++)

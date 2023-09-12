@@ -23,7 +23,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 [SPDX](https://spdx.dev) format that lists all dependencies and their versions.
 
 <div align="center" class="padding-bottom--md">
-  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/tenzir/releases/latest/download/Tenzir.spdx">Latest SBOM</a>
+  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/tenzir/releases/latest/download/tenzir.spdx.json">Latest SBOM</a>
 </div>
 
 |Required|Dependency|Version|Description|
@@ -46,6 +46,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[libpcap](https://www.tcpdump.org)||Required for building the `pcap` plugin.|
 ||[librdkafka](https://github.com/confluentinc/librdkafka)||Required for building the `kafka` plugin.|
 ||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
+||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
 ||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for Tenzir.|

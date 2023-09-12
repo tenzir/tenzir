@@ -58,7 +58,8 @@ jobs:
 
       - name: Ansible Lint
         run: |
-          pip install --upgrade ansible-lint
+          pip install --upgrade ansible ansible-lint
+          ansible-galaxy collection install ansible.posix
           ansible-lint --strict --profile production ansible
 
       - name: Terraform fmt

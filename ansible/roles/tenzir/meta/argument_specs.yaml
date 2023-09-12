@@ -1,0 +1,15 @@
+---
+argument_specs:
+  # roles/tenzir/tasks/main.yml entry point
+  main:
+    short_description: The main entry point for the tenzir role.
+    options:
+      config_dir:
+        type: str
+        required: true
+        description: A directory containing a Tenzir configuration tree
+      read_write_paths:
+        type: list
+        elements: str
+        default: []
+        description: Extra directories that systemd should grant access to

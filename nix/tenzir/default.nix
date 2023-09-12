@@ -8,10 +8,8 @@
     tenzir-source,
     cmake,
     cmake-format,
-    poetry,
     pkg-config,
     git,
-    pandoc,
     boost,
     caf,
     libpcap,
@@ -27,6 +25,7 @@
     libunwind,
     xxHash,
     rdkafka,
+    cppzmq,
     re2,
     dpkg,
     restinio,
@@ -62,7 +61,9 @@
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"
+        "plugins/sigma"
         "plugins/web"
+        "plugins/zmq"
       ]
       ++ extraPlugins';
   in
@@ -83,10 +84,7 @@
 
         nativeBuildInputs = [
           cmake
-          cmake-format
           dpkg
-          pandoc
-          poetry
         ];
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
@@ -97,6 +95,7 @@
           libunwind
           libyamlcpp
           rdkafka
+          cppzmq
           re2
           restinio
         ];
@@ -125,6 +124,7 @@
             }"
             "-DTENZIR_ENABLE_BACKTRACE=ON"
             "-DTENZIR_ENABLE_JEMALLOC=ON"
+            "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_PYTHON_BINDINGS=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
             "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
@@ -150,15 +150,10 @@
           ]
           ++ extraCmakeFlags;
 
-        # The executable is run to generate the man page as part of the build phase.
-        # libtenzir.{dyld,so} is put into the libtenzir subdir if relocatable installation
-        # is off, which is the case here.
-        preBuild = lib.optionalString (!isStatic) ''
-          export LD_LIBRARY_PATH="$PWD/libtenzir''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH"
-          export DYLD_LIBRARY_PATH="$PWD/libtenzir''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH"
-        '';
-
-        hardeningDisable = lib.optional isStatic "pic";
+        hardeningDisable = lib.optionals isStatic [
+          "fortify"
+          "pic"
+        ];
 
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*

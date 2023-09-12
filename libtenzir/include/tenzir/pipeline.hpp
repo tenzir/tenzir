@@ -195,6 +195,10 @@ struct [[nodiscard]] metric {
   duration time_processing = {};
   duration time_scheduled = {};
   duration time_total = {};
+  uint64_t num_runs = {};
+  uint64_t num_runs_processing = {};
+  uint64_t num_runs_processing_input = {};
+  uint64_t num_runs_processing_output = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, metric& x) -> bool {
@@ -206,7 +210,11 @@ struct [[nodiscard]] metric {
       f.field("time_scheduled", x.time_scheduled),
       f.field("time_total", x.time_total),
       f.field("inbound_measurement", x.inbound_measurement),
-      f.field("outbound_measurement", x.outbound_measurement));
+      f.field("outbound_measurement", x.outbound_measurement),
+      f.field("num_runs", x.num_runs),
+      f.field("num_runs_processing", x.num_runs_processing),
+      f.field("num_runs_processing_input", x.num_runs_processing_input),
+      f.field("num_runs_processing_output", x.num_runs_processing_output));
   }
 };
 

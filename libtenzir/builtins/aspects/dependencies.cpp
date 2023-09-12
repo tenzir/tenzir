@@ -35,7 +35,7 @@ public:
   }
 
   auto location() const -> operator_location override {
-    return operator_location::local;
+    return operator_location::anywhere;
   }
 
   auto show(operator_control_plane&) const -> generator<table_slice> override {

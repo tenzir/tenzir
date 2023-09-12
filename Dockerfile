@@ -22,7 +22,7 @@ COPY plugins ./plugins
 COPY python ./python
 COPY schema ./schema
 COPY tenzir ./tenzir
-COPY CMakeLists.txt LICENSE README.md Tenzir.spdx VERSIONING.md \
+COPY CMakeLists.txt LICENSE README.md tenzir.spdx.json VERSIONING.md \
      tenzir.yaml.example version.json ./
 
 # -- development ---------------------------------------------------------------
@@ -101,6 +101,7 @@ RUN apt-get update && \
       libunwind8 \
       libxxhash-dev \
       libyaml-cpp0.7 \
+      libzmq5 \
       lsb-release \
       openssl \
       robin-map-dev \

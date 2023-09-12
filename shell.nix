@@ -14,6 +14,10 @@ in
           pkgs.clang_16
           # Bintools come with a wrapped lld for faster linking.
           pkgs.llvmPackages_16.bintools
+          pkgs.cmake-format
+          pkgs.pandoc
+          pkgs.poetry
+          pkgs.python3Packages.spdx-tools
         ];
       # To build libcaf_openssl with bundled CAF.
       buildInputs = [pkgs.openssl];

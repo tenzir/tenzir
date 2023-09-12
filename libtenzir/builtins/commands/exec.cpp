@@ -109,6 +109,12 @@ auto format_metric(const metric& metric) {
                      data{metric.time_processing},
                      100.0 * static_cast<double>(metric.time_processing.count())
                        / static_cast<double>(metric.time_total.count()));
+  it = fmt::format_to(
+    it, "{}runs: {} ({:.2f}% processing / {:.2f}% input / {:.2f}% output)\n",
+    indent, metric.num_runs,
+    100.0 * metric.num_runs_processing / metric.num_runs,
+    100.0 * metric.num_runs_processing_input / metric.num_runs,
+    100.0 * metric.num_runs_processing_output / metric.num_runs);
   if (metric.inbound_measurement.unit != "void") {
     it = fmt::format_to(it, "{}inbound:\n", indent);
     it = fmt::format_to(

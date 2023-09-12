@@ -645,15 +645,15 @@ jobs:
           apt-get -y install git
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Publish Tenzir.spdx to GitHub Release
+      - name: Publish tenzir.spdx.json to GitHub Release
         if: ${{ github.event_name == 'release' && matrix.tenzir.name == 'Debian' }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "Tenzir.spdx"
-          asset_name: "Tenzir.spdx"
+          asset_path: "tenzir.spdx.json"
+          asset_name: "tenzir.spdx.json"
           asset_content_type: text/plain
       - name: Checkout submodules
         run: |
@@ -812,6 +812,9 @@ jobs:
           # - name: Inventory
           #   target: inventory
           #   path: contrib/tenzir-plugins/inventory
+          - name: Kafka
+            target: kafka
+            path: plugins/kafka
           - name: Matcher
             target: matcher
             path: contrib/tenzir-plugins/matcher
@@ -827,6 +830,12 @@ jobs:
           - name: Platform
             target: platform
             path: contrib/tenzir-plugins/platform
+          - name: Sigma
+            target: sigma
+            path: plugins/sigma
+          - name: ZeroMQ
+            target: zmq
+            path: plugins/zmq
         exclude:
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
@@ -842,6 +851,9 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Matcher}}
           - {setup: {os: macos-latest}, plugin: {name: Netflow}}
           - {setup: {os: macos-latest}, plugin: {name: Pipeline Manager}}
+          - {setup: {os: macos-latest}, plugin: {name: Sigma}}
+          - {setup: {os: macos-latest}, plugin: {name: Kafka}}
+          - {setup: {os: macos-latest}, plugin: {name: ZeroMQ}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
