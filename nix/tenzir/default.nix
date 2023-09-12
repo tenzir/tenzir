@@ -25,6 +25,7 @@
     libunwind,
     xxHash,
     rdkafka,
+    cppzmq,
     re2,
     dpkg,
     restinio,
@@ -61,6 +62,7 @@
         "plugins/parquet"
         "plugins/sigma"
         "plugins/web"
+        "plugins/zmq"
       ]
       ++ extraPlugins';
   in
@@ -92,6 +94,7 @@
           libunwind
           libyamlcpp
           rdkafka
+          cppzmq
           re2
           restinio
         ];
@@ -146,7 +149,10 @@
           ]
           ++ extraCmakeFlags;
 
-        hardeningDisable = lib.optional isStatic "pic";
+        hardeningDisable = lib.optionals isStatic [
+          "fortify"
+          "pic"
+        ];
 
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*

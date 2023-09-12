@@ -812,6 +812,9 @@ jobs:
           # - name: Inventory
           #   target: inventory
           #   path: contrib/tenzir-plugins/inventory
+          - name: Kafka
+            target: kafka
+            path: plugins/kafka
           - name: Matcher
             target: matcher
             path: contrib/tenzir-plugins/matcher
@@ -830,6 +833,9 @@ jobs:
           - name: Sigma
             target: sigma
             path: plugins/sigma
+          - name: ZeroMQ
+            target: zmq
+            path: plugins/zmq
         exclude:
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
@@ -846,6 +852,8 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Netflow}}
           - {setup: {os: macos-latest}, plugin: {name: Pipeline Manager}}
           - {setup: {os: macos-latest}, plugin: {name: Sigma}}
+          - {setup: {os: macos-latest}, plugin: {name: Kafka}}
+          - {setup: {os: macos-latest}, plugin: {name: ZeroMQ}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"

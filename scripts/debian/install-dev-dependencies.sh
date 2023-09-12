@@ -9,6 +9,7 @@ apt-get -y --no-install-recommends install \
     ccache \
     cmake-data \
     cmake \
+    cppzmq-dev \
     curl \
     flatbuffers-compiler-dev \
     g++-12 \

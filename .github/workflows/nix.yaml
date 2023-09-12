@@ -111,7 +111,7 @@ jobs:
         run: |
           nix shell --inputs-from ./. \
             nixpkgs#git \
-            nixpkgs#nushell \
+            nixpkgs#nushellFull \
             nixpkgs#rclone \
             nixpkgs#skopeo \
             -c .github/workflows/nix.nu '${{ inputs.config }}'

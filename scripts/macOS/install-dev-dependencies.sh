@@ -7,6 +7,7 @@ brew install \
     apache-arrow \
     boost \
     ccache \
+    cppzmq \
     flatbuffers \
     fmt \
     gnu-sed \
