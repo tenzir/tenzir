@@ -38,9 +38,15 @@ action() {
   printf "${blue}==>${bold} %s${normal}\n" "$@"
 }
 
-#
-# Execution
-#
+# Only prompt for user confirmation if we have a TTY.
+confirm() {
+  if [ -t 1 ]
+  then
+    echo
+    echo "Press ${green}ENTER${normal} to continue."
+    read -r response < /dev/tty
+  fi
+}
 
 # Print welcome banner.
 echo "${blue}"
@@ -101,7 +107,7 @@ then
   exit 0
 else
   echo "We do not offer pre-built packages for ${platform}." \
-       "Your options:"
+      "Your options:"
   echo
   echo "  1. Use Docker"
   echo "  2. Build from source"
@@ -143,9 +149,7 @@ echo
 echo "(You can skip these steps, but then only open source features will be"
 echo "available. Visit ${bold}https://tenzir.com/pricing${normal} for a" \
   "feature comparison.)"
-echo
-echo "Press ${green}ENTER${normal} to continue."
-read -r dummy_
+confirm
 
 # Check for platform configuration.
 action "Checking for existence of platform configuration"
@@ -170,11 +174,11 @@ if [ "${platform}" = "Debian" ]
 then
   cmd1="sudo dpkg -i \"${tmpdir}/${package}\""
   cmd2="sudo systemctl status tenzir-node"
-  echo "Press ${green}ENTER${normal} to continue with the following commands:"
+  echo "This script is about to run the following commands:"
   echo
   echo "  - ${cmd1}"
   echo "  - ${cmd2}"
-  read -r dummy_
+  confirm
   action "Installing via dpkg"
   eval "${cmd1}"
   action "Checking node status"
@@ -182,9 +186,10 @@ then
 elif [ "${platform}" = "Linux" ]
 then
   cmd1="sudo tar xzf \"${tmpdir}/${package}\" -C /"
-  echo "Press ${green}ENTER${normal} to continue with the following commands:"
+  echo "This script is about to run the following command:"
   echo
   echo "  - ${cmd1}"
+  confirm
   action "Unpacking tarball"
   eval "${cmd1}"
 fi
