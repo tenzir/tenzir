@@ -39,16 +39,18 @@ auto inspect(auto& f, http_options& x) -> bool {
 
 /// Options for the curl wrapper.
 struct curl_options {
-  std::string default_protocol;
-  std::string url;
-  http_options http;
+  std::string default_protocol{};
+  std::string url{};
+  http_options http{};
+  bool verbose{false};
 };
 
 auto inspect(auto& f, curl_options& x) -> bool {
   return f.object(x)
     .pretty_name("curl_options")
     .fields(f.field("default_protocol", x.default_protocol),
-            f.field("url", x.url), f.field("http", x.http));
+            f.field("url", x.url), f.field("http", x.http),
+            f.field("verbose", x.verbose));
 }
 
 /// A wrapper around the C API.

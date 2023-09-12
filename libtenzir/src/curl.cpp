@@ -86,6 +86,9 @@ curl::~curl() {
 }
 
 auto curl::set(const curl_options& opts) -> caf::error {
+  if (opts.verbose)
+    if (auto err = set(CURLOPT_VERBOSE, 1L))
+      return err;
   if (not opts.default_protocol.empty())
     if (auto err = set(CURLOPT_DEFAULT_PROTOCOL, opts.default_protocol.c_str()))
       return err;
@@ -144,7 +147,6 @@ auto curl::set(const curl_options& opts) -> caf::error {
 }
 
 auto curl::download(std::chrono::milliseconds timeout) -> generator<chunk_ptr> {
-  // curl_easy_setopt(easy_, CURLOPT_VERBOSE, 1L);
   std::vector<chunk_ptr> chunks;
   auto err = set(CURLOPT_WRITEDATA, &chunks);
   TENZIR_ASSERT(not err);

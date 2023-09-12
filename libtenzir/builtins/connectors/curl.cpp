@@ -188,8 +188,14 @@ public:
     if (name() == "http" || name() == "https") {
       // Collect all arguments first until `argument_parser` becomes mightier.
       auto items = std::vector<located<std::string>>{};
-      while (auto arg = p.accept_shell_arg())
-        items.push_back(std::move(*arg));
+      while (auto arg = p.accept_shell_arg()) {
+        // Process options here manually until argument_parser becomes more
+        // powerful.
+        if (arg && (arg->inner == "-v" || arg->inner == "--verbose"))
+          args.options.verbose = true;
+        else
+          items.push_back(std::move(*arg));
+      }
       if (items.empty())
         diagnostic::error("no URL provided").throw_();
       // No ambiguity, just go with <url>.
@@ -221,6 +227,7 @@ public:
       auto parser = argument_parser{
         name(),
         fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+      parser.add("-v,--verbose", args.options.verbose);
       parser.add(args.options.url, "<url>");
       parser.parse(p);
     }
