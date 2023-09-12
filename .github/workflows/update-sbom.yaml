@@ -3,7 +3,7 @@ on:
   workflow_dispatch
 
 permissions:
-  id-token: read
+  #id-token: write
   pull-requests: write
 
 jobs:
