@@ -12,6 +12,7 @@
     git,
     boost,
     caf,
+    curl,
     libpcap,
     arrow-cpp,
     fast_float,
@@ -87,6 +88,7 @@
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           boost
+          curl
           fast_float
           libpcap
           libunwind

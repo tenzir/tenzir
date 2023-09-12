@@ -164,7 +164,7 @@ struct accountant_state_impl {
                double x, const metrics_metadata& meta1,
                const metrics_metadata& meta2) {
     using namespace std::string_view_literals;
-    auto printer = json_printer{json_printer::options{
+    auto printer = json_printer{json_printer_options{
       .oneline = true,
       .omit_empty_records = true,
     }};

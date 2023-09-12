@@ -4,5 +4,5 @@ error: loader `a/b/c.json` could not be found
 1 | from a/b/c.json read json
   |      ^^^^^^^^^^ 
   |
-  = hint: must be one of -, file, stdin
+  = hint: must be one of -, file, ftp, ftps, http, https, stdin
   = docs: https://docs.tenzir.com/next/connectors

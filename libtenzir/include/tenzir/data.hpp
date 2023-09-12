@@ -11,6 +11,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/printable/print.hpp"
+#include "tenzir/concept/printable/tenzir/json_printer_options.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/string.hpp"
@@ -461,8 +462,10 @@ caf::expected<data> from_json(std::string_view x);
 
 /// Prints data as JSON.
 /// @param x The data instance.
+/// @param opts Options to the JSON printer.
 /// @returns The JSON representation of *x*, or an error.
-caf::expected<std::string> to_json(const data& x);
+caf::expected<std::string>
+to_json(const data& x, json_printer_options opts = {});
 
 // -- YAML -------------------------------------------------------------
 
