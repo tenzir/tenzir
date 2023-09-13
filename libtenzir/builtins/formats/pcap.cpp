@@ -307,9 +307,7 @@ public:
   }
 
   static auto pack(const file_header& header) -> chunk_ptr {
-    const auto* ptr = reinterpret_cast<const std::byte*>(&header);
-    auto bytes = std::span<const std::byte>{ptr, sizeof(file_header)};
-    return chunk::copy(bytes);
+    return chunk::copy(as_bytes(header));
   }
 
   static auto make_file_header(const table_slice& slice)

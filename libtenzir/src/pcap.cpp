@@ -12,6 +12,16 @@
 
 namespace tenzir::pcap {
 
+auto as_bytes(const file_header& header) -> std::span<const std::byte> {
+  const auto* ptr = reinterpret_cast<const std::byte*>(&header);
+  return std::span<const std::byte>{ptr, sizeof(file_header)};
+}
+
+auto as_bytes(const packet_header& header) -> std::span<const std::byte> {
+  const auto* ptr = reinterpret_cast<const std::byte*>(&header);
+  return std::span<const std::byte>{ptr, sizeof(packet_header)};
+}
+
 auto byteswap(file_header hdr) -> file_header {
   auto result = file_header{};
   result.magic_number = detail::byteswap(hdr.magic_number);
