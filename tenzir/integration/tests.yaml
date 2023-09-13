@@ -1070,3 +1070,11 @@ tests:
       # testing binary outputs very well, so we should implement more tests once
       # we're completed the transition to bats (see tenzir/tenzir#2859).
       - command: exec 'load file @./data/json/conn.log.json.gz | decompress gzip | read zeek-json | summarize num_events=count(.)'
+
+  Lines:
+    tags: [pipelines, formats]
+    steps:
+      - command: exec 'read lines | summarize n=count(.) | write json -c'
+        input: data/cef/checkpoint.log
+      - command: exec 'read lines -s | summarize n=count(.) | write json -c'
+        input: data/cef/checkpoint.log

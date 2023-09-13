@@ -127,3 +127,16 @@ Import a [CEF](/formats/cef) log from an FTP server into a Tenzir node:
 load ftp example.org/cef.log read cef
 | import
 ```
+
+## Lines Parser
+
+The new [`lines`](/formats/lines) parser splits its input at newline characters
+and produces events with a single field representing the line. This parser is
+especially useful for onboarding line-based text files into pipelines.
+
+The `-s|--skip-empty` flags ignores empty lines. For example, read a text file
+as follows:
+
+```
+from file /tmp/test.txt read lines --skip-empty
+```
