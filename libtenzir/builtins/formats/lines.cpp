@@ -1,0 +1,148 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include <tenzir/argument_parser.hpp>
+#include <tenzir/detail/assert.hpp>
+#include <tenzir/plugin.hpp>
+#include <tenzir/table_slice_builder.hpp>
+#include <tenzir/to_lines.hpp>
+
+#include <optional>
+
+namespace tenzir::plugins::lines {
+
+namespace {
+
+/// The default name of the record field.
+const auto default_field_name = std::string{"data"};
+
+struct parser_args {
+  std::optional<located<std::string>> field_name;
+  std::optional<location> skip_empty;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, parser_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("parser_args")
+      .fields(f.field("field_name", x.field_name),
+              f.field("skip_empty", x.skip_empty));
+  }
+};
+
+auto line_type(std::string field_name = "data") -> type {
+  TENZIR_ASSERT(not field_name.empty());
+  return type{
+    "tenzir.line",
+    record_type{
+      {std::move(field_name), string_type{}},
+    },
+  };
+}
+
+class lines_parser final : public plugin_parser {
+public:
+  lines_parser() = default;
+
+  explicit lines_parser(parser_args args) : args_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "lines";
+  }
+
+  auto
+  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> std::optional<generator<table_slice>> override {
+    auto field_name
+      = args_.field_name ? args_.field_name->inner : default_field_name;
+    auto make
+      = [](auto& ctrl, generator<chunk_ptr> input, std::string field_name,
+           bool skip_empty) -> generator<table_slice> {
+      auto make_builder = [field_name = std::move(field_name)]() {
+        return table_slice_builder{line_type(field_name)};
+      };
+      auto num_non_empty_lines = size_t{0};
+      auto num_empty_lines = size_t{0};
+      auto builder = make_builder();
+      for (auto line : to_lines(std::move(input))) {
+        if (not line) {
+          co_yield {};
+          continue;
+        }
+        if (line->empty()) {
+          ++num_empty_lines;
+          if (skip_empty) {
+            co_yield {};
+            continue;
+          }
+        } else {
+          ++num_non_empty_lines;
+        }
+        auto num_lines = skip_empty ? num_non_empty_lines
+                                    : num_non_empty_lines + num_empty_lines;
+        if (not builder.add(*line)) {
+          diagnostic::error("failed add line")
+            .hint("line number: ", num_lines + 1)
+            .hint("{}", *line)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+        // FIXME: make configurable. Like in PCAP?
+        //
+        //    if (builder.rows() >= defaults::import::table_slice_size
+        //        or last_finish + defaults::import::batch_timeout < now)
+        //
+        // To be discussed in review.
+        if (builder.rows() == 10) {
+          co_yield builder.finish();
+          builder = make_builder();
+        }
+      }
+      if (builder.rows() > 0)
+        co_yield builder.finish();
+    };
+    return make(ctrl, std::move(input), field_name, !!args_.skip_empty);
+  }
+
+  friend auto inspect(auto& f, lines_parser& x) -> bool {
+    return f.object(x)
+      .pretty_name("lines_parser")
+      .fields(f.field("args", x.args_));
+  }
+
+private:
+  parser_args args_;
+};
+
+class plugin final : public virtual parser_plugin<lines_parser> {
+public:
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/docs/formats/{}", name())};
+    auto args = parser_args{};
+    parser.add("-f,--field-name", args.field_name, "<string>");
+    parser.add("-s,--skip-empty-lines", args.skip_empty);
+    parser.parse(p);
+    if (args.field_name and args.field_name->inner.empty())
+      diagnostic::error("field name must not be empty")
+        .primary(args.field_name->source)
+        .throw_();
+    return std::make_unique<lines_parser>(std::move(args));
+  }
+
+  auto name() const -> std::string override {
+    return "lines";
+  }
+};
+
+} // namespace
+
+} // namespace tenzir::plugins::lines
+
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::plugin)
