@@ -80,7 +80,6 @@ public:
         if (not builder.add(*line)) {
           diagnostic::error("failed to add line")
             .hint("line number: ", num_lines + 1)
-            .hint("{}", *line)
             .emit(ctrl.diagnostics());
           co_return;
         }
