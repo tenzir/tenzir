@@ -5,7 +5,7 @@ Parses events as lines.
 ## Synopsis
 
 ```
-lines [-f|--field-name <string>] [-s|--skip-empty]
+lines [-s|--skip-empty]
 ```
 
 ## Description
@@ -17,11 +17,7 @@ Newline characters include:
 - `\n`
 - `\r\n`
 
-### `-f|--field-name <string>`
-
-Provides a different field name for the output.
-
-Defaults to `data`.
+The resulting events have a single field called `line`.
 
 ### `-s|--skip-empty`
 

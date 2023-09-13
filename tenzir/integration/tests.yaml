@@ -1078,5 +1078,3 @@ tests:
         input: data/cef/checkpoint.log
       - command: exec 'read lines -s | summarize n=count(.) | write json -c'
         input: data/cef/checkpoint.log
-      - command: exec 'read lines -f foo | head 1 | write json -c'
-        input: data/cef/checkpoint.log

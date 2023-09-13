@@ -22,24 +22,21 @@ namespace {
 const auto default_field_name = std::string{"data"};
 
 struct parser_args {
-  std::optional<located<std::string>> field_name;
   std::optional<location> skip_empty;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
     return f.object(x)
       .pretty_name("parser_args")
-      .fields(f.field("field_name", x.field_name),
-              f.field("skip_empty", x.skip_empty));
+      .fields(f.field("skip_empty", x.skip_empty));
   }
 };
 
-auto line_type(std::string field_name = "data") -> type {
-  TENZIR_ASSERT(not field_name.empty());
+auto line_type() -> type {
   return type{
     "tenzir.line",
     record_type{
-      {std::move(field_name), string_type{}},
+      {"line", string_type{}},
     },
   };
 }
@@ -58,17 +55,11 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    auto field_name
-      = args_.field_name ? args_.field_name->inner : default_field_name;
-    auto make
-      = [](auto& ctrl, generator<chunk_ptr> input, std::string field_name,
-           bool skip_empty) -> generator<table_slice> {
-      auto make_builder = [field_name = std::move(field_name)]() {
-        return table_slice_builder{line_type(field_name)};
-      };
+    auto make = [](auto& ctrl, generator<chunk_ptr> input,
+                   bool skip_empty) -> generator<table_slice> {
       auto num_non_empty_lines = size_t{0};
       auto num_empty_lines = size_t{0};
-      auto builder = make_builder();
+      auto builder = table_slice_builder{line_type()};
       for (auto line : to_lines(std::move(input))) {
         if (not line) {
           co_yield {};
@@ -100,13 +91,13 @@ public:
         // To be discussed in review.
         if (builder.rows() == 10) {
           co_yield builder.finish();
-          builder = make_builder();
+          builder = table_slice_builder{line_type()};
         }
       }
       if (builder.rows() > 0)
         co_yield builder.finish();
     };
-    return make(ctrl, std::move(input), field_name, !!args_.skip_empty);
+    return make(ctrl, std::move(input), !!args_.skip_empty);
   }
 
   friend auto inspect(auto& f, lines_parser& x) -> bool {
@@ -126,13 +117,8 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/docs/formats/{}", name())};
     auto args = parser_args{};
-    parser.add("-f,--field-name", args.field_name, "<string>");
     parser.add("-s,--skip-empty-lines", args.skip_empty);
     parser.parse(p);
-    if (args.field_name and args.field_name->inner.empty())
-      diagnostic::error("field name must not be empty")
-        .primary(args.field_name->source)
-        .throw_();
     return std::make_unique<lines_parser>(std::move(args));
   }
 
