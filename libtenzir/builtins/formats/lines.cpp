@@ -121,10 +121,6 @@ public:
     parser.parse(p);
     return std::make_unique<lines_parser>(std::move(args));
   }
-
-  auto name() const -> std::string override {
-    return "lines";
-  }
 };
 
 } // namespace
