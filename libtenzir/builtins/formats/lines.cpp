@@ -77,7 +77,7 @@ public:
         auto num_lines = skip_empty ? num_non_empty_lines
                                     : num_non_empty_lines + num_empty_lines;
         if (not builder.add(*line)) {
-          diagnostic::error("failed add line")
+          diagnostic::error("failed to add line")
             .hint("line number: ", num_lines + 1)
             .hint("{}", *line)
             .emit(ctrl.diagnostics());
