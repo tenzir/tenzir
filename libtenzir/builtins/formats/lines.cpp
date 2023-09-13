@@ -60,6 +60,7 @@ public:
       auto num_non_empty_lines = size_t{0};
       auto num_empty_lines = size_t{0};
       auto builder = table_slice_builder{line_type()};
+      auto last_finish = std::chrono::steady_clock::now();
       for (auto line : to_lines(std::move(input))) {
         if (not line) {
           co_yield {};
@@ -83,13 +84,10 @@ public:
             .emit(ctrl.diagnostics());
           co_return;
         }
-        // FIXME: make configurable. Like in PCAP?
-        //
-        //    if (builder.rows() >= defaults::import::table_slice_size
-        //        or last_finish + defaults::import::batch_timeout < now)
-        //
-        // To be discussed in review.
-        if (builder.rows() == 10) {
+        const auto now = std::chrono::steady_clock::now();
+        if (builder.rows() >= defaults::import::table_slice_size
+            or last_finish + defaults::import::batch_timeout < now) {
+          last_finish = now;
           co_yield builder.finish();
           builder = table_slice_builder{line_type()};
         }
