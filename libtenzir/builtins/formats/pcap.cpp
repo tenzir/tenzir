@@ -158,9 +158,9 @@ public:
         co_return;
       }
       if (*need_swap)
-        TENZIR_DEBUG("detected different byte order in file and host");
+        TENZIR_VERBOSE("detected different byte order in file and host");
       else
-        TENZIR_DEBUG("detected identical byte order in file and host");
+        TENZIR_VERBOSE("detected identical byte order in file and host");
       if (*need_swap)
         input_file_header = byteswap(input_file_header);
       TENZIR_DEBUG("parsed PCAP file header");
@@ -180,8 +180,10 @@ public:
         }
         co_yield builder.finish();
       }
-      // After the header, the remainder of the file are Packet Records,
-      // consisting of a 16-byte header and variable-length payload.
+      // After the header, the remainder of the file are typically Packet
+      // Records, consisting of a 16-byte header and variable-length payload.
+      // However, our parser is a bit smarter and also supports concatenated
+      // PCAP traces.
       auto builder = table_slice_builder{packet_record_type()};
       auto num_packets = size_t{0};
       auto last_finish = std::chrono::steady_clock::now();
@@ -193,7 +195,7 @@ public:
           co_yield builder.finish();
         }
         packet_record packet;
-        // Read the header.
+        // We first try to parse a packet header first.
         while (true) {
           auto length = sizeof(packet_header);
           auto bytes = read_n(length);
@@ -210,7 +212,7 @@ public:
             }
             co_return;
           }
-          if (bytes->size() != length) {
+          if (bytes->size() < length) {
             diagnostic::error("PCAP packet header to short")
               .note("from `pcap`")
               .note("expected {} bytes, but got {}", length, bytes->size())
@@ -218,6 +220,28 @@ public:
             co_return;
           }
           std::memcpy(&packet.header, bytes->data(), sizeof(packet_header));
+          // Is this actually a file header?
+          if (is_file_header(packet.header)) {
+            TENZIR_VERBOSE("detected new PCAP file header");
+            std::memcpy(&input_file_header, &packet.header,
+                        sizeof(packet_header));
+            // Read the remaining two fields of the packet header.
+            while (true) {
+              auto bytes = read_n(2 * sizeof(uint32_t));
+              if (!bytes) {
+                co_yield {};
+                continue;
+              }
+              std::memcpy(&input_file_header.snaplen, bytes->data(),
+                          bytes->size());
+              break;
+            }
+            // Jump back to the while loop that reads pairs of packet header and
+            // packet data.
+            continue;
+          }
+
+          // Okay, we got a packet header, let's proceed.
           if (*need_swap)
             packet.header = byteswap(packet.header);
           break;

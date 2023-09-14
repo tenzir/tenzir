@@ -56,6 +56,11 @@ static_assert(sizeof(packet_header) == 16);
 
 auto as_bytes(const packet_header& x) -> std::span<const std::byte>;
 
+// Checks whether a packet header is actually a packet header. This is a
+// heuristic based on the binary shape of the header, not a standard-compliant
+// check. However, it works robustly in practice.
+auto is_file_header(const packet_header& header) -> bool;
+
 // PCAP files are written out with the system endianness, so we may have to
 // swap bytes whenever the local endianness differs from the trace file. The
 // magic number in the file helps identifying the endianness.
