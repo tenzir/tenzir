@@ -72,9 +72,9 @@ auto is_file_header(const packet_header& header) -> bool {
   // base rate is too low for this.
   return true;
   // What could go wrong if we didn't do the next checks? The literal magic
-  // values would be UNIX timestamps equivalent to of Dec 19, 2055. At this
-  // point AGI will have killed us all. If we got (real or simulated) packets
-  // from that very second in the future, we deem it next to impossible that the
+  // values would be UNIX timestamps equivalent to Dec 19, 2055. At this point
+  // AGI will have killed us all. If we got (real or simulated) packets from
+  // that very second in the future, we deem it next to impossible that the
   // fractional timestamp accidentally matched the PCAP version.
   auto major_version = header.timestamp_fraction >> 16;
   auto minor_version = header.timestamp_fraction & 0xffff;
