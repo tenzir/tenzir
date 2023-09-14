@@ -169,7 +169,7 @@ public:
         co_return;
       }
       if (*need_swap) {
-        TENZIR_VERBOSE("detected different byte order in file and host");
+        TENZIR_DEBUG("detected different byte order in file and host");
         input_file_header = byteswap(input_file_header);
       } else {
         TENZIR_DEBUG("detected identical byte order in file and host");
@@ -245,10 +245,16 @@ public:
             need_swap = need_byte_swap(input_file_header.magic_number);
             TENZIR_ASSERT(need_swap); // checked in is_file_header
             if (*need_swap) {
-              TENZIR_VERBOSE("detected different byte order in file and host");
+              TENZIR_DEBUG("detected different byte order in file and host");
               input_file_header = byteswap(input_file_header);
             } else {
               TENZIR_DEBUG("detected identical byte order in file and host");
+            }
+            // Before emitting the new file header, flush all buffered packets
+            // from the previous trace.
+            if (builder.rows() > 0) {
+              last_finish = now;
+              co_yield builder.finish();
             }
             if (emit_file_header)
               co_yield make_file_header_table_slice(input_file_header);
