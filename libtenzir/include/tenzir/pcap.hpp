@@ -41,7 +41,11 @@ struct file_header {
 // The file header length is 24 octets.
 static_assert(sizeof(file_header) == 24);
 
-auto as_bytes(const file_header& x) -> std::span<const std::byte>;
+auto as_bytes(const file_header& x)
+  -> std::span<const std::byte, sizeof(file_header)>;
+
+auto as_writeable_bytes(file_header& x)
+  -> std::span<std::byte, sizeof(file_header)>;
 
 /// The packet header.
 struct packet_header {
@@ -54,7 +58,11 @@ struct packet_header {
 // The packet header length is 16 octets.
 static_assert(sizeof(packet_header) == 16);
 
-auto as_bytes(const packet_header& x) -> std::span<const std::byte>;
+auto as_bytes(const packet_header& x)
+  -> std::span<const std::byte, sizeof(packet_header)>;
+
+auto as_writeable_bytes(packet_header& x)
+  -> std::span<std::byte, sizeof(packet_header)>;
 
 // Checks whether a packet header is actually a packet header. This is a
 // heuristic based on the binary shape of the header, not a standard-compliant

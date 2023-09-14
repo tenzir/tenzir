@@ -12,14 +12,31 @@
 
 namespace tenzir::pcap {
 
-auto as_bytes(const file_header& header) -> std::span<const std::byte> {
+auto as_bytes(const file_header& header)
+  -> std::span<const std::byte, sizeof(file_header)> {
   const auto* ptr = reinterpret_cast<const std::byte*>(&header);
-  return std::span<const std::byte>{ptr, sizeof(file_header)};
+  return std::span<const std::byte, sizeof(file_header)>{ptr,
+                                                         sizeof(file_header)};
 }
 
-auto as_bytes(const packet_header& header) -> std::span<const std::byte> {
+auto as_writeable_bytes(file_header& header)
+  -> std::span<std::byte, sizeof(file_header)> {
+  auto* ptr = reinterpret_cast<std::byte*>(&header);
+  return std::span<std::byte, sizeof(file_header)>{ptr, sizeof(file_header)};
+}
+
+auto as_bytes(const packet_header& header)
+  -> std::span<const std::byte, sizeof(packet_header)> {
   const auto* ptr = reinterpret_cast<const std::byte*>(&header);
-  return std::span<const std::byte>{ptr, sizeof(packet_header)};
+  return std::span<const std::byte, sizeof(packet_header)>{
+    ptr, sizeof(packet_header)};
+}
+
+auto as_writeable_bytes(packet_header& header)
+  -> std::span<std::byte, sizeof(packet_header)> {
+  auto* ptr = reinterpret_cast<std::byte*>(&header);
+  return std::span<std::byte, sizeof(packet_header)>{ptr,
+                                                     sizeof(packet_header)};
 }
 
 auto is_file_header(const packet_header& header) -> bool {

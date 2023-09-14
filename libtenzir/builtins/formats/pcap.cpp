@@ -219,8 +219,10 @@ public:
           std::memcpy(&packet.header, bytes->data(), sizeof(packet_header));
           if (is_file_header(packet.header)) {
             TENZIR_DEBUG("detected new PCAP file header");
-            std::memcpy(&input_file_header, &packet.header,
-                        sizeof(packet_header));
+            auto file_header_bytes = as_writeable_bytes(input_file_header);
+            auto packet_header_bytes = as_bytes(packet.header);
+            std::copy(packet_header_bytes.begin(), packet_header_bytes.end(),
+                      file_header_bytes.begin());
             // Read the remaining two fields of the packet header.
             while (true) {
               constexpr auto length
@@ -238,8 +240,9 @@ public:
               }
               TENZIR_ASSERT(sizeof(file_header) - sizeof(packet_header)
                             == bytes->size());
-              std::memcpy(&input_file_header + sizeof(packet_header),
-                          bytes->data(), bytes->size());
+              auto remainder
+                = file_header_bytes.subspan<sizeof(packet_header)>();
+              std::copy(bytes->begin(), bytes->end(), remainder.begin());
               break;
             }
             need_swap = need_byte_swap(input_file_header.magic_number);
