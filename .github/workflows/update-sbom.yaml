@@ -3,7 +3,6 @@ on:
   workflow_dispatch
 
 permissions:
-  id-token: read
   pull-requests: write
 
 jobs:
@@ -38,3 +37,7 @@ jobs:
           committer: tenzir-bot <engineering@tenzir.com>
           commit-message: Update SBOM
           title: Update SBOM
+          body: Update SBOM from workflow triggered by @${{ github.actor }}.
+          labels: maintenance
+          branch: topic/update-sbom
+          delete-branch: true
