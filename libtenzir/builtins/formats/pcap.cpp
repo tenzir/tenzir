@@ -101,6 +101,17 @@ auto make_byte_reader(generator<chunk_ptr> input) {
     };
 }
 
+auto make_file_header_table_slice(const file_header& header) -> table_slice {
+  auto builder = table_slice_builder{file_header_type()};
+  auto okay = builder.add(header.magic_number)
+              && builder.add(header.major_version)
+              && builder.add(header.minor_version)
+              && builder.add(header.reserved1) && builder.add(header.reserved2)
+              && builder.add(header.snaplen) && builder.add(header.linktype);
+  TENZIR_ASSERT(okay);
+  return builder.finish();
+}
+
 struct parser_args {
   std::optional<location> emit_file_header;
 
@@ -157,29 +168,14 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
-      if (*need_swap)
+      if (*need_swap) {
         TENZIR_VERBOSE("detected different byte order in file and host");
-      else
-        TENZIR_VERBOSE("detected identical byte order in file and host");
-      if (*need_swap)
         input_file_header = byteswap(input_file_header);
-      TENZIR_DEBUG("parsed PCAP file header");
-      if (emit_file_header) {
-        auto builder = table_slice_builder{file_header_type()};
-        if (!(builder.add(input_file_header.magic_number)
-              && builder.add(input_file_header.major_version)
-              && builder.add(input_file_header.minor_version)
-              && builder.add(input_file_header.reserved1)
-              && builder.add(input_file_header.reserved2)
-              && builder.add(input_file_header.snaplen)
-              && builder.add(input_file_header.linktype))) {
-          diagnostic::error("failed to emit PCAP file header")
-            .note("from `pcap`")
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        co_yield builder.finish();
+      } else {
+        TENZIR_DEBUG("detected identical byte order in file and host");
       }
+      if (emit_file_header)
+        co_yield make_file_header_table_slice(input_file_header);
       // After the header, the remainder of the file are typically Packet
       // Records, consisting of a 16-byte header and variable-length payload.
       // However, our parser is a bit smarter and also supports concatenated
@@ -197,6 +193,7 @@ public:
         packet_record packet;
         // We first try to parse a packet header first.
         while (true) {
+          TENZIR_DEBUG("reading packet header");
           auto length = sizeof(packet_header);
           auto bytes = read_n(length);
           if (!bytes) {
@@ -220,27 +217,45 @@ public:
             co_return;
           }
           std::memcpy(&packet.header, bytes->data(), sizeof(packet_header));
-          // Is this actually a file header?
           if (is_file_header(packet.header)) {
-            TENZIR_VERBOSE("detected new PCAP file header");
+            TENZIR_DEBUG("detected new PCAP file header");
             std::memcpy(&input_file_header, &packet.header,
                         sizeof(packet_header));
             // Read the remaining two fields of the packet header.
             while (true) {
-              auto bytes = read_n(2 * sizeof(uint32_t));
+              constexpr auto length
+                = sizeof(file_header::snaplen) + sizeof(file_header::linktype);
+              auto bytes = read_n(length);
               if (!bytes) {
                 co_yield {};
                 continue;
               }
-              std::memcpy(&input_file_header.snaplen, bytes->data(),
-                          bytes->size());
+              if (bytes->size() != length) {
+                diagnostic::error("failed to read remaining PCAP file header")
+                  .hint("got {} bytes but needed {}", bytes->size(), length)
+                  .emit(ctrl.diagnostics());
+                co_return;
+              }
+              TENZIR_ASSERT(sizeof(file_header) - sizeof(packet_header)
+                            == bytes->size());
+              std::memcpy(&input_file_header + sizeof(packet_header),
+                          bytes->data(), bytes->size());
               break;
             }
-            // Jump back to the while loop that reads pairs of packet header and
-            // packet data.
+            need_swap = need_byte_swap(input_file_header.magic_number);
+            TENZIR_ASSERT(need_swap); // checked in is_file_header
+            if (*need_swap) {
+              TENZIR_VERBOSE("detected different byte order in file and host");
+              input_file_header = byteswap(input_file_header);
+            } else {
+              TENZIR_DEBUG("detected identical byte order in file and host");
+            }
+            if (emit_file_header)
+              co_yield make_file_header_table_slice(input_file_header);
+            //  Jump back to the while loop that reads pairs of packet header
+            //  and packet data.
             continue;
           }
-
           // Okay, we got a packet header, let's proceed.
           if (*need_swap)
             packet.header = byteswap(packet.header);
@@ -248,6 +263,8 @@ public:
         }
         // Read the packet.
         while (true) {
+          TENZIR_DEBUG("reading packet data of size {}",
+                       packet.header.captured_packet_length);
           auto length = packet.header.captured_packet_length;
           auto bytes = read_n(length);
           if (!bytes) {
