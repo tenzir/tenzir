@@ -264,7 +264,7 @@ public:
         // Read the packet.
         while (true) {
           TENZIR_DEBUG("reading packet data of size {}",
-                       packet.header.captured_packet_length);
+                       uint32_t{packet.header.captured_packet_length});
           auto length = packet.header.captured_packet_length;
           auto bytes = read_n(length);
           if (!bytes) {
