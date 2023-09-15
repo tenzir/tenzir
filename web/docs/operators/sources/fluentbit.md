@@ -1,12 +1,12 @@
-# fluentbit
+# fluent-bit
 
-The `fluentbit` source receives events from [Fluent
+The `fluent-bit` source receives events from [Fluent
 Bit](https://docs.fluentbit.io/).
 
 ## Synopsis
 
 ```
-fluentbit [-X|--set <key=value>,...] <plugin> [<key=value>...]
+fluent-bit [-X|--set <key=value>,...] <plugin> [<key=value>...]
 ```
 
 ## Description
@@ -16,17 +16,17 @@ making it possible to acquire events from a Fluent Bit [input plugin][inputs]
 
 [inputs]: https://docs.fluentbit.io/manual/pipeline/inputs
 
-Syntactically, the `fluentbit` operator behaves similar to an invocation of the
+Syntactically, the `fluent-bit` operator behaves similar to an invocation of the
 `fluent-bit` command line utility. For example, the invocation
 
 ```bash
 fluent-bit -o plugin -p key1=value1 -p key2=value2 -p ...
 ```
 
-translates to our `fluentbit` operator as follows:
+translates to our `fluent-bit` operator as follows:
 
 ```bash
-fluentbit plugin key1=value1 key2=value2 ...
+fluent-bit plugin key1=value1 key2=value2 ...
 ```
 
 ### `-X|--set <key=value>`
@@ -39,8 +39,8 @@ Fluent Bit according to your needs.
 
 [service-properties]: https://docs.fluentbit.io/manual/administration/configuring-fluent-bit/classic-mode/configuration-file#config_section
 
-We recommand factoring these options into the plugin-specific `fluentbit.yaml`
-so that they are indpendent of the `fluentbit` operator arguments.
+We recommand factoring these options into the plugin-specific `fluent-bit.yaml`
+so that they are indpendent of the `fluent-bit` operator arguments.
 
 ### `<plugin>`
 
@@ -64,7 +64,7 @@ Ingest [OpenTelemetry](https://docs.fluentbit.io/manual/pipeline/inputs/slack)
 logs, metrics, and traces:
 
 ```
-fluentbit opentelemetry
+fluent-bit opentelemetry
 ```
 
 You can then send JSON-encoded log data to a freshly created API endpoint:
@@ -81,7 +81,7 @@ Handle [Splunk](https://docs.fluentbit.io/manual/pipeline/inputs/splunk) HTTP
 HEC requests:
 
 ```
-fluentbit splunk port=8088
+fluent-bit splunk port=8088
 ```
 
 Handle [ElasticSearch &
@@ -89,5 +89,5 @@ OpenSearch](https://docs.fluentbit.io/manual/pipeline/outputs/elasticsearch)
 Bulk API requests or ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat):
 
 ```
-fluentbit es port=9200
+fluent-bit es port=9200
 ```

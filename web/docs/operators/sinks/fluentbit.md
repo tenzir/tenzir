@@ -1,31 +1,31 @@
-# fluentbit
+# fluent-bit
 
-The `fluentbit` sink sends events to [Fluent Bit](https://docs.fluentbit.io/).
+The `fluent-bit` sink sends events to [Fluent Bit](https://docs.fluentbit.io/).
 
 ## Synopsis
 
 ```
-fluentbit [-X|--set <key=value>,...] <plugin> [<key=value>...]
+fluent-bit [-X|--set <key=value>,...] <plugin> [<key=value>...]
 ```
 
 ## Description
 
-The `fluentbit` sink operator acts as a bridge into the Fluent Bit ecosystem,
+The `fluent-bit` sink operator acts as a bridge into the Fluent Bit ecosystem,
 making it possible to process events with a Fluent Bit [output plugin][outputs]
 
 [outputs]: https://docs.fluentbit.io/manual/pipeline/output
 
-Syntactically, the `fluentbit` operator behaves similar to an invocation of the
+Syntactically, the `fluent-bit` operator behaves similar to an invocation of the
 `fluent-bit` command line utility. For example, the invocation
 
 ```bash
 fluent-bit -o plugin -p key1=value1 -p key2=value2 -p ...
 ```
 
-translates to our `fluentbit` operator as follows:
+translates to our `fluent-bit` operator as follows:
 
 ```bash
-fluentbit plugin key1=value1 key2=value2 ...
+fluent-bit plugin key1=value1 key2=value2 ...
 ```
 
 ### `-X|--set <key=value>`
@@ -38,8 +38,8 @@ Fluent Bit according to your needs.
 
 [service-properties]: https://docs.fluentbit.io/manual/administration/configuring-fluent-bit/classic-mode/configuration-file#config_section
 
-We recommand factoring these options into the plugin-specific `fluentbit.yaml`
-so that they are indpendent of the `fluentbit` operator arguments.
+We recommand factoring these options into the plugin-specific `fluent-bit.yaml`
+so that they are indpendent of the `fluent-bit` operator arguments.
 
 ### `<plugin>`
 
@@ -62,17 +62,19 @@ multi-option `-p key=value` of the `fluent-bit` executable.
 Send events to [Slack](https://docs.fluentbit.io/manual/pipeline/outputs/slack):
 
 ```
-fluentbit slack webhook=https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX
+fluent-bit slack webhook=https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-Send events to [Splunk](https://docs.fluentbit.io/manual/pipeline/outputs/splunk):
+Send events to
+[Splunk](https://docs.fluentbit.io/manual/pipeline/outputs/splunk):
 
 ```
-fluentbit splunk host=127.0.0.1 port=8088 tls=on tls.verify=off
+fluent-bit splunk host=127.0.0.1 port=8088 tls=on tls.verify=off
 ```
 
-Send events to [ElasticSearch](https://docs.fluentbit.io/manual/pipeline/outputs/elasticsearch):
+Send events to
+[ElasticSearch](https://docs.fluentbit.io/manual/pipeline/outputs/elasticsearch):
 
 ```
-fluentbit es host=192.168.2.3 port=9200 index=my_index type=my_type
+fluent-bit es host=192.168.2.3 port=9200 index=my_index type=my_type
 ```
