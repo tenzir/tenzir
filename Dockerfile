@@ -111,6 +111,10 @@ RUN apt-get update && \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
     apt-get -y --no-install-recommends install libarrow1300 libparquet1300 && \
+    wget -O - 'https://packages.fluentbit.io/fluentbit.key' | gpg --dearmor | tee /usr/share/keyrings/fluentbit.gpg >/dev/null && \
+    echo "deb [signed-by=/usr/share/keyrings/fluentbit.gpg] https://packages.fluentbit.io/debian/$(lsb_release --codename --short) $(lsb_release --codename --short) main" | tee /etc/apt/sources.list.d/fluentbit.list && \
+    apt-get update && \
+    apt-get -y install fluent-bit && \
     rm -rf /var/lib/apt/lists/*
 
 USER tenzir:tenzir
