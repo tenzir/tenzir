@@ -248,7 +248,7 @@ public:
     return caf::none;
   }
 
-  ~plugin() override {
+  virtual auto deinitialize() -> void override {
     auto finalized = arrow::fs::FinalizeS3();
     if (not finalized.ok()) {
       TENZIR_ERROR("failed to close Arrow S3 filesystem: {}",

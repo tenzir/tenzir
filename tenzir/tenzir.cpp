@@ -107,6 +107,17 @@ int main(int argc, char** argv) {
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : *loaded_plugin_paths)
     TENZIR_VERBOSE("loaded plugin: {}", file);
+  // Make sure to deinitialize all plugins at the end.
+  auto plugin_guard = caf::detail::make_scope_guard([]() noexcept {
+    // Ideally, we would not have this deinitialize function at all and could
+    // just call `plugins::get_mutable().clear()`, but that has a race condition
+    // in that some detached actors may still be alive that are owned by
+    // plugins, which then often dereference a nullptr through the global actor
+    // system config.
+    for (auto& plugin : plugins::get_mutable()) {
+      plugin->deinitialize();
+    }
+  });
   // Initialize successfully loaded plugins.
   if (auto err = plugins::initialize(cfg)) {
     TENZIR_ERROR("failed to initialize plugins: {}", err);
@@ -227,8 +238,6 @@ int main(int argc, char** argv) {
     TENZIR_ERROR("failed to cancel signal monitoring thread");
   signal_monitoring_thread.join();
   pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
-  // Deinitialize all plugins. Needed for timely S3 deinitialization.
-  plugins::get_mutable().clear();
   if (run_error) {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
