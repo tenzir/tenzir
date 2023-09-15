@@ -18,6 +18,7 @@
 #include <tenzir/mac.hpp>
 #include <tenzir/plugin.hpp>
 
+#include <arrow/record_batch.h>
 #include <netinet/in.h>
 
 namespace tenzir::plugins::decapsulate {
@@ -370,7 +371,21 @@ public:
         if (auto diag = parse(row, raw_frame, inferred_type))
           ctrl.diagnostics().emit(std::move(*diag));
       }
-      co_yield builder.finish();
+      // Add back the untouched data column at the end before yielding.
+      auto transformation = indexed_transformation{
+        .index = {slice.columns() - 1},
+        .fun = [&](struct record_type::field in_field,
+                   std::shared_ptr<arrow::Array> in_array)
+          -> indexed_transformation::result_type {
+          return {
+            {std::move(in_field), std::move(in_array)},
+            // {{"data", string_type{}}, std::move(data_array)},
+            {{"pcap", slice.schema()},
+             to_record_batch(slice)->ToStructArray().ValueOrDie()},
+          };
+        },
+      };
+      co_yield transform_columns(builder.finish(), {std::move(transformation)});
     }
   }
 
