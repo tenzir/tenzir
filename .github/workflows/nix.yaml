@@ -67,14 +67,14 @@ jobs:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Login to GitHub Container Registry
         if: steps.cfg.outputs.needs-ghcr == 'true'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: tenzir-bot
           password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
       - name: Login to Docker Hub
         if: steps.cfg.outputs.needs-docker-hub == 'true'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
