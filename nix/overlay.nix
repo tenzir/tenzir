@@ -10,19 +10,31 @@
     then final.llvmPackages_16.stdenv
     else final.stdenv;
 in {
+  google-cloud-cpp =
+    if !isStatic
+    then prev.google-cloud-cpp
+    else
+    prev.google-cloud-cpp.overrideAttrs (orig: {
+        buildInputs = orig.buildInputs ++ [ final.gbenchmark ];
+        propagatedNativeBuildInputs = (orig.propagatedNativeBuildInputs or []) ++ [prev.buildPackages.pkg-config];
+        patches = (orig.patches or []) ++ [
+          ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
+        ];
+      });
   arrow-cpp =
     if !isStatic
     then prev.arrow-cpp
     else
       (prev.arrow-cpp.override {
         enableShared = false;
-        enableS3 = true;
-        enableGcs = false;
+        google-cloud-cpp = final.google-cloud-cpp.override {
+          apis = [ "storage" ];
+        };
       })
-      .overrideAttrs (old: {
-        buildInputs = old.buildInputs ++ [final.sqlite];
+      .overrideAttrs (orig: {
+        buildInputs = orig.buildInputs ++ [final.sqlite];
         cmakeFlags =
-          old.cmakeFlags
+          orig.cmakeFlags
           ++ [
             # Needed for correct dependency resolution, should be the default...
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"

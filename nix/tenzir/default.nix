@@ -57,6 +57,7 @@
     extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
     bundledPlugins =
       [
+        "plugins/gcs"
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"

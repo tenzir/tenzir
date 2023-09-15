@@ -809,6 +809,9 @@ jobs:
           - name: Compaction
             target: compaction
             path: contrib/tenzir-plugins/compaction
+          - name: GCS
+            target: gcs
+            path: plugins/gcs
           # - name: Inventory
           #   target: inventory
           #   path: contrib/tenzir-plugins/inventory
@@ -847,6 +850,7 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
           - {setup: {os: macos-latest}, plugin: {name: Compaction}}
           - {setup: {os: macos-latest}, plugin: {name: Fleet}}
+          - {setup: {os: macos-latest}, plugin: {name: GCS}}
           - {setup: {os: macos-latest}, plugin: {name: Inventory}}
           - {setup: {os: macos-latest}, plugin: {name: Matcher}}
           - {setup: {os: macos-latest}, plugin: {name: Netflow}}

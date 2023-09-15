@@ -1,0 +1,173 @@
+From 086b64a78ff566788210bbdf9bc703fa296af134 Mon Sep 17 00:00:00 2001
+From: Tobias Mayer <tobim@fastmail.fm>
+Date: Wed, 13 Sep 2023 13:24:17 +0200
+Subject: [PATCH] Use pkg-config to find CURL
+
+---
+ cmake/FindCurlWithTargets.cmake            | 77 +++-------------------
+ google/cloud/config-rest.cmake.in          |  2 +-
+ google/cloud/google_cloud_cpp_common.cmake |  6 ++
+ google/cloud/oauth2/config.cmake.in        |  2 +-
+ google/cloud/storage/config-grpc.cmake.in  |  2 +-
+ google/cloud/storage/config.cmake.in       |  2 +-
+ 6 files changed, 20 insertions(+), 71 deletions(-)
+
+diff --git a/cmake/FindCurlWithTargets.cmake b/cmake/FindCurlWithTargets.cmake
+index 445105e202..ade9f391bd 100644
+--- a/cmake/FindCurlWithTargets.cmake
++++ b/cmake/FindCurlWithTargets.cmake
+@@ -14,72 +14,15 @@
+ # limitations under the License.
+ # ~~~
+ 
+-# gRPC always requires thread support.
+-find_package(Threads REQUIRED)
+-
+-# The `FindCurl` CMake module does not handle static libraries correctly, and
+-# does not produce consistent names for the CURL targets. This file first tries
+-# to load the CURL config files, and only if not found fallsback to the FindCurl
+-# module. In the latter case, it adjusts the targets to work consistently across
+-# CMake versions and to link the right dependencies when compiled statically.
+-
+-find_package(CURL CONFIG QUIET)
+-if (CURL_FOUND)
+-    message(STATUS "CURL found using via CONFIG module")
+-else ()
+-    # As searching for libcurl using CONFIG mode failed, try again using the
+-    # CMake config module. We will need to fix up a few things if the module is
+-    # found this way.
+-    find_package(CURL REQUIRED)
+-    # Before CMake 3.12 the module does not define a target, compare:
+-    # https://cmake.org/cmake/help/v3.12/module/FindCURL.html vs
+-    # https://cmake.org/cmake/help/v3.11/module/FindCURL.html
+-    #
+-    # Manually define the target if it does not exist so the rest of the code
+-    # does not have to deal with these details:
+-    if (NOT TARGET CURL::libcurl)
+-        add_library(CURL::libcurl UNKNOWN IMPORTED)
+-        set_property(
+-            TARGET CURL::libcurl
+-            APPEND
+-            PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${CURL_INCLUDE_DIR}")
+-        set_property(
+-            TARGET CURL::libcurl
+-            APPEND
+-            PROPERTY IMPORTED_LOCATION "${CURL_LIBRARY}")
+-    endif ()
+-    # If the library is static, we need to explicitly link its dependencies. The
+-    # CMake module does not do so. However, we should not do so for shared
+-    # libraries, because the version of OpenSSL (for example) found by
+-    # find_package() may be newer than the version linked against libcurl.
+-    if ("${CURL_LIBRARY}" MATCHES "${CMAKE_STATIC_LIBRARY_SUFFIX}$")
+-        find_package(OpenSSL REQUIRED)
+-        find_package(ZLIB REQUIRED)
+-        set_property(
+-            TARGET CURL::libcurl
+-            APPEND
+-            PROPERTY INTERFACE_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto
+-                     ZLIB::ZLIB)
+-        message(STATUS "CURL linkage will be static")
+-        # On WIN32 and APPLE there are even more libraries needed for static
+-        # linking.
+-        if (WIN32)
+-            set_property(
+-                TARGET CURL::libcurl
+-                APPEND
+-                PROPERTY INTERFACE_LINK_LIBRARIES crypt32 wsock32 ws2_32)
+-            set_property(
+-                TARGET CURL::libcurl
+-                APPEND
+-                PROPERTY INTERFACE_COMPILE_DEFINITIONS "CURL_STATICLIB")
+-        endif ()
+-        if (APPLE)
+-            set_property(
+-                TARGET CURL::libcurl
+-                APPEND
+-                PROPERTY INTERFACE_LINK_LIBRARIES ldap)
+-        endif ()
++if (NOT TARGET CURL::libcurl)
++    find_package(CURL CONFIG QUIET)
++    if (CURL_FOUND)
++        message(STATUS "CURL found using via CONFIG module")
+     else ()
+-        message(STATUS "CURL linkage will be non-static")
++        # The FindCURL module from CMake doesn't expose the link dependencies of libcurl.a
++        # correctly, so we use pkg-config instead.
++        find_package(PkgConfig REQUIRED QUIET)
++        pkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)
++        add_library(CURL::libcurl ALIAS PkgConfig::PC_CURL)
+     endif ()
+-endif (CURL_FOUND)
++endif ()
+diff --git a/google/cloud/config-rest.cmake.in b/google/cloud/config-rest.cmake.in
+index 0e712e688f..cf24b78a82 100644
+--- a/google/cloud/config-rest.cmake.in
++++ b/google/cloud/config-rest.cmake.in
+@@ -15,7 +15,7 @@
+ include(CMakeFindDependencyMacro)
+ find_dependency(google_cloud_cpp_common)
+ find_dependency(absl)
+-find_dependency(CURL)
++include("${CMAKE_CURRENT_LIST_DIR}/../FindCurlWithTargets.cmake")
+ find_dependency(nlohmann_json)
+ find_dependency(OpenSSL)
+ 
+diff --git a/google/cloud/google_cloud_cpp_common.cmake b/google/cloud/google_cloud_cpp_common.cmake
+index c3e366b8ec..f9c47c3225 100644
+--- a/google/cloud/google_cloud_cpp_common.cmake
++++ b/google/cloud/google_cloud_cpp_common.cmake
+@@ -260,6 +260,12 @@ install(
+     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/google_cloud_cpp_common"
+     COMPONENT google_cloud_cpp_development)
+ 
++install(
++    FILES
++        "${CMAKE_SOURCE_DIR}/cmake/FindCurlWithTargets.cmake"
++    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake"
++    COMPONENT google_cloud_cpp_development)
++
+ # Create a header-only library for the mocks. We use a CMake `INTERFACE` library
+ # for these, a regular library would not work on macOS (where the library needs
+ # at least one .o file).
+diff --git a/google/cloud/oauth2/config.cmake.in b/google/cloud/oauth2/config.cmake.in
+index 0bb410af13..5d7c4da149 100644
+--- a/google/cloud/oauth2/config.cmake.in
++++ b/google/cloud/oauth2/config.cmake.in
+@@ -16,7 +16,7 @@ include(CMakeFindDependencyMacro)
+ find_dependency(google_cloud_cpp_common)
+ find_dependency(google_cloud_cpp_rest_internal)
+ find_dependency(absl)
+-find_dependency(CURL)
++include("${CMAKE_CURRENT_LIST_DIR}/../FindCurlWithTargets.cmake")
+ find_dependency(nlohmann_json)
+ find_dependency(OpenSSL)
+ 
+diff --git a/google/cloud/storage/config-grpc.cmake.in b/google/cloud/storage/config-grpc.cmake.in
+index 5f266d7278..399e7edf87 100644
+--- a/google/cloud/storage/config-grpc.cmake.in
++++ b/google/cloud/storage/config-grpc.cmake.in
+@@ -18,7 +18,7 @@ find_dependency(google_cloud_cpp_grpc_utils)
+ find_dependency(google_cloud_cpp_rest_internal)
+ find_dependency(google_cloud_cpp_common)
+ find_dependency(absl)
+-find_dependency(CURL)
++include("${CMAKE_CURRENT_LIST_DIR}/../FindCurlWithTargets.cmake")
+ find_dependency(Crc32c)
+ find_dependency(nlohmann_json)
+ find_dependency(OpenSSL)
+diff --git a/google/cloud/storage/config.cmake.in b/google/cloud/storage/config.cmake.in
+index fb5a1330cd..f7175be9b0 100644
+--- a/google/cloud/storage/config.cmake.in
++++ b/google/cloud/storage/config.cmake.in
+@@ -16,7 +16,7 @@ include(CMakeFindDependencyMacro)
+ find_dependency(google_cloud_cpp_rest_internal)
+ find_dependency(google_cloud_cpp_common)
+ find_dependency(absl)
+-find_dependency(CURL)
++include("${CMAKE_CURRENT_LIST_DIR}/../FindCurlWithTargets.cmake")
+ find_dependency(Crc32c)
+ find_dependency(nlohmann_json)
+ find_dependency(OpenSSL)
+-- 
+2.41.0
+
