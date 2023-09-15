@@ -1061,6 +1061,10 @@ tests:
       - command: exec 'read pcap -e | write pcap'
         input: data/pcap/example.pcap.gz
         transformation: md5sum | cut -f 1 -d ' '
+      # Concatenate PCAPs and process them. The test ensures that we have the
+      # right sequencing of file header and packet header events.
+      - command: exec 'shell "cat @./data/pcap/vlan-*.pcap" | read pcap -e | put schema=#schema | write json -c'
+      - command: exec 'shell "cat @./data/pcap/vlan-*.pcap" | read pcap -e | write pcap | discard'
 
   Compression:
     tags: [pipelines, compression]
