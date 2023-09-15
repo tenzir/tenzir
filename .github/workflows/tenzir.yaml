@@ -356,7 +356,7 @@ jobs:
             $(git -C contrib/tenzir-plugins rev-parse HEAD) \
             $(git -C contrib/tenzir-plugins rev-parse origin/main)
       - name: Install Nix
-        uses: cachix/install-nix-action@v22
+        uses: cachix/install-nix-action@v23
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Verify Nix sources are synchronized
