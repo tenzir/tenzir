@@ -140,3 +140,33 @@ as follows:
 ```
 from file /tmp/test.txt read lines --skip-empty
 ```
+
+## Concatenating PCAP files
+
+The [`pcap`](/formats/pcap) parser can now read concatenated PCAP files,
+allowing you to easily process large amounts of trace files. This comes
+especially handy on the command line:
+
+```bash
+cat *.pcap | tenzir 'read pcap'
+```
+
+The [`nic`](/connectors/nic) loader has a new flag `--emit-file-headers` that
+prepends a PCAP file header for every batch of bytes that it produces, yielding
+a stream of concatenated PCAP files. This gives rise to creative use cases
+involving packet shipping. For example, to ship blocks of packets as "micro
+traces" via 0mq, you could do:
+
+```
+load nic eth0
+| save zmq
+```
+
+This creates 0mq PUB socket where subscribes can come and go. Each 0mq message
+is a self-contained PCAP trace, which avoids painful resynchronization logic.
+You can consume this feed with a remote subscriber:
+
+```
+load zmq
+| read pcap
+```
