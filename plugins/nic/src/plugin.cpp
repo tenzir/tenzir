@@ -41,11 +41,11 @@ struct loader_args {
 
 auto make_file_header(int snaplen, int linktype) -> pcap::file_header {
   return {
-#ifdef PCAP_TSTAMP_PRECISION_NANO
-    .magic_number = pcap::magic_number_2,
-#else
+    // Timestamps have microsecond resolution when using pcap_open_live(). If we
+    // want nanosecond resolution, we must stop using pcap_open_live() and
+    // replace it with pcap_create() and pcap_activate(). See
+    // https://stackoverflow.com/q/28310922/1170277 for details.
     .magic_number = pcap::magic_number_1,
-#endif
     .major_version = 2,
     .minor_version = 4,
     .reserved1 = 0,
