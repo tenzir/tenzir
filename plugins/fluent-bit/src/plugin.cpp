@@ -379,7 +379,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "fluentbit";
+    return "fluent-bit";
   }
 
   auto detached() const -> bool override {
@@ -425,7 +425,7 @@ public:
     auto args = operator_args{};
     auto arg = p.accept_shell_arg();
     if (arg == std::nullopt)
-      diagnostic::error("missing fluentbit plugin").throw_();
+      diagnostic::error("missing fluent-bit plugin").throw_();
     auto have_options = false;
     if (arg->inner == "-X" || arg->inner == "--set") {
       have_options = true;
@@ -444,7 +444,7 @@ public:
     if (have_options) {
       arg = p.accept_shell_arg();
       if (arg == std::nullopt)
-        diagnostic::error("missing fluentbit plugin").throw_();
+        diagnostic::error("missing fluent-bit plugin").throw_();
     }
     args.plugin = std::move(arg->inner);
     while (true) {
@@ -463,7 +463,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "fluentbit";
+    return "fluent-bit";
   }
 
 private:
