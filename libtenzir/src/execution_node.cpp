@@ -809,7 +809,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // consider this the case when neither the input nor the output have
     // stalled, i.e., when there is more input to be consumed and room for
     // output to be produced or further output desired.
-    if (not input_stalled and not output_stalled) {
+    if (not input_stalled or not output_stalled) {
       schedule_run();
     }
     // Adjust performance counters for this run.

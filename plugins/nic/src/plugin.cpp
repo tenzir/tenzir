@@ -28,13 +28,31 @@ namespace {
 struct loader_args {
   located<std::string> iface;
   std::optional<located<uint32_t>> snaplen;
+  std::optional<location> emit_file_headers;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("loader_args")
-      .fields(f.field("iface", x.iface), f.field("snaplen", x.snaplen));
+      .fields(f.field("iface", x.iface), f.field("snaplen", x.snaplen),
+              f.field("emit_file_headers", x.emit_file_headers));
   }
+};
+
+auto make_file_header(int snaplen, int linktype) -> pcap::file_header {
+  return {
+    // Timestamps have microsecond resolution when using pcap_open_live(). If we
+    // want nanosecond resolution, we must stop using pcap_open_live() and
+    // replace it with pcap_create() and pcap_activate(). See
+    // https://stackoverflow.com/q/28310922/1170277 for details.
+    .magic_number = pcap::magic_number_1,
+    .major_version = 2,
+    .minor_version = 4,
+    .reserved1 = 0,
+    .reserved2 = 0,
+    .snaplen = detail::narrow_cast<uint32_t>(snaplen),
+    .linktype = detail::narrow_cast<uint32_t>(linktype),
+  };
 };
 
 class nic_loader final : public plugin_loader {
@@ -50,8 +68,8 @@ public:
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
     TENZIR_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
                  snaplen);
-    auto make = [](auto& ctrl, auto iface,
-                   auto snaplen) mutable -> generator<chunk_ptr> {
+    auto make = [](auto& ctrl, auto iface, auto snaplen,
+                   bool emit_file_headers) mutable -> generator<chunk_ptr> {
       auto put_iface_in_promiscuous_mode = 1;
       // The packet buffer timeout functions much like a read timeout: It
       // describes the number of milliseconds to wait at most until returning
@@ -75,6 +93,8 @@ public:
       auto pcap = std::shared_ptr<pcap_t>{ptr, [](pcap_t* p) {
                                             pcap_close(p);
                                           }};
+      auto linktype = pcap_datalink(pcap.get());
+      TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
       // We yield once initially to signal that the operator successfully
       // started.
       co_yield {};
@@ -118,28 +138,21 @@ public:
             .emit(ctrl.diagnostics());
           break;
         }
-        // Emit a PCAP file header before the first packet. This results in a
-        // packet stream that looks like a standard PCAP file downstream,
-        // allowing users to use the `pcap` format to parse the byte stream.
-        if (num_packets == 0) {
+        // Emit a PCAP file header, either with every chunk or once initially as
+        // separate chunk. This results in a packet stream that looks like a
+        // standard PCAP file downstream, allowing users to use the `pcap`
+        // format to parse the byte stream.
+        if (emit_file_headers) {
+          if (buffer.empty()) {
+            auto header = make_file_header(snaplen, linktype);
+            auto bytes = as_bytes(header);
+            buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+          }
+        } else if (num_packets == 0) {
           auto linktype = pcap_datalink(pcap.get());
           TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
-          auto header = pcap::file_header{
-#ifdef PCAP_TSTAMP_PRECISION_NANO
-            .magic_number = pcap::magic_number_2,
-#else
-            .magic_number = pcap::magic_number_1,
-#endif
-            .major_version = 2,
-            .minor_version = 4,
-            .reserved1 = 0,
-            .reserved2 = 0,
-            .snaplen = snaplen,
-            .linktype = detail::narrow_cast<uint32_t>(linktype),
-          };
-          const auto* ptr = reinterpret_cast<const std::byte*>(&header);
-          auto bytes = std::span<const std::byte>{ptr, sizeof(header)};
-          co_yield chunk::copy(bytes);
+          auto header = make_file_header(snaplen, linktype);
+          co_yield chunk::copy(as_bytes(header));
         }
         auto header = pcap::packet_header{
           .timestamp = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_sec),
@@ -160,7 +173,7 @@ public:
         ++num_packets;
       }
     };
-    return make(ctrl, args_.iface.inner, snaplen);
+    return make(ctrl, args_.iface.inner, snaplen, !!args_.emit_file_headers);
   }
 
   auto to_string() const -> std::string override {
@@ -202,10 +215,11 @@ public:
     -> std::unique_ptr<plugin_loader> override {
     auto parser = argument_parser{
       name(),
-      fmt::format("https://docs.tenzir.com/docs/next/connectors/{}", name())};
+      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
     auto args = loader_args{};
     parser.add(args.iface, "<iface>");
     parser.add("-s,--snaplen", args.snaplen, "<count>");
+    parser.add("-e,--emit-file-headers", args.emit_file_headers);
     parser.parse(p);
     return std::make_unique<nic_loader>(std::move(args));
   }
