@@ -60,6 +60,7 @@
     bundledPlugins =
       [
         "plugins/gcs"
+        "plugins/fluent-bit"
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"

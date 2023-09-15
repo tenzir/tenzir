@@ -27,6 +27,5 @@ endif ()
 
 get_filename_component(FLUENT_BIT_LOCATION ${FLUENT_BIT_LIB} PATH)
 get_filename_component(FLUENT_BIT_LOCATION ${FLUENT_BIT_LOCATION} PATH)
-get_filename_component(FLUENT_BIT_LOCATION ${FLUENT_BIT_LOCATION} PATH)
 dependency_summary("fluent-bit" ${FLUENT_BIT_LOCATION} "Dependencies")
 target_link_libraries(fluent-bit PUBLIC fluentbit::fluentbit)
