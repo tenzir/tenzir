@@ -60,6 +60,14 @@ restinio::http_method_id_t to_restinio_method(tenzir::http_method method) {
       return restinio::http_method_get();
     case tenzir::http_method::post:
       return restinio::http_method_post();
+    case tenzir::http_method::put:
+      return restinio::http_method_put();
+    case tenzir::http_method::delete_:
+      return restinio::http_method_delete();
+    case tenzir::http_method::head:
+      return restinio::http_method_head();
+    case tenzir::http_method::options:
+      return restinio::http_method_options();
   }
   // Unreachable.
   return restinio::http_method_get();

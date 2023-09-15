@@ -31,6 +31,9 @@ std::string method_to_string(const tenzir::http_method method) {
     case tenzir::http_method::post:
       result = "post";
       break;
+    default:
+      result = "not handled in unit tests; please extend this switch";
+      break;
   }
   return result;
 }

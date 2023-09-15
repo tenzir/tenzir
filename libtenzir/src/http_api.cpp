@@ -38,6 +38,38 @@ auto to_json_oneline(const T& obj) -> std::string {
 
 namespace tenzir {
 
+// TODO: Consider replacing with magic_enum
+auto http_method_from_string(const std::string& str)
+  -> caf::expected<http_method> {
+  static constexpr std::array<std::pair<http_method, const char*>, 6> method_map
+    = {{
+      {http_method::get, "GET"},
+      {http_method::post, "POST"},
+      {http_method::put, "PUT"},
+      {http_method::head, "HEAD"},
+      {http_method::options, "OPTIONS"},
+      {http_method::delete_, "DELETE"},
+    }};
+  constexpr int num_methods = [](http_method m) {
+    // Use a switch-statement to force a compiler error if we forget
+    // to add a new enum value.
+    switch (m) {
+      case http_method::get:
+      case http_method::post:
+      case http_method::put:
+      case http_method::head:
+      case http_method::options:
+      case http_method::delete_:
+        return 6;
+    }
+  }(http_method::get);
+  static_assert(method_map.size() == num_methods);
+  for (auto const& [method, method_string] : method_map)
+    if (str == method_string)
+      return method;
+  return caf::make_error(ec::invalid_argument, "unknown method");
+}
+
 auto rest_endpoint::canonical_path() const -> std::string {
   // eg. "POST /query/:id/next (v0)"
   return fmt::format("{} {} ({})", method, path, version);
