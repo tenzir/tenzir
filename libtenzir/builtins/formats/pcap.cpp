@@ -113,13 +113,13 @@ auto make_file_header_table_slice(const file_header& header) -> table_slice {
 }
 
 struct parser_args {
-  std::optional<location> emit_file_header;
+  std::optional<location> emit_file_headers;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
     return f.object(x)
       .pretty_name("parser_args")
-      .fields(f.field("emit-file-header", x.emit_file_header));
+      .fields(f.field("emit_file_headers", x.emit_file_headers));
   }
 };
 
@@ -138,7 +138,7 @@ public:
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
     auto make = [](auto& ctrl, generator<chunk_ptr> input,
-                   bool emit_file_header) -> generator<table_slice> {
+                   bool emit_file_headers) -> generator<table_slice> {
       // A PCAP file starts with a 24-byte header.
       auto input_file_header = file_header{};
       auto read_n = make_byte_reader(std::move(input));
@@ -174,7 +174,7 @@ public:
       } else {
         TENZIR_DEBUG("detected identical byte order in file and host");
       }
-      if (emit_file_header)
+      if (emit_file_headers)
         co_yield make_file_header_table_slice(input_file_header);
       // After the header, the remainder of the file are typically Packet
       // Records, consisting of a 16-byte header and variable-length payload.
@@ -259,7 +259,7 @@ public:
               last_finish = now;
               co_yield builder.finish();
             }
-            if (emit_file_header)
+            if (emit_file_headers)
               co_yield make_file_header_table_slice(input_file_header);
             //  Jump back to the while loop that reads pairs of packet header
             //  and packet data.
@@ -325,7 +325,7 @@ public:
         co_yield builder.finish();
       }
     };
-    return make(ctrl, std::move(input), !!args_.emit_file_header);
+    return make(ctrl, std::move(input), !!args_.emit_file_headers);
   }
 
   friend auto inspect(auto& f, pcap_parser& x) -> bool {
@@ -558,10 +558,9 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/next/formats/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/docs/formats/{}", name())};
     auto args = parser_args{};
-    parser.add("-e,--emit-file-header", args.emit_file_header);
+    parser.add("-e,--emit-file-headers", args.emit_file_headers);
     parser.parse(p);
     return std::make_unique<pcap_parser>(std::move(args));
   }
@@ -569,8 +568,7 @@ public:
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/next/formats/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/docs/formats/{}", name())};
     auto args = printer_args{};
     parser.parse(p);
     return std::make_unique<pcap_printer>(std::move(args));
