@@ -8,12 +8,15 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/concept/parseable/tenzir/ip.hpp>
+#include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/data.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pcap.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/table_slice_builder.hpp>
 
 #include <pcap/pcap.h>
 
@@ -203,12 +206,112 @@ private:
   record config_;
 };
 
-class plugin final : public loader_plugin<nic_loader> {
+/// A type that represents an description of a NIC.
+auto nic_type() -> type {
+  return type{
+    "tenzir.nic",
+    record_type{
+      {"name", string_type{}},
+      {"description", string_type{}},
+      {"addresses", list_type{string_type{}}},
+      {"loopback", bool_type{}},
+      {"up", bool_type{}},
+      {"running", bool_type{}},
+      {"wireless", bool_type{}},
+      {"status",
+       record_type{
+         {"unknown", bool_type{}},
+         {"connected", bool_type{}},
+         {"disconnected", bool_type{}},
+         {"not_applicable", bool_type{}},
+       }},
+    },
+  };
+}
+
+class plugin final : public virtual loader_plugin<nic_loader>,
+                     public virtual aspect_plugin {
 public:
   auto initialize(const record& config, const record& /* global_config */)
     -> caf::error override {
     config_ = config;
     return caf::none;
+  }
+
+  auto aspect_name() const -> std::string override {
+    return "nics";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice> override {
+    auto err = std::array<char, PCAP_ERRBUF_SIZE>{};
+    pcap_if_t* devices = nullptr;
+    auto result = pcap_findalldevs(&devices, err.data());
+    auto deleter = [](pcap_if_t* ptr) {
+      pcap_freealldevs(ptr);
+    };
+    auto iface = std::shared_ptr<pcap_if_t>{devices, deleter};
+    if (result == PCAP_ERROR) {
+      diagnostic::error("failed to enumerate NICs")
+        .hint("{}", std::string_view{err.data(), err.size()})
+        .hint("pcap_findalldevs")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    TENZIR_ASSERT(result == 0);
+    auto builder = table_slice_builder{nic_type()};
+    for (const auto* ptr = iface.get(); ptr != nullptr; ptr = ptr->next) {
+      auto okay = builder.add(std::string_view{ptr->name});
+      TENZIR_ASSERT(okay);
+      if (ptr->description)
+        okay = builder.add(std::string_view{ptr->description});
+      else
+        okay = builder.add(caf::none);
+      auto addrs = list{};
+      for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next) {
+        auto* sa = addr->addr;
+        auto host = std::array<char, NI_MAXHOST>{};
+        auto result = getnameinfo(sa, sa->sa_len, host.data(), host.size(),
+                                  nullptr, 0, NI_NUMERICHOST | NI_NUMERICSERV);
+        if (result != 0) {
+          okay = builder.add(caf::none);
+          TENZIR_ASSERT(okay);
+          continue;
+        }
+        auto str = std::string{host.data()};
+        if (not str.empty())
+          addrs.emplace_back(str);
+      }
+      okay = builder.add(addrs);
+      TENZIR_ASSERT(okay);
+      auto is_set = [ptr](uint32_t x) {
+        return (ptr->flags & x) == x;
+      };
+      auto is_status = [ptr](uint32_t x) {
+        return (ptr->flags & PCAP_IF_CONNECTION_STATUS) == x;
+      };
+      okay = builder.add(is_set(PCAP_IF_LOOPBACK));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_set(PCAP_IF_UP));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_set(PCAP_IF_RUNNING));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_set(PCAP_IF_WIRELESS));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_UNKNOWN));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_CONNECTED));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_DISCONNECTED));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_NOT_APPLICABLE));
+      TENZIR_ASSERT(okay);
+    }
+    co_yield builder.finish();
   }
 
   auto parse_loader(parser_interface& p) const
