@@ -34,7 +34,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 |✓|[OpenSSL](https://www.openssl.org)||Utilities for secure networking and cryptography.|
 |✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 1.12.0|Memory-efficient cross-platform serialization library.|
 |✓|[Boost](https://www.boost.org)|>= 1.81.0|Required as a general utility library.|
-|✓|[Apache Arrow](https://arrow.apache.org)|>= 12.0.0|Required for in-memory data representation. Must be built with Compute, Zstd and Parquet enabled. For the `gcs` plugin, GCS needs to be enabled. |
+|✓|[Apache Arrow](https://arrow.apache.org)|>= 13.0.0|Required for in-memory data representation. Must be built with Compute, Filesystem, S3, Zstd and Parquet enabled. For the `gcs` plugin, GCS needs to be enabled. |
 |✓|[re2](https://github.com/google/re2)||Required for regular expressione evaluation.|
 |✓|[yaml-cpp](https://github.com/jbeder/yaml-cpp)|>= 0.6.2|Required for reading YAML configuration files.|
 |✓|[simdjson](https://github.com/simdjson/simdjson)|>= 3.1.0|Required for high-performance JSON parsing. (Bundled as submodule.)|

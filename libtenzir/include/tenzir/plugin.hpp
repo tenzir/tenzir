@@ -127,6 +127,10 @@ public:
     return {};
   }
 
+  // Deinitializes a plugin.
+  virtual auto deinitialize() -> void {
+  }
+
   /// Returns the unique name of the plugin.
   [[nodiscard]] virtual std::string name() const = 0;
 };

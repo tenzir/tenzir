@@ -1078,3 +1078,11 @@ tests:
         input: data/cef/checkpoint.log
       - command: exec 'read lines -s | summarize n=count(.) | write json -c'
         input: data/cef/checkpoint.log
+
+  # TODO: Set up Tenzir S3 stuff for Tenzir-internal read/write tests?
+  # TODO: Re-enable this test once Arrow updated their bundled AWS SDK from version 1.10.55,
+  # see: https://github.com/apache/arrow/issues/37721
+  #S3 Connector:
+    #tags: [pipelines]
+    #steps:
+      #- command: exec 'from s3 s3://sentinel-cogs/sentinel-s2-l2a-cogs/1/C/CV/2023/1/S2B_1CCV_20230101_0_L2A/tileinfo_metadata.json | write json'
