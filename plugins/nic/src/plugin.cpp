@@ -12,6 +12,7 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/data.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pcap.hpp>
@@ -213,7 +214,7 @@ auto nic_type() -> type {
     record_type{
       {"name", string_type{}},
       {"description", string_type{}},
-      {"addresses", list_type{string_type{}}},
+      {"addresses", list_type{ip_type{}}},
       {"loopback", bool_type{}},
       {"up", bool_type{}},
       {"running", bool_type{}},
@@ -272,20 +273,9 @@ public:
       else
         okay = builder.add(caf::none);
       auto addrs = list{};
-      for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next) {
-        auto* sa = addr->addr;
-        auto host = std::array<char, NI_MAXHOST>{};
-        auto result = getnameinfo(sa, sa->sa_len, host.data(), host.size(),
-                                  nullptr, 0, NI_NUMERICHOST | NI_NUMERICSERV);
-        if (result != 0) {
-          okay = builder.add(caf::none);
-          TENZIR_ASSERT(okay);
-          continue;
-        }
-        auto str = std::string{host.data()};
-        if (not str.empty())
-          addrs.emplace_back(str);
-      }
+      for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next)
+        if (auto x = to<ip>(detail::to_string(addr->addr)))
+          addrs.emplace_back(*x);
       okay = builder.add(addrs);
       TENZIR_ASSERT(okay);
       auto is_set = [ptr](uint32_t x) {
