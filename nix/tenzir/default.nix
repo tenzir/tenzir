@@ -187,26 +187,18 @@
               self.override {
                 extraPlugins = map (x: x.src) actualPlugins;
               }
-            else let
-              pluginDir = symlinkJoin {
-                name = "tenzir-plugin-dir";
-                paths = [actualPlugins];
+            else
+              symlinkJoin {
+                name = "tenzir";
+                paths = [self actualPlugins];
               };
-            in
-              runCommand "tenzir-with-plugins"
-              {
-                nativeBuildInputs = [makeWrapper];
-              } ''
-                makeWrapper ${self}/bin/tenzir-ctl $out/bin/tenzir-ctl \
-                  --set TENZIR_PLUGIN_DIRS "${pluginDir}/lib/tenzir/plugins"
-              '';
         };
 
         meta = with lib; {
           description = "Visibility Across Space and Time";
           homepage = "https://www.tenzir.com/";
           # Set mainProgram so that all editions work with `nix run`.
-          mainProgram = "tenzir-ctl";
+          mainProgram = "tenzir";
           license = licenses.bsd3;
           platforms = platforms.unix;
           maintainers = with maintainers; [tobim];
