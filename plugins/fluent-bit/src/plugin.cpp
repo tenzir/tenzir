@@ -31,9 +31,9 @@ namespace {
 // Shared state between this operator and the Fluent Bit plugins.
 // WARNING: keep in sync with the respective code bases.
 struct shared_state {
-  char* buf;
-  int len;
-  pthread_mutex_t lock;
+  char* buf{nullptr};
+  int len{0};
+  pthread_mutex_t lock{};
 };
 
 /// A map of key-value pairs of Fluent Bit plugin configuration options.
@@ -296,8 +296,8 @@ private:
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
   std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
   size_t num_stop_polls_{0}; ///< Number of polls in the destructor
-  shared_state state_{.buf = nullptr, .len = 0}; ///< Shared state with FB
-  std::string buffer_{};                         ///< Buffer for shred state
+  shared_state state_{};     ///< Shared state with FB
+  std::string buffer_{};     ///< Buffer for shred state
 };
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
@@ -318,7 +318,7 @@ public:
     }
     while (engine->running()) {
       auto result = table_slice{};
-      auto parse_fluentbit = [&result](std::string_view data) {
+      auto parse_fluentbit = [&result](std::string_view /* data */) {
         // TODO: create table slices from JSON. The alternative would be
         // switching the format to MsgPack, but this is perhaps v2 when things
         // are too slow.
