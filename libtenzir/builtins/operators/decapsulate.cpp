@@ -384,7 +384,12 @@ public:
           };
         },
       };
-      co_yield transform_columns(builder.finish(), {std::move(transformation)});
+      auto result
+        = transform_columns(builder.finish(), {std::move(transformation)});
+      auto renamed_schema
+        = type{"tenzir.packet", caf::get<record_type>(result.schema())};
+      result = cast(std::move(result), renamed_schema);
+      co_yield result;
     }
   }
 
