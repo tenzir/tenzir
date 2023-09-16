@@ -88,8 +88,6 @@
         ];
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
-          boost
-          curl
           fast_float
           libpcap
           libunwind
@@ -101,7 +99,9 @@
         ];
         propagatedBuildInputs = [
           arrow-cpp
+          boost
           caf
+          curl
           flatbuffers
           jemalloc
           robin-map
