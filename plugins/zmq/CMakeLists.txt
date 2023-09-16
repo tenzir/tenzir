@@ -20,6 +20,14 @@ TenzirRegisterPlugin(
 
 find_package(cppzmq QUIET)
 
+if (TARGET libzmq)
+  # libzmq declares its link dependencies as public, but in reality they are all
+  # private. Clearing the link libraries fixes execution when those dependencies
+  # are not installed in a "standard location", such as in a Nix managed build
+  # environment.
+  set_target_properties(libzmq PROPERTIES INTERFACE_LINK_LIBRARIES "")
+endif ()
+
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   target_link_libraries(zmq PUBLIC cppzmq-static)
 else ()
