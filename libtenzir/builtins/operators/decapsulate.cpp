@@ -379,7 +379,6 @@ public:
           -> indexed_transformation::result_type {
           return {
             {std::move(in_field), std::move(in_array)},
-            // {{"data", string_type{}}, std::move(data_array)},
             {{"pcap", slice.schema()},
              to_record_batch(slice)->ToStructArray().ValueOrDie()},
           };
