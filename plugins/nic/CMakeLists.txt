@@ -19,4 +19,5 @@ TenzirRegisterPlugin(
 # Link nic plugin against libpcap.
 find_package(PkgConfig REQUIRED QUIET)
 pkg_check_modules(pcap REQUIRED IMPORTED_TARGET libpcap)
+dependency_summary("libpcap" PkgConfig::pcap "Dependencies")
 target_link_libraries(nic PUBLIC PkgConfig::pcap)
