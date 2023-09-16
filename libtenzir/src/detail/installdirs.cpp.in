@@ -18,7 +18,6 @@ std::filesystem::path install_configdir() {
   // We are permissive for the config file paths, in case the prefix does not
   // contain the package name.
   auto tenzir = "@CMAKE_INSTALL_FULL_SYSCONFDIR@/tenzir";
-  auto tenzir = "@CMAKE_INSTALL_FULL_SYSCONFDIR@/tenzir";
   std::error_code err{};
   if (std::filesystem::exists(tenzir, err) &&
       !std::filesystem::exists(tenzir, err))
