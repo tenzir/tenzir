@@ -212,7 +212,7 @@ as follows:
 from file /tmp/test.txt read lines --skip-empty
 ```
 
-## Concatenating PCAP files
+## Concatenating PCAPs
 
 The [`pcap`](/formats/pcap) parser can now read concatenated PCAP files,
 allowing you to easily process large amounts of trace files. This comes
@@ -241,3 +241,6 @@ You can consume this feed with a remote subscriber:
 load zmq
 | read pcap
 ```
+
+Finally, we also made it easier to identify available network interfaces when
+using the `nic` loader: `show nics` now returns a list of available interfaces.
