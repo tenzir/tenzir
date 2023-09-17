@@ -195,7 +195,7 @@
         };
 
         meta = with lib; {
-          description = "Visibility Across Space and Time";
+          description = "Open Source Security Data Pipelines";
           homepage = "https://www.tenzir.com/";
           # Set mainProgram so that all editions work with `nix run`.
           mainProgram = "tenzir";
