@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
@@ -25,6 +26,19 @@
 #include <fluent-bit/fluent-bit-minimal.h>
 
 namespace tenzir::plugins::fluentbit {
+
+// We're using the 'lib' Fluent Bit plugin for both input and output. We could
+// upgrade our implementation to switch from JSON data exchange to MsgPack. For
+// the 'lib' output plugin, we could already consume MsgPack. For the 'lib'
+// input, we got green light from Eduardo that he would accept patch to also
+// support MsgPack, as there's currently only JSON support. The proposed API
+// changes was as follows:
+//
+//     in_ffd = flb_input(ctx, "lib", NULL);
+//     // New: allow switching input format to MsgPack!
+//     flb_input_set(ctx, in_ffd, "format", "msgpack", NULL);
+//     // No more JSON, but raw MsgPack delivery.
+//     flb_lib_push(ctx, in_ffd, msgpack_buf, msgpack_buf_len);"
 
 namespace {
 
@@ -59,7 +73,6 @@ class engine {
     auto str = std::string_view{reinterpret_cast<char*>(record), size};
     auto* self = reinterpret_cast<engine*>(data);
     self->append(str);
-    self->append(std::string{'\n'}); // ensures valid JSONL
     flb_lib_free(record);
     return 0;
   }
@@ -123,12 +136,18 @@ public:
   /// @note This function is thread-safe.
   void append(const auto& data) {
     auto guard = std::lock_guard{*buffer_mtx_};
+    // We have JSONL in our buffer. If we get multiple objects before we had a
+    // chance to consume them, we must add a newline manually.
+    if (not buffer_.empty() && buffer_.back() != '\n')
+      buffer_.push_back('\n');
     buffer_.insert(buffer_.end(), data.begin(), data.end());
   }
 
   /// Tries to consume the shared buffer with a function.
   /// @note This function is thread-safe.
   auto try_consume(auto f) -> bool {
+    // NB: this would be UB iff called in the same thread as append(). But since
+    // append() is called by the Fluent Bit thread, it is not UB.
     if (auto lock = std::unique_lock{*buffer_mtx_, std::try_to_lock}) {
       if (buffer_.empty())
         return false;
@@ -287,34 +306,64 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
+    auto builder = adaptive_table_slice_builder{};
+    auto parse = [&builder](std::string_view data) {
+      TENZIR_DEBUG("processing shared buffer");
+      TENZIR_ASSERT(not data.empty());
+      // What we're getting here is the typical Fluent Bit array consisting of
+      // the following format, as described in
+      // https://docs.fluentbit.io/manual/concepts/key-concepts#event-format:
+      //
+      //     [[TIMESTAMP, METADATA], MESSAGE]
+      //
+      // where
+      //
+      // - TIMESTAMP is a timestamp in seconds as an integer or floating point
+      //   value (not a string);
+      // - METADATA is a possibly-empty object containing event metadata; and
+      // - MESSAGE is an object containing the event body.
+      //
+      // Fluent Bit versions prior to v2.1.0 instead used
+      //
+      //     [TIMESTAMP, MESSAGE]
+      //
+      // to represent events. This format is still supported for reading input
+      // event streams.
+      //
+      // We are parsing this into a table with the following fields:
+      //
+      // 1. timestamp: time (timestamp alias type)
+      // 2. metadata: record (inferred)
+      // 3. message: record (inferred)
+      //
+      // TODO: do 👆 as opposed to doing 👇
+      auto row = builder.push_row();
+      if (auto err = row.push_field("data").add(data)) {
+        TENZIR_WARN("failed to add Fluent Bit data: {}", data);
+        return false;
+      }
+      return true;
+    };
+    auto last_finish = std::chrono::steady_clock::now();
     while (engine->running()) {
-      auto result = table_slice{};
-      auto parse_fluentbit = [&result](std::string_view data) {
-        TENZIR_ASSERT(not data.empty());
-        if (data.back() == '\n')
-          data.remove_suffix(1);
-        if (data.empty())
-          return true;
-        // TODO: create table slices from JSON. The alternative would be
-        // switching the format to MsgPack, but this is perhaps v2 when things
-        // are too slow.
-        //
-        // Speaking with Dominik, we could use simdjson directly here to get the
-        // second array element of the Fluent Bit message [timestamp, {..}],
-        // using something like on_demand::dom::parse. Once we're ready to
-        // extract the contained object, we should go to Jannis as he's
-        // currently reworking the JSON parser. What we need is a library
-        // utility that bakes us a table slice given a JSON object and builder.
-        TENZIR_WARN("{}", data);
-        result = {};
-        return true;
-      };
+      const auto now = std::chrono::steady_clock::now();
       // Poll the engine and process data that Fluent Bit already handed over.
-      if (not engine->try_consume(parse_fluentbit)) {
+      if (not engine->try_consume(parse)) {
         TENZIR_DEBUG("sleeping for {}", args_.poll_interval);
         std::this_thread::sleep_for(args_.poll_interval);
       }
-      co_yield result;
+      if (builder.rows() >= defaults::import::table_slice_size
+          or last_finish + defaults::import::batch_timeout < now) {
+        TENZIR_DEBUG("flushing table slice with {} rows", builder.rows());
+        last_finish = now;
+        co_yield builder.finish();
+      } else {
+        co_yield {};
+      }
+    }
+    if (builder.rows() > 0) {
+      TENZIR_DEBUG("flushing last table slice with {} rows", builder.rows());
+      co_yield builder.finish();
     }
   }
 
