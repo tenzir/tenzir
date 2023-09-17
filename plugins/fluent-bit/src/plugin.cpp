@@ -28,14 +28,6 @@ namespace tenzir::plugins::fluentbit {
 
 namespace {
 
-// Shared state between this operator and the Fluent Bit plugins.
-// WARNING: keep in sync with the respective code bases.
-struct shared_state {
-  char* buf{nullptr};
-  int len{0};
-  pthread_mutex_t lock{};
-};
-
 /// A map of key-value pairs of Fluent Bit plugin configuration options.
 using property_map = std::map<std::string, std::string>;
 
@@ -119,9 +111,6 @@ public:
       stop();
       flb_destroy(ctx_);
     }
-    auto ret = pthread_mutex_destroy(&state_.lock);
-    if (ret != 0)
-      TENZIR_ERROR("failed to destroy mutex: {}", std::strerror(ret));
   }
 
   // The engine is a move-only handle type.
@@ -132,41 +121,22 @@ public:
 
   /// Copies data into the shared buffer with the Tenzir Fluent Bit plugin.
   /// @note This function is thread-safe.
-  void append(const auto& buffer) {
-    pthread_mutex_lock(&state_.lock);
-    TENZIR_ASSERT(state_.len >= 0);
-    TENZIR_ASSERT(static_cast<size_t>(state_.len) == buffer_.size());
-    // When we enter here, Fluent Bit may have futzed with our buffer and
-    // partially processed it. So we must adjust our own buffer accordingly.
-    // Fluent Bit assuems that the last writeable byte is at position `len` and
-    // may write a NUL byte at `len + 1` to produce a NUL-terminated C-string.
-    buffer_.resize(detail::narrow_cast<size_t>(state_.len));
-    // Now we're ready to write new data.
-    buffer_.insert(buffer_.end(), buffer.begin(), buffer.end());
-    // Finally, we update the shared state to allow Fluent Bit to wield freely.
-    // Fluent Bit expects that it can freely within the buffer bounds.
-    state_.buf = buffer_.data();
-    state_.len = detail::narrow_cast<int>(buffer_.size());
-    pthread_mutex_unlock(&state_.lock);
+  void append(const auto& data) {
+    auto guard = std::lock_guard{*buffer_mtx_};
+    buffer_.insert(buffer_.end(), data.begin(), data.end());
   }
 
   /// Tries to consume the shared buffer with a function.
   /// @note This function is thread-safe.
   auto try_consume(auto f) -> bool {
-    if (pthread_mutex_trylock(&state_.lock) != 0)
-      return false;
-    auto guard = caf::detail::make_scope_guard([&] {
-      pthread_mutex_unlock(&state_.lock);
-    });
-    if (state_.len == 0)
-      return false;
-    auto str = std::string_view{state_.buf, static_cast<size_t>(state_.len)};
-    if (f(str)) {
-      buffer_.clear();
-      state_.buf = nullptr;
-      state_.len = 0;
+    if (auto lock = std::unique_lock{*buffer_mtx_, std::try_to_lock}) {
+      if (buffer_.empty())
+        return false;
+      if (f(buffer_))
+        buffer_.clear();
+      return true;
     }
-    return true;
+    return false;
   }
 
   /// Provides an upper bound on sleep time before stopping the engine. This is
@@ -224,14 +194,15 @@ private:
   }
 
   explicit engine(flb_ctx_t* ctx, std::chrono::milliseconds poll_interval)
-    : ctx_{ctx}, poll_interval_{poll_interval} {
+    : ctx_{ctx},
+      poll_interval_{poll_interval},
+      buffer_mtx_{std::make_unique<std::mutex>()} {
     TENZIR_ASSERT(ctx != nullptr);
-    pthread_mutex_init(&state_.lock, nullptr);
   }
 
   auto input(const std::string& plugin, const property_map& properties = {})
     -> bool {
-    ffd_ = flb_input(ctx_, plugin.c_str(), &state_);
+    ffd_ = flb_input(ctx_, plugin.c_str(), nullptr);
     if (ffd_ < 0) {
       TENZIR_ERROR("failed to setup {} input plugin ({})", plugin, ffd_);
       return false;
@@ -296,8 +267,8 @@ private:
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
   std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
   size_t num_stop_polls_{0}; ///< Number of polls in the destructor
-  shared_state state_{};     ///< Shared state with FB
-  std::string buffer_{};     ///< Buffer for shred state
+  std::string buffer_{};     ///< Buffer shared with Fluent Bit
+  std::unique_ptr<std::mutex> buffer_mtx_{}; ///< Protects the shared buffer
 };
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
@@ -318,7 +289,12 @@ public:
     }
     while (engine->running()) {
       auto result = table_slice{};
-      auto parse_fluentbit = [&result](std::string_view /* data */) {
+      auto parse_fluentbit = [&result](std::string_view data) {
+        TENZIR_ASSERT(not data.empty());
+        if (data.back() == '\n')
+          data.remove_suffix(1);
+        if (data.empty())
+          return true;
         // TODO: create table slices from JSON. The alternative would be
         // switching the format to MsgPack, but this is perhaps v2 when things
         // are too slow.
@@ -329,12 +305,15 @@ public:
         // extract the contained object, we should go to Jannis as he's
         // currently reworking the JSON parser. What we need is a library
         // utility that bakes us a table slice given a JSON object and builder.
+        TENZIR_WARN("{}", data);
         result = {};
         return true;
       };
       // Poll the engine and process data that Fluent Bit already handed over.
-      if (not engine->try_consume(parse_fluentbit))
+      if (not engine->try_consume(parse_fluentbit)) {
+        TENZIR_DEBUG("sleeping for {}", args_.poll_interval);
         std::this_thread::sleep_for(args_.poll_interval);
+      }
       co_yield result;
     }
   }
