@@ -92,6 +92,62 @@ Metrics:
               type: number
               description: The total duration of the pipeline sink data processing in seconds.
               example: 1.452123512
+CreateParameters:
+  type: object
+  required:
+    - definition
+  properties:
+    definition:
+      type: string
+      example: export | where foo | publish /bar
+      description: The pipeline definition.
+    start_when_created:
+      type: boolean
+      description: |
+        Start this pipeline upon creation.
+        This parameter must be true if the `hidden` parameter is also true.
+      default: false
+    name:
+      type: string
+      description: The human-readable name of the pipeline.
+      default: "[an auto-generated id]"
+      example: zeek-monitoring-pipeline
+    hidden:
+      type: boolean
+      description: |
+        A flag specifying whether this pipeline is hidden.
+        Hidden pipelines are not persisted and will not show up in the /pipeline/list endpoint response.
+      default: false
+      example: false
+    ttl:
+      type: string
+      description: |
+        A duration string specifying the maximum time for this pipeline to exist. No value means the pipeline is allowed to exist forever.
+        This parameter must be defined if the `hidden` parameter is true.
+      default: ~
+      example: 5.0m
+    restart_with_node:
+      type: boolean
+      default: false
+      description: |
+        Check if the pipeline should be restarted when the Tenzir Node is restarted.
+        This parameter must be false if the `hidden` parameter is true.
+      example: false
+LaunchParameters:
+  allOf:
+    - $ref: "#/components/schemas/CreateParameters"
+    - type: object
+      required:
+        - serve_id
+      properties:
+        serve_id:
+          type: string
+          description: The identifier for the `server` operator.
+          example: "4ada2434-32asfe2s"
+        serve_buffer_size:
+          type: integer
+          description: The maximum number of events to keep in the `serve` operator.
+          example: 4000
 Diagnostics:
   type: array
   items:
