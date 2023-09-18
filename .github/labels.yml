@@ -21,6 +21,9 @@
 - name: feature
   color: fbca04
   description: New functionality
+- name: improvement
+  color: fbca04
+  description: An incremental enhancement of an existing feature
 - name: maintenance
   color: fbca04
   description: Tasks for keeping up the infrastructure
@@ -31,15 +34,18 @@
   color: fbca04
   description: Restructuring of existing code
 # Code base part
+- name: ci
+  color: 0366d6
+  description: Continuous integration and delivery
 - name: dependencies
   color: 0366d6
   description: Update of dependent software
 - name: docs
   color: 0366d6
   description: Documentation and blog
-- name: ci
+- name: packaging
   color: 0366d6
-  description: Continuous integration and delivery
+  description: Relating to the build scaffold
 - name: rfc
   color: 0366d6
   description: A Request For Comments (RFC)

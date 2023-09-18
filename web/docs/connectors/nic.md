@@ -7,7 +7,7 @@ Reads bytes from a network interface card (NIC).
 ## Synopsis
 
 ```
-nic <iface> [-s|--snaplen <count>]
+nic <iface> [-s|--snaplen <count>] [-e|--emit-file-headers]
 ```
 
 ## Description
@@ -28,6 +28,18 @@ This value is an upper bound on the packet size. Packets larger than this size
 get truncated to `<count>` bytes.
 
 Defaults to `262144`.
+
+### `-e|--emit-file-headers`
+
+Creates PCAP file headers for every flushed batch.
+
+The `nic` connector emits chunk of bytes that represent a stream of packets.
+When setting `--emit-file-headers` every chunk gets its own PCAP file header, as
+opposed to just the very first. This yields a continuous stream of concatenated
+PCAP files.
+
+The [`pcap`](../formats/pcap.md) parser can handle such concatenated traces, and
+optionally re-emit thes file headers as separate events.
 
 ## Examples
 

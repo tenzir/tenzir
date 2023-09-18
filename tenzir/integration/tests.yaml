@@ -1061,6 +1061,10 @@ tests:
       - command: exec 'read pcap -e | write pcap'
         input: data/pcap/example.pcap.gz
         transformation: md5sum | cut -f 1 -d ' '
+      # Concatenate PCAPs and process them. The test ensures that we have the
+      # right sequencing of file header and packet header events.
+      - command: exec 'shell "cat @./data/pcap/vlan-*.pcap" | read pcap -e | put schema=#schema | write json -c'
+      - command: exec 'shell "cat @./data/pcap/vlan-*.pcap" | read pcap -e | write pcap | discard'
 
   Compression:
     tags: [pipelines, compression]
@@ -1070,3 +1074,19 @@ tests:
       # testing binary outputs very well, so we should implement more tests once
       # we're completed the transition to bats (see tenzir/tenzir#2859).
       - command: exec 'load file @./data/json/conn.log.json.gz | decompress gzip | read zeek-json | summarize num_events=count(.)'
+
+  Lines:
+    tags: [pipelines, formats]
+    steps:
+      - command: exec 'read lines | summarize n=count(.) | write json -c'
+        input: data/cef/checkpoint.log
+      - command: exec 'read lines -s | summarize n=count(.) | write json -c'
+        input: data/cef/checkpoint.log
+
+  # TODO: Set up Tenzir S3 stuff for Tenzir-internal read/write tests?
+  # TODO: Re-enable this test once Arrow updated their bundled AWS SDK from version 1.10.55,
+  # see: https://github.com/apache/arrow/issues/37721
+  #S3 Connector:
+    #tags: [pipelines]
+    #steps:
+      #- command: exec 'from s3 s3://sentinel-cogs/sentinel-s2-l2a-cogs/1/C/CV/2023/1/S2B_1CCV_20230101_0_L2A/tileinfo_metadata.json | write json'

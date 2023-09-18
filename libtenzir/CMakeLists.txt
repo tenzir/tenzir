@@ -62,10 +62,10 @@ TenzirCompileFlatBuffers(
 # -- arrow ---------------------------------------------------------------------
 
 find_package(Arrow REQUIRED CONFIG)
-if (Arrow_VERSION_MAJOR LESS 12)
+if (Arrow_VERSION_MAJOR LESS 13)
   message(
     FATAL_ERROR
-      "Tenzir requires at least Arrow version 12.0, but found ${ARROW_VERSION}")
+      "Tenzir requires at least Arrow version 13.0, but found ${ARROW_VERSION}")
 endif ()
 mark_as_advanced(
   BROTLI_COMMON_LIBRARY
@@ -250,6 +250,14 @@ if (TENZIR_ENABLE_JOURNALD_LOGGING)
   target_link_libraries(libtenzir PRIVATE systemd::systemd)
   dependency_summary("libsystemd" systemd::systemd "Dependencies")
 endif ()
+
+# Link against curl.
+# The FindCURL module from CMake doesn't expose the link dependencies of libcurl.a
+# correctly, so we use pkg-config instead.
+pkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\npkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)")
+target_link_libraries(libtenzir PUBLIC PkgConfig::PC_CURL)
+dependency_summary("CURL" PkgConfig::PC_CURL "Dependencies")
 
 # Link against fmt.
 find_package(fmt 7.1.3 REQUIRED)

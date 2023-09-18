@@ -205,6 +205,7 @@
           # We use tenzir-de-static so we don't require proprietary plugins,
           # they don't influence the final result.
         in flake-utils.lib.mkApp { drv = pkgs.writeScriptBin "generate" ''
+            TMP="$(mktemp -d)"
             echo "Writing intermediate files to $TMP"
             echo "Generating nixpkgs based meta information"
             ${nix}/bin/nix-env -qa --meta --json -f ${nixpkgs} '.*' > $TMP/meta.json

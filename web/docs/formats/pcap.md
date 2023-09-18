@@ -9,7 +9,7 @@ Reads and writes raw network packets in [PCAP][pcap-rfc] file format.
 Parser:
 
 ```
-pcap [-e|--emit-file-header]
+pcap [-e|--emit-file-headers]
 ```
 
 Printer:
@@ -43,15 +43,19 @@ pcap.packet:
     - data: string
 ```
 
-### `-e|--emit-file-header` (Parser)
+### `-e|--emit-file-headers` (Parser)
 
-Emit a `pcap.file_header` event that represents the the PCAP file header. If present,
-the parser injects this additional event before the subsequent stream of
-packets.
+Emit a `pcap.file_header` event that represents the PCAP file header. If
+present, the parser injects this additional event before the subsequent stream
+of packets.
 
 Emitting this extra event makes it possible to seed the `pcap` printer with a
 file header from the input. This allows for controlling the timestamp formatting
 (microseconds vs. nanosecond granularity) and byte order in the packet headers.
+
+When the PCAP parser processes a concatenated stream of PCAP files, specifying
+`--emit-file-headers` will also re-emit every intermediate file header as
+separate event.
 
 Use this option when you would like to reproduce the identical trace file layout
 of the PCAP input.
@@ -75,4 +79,10 @@ file:
 
 ```
 read pcap | decapsulate
+```
+
+On the command line, merge PCAP files and process parse them:
+
+```bash
+cat *.pcap | tenzir 'read pcap'
 ```

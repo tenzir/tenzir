@@ -51,7 +51,7 @@ jobs:
       release-version: ${{ steps.determine-version.outputs.release-version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Fetch Tags
@@ -72,11 +72,11 @@ jobs:
         working-directory: ./cloud/aws
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -104,7 +104,7 @@ jobs:
       TF_STATE_BACKEND: "local"
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
@@ -132,7 +132,7 @@ jobs:
       TENZIR_VERSION: ${{ needs.determine-version.outputs.release-version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Secret hashes
@@ -169,7 +169,7 @@ jobs:
       TENZIR_CLOUD_PLUGINS: "workbucket,tests,misp"
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
@@ -202,7 +202,7 @@ jobs:
       TENZIR_CLOUD_PLUGINS: "tfcloud,workbucket,flowlogs"
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
@@ -241,7 +241,7 @@ jobs:
       TENZIR_CLOUD_PLUGINS: "tfcloud,workbucket,cloudtrail"
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
@@ -283,7 +283,7 @@ jobs:
       TENZIR_CLOUD_PLUGINS: "workbucket,misp"
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Pull cached CLI image

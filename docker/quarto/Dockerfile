@@ -11,21 +11,23 @@ USER root
 # libfontconfig1-dev is required to install systemfonts (R)
 RUN apt-get update && \
     apt install -y \
-        dirmngr \ 
-        gnupg \
         apt-transport-https \
+        bindfs \
         ca-certificates \
-        software-properties-common \
-        python3-pip \
-        git \
         curl \
+        dirmngr \
+        git \
+        gnupg \
         libcurl4-openssl-dev \
-        libfontconfig1-dev && \
-        rm -rf /var/lib/apt/lists/*
-
-# install a recent version of R
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-key '95C0FAF38DB3CCAD0C080A7BDC78B2DDEABC47B7' && \
-    add-apt-repository 'deb http://cloud.r-project.org/bin/linux/debian bullseye-cran40/' && \
+        libfontconfig1-dev \
+        python3-pip \
+        software-properties-common \
+        sudo && \
+    gpg --keyserver keyserver.ubuntu.com \
+        --recv-key '95C0FAF38DB3CCAD0C080A7BDC78B2DDEABC47B7' && \
+    gpg --armor --export '95C0FAF38DB3CCAD0C080A7BDC78B2DDEABC47B7' > /etc/apt/keyrings/cran.asc && \
+    echo "deb [signed-by=/etc/apt/keyrings/cran.asc] http://cloud.r-project.org/bin/linux/debian $(lsb_release --codename --short)-cran40/" \
+      | tee /etc/apt/sources.list.d/cran.list && \
     apt-get update && \
     apt-get install -y r-base && \
     rm -rf /var/lib/apt/lists/*
@@ -47,10 +49,6 @@ RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
 FROM quarto-base as quarto-bind
 
 USER root
-
-RUN apt update && \
-    apt install -y bindfs sudo && \
-    rm -rf /var/lib/apt/lists/*
 
 COPY docker/quarto/entrypoint.sh /entrypoint.sh
 
