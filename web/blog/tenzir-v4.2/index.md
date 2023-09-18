@@ -1,68 +1,70 @@
 ---
 title: Tenzir v4.2
 authors: [dakostu, mavam]
-date: 2023-09-07
-tags: [release, pipelines, connectors, s3, zmq]
-draft: true
+date: 2023-09-19
+tags: [release, pipelines, connectors, s3, gcs, zmq]
 ---
 
-We've just released Tenzir v4.2 that introduces two new connectors: [S3][s3] for
-interacting with blob storage and [ZeroMQ][zeromq] for writing distributed
-multi-hop pipelines.
+We've just released Tenzir v4.2 that introduces two new connectors: [S3][s3] and
+[GCS][gcs] for interacting with blob storage and [ZeroMQ][zeromq] for writing
+distributed multi-hop pipelines. There's also a new [`lines`][lines] parser for
+easier text processing and a bunch of PCAP quality-of-life improvements.
 
 [s3]: https://aws.amazon.com/s3/
-[marketplace]: https://aws.amazon.com/marketplace/search/results?trk=8384929b-0eb1-4af3-8996-07aa409646bc&sc_channel=el&FULFILLMENT_OPTION_TYPE=DATA_EXCHANGE&CONTRACT_TYPE=OPEN_DATA_LICENSES&DATA_AVAILABLE_THROUGH=S3_OBJECTS&PRICING_MODEL=FREE&filters=FULFILLMENT_OPTION_TYPE%2CCONTRACT_TYPE%2CDATA_AVAILABLE_THROUGH%2CPRICING_MODEL
-[density]: https://aws.amazon.com/marketplace/pp/prodview-jf2hjpr2mrj4m?sr=0-2&ref_=beagle&applicationId=AWSMPContessa#overview
-[humor]: https://aws.amazon.com/marketplace/pp/prodview-b53zm25dl3jcc?sr=0-3&ref_=beagle&applicationId=AWSMPContessa#overview
-[uri]: https://arrow.apache.org/docs/10.0/r/articles/fs.html#uri-options
+[gcs]: https://cloud.google.com/storage
 [zeromq]: https://zeromq.org/
+[lines]: /formats/lines
+
+![Tenzir v4.2](tenzir-v4.2.excalidraw.svg)
 
 <!--truncate-->
 
 ## S3 Saver & Loader
 
-The new [`s3`](connectors/s3) connector hooks up Tenzir to the vast data masses
+The new [`s3`](/connectors/s3) connector hooks up Tenzir to the vast data masses
 on [Amazon S3](https://aws.amazon.com/s3/) and S3-compatible object storage
-systems.
-We are using Arrow's filesystem abstraction for establishing connections to
-these systems. This abstraction already handles AWS's default credentials
-provider chain. If you have set up your AWS account in this chain, then you
-don't need to worry about setting it up again in config files or similar
-formats.
-
-With the `s3` loader, you can access objects on S3 buckets, assuming you have
-the proper credentials:
+systems. With the `s3` loader, you can access objects on S3 buckets, assuming
+you have the proper credentials provided:
 
 ```bash
 tenzir 'from s3 s3://bucket/mystuff/file.json'
 ```
 
+Internally, we are using Arrow's filesystem abstraction for establishing
+connections. This abstraction already handles AWS's default credentials provider
+chain. If you have set up your AWS account in this chain, then you don't need to
+worry about setting it up again in config files or similar formats.
+
 S3 buckets can also be public, meaning you don't need any specific credentials
-to access the objects therein.
-AWS offers tons of such public (read-only) buckets with scientific data on
-their [Marketplace][marketplace].
-Tenzir, of course, can also import public read-only data - for example, some
-[population density & demographic estimate data][density]:
+to access the objects therein. AWS offers tons of such public (read-only)
+buckets with scientific data on their [Marketplace][marketplace]. Tenzir can
+also consume public read-only data—for example, e.g., some [population density &
+demographic estimate data][density]:
 
-```bash
-tenzir "load s3
-s3://dataforgood-fb-data/csv/month=2019-06/country=VGB/type=children_under_five/
-VGB_children_under_five.csv.gz | decompress gzip | read csv"
+[marketplace]: https://aws.amazon.com/marketplace/search/results?trk=8384929b-0eb1-4af3-8996-07aa409646bc&sc_channel=el&FULFILLMENT_OPTION_TYPE=DATA_EXCHANGE&CONTRACT_TYPE=OPEN_DATA_LICENSES&DATA_AVAILABLE_THROUGH=S3_OBJECTS&PRICING_MODEL=FREE&filters=FULFILLMENT_OPTION_TYPE%2CCONTRACT_TYPE%2CDATA_AVAILABLE_THROUGH%2CPRICING_MODEL
+[density]: https://aws.amazon.com/marketplace/pp/prodview-jf2hjpr2mrj4m?sr=0-2&ref_=beagle&applicationId=AWSMPContessa#overview
+
+```
+load s3 dataforgood-fb-data/csv/month=2019-06/country=VGB/type=children_under_five/VGB_children_under_five.csv.gz
+| decompress gzip
+| read csv
 ```
 
-Now, let's combine this with `aws s3 ls` to receive all [Amazon product Q&A
-humor detection data][humor]:
+Let's combine this with `aws s3 ls` to receive all [Amazon product Q&A humor
+detection data][humor]:
+
+[humor]: https://aws.amazon.com/marketplace/pp/prodview-b53zm25dl3jcc?sr=0-3&ref_=beagle&applicationId=AWSMPContessa#overview
 
 ```bash
-aws s3 ls --no-sign-request --recursive s3://humor-detection-pds/ | awk '{print
-$4}' | grep "\.csv" | xargs -I {} tenzir "from s3 s3://humor-detection-pds/{}
-read csv"
+aws s3 ls --no-sign-request --recursive humor-detection-pds/ |
+  awk '{print $4}' |
+  grep "\.csv" |
+  xargs -I {} tenzir "from s3 humor-detection-pds/{} read csv"
 ```
 
-The original .csv data is a bit unpolished (for example, there are line breaks
-and superfluous commas in the middle of some values) - Tenzir's `csv` parser
-will ignore those lines, and the rest of the data will be there at your
-fingertips.
+The original CSV data is a bit unpolished, e.g., there are line breaks
+and superfluous commas in the middle of some values. Tenzir's `csv` parser
+will ignore those lines, but the rest of the data is at your fingertips.
 
 The `s3` writer uploads the pipeline output to an object in the bucket:
 
@@ -70,29 +72,52 @@ The `s3` writer uploads the pipeline output to an object in the bucket:
 tenzir "export | to s3 s3://mybucket/folder/ok.json"
 ```
 
-Arrow has URI option capabilities, as [this blog post][uri] describes in
-detail. The most relevant info for the S3 connector:
+You can provide options to an S3 as [URI query parameters][uri]:
 
 > For S3, the options that can be included in the URI as query parameters are
-`region`, `scheme`, `endpoint_override`, `access_key`, `secret_key`,
-`allow_bucket_creation`, and `allow_bucket_deletion`.
+> `region`, `scheme`, `endpoint_override`, `access_key`, `secret_key`,
+> `allow_bucket_creation`, and `allow_bucket_deletion`.
 
-The most exciting of these options would be `endpoint_override` - it allows you
-to connect to different endpoints of other, S3-compatible storage systems:
+[uri]: https://arrow.apache.org/docs/10.0/r/articles/fs.html#uri-options
+
+The most exciting of these options would be `endpoint_override`, as it allows
+you to connect to different endpoints of other S3-compatible storage systems:
 
 ```
-from s3
-s3://examplebucket/test.json?endpoint_override=s3.us-west.mycloudservice.com
+from s3 s3://examplebucket/test.json?endpoint_override=s3.us-west.mycloudservice.com
 ```
 
-The `s3` connector is a huge step for Tenzir's data accessibility. It already
-covers a lot of ground, but it is the first of many connectors that will
-cover a lot more: More connections, more data, more information, more value.
+The `s3` connector is a huge step for Tenzir's capability to interact with blob
+storage. Our list of connectors is continuously growing and our modular
+framework allows for cranking out many more at ease. More connectors, more data,
+more information, more value!
+
+## Google Cloud Storage (GCS) Connector
+
+Similar to the `s3` connector we added the [`gcs`](/connectors/gcs) connector
+that interfaces to [Google Cloud Storage
+(GCS)](https://cloud.google.com/storage).
+
+The connector tries to retrieve the appropriate credentials using Google's
+[Application Default Credentials](https://google.aip.dev/auth/4110). This means
+you can use the connector conveniently to read from or write to a storage
+bucket:
+
+```
+from gcs gs://bucket/path/to/file
+to gcs gs://bucket/path/to/file
+```
+
+As with `s3`, you can also use override the default endpoint and other options
+by passing URI query parameters. Have a look at the [connector
+documentation](/connectors/gcs) for further details.
 
 ## ZeroMQ Saver & Loader
 
 The new [`zmq`](/connectors/zmq) connector makes it easy to interact with the
-raw bytes in [ZeroMQ][zeromq] messages. We model the `zmq` *loader* as subscriber with a `SUB` socket, and the *saver* as a publisher with the `PUB` socket:
+raw bytes in [ZeroMQ][zeromq] messages. We model the `zmq` *loader* as
+subscriber with a `SUB` socket, and the *saver* as a publisher with the `PUB`
+socket:
 
 ![ZeroMQ Connector](zeromq-connector.excalidraw.svg)
 
@@ -133,9 +158,9 @@ connecting socket? No problem:
 tenzir 'from zmq --bind'
 ```
 
-These examples show the power of composability: Tenzir operators work with
-both bytes and events, enabling in-flight reshaping, format conversation, or
-simply data shipping at ease.
+These examples show the power of composability: Tenzir operators work with both
+bytes and events, enabling in-flight reshaping, format conversation, or simply
+data shipping at ease.
 
 ## HTTP and FTP Loader
 
@@ -181,13 +206,13 @@ look at some more that you can readily work with.
 Download and process a [CSV](/formats/csv) file:
 
 ```
-from http example.org/file.csv read csv
+from http http://example.org/file.csv read csv
 ```
 
 Process a Zstd-compressed [Zeek TSV](/formats/zeek-tsv) file:
 
 ```
-load http example.org/gigantic.log.zst
+load https https://example.org/gigantic.log.zst
 | decompress zstd
 | read zeek-tsv
 ```
@@ -195,14 +220,14 @@ load http example.org/gigantic.log.zst
 Import a [CEF](/formats/cef) log from an FTP server into a Tenzir node:
 
 ```
-load ftp example.org/cef.log read cef
+load ftp ftp://example.org/cef.log read cef
 | import
 ```
 
 ## Lines Parser
 
-The new [`lines`](/formats/lines) parser splits its input at newline characters
-and produces events with a single field representing the line. This parser is
+The new [`lines`][lines] parser splits its input at newline characters and
+produces events with a single field representing the line. This parser is
 especially useful for onboarding line-based text files into pipelines.
 
 The `-s|--skip-empty` flags ignores empty lines. For example, read a text file
