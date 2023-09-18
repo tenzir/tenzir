@@ -164,11 +164,9 @@ TEST(set field to value then to null) {
   auto foo = b.record().field("foo");
   foo.atom(42);
   foo.null();
-  check(b, {{1, "struct<foo: int64>", R"(-- is_valid: all not null
--- child 0 type: int64
-  [
-    null
-  ])"}});
+  check(b, {{1, "struct<foo: null>", R"(-- is_valid: all not null
+-- child 0 type: null
+1 nulls)"}});
 }
 
 TEST(set field to null then to value) {

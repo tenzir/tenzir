@@ -751,6 +751,11 @@ tests:
     steps:
       - command: exec 'from file @./data/json/record-list-different-fields.json'
 
+  Read JSON with list config in overwritten field:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/record-list-conflict-field-overwrite.json'
+
   Schema ID Extractor:
     tags: [pipelines, cef]
     steps:
