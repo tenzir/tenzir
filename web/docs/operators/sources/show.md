@@ -30,6 +30,8 @@ Available aspects:
 - `dependencies`: shows information about build-time dependencies.
 - `fields`: shows all fields of existing tables at a remote node.
 - `formats`: shows all available [formats](../../formats.md).
+- `nics`: shows all network interfaces for the [`nic`](../../connectors/nic.md)
+  loader.
 - `operators`: shows all available [operators](../../operators.md).
 - `partitions`: shows all table partitions of a remote node.
 - `pipelines`: shows all managed pipelines of a remote node.

@@ -454,4 +454,26 @@ caf::error seek(int fd, size_t bytes) {
   return caf::none;
 }
 
+auto to_string(const sockaddr* sa) -> std::string {
+  auto buffer = std::array<char, INET6_ADDRSTRLEN>{};
+  switch (sa->sa_family) {
+    default:
+      return {};
+    case AF_INET: {
+      const auto* ptr = &reinterpret_cast<const sockaddr_in*>(sa)->sin_addr;
+      const auto* result
+        = inet_ntop(AF_INET, ptr, buffer.data(), buffer.size());
+      TENZIR_ASSERT(result != nullptr);
+      break;
+    }
+    case AF_INET6:
+      const auto* ptr = &reinterpret_cast<const sockaddr_in6*>(sa)->sin6_addr;
+      const auto* result
+        = inet_ntop(AF_INET6, ptr, buffer.data(), buffer.size());
+      TENZIR_ASSERT(result != nullptr);
+      break;
+  }
+  return std::string{buffer.data()};
+}
+
 } // namespace tenzir::detail
