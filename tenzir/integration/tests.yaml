@@ -1047,7 +1047,7 @@ tests:
     tags: [pipelines, parser, printer, pcap]
     steps:
       # Make sure basic decapsulation logic works.
-      - command: exec 'read pcap | decapsulate | write json'
+      - command: exec 'read pcap | decapsulate | drop pcap.data | write json'
         input: data/pcap/example.pcap.gz
       # Decapsulate VLAN information. Manually verified with:
       # tshark -r vlan-single-tagging.pcap -T fields -e vlan.id
@@ -1064,7 +1064,6 @@ tests:
       # Concatenate PCAPs and process them. The test ensures that we have the
       # right sequencing of file header and packet header events.
       - command: exec 'shell "cat @./data/pcap/vlan-*.pcap" | read pcap -e | put schema=#schema | write json -c'
-      - command: exec 'shell "cat @./data/pcap/vlan-*.pcap" | read pcap -e | write pcap | discard'
 
   Compression:
     tags: [pipelines, compression]

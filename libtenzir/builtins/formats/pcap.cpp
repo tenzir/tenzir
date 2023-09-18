@@ -483,7 +483,7 @@ public:
                      "packet linktype doesn't match file header")
               .done();
           } else if (current_file_header->magic_number == magic_number_1) {
-            pkt.header.timestamp *= 1'000;
+            pkt.header.timestamp_fraction /= 1'000;
           }
           auto bytes = as_bytes(pkt.header);
           buffer.reserve(sizeof(packet_header) + pkt.data.size());
