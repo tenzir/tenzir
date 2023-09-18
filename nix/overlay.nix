@@ -21,6 +21,18 @@ in {
           ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
         ];
       });
+  aws-c-cal =
+    if !isStatic
+    then prev.aws-c-cal
+    else
+      prev.aws-c-cal.overrideAttrs (orig: {
+        patches = (orig.patches or []) ++ [
+          (prev.fetchpatch {
+            url = "https://github.com/awslabs/aws-c-cal/commit/ee46efc3dd0cf300ff4ec89cc2d79f1b0fe1c8cb.patch";
+            sha256 = "sha256-bFc0Mqt0Ho3i3xGHiQitP35dQgPd9Wthkyb1TT/nRYs=";
+          })
+        ];
+      });
   arrow-cpp =
     if !isStatic
     then prev.arrow-cpp
