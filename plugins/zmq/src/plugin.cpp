@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <optional>
+#include <regex>
 #include <string>
 #include <zmq.hpp>
 
@@ -461,7 +462,9 @@ public:
         .primary(*args.connect)
         .hint("--bind and --connect are mutually exclusive")
         .throw_();
-    if (args.endpoint && args.endpoint->inner.find("://") == std::string::npos)
+    if (args.endpoint
+        and not std::regex_match(args.endpoint->inner,
+                                 std::regex{"^\\w+://.*"}))
       args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
     return std::make_unique<zmq_saver>(std::move(args));
   }
