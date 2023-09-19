@@ -55,10 +55,10 @@ using concrete_types
                            ip_type, subnet_type, enumeration_type, list_type,
                            map_type, record_type>;
 
-///
+/// Reification of the variant inhabitants of `type`.
 using type_kind = caf::detail::tl_apply_t<concrete_types, tag_variant>;
 
-/// Returns a the name of type kind.
+/// Returns the name of the type kind.
 auto to_string(type_kind x) -> std::string_view;
 
 /// A concept that models any concrete type.
@@ -140,8 +140,7 @@ public:
   /// The corresponding Arrow DataType.
   using arrow_type = arrow::DataType;
 
-  /// Default-constructs a type, which is semantically equivalent to the
-  /// `null` type. TODO: Other docs?
+  /// Default-constructs a type, which is equivalent to the `null` type.
   type() noexcept;
 
   /// Copy-constructs a type, resulting in a shallow copy with shared lifetime.

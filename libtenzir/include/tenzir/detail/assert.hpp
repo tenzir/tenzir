@@ -72,5 +72,5 @@
 /// `die("unreachable")`, it prints a backtrace.
 #define TENZIR_UNREACHABLE() TENZIR_ASSERT_CHEAP(false, "unreachable")
 
-/// TODO
+/// Used to mark code as unfinished. Reaching it aborts the program.
 #define TENZIR_TODO() TENZIR_ASSERT_CHEAP(false, "todo")

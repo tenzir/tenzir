@@ -174,17 +174,19 @@ void construct_enumeration_type(stateful_type_base& self, const T* begin,
 template <class T>
 void construct_record_type(stateful_type_base& self, const T& begin,
                            const T& end) {
-  // TODO: Remove me.
-  // TENZIR_ASSERT(begin != end, "A record type must not have zero fields.");
   const auto reserved_size = [&]() noexcept {
     // By default the builder allocates 1024 bytes, which is much more than
     // what we require, and since we can easily calculate the exact amount we
     // should do that. The total length is made up from the following terms:
-    // - 52 bytes FlatBuffers table framing
+    // - 44 bytes FlatBuffers table framing
+    // - 8 additional bytes if there are any fields at all.
     // - 24 bytes for each contained field.
     // - All contained string lengths, rounded up to four each.
     // - All contained nested type FlatBuffers.
-    size_t size = 52;
+    size_t size = 44;
+    if (begin != end) {
+      size += 8;
+    }
     for (auto it = begin; it != end; ++it) {
       const auto& type_bytes = as_bytes(it->type);
       size += 24;
@@ -213,8 +215,7 @@ void construct_record_type(stateful_type_base& self, const T& begin,
     builder, fbs::type::Type::record_type, record_type_offset.Union());
   builder.Finish(type_offset);
   auto result = builder.Release();
-  // TODO: Check this.
-  // TENZIR_ASSERT(result.size() == reserved_size);
+  TENZIR_ASSERT(result.size() == reserved_size);
   auto chunk = chunk::make(std::move(result));
   self = type{std::move(chunk)};
 }
@@ -1359,13 +1360,10 @@ bool congruent(const type& x, const type& y) noexcept {
                                                "complex type");
     },
     []<concrete_type T, concrete_type U>(const T&, const U&) noexcept {
-      TENZIR_WARN("checking {} and {}", typeid(T).name(), typeid(U).name());
-      return std::is_same_v<T, U>;
+      return std::is_same_v<T, U> || std::is_same_v<T, null_type>
+             || std::is_same_v<U, null_type>;
     },
-  };
-  // TODO: ??
-  if (!x || !y)
-    return true;
+  }; // namespace tenzir
   return caf::visit(f, x, y);
 }
 
@@ -1603,12 +1601,10 @@ replace_if_congruent(std::initializer_list<type*> xs, const module& with) {
 
 // -- null_type ---------------------------------------------------------------
 
-// TODO: Is this correct?
 static_assert(null_type::type_index
               == static_cast<uint8_t>(fbs::type::Type::NONE));
 
 auto as_bytes(const null_type&) noexcept -> std::span<const std::byte> {
-  // TODO: Is this correct?
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 12;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};

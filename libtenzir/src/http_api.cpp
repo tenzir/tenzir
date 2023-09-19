@@ -161,9 +161,6 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                 [&](const string_type&) -> caf::expected<data> {
                   return x_as_string;
                 },
-                [&](const null_type&) -> caf::expected<data> {
-                  TENZIR_TODO();
-                },
                 [&]<basic_type Type>(const Type&) -> caf::expected<data> {
                   using data_t = type_to_data_t<Type>;
                   auto result = to<data_t>(x_as_string);
@@ -183,9 +180,6 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
             result.emplace_back(*parsed);
           }
           return result;
-        },
-        [&](const null_type&) -> caf::expected<data> {
-          TENZIR_TODO();
         },
         [&]<basic_type Type>(const Type&) -> caf::expected<data> {
           using data_t = type_to_data_t<Type>;

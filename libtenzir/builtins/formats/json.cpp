@@ -106,6 +106,8 @@ struct selector {
   }
 };
 
+constexpr auto unknown_entry_name = std::string_view{};
+
 struct entry_data {
   explicit entry_data(std::string name,
                       std::optional<std::reference_wrapper<const type>> schema)
@@ -116,15 +118,14 @@ struct entry_data {
 
   auto flush() -> std::vector<table_slice> {
     flushed = std::chrono::steady_clock::now();
-    return builder.finish_as_table_slice(name);
+    return builder.finish_as_table_slice(
+      name == unknown_entry_name ? "tenzir.json" : name);
   }
 
   std::string name;
   series_builder builder;
   std::chrono::steady_clock::time_point flushed;
 };
-
-constexpr auto unknown_entry_name = std::string_view{};
 
 struct parser_state {
   explicit parser_state(operator_control_plane& ctrl, bool preserve_order)

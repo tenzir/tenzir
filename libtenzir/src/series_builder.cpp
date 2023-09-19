@@ -1330,8 +1330,7 @@ auto series_builder::finish_as_table_slice(std::string_view name)
       // here. However, the name is included as part of the fingerprint, which
       // means that `#schema` was a different fingerprint than `#schema_id`,
       // which creates potential for confusion.
-      // TODO: Consider not using a name here at all.
-      array.type = tenzir::type{"tenzir.json", array.type};
+      array.type = tenzir::type{"tenzir.unknown", array.type};
     }
     auto* cast = dynamic_cast<arrow::StructArray*>(array.array.get());
     TENZIR_ASSERT_CHEAP(cast);
