@@ -108,7 +108,8 @@ public:
   auto operator=(const builder_base&) -> builder_base& = delete;
   auto operator=(builder_base&&) -> builder_base& = delete;
 
-  virtual auto finish_and_leave(int64_t count) -> typed_array = 0;
+  /// @pre `0 <= count <= length()`
+  virtual auto finish(int64_t count) -> typed_array = 0;
 
   virtual auto arrow_type() const -> std::shared_ptr<arrow::DataType> = 0;
 
@@ -134,11 +135,11 @@ public:
     (void)root;
   }
 
-  auto finish_and_leave(int64_t count) -> typed_array override {
+  auto finish(int64_t count) -> typed_array override {
     TENZIR_ASSERT_CHEAP(count <= length_);
     auto builder = arrow::NullBuilder{};
-    check(builder.AppendNulls(length_ - count));
-    length_ = count;
+    check(builder.AppendNulls(count));
+    length_ -= count;
     return {null_type{}, builder.Finish().ValueOrDie()};
   }
 
@@ -222,6 +223,7 @@ public:
     }
   }
 
+  // TODO: Fix docs.
   /// Finishes the builder, but leaves the last `count` element. The builder is
   /// fully finished if `count == 0`. We attempt to reduce the underlying type:
   /// If all remaining elements of the series are null, then we transition this
@@ -230,21 +232,23 @@ public:
   /// have null items, the inner list type becomes null. Type reduction is also
   /// applied recursively. The goal is to leave the builder in the same state
   /// as-if the last `count` items were added to a fresh builder.
-  auto finish_and_leave(int64_t count) -> typed_array {
-    TENZIR_DEBUG("dynamic builder got request to finish and leave {}", count);
-    TENZIR_ASSERT_CHEAP(count <= builder_->length());
+  auto finish(int64_t count) -> typed_array {
+    TENZIR_DEBUG("dynamic builder got request to finish {}", count);
+    auto old_length = length();
+    TENZIR_ASSERT_CHEAP(count <= old_length);
     auto result = typed_array{};
-    if (count == builder_->length()) {
+    if (count == 0) {
       result.type = type();
       result.array
         = result.type.make_arrow_builder(arrow::default_memory_pool())
             ->Finish()
             .ValueOrDie();
     } else {
-      result = builder_->finish_and_leave(count);
+      result = builder_->finish(count);
     }
+    TENZIR_ERROR("{} == {} - {}", length(), old_length, count);
+    TENZIR_ASSERT_CHEAP(length() == old_length - count);
     result.type.assign_metadata(metadata_);
-    TENZIR_ASSERT_CHEAP(builder_->length() == count);
     make_null_if_possible();
     return result;
   }
@@ -327,24 +331,24 @@ public:
   }
 
   void finish_previous_events(dynamic_builder* requester) {
-    if (builder_.length() == 0) {
-      return;
-    }
-    auto keep_last = true;
+    auto count = int64_t{};
     if (requester == &builder_) {
       // This function is called directly when a conflict is detected, before
       // new data is added. Hence, if the requester is the root dynamic builder,
-      // then the "current" event was not appended yet, hence we do not keep the
-      // last event.
-      keep_last = false;
+      // then the "current" event was not appended yet. There, the last event in
+      // the builder is a "previous" event, and must thus be finished.
+      count = builder_.length();
+    } else {
+      count = builder_.length() - 1;
     }
-    if (builder_.length() == 1 && keep_last) {
+    TENZIR_ASSERT_CHEAP(count >= 0);
+    if (count == 0) {
       return;
     }
-    auto leave = keep_last ? 1 : 0;
-    auto slice = builder_.finish_and_leave(leave);
-    TENZIR_ASSERT_CHEAP(builder_.length() == leave);
-    TENZIR_ASSERT_CHEAP(slice.length() > 0);
+    auto remaining = builder_.length() - count;
+    auto slice = builder_.finish(count);
+    TENZIR_ASSERT_CHEAP(slice.length() == count);
+    TENZIR_ASSERT_CHEAP(builder_.length() == remaining);
     finished_.push_back(std::move(slice));
   }
 
@@ -356,7 +360,7 @@ public:
   auto finish() -> std::vector<typed_array> {
     has_conflict_ = false;
     if (builder_.length() > 0) {
-      finished_.push_back(builder_.finish_and_leave(0));
+      finished_.push_back(builder_.finish(builder_.length()));
       TENZIR_ASSERT_CHEAP(builder_.length() == 0);
     }
     return std::exchange(finished_, {});
@@ -378,7 +382,7 @@ public:
 private:
   void finish_if_conflict() {
     if (has_conflict_) {
-      finished_.push_back(builder_.finish_and_leave(0));
+      finished_.push_back(builder_.finish(builder_.length()));
       has_conflict_ = false;
     }
   }
@@ -404,28 +408,27 @@ public:
     variants_.push_back(std::move(builder));
   }
 
-  auto finish_and_leave(int64_t count) -> typed_array override {
-    TENZIR_DEBUG("conflict_builder::finish_and_leave({}) with {} variants and "
-                 "length {}",
+  auto finish(int64_t count) -> typed_array override {
+    TENZIR_DEBUG("conflict_builder::finish({}) with {} variants and length {}",
                  count, variants_.size(), length());
     TENZIR_ASSERT_CHEAP(count <= length());
     auto builder = arrow::StringBuilder{};
-    auto leave_counts = std::vector<int64_t>{};
-    leave_counts.resize(variants_.size());
-    for (auto it = discriminants_.rbegin();
-         it != discriminants_.rbegin() + count; ++it) {
-      leave_counts[*it] += 1;
+    auto variant_counts = std::vector<int64_t>{};
+    variant_counts.resize(variants_.size());
+    auto end = discriminants_.begin() + count;
+    for (auto it = discriminants_.begin(); it != end; ++it) {
+      variant_counts[*it] += 1;
     }
     auto arrays = std::vector<typed_array>{};
     arrays.reserve(variants_.size());
     for (auto i = size_t{0}; i < variants_.size(); ++i) {
-      arrays.push_back(variants_[i]->finish_and_leave(leave_counts[i]));
+      arrays.push_back(variants_[i]->finish(variant_counts[i]));
     }
     TENZIR_DEBUG("conflict_builder done with collecting data");
     auto variant_offsets = std::vector<int64_t>{};
     variant_offsets.resize(variants_.size());
-    for (auto i = int64_t{0}; i < length() - count; ++i) {
-      auto discriminant = discriminants_[i];
+    for (auto it = discriminants_.begin(); it != end; ++it) {
+      auto discriminant = *it;
       TENZIR_ASSERT_CHEAP(discriminant < variants_.size());
       auto offset = variant_offsets[discriminant];
       TENZIR_ASSERT_CHEAP(offset < arrays[discriminant].length());
@@ -450,8 +453,8 @@ public:
       check(builder.Append(string));
       variant_offsets[discriminant] += 1;
     }
-    discriminants_.erase(discriminants_.begin(), discriminants_.end() - count);
-    TENZIR_DEBUG("returning from conflict_builder::finish_and_leave");
+    discriminants_.erase(discriminants_.begin(), end);
+    TENZIR_DEBUG("returning from conflict_builder::finish");
     return {string_type{}, builder.Finish().ValueOrDie()};
   }
 
@@ -525,7 +528,7 @@ private:
 
 template <class T>
   requires basic_type<T> || std::same_as<T, enumeration_type>
-auto append_array_slice(auto& builder, T type, const arrow::Array& array,
+auto append_array_slice(auto& builder, const T& type, const arrow::Array& array,
                         int64_t offset, int64_t length) {
   using arrow_type = type_to_arrow_type_t<T>;
   using array_type = arrow::TypeTraits<arrow_type>::ArrayType;
@@ -572,11 +575,14 @@ public:
     return std::static_pointer_cast<array_type>(inner_->Finish().ValueOrDie());
   }
 
-  auto finish_and_leave(int64_t count) -> typed_array override {
-    auto result = finish();
-    append_array_slice(*inner_, type_, *result, result->length() - count,
-                       count);
-    return {type_, result->SliceSafe(0, result->length() - count).ValueOrDie()};
+  auto finish(int64_t count) -> typed_array override {
+    TENZIR_WARN("finishing {} of {} with type {}", count, length(), kind());
+    auto array = finish();
+    TENZIR_ASSERT_CHEAP(count <= array->length());
+    auto rest_begin = count;
+    auto rest_count = array->length() - rest_begin;
+    append_array_slice(*inner_, type_, *array, rest_begin, rest_count);
+    return {type_, array->SliceSafe(0, count).ValueOrDie()};
   }
 
   auto arrow_type() const -> std::shared_ptr<arrow::DataType> override {
@@ -655,42 +661,37 @@ public:
     }
   }
 
-  auto finish_and_leave(int64_t count) -> typed_array override {
-    auto finish_count = length() - count;
-    TENZIR_DEBUG("list got request to finish {} and leave {}", finish_count,
-                 count);
+  auto finish(int64_t count) -> typed_array override {
+    auto old_length = length();
+    TENZIR_WARN("list got request to finish {} of {}", count, old_length);
     check(offsets_.Append(detail::narrow<int32_t>(elements_.length())));
     auto offsets = std::shared_ptr<arrow::Int32Array>{};
     check(offsets_.Finish(&offsets));
-    if (count == 0) {
-      TENZIR_ASSERT_CHEAP(offsets->length() == finish_count + 1);
-    }
     auto result_offsets = std::static_pointer_cast<arrow::Int32Array>(
-      offsets->SliceSafe(0, finish_count + 1).ValueOrDie());
-    auto ending_offset = result_offsets->Value(finish_count);
-    TENZIR_DEBUG("ending offset of list is {} of {}", ending_offset,
+      offsets->SliceSafe(0, count + 1).ValueOrDie());
+    auto ending_offset = result_offsets->Value(count);
+    TENZIR_DEBUG("ending offset of list is {} out of {}", ending_offset,
                  elements_.length());
-    if (count == 0) {
+    if (count == old_length) {
       TENZIR_ASSERT_CHEAP(ending_offset == elements_.length());
     }
-    TENZIR_ASSERT_CHEAP(count == offsets->length() - finish_count - 1);
-    // Copy and shift the remaining offsets.
-    for (auto i = int64_t{0}; i < count; ++i) {
-      auto shifted = offsets->Value(finish_count + i) - ending_offset;
-      if (i == 0) {
-        TENZIR_ASSERT_CHEAP(shifted == 0);
-      }
+    // Copy and shift the remaining offsets. Note that we do not copy the last
+    // offsets in order to maintain the invariant of `offsets_`.
+    auto remaining = old_length - count;
+    TENZIR_ASSERT_CHEAP(remaining == offsets->length() - count - 1);
+    check(offsets_.Reserve(remaining));
+    for (auto i = count; i < count + remaining; ++i) {
+      auto shifted = offsets->Value(i) - ending_offset;
       check(offsets_.Append(shifted));
     }
-    auto remaining_elements = elements_.length() - ending_offset;
     // The following call will reset the list type (and therefore destroy the
     // inner builder) if no elements remain.
-    auto used_elements = elements_.finish_and_leave(remaining_elements);
+    auto result_elements = elements_.finish(ending_offset);
     auto result
-      = arrow::ListArray::FromArrays(*result_offsets, *used_elements.array)
+      = arrow::ListArray::FromArrays(*result_offsets, *result_elements.array)
           .ValueOrDie();
     TENZIR_ASSERT_EXPENSIVE(result->ValidateFull().ok());
-    return {list_type{used_elements.type}, result};
+    return {list_type{result_elements.type}, result};
   }
 
   auto arrow_type() const -> std::shared_ptr<arrow::DataType> override {
@@ -738,27 +739,24 @@ public:
     return record_ref{this};
   }
 
-  auto finish_and_leave(int64_t count) -> typed_array override {
+  auto finish(int64_t count) -> typed_array override {
     TENZIR_ASSERT_CHEAP(count <= length_);
+    TENZIR_WARN("finishing {} of {} records with {} fields", count, length(),
+                fields_.size());
     auto ty = type();
-    auto children_arrays = std::vector<std::shared_ptr<arrow::Array>>{};
-    children_arrays.reserve(fields_.size());
-    auto target_length = length_ - count;
-    TENZIR_DEBUG("finishing {} records with {} fields", target_length,
-                 fields_.size());
+    auto field_arrays = std::vector<std::shared_ptr<arrow::Array>>{};
+    field_arrays.reserve(fields_.size());
     for (auto it = fields_.begin(); it != fields_.end();) {
       auto& [name, builder] = *it;
       TENZIR_ASSERT_CHEAP(builder->length() <= length_);
-      if (builder->length() < target_length) {
-        builder->resize(target_length);
+      if (builder->length() < count) {
+        builder->resize(count);
       }
-      auto leave = builder->length() - target_length;
-      TENZIR_DEBUG("requesting field {} of length {} to finish and leave {}",
-                   name, builder->length(), leave);
-      auto array = builder->finish_and_leave(leave);
-      TENZIR_ASSERT_CHEAP(builder->length() == leave);
-      TENZIR_ASSERT_CHEAP(array.length() == target_length);
-      children_arrays.push_back(std::move(array.array));
+      TENZIR_DEBUG("requesting field {} to finish {} of {}", name, count,
+                   builder->length());
+      auto field = builder->finish(count);
+      TENZIR_ASSERT_CHEAP(field.length() == count);
+      field_arrays.push_back(std::move(field.array));
       auto remove = false;
       if (builder->length() > 0) {
         TENZIR_DEBUG("not removing field `{}` due to length {}", name,
@@ -781,8 +779,8 @@ public:
     }
     auto null_bitmap = std::shared_ptr<arrow::Buffer>{};
     if (valid_.length() > 0) {
-      if (target_length >= valid_.length()) {
-        auto add_trues = target_length - valid_.length();
+      if (count >= valid_.length()) {
+        auto add_trues = count - valid_.length();
         check(valid_.Reserve(add_trues));
         while (add_trues > 0) {
           valid_.UnsafeAppend(true);
@@ -795,12 +793,10 @@ public:
         TENZIR_TODO();
       }
     }
-    auto result
-      = std::make_shared<arrow::StructArray>(ty.to_arrow_type(), target_length,
-                                             children_arrays,
-                                             std::move(null_bitmap));
+    auto result = std::make_shared<arrow::StructArray>(
+      ty.to_arrow_type(), count, field_arrays, std::move(null_bitmap));
     TENZIR_ASSERT_EXPENSIVE(result->ValidateFull().ok());
-    length_ = count;
+    length_ -= count;
     return {std::move(ty), result};
   }
 
@@ -815,7 +811,7 @@ public:
   auto type() const -> tenzir::type override {
     auto fields = std::vector<struct record_type::field>{};
     fields.reserve(fields_.size());
-    for (auto& field : fields_) {
+    for (const auto& field : fields_) {
       fields.emplace_back(field.first, field.second->type());
     }
     return tenzir::type{record_type{fields}};
