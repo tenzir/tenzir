@@ -95,7 +95,8 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
 std::string to_zeek_string(const type& t) {
   auto f = detail::overload{
     [](const null_type&) -> std::string {
-      TENZIR_TODO();
+      // Zeek does not have a proper null type, so we fall back to string.
+      return "string";
     },
     [](const bool_type&) -> std::string {
       return "bool";
@@ -125,13 +126,13 @@ std::string to_zeek_string(const type& t) {
       return "subnet";
     },
     [](const enumeration_type&) -> std::string {
-      return "enumeration";
+      return "enum";
     },
     [](const list_type& lt) -> std::string {
       return fmt::format("vector[{}]", to_zeek_string(lt.value_type()));
     },
     [](const map_type&) -> std::string {
-      return "map";
+      TENZIR_UNREACHABLE();
     },
     [](const record_type&) -> std::string {
       return "record";
