@@ -254,6 +254,9 @@ public:
     parser.add("--anonymous", args.anonymous);
     parser.add(args.uri, "<uri>");
     parser.parse(p);
+    // TODO: URI parser.
+    if (not args.uri.inner.starts_with("gs://"))
+      args.uri.inner = fmt::format("gs://{}", args.uri.inner);
     return std::make_unique<gcs_loader>(std::move(args));
   }
 
@@ -266,6 +269,7 @@ public:
     parser.add("--anonymous", args.anonymous);
     parser.add(args.uri, "<uri>");
     parser.parse(p);
+    // TODO: URI parser.
     if (not args.uri.inner.starts_with("gs://"))
       args.uri.inner = fmt::format("gs://{}", args.uri.inner);
     return std::make_unique<gcs_saver>(std::move(args));
