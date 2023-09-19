@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -14,6 +13,7 @@
 #include <tenzir/data.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/type.hpp>
@@ -37,41 +37,33 @@ auto parse_node(auto& guard, const YAML::Node& node,
   switch (node.Type()) {
     case YAML::NodeType::Undefined:
     case YAML::NodeType::Null: {
+      guard.null();
       break;
     }
     case YAML::NodeType::Scalar: {
       if (auto as_bool = bool{}; YAML::convert<bool>::decode(node, as_bool)) {
-        if (auto err = guard.add(as_bool)) [[unlikely]] {
-          diagnostic::error("failed to append value: {}", err)
-            .emit(ctrl.diagnostics());
-        }
+        guard.data(as_bool);
         break;
       }
       // TODO: Do not attempt to parse pattern, map, list, and record here.
       if (auto as_data = data{}; parsers::data(node.Scalar(), as_data)) {
-        if (auto err = guard.add(make_data_view(as_data))) [[unlikely]] {
-          diagnostic::error("failed to append value: {}", err)
-            .emit(ctrl.diagnostics());
-        }
+        guard.data(make_data_view(as_data));
         break;
       }
-      if (auto err = guard.add(make_view(node.Scalar()))) [[unlikely]] {
-        diagnostic::error("failed to append value: {}", err)
-          .emit(ctrl.diagnostics());
-      }
+      guard.data(make_view(node.Scalar()));
       break;
     }
     case YAML::NodeType::Sequence: {
-      auto list = guard.push_list();
+      auto list = guard.list();
       for (const auto& element : node) {
         parse_node(list, element, ctrl);
       }
       break;
     }
     case YAML::NodeType::Map: {
-      auto record = guard.push_record();
+      auto record = guard.record();
       for (const auto& element : node) {
-        auto field = record.push_field(element.first.Scalar());
+        auto field = record.field(element.first.Scalar());
         parse_node(field, element.second, ctrl);
       }
       break;
@@ -79,10 +71,9 @@ auto parse_node(auto& guard, const YAML::Node& node,
   }
 };
 
-auto load_document(adaptive_table_slice_builder& builder,
-                   std::string&& document, operator_control_plane& ctrl)
-  -> void {
-  auto row = builder.push_row();
+auto load_document(series_builder& builder, std::string&& document,
+                   operator_control_plane& ctrl) -> void {
+  auto record = builder.record();
   try {
     auto node = YAML::Load(document);
     if (not node.IsMap()) {
@@ -90,13 +81,13 @@ auto load_document(adaptive_table_slice_builder& builder,
       return;
     }
     for (const auto& element : node) {
-      auto field = row.push_field(element.first.as<std::string>());
+      auto field = record.field(element.first.as<std::string>());
       parse_node(field, element.second, ctrl);
     }
   } catch (const YAML::Exception& err) {
     diagnostic::error("failed to load YAML document: {}", err.what())
       .emit(ctrl.diagnostics());
-    row.cancel();
+    builder.remove_last();
   }
 };
 
@@ -162,7 +153,7 @@ public:
     return std::invoke(
       [](generator<std::optional<std::string_view>> lines,
          operator_control_plane& ctrl) -> generator<table_slice> {
-        auto builder = adaptive_table_slice_builder{};
+        auto builder = series_builder{};
         auto document = std::string{};
         for (auto&& line : lines) {
           if (not line) {
@@ -187,7 +178,9 @@ public:
         if (not document.empty()) {
           load_document(builder, std::exchange(document, {}), ctrl);
         }
-        co_yield builder.finish();
+        for (auto&& slice : builder.finish_as_table_slice("tenzir.yaml")) {
+          co_yield std::move(slice);
+        }
       },
       to_lines(std::move(input)), ctrl);
   }
