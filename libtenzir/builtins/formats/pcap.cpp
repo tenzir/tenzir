@@ -345,7 +345,7 @@ auto make_chunk(const file_header& header) -> chunk_ptr {
   return chunk::copy(as_bytes(header));
 }
 
-/// Creates a file header from teh first row of table slice (that is assumed to
+/// Creates a file header from the first row of table slice (that is assumed to
 /// have one row).
 auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
   if (slice.schema().name() != "pcap.file_header" || slice.rows() == 0)
@@ -358,26 +358,40 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
   if (begin == xs.end() || *begin == std::nullopt)
     return std::nullopt;
   for (const auto& [key, value] : **begin) {
-    if (key == "magic_number")
+    if (key == "magic_number") {
       result.magic_number
         = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-    if (key == "major_version")
+      continue;
+    }
+    if (key == "major_version") {
       result.major_version
         = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
-    if (key == "minor_version")
+      continue;
+    }
+    if (key == "minor_version") {
       result.minor_version
         = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
-    if (key == "reserved1")
+      continue;
+    }
+    if (key == "reserved1") {
       result.reserved1
         = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-    if (key == "reserved2")
+      continue;
+    }
+    if (key == "reserved2") {
       result.reserved2
         = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-    if (key == "snaplen")
+      continue;
+    }
+    if (key == "snaplen") {
       result.snaplen = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-    if (key == "linktype")
+      continue;
+    }
+    if (key == "linktype") {
       result.linktype
         = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      continue;
+    }
   }
   return result;
 }
