@@ -22,6 +22,9 @@ namespace tenzir {
 /// A type representing an OS process.
 auto process_type() -> type;
 
+/// A type representing an OS process.
+auto socket_type() -> type;
+
 /// A platform-independent operating system.
 class os {
 public:
@@ -29,6 +32,9 @@ public:
 
   /// Provides a snapshot of all currently running processes.
   virtual auto processes() -> table_slice = 0;
+
+  /// Provides a snapshot of all open sockets.
+  virtual auto sockets() -> table_slice = 0;
 };
 
 #ifdef TENZIR_MACOS
@@ -38,6 +44,8 @@ public:
   static auto make() -> std::unique_ptr<darwin>;
 
   auto processes() -> table_slice final;
+
+  auto sockets() -> table_slice final;
 
 private:
   struct mach_timebase_info timebase_ {};
