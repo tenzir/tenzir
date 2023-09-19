@@ -385,7 +385,8 @@ public:
           };
         },
       };
-      co_yield transform_columns(new_slice, {std::move(transformation)});
+      auto result = transform_columns(new_slice, {std::move(transformation)});
+      co_yield std::move(result);
     }
   }
 
