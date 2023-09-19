@@ -43,7 +43,7 @@ type suricata.component.quic_extensions = record {
 
 type suricata.quic = suricata.component.common + record {
   quic: record {
-    version: uint64,
+    version: string,
     sni: string,
     ua: string,
     ja3: suricata.component.ja3,

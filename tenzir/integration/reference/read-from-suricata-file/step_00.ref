@@ -2398,5 +2398,27 @@
     }
   }
 }
-warning: !! convert_error: unable to convert Q039 into an uint64
- = note: from `read "json", parser_args(*selector("suricata", "event_type"), null, "", null, true, true, false)`
+{
+  "timestamp": "2018-03-02T15:20:26.274662",
+  "flow_id": 377203059543418,
+  "pcap_cnt": 78030141,
+  "vlan": null,
+  "in_iface": null,
+  "src_ip": "172.31.65.77",
+  "src_port": 57549,
+  "dest_ip": "209.85.202.155",
+  "dest_port": 443,
+  "proto": "UDP",
+  "event_type": "quic",
+  "community_id": null,
+  "quic": {
+    "version": "Q039",
+    "sni": "stats.g.doubleclick.net",
+    "ua": "Chrome/64.0.3282.186 Windows NT 6.3; Win64; x64",
+    "ja3": null,
+    "ja3s": null,
+    "cyu": null,
+    "extensions": null
+  },
+  "pkt_src": "wire/pcap"
+}
