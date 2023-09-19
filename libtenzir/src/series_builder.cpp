@@ -246,7 +246,6 @@ public:
     } else {
       result = builder_->finish(count);
     }
-    TENZIR_ERROR("{} == {} - {}", length(), old_length, count);
     TENZIR_ASSERT_CHEAP(length() == old_length - count);
     result.type.assign_metadata(metadata_);
     make_null_if_possible();
@@ -576,7 +575,7 @@ public:
   }
 
   auto finish(int64_t count) -> typed_array override {
-    TENZIR_WARN("finishing {} of {} with type {}", count, length(), kind());
+    TENZIR_DEBUG("finishing {} of {} with type {}", count, length(), kind());
     auto array = finish();
     TENZIR_ASSERT_CHEAP(count <= array->length());
     auto rest_begin = count;
@@ -663,7 +662,7 @@ public:
 
   auto finish(int64_t count) -> typed_array override {
     auto old_length = length();
-    TENZIR_WARN("list got request to finish {} of {}", count, old_length);
+    TENZIR_DEBUG("list got request to finish {} of {}", count, old_length);
     check(offsets_.Append(detail::narrow<int32_t>(elements_.length())));
     auto offsets = std::shared_ptr<arrow::Int32Array>{};
     check(offsets_.Finish(&offsets));
@@ -741,8 +740,8 @@ public:
 
   auto finish(int64_t count) -> typed_array override {
     TENZIR_ASSERT_CHEAP(count <= length_);
-    TENZIR_WARN("finishing {} of {} records with {} fields", count, length(),
-                fields_.size());
+    TENZIR_DEBUG("finishing {} of {} records with {} fields", count, length(),
+                 fields_.size());
     auto ty = type();
     auto field_arrays = std::vector<std::shared_ptr<arrow::Array>>{};
     field_arrays.reserve(fields_.size());
@@ -779,18 +778,17 @@ public:
     }
     auto null_bitmap = std::shared_ptr<arrow::Buffer>{};
     if (valid_.length() > 0) {
-      if (count >= valid_.length()) {
-        auto add_trues = count - valid_.length();
-        check(valid_.Reserve(add_trues));
-        while (add_trues > 0) {
-          valid_.UnsafeAppend(true);
-          add_trues -= 1;
-        }
+      if (count < valid_.length()) {
+        auto total_bits = valid_.length();
         null_bitmap = valid_.Finish().ValueOrDie();
+        auto copy_bits = total_bits - count;
+        check(valid_.Reserve(copy_bits));
+        valid_.UnsafeAppend(null_bitmap->data(), count, copy_bits);
+        null_bitmap = std::make_shared<arrow::Buffer>(null_bitmap, 0, count);
       } else {
-        // TODO: Can this happen? If so, we have to copy the remainder of the
-        // validity bitmap.
-        TENZIR_TODO();
+        auto missing = count - valid_.length();
+        check(valid_.Append(missing, true));
+        null_bitmap = valid_.Finish().ValueOrDie();
       }
     }
     auto result = std::make_shared<arrow::StructArray>(

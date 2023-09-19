@@ -756,6 +756,11 @@ tests:
     steps:
       - command: exec 'from file @./data/json/record-list-conflict-field-overwrite.json'
 
+  Read JSON record list with nulls and conflict:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/record-list-with-null-conflict.json'
+
   Schema ID Extractor:
     tags: [pipelines, cef]
     steps:
