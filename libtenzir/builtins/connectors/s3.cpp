@@ -277,6 +277,8 @@ public:
     parser.add("--anonymous", args.anonymous);
     parser.add(args.uri, "<uri>");
     parser.parse(p);
+    if (not args.uri.inner.starts_with("s3://"))
+      args.uri.inner = fmt::format("s3://{}", args.uri.inner);
     return std::make_unique<s3_saver>(std::move(args));
   }
 
