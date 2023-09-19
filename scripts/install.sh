@@ -172,10 +172,10 @@ then
 fi
 if [ "${platform}" = "Debian" ]
 then
+  # adduser is required by the Debian package installation.
   if ! check adduser
   then
-    echo "Could not find ${bold}adduser${normal} in \$PATH,"
-    echo "it is required for the Debian package install."
+    echo "Could not find ${bold}adduser${normal} in \$PATH."
     exit 1
   fi
   cmd1="sudo dpkg -i \"${tmpdir}/${package}\""
