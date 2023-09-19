@@ -338,12 +338,114 @@ private:
   parser_args args_;
 };
 
-struct printer_args {
-  // template <class Inspector>
-  // friend auto inspect(Inspector& f, printer_args& x) -> bool {
-  //   return f.object(x).pretty_name("printer_args");
-  // }
-};
+struct printer_args {};
+
+/// Creates a chunk from a PCAP file header.
+auto make_chunk(const file_header& header) -> chunk_ptr {
+  return chunk::copy(as_bytes(header));
+}
+
+/// Creates a file header from the first row of table slice (that is assumed to
+/// have one row).
+auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
+  if (slice.schema().name() != "pcap.file_header" || slice.rows() == 0)
+    return std::nullopt;
+  auto result = file_header{};
+  const auto& input_record = caf::get<record_type>(slice.schema());
+  auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+  auto xs = values(input_record, *array);
+  auto begin = xs.begin();
+  if (begin == xs.end() || *begin == std::nullopt)
+    return std::nullopt;
+  for (const auto& [key, value] : **begin) {
+    if (key == "magic_number") {
+      result.magic_number
+        = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      continue;
+    }
+    if (key == "major_version") {
+      result.major_version
+        = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
+      continue;
+    }
+    if (key == "minor_version") {
+      result.minor_version
+        = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
+      continue;
+    }
+    if (key == "reserved1") {
+      result.reserved1
+        = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      continue;
+    }
+    if (key == "reserved2") {
+      result.reserved2
+        = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      continue;
+    }
+    if (key == "snaplen") {
+      result.snaplen = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      continue;
+    }
+    if (key == "linktype") {
+      result.linktype
+        = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      continue;
+    }
+    TENZIR_DEBUG("ignoring unknown PCAP file header key '{}' with value {}",
+                 key, value);
+  }
+  return result;
+}
+
+/// Constructs a PCAP file header with a given link type.
+auto make_file_header(uint32_t linktype) -> file_header {
+  return {
+    .magic_number = magic_number_2,
+    .major_version = 2,
+    .minor_version = 4,
+    .reserved1 = 0,
+    .reserved2 = 0,
+    .snaplen = maximum_snaplen,
+    .linktype = linktype,
+  };
+}
+
+/// Creates a packet record in host-byte order and nanosecond timestamp
+/// resolution, i.e., for a fileheader with `magic_number_2`.
+auto to_packet_record(auto row) -> std::pair<packet_record, uint32_t> {
+  auto pkt = packet_record{};
+  auto linktype = uint32_t{0};
+  auto timestamp = time{};
+  auto pkt_data = std::string_view{};
+  // NB: the API for record_view feels iffy. It should expose a field-based
+  // access method, as opposed to just key-value pairs.
+  for (const auto& [key, value] : row) {
+    if (key == "linktype")
+      linktype = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+    else if (key == "timestamp")
+      timestamp = caf::get<time>(value);
+    else if (key == "captured_packet_length")
+      pkt.header.captured_packet_length = caf::get<uint64_t>(value);
+    else if (key == "original_packet_length")
+      pkt.header.original_packet_length = caf::get<uint64_t>(value);
+    else if (key == "data")
+      pkt_data = caf::get<std::string_view>(value);
+    else
+      TENZIR_WARN("got invalid PCAP header field ''", key);
+  }
+  // Split the timestamp in two pieces.
+  auto ns = timestamp.time_since_epoch();
+  auto secs = std::chrono::duration_cast<std::chrono::seconds>(ns);
+  auto fraction = ns - secs;
+  auto timestamp_fraction = detail::narrow_cast<uint32_t>(fraction.count());
+  pkt.header.timestamp = detail::narrow_cast<uint32_t>(secs.count()),
+  pkt.header.timestamp_fraction = timestamp_fraction;
+  // Translate the string to raw packet data.
+  pkt.data = std::span<const std::byte>{
+    reinterpret_cast<const std::byte*>(pkt_data.data()), pkt_data.size()};
+  return {pkt, linktype};
+}
 
 class pcap_printer final : public plugin_printer {
 public:
@@ -356,179 +458,108 @@ public:
     return "pcap";
   }
 
-  static auto pack(const file_header& header) -> chunk_ptr {
-    return chunk::copy(as_bytes(header));
-  }
-
-  static auto make_file_header(const table_slice& slice)
-    -> std::optional<file_header> {
-    if (slice.schema().name() != "pcap.file_header" || slice.rows() == 0)
-      return std::nullopt;
-    auto result = file_header{};
-    const auto& input_record = caf::get<record_type>(slice.schema());
-    auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
-    auto xs = values(input_record, *array);
-    auto begin = xs.begin();
-    if (begin == xs.end() || *begin == std::nullopt)
-      return std::nullopt;
-    for (const auto& [key, value] : **begin) {
-      if (key == "magic_number")
-        result.magic_number
-          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-      if (key == "major_version")
-        result.major_version
-          = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
-      if (key == "minor_version")
-        result.minor_version
-          = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
-      if (key == "reserved1")
-        result.reserved1
-          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-      if (key == "reserved2")
-        result.reserved2
-          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-      if (key == "snaplen")
-        result.snaplen
-          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-      if (key == "linktype")
-        result.linktype
-          = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-    }
-    return result;
-  }
-
   auto instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
+    // When the printer receives table slices, it can be a wild mix of file
+    // headers and packet records. We may receive an ordered event stream
+    // beginning with a file header, but we may also receive a random sequence
+    // of packet events coming from a historical query.
     return printer_instance::make(
       [&ctrl, input_schema = std::move(input_schema),
-       output_file_header = std::optional<file_header>{}, need_swap = false,
+       current_file_header = std::optional<file_header>{},
        file_header_printed = false, buffer = std::vector<std::byte>{}](
         table_slice slice) mutable -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
         }
-        // We may receive a PCAP file header as first event. The header magic
-        // tells us how we should write timestamps and if we need to byte-swap
-        // packet headers.
+        // We may receive multiple file headers. If we receive any, we take
+        // it into consideration for timestamp resolution.
         if (slice.schema().name() == "pcap.file_header") {
-          TENZIR_DEBUG("got external PCAP file header");
-          if (output_file_header) {
-            diagnostic::warning("ignoring external PCAP file header")
-              .note("cannot re-emit file header after having emitted packets")
-              .note("from `pcap`")
-              .emit(ctrl.diagnostics());
-          } else if (auto header = make_file_header(slice)) {
-            output_file_header = *header;
+          TENZIR_DEBUG("got new PCAP file header");
+          if (auto header = make_file_header(slice)) {
+            current_file_header = *header;
           } else {
-            diagnostic::error("failed to parse external PCAP file header")
-              .note("from `pcap`")
+            diagnostic::warning("failed to parse PCAP file header")
               .emit(ctrl.diagnostics());
           }
           co_yield {};
           co_return;
-        } else if (slice.schema().name() != "pcap.packet") {
-          diagnostic::warning("received invalid schema")
-            .note("got '{}' but expected pcap.packet", slice.schema().name())
-            .note("from `pcap`")
+        }
+        // Helper function to process a row in a table slice of packets.
+        auto process_packet_row = [&](auto row) -> std::optional<diagnostic> {
+          auto [pkt, linktype] = to_packet_record(row);
+          // Generate file header based on first packet or fail if the packet
+          // is incompatible with the known file header.
+          if (not current_file_header) {
+            TENZIR_DEBUG("generating PCAP file header");
+            current_file_header = make_file_header(linktype);
+          } else if (linktype != current_file_header->linktype) {
+            return diagnostic::error(
+                     "packet linktype doesn't match file header")
+              .done();
+          } else if (current_file_header->magic_number == magic_number_1) {
+            pkt.header.timestamp_fraction /= 1'000;
+          }
+          auto bytes = as_bytes(pkt.header);
+          buffer.reserve(sizeof(packet_header) + pkt.data.size());
+          buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+          buffer.insert(buffer.end(), pkt.data.begin(), pkt.data.end());
+          return {};
+        };
+        // Extract PCAP data from input.
+        const auto& input_record = caf::get<record_type>(slice.schema());
+        if (slice.schema().name() == "pcap.packet") {
+          auto resolved_slice = resolve_enumerations(slice);
+          auto array
+            = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+          for (const auto& row : values(input_record, *array)) {
+            TENZIR_ASSERT_CHEAP(row);
+            if (auto diag = process_packet_row(*row)) {
+              ctrl.diagnostics().emit(std::move(*diag));
+              co_return;
+            }
+          }
+        } else if (slice.schema().name() == "tenzir.packet") {
+          const auto pcap_index = input_record.resolve_key("pcap");
+          if (not pcap_index) {
+            TENZIR_VERBOSE("ignoring tenzir.packet events without pcap field");
+            co_yield {};
+            co_return;
+          }
+          auto [pcap_type, pcap_array] = pcap_index->get(slice);
+          const auto* pcap_record_type = caf::get_if<record_type>(&pcap_type);
+          const auto* pcap_values
+            = caf::get_if<arrow::StructArray>(&*pcap_array);
+          if (not(pcap_record_type or pcap_values)) {
+            diagnostic::warning("got a malformed 'tenzir.packet' event")
+              .note("field 'pcap' not a record")
+              .emit(ctrl.diagnostics());
+            co_yield {};
+            co_return;
+          }
+          for (const auto& row : values(*pcap_record_type, *pcap_values)) {
+            TENZIR_ASSERT_CHEAP(row);
+            if (auto diag = process_packet_row(*row)) {
+              ctrl.diagnostics().emit(std::move(*diag));
+              co_return;
+            }
+          }
+        } else {
+          diagnostic::warning("received unprocessable schema")
+            .note("cannot handle", slice.schema().name())
             .emit(ctrl.diagnostics());
           co_yield {};
           co_return;
         }
-        // Iterate row-wise.
-        const auto& input_record = caf::get<record_type>(slice.schema());
-        auto resolved_slice = resolve_enumerations(slice);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-        for (const auto& row : values(input_record, *array)) {
-          TENZIR_ASSERT_CHEAP(row);
-          // NB: the API for record_view is just wrong. It should expose a
-          // field-based access method, as opposed to just key-value pairs.
-          auto timestamp = time{};
-          auto captured_packet_length = uint64_t{0};
-          auto original_packet_length = uint64_t{0};
-          auto data = std::string_view{};
-          auto linktype = uint32_t{0};
-          for (const auto& [key, value] : *row) {
-            if (key == "linktype")
-              linktype
-                = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-            else if (key == "timestamp")
-              timestamp = caf::get<time>(value);
-            else if (key == "captured_packet_length")
-              captured_packet_length = caf::get<uint64_t>(value);
-            else if (key == "original_packet_length")
-              original_packet_length = caf::get<uint64_t>(value);
-            else if (key == "data")
-              data = caf::get<std::string_view>(value);
-            else
-              diagnostic::error("got invalid PCAP header field ''", key)
-                .note("from `pcap`")
-                .emit(ctrl.diagnostics());
-          }
-          // Print the file header once.
-          if (!file_header_printed) {
-            if (output_file_header) {
-              TENZIR_DEBUG("using provided PCAP file header");
-              auto swap = need_byte_swap(output_file_header->magic_number);
-              if (!swap) {
-                diagnostic::error("got invalid PCAP magic number: {0:x}",
-                                  uint32_t{output_file_header->magic_number})
-                  .note("from `pcap`")
-                  .emit(ctrl.diagnostics());
-                co_return;
-              }
-              need_swap = *swap;
-              if (need_swap)
-                co_yield pack(byteswap(*output_file_header));
-              else
-                co_yield pack(*output_file_header);
-            } else {
-              TENZIR_DEBUG("generating a PCAP file header");
-              auto header = file_header{
-                .magic_number = magic_number_2,
-                .major_version = 2,
-                .minor_version = 4,
-                .reserved1 = 0,
-                .reserved2 = 0,
-                .snaplen = maximum_snaplen,
-                .linktype = linktype,
-              };
-              co_yield pack(header);
-            }
-            file_header_printed = true;
-          } else if (linktype != output_file_header->linktype) {
-            diagnostic::error("packet with new linktype {}, first was {}",
-                              linktype, uint32_t{output_file_header->linktype})
-              .note("from `pcap`")
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          // Split timestamp in two pieces.
-          auto ns = timestamp.time_since_epoch();
-          auto secs = std::chrono::duration_cast<std::chrono::seconds>(ns);
-          auto fraction = ns - secs;
-          auto timestamp_fraction
-            = detail::narrow_cast<uint32_t>(fraction.count());
-          if (output_file_header->magic_number == magic_number_1)
-            timestamp_fraction /= 1'000;
-          auto header = packet_header{
-            .timestamp = detail::narrow_cast<uint32_t>(secs.count()),
-            .timestamp_fraction = timestamp_fraction,
-            .captured_packet_length
-            = detail::narrow_cast<uint32_t>(captured_packet_length),
-            .original_packet_length
-            = detail::narrow_cast<uint32_t>(original_packet_length),
-          };
-          if (need_swap)
-            header = byteswap(header);
-          // Copy over header.
-          buffer.resize(sizeof(packet_header) + data.size());
-          std::memcpy(buffer.data(), &header, sizeof(header));
-          std::memcpy(buffer.data() + sizeof(packet_header), data.data(),
-                      data.size());
-          co_yield chunk::copy(buffer);
+        if (not file_header_printed) {
+          TENZIR_DEBUG("emitting PCAP file header");
+          TENZIR_ASSERT_CHEAP(current_file_header);
+          co_yield make_chunk(*current_file_header);
+          file_header_printed = true;
         }
+        co_yield chunk::copy(buffer);
+        buffer.clear();
       });
   }
 

@@ -1,3 +1,0 @@
-warning: ignoring external PCAP file header
- = note: cannot re-emit file header after having emitted packets
- = note: from `pcap`
