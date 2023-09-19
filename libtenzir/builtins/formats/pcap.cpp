@@ -392,6 +392,8 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
         = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
       continue;
     }
+    TENZIR_DEBUG("ignoring unknown PCAP file header key '{}' with value {}",
+                 key, value);
   }
   return result;
 }
