@@ -233,7 +233,6 @@ public:
   /// applied recursively. The goal is to leave the builder in the same state
   /// as-if the last `count` items were added to a fresh builder.
   auto finish(int64_t count) -> typed_array {
-    TENZIR_DEBUG("dynamic builder got request to finish {}", count);
     auto old_length = length();
     TENZIR_ASSERT_CHEAP(count <= old_length);
     auto result = typed_array{};
@@ -255,7 +254,7 @@ public:
   void make_null_if_possible() {
     if (builder_->only_null() and not is_protected()) {
       auto length = builder_->length();
-      TENZIR_DEBUG("reset builder of length {} due to all null of type {}",
+      TENZIR_TRACE("reset builder of length {} due to all null of type {}",
                    length, builder_->type());
       builder_ = std::make_unique<typed_builder<null_type>>(root_);
       builder_->resize(length);
@@ -408,8 +407,8 @@ public:
   }
 
   auto finish(int64_t count) -> typed_array override {
-    TENZIR_DEBUG("conflict_builder::finish({}) with {} variants and length {}",
-                 count, variants_.size(), length());
+    TENZIR_TRACE("finishing {} of {} conflicts with {} variants", count,
+                 length(), variants_.size());
     TENZIR_ASSERT_CHEAP(count <= length());
     auto builder = arrow::StringBuilder{};
     auto variant_counts = std::vector<int64_t>{};
@@ -423,7 +422,6 @@ public:
     for (auto i = size_t{0}; i < variants_.size(); ++i) {
       arrays.push_back(variants_[i]->finish(variant_counts[i]));
     }
-    TENZIR_DEBUG("conflict_builder done with collecting data");
     auto variant_offsets = std::vector<int64_t>{};
     variant_offsets.resize(variants_.size());
     for (auto it = discriminants_.begin(); it != end; ++it) {
@@ -453,7 +451,6 @@ public:
       variant_offsets[discriminant] += 1;
     }
     discriminants_.erase(discriminants_.begin(), end);
-    TENZIR_DEBUG("returning from conflict_builder::finish");
     return {string_type{}, builder.Finish().ValueOrDie()};
   }
 
@@ -575,7 +572,7 @@ public:
   }
 
   auto finish(int64_t count) -> typed_array override {
-    TENZIR_DEBUG("finishing {} of {} with type {}", count, length(), kind());
+    TENZIR_TRACE("finishing {} of {} with type {}", count, length(), kind());
     auto array = finish();
     TENZIR_ASSERT_CHEAP(count <= array->length());
     auto rest_begin = count;
@@ -662,14 +659,14 @@ public:
 
   auto finish(int64_t count) -> typed_array override {
     auto old_length = length();
-    TENZIR_DEBUG("list got request to finish {} of {}", count, old_length);
+    TENZIR_TRACE("list got request to finish {} of {}", count, old_length);
     check(offsets_.Append(detail::narrow<int32_t>(elements_.length())));
     auto offsets = std::shared_ptr<arrow::Int32Array>{};
     check(offsets_.Finish(&offsets));
     auto result_offsets = std::static_pointer_cast<arrow::Int32Array>(
       offsets->SliceSafe(0, count + 1).ValueOrDie());
     auto ending_offset = result_offsets->Value(count);
-    TENZIR_DEBUG("ending offset of list is {} out of {}", ending_offset,
+    TENZIR_TRACE("ending offset of list is {} out of {}", ending_offset,
                  elements_.length());
     if (count == old_length) {
       TENZIR_ASSERT_CHEAP(ending_offset == elements_.length());
@@ -740,7 +737,7 @@ public:
 
   auto finish(int64_t count) -> typed_array override {
     TENZIR_ASSERT_CHEAP(count <= length_);
-    TENZIR_DEBUG("finishing {} of {} records with {} fields", count, length(),
+    TENZIR_TRACE("finishing {} of {} records with {} fields", count, length(),
                  fields_.size());
     auto ty = type();
     auto field_arrays = std::vector<std::shared_ptr<arrow::Array>>{};
@@ -751,26 +748,24 @@ public:
       if (builder->length() < count) {
         builder->resize(count);
       }
-      TENZIR_DEBUG("requesting field {} to finish {} of {}", name, count,
-                   builder->length());
       auto field = builder->finish(count);
       TENZIR_ASSERT_CHEAP(field.length() == count);
       field_arrays.push_back(std::move(field.array));
       auto remove = false;
       if (builder->length() > 0) {
-        TENZIR_DEBUG("not removing field `{}` due to length {}", name,
+        TENZIR_TRACE("not removing field `{}` due to length {}", name,
                      builder->length());
       } else {
         if (builder->is_protected()) {
-          TENZIR_DEBUG("not removing field `{}` due to protection", name);
+          TENZIR_TRACE("not removing field `{}` due to protection", name);
         } else if (builder.get() == keep_alive_) {
-          TENZIR_DEBUG("not removing field `{}` due to keep alive", name);
+          TENZIR_TRACE("not removing field `{}` due to keep alive", name);
         } else {
           remove = true;
         }
       }
       if (remove) {
-        TENZIR_DEBUG("removing field `{}`", name);
+        TENZIR_TRACE("removing field `{}`", name);
         it = fields_.erase(it);
       } else {
         ++it;
@@ -995,7 +990,7 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
                                   "expected {} but got {}",
                                   want_kind, have_kind)
                         .c_str());
-  TENZIR_DEBUG("finishing events due to conflict: requested {} but got {}",
+  TENZIR_TRACE("finishing events due to conflict: requested {} but got {}",
                want_kind, have_kind);
 
   // TODO: Rewrite and unify the following comments.
