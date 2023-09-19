@@ -372,7 +372,7 @@ public:
           ctrl.diagnostics().emit(std::move(*diag));
       }
       // Add back the untouched data column at the end before yielding.
-      auto new_slice = builder.finish();
+      auto new_slice = builder.finish("tenzir.packet");
       auto transformation = indexed_transformation{
         .index = {caf::get<record_type>(new_slice.schema()).num_fields() - 1},
         .fun = [&](struct record_type::field in_field,
@@ -385,11 +385,7 @@ public:
           };
         },
       };
-      auto result = transform_columns(new_slice, {std::move(transformation)});
-      auto renamed_schema
-        = type{"tenzir.packet", caf::get<record_type>(result.schema())};
-      result = cast(std::move(result), renamed_schema);
-      co_yield result;
+      co_yield transform_columns(new_slice, {std::move(transformation)});
     }
   }
 
