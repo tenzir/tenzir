@@ -27,7 +27,7 @@ public:
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
     auto system = std::unique_ptr<os>{};
-#ifdef TENZIR_MACOS
+#if TENZIR_MACOS
     system = darwin::make();
 #endif
     if (not system) {

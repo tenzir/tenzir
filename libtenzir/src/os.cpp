@@ -15,7 +15,7 @@
 
 #include <algorithm>
 
-#ifdef TENZIR_MACOS
+#if TENZIR_MACOS
 #  include <mach/mach_time.h>
 
 #  include <libproc.h>
@@ -66,7 +66,7 @@ auto socket_type() -> type {
   };
 }
 
-#ifdef TENZIR_MACOS
+#if TENZIR_MACOS
 
 auto darwin::make() -> std::unique_ptr<darwin> {
   auto result = std::make_unique<darwin>();

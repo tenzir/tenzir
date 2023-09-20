@@ -13,7 +13,7 @@
 
 #include <algorithm>
 
-#ifdef TENZIR_MACOS
+#if TENZIR_MACOS
 #  include <mach/mach_time.h>
 #endif
 
@@ -37,7 +37,7 @@ public:
   virtual auto sockets() -> table_slice = 0;
 };
 
-#ifdef TENZIR_MACOS
+#if TENZIR_MACOS
 
 class darwin final : public os {
 public:
