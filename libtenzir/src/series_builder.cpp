@@ -1073,8 +1073,9 @@ void detail::field_ref::atom(detail::atom_view value) {
             field->resize(origin_->length() - 1);
           }
         } else {
-          // If the builder does not exist, we do nothing. This means that if a
-          // field is always null, it is never added to the record.
+          // If the builder does not exist, we just insert a new builder. This
+          // is so that, even if a field is always null, it still is present.
+          (void)origin_->insert_new_field(std::string{name_});
         }
       } else if constexpr (std::same_as<atom_type, enumeration_type>) {
         // The `enumeration` type cannot be added on-demand because the value
