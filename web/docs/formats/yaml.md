@@ -4,14 +4,6 @@ Reads and writes YAML.
 
 ## Synopsis
 
-Parser:
-
-```
-yaml
-```
-
-Printer:
-
 ```
 yaml
 ```
