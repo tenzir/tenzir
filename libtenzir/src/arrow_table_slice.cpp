@@ -422,7 +422,7 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
       = arrow::StructArray::Make(layer.arrays, arrow_fields).ValueOrDie();
   }
 #if TENZIR_ENABLE_ASSERTIONS
-  auto validate_status = new_struct_array->ValidateFull();
+  auto validate_status = new_struct_array->Validate();
   TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
 #endif // TENZIR_ENABLE_ASSERTIONS
   return {

@@ -252,15 +252,15 @@ public:
     }
   }
 
-  // TODO: Fix docs.
-  /// Finishes the builder, but leaves the last `count` element. The builder is
-  /// fully finished if `count == 0`. We attempt to reduce the underlying type:
-  /// If all remaining elements of the series are null, then we transition this
-  /// builder the null type. If the series contains records where one field is
-  /// always null, we drop the field. If the series contains lists which only
-  /// have null items, the inner list type becomes null. Type reduction is also
-  /// applied recursively. The goal is to leave the builder in the same state
-  /// as-if the last `count` items were added to a fresh builder.
+  /// Finishes and returns the first `count` elements.
+  ///
+  /// We attempt to reduce the underlying type: If all remaining elements of the
+  /// series are null, then we transition this builder the null type. If the
+  /// series contains records where one field is always null, we drop the field.
+  /// If the series contains lists which only have null items, the inner list
+  /// type becomes null. Type reduction is also applied recursively. The goal is
+  /// to leave the builder in the same state as-if the remaining items were
+  /// added to a fresh builder.
   auto finish(int64_t count) -> typed_array {
     auto old_length = length();
     TENZIR_ASSERT_CHEAP(count <= old_length);
@@ -715,7 +715,7 @@ public:
     auto result
       = arrow::ListArray::FromArrays(*result_offsets, *result_elements.array)
           .ValueOrDie();
-    TENZIR_ASSERT_EXPENSIVE(result->ValidateFull().ok());
+    TENZIR_ASSERT_EXPENSIVE(result->Validate().ok());
     return {list_type{result_elements.type}, result};
   }
 
@@ -817,7 +817,7 @@ public:
     }
     auto result = std::make_shared<arrow::StructArray>(
       ty.to_arrow_type(), count, field_arrays, std::move(null_bitmap));
-    TENZIR_ASSERT_EXPENSIVE(result->ValidateFull().ok());
+    TENZIR_ASSERT_EXPENSIVE(result->Validate().ok());
     length_ -= count;
     return {std::move(ty), result};
   }
@@ -1001,35 +1001,7 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
     // type conflict.
     return cast->prepare<Type>();
   }
-  // Otherwise, there is a type conflict. This means that we have to flush the
-  // top-level `series_builder2` and create a new one that is initialized with
-  // the data already parsed for the top-level item. However, if the type
-  // conflict arises because we are inside a list with conflicting types, this
-  // would not solve the situation. Because, as of the time of writing this,
-  // we have no sum types, we decided to solve this by converting all values
-  // of the conflicting type to a string. Note that this is not necessarily
-  // the top-level list item, e.g., if the list contains two records with
-  // conflicts.
-
-  auto have_kind = builder_->kind();
-  auto want_kind = type_kind::make<Type>();
-  TENZIR_ASSERT(have_kind != want_kind);
-  TENZIR_ASSERT_CHEAP(not protected_,
-                      fmt::format("type mismatch for prepared type: "
-                                  "expected {} but got {}",
-                                  want_kind, have_kind)
-                        .c_str());
-  TENZIR_TRACE("finishing events due to conflict: requested {} but got {}",
-               want_kind, have_kind);
-
-  // TODO: Rewrite and unify the following comments.
-
-  // {"foo": [1, 2]}
-  // {"foo": ["hello", "world"]}
-  // {"foo": [1, 2]}
-  // {"foo": [42, "world"]} -> {"foo": ["42", "world"]}
-
-  // Otherwise, there are three cases to consider:
+  // Otherwise, there is a type conflict. There are three cases to consider:
   //
   // 1. ~~~
   //    {"foo": {"bar": 42}}
@@ -1061,15 +1033,19 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
   //    We can differentiate between (2) and (3) by finishing the previous
   //    events, which we have to do anyway. If data remains in the builder,
   //    then we know that there is a conflict within the current event.
-
-  // {"foo": [{"bar": [{"baz": 42}]}, {"bar": [{"baz": "hi"}]}]}
-  // {"foo": [{"bar": [{"baz": "42"}]}, {"bar": [{"baz": "hi"}]}]}
-  // foo[].bar[].baz
-
+  auto have_kind = builder_->kind();
+  auto want_kind = type_kind::make<Type>();
+  TENZIR_ASSERT(have_kind != want_kind);
+  TENZIR_ASSERT_CHEAP(not protected_,
+                      fmt::format("type mismatch for prepared type: "
+                                  "expected {} but got {}",
+                                  want_kind, have_kind)
+                        .c_str());
+  TENZIR_TRACE("finishing events due to conflict: requested {} but got {}",
+               want_kind, have_kind);
   root_->finish_previous_events(this);
-
   if (length() > 0) {
-    TENZIR_VERBOSE("switchting to conflict builder");
+    TENZIR_VERBOSE("switching to conflict builder");
     builder_
       = std::make_unique<detail::conflict_builder>(root_, std::move(builder_));
     root_->set_conflict_flag();
@@ -1171,6 +1147,10 @@ void builder_ref::atom(detail::atom_view value) {
 }
 
 auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
+  if (std::holds_alternative<caf::none_t>(value)) {
+    atom(value);
+    return {};
+  }
   if (not is_protected()) {
     if (std::holds_alternative<enumeration>(value)) {
       // We cannot infer the `enumeration_type` from an `enumeration` value.
@@ -1277,7 +1257,7 @@ auto builder_ref::try_data(data_view2 value) -> caf::expected<void> {
       }
       return {};
     },
-    [&](const auto& x) -> caf::expected<void> {
+    [&]<atom_view_type T>(const T& x) -> caf::expected<void> {
       return try_atom(x);
     },
     [&](const view<pattern>&) -> caf::expected<void> {
@@ -1386,7 +1366,7 @@ auto series_builder::finish_as_table_slice(std::string_view name)
     auto batch = arrow::RecordBatch::Make(std::move(arrow_schema),
                                           cast->length(), cast->fields());
     TENZIR_ASSERT_CHEAP(batch);
-    TENZIR_ASSERT_EXPENSIVE(batch->ValidateFull().ok());
+    TENZIR_ASSERT_EXPENSIVE(batch->Validate().ok());
     result.emplace_back(batch, array.type);
   }
   return result;

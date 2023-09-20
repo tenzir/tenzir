@@ -420,7 +420,7 @@ TEST(enumeration type) {
   auto t = type{record_type{{"foo", enumeration_type{{"bar", 0}, {"baz", 1}}}}};
   auto b = series_builder{t};
   b.record().field("foo").data(enumeration{0});
-  b.record();
+  b.record().field("foo").data(caf::none);
   b.record().field("foo").data(enumeration{1});
   check(b, {{3, "struct<foo: extension<tenzir.enumeration>>",
              R"(-- is_valid: all not null
