@@ -47,17 +47,18 @@ apt-get -y --no-install-recommends install \
 wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb"
 apt-get -y --no-install-recommends install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 apt-get update
-apt-get -y --no-install-recommends install libarrow-dev=12.0.1-1 libprotobuf-dev libparquet-dev=12.0.1-1
+apt-get -y --no-install-recommends install libarrow-dev=13.0.0-1 libprotobuf-dev libparquet-dev=13.0.0-1
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 
 # Node 18.x and Yarn
-wget -O - 'https://deb.nodesource.com/setup_18.x' | bash -
-wget -O - 'https://dl.yarnpkg.com/debian/pubkey.gpg' | gpg --dearmor | tee /usr/share/keyrings/yarnkey.gpg >/dev/null
-echo "deb [signed-by=/usr/share/keyrings/yarnkey.gpg] https://dl.yarnpkg.com/debian stable main" | tee /etc/apt/sources.list.d/yarn.list
+NODE_MAJOR=18
+mkdir -p /etc/apt/keyrings
+wget -O /etc/apt/keyrings/nodesource.asc https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
 apt-get update
 apt-get -y install yarn
 
 # Poetry
 export POETRY_HOME=/opt/poetry
 curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
-ln -s /opt/poetry/bin/poetry /usr/local/bin/
+ln -nsf /opt/poetry/bin/poetry /usr/local/bin/poetry

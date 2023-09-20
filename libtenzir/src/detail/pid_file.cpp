@@ -10,8 +10,6 @@
 
 #include "tenzir/concept/parseable/numeric/integral.hpp"
 #include "tenzir/concept/parseable/to.hpp"
-#include "tenzir/concept/printable/numeric.hpp"
-#include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/load_contents.hpp"
 #include "tenzir/detail/posix.hpp"
@@ -109,7 +107,7 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
                            "failed in flock(2):", strerror(errno));
   }
   // Write the PID in human readable form into the file.
-  auto pid_string = to_string(pid);
+  auto pid_string = std::to_string(pid);
   TENZIR_ASSERT(!pid_string.empty());
   if (::write(fd, pid_string.data(), pid_string.size()) < 0) {
     ::close(fd);

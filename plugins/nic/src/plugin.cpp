@@ -8,12 +8,16 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/concept/parseable/tenzir/ip.hpp>
+#include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/data.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pcap.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/table_slice_builder.hpp>
 
 #include <pcap/pcap.h>
 
@@ -28,13 +32,31 @@ namespace {
 struct loader_args {
   located<std::string> iface;
   std::optional<located<uint32_t>> snaplen;
+  std::optional<location> emit_file_headers;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("loader_args")
-      .fields(f.field("iface", x.iface), f.field("snaplen", x.snaplen));
+      .fields(f.field("iface", x.iface), f.field("snaplen", x.snaplen),
+              f.field("emit_file_headers", x.emit_file_headers));
   }
+};
+
+auto make_file_header(int snaplen, int linktype) -> pcap::file_header {
+  return {
+    // Timestamps have microsecond resolution when using pcap_open_live(). If we
+    // want nanosecond resolution, we must stop using pcap_open_live() and
+    // replace it with pcap_create() and pcap_activate(). See
+    // https://stackoverflow.com/q/28310922/1170277 for details.
+    .magic_number = pcap::magic_number_1,
+    .major_version = 2,
+    .minor_version = 4,
+    .reserved1 = 0,
+    .reserved2 = 0,
+    .snaplen = detail::narrow_cast<uint32_t>(snaplen),
+    .linktype = detail::narrow_cast<uint32_t>(linktype),
+  };
 };
 
 class nic_loader final : public plugin_loader {
@@ -50,8 +72,8 @@ public:
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
     TENZIR_DEBUG("capturing from {} with snaplen of {}", args_.iface.inner,
                  snaplen);
-    auto make = [](auto& ctrl, auto iface,
-                   auto snaplen) mutable -> generator<chunk_ptr> {
+    auto make = [](auto& ctrl, auto iface, auto snaplen,
+                   bool emit_file_headers) mutable -> generator<chunk_ptr> {
       auto put_iface_in_promiscuous_mode = 1;
       // The packet buffer timeout functions much like a read timeout: It
       // describes the number of milliseconds to wait at most until returning
@@ -75,6 +97,8 @@ public:
       auto pcap = std::shared_ptr<pcap_t>{ptr, [](pcap_t* p) {
                                             pcap_close(p);
                                           }};
+      auto linktype = pcap_datalink(pcap.get());
+      TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
       // We yield once initially to signal that the operator successfully
       // started.
       co_yield {};
@@ -118,28 +142,21 @@ public:
             .emit(ctrl.diagnostics());
           break;
         }
-        // Emit a PCAP file header before the first packet. This results in a
-        // packet stream that looks like a standard PCAP file downstream,
-        // allowing users to use the `pcap` format to parse the byte stream.
-        if (num_packets == 0) {
+        // Emit a PCAP file header, either with every chunk or once initially as
+        // separate chunk. This results in a packet stream that looks like a
+        // standard PCAP file downstream, allowing users to use the `pcap`
+        // format to parse the byte stream.
+        if (emit_file_headers) {
+          if (buffer.empty()) {
+            auto header = make_file_header(snaplen, linktype);
+            auto bytes = as_bytes(header);
+            buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+          }
+        } else if (num_packets == 0) {
           auto linktype = pcap_datalink(pcap.get());
           TENZIR_ASSERT(linktype != PCAP_ERROR_NOT_ACTIVATED);
-          auto header = pcap::file_header{
-#ifdef PCAP_TSTAMP_PRECISION_NANO
-            .magic_number = pcap::magic_number_2,
-#else
-            .magic_number = pcap::magic_number_1,
-#endif
-            .major_version = 2,
-            .minor_version = 4,
-            .reserved1 = 0,
-            .reserved2 = 0,
-            .snaplen = snaplen,
-            .linktype = detail::narrow_cast<uint32_t>(linktype),
-          };
-          const auto* ptr = reinterpret_cast<const std::byte*>(&header);
-          auto bytes = std::span<const std::byte>{ptr, sizeof(header)};
-          co_yield chunk::copy(bytes);
+          auto header = make_file_header(snaplen, linktype);
+          co_yield chunk::copy(as_bytes(header));
         }
         auto header = pcap::packet_header{
           .timestamp = detail::narrow_cast<uint32_t>(pkt_hdr->ts.tv_sec),
@@ -160,7 +177,7 @@ public:
         ++num_packets;
       }
     };
-    return make(ctrl, args_.iface.inner, snaplen);
+    return make(ctrl, args_.iface.inner, snaplen, !!args_.emit_file_headers);
   }
 
   auto to_string() const -> std::string override {
@@ -190,7 +207,31 @@ private:
   record config_;
 };
 
-class plugin final : public loader_plugin<nic_loader> {
+/// A type that represents an description of a NIC.
+auto nic_type() -> type {
+  return type{
+    "tenzir.nic",
+    record_type{
+      {"name", string_type{}},
+      {"description", string_type{}},
+      {"addresses", list_type{ip_type{}}},
+      {"loopback", bool_type{}},
+      {"up", bool_type{}},
+      {"running", bool_type{}},
+      {"wireless", bool_type{}},
+      {"status",
+       record_type{
+         {"unknown", bool_type{}},
+         {"connected", bool_type{}},
+         {"disconnected", bool_type{}},
+         {"not_applicable", bool_type{}},
+       }},
+    },
+  };
+}
+
+class plugin final : public virtual loader_plugin<nic_loader>,
+                     public virtual aspect_plugin {
 public:
   auto initialize(const record& config, const record& /* global_config */)
     -> caf::error override {
@@ -198,14 +239,80 @@ public:
     return caf::none;
   }
 
+  auto aspect_name() const -> std::string override {
+    return "nics";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice> override {
+    auto err = std::array<char, PCAP_ERRBUF_SIZE>{};
+    pcap_if_t* devices = nullptr;
+    auto result = pcap_findalldevs(&devices, err.data());
+    auto deleter = [](pcap_if_t* ptr) {
+      pcap_freealldevs(ptr);
+    };
+    auto iface = std::shared_ptr<pcap_if_t>{devices, deleter};
+    if (result == PCAP_ERROR) {
+      diagnostic::error("failed to enumerate NICs")
+        .hint("{}", std::string_view{err.data(), err.size()})
+        .hint("pcap_findalldevs")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    TENZIR_ASSERT(result == 0);
+    auto builder = table_slice_builder{nic_type()};
+    for (const auto* ptr = iface.get(); ptr != nullptr; ptr = ptr->next) {
+      auto okay = builder.add(std::string_view{ptr->name});
+      TENZIR_ASSERT(okay);
+      if (ptr->description)
+        okay = builder.add(std::string_view{ptr->description});
+      else
+        okay = builder.add(caf::none);
+      auto addrs = list{};
+      for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next)
+        if (auto x = to<ip>(detail::to_string(addr->addr)))
+          addrs.emplace_back(*x);
+      okay = builder.add(addrs);
+      TENZIR_ASSERT(okay);
+      auto is_set = [ptr](uint32_t x) {
+        return (ptr->flags & x) == x;
+      };
+      auto is_status = [ptr](uint32_t x) {
+        return (ptr->flags & PCAP_IF_CONNECTION_STATUS) == x;
+      };
+      okay = builder.add(is_set(PCAP_IF_LOOPBACK));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_set(PCAP_IF_UP));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_set(PCAP_IF_RUNNING));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_set(PCAP_IF_WIRELESS));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_UNKNOWN));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_CONNECTED));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_DISCONNECTED));
+      TENZIR_ASSERT(okay);
+      okay = builder.add(is_status(PCAP_IF_CONNECTION_STATUS_NOT_APPLICABLE));
+      TENZIR_ASSERT(okay);
+    }
+    co_yield builder.finish();
+  }
+
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
     auto parser = argument_parser{
       name(),
-      fmt::format("https://docs.tenzir.com/docs/next/connectors/{}", name())};
+      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
     auto args = loader_args{};
     parser.add(args.iface, "<iface>");
     parser.add("-s,--snaplen", args.snaplen, "<count>");
+    parser.add("-e,--emit-file-headers", args.emit_file_headers);
     parser.parse(p);
     return std::make_unique<nic_loader>(std::move(args));
   }

@@ -38,7 +38,7 @@ jobs:
       image: ${{ matrix.image }}
     steps:
       - name: Setup dependencies
-        run: apt update && apt install -y curl sudo
+        run: apt update && apt install -y curl sudo adduser
       - name: Run installer
         run: curl https://get.tenzir.app | sh
   container-redhat-based:

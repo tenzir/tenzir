@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <arpa/inet.h>
 #include <caf/fwd.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -176,5 +177,10 @@ write(int fd, const void* buffer, size_t bytes);
 /// @param bytes The number of bytes that should be skipped.
 /// @returns `caf::none` on successful seeking.
 [[nodiscard]] caf::error seek(int fd, size_t bytes);
+
+/// Creates a string representation from a socket address.
+/// @param sa The socket address.
+/// @returns The string representation of *sa*.
+auto to_string(const sockaddr* sa) -> std::string;
 
 } // namespace tenzir::detail

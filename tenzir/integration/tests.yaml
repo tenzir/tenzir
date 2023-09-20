@@ -1072,7 +1072,7 @@ tests:
     tags: [pipelines, parser, printer, pcap]
     steps:
       # Make sure basic decapsulation logic works.
-      - command: exec 'read pcap | decapsulate | write json'
+      - command: exec 'read pcap | decapsulate | drop pcap.data | write json'
         input: data/pcap/example.pcap.gz
       # Decapsulate VLAN information. Manually verified with:
       # tshark -r vlan-single-tagging.pcap -T fields -e vlan.id
@@ -1086,6 +1086,9 @@ tests:
       - command: exec 'read pcap -e | write pcap'
         input: data/pcap/example.pcap.gz
         transformation: md5sum | cut -f 1 -d ' '
+      # Concatenate PCAPs and process them. The test ensures that we have the
+      # right sequencing of file header and packet header events.
+      - command: exec 'shell "cat @./data/pcap/vlan-*.pcap" | read pcap -e | put schema=#schema | write json -c'
 
   Compression:
     tags: [pipelines, compression]
@@ -1103,3 +1106,11 @@ tests:
         input: data/cef/checkpoint.log
       - command: exec 'read lines -s | summarize n=count(.) | write json -c'
         input: data/cef/checkpoint.log
+
+  # TODO: Set up Tenzir S3 stuff for Tenzir-internal read/write tests?
+  # TODO: Re-enable this test once Arrow updated their bundled AWS SDK from version 1.10.55,
+  # see: https://github.com/apache/arrow/issues/37721
+  #S3 Connector:
+    #tags: [pipelines]
+    #steps:
+      #- command: exec 'from s3 s3://sentinel-cogs/sentinel-s2-l2a-cogs/1/C/CV/2023/1/S2B_1CCV_20230101_0_L2A/tileinfo_metadata.json | write json'

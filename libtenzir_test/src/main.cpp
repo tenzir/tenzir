@@ -138,5 +138,8 @@ int main(int argc, char** argv) {
   // Initialize factories.
   [[maybe_unused]] auto config = tenzir::configuration{};
   // Run the unit tests.
-  return caf::test::main(argc, argv);
+  auto result = caf::test::main(argc, argv);
+  // Deinitialize plugins.
+  tenzir::plugins::get_mutable().clear();
+  return result;
 }
