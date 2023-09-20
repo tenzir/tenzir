@@ -153,20 +153,20 @@ auto parse_http_options(std::vector<located<std::string>>& request_items)
         .primary(request_item.source)
         .throw_();
     }
-    if (not body.empty()) {
-      // We're currently only supporting JSON. In the future we're going to
-      // support -f for form-encoded data as well.
-      auto json_body = to_json(body, {.oneline = true});
-      TENZIR_ASSERT_CHEAP(json_body);
-      result.body = std::move(*json_body);
-      result.headers["Accept"] = "application/json, */*";
-      result.headers["Content-Type"] = "application/json";
-    }
-    // User-provided headers always have precedence, which is why we process
-    // them last, after we added automatically generated ones previously.
-    for (auto& [header, value] : headers)
-      result.headers[header] = std::move(value);
   }
+  if (not body.empty()) {
+    // We're currently only supporting JSON. In the future we're going to
+    // support -f for form-encoded data as well.
+    auto json_body = to_json(body, {.oneline = true});
+    TENZIR_ASSERT_CHEAP(json_body);
+    result.body = std::move(*json_body);
+    result.headers["Accept"] = "application/json, */*";
+    result.headers["Content-Type"] = "application/json";
+  }
+  // User-provided headers always have precedence, which is why we process
+  // them last, after we added automatically generated ones previously.
+  for (auto& [header, value] : headers)
+    result.headers[header] = std::move(value);
   return result;
 }
 
