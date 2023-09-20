@@ -21,43 +21,10 @@
 
 namespace tenzir {
 
-namespace detail {
-
-template <class T>
-struct is_atom_type
-  : std::bool_constant<basic_type<T> || std::same_as<T, enumeration_type>> {};
-
-template <class T>
-concept atom_type = is_atom_type<T>::value;
-
-using atom_view_types
-  = caf::detail::tl_map_t<caf::detail::tl_filter_t<concrete_types, is_atom_type>,
-                          type_to_data, view_trait>;
-
-template <class T>
-concept atom_view_type = caf::detail::tl_contains<atom_view_types, T>::value;
-
-} // namespace detail
-
-struct data_view2;
-
-using atom_view
-  = caf::detail::tl_apply_t<detail::atom_view_types, std::variant>;
-
-template <class T>
-struct atom_view_to_type : data_to_type<T> {};
-
-template <>
-struct atom_view_to_type<std::string_view> {
-  using type = string_type;
-};
-
-template <class T>
-using atom_view_to_type_t = atom_view_to_type<T>::type;
-
-class series_builder;
-class record_ref;
 class builder_ref;
+struct data_view2;
+class record_ref;
+class series_builder;
 struct typed_array;
 
 namespace detail {
@@ -67,6 +34,7 @@ class series_builder_impl;
 class builder_base;
 template <class Type>
 class typed_builder;
+struct atom_view;
 
 } // namespace detail
 
@@ -124,9 +92,10 @@ public:
   auto operator=(const series_builder&) -> series_builder& = delete;
   auto operator=(series_builder&&) noexcept -> series_builder&;
 
-  // TODO: Provide only `.data()`?
   void null();
-  void atom(atom_view value);
+
+  auto try_data(data_view2 value) -> caf::expected<void>;
+
   void data(data_view2 value);
 
   auto record() -> record_ref;
@@ -145,7 +114,7 @@ public:
   /// Returns the full type, which can be expensive. Use `kind()` if possible.
   auto type() -> type;
 
-  /// Returns `type().kind()`, but can be ssignificantly more efficient.
+  /// Returns `type().kind()`, but can be significantly more efficient.
   auto kind() -> type_kind;
 
   /// Returns the number of elements that would be returned by `finish()`.
@@ -182,10 +151,12 @@ struct typed_array {
 /// Unlike `data_view`, this type is based on `std::variant` and can be much
 /// better used as a parameter.
 ///
-/// TODO: Why does `data_view` (and this currently) use ref-counts?
+/// TODO: Consider eventually retiring the current `data_view`, perhaps
+/// replacing it with an implementation that does not use ref-counts internally.
 struct data_view2
   : caf::detail::tl_apply_t<caf::detail::tl_map_t<data::types, view_trait>,
                             variant> {
+public:
   using variant::variant;
 
   explicit(false) data_view2(data_view x) {
@@ -217,7 +188,7 @@ public:
     : origin_{origin}, name_{name} {
   }
 
-  void atom(atom_view value);
+  void atom(detail::atom_view value);
 
   auto record() -> record_ref;
 
@@ -256,13 +227,7 @@ public:
   explicit(false) builder_ref(detail::field_ref ref) : ref_{ref} {
   }
 
-  void null() {
-    atom(caf::none);
-  }
-
-  void atom(atom_view value);
-
-  auto try_atom(atom_view) -> caf::expected<void>;
+  void null();
 
   void data(data_view2 value);
 
@@ -279,6 +244,10 @@ public:
   auto is_protected() -> bool;
 
 private:
+  void atom(detail::atom_view value);
+
+  auto try_atom(detail::atom_view) -> caf::expected<void>;
+
   template <class F>
   auto dispatch(F&& f) -> decltype(auto);
 

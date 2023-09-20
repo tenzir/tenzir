@@ -418,8 +418,9 @@ private:
     TENZIR_UNREACHABLE();
   }
 
-  [[nodiscard]] auto add_value(builder_ref builder, atom_view value) -> bool {
-    auto result = builder.try_atom(value);
+  [[nodiscard]] auto add_value(builder_ref builder, const data_view2& value)
+    -> bool {
+    auto result = builder.try_data(value);
     if (not result) {
       ctrl_.warn(result.error());
       return false;

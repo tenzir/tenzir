@@ -26,15 +26,17 @@ public:
 
   auto show(operator_control_plane&) const -> generator<table_slice> override {
     auto builder = series_builder{};
-    auto row = builder.record();
-    row.field("type").data(tenzir::version::build::type);
-    row.field("tree_hash").data(tenzir::version::build::tree_hash);
-    row.field("assertions").data(tenzir::version::build::has_assertions);
-    auto sanitizers = row.field("sanitizers").record();
-    sanitizers.field("address").data(
-      tenzir::version::build::has_address_sanitizer);
-    sanitizers.field("undefined_behavior")
-      .data(tenzir::version::build::has_undefined_behavior_sanitizer);
+    builder.data(record{
+      {"type", tenzir::version::build::type},
+      {"tree_hash", tenzir::version::build::tree_hash},
+      {"assertions", tenzir::version::build::has_assertions},
+      {"sanitizers",
+       record{
+         {"address", tenzir::version::build::has_address_sanitizer},
+         {"undefined_behavior",
+          tenzir::version::build::has_undefined_behavior_sanitizer},
+       }},
+    });
     for (auto&& slice : builder.finish_as_table_slice("tenzir.build")) {
       co_yield std::move(slice);
     }

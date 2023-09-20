@@ -95,9 +95,38 @@ void check(const arrow::Status& status) {
   TENZIR_ASSERT_CHEAP(status.ok(), status.ToString().c_str());
 }
 
+template <class T>
+struct is_atom_type
+  : std::bool_constant<basic_type<T> || std::same_as<T, enumeration_type>> {};
+
+template <class T>
+concept atom_type = is_atom_type<T>::value;
+
+using atom_view_types
+  = caf::detail::tl_map_t<caf::detail::tl_filter_t<concrete_types, is_atom_type>,
+                          type_to_data, view_trait>;
+
+template <class T>
+concept atom_view_type = caf::detail::tl_contains<atom_view_types, T>::value;
+
+template <class T>
+struct atom_view_to_type : data_to_type<T> {};
+
+template <>
+struct atom_view_to_type<std::string_view> {
+  using type = string_type;
+};
+
+template <class T>
+using atom_view_to_type_t = atom_view_to_type<T>::type;
+
 } // namespace
 
 namespace detail {
+
+struct atom_view : caf::detail::tl_apply_t<atom_view_types, variant> {
+  using variant::variant;
+};
 
 class builder_base {
 public:
@@ -187,7 +216,7 @@ public:
   auto operator=(const dynamic_builder&) -> dynamic_builder& = delete;
   auto operator=(dynamic_builder&&) -> dynamic_builder& = delete;
 
-  void atom(atom_view value);
+  void atom(detail::atom_view value);
 
   auto record() -> record_ref;
 
@@ -293,7 +322,7 @@ public:
   auto operator=(const series_builder_impl&) -> series_builder_impl& = delete;
   auto operator=(series_builder_impl&&) -> series_builder_impl& = delete;
 
-  void atom(atom_view value) {
+  void atom(detail::atom_view value) {
     finish_if_conflict();
     builder_.atom(std::move(value));
   }
@@ -921,7 +950,7 @@ private:
   series_builder_impl* root_;
 };
 
-void dynamic_builder::atom(atom_view value) {
+void dynamic_builder::atom(detail::atom_view value) {
   std::visit(
     [&](auto value) {
       if constexpr (std::is_same_v<decltype(value), caf::none_t>) {
@@ -1052,7 +1081,7 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
 
 } // namespace detail
 
-void detail::field_ref::atom(atom_view value) {
+void detail::field_ref::atom(detail::atom_view value) {
   std::visit(
     [&](auto value) {
       using atom_type = atom_view_to_type_t<decltype(value)>;
@@ -1135,13 +1164,13 @@ auto builder_ref::dispatch(F&& f) -> decltype(auto) {
     ref_);
 }
 
-void builder_ref::atom(atom_view value) {
+void builder_ref::atom(detail::atom_view value) {
   dispatch([&](auto& ref) {
     ref.atom(value);
   });
 }
 
-auto builder_ref::try_atom(atom_view value) -> caf::expected<void> {
+auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
   if (not is_protected()) {
     if (std::holds_alternative<enumeration>(value)) {
       // We cannot infer the `enumeration_type` from an `enumeration` value.
@@ -1155,7 +1184,7 @@ auto builder_ref::try_atom(atom_view value) -> caf::expected<void> {
              const FromData& value, tag<ToType>) -> caf::expected<void> {
     using FromType = atom_view_to_type_t<FromData>;
     using ToData = type_to_data_t<ToType>;
-    if constexpr (not detail::atom_type<ToType>) {
+    if constexpr (not atom_type<ToType>) {
       return caf::make_error(ec::type_clash,
                              fmt::format("expected {} but got {}",
                                          type_kind::of<ToType>,
@@ -1164,8 +1193,28 @@ auto builder_ref::try_atom(atom_view value) -> caf::expected<void> {
       auto result = caf::expected<ToData>{ToData{}};
       auto full_ty = type();
       auto ty = caf::get<ToType>(full_ty);
-      // TODO: Consider refactoring this logic.
-      if constexpr (std::same_as<ToType, duration_type>) {
+      // TODO: Refactor this logic.
+      if constexpr (std::same_as<FromType, enumeration_type>) {
+        // We have to special case this, because we cannot construct a proper
+        // `FromType` instance just from the data.
+        if constexpr (std::same_as<ToType, enumeration_type>) {
+          if (ty.field(value).empty()) {
+            return caf::make_error(ec::invalid_argument,
+                                   fmt::format("enumeration type {} does not "
+                                               "accept value {}",
+                                               full_ty, value));
+          }
+          result = value;
+        } else {
+          // TODO: We could consider allowing some conversions from enumeration.
+          // However, this code path is normally not taken anyway. For example,
+          // the JSON parser first has to resolve the enumeration string, which
+          // requires this having enumeration type.
+          return caf::make_error(ec::convert_error,
+                                 fmt::format("cannot convert enumeration to {}",
+                                             type_kind::of<ToType>));
+        }
+      } else if constexpr (std::same_as<ToType, duration_type>) {
         // TODO: Should we prefer to error if no unit was specified?
         auto unit = full_ty.attribute("unit").value_or("s");
         if constexpr (
@@ -1197,6 +1246,10 @@ auto builder_ref::try_atom(atom_view value) -> caf::expected<void> {
   return std::visit(f, value, kind());
 }
 
+void builder_ref::null() {
+  data(caf::none);
+}
+
 void builder_ref::data(data_view2 value) {
   auto result = try_data(std::move(value));
   TENZIR_ASSERT_CHEAP(result, fmt::to_string(result.error()).c_str());
@@ -1207,14 +1260,20 @@ auto builder_ref::try_data(data_view2 value) -> caf::expected<void> {
     [&](const view<tenzir::record>& x) -> caf::expected<void> {
       auto r = record();
       for (auto&& [name, data] : x) {
-        return r.field(name).try_data(data);
+        auto result = r.field(name).try_data(data);
+        if (not result) {
+          return result.error();
+        }
       }
       return {};
     },
     [&](const view<tenzir::list>& x) -> caf::expected<void> {
       auto l = list();
       for (const auto& y : x) {
-        return l.try_data(y);
+        auto result = l.try_data(y);
+        if (not result) {
+          return result.error();
+        }
       }
       return {};
     },
@@ -1277,11 +1336,11 @@ auto series_builder::operator=(series_builder&&) noexcept
   -> series_builder& = default;
 
 void series_builder::null() {
-  impl_->atom(caf::none);
+  data(caf::none);
 }
 
-void series_builder::atom(atom_view value) {
-  impl_->atom(value);
+auto series_builder::try_data(data_view2 value) -> caf::expected<void> {
+  return builder_ref{*this}.try_data(std::move(value));
 }
 
 void series_builder::data(data_view2 value) {
