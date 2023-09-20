@@ -325,7 +325,7 @@ TEST(split results into two slices when input chunks has more events than a
   CHECK_EQUAL(output_slices.front().rows(), defaults::import::table_slice_size);
 }
 
-TEST(null in the input json results in the value being missing in the schema) {
+TEST(null in the input json results in the value not missing in the schema) {
   auto sut = create_sut(
     make_chunk_generator({R"({"a": 5, "b": null})", R"({"c": null})"}),
     control_plane_mock);
@@ -335,7 +335,7 @@ TEST(null in the input json results in the value being missing in the schema) {
   }
   REQUIRE_EQUAL(output_slices.size(), 1u);
   CHECK_EQUAL(output_slices.front().rows(), 2u);
-  CHECK_EQUAL(output_slices.front().columns(), 1u);
+  CHECK_EQUAL(output_slices.front().columns(), 3u);
   CHECK_EQUAL(materialize(output_slices.front().at(0u, 0u)), int64_t{5u});
 }
 
