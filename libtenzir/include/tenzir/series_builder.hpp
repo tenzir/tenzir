@@ -22,9 +22,9 @@
 namespace tenzir {
 
 class builder_ref;
-struct data_view2;
 class record_ref;
 class series_builder;
+struct data_view2;
 struct typed_array;
 
 namespace detail {
@@ -83,6 +83,7 @@ struct atom_view;
 /// afterwards.
 class series_builder {
 public:
+  /// Initializes the builder, optionally with a given type (see above).
   series_builder(std::optional<std::reference_wrapper<const tenzir::type>> ty
                  = std::nullopt);
 
@@ -92,18 +93,42 @@ public:
   auto operator=(const series_builder&) -> series_builder& = delete;
   auto operator=(series_builder&&) noexcept -> series_builder&;
 
+  /// Adds a `null` value to the builder.
+  ///
+  /// This operation cannot fail. It is equivalent to `data(caf::none)`.
   void null();
 
+  /// Attempts to add the given data to the builder.
+  ///
+  /// This only attempts conversions if the builder was initialized with a type.
+  /// In that case, it fails if there is no eligible conversion. Otherwise, the
+  /// type is inferred only based on the given value. Enumeration types cannot
+  /// be inferred from their data and return an error instead.
   auto try_data(data_view2 value) -> caf::expected<void>;
 
+  /// Same as `try_data(value)`, but asserts success.
   void data(data_view2 value);
 
+  /// Begins building a new record.
+  ///
+  /// Unlike `data(record{...})`, the record fields can be specified on-the-fly.
   auto record() -> record_ref;
 
+  /// Begins building a new list.
+  ///
+  /// Similar to `record()`.
   auto list() -> builder_ref;
 
+  /// Finishes and returns the built data arrays.
+  ///
+  /// Returns a `vector` instead of a single array because type conflicts are
+  /// handled by starting a new array. After calling this method, the builder is
+  /// empty and can be directly used again. If the builder was initialized with
+  /// a type, then this initilization is preserved.
   auto finish() -> std::vector<typed_array>;
 
+  /// Similar to `finish()`, but converts the result to table slices.
+  ///
   /// If `name == ""`, then the name will match the name of the type that was
   /// used for initialization (if it had a name), and `tenzir.json` otherwise.
   ///
@@ -146,17 +171,16 @@ struct typed_array {
   std::shared_ptr<arrow::Array> array;
 };
 
-/// An alternative to `data_view`
+/// A temporary alternative to `data_view`.
 ///
-/// Unlike `data_view`, this type is based on `std::variant` and can be much
-/// better used as a parameter.
+/// Unlike `data_view`, this type is based on `std::variant` and is more
+/// convenient to use as a parameter.
 ///
 /// TODO: Consider eventually retiring the current `data_view`, perhaps
 /// replacing it with an implementation that does not use ref-counts internally.
 struct data_view2
   : caf::detail::tl_apply_t<caf::detail::tl_map_t<data::types, view_trait>,
                             variant> {
-public:
   using variant::variant;
 
   explicit(false) data_view2(data_view x) {
@@ -211,6 +235,8 @@ private:
 } // namespace detail
 
 /// A type-erased reference to a builder.
+///
+/// See `series_builder` for documentation of the methods.
 class builder_ref {
 public:
   explicit(false) builder_ref(series_builder& ref) : ref_{ref.impl_.get()} {
@@ -241,6 +267,7 @@ public:
 
   auto type() -> type;
 
+  /// Returns true if this builder was initialized with a type.
   auto is_protected() -> bool;
 
 private:
@@ -256,13 +283,15 @@ private:
     ref_;
 };
 
-/// Method has no immediate effect.
 class record_ref {
 public:
   explicit record_ref(detail::typed_builder<record_type>* origin)
     : origin_{origin} {
   }
 
+  /// Returns the builder for the given field.
+  ///
+  /// Note that this method has no immediate effect.
   auto field(std::string_view name) -> builder_ref {
     return detail::field_ref{origin_, name};
   }
