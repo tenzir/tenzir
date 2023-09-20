@@ -75,7 +75,7 @@ costs, organizations are adopting various strategies:
 - **Adopting XDR**: Others are transitioning to Extended Detection and Response
   (XDR) solutions, prioritizing in-depth analysis over breadth. But as XDR gains
   traction, it may inherit SIEM's cost challenges.
-- **Building Security Data Lakes:** These are becoming increasingly popular due
+- **Building Security Data Lakes**: These are becoming increasingly popular due
   to their cost-effectiveness and advanced analytical capabilities. However,
   transitioning to a data lake doesn't guarantee reduced consumption. Many
   organizations will find they are swapping Capex for Opex. Moreover, while data
