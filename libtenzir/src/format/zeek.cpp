@@ -95,8 +95,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
 std::string to_zeek_string(const type& t) {
   auto f = detail::overload{
     [](const null_type&) -> std::string {
-      // Zeek does not have a proper null type, so we fall back to string.
-      return "string";
+      return "none";
     },
     [](const bool_type&) -> std::string {
       return "bool";
@@ -138,7 +137,7 @@ std::string to_zeek_string(const type& t) {
       return "record";
     },
   };
-  return t ? caf::visit(f, t) : "none";
+  return caf::visit(f, t);
 }
 
 constexpr char separator = '\x09';

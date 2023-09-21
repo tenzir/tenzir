@@ -305,9 +305,17 @@ private:
 
   [[nodiscard]] auto
   parse_number(simdjson::ondemand::value val, builder_ref builder) -> bool {
-    // TODO: Check that this is safe.
-    auto kind = raw_ ? simdjson::ondemand::number_type::floating_point_number
-                     : val.get_number_type().value_unsafe();
+    auto kind = simdjson::ondemand::number_type{};
+    if (raw_) {
+      kind = simdjson::ondemand::number_type::floating_point_number;
+    } else {
+      auto result = val.get_number_type();
+      if (result.error()) {
+        report_parse_err(val, "a number");
+        return false;
+      }
+      kind = result.value_unsafe();
+    }
     switch (kind) {
       case simdjson::ondemand::number_type::floating_point_number: {
         auto result = val.get_double();

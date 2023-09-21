@@ -25,7 +25,7 @@ namespace tenzir {
 
 TEST(null_type) {
   static_assert(concrete_type<null_type>);
-  // TODO: Rest.
+  // TODO: Add some more tests that cover the null type.
   auto t = type{};
   auto n = null_type{};
   auto tn = type{null_type{}};

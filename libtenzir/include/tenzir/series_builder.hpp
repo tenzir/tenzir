@@ -49,11 +49,11 @@ struct atom_view;
 /// nested objects become invalidated once a method is called on one of their
 /// parents. For example, `auto r = builder.record()` is not valid anymore after
 /// another record has been created with `auto s = builder.record()`. All
-/// handles and the main buider itself can be moved freely without invalidation.
+/// handles and the main builder itself can be moved freely without invalidation.
 ///
 /// It can happen that type conflicts arise. For example, a field can be a
 /// string in one element of the series, but a record in another. These
-/// conflicts are normally bsolved by flushing previous events into their own
+/// conflicts are normally solved by flushing previous events into their own
 /// table slice, which is why `.finish()` returns a vector of table slices. The
 /// data of the element that is still being built is retained while flushing.
 /// Furthermore, the builder resets its internal state such that it matches the
@@ -124,7 +124,7 @@ public:
   /// Returns a `vector` instead of a single array because type conflicts are
   /// handled by starting a new array. After calling this method, the builder is
   /// empty and can be directly used again. If the builder was initialized with
-  /// a type, then this initilization is preserved.
+  /// a type, then this initialization is preserved.
   auto finish() -> std::vector<typed_array>;
 
   /// Similar to `finish()`, but converts the result to table slices.

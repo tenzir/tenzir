@@ -74,9 +74,9 @@
 /// The `dynamic_builder` upgrades the typed builder when a conflict arises.
 /// To this end, we use the following lattice.
 ///
-///                           confict_builder
+///                           conflict_builder
 ///                            /     |     \.
-///     typed_builder<int64_type>   ...    typed_builder<string_type>
+///    typed_builder<int64_type>    ...    typed_builder<string_type>
 ///                            \     |     /
 ///                       typed_builder<null_type>
 ///
@@ -302,13 +302,8 @@ private:
   // Keeping a pointer here is fine because the type is not movable.
   series_builder_impl* root_;
 
-  /// ...
   std::unique_ptr<detail::builder_base> builder_;
-
-  /// ...
   bool protected_ = false;
-
-  ///
   tenzir::type metadata_;
 };
 
@@ -324,7 +319,7 @@ public:
 
   void atom(detail::atom_view value) {
     finish_if_conflict();
-    builder_.atom(std::move(value));
+    builder_.atom(value);
   }
 
   auto record() -> record_ref {
@@ -874,7 +869,7 @@ public:
   }
 
   auto only_null() const -> bool override {
-    // Missing valdity entries are considered to be true, i.e., non-null.
+    // Missing validity entries are considered to be true, i.e., non-null.
     return valid_.false_count() == length_;
   }
 
@@ -916,7 +911,7 @@ private:
   auto make_fields() const -> std::vector<std::shared_ptr<arrow::Field>> {
     auto fields = std::vector<std::shared_ptr<arrow::Field>>{};
     fields.reserve(fields_.size());
-    for (auto& [name, builder_] : fields_) {
+    for (const auto& [name, builder_] : fields_) {
       fields.push_back(arrow::field(name, builder_->arrow_type()));
     }
     return fields;
@@ -944,7 +939,7 @@ private:
   /// Number of records (including nulls) in this builder.
   int64_t length_ = 0;
 
-  /// Used to keep a field builder alive during conflcit flushing.
+  /// Used to keep a field builder alive during conflict flushing.
   dynamic_builder* keep_alive_ = nullptr;
 
   series_builder_impl* root_;
@@ -1026,7 +1021,7 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
   //    resolve it properly without introducing sum types. Because, at the
   //    time of writing this, we did not want to do it, we convert the
   //    conflicting items to strings. This also resolves the conflict, at the
-  //    cost of an inacurracy with regard to the actual data:
+  //    cost of an inaccuracy with regard to the actual data:
   //    ~~~
   //    {"foo": [{"bar": "1"}, {"bar": "baz"}]}
   //    ~~~
