@@ -35,6 +35,8 @@ public:
   virtual auto sockets() -> table_slice = 0;
 };
 
+#if TENZIR_MACOS
+
 /// An abstraction of macOS.
 class darwin final : public os {
 public:
@@ -52,5 +54,7 @@ private:
   struct state;
   std::unique_ptr<state> state_;
 };
+
+#endif
 
 } // namespace tenzir

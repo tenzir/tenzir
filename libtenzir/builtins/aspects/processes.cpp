@@ -25,7 +25,7 @@ public:
 
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
-    auto system = darwin::make();
+    auto system = os::make();
     if (not system) {
       diagnostic::error("failed to create OS shim").emit(ctrl.diagnostics());
       co_return;
