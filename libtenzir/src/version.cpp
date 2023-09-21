@@ -60,7 +60,23 @@ record retrieve_versions() {
       plugin_names.push_back(fmt::format("{}", plugin->name()));
   }
   result["plugins"] = std::move(plugin_names);
+  list features;
+  for (auto feature : tenzir_features())
+    features.push_back(feature);
+  result["features"] = features;
   return result;
+}
+
+auto tenzir_features() -> std::vector<std::string> {
+  // A list of features that are supported by this version of the node.
+  // This is intended to support the rollout of potentially breaking new
+  // features, so that downstream API consumers can adjust their behavior
+  // depending on the capabilities of the node.
+  //
+  // large_responses - The platform plugin understands the
+  //                   `alternate_payload_destination` field and can send
+  //                   out-of-band responses.
+  return {"large_responses"};
 }
 
 } // namespace tenzir
