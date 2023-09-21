@@ -70,4 +70,7 @@
 
 /// Unlike `__builtin_unreachable()`, reaching this macro is not UB, and unlike
 /// `die("unreachable")`, it prints a backtrace.
-#define TENZIR_UNREACHABLE() TENZIR_ASSERT_CHEAP(false)
+#define TENZIR_UNREACHABLE() TENZIR_ASSERT_CHEAP(false, "unreachable")
+
+/// Used to mark code as unfinished. Reaching it aborts the program.
+#define TENZIR_TODO() TENZIR_ASSERT_CHEAP(false, "todo")

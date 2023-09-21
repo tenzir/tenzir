@@ -736,6 +736,31 @@ tests:
     steps:
       - command: exec 'from file @./data/zeek/zeek.json read zeek-json | write json'
 
+  Read JSON from tshark output:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/pcap/tshark.json'
+
+  Read JSON with new field in record list:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/record-list-new-field.json'
+
+  Read JSON with differents fields in one record list:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/record-list-different-fields.json'
+
+  Read JSON with list config in overwritten field:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/record-list-conflict-field-overwrite.json'
+
+  Read JSON record list with nulls and conflict:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/record-list-with-null-conflict.json'
+
   Schema ID Extractor:
     tags: [pipelines, cef]
     steps:

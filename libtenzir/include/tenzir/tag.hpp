@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "tenzir/die.hpp"
-
-#include <variant>
+#include "tenzir/variant.hpp"
 
 namespace tenzir {
 
@@ -18,6 +16,8 @@ namespace tenzir {
 template <typename T>
 struct tag {
   using type = T;
+
+  auto operator<=>(const tag& other) const = default;
 
   friend auto inspect(auto& f, tag& x) -> bool {
     return f.object(x).pretty_name("tag").fields();
@@ -30,13 +30,19 @@ inline constexpr auto tag_v = tag<T>{};
 
 /// Variant of the marker types of the given types.
 template <typename... Ts>
-struct tag_variant : std::variant<tag<Ts>...> {
-  using std::variant<tag<Ts>...>::variant;
+class tag_variant : public variant<tag<Ts>...> {
+public:
+  using super = variant<tag<Ts>...>;
+
+  using super::super;
 
   template <class T>
-  static auto make() -> tag_variant {
+  static constexpr auto make() -> tag_variant {
     return tag_variant{tag_v<T>};
   }
+
+  template <class T>
+  static constexpr auto of = make<T>();
 
   /// Returns whether this holds `tag<T>`.
   template <typename T>
@@ -44,31 +50,21 @@ struct tag_variant : std::variant<tag<Ts>...> {
     return std::holds_alternative<tag<T>>(*this);
   }
 
+  template <typename T>
+  auto is_not() const -> bool {
+    return not is<T>();
+  }
+
+  template <typename... Us>
+  auto is_any() const -> bool {
+    return (std::holds_alternative<tag<Us>>(*this) || ...);
+  }
+
+  auto operator<=>(const tag_variant& other) const = default;
+
   template <class Inspector>
   friend auto inspect(Inspector& f, tag_variant& x) -> bool {
-    auto index = x.index();
-    if (not f.apply(index)) {
-      return false;
-    }
-    if constexpr (Inspector::is_loading) {
-      switch (index) {
-#define TENZIR_TAG_VARIANT_APPLY_INDEX(idx)                                    \
-  case idx:                                                                    \
-    if constexpr ((idx) < sizeof...(Ts)) {                                     \
-      x.template emplace<idx>();                                               \
-      return true;                                                             \
-    }                                                                          \
-    return false
-        TENZIR_TAG_VARIANT_APPLY_INDEX(0);
-        TENZIR_TAG_VARIANT_APPLY_INDEX(1);
-        TENZIR_TAG_VARIANT_APPLY_INDEX(2);
-        TENZIR_TAG_VARIANT_APPLY_INDEX(3);
-#undef TENZIR_TAG_VARIANT_APPLY_INDEX
-        default:
-          die("unimplemented");
-      }
-    }
-    return true;
+    return f.apply(static_cast<super&>(x));
   }
 };
 

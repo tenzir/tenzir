@@ -26,18 +26,7 @@
     "rcode": null,
     "ttl": null,
     "tx_id": 0,
-    "grouped": {
-      "A": null,
-      "NS": null,
-      "AAAA": null,
-      "CNAME": null,
-      "TXT": null,
-      "MX": null,
-      "PTR": null,
-      "SOA": null,
-      "SSHFP": null,
-      "SRV": null
-    },
+    "grouped": null,
     "answers": null
   }
 }

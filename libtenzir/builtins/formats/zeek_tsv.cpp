@@ -250,6 +250,9 @@ struct zeek_printer {
 
   auto to_zeek_string(const type& t) const -> std::string {
     auto f = detail::overload{
+      [](const null_type&) -> std::string {
+        return "none";
+      },
       [](const bool_type&) -> std::string {
         return "bool";
       },
@@ -278,19 +281,19 @@ struct zeek_printer {
         return "subnet";
       },
       [](const enumeration_type&) -> std::string {
-        return "enumeration";
+        return "enum";
       },
       [this](const list_type& lt) -> std::string {
         return fmt::format("vector[{}]", to_zeek_string(lt.value_type()));
       },
       [](const map_type&) -> std::string {
-        return "map";
+        TENZIR_UNREACHABLE();
       },
       [](const record_type&) -> std::string {
         return "record";
       },
     };
-    return t ? caf::visit(f, t) : "none";
+    return caf::visit(f, t);
   }
 
   auto generate_timestamp() const -> std::string {

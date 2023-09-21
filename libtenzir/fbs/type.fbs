@@ -82,6 +82,7 @@ namespace tenzir.fbs.type;
 
 /// The sum type of all possible types.
 union Type {
+  // null_type: NONE,
   bool_type: BoolType,
   int64_type: Int64Type,
   uint64_type: UInt64Type,

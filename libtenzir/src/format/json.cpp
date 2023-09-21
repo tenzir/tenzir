@@ -19,6 +19,7 @@
 #include "tenzir/concept/printable/tenzir/data.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/format/json/default_selector.hpp"
 #include "tenzir/format/json/field_selector.hpp"
 #include "tenzir/logger.hpp"
@@ -77,6 +78,9 @@ data extract(const ::simdjson::dom::element& value, const type& type) {
 
 data extract(const ::simdjson::dom::array& values, const type& type) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const bool_type&) noexcept -> data {
       return caf::none;
     },
@@ -127,6 +131,9 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
 
 data extract(int64_t value, const type& type) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const bool_type&) noexcept -> data {
       return value != 0;
     },
@@ -184,6 +191,9 @@ data extract(int64_t value, const type& type) {
 
 data extract(const ::simdjson::dom::object& value, const type& type) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const bool_type&) noexcept -> data {
       return caf::none;
     },
@@ -280,6 +290,9 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
 
 data extract(uint64_t value, const type& type) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const bool_type&) noexcept -> data {
       return value != 0;
     },
@@ -337,6 +350,9 @@ data extract(uint64_t value, const type& type) {
 
 data extract(double value, const type& type) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const bool_type&) noexcept -> data {
       return value != 0.0;
     },
@@ -389,6 +405,9 @@ data extract(double value, const type& type) {
 
 data extract(std::string_view value, const type& type) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const bool_type&) noexcept -> data {
       if (bool result = {}; parsers::json_boolean(value, result))
         return result;
@@ -467,6 +486,9 @@ data extract(std::string_view value, const type& type) {
 
 data extract(bool value, const type& type) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const bool_type&) noexcept -> data {
       return value;
     },
@@ -580,6 +602,10 @@ caf::error add(const ::simdjson::dom::element& value, const type& type,
 
 void add(int64_t value, const type& type, table_slice_builder& builder) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      TENZIR_ASSERT(added);
+    },
     [&](const bool_type&) noexcept {
       const auto added = builder.add(value != 0);
       TENZIR_ASSERT(added);
@@ -652,6 +678,10 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
 
 void add(uint64_t value, const type& type, table_slice_builder& builder) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      TENZIR_ASSERT(added);
+    },
     [&](const bool_type&) noexcept {
       const auto added = builder.add(value != 0);
       TENZIR_ASSERT(added);
@@ -724,6 +754,10 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
 
 void add(double value, const type& type, table_slice_builder& builder) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      TENZIR_ASSERT(added);
+    },
     [&](const bool_type&) noexcept {
       const auto added = builder.add(value != 0);
       TENZIR_ASSERT(added);
@@ -785,6 +819,10 @@ void add(double value, const type& type, table_slice_builder& builder) {
 
 void add(bool value, const type& type, table_slice_builder& builder) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      TENZIR_ASSERT(added);
+    },
     [&](const bool_type&) noexcept {
       const auto added = builder.add(value);
       TENZIR_ASSERT(added);
@@ -843,6 +881,10 @@ void add(bool value, const type& type, table_slice_builder& builder) {
 void add(std::string_view value, const type& type,
          table_slice_builder& builder) {
   auto f = detail::overload{
+    [&](const null_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      TENZIR_ASSERT(added);
+    },
     [&](const bool_type&) noexcept {
       if (bool result = {}; parsers::json_boolean(value, result)) {
         const auto added = builder.add(result);

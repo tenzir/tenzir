@@ -25,7 +25,7 @@
     "223.149.205.1"
   ]
 }
-warning: group-by column `z` does not exist for schema `9940eae275d3b1fa`
+warning: group-by column `z` does not exist for schema `tenzir.json`
 warning: group-by column `z` does not exist for schema `zeek._0_0_2`
 warning: group-by column `z` does not exist for schema `zeek.conn`
 warning: group-by column `z` does not exist for schema `zeek.conn_long`

@@ -13,7 +13,6 @@
     "id": 22038,
     "rrname": "google.com",
     "rrtype": "MX",
-    "tx_id": 0,
-    "grouped": {}
+    "tx_id": 0
   }
 }

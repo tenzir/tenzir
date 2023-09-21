@@ -8,13 +8,13 @@ Parser:
 
 ```
 json [--schema=<schema>] [--selector=<field[:prefix]>] [--unnest-separator=<string>]
-     [--no-infer] [--ndjson]
+     [--no-infer] [--ndjson] [--raw]
 ```
 
 Printer:
 
 ```
-json [-c|--compact-output] [-C|--color-output] [-M|--monochrome-output] 
+json [-c|--compact-output] [-C|--color-output] [-M|--monochrome-output]
      [--omit-nulls] [--omit-empty-objects] [--omit-empty-lists] [--omit-empty]
 ```
 
@@ -98,6 +98,12 @@ Popular examples of NDJSON include the Suricat Eve JSON and the Zeek Streaming
 JSON formats. Tenzir supports [`suricata`][suricata.md] and
 [`zeek-json`][zeek-json.md] parsers out of the box that utilize this mechanism.
 
+### `--raw` (Parser)
+
+Use only the raw JSON types. This means that all strings are parsed as `string`,
+irrespective of whether they are a valid `ip`, `duration`, etc. Also, since JSON
+only has one generic number type, all numbers are parsed with the `double` type.
+
 ### `--c|--compact-output` (Printer)
 
 Switch to line-delimited JSON output (JSONL/NDJSON).
@@ -131,10 +137,10 @@ Example:
 
 ```json
 {
-  "a": null
+  "a": null,
   "b": [42, null, 43],
   "c": {
-    "d": null
+    "d": null,
     "e": 42
   }
 }
@@ -144,7 +150,7 @@ With `--omit-nulls`, this example becomes:
 
 ```json
 {
-  "b": 42,
+  "b": [42, 43],
   "c": {
     "e": 42
   }
@@ -159,7 +165,7 @@ Example:
 
 ```json
 {
-  "w": null
+  "w": null,
   "x": {},
   "y": {
     "z": {}
@@ -183,7 +189,7 @@ Example:
 
 ```json
 {
-  "m": []
+  "m": [],
   "n": {},
   "o": {
     "p": []

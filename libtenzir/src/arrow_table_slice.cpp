@@ -401,16 +401,26 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record batch after the transformation.
   TENZIR_ASSERT(layer.fields.size() == layer.arrays.size());
-  if (layer.fields.empty())
-    return {};
   auto new_schema = type{record_type{layer.fields}};
   new_schema.assign_metadata(schema);
   auto arrow_fields = arrow::FieldVector{};
   arrow_fields.reserve(layer.fields.size());
   for (const auto& field : layer.fields)
     arrow_fields.push_back(field.type.to_arrow_field(field.name));
-  auto new_struct_array
-    = arrow::StructArray::Make(layer.arrays, arrow_fields).ValueOrDie();
+  auto new_struct_array = std::shared_ptr<arrow::StructArray>{};
+  // TODO: Does it make sense to add `struct_array->offset()` here?
+  if (layer.arrays.empty()
+      || struct_array->length() == layer.arrays[0]->length()) {
+    new_struct_array = std::make_shared<arrow::StructArray>(
+      std::make_shared<arrow::StructType>(arrow_fields), struct_array->length(),
+      layer.arrays, struct_array->null_bitmap(), struct_array->null_count());
+  } else {
+    // FIXME: Callers should not rely on this hack. The signature of this
+    // function does not really allow this, as it can change the behavior for
+    // nulls.
+    new_struct_array
+      = arrow::StructArray::Make(layer.arrays, arrow_fields).ValueOrDie();
+  }
 #if TENZIR_ENABLE_ASSERTIONS
   auto validate_status = new_struct_array->Validate();
   TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "tenzir/config.hpp" // IWYU pragma: export
-#include "tenzir/tag.hpp"
 #include "tenzir/tql/fwd.hpp"
 
 #include <caf/config.hpp>
@@ -151,6 +150,7 @@ class list_type;
 class map_type;
 class module;
 class null_bitmap;
+class null_type;
 class operator_base;
 class operator_box;
 class parser_interface;
@@ -277,6 +277,12 @@ class scope_linked;
 
 template <class... Ts>
 class variant;
+
+template <typename T>
+struct tag;
+
+template <class... Ts>
+class tag_variant;
 
 namespace detail {
 

@@ -24,11 +24,23 @@
 #include <caf/none.hpp>
 
 namespace tenzir {
+
+struct null_parser : parser_base<null_parser> {
+  using attribute = caf::none_t;
+
+  template <class Iterator, class Attribute>
+  auto parse(Iterator& f, const Iterator& l, Attribute&) const -> bool {
+    return parsers::lit{"null"}.parse(f, l, unused);
+  }
+};
+
 namespace parsers {
 
 constexpr inline auto number = (parsers::count >> &!chr{'.'})
                                | (parsers::integer >> &!chr{'.'})
                                | parsers::real;
+
+constexpr inline auto null = null_parser{};
 
 } // namespace parsers
 
@@ -78,7 +90,9 @@ private:
       | '[' >> ~(x % ',') >> trailing_comma >> ']'
       | '{' >> ~as<map>(kvp % ',') >> trailing_comma >> '}'
       | record_parser
-      | as<caf::none_t>("null"_p)
+      // TODO: We have two representations for the null type: `null` and `_`,
+      // but should consider dropping `_` eventually.
+      | parsers::null
       | as<caf::none_t>(parsers::ch<'_'>)
       ;
     // clang-format on
@@ -89,6 +103,11 @@ private:
 template <>
 struct parser_registry<data> {
   using type = data_parser;
+};
+
+template <>
+struct parser_registry<caf::none_t> {
+  using type = null_parser;
 };
 
 namespace parsers {

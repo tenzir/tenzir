@@ -38,7 +38,7 @@ auto get_common_types_impl(const InputType& input_type, const data& new_input,
                            type_list<CommonTypes...>)
   -> std::vector<std::pair<type, data>> {
   auto ret = std::vector<std::pair<type, data>>{};
-  auto push_type = [&](const auto& current_common_type) {
+  [[maybe_unused]] auto push_type = [&](const auto& current_common_type) {
     const auto& actual_data = caf::get<type_to_data_t<InputType>>(new_input);
     if (auto cast_val
         = cast_value(input_type, actual_data, current_common_type)) {

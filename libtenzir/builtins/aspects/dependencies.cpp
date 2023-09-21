@@ -9,6 +9,7 @@
 #include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 #include <arrow/util/config.h>
 #include <boost/version.hpp>
@@ -39,17 +40,14 @@ public:
   }
 
   auto show(operator_control_plane&) const -> generator<table_slice> override {
-    auto builder = adaptive_table_slice_builder{};
+    auto builder = series_builder{};
 #define TENZIR_ADD_DEPENDENCY(name, version)                                   \
   do {                                                                         \
-    auto row = builder.push_row();                                             \
-    auto err = row.push_field("name").add(#name);                              \
-    TENZIR_ASSERT_CHEAP(not err);                                              \
+    auto row = builder.record();                                               \
+    row.field("name").data(#name);                                             \
     const auto version_string = std::string{(version)}; /*NOLINT*/             \
-    auto version_field = row.push_field("version");                            \
     if (not version_string.empty()) {                                          \
-      err = version_field.add(version_string);                                 \
-      TENZIR_ASSERT_CHEAP(not err);                                            \
+      row.field("version").data(version_string);                               \
     }                                                                          \
   } while (false)
     TENZIR_ADD_DEPENDENCY(arrow, fmt::format("{}.{}.{}", ARROW_VERSION_MAJOR,
@@ -90,10 +88,9 @@ public:
                                       XXH_VERSION_MINOR, XXH_VERSION_RELEASE));
     TENZIR_ADD_DEPENDENCY(yaml_cpp, "");
 #undef TENZIR_ADD_DEPENDENCY
-    auto result = builder.finish();
-    auto renamed_schema
-      = type{"tenzir.dependency", caf::get<record_type>(result.schema())};
-    co_yield cast(std::move(result), renamed_schema);
+    for (auto&& slice : builder.finish_as_table_slice("tenzir.dependency")) {
+      co_yield std::move(slice);
+    }
   } // namespace
 };  // namespace
 

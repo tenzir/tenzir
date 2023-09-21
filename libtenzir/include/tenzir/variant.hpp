@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#pragma once
+
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/error.hpp"
 

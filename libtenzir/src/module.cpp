@@ -62,7 +62,7 @@ module module::combine(const module& s1, const module& s2) {
 }
 
 bool module::add(module::value_type t) {
-  if (!t || find(t.name()) != nullptr)
+  if (find(t.name()) != nullptr)
     return false;
   types_.push_back(std::move(t));
   return true;

@@ -32,20 +32,29 @@
 
 namespace tenzir {
 
-namespace {
-
-std::span<const std::byte> none_type_representation() {
-  static const auto buffer = []() noexcept {
-    constexpr auto reserved_size = 12;
-    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto type = fbs::CreateType(builder);
-    builder.Finish(type);
-    auto result = builder.Release();
-    TENZIR_ASSERT(result.size() == reserved_size);
-    return result;
-  }();
-  return as_bytes(buffer);
+auto to_string(type_kind x) -> std::string_view {
+  auto f = detail::overload{
+    []<basic_type T>(tag<T>) -> std::string_view {
+      static auto result = fmt::to_string(T{});
+      return result;
+    },
+    [](tag<enumeration_type>) -> std::string_view {
+      return "enumeration";
+    },
+    [](tag<record_type>) -> std::string_view {
+      return "record";
+    },
+    [](tag<list_type>) -> std::string_view {
+      return "list";
+    },
+    [](tag<map_type>) -> std::string_view {
+      return "map";
+    },
+  };
+  return std::visit(f, x);
 }
+
+namespace {
 
 constexpr size_t reserved_string_size(std::string_view str) {
   // This helper function calculates the length of a string in a FlatBuffers
@@ -165,16 +174,19 @@ void construct_enumeration_type(stateful_type_base& self, const T* begin,
 template <class T>
 void construct_record_type(stateful_type_base& self, const T& begin,
                            const T& end) {
-  TENZIR_ASSERT(begin != end, "A record type must not have zero fields.");
   const auto reserved_size = [&]() noexcept {
     // By default the builder allocates 1024 bytes, which is much more than
     // what we require, and since we can easily calculate the exact amount we
     // should do that. The total length is made up from the following terms:
-    // - 52 bytes FlatBuffers table framing
+    // - 44 bytes FlatBuffers table framing
+    // - 8 additional bytes if there are any fields at all.
     // - 24 bytes for each contained field.
     // - All contained string lengths, rounded up to four each.
     // - All contained nested type FlatBuffers.
-    size_t size = 52;
+    size_t size = 44;
+    if (begin != end) {
+      size += 8;
+    }
     for (auto it = begin; it != end; ++it) {
       const auto& type_bytes = as_bytes(it->type);
       size += 24;
@@ -595,7 +607,7 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
   }
   auto f = detail::overload{
     [&](const legacy_none_type&) noexcept {
-      return type{other.name(), type{}, std::move(attributes)};
+      return type{other.name(), null_type{}, std::move(attributes)};
     },
     [&](const legacy_bool_type&) noexcept {
       return type{other.name(), bool_type{}, std::move(attributes)};
@@ -662,6 +674,9 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
 
 legacy_type type::to_legacy_type() const noexcept {
   auto f = detail::overload{
+    [&](const null_type&) noexcept -> legacy_type {
+      return legacy_none_type{};
+    },
     [&](const bool_type&) noexcept -> legacy_type {
       return legacy_bool_type{};
     },
@@ -717,7 +732,7 @@ legacy_type type::to_legacy_type() const noexcept {
       return result;
     },
   };
-  auto result = *this ? caf::visit(f, *this) : legacy_none_type{};
+  auto result = caf::visit(f, *this);
   if (!name().empty())
     result = legacy_alias_type{std::move(result)}.name(std::string{name()});
   for (const auto& attribute : attributes()) {
@@ -742,6 +757,8 @@ const fbs::Type& type::table(enum transparent transparent) const noexcept {
 }
 
 type::operator bool() const noexcept {
+  // TODO: Remove this function?
+  // TENZIR_UNREACHABLE();
   return table(transparent::yes).type_type() != fbs::type::Type::NONE;
 }
 
@@ -780,15 +797,23 @@ uint8_t type::type_index() const noexcept {
   return static_cast<uint8_t>(table(transparent::yes).type_type());
 }
 
+auto type::kind() const noexcept -> type_kind {
+  return caf::visit(
+    []<class T>(const T&) -> type_kind {
+      return tag_v<T>;
+    },
+    *this);
+}
+
 std::span<const std::byte> as_bytes(const type& x) noexcept {
-  return x.table_ ? as_bytes(*x.table_) : none_type_representation();
+  return x.table_ ? as_bytes(*x.table_) : as_bytes(null_type{});
 }
 
 data type::construct() const noexcept {
   auto f = []<concrete_type T>(const T& x) noexcept -> data {
     return x.construct();
   };
-  return *this ? caf::visit(f, *this) : data{};
+  return caf::visit(f, *this);
 }
 
 data type::to_definition(bool expand) const noexcept {
@@ -936,7 +961,7 @@ std::shared_ptr<arrow::DataType> type::to_arrow_type() const noexcept {
              const T& x) noexcept -> std::shared_ptr<arrow::DataType> {
     return x.to_arrow_type();
   };
-  return *this ? caf::visit(f, *this) : nullptr;
+  return caf::visit(f, *this);
 }
 
 std::shared_ptr<arrow::Field>
@@ -958,7 +983,7 @@ type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
              const T& x) noexcept -> std::shared_ptr<arrow::ArrayBuilder> {
     return x.make_arrow_builder(pool);
   };
-  return *this ? caf::visit(f, *this) : nullptr;
+  return caf::visit(f, *this);
 }
 
 auto inspect(caf::detail::stringification_inspector& f, type& x) {
@@ -1335,11 +1360,10 @@ bool congruent(const type& x, const type& y) noexcept {
                                                "complex type");
     },
     []<concrete_type T, concrete_type U>(const T&, const U&) noexcept {
-      return std::is_same_v<T, U>;
+      return std::is_same_v<T, U> || std::is_same_v<T, null_type>
+             || std::is_same_v<U, null_type>;
     },
-  };
-  if (!x || !y)
-    return true;
+  }; // namespace tenzir
   return caf::visit(f, x, y);
 }
 
@@ -1573,6 +1597,39 @@ replace_if_congruent(std::initializer_list<type*> xs, const module& with) {
       *x = *t;
     }
   return caf::none;
+}
+
+// -- null_type ---------------------------------------------------------------
+
+static_assert(null_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::NONE));
+
+auto as_bytes(const null_type&) noexcept -> std::span<const std::byte> {
+  static const auto buffer = []() noexcept {
+    constexpr auto reserved_size = 12;
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto type = fbs::CreateType(builder, fbs::type::Type::NONE);
+    builder.Finish(type);
+    auto result = builder.Release();
+    TENZIR_ASSERT(result.size() == reserved_size);
+    return result;
+  }();
+  return as_bytes(buffer);
+}
+
+auto null_type::construct() noexcept -> caf::none_t {
+  return caf::none;
+}
+
+auto null_type::to_arrow_type() noexcept -> std::shared_ptr<arrow::NullType> {
+  return std::static_pointer_cast<arrow_type>(arrow::null());
+}
+
+auto null_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept
+  -> std::shared_ptr<
+    typename arrow::TypeTraits<null_type::arrow_type>::BuilderType> {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
 }
 
 // -- bool_type ---------------------------------------------------------------
