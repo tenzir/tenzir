@@ -9,14 +9,14 @@
 #include <tenzir/os.hpp>
 #include <tenzir/plugin.hpp>
 
-namespace tenzir::plugins::processes {
+namespace tenzir::plugins::sockets {
 
 namespace {
 
 class plugin final : public virtual aspect_plugin {
 public:
   auto name() const -> std::string override {
-    return "processes";
+    return "sockets";
   }
 
   auto location() const -> operator_location override {
@@ -25,17 +25,17 @@ public:
 
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
-    auto system = darwin::make();
+    auto system = os::make();
     if (not system) {
       diagnostic::error("failed to create OS shim").emit(ctrl.diagnostics());
       co_return;
     }
-    co_yield system->processes();
+    co_yield system->sockets();
   }
 };
 
 } // namespace
 
-} // namespace tenzir::plugins::processes
+} // namespace tenzir::plugins::sockets
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::processes::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::sockets::plugin)

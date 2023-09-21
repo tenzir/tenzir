@@ -24,6 +24,8 @@ auto socket_type() -> type;
 /// A platform-independent operating system.
 class os {
 public:
+  static auto make() -> std::unique_ptr<os>;
+
   virtual ~os() = default;
 
   /// Provides a snapshot of all currently running processes.

@@ -66,6 +66,13 @@ auto socket_type() -> type {
   };
 }
 
+auto os::make() -> std::unique_ptr<os> {
+#if TENZIR_MACOS
+  return darwin::make();
+#endif
+  return nullptr;
+}
+
 namespace {
 
 struct process {
