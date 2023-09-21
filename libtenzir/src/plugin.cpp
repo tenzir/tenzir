@@ -481,12 +481,6 @@ private:
   const store_plugin* plugin_;
 };
 
-auto store_plugin::parse_parser(parser_interface& p) const
-  -> std::unique_ptr<plugin_parser> {
-  argument_parser{name()}.parse(p);
-  return std::make_unique<store_parser>(this);
-}
-
 class store_printer_impl : public printer_instance {
 public:
   explicit store_printer_impl(std::unique_ptr<active_store> store,
@@ -548,12 +542,40 @@ private:
   const store_plugin* plugin_;
 };
 
+auto store_plugin::parse_parser(parser_interface& p) const
+  -> std::unique_ptr<plugin_parser> {
+  argument_parser{name()}.parse(p);
+  return std::make_unique<store_parser>(this);
+}
+
 auto store_plugin::parse_printer(parser_interface& p) const
   -> std::unique_ptr<plugin_printer> {
   argument_parser{name()}.parse(p);
   return std::make_unique<store_printer>(this);
 }
 
+auto store_plugin::serialize(inspector& f, const plugin_printer& x) const
+  -> bool {
+  auto o = detail::overload{[&](auto g) {
+    return g.get().object(x).fields();
+  }};
+  auto obj = std::visit(o, f);
+  return f.apply(obj);
+}
+
+auto store_plugin::deserialize(inspector& f,
+                               std::unique_ptr<plugin_printer>& x) const
+  -> void {
+  auto o = detail::overload{[&](auto g) {
+    return g.get().object(x).fields();
+  }};
+  auto obj = std::visit(o, f);
+  if (f.apply(obj)) {
+    x = std::make_unique<store_printer>(this);
+  } else {
+    x = nullptr;
+  }
+}
 // -- aspect plugin ------------------------------------------------------------
 
 auto aspect_plugin::aspect_name() const -> std::string {
