@@ -283,6 +283,14 @@ private:
 
   explicit engine(::zmq::socket_type socket_type)
     : socket_{ctx_, socket_type}, monitor_{ctx_, socket_} {
+    // The linger period determines how long pending messages which have yet
+    // to be sent to a peer shall linger in memory after a socket is closed
+    // with zmq_close(3), and further affects the termination of the socket's
+    // context with zmq_term(3).
+    //
+    // The value of 0 specifies no linger period. Pending messages shall be
+    // discarded immediately when the socket is closed with zmq_close().
+    socket_.set(::zmq::sockopt::linger, 0);
   }
 
   void bind(const std::string& endpoint) {
