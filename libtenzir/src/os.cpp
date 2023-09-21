@@ -66,17 +66,6 @@ auto socket_type() -> type {
   };
 }
 
-#if TENZIR_MACOS
-
-auto darwin::make() -> std::unique_ptr<darwin> {
-  auto result = std::make_unique<darwin>();
-  if (mach_timebase_info(&result->timebase_) != KERN_SUCCESS) {
-    TENZIR_ERROR("failed to get MACH timebase");
-    return nullptr;
-  }
-  return result;
-}
-
 namespace {
 
 struct process {
@@ -94,6 +83,22 @@ struct process {
   std::optional<duration> utime;
   std::optional<duration> stime;
 };
+
+struct socket {
+  uint32_t pid;
+  int protocol;
+  ip local_addr;
+  uint16_t local_port;
+  ip remote_addr;
+  uint16_t remote_port;
+  std::string state;
+};
+
+} // namespace
+
+#if TENZIR_MACOS
+
+namespace {
 
 auto fetch_processes(const auto& timebase) -> std::vector<process> {
   auto num_procs = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
@@ -151,16 +156,6 @@ auto fetch_processes(const auto& timebase) -> std::vector<process> {
   }
   return result;
 }
-
-struct socket {
-  uint32_t pid;
-  int protocol;
-  ip local_addr;
-  uint16_t local_port;
-  ip remote_addr;
-  uint16_t remote_port;
-  std::string state;
-};
 
 auto socket_state_to_string(auto proto, auto state) -> std::string_view {
   switch (proto) {
@@ -259,9 +254,27 @@ auto sockets_for_pid(pid_t pid) -> std::vector<socket> {
 
 } // namespace
 
+struct darwin::state {
+  struct mach_timebase_info timebase_ {};
+};
+
+auto darwin::make() -> std::unique_ptr<darwin> {
+  auto result = std::unique_ptr<darwin>{new darwin};
+  if (mach_timebase_info(&result->state_->timebase_) != KERN_SUCCESS) {
+    TENZIR_ERROR("failed to get MACH timebase");
+    return nullptr;
+  }
+  return result;
+}
+
+darwin::darwin() : state_{std::make_unique<state>()} {
+}
+
+darwin::~darwin() = default;
+
 auto darwin::processes() -> table_slice {
   auto builder = table_slice_builder{process_type()};
-  for (const auto& proc : fetch_processes(timebase_)) {
+  for (const auto& proc : fetch_processes(state_->timebase_)) {
     auto okay = builder.add(proc.name, proc.pid, proc.ppid, proc.uid, proc.gid,
                             proc.ruid, proc.rgid, proc.priority, proc.startup);
     okay = builder.add(proc.vsize ? make_view(*proc.vsize) : data_view{});
@@ -278,8 +291,8 @@ auto darwin::processes() -> table_slice {
 
 auto darwin::sockets() -> table_slice {
   auto builder = table_slice_builder{socket_type()};
-  auto procs = fetch_processes(timebase_);
-  for (const auto& proc : fetch_processes(timebase_)) {
+  auto procs = fetch_processes(state_->timebase_);
+  for (const auto& proc : fetch_processes(state_->timebase_)) {
     auto pid = detail::narrow_cast<pid_t>(proc.pid);
     for (const auto& socket : sockets_for_pid(pid)) {
       auto okay = builder.add(uint64_t{proc.pid}, proc.name,

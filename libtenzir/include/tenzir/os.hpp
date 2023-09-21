@@ -13,10 +13,6 @@
 
 #include <algorithm>
 
-#if TENZIR_MACOS
-#  include <mach/mach_time.h>
-#endif
-
 namespace tenzir {
 
 /// A type representing an OS process.
@@ -37,20 +33,22 @@ public:
   virtual auto sockets() -> table_slice = 0;
 };
 
-#if TENZIR_MACOS
-
+/// An abstraction of macOS.
 class darwin final : public os {
 public:
   static auto make() -> std::unique_ptr<darwin>;
+
+  ~darwin() final;
 
   auto processes() -> table_slice final;
 
   auto sockets() -> table_slice final;
 
 private:
-  struct mach_timebase_info timebase_ {};
-};
+  darwin();
 
-#endif
+  struct state;
+  std::unique_ptr<state> state_;
+};
 
 } // namespace tenzir
