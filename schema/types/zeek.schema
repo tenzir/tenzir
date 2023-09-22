@@ -435,6 +435,9 @@ type zeek.software = record {
   version: record {
     major: uint64,
     minor: uint64,
+    minor2: uint64,
+    minor3: uint64,
+    addl: string
   },
   unparsed_version: string,
   _write_ts: time,
