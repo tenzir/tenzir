@@ -1204,7 +1204,9 @@
   "name": "squid",
   "version": {
     "major": 2,
-    "minor": 5.0,
+    "minor": 5,
+    "minor2": null,
+    "minor3": null,
     "addl": "STABLE12"
   },
   "unparsed_version": "squid/2.5.STABLE12",
