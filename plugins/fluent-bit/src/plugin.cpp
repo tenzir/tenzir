@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
@@ -17,6 +16,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 #include <arrow/record_batch.h>
 
@@ -41,6 +41,9 @@ namespace tenzir::plugins::fluentbit {
 //     flb_lib_push(ctx, in_ffd, msgpack_buf, msgpack_buf_len);"
 
 namespace {
+
+/// The name of the table slice that the source yields.
+constexpr auto table_slice_name = "tenzir.fluentbit";
 
 /// A map of key-value pairs of Fluent Bit plugin configuration options.
 using property_map = std::map<std::string, std::string>;
@@ -134,28 +137,33 @@ public:
 
   /// Copies data into the shared buffer with the Tenzir Fluent Bit plugin.
   /// @note This function is thread-safe.
-  void append(const auto& data) {
+  void append(const auto& str) {
+    TENZIR_ASSERT_CHEAP(not str.empty());
     auto guard = std::lock_guard{*buffer_mtx_};
-    // We have JSONL in our buffer. If we get multiple objects before we had a
-    // chance to consume them, we must add a newline manually.
-    if (not buffer_.empty() && buffer_.back() != '\n')
-      buffer_.push_back('\n');
-    buffer_.insert(buffer_.end(), data.begin(), data.end());
+    // Ideally, every callback invocation produces valid JSON adhering to the
+    // Fluent Bit convention of [first, second].
+    // TODO: have another look at the Fluent Bit source code and validate this
+    // assumption. Until then, we perform a cheap poorman's check to ensure the
+    // input conforms to the expectation.
+    TENZIR_ASSERT_CHEAP(str.back() == ']');
+    buffer_.emplace_back(str);
   }
 
   /// Tries to consume the shared buffer with a function.
   /// @note This function is thread-safe.
-  auto try_consume(auto f) -> bool {
+  auto try_consume(auto f) -> size_t {
     // NB: this would be UB iff called in the same thread as append(). But since
     // append() is called by the Fluent Bit thread, it is not UB.
     if (auto lock = std::unique_lock{*buffer_mtx_, std::try_to_lock}) {
-      if (buffer_.empty())
-        return false;
-      if (f(buffer_))
+      if (not buffer_.empty()) {
+        auto result = buffer_.size();
+        for (const auto& line : buffer_)
+          f(std::string_view{line});
         buffer_.clear();
-      return true;
+        return result;
+      }
     }
-    return false;
+    return 0;
   }
 
   /// Provides an upper bound on sleep time before stopping the engine. This is
@@ -285,8 +293,8 @@ private:
   flb_ctx_t* ctx_{nullptr}; ///< Fluent Bit context
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
   std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
-  size_t num_stop_polls_{0}; ///< Number of polls in the destructor
-  std::string buffer_{};     ///< Buffer shared with Fluent Bit
+  size_t num_stop_polls_{0};          ///< Number of polls in the destructor
+  std::vector<std::string> buffer_{}; ///< Buffer shared with Fluent Bit
   std::unique_ptr<std::mutex> buffer_mtx_{}; ///< Protects the shared buffer
 };
 
@@ -306,10 +314,10 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    auto builder = adaptive_table_slice_builder{};
-    auto parse = [&builder](std::string_view data) {
-      TENZIR_DEBUG("processing shared buffer");
-      TENZIR_ASSERT(not data.empty());
+    auto builder = series_builder{};
+    // FIXME: handle all return values.
+    auto parse = [&builder](std::string_view line) {
+      TENZIR_ASSERT(not line.empty());
       // What we're getting here is the typical Fluent Bit array consisting of
       // the following format, as described in
       // https://docs.fluentbit.io/manual/concepts/key-concepts#event-format:
@@ -335,35 +343,88 @@ public:
       // 1. timestamp: time (timestamp alias type)
       // 2. metadata: record (inferred)
       // 3. message: record (inferred)
-      //
-      // TODO: do 👆 as opposed to doing 👇
-      auto row = builder.push_row();
-      if (auto err = row.push_field("data").add(data)) {
-        TENZIR_WARN("failed to add Fluent Bit data: {}", data);
-        return false;
+      auto json = from_json(line);
+      if (not json) {
+        TENZIR_WARN("invalid JSON: {}", line);
+        return;
       }
-      return true;
+      const auto* outer = caf::get_if<list>(&*json);
+      if (outer == nullptr) {
+        TENZIR_WARN("expected array as top-level JSON, got {}", *json);
+        return;
+      }
+      if (outer->size() != 2) {
+        TENZIR_WARN("expected two-element array at top-level, got {}",
+                    outer->size());
+        return;
+      }
+      // The outer framing is established, now create a new table slice row.
+      auto row = builder.record();
+      const auto& first = outer->front();
+      // The first element must be either:
+      // - TIMESTAMP
+      // - [TIMESTAMP, METADATA]
+      auto handle_first = detail::overload{
+        [&](const auto&) {
+          TENZIR_ERROR("expected array or number, got {}", first);
+        },
+        [&](const double& ts) {
+          auto d = std::chrono::duration_cast<duration>(double_seconds(ts));
+          row.field("timestamp").data(time{d});
+        },
+        [&](const uint64_t& ts) {
+          row.field("timestamp").data(time{std::chrono::seconds(ts)});
+        },
+        [&](const list& xs) {
+          if (xs.size() != 2) {
+            TENZIR_WARN("expected 2-element inner array, got {}", xs.size());
+            return;
+          }
+          auto handle_nested_first = detail::overload{
+            [&](const auto&) {
+              TENZIR_ERROR("expected timestamp or object, got {}", xs[0]);
+            },
+            [&](const double& n) {
+              auto d = std::chrono::duration_cast<duration>(double_seconds(n));
+              row.field("timestamp").data(time{d});
+            },
+            [&](const uint64_t& n) {
+              row.field("timestamp").data(time{std::chrono::seconds(n)});
+            },
+          };
+          caf::visit(handle_nested_first, xs[0]);
+          row.field("metadata").data(make_view(xs[1]));
+        },
+      };
+      caf::visit(handle_first, first);
+      // The second array element is always the MESSAGE.
+      const auto& second = outer->back();
+      row.field("message").data(make_view(second));
     };
     auto last_finish = std::chrono::steady_clock::now();
     while (engine->running()) {
       const auto now = std::chrono::steady_clock::now();
       // Poll the engine and process data that Fluent Bit already handed over.
-      if (not engine->try_consume(parse)) {
+      if (engine->try_consume(parse) == 0) {
         TENZIR_DEBUG("sleeping for {}", args_.poll_interval);
         std::this_thread::sleep_for(args_.poll_interval);
       }
-      if (builder.rows() >= defaults::import::table_slice_size
+      auto max_slice_length
+        = detail::narrow_cast<int64_t>(defaults::import::table_slice_size);
+      if (builder.length() >= max_slice_length
           or last_finish + defaults::import::batch_timeout < now) {
-        TENZIR_DEBUG("flushing table slice with {} rows", builder.rows());
+        TENZIR_DEBUG("flushing table slice with {} rows", builder.length());
         last_finish = now;
-        co_yield builder.finish();
+        for (auto& slice : builder.finish_as_table_slice(table_slice_name))
+          co_yield slice;
       } else {
         co_yield {};
       }
     }
-    if (builder.rows() > 0) {
-      TENZIR_DEBUG("flushing last table slice with {} rows", builder.rows());
-      co_yield builder.finish();
+    if (builder.length() > 0) {
+      TENZIR_DEBUG("flushing last table slice with {} rows", builder.length());
+      for (auto& slice : builder.finish_as_table_slice(table_slice_name))
+        co_yield slice;
     }
   }
 
