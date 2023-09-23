@@ -12,8 +12,8 @@ Bit][fluentbit] support with the `fluent-bit` [source][fluentbit-source] and
 can do *plus* what Tenzir already offers. What a treat!
 
 [fluentbit]: https://fluentbit.io/
-[fluentbit-source]: /operators/sources/fluent-bit
-[fluentbit-sink]: /operators/sink/fluent-bit
+[fluentbit-source]: /next/operators/sources/fluent-bit
+[fluentbit-sink]: /next/operators/sinks/fluent-bit
 
 ![Tenzir v4.3](tenzir-v4.3.excalidraw.svg)
 
