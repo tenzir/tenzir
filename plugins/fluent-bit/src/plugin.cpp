@@ -225,6 +225,12 @@ private:
       poll_interval_{poll_interval},
       buffer_mtx_{std::make_unique<std::mutex>()} {
     TENZIR_ASSERT(ctx != nullptr);
+    // We call this function only to produce a side effect of global state
+    // initialization in Fluent Bit. This smells like a bug, yes. If we didn't
+    // do this, we'd crash in flb_destroy with an attempt to deallocate the
+    // pointer to thread-local state that first gets initialized in flb_start.
+    // To avoid the crash, we indirectly initialize this state here.
+    flb_init_env();
   }
 
   auto input(const std::string& plugin, const property_map& properties = {})
@@ -265,12 +271,15 @@ private:
     return true;
   }
 
+  /// Starts the engine.
   auto start() -> bool {
     TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
     TENZIR_DEBUG("starting Fluent Bit engine");
     auto ret = flb_start(ctx_);
-    if (ret == 0)
+    if (ret == 0) {
+      started_ = true;
       return true;
+    }
     TENZIR_ERROR("failed to start engine ({})", ret);
     return false;
   }
@@ -278,19 +287,26 @@ private:
   /// Stops the engine.
   auto stop() -> bool {
     TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
+    if (not started_) {
+      TENZIR_DEBUG("discarded attempt to stop unstarted engine");
+      return false;
+    }
     TENZIR_DEBUG("stopping Fluent Bit engine");
     for (size_t i = 0; ctx_->status == FLB_LIB_OK && i < num_stop_polls_; ++i) {
       TENZIR_DEBUG("sleeping while Fluent Bit context is okay");
       std::this_thread::sleep_for(poll_interval_);
     }
     auto ret = flb_stop(ctx_);
-    if (ret == 0)
+    if (ret == 0) {
+      started_ = false;
       return true;
+    }
     TENZIR_ERROR("failed to stop engine ({})", ret);
     return false;
   }
 
   flb_ctx_t* ctx_{nullptr}; ///< Fluent Bit context
+  bool started_{false};     ///< Engine started/stopped status.
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
   std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
   size_t num_stop_polls_{0};          ///< Number of polls in the destructor
