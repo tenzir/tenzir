@@ -399,7 +399,33 @@ public:
       caf::visit(handle_first, first);
       // The second array element is always the MESSAGE.
       const auto& second = outer->back();
-      row.field("message").data(make_view(second));
+      // We are not always getting a JSON object here. Sometimes we get an
+      // escaped string that contains a JSON object that we need to extract
+      // first. Fluent Bit has a concept of *encoders* and *decoders* for this
+      // purpose: https://docs.fluentbit.io/manual/pipeline/parsers/decoders.
+      // Parsers can be configured with a decoder using the option
+      // `decode_field json <field>`.
+      //
+      // While this means there are potentially infinite choices to make, in
+      // reality we see hopefully mostly default configurations that cover 99%
+      // of decoding needs: a nested field "log" with a string that is escaped
+      // JSON. That's what we're looking for manually for now. If users come
+      // with more flexible decoding requests, we need to adapt.
+      auto decoded = false;
+      if (const auto* rec = caf::get_if<record>(&second)) {
+        if (auto log = try_get<std::string>(*rec, "log")) {
+          if (*log and not(*log)->empty()) {
+            if (auto log_json = from_json(**log)) {
+              row.field("message").data(record{
+                {"log", std::move(*log_json)},
+              });
+              decoded = true;
+            }
+          }
+        }
+      }
+      if (not decoded)
+        row.field("message").data(make_view(second));
     };
     auto last_finish = std::chrono::steady_clock::now();
     while (engine->running()) {

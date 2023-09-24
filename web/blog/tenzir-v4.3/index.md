@@ -146,7 +146,9 @@ You should then see:
 {
   "timestamp": "2022-08-12T09:20:24.698112",
   "message": {
-    "log": "{\"message\":\"dummy\"}"
+    "log": {
+      "message": "dummy"
+    }
   }
 }
 ```
