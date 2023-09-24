@@ -1,0 +1,3 @@
+tenzir:
+  plugins:
+    - fluent-bit
