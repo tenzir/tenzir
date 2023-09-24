@@ -167,34 +167,44 @@ auto parse_http_options(std::vector<located<std::string>>& request_items)
 
 template <detail::string_literal Protocol>
 class plugin final : public virtual loader_plugin<curl_loader<Protocol>> {
-  /// Auto-completes a scheme-less URL with the schem from this plugin.
+public:
+  static auto protocol() -> std::string {
+    return std::string{Protocol.str()};
+  }
+
+  auto parse_loader(parser_interface& p) const
+    -> std::unique_ptr<plugin_loader> override {
+    return std::make_unique<curl_loader<Protocol>>(parse_args(p));
+  }
+
+  auto name() const -> std::string override {
+    return protocol();
+  }
+
+private:
+  /// Auto-completes a scheme-less URL with the scheme from this plugin.
   static auto auto_complete(std::string_view url) -> std::string {
     if (url.find("://") != std::string_view::npos)
       return std::string{url};
     return fmt::format("{}://{}", Protocol.str(), url);
   }
 
-public:
-  auto parse_loader(parser_interface& p) const
-    -> std::unique_ptr<plugin_loader> override {
-    auto args = connector_args{};
-    args.options.default_protocol = name();
-    auto make = [&]() {
-      return std::make_unique<curl_loader<Protocol>>(std::move(args));
-    };
+  static auto parse_args(parser_interface& p) -> connector_args {
+    auto result = connector_args{};
+    result.options.default_protocol = protocol();
     // For HTTP and HTTPS the desired CLI UX is HTTPie:
     //
     //     [<method>] <url> [<item>..]
     //
     // Please see `man http` for an explanation of the desired outcome.
-    if (name() == "http" || name() == "https") {
+    if (protocol() == "http" || protocol() == "https") {
       // Collect all arguments first until `argument_parser` becomes mightier.
       auto items = std::vector<located<std::string>>{};
       while (auto arg = p.accept_shell_arg()) {
         // Process options here manually until argument_parser becomes more
         // powerful.
-        if (arg && (arg->inner == "-v" || arg->inner == "--verbose"))
-          args.options.verbose = true;
+        if (arg->inner == "-v" || arg->inner == "--verbose")
+          result.options.verbose = true;
         else
           items.push_back(std::move(*arg));
       }
@@ -202,8 +212,8 @@ public:
         diagnostic::error("no URL provided").throw_();
       // No ambiguity, just go with <url>.
       if (items.size() == 1) {
-        args.options.url = std::move(items[0].inner);
-        return make();
+        result.options.url = std::move(items[0].inner);
+        return result;
       }
       TENZIR_ASSERT(items.size() >= 2);
       // Try <method> <url> [<item>..]
@@ -213,31 +223,27 @@ public:
         // FIXME: find a strategy to deal with some false positives here, e.g.,
         // "localhost".
         auto method = std::move(items[0].inner);
-        args.options.url = auto_complete(items[1].inner);
+        result.options.url = auto_complete(items[1].inner);
         items.erase(items.begin());
         items.erase(items.begin());
-        args.options.http = parse_http_options(items);
-        args.options.http.method = std::move(method);
-        return make();
+        result.options.http = parse_http_options(items);
+        result.options.http.method = std::move(method);
+        return result;
       }
       TENZIR_DEBUG("trying last possible syntax: <url> <item> [<item>..]");
-      args.options.url = auto_complete(items[0].inner);
+      result.options.url = auto_complete(items[0].inner);
       items.erase(items.begin());
-      args.options.http = parse_http_options(items);
-      return make();
+      result.options.http = parse_http_options(items);
+      return result;
     } else {
       auto parser = argument_parser{
-        name(),
-        fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
-      parser.add("-v,--verbose", args.options.verbose);
-      parser.add(args.options.url, "<url>");
+        protocol(),
+        fmt::format("https://docs.tenzir.com/docs/connectors/{}", protocol())};
+      parser.add("-v,--verbose", result.options.verbose);
+      parser.add(result.options.url, "<url>");
       parser.parse(p);
     }
-    return make();
-  }
-
-  auto name() const -> std::string override {
-    return std::string{Protocol.str()};
+    return result;
   }
 };
 
