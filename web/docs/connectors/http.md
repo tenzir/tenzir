@@ -6,18 +6,21 @@ sidebar_custom_props:
 
 # http
 
-Loads bytes via HTTP.
+Loads and saves bytes via HTTP.
 
 ## Synopsis
 
 ```
-http [<method>] <url> [<item>..]
+http [-f|--form] [-j|--json] [-v|--verbose] [<method>] <url> [<item>..]
 ```
 
 ## Description
 
 The `http` loader performs a HTTP request and returns the bytes of the HTTP
-response body.
+response body. Similarly, the `http` saver also performs a HTTP request with the
+request body being the the provided bytes. While saver and loader support the
+exact syntax, the saver only accepts data from its upstream operator and ignores
+any explicitly provided request body.
 
 We modeled the `http` loader after [HTTPie](https://httpie.io/), which comes
 with an expressive and intuitive command-line syntax. We recommend to study the
@@ -38,6 +41,17 @@ from http PUT pie.dev/put X-API-Token:123 foo=bar
 
 More generally, if your HTTPie command line is `http X` then you can write `from
 http X` to obtain an event stream or `load http X` for a byte stream.
+
+### `-f|--form`
+
+Submits the HTTP request body as form.
+
+This automatically sets the Conte-Type header to
+`application/x-www-form-urlencoded`.
+
+### `-j|--json`
+
+Explicitly sets the Accept header to `application/json`.
 
 ### `<method>`
 
