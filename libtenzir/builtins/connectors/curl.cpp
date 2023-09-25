@@ -10,6 +10,7 @@
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config.hpp>
 #include <tenzir/curl.hpp>
+#include <tenzir/detail/string.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
@@ -100,10 +101,22 @@ public:
     auto handle = std::make_shared<curl>();
     if (auto err = handle->set(args_.options))
       return err;
+    // The saver gets its input from the upstream operator, so we ignore any
+    // user-provided request body.
+    if (not args_.options.http.body.data.empty()) {
+      const auto* ptr
+        = reinterpret_cast<const char*>(args_.options.http.body.data.data());
+      auto size = args_.options.http.body.data.size();
+      diagnostic::warning("ignoring non-empty HTTP request body")
+        .hint("{}", detail::byte_escape(std::string_view{ptr, size}))
+        .emit(ctrl.diagnostics());
+    }
     return [&ctrl, args = args_,
             handle = std::move(handle)](chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0)
         return;
+      // TODO: make this smarter and provide the contentt type. We currently
+      // blindly assume application/json.
       if (auto err = handle->upload(as_bytes(chunk))) {
         diagnostic::error("failed to upload chunk ({} bytes) to {}",
                           chunk->size(), args.options.url)
