@@ -699,7 +699,9 @@ public:
 /// A base class for plugins that add new store backends.
 class store_plugin : public virtual store_actor_plugin,
                      public virtual parser_parser_plugin,
-                     public virtual printer_parser_plugin {
+                     public virtual printer_parser_plugin,
+                     public virtual parser_serialization_plugin,
+                     public virtual printer_serialization_plugin {
 public:
   /// Create a store for passive partitions.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
@@ -709,6 +711,18 @@ public:
   /// @param tenzir_config The tenzir node configuration.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
   make_active_store() const = 0;
+
+  [[nodiscard]] auto serialize(inspector& f, const plugin_parser& x) const
+    -> bool override;
+
+  auto deserialize(inspector& f, std::unique_ptr<plugin_parser>& x) const
+    -> void override;
+
+  [[nodiscard]] auto serialize(inspector& f, const plugin_printer& x) const
+    -> bool override;
+
+  auto deserialize(inspector& f, std::unique_ptr<plugin_printer>& x) const
+    -> void override;
 
 private:
   [[nodiscard]] caf::expected<builder_and_header>

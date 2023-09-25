@@ -481,12 +481,6 @@ private:
   const store_plugin* plugin_;
 };
 
-auto store_plugin::parse_parser(parser_interface& p) const
-  -> std::unique_ptr<plugin_parser> {
-  argument_parser{name()}.parse(p);
-  return std::make_unique<store_parser>(this);
-}
-
 class store_printer_impl : public printer_instance {
 public:
   explicit store_printer_impl(std::unique_ptr<active_store> store,
@@ -548,12 +542,63 @@ private:
   const store_plugin* plugin_;
 };
 
+auto store_plugin::parse_parser(parser_interface& p) const
+  -> std::unique_ptr<plugin_parser> {
+  argument_parser{name()}.parse(p);
+  return std::make_unique<store_parser>(this);
+}
+
 auto store_plugin::parse_printer(parser_interface& p) const
   -> std::unique_ptr<plugin_printer> {
   argument_parser{name()}.parse(p);
   return std::make_unique<store_printer>(this);
 }
 
+auto store_plugin::serialize(inspector& f, const plugin_parser& x) const
+  -> bool {
+  auto o = detail::overload{[&](auto g) {
+    return g.get().object(x).fields();
+  }};
+  auto obj = std::visit(o, f);
+  return f.apply(obj);
+}
+
+auto store_plugin::deserialize(inspector& f,
+                               std::unique_ptr<plugin_parser>& x) const
+  -> void {
+  auto o = detail::overload{[&](auto g) {
+    return g.get().object(x).fields();
+  }};
+  auto obj = std::visit(o, f);
+  if (f.apply(obj)) {
+    x = std::make_unique<store_parser>(this);
+  } else {
+    x = nullptr;
+  }
+}
+
+auto store_plugin::serialize(inspector& f, const plugin_printer& x) const
+  -> bool {
+  auto o = detail::overload{[&](auto g) {
+    return g.get().object(x).fields();
+  }};
+  auto obj = std::visit(o, f);
+  return f.apply(obj);
+}
+
+auto store_plugin::deserialize(inspector& f,
+                               std::unique_ptr<plugin_printer>& x) const
+  -> void {
+  auto o = detail::overload{[&](auto g) {
+    return g.get().object(x).fields();
+  }};
+  auto obj = std::visit(o, f);
+  if (f.apply(obj)) {
+    x = std::make_unique<store_printer>(this);
+  } else {
+    x = nullptr;
+  }
+}
 // -- aspect plugin ------------------------------------------------------------
 
 auto aspect_plugin::aspect_name() const -> std::string {
@@ -572,9 +617,10 @@ plugin_ptr::make_dynamic(const char* filename,
   auto libtenzir_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "tenzir_libtenzir_version"));
   if (!libtenzir_version)
-    return caf::make_error(
-      ec::system_error, "failed to resolve symbol tenzir_libtenzir_version in",
-      filename, dlerror());
+    return caf::make_error(ec::system_error,
+                           "failed to resolve symbol "
+                           "tenzir_libtenzir_version in",
+                           filename, dlerror());
   if (strcmp(libtenzir_version(), version::version) != 0)
     return caf::make_error(ec::version_error, "libtenzir version mismatch in",
                            filename, libtenzir_version(), version::version);
@@ -621,8 +667,8 @@ plugin_ptr::make_dynamic(const char* filename,
                              "tenzir_plugin_register_type_id_block in",
                              filename, dlerror());
     // If the plugin requested to add additional type ID blocks, check if the
-    // ranges overlap. Since this is static for the whole process, we just store
-    // the already registed ID blocks from plugins in a static variable.
+    // ranges overlap. Since this is static for the whole process, we just
+    // store the already registed ID blocks from plugins in a static variable.
     static auto old_blocks = std::vector<::tenzir::plugin_type_id_block>{
       {caf::id_block::tenzir_types::begin, caf::id_block::tenzir_actors::end}};
     // Static plugins are built as part of the tenzir binary rather then
