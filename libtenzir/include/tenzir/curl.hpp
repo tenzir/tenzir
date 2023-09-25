@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/data.hpp"
 #include "tenzir/generator.hpp"
 
 #include <caf/error.hpp>
@@ -18,9 +19,16 @@
 
 #include <chrono>
 #include <map>
+#include <span>
 #include <string>
 
 namespace tenzir {
+
+/// The contents of a HTTP request body.
+struct http_request_body {
+  std::vector<std::byte> data;
+  std::string content_type;
+};
 
 /// HTTP options for curl.
 struct http_options {
@@ -28,17 +36,19 @@ struct http_options {
 
   std::string method;
   std::map<std::string, std::string> headers;
-  std::string body;
+
+  http_request_body body;
 };
 
 auto inspect(auto& f, http_options& x) -> bool {
   return f.object(x)
     .pretty_name("http_options")
     .fields(f.field("method", x.method), f.field("headers", x.headers),
-            f.field("body", x.body));
+            f.field("body.data", x.body.data),
+            f.field("body.content_type", x.body.content_type));
 }
 
-/// Options for the curl wrapper.
+/// Global options for the curl wrapper.
 struct curl_options {
   std::string default_protocol{};
   std::string url{};
@@ -54,16 +64,10 @@ auto inspect(auto& f, curl_options& x) -> bool {
             f.field("verbose", x.verbose));
 }
 
-/// A wrapper around the C API.
+/// A wrapper around the libcurl C API.
 class curl {
-  static auto to_error(CURLcode number) -> caf::error;
-
-  static auto to_error(CURLMcode number) -> caf::error;
-
-  static auto write_callback(void* ptr, size_t size, size_t nmemb,
-                             void* user_data) -> size_t;
-
 public:
+  /// Constructs a handle.
   explicit curl();
 
   curl(curl&) = delete;
@@ -73,13 +77,45 @@ public:
 
   ~curl();
 
+  /// Sets options for subsequent operations.
+  /// @param opts The options to set.
   auto set(const curl_options& opts) -> caf::error;
 
+  /// Performs a HTTP request and retrieves the result as generator of byte
+  /// chunks.
+  /// @param timeout The poll timeout that drives the internal loop to fetch
+  /// chunks of data.
   auto download(std::chrono::milliseconds timeout)
     -> generator<caf::expected<chunk_ptr>>;
 
+  /// Performs a HTTP request and uses the provided bytes as request body.
+  /// @param bytes The bytes to put in the request body.
+  auto upload(std::span<const std::byte> bytes) -> caf::error;
+
+  /// URL-encodes a given string.
+  /// @param str The input to encode.
+  /// @returns The encoded string.
+  auto escape(std::string_view str) -> std::string;
+
+  /// URL-encodes a record of parameters.
+  /// @param xs The key-value pairs to encode.
+  /// @returns The encoded string.
+  auto escape(const record& xs) -> std::string;
+
 private:
+  static auto to_error(CURLcode number) -> caf::error;
+
+  static auto to_error(CURLMcode number) -> caf::error;
+
+  static auto write_callback(void* ptr, size_t size, size_t nmemb,
+                             void* user_data) -> size_t;
+
+  static auto read_callback(char* buffer, size_t size, size_t nitems,
+                            void* user_data) -> size_t;
+
   auto set(CURLoption option, auto parameter) -> caf::error;
+
+  auto set_body_data(std::span<const std::byte> bytes) -> caf::error;
 
   CURL* easy_{nullptr};
   CURLM* multi_{nullptr};
