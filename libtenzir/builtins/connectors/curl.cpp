@@ -85,6 +85,57 @@ private:
   connector_args args_;
 };
 
+template <detail::string_literal Protocol>
+class curl_saver final : public plugin_saver {
+public:
+  curl_saver() = default;
+
+  explicit curl_saver(connector_args args) : args_{std::move(args)} {
+  }
+
+  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+    -> caf::expected<std::function<void(chunk_ptr)>> override {
+    // We only use a pointer here to be able to move the handle into the lambda
+    // state.
+    auto handle = std::make_shared<curl>();
+    if (auto err = handle->set(args_.options))
+      return err;
+    return [&ctrl, args = args_,
+            handle = std::move(handle)](chunk_ptr chunk) mutable {
+      if (!chunk || chunk->size() == 0)
+        return;
+      if (auto err = handle->upload(as_bytes(chunk))) {
+        diagnostic::error("failed to upload chunk ({} bytes) to {}",
+                          chunk->size(), args.options.url)
+          .hint("{}", err)
+          .emit(ctrl.diagnostics());
+        return;
+      }
+    };
+  }
+
+  auto name() const -> std::string override {
+    return std::string{Protocol.str()};
+  }
+
+  auto default_printer() const -> std::string override {
+    return "json";
+  }
+
+  auto is_joining() const -> bool override {
+    return true;
+  }
+
+  friend auto inspect(auto& f, curl_saver& x) -> bool {
+    return f.object(x)
+      .pretty_name("curl_saver")
+      .fields(f.field("args", x.args_));
+  }
+
+private:
+  connector_args args_;
+};
+
 /// A key-value pair passed on the command line.
 struct request_item {
   std::string_view type;
@@ -119,9 +170,9 @@ auto parse_request_item(std::string_view str) -> std::optional<request_item> {
 }
 
 /// Parses a sequence of key-value pairs (= request items)
-auto parse_http_options(std::vector<located<std::string>>& request_items)
-  -> http_options {
-  auto result = http_options{};
+auto parse_http_options(http_options& opts,
+                        std::vector<located<std::string>>& request_items)
+  -> void {
   auto body = record{};
   auto headers = std::map<std::string, std::string>{};
   for (const auto& request_item : request_items) {
@@ -133,10 +184,12 @@ auto parse_http_options(std::vector<located<std::string>>& request_items)
     if (item->type == "header") {
       headers[std::string{item->key}] = std::string{item->value};
     } else if (item->type == "data") {
-      result.method = "POST";
+      if (opts.method.empty())
+        opts.method = "POST";
       body[std::string{item->key}] = std::string{item->value};
     } else if (item->type == "data-json") {
-      result.method = "POST";
+      if (opts.method.empty())
+        opts.method = "POST";
       auto data = from_json(item->value);
       if (not data)
         diagnostic::error("invalid JSON value")
@@ -149,24 +202,36 @@ auto parse_http_options(std::vector<located<std::string>>& request_items)
         .throw_();
     }
   }
-  if (not body.empty()) {
-    // We're currently only supporting JSON. In the future we're going to
-    // support -f for form-encoded data as well.
-    auto json_body = to_json(body, {.oneline = true});
-    TENZIR_ASSERT_CHEAP(json_body);
-    result.body = std::move(*json_body);
-    result.headers["Accept"] = "application/json, */*";
-    result.headers["Content-Type"] = "application/json";
+  if (opts.body.content_type.empty()
+      or opts.body.content_type.starts_with("application/json")) {
+    if (not body.empty()) {
+      auto json_body = to_json(body, {.oneline = true});
+      TENZIR_ASSERT_CHEAP(json_body);
+      auto bytes = as_bytes(*json_body);
+      opts.body.data = {bytes.begin(), bytes.end()};
+      opts.body.content_type = "application/json";
+      opts.headers["Accept"] = "application/json, */*";
+    }
+  } else if (opts.body.content_type.starts_with("application/"
+                                                "x-www-form-urlencoded")) {
+    auto url_encoded = curl{}.escape(flatten(body));
+    TENZIR_DEBUG("urlencoded request body: {}", url_encoded);
+    auto bytes = as_bytes(url_encoded);
+    opts.body.data = {bytes.begin(), bytes.end()};
+  } else {
+    diagnostic::error("could not encode request body with content type {}",
+                      opts.body.content_type)
+      .throw_();
   }
   // User-provided headers always have precedence, which is why we process
   // them last, after we added automatically generated ones previously.
   for (auto& [header, value] : headers)
-    result.headers[header] = std::move(value);
-  return result;
+    opts.headers[header] = std::move(value);
 }
 
 template <detail::string_literal Protocol>
-class plugin final : public virtual loader_plugin<curl_loader<Protocol>> {
+class plugin final : public virtual loader_plugin<curl_loader<Protocol>>,
+                     public virtual saver_plugin<curl_saver<Protocol>> {
 public:
   static auto protocol() -> std::string {
     return std::string{Protocol.str()};
@@ -175,6 +240,11 @@ public:
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
     return std::make_unique<curl_loader<Protocol>>(parse_args(p));
+  }
+
+  auto parse_saver(parser_interface& p) const
+    -> std::unique_ptr<plugin_saver> override {
+    return std::make_unique<curl_saver<Protocol>>(parse_args(p));
   }
 
   auto name() const -> std::string override {
@@ -203,10 +273,17 @@ private:
       while (auto arg = p.accept_shell_arg()) {
         // Process options here manually until argument_parser becomes more
         // powerful.
-        if (arg->inner == "-v" || arg->inner == "--verbose")
+        if (arg->inner == "-v" || arg->inner == "--verbose") {
           result.options.verbose = true;
-        else
+        } else if (arg->inner == "-j" || arg->inner == "--json") {
+          result.options.http.body.content_type = "application/json";
+          result.options.http.headers["Accept"] = "application/json";
+        } else if (arg->inner == "-f" || arg->inner == "--form") {
+          result.options.http.body.content_type
+            = "application/x-www-form-urlencoded";
+        } else {
           items.push_back(std::move(*arg));
+        }
       }
       if (items.empty())
         diagnostic::error("no URL provided").throw_();
@@ -221,19 +298,19 @@ private:
       if (std::regex_match(items[0].inner, method_regex)) {
         TENZIR_DEBUG("detected syntax: <method> <url> [<item>..]");
         // FIXME: find a strategy to deal with some false positives here, e.g.,
-        // "localhost".
+        // "localhost" should be interepreted as URL and not HTTP method.
         auto method = std::move(items[0].inner);
         result.options.url = auto_complete(items[1].inner);
         items.erase(items.begin());
         items.erase(items.begin());
-        result.options.http = parse_http_options(items);
         result.options.http.method = std::move(method);
+        parse_http_options(result.options.http, items);
         return result;
       }
       TENZIR_DEBUG("trying last possible syntax: <url> <item> [<item>..]");
       result.options.url = auto_complete(items[0].inner);
       items.erase(items.begin());
-      result.options.http = parse_http_options(items);
+      parse_http_options(result.options.http, items);
       return result;
     } else {
       auto parser = argument_parser{

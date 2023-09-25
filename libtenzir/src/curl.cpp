@@ -185,22 +185,22 @@ auto curl::set(const curl_options& opts) -> caf::error {
   if (not opts.url.empty())
     if (auto err = set(CURLOPT_URL, opts.url.c_str()))
       return err;
-  if (opts.default_protocol == "http" || opts.default_protocol == "https") {
-    if (not opts.http.body.data.empty()) {
+  if (opts.default_protocol == "http" or opts.default_protocol == "https") {
+    // For POST and PUT, we also set an empty body.
+    if (not opts.http.body.data.empty() or opts.http.method == "POST"
+        or opts.http.method == "PUT") {
       if (auto err = set_body_data(as_bytes(opts.http.body.data)))
         return err;
     }
+    // Configure curl based on HTTP method.
     if (opts.http.method == "GET") {
       if (auto err = set(CURLOPT_HTTPGET, 1L))
         return err;
     } else if (opts.http.method == "HEAD") {
       if (auto err = set(CURLOPT_NOBODY, 1L))
         return err;
-    } else if (opts.http.method == "POST" || not opts.http.body.data.empty()) {
+    } else if (opts.http.method == "POST") {
       if (auto err = set(CURLOPT_POST, 1L))
-        return err;
-    } else if (opts.http.method == "PUT") {
-      if (auto err = set(CURLOPT_UPLOAD, 1L))
         return err;
     } else if (not opts.http.method.empty()) {
       if (auto err = set(CURLOPT_CUSTOMREQUEST, opts.http.method.c_str()))
@@ -210,6 +210,7 @@ auto curl::set(const curl_options& opts) -> caf::error {
       curl_slist_free_all(headers_);
       headers_ = nullptr;
     }
+    // Add Content-Type to headers if user specified it for the request body.
     if (not opts.http.body.content_type.empty()) {
       auto content_type
         = fmt::format("Content-Type: {}", opts.http.body.content_type);
