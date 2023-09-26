@@ -167,10 +167,7 @@ inline constexpr const size_t rotate_files = 3;
 namespace api {
 
 /// The maximum response size for one request.
-//  The AWS API Gateway enforces a 128KiB limit for websocket messages,
-//  and we stay slightly below that here to allow the platform plugin to
-//  add it's own framing and metadata.
-inline constexpr size_t max_response_size = size_t{124} * 1'024; // 124 KiB
+inline constexpr size_t max_response_size = size_t{64} * 1'024 * 1024; // 64 MiB
 
 namespace serve {
 
