@@ -24,7 +24,14 @@ namespace tenzir {
 enum class http_method : uint8_t {
   get,
   post,
+  put,
+  head,
+  delete_,
+  options,
 };
+
+auto http_method_from_string(const std::string& str)
+  -> caf::expected<http_method>;
 
 enum class http_content_type : uint16_t {
   json,
@@ -32,8 +39,10 @@ enum class http_content_type : uint16_t {
 };
 
 enum class http_status_code : uint16_t {
+  ok = 200,
   bad_request = 400,
   unprocessable_entity = 422,
+  internal_server_error = 500,
 };
 
 enum class api_version : uint8_t {
@@ -260,6 +269,18 @@ struct fmt::formatter<tenzir::http_method> {
         break;
       case tenzir::http_method::post:
         value_string = "POST";
+        break;
+      case tenzir::http_method::put:
+        value_string = "PUT";
+        break;
+      case tenzir::http_method::delete_:
+        value_string = "DELETE";
+        break;
+      case tenzir::http_method::options:
+        value_string = "OPTIONS";
+        break;
+      case tenzir::http_method::head:
+        value_string = "HEAD";
         break;
     }
     return formatter<std::string_view>{}.format(value_string, ctx);
