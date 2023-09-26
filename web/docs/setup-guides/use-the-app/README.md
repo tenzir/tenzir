@@ -45,7 +45,7 @@ pipelines](../../user-guides/run-a-pipeline/README.md).
 #### Run a pipeline
 
 Write your pipeline in EDITOR, hit the *Run* button, and analyze the result in
-SCHEMAS and DATA.
+SCHEMAS and RESULTS.
 
 #### Deploy a pipeline
 
