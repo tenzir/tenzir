@@ -203,6 +203,11 @@ Location:
     end:
       type: number
       example: 48
+PipelineLabels:
+  type: array
+  description: The user-provided labels for this pipeline.
+  items:
+    $ref: "#/components/schemas/PipelineLabel"
 PipelineInfo:
   type: object
   properties:
@@ -248,6 +253,8 @@ PipelineInfo:
       $ref: '#/components/schemas/Diagnostics'
     metrics:
       $ref: '#/components/schemas/Metrics'
+    labels:
+      $ref: "#/components/schemas/PipelineLabels"
   )_");
   TENZIR_ASSERT_CHEAP(schemas);
   // clang-format off
