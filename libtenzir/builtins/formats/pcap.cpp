@@ -13,6 +13,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pcap.hpp>
+#include <tenzir/pcapng.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
@@ -159,6 +160,13 @@ public:
         }
         std::memcpy(&input_file_header, bytes->data(), bytes->size());
         break;
+      }
+      if (input_file_header.magic_number == pcapng::magic_number) {
+        diagnostic::error("PCAPng currently unsupported")
+          .hint("use `shell \"tshark -F pcap -r - -w -\"` to convert to PCAP")
+          .note("visit https://github.com/tenzir/public-roadmap/issues/75")
+          .emit(ctrl.diagnostics());
+        co_return;
       }
       auto need_swap = need_byte_swap(input_file_header.magic_number);
       if (!need_swap) {
