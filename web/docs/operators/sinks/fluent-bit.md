@@ -11,7 +11,7 @@ fluent-bit [-X|--set <key=value>,...] <plugin> [<key=value>...]
 ## Description
 
 The `fluent-bit` sink operator acts as a bridge into the Fluent Bit ecosystem,
-making it possible to process events with a Fluent Bit [output plugin][outputs]
+making it possible to process events with a Fluent Bit [output plugin][outputs].
 
 [outputs]: https://docs.fluentbit.io/manual/pipeline/output
 
@@ -38,8 +38,8 @@ Fluent Bit according to your needs.
 
 [service-properties]: https://docs.fluentbit.io/manual/administration/configuring-fluent-bit/classic-mode/configuration-file#config_section
 
-We recommand factoring these options into the plugin-specific `fluent-bit.yaml`
-so that they are indpendent of the `fluent-bit` operator arguments.
+We recommend factoring these options into the plugin-specific `fluent-bit.yaml`
+so that they are independent of the `fluent-bit` operator arguments.
 
 ### `<plugin>`
 

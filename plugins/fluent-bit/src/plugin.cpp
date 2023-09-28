@@ -463,6 +463,7 @@ public:
         co_yield {};
       }
     }
+    TENZIR_WARN("heejahooo");
     if (builder.length() > 0) {
       TENZIR_DEBUG("flushing last table slice with {} rows", builder.length());
       for (auto& slice : builder.finish_as_table_slice(table_slice_name))

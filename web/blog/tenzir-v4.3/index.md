@@ -158,7 +158,7 @@ More powerful inputs mimic other applications, like [Splunk][splunk] or
 Here you go:
 
 [splunk]: https://docs.fluentbit.io/manual/pipeline/inputs/splunk
-[splunk]: https://docs.fluentbit.io/manual/pipeline/inputs/elasticsearch
+[elasticsearch]: https://docs.fluentbit.io/manual/pipeline/inputs/elasticsearch
 
 ```bash
 tenzir 'fluent-bit splunk'
