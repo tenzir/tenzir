@@ -16,6 +16,9 @@
 [submodule "libtenzir/aux/caf"]
 	path = libtenzir/aux/caf
 	url = https://github.com/tenzir/actor-framework
+[submodule "libtenzir/aux/pfs"]
+	path = libtenzir/aux/pfs
+	url = https://github.com/dtrugman/pfs.git
 [submodule "tenzir/functional-test/bats"]
 	path = tenzir/functional-test/bats
 	url = https://github.com/bats-core/bats-core

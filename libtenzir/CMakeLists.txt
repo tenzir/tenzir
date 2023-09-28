@@ -374,6 +374,31 @@ else ()
 endif ()
 target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
+  add_feature_info(
+    "TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
+    "use the pfs submodule.")
+  if (NOT TENZIR_ENABLE_BUNDLED_PFS)
+    find_package(pfs CONFIG)
+  endif ()
+  if (NOT pfs_FOUND)
+    if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs/CMakeLists.txt")
+      message(
+        FATAL_ERROR
+          "pfs library not found, either use -pfs_DIR=... or"
+          " initialize the libtenzir/aux/pfs submodule")
+    endif ()
+    add_subdirectory(aux/pfs)
+    add_library(pfs::pfs ALIAS pfs)
+    dependency_summary("pfs" "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs"
+                       "Dependencies")
+  else ()
+    dependency_summary("pfs" pfs::pfs "Dependencies")
+  endif ()
+  target_link_libraries(libtenzir PRIVATE pfs::pfs)
+endif()
+
 # Link against a backtrace library.
 option(TENZIR_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
 add_feature_info("TENZIR_ENABLE_BACKTRACE" TENZIR_ENABLE_BACKTRACE
