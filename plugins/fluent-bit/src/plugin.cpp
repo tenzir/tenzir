@@ -115,7 +115,7 @@ public:
     auto result
       = make_engine(plugin_config, args.poll_interval, args.service_properties);
     if (not result)
-      return nullptr;
+      return result;
     if (not(*result)->input("lib"))
       return caf::make_error(ec::unspecified,
                              "failed to setup Fluent Bit lib input");
