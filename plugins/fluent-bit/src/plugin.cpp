@@ -83,41 +83,49 @@ public:
   /// Constructs a Fluent Bit engine for use as "source" in a pipeline.
   static auto
   make_source(const operator_args& args, const record& plugin_config)
-    -> std::unique_ptr<engine> {
+    -> caf::expected<std::unique_ptr<engine>> {
     auto result
       = make_engine(plugin_config, args.poll_interval, args.service_properties);
     if (not result)
-      return nullptr;
-    if (not result->input(args.plugin, args.args))
-      return nullptr;
+      return result;
+    if (not(*result)->input(args.plugin, args.args))
+      return caf::make_error(ec::unspecified,
+                             fmt::format("failed to setup Fluent Bit {} input",
+                                         args.plugin));
     auto callback = flb_lib_out_cb{
       .cb = handle_lib_output,
-      .data = result.get(),
+      .data = result->get(),
     };
     // There are two options for the `lib` output:
     // - format: "msgpack" or "json"
     // - max_records: integer representing the maximum number of records to
     //   process per single flush call.
-    if (not result->output("lib", {{"format", "json"}}, &callback))
-      return nullptr;
-    if (not result->start())
-      return nullptr;
+    if (not(*result)->output("lib", {{"format", "json"}}, &callback))
+      return caf::make_error(ec::unspecified,
+                             "failed to setup Fluent Bit lib output");
+    if (not(*result)->start())
+      return caf::make_error(ec::unspecified,
+                             "failed to start Fluent Bit engine");
     return result;
   }
 
   /// Constructs a Fluent Bit engine for use as "sink" in a pipeline.
   static auto make_sink(const operator_args& args, const record& plugin_config)
-    -> std::unique_ptr<engine> {
+    -> caf::expected<std::unique_ptr<engine>> {
     auto result
       = make_engine(plugin_config, args.poll_interval, args.service_properties);
     if (not result)
       return nullptr;
-    if (not result->input("lib"))
-      return nullptr;
-    if (not result->output(args.plugin, args.args))
-      return nullptr;
-    if (not result->start())
-      return nullptr;
+    if (not(*result)->input("lib"))
+      return caf::make_error(ec::unspecified,
+                             "failed to setup Fluent Bit lib input");
+    if (not(*result)->output(args.plugin, args.args))
+      return caf::make_error(ec::unspecified,
+                             fmt::format("failed to setup Fluent Bit {} outut",
+                                         args.plugin));
+    if (not(*result)->start())
+      return caf::make_error(ec::unspecified,
+                             "failed to start Fluent Bit engine");
     return result;
   }
 
@@ -191,30 +199,30 @@ private:
   static auto make_engine(const record& global_properties,
                           std::chrono::milliseconds poll_interval,
                           const property_map& local_properties)
-    -> std::unique_ptr<engine> {
+    -> caf::expected<std::unique_ptr<engine>> {
     auto* ctx = flb_create();
     if (ctx == nullptr)
-      return nullptr;
+      return caf::make_error(ec::unspecified,
+                             "failed to create Fluent Bit context");
     // Start with a less noisy log level.
-    if (flb_service_set(ctx, "log_level", "error", nullptr) != 0) {
-      TENZIR_ERROR("failed to adjust default log_level");
-      return nullptr;
-    }
+    if (flb_service_set(ctx, "log_level", "error", nullptr) != 0)
+      return caf::make_error(ec::unspecified,
+                             "failed to adjust Fluent Bit log_level");
     for (const auto& [key, value] : global_properties) {
       auto str_value = to_string(value);
       TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
-      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set global service option: {}={}", key,
-                     str_value);
-        return nullptr;
-      }
+      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0)
+        return caf::make_error(ec::unspecified,
+                               fmt::format("failed to set global service "
+                                           "option: {}={}", //
+                                           key, str_value));
     }
     for (const auto& [key, value] : local_properties) {
       TENZIR_DEBUG("setting local service option: {}={}", key, value);
-      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
-        TENZIR_ERROR("failed to set local service option: {}={}", key, value);
-        return nullptr;
-      }
+      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0)
+        return caf::make_error(
+          ec::unspecified,
+          fmt::format("failed to set local service option: {}={}", key, value));
     }
     return std::unique_ptr<engine>(new engine{ctx, poll_interval});
   }
@@ -326,11 +334,11 @@ public:
     auto engine = engine::make_source(args_, config_);
     if (not engine) {
       diagnostic::error("failed to create Fluent Bit engine")
+        .hint("{}", engine.error())
         .emit(ctrl.diagnostics());
       co_return;
     }
     auto builder = series_builder{};
-    // FIXME: handle all return values.
     auto parse = [&builder](std::string_view line) {
       TENZIR_ASSERT(not line.empty());
       // What we're getting here is the typical Fluent Bit array consisting of
@@ -443,10 +451,10 @@ public:
         row.field("message").data(make_view(second));
     };
     auto last_finish = std::chrono::steady_clock::now();
-    while (engine->running()) {
+    while ((*engine)->running()) {
       const auto now = std::chrono::steady_clock::now();
       // Poll the engine and process data that Fluent Bit already handed over.
-      if (engine->try_consume(parse) == 0) {
+      if ((*engine)->try_consume(parse) == 0) {
         TENZIR_DEBUG("sleeping for {}", args_.poll_interval);
         std::this_thread::sleep_for(args_.poll_interval);
       }
@@ -462,7 +470,6 @@ public:
         co_yield {};
       }
     }
-    TENZIR_WARN("heejahooo");
     if (builder.length() > 0) {
       TENZIR_DEBUG("flushing last table slice with {} rows", builder.length());
       for (auto& slice : builder.finish_as_table_slice(table_slice_name))
@@ -476,10 +483,11 @@ public:
     auto engine = engine::make_sink(args_, config_);
     if (not engine) {
       diagnostic::error("failed to create Fluent Bit engine")
+        .hint("{}", engine.error())
         .emit(ctrl.diagnostics());
       co_return;
     }
-    engine->max_wait_before_stop(std::chrono::seconds(1));
+    (*engine)->max_wait_before_stop(std::chrono::seconds(1));
     auto event = std::string{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -501,7 +509,7 @@ public:
         TENZIR_ASSERT_CHEAP(ok);
         // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
         auto message = fmt::format("[{}, {}]", flb_time_now(), event);
-        if (not engine->push(message))
+        if (not(*engine)->push(message))
           TENZIR_ERROR("failed to push data into Fluent Bit engine");
         event.clear();
       }
