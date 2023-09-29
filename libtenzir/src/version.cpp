@@ -76,7 +76,10 @@ auto tenzir_features() -> std::vector<std::string> {
   // large_responses - The platform plugin understands the
   //                   `alternate_payload_destination` field and can send
   //                   out-of-band responses.
-  return {"large_responses"};
+  // launch_endpoint - The pipeline manager plugin has a new `/pipeline/launch`
+  //                   endpoint and can thus unify the workflows of running &
+  //                   deploying pipelines.
+  return {"large_responses", "launch_endpoint"};
 }
 
 } // namespace tenzir
