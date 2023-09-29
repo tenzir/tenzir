@@ -6,7 +6,7 @@
   roles:
     - role: tenzir
       vars:
-        config_file: ./tenzir.yaml
-        read_write_paths: [/tmp]
+        tenzir_config_dir: ./etc/tenzir
+        tenzir_read_write_paths: [/tmp]
         tenzir_archive: ./tenzir.tar.gz
         tenzir_debian_package: ./tenzir.deb

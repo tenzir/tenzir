@@ -4,11 +4,11 @@ argument_specs:
   main:
     short_description: The main entry point for the tenzir role.
     options:
-      config_dir:
+      tenzir_config_dir:
         type: str
         required: true
         description: A directory containing a Tenzir configuration tree
-      read_write_paths:
+      tenzir_read_write_paths:
         type: list
         elements: str
         default: []
