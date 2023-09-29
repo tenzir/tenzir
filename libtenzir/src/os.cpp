@@ -15,7 +15,9 @@
 
 #include <algorithm>
 
-#if TENZIR_MACOS
+#if TENZIR_LINUX
+#  include <pfs/procfs.hpp>
+#elif TENZIR_MACOS
 #  include <mach/mach_time.h>
 
 #  include <libproc.h>
@@ -67,47 +69,193 @@ auto socket_type() -> type {
 }
 
 auto os::make() -> std::unique_ptr<os> {
-#if TENZIR_MACOS
+#if TENZIR_LINUX
+  return linux::make();
+#elif TENZIR_MACOS
   return darwin::make();
 #endif
   return nullptr;
 }
 
+auto os::processes() -> table_slice {
+  auto builder = table_slice_builder{process_type()};
+  for (const auto& proc : fetch_processes()) {
+    auto okay = builder.add(proc.name, proc.pid, proc.ppid, proc.uid, proc.gid,
+                            proc.ruid, proc.rgid, proc.priority, proc.startup);
+    okay = builder.add(proc.vsize ? make_view(*proc.vsize) : data_view{});
+    TENZIR_ASSERT(okay);
+    okay = builder.add(proc.rsize ? make_view(*proc.rsize) : data_view{});
+    TENZIR_ASSERT(okay);
+    okay = builder.add(proc.utime ? make_view(*proc.utime) : data_view{});
+    TENZIR_ASSERT(okay);
+    okay = builder.add(proc.stime ? make_view(*proc.stime) : data_view{});
+    TENZIR_ASSERT(okay);
+  }
+  return builder.finish();
+}
+
+auto os::sockets() -> table_slice {
+  auto builder = table_slice_builder{socket_type()};
+  for (const auto& proc : fetch_processes()) {
+    auto pid = detail::narrow_cast<uint32_t>(proc.pid);
+    for (const auto& socket : sockets_for(pid)) {
+      auto okay = builder.add(uint64_t{proc.pid}, proc.name,
+                              detail::narrow_cast<uint64_t>(socket.protocol),
+                              socket.local_addr, uint64_t{socket.local_port},
+                              socket.remote_addr, uint64_t{socket.remote_port},
+                              not socket.state.empty() ? make_view(socket.state)
+                                                       : data_view{});
+      TENZIR_ASSERT(okay);
+    }
+  }
+  return builder.finish();
+}
+
+#if TENZIR_LINUX
+
+struct linux::state {
+  uint64_t clock_tick{};
+  pfs::procfs procfs{};
+};
+
+auto linux::make() -> std::unique_ptr<linux> {
+  auto result = std::unique_ptr<linux>{new linux};
+  result.clock_tick = sysconf(_SC_CLK_TCK);
+  return result;
+}
+
+linux::linux() : state_{std::make_unique<state>()} {
+}
+
+linux::~linux() = default;
+
+auto linux::fetch_processes() -> std::vector<process> {
+  auto result = std::vector<process>{};
+  try {
+    auto tasks = state_->procfs.get_processes();
+    result.reserve(tasks.size());
+    for (const auto& task : tasks) {
+      try {
+        auto stat = task.get_stat();
+        auto status = task.get_status();
+        auto proc = process{
+          .name = task.get_comm(),
+          .pid = detail::narrow_cast<uint32_t>(task.id()),
+          .ppid = detail::narrow_cast<uint32_t>(stat.ppid),
+          .uid = detail::narrow_cast<uid_t>(status.uid.effective),
+          .gid = detail::narrow_cast<gid_t>(status.gid.effective),
+          .ruid = detail::narrow_cast<uid_t>(status.uid.real),
+          .rgid = detail::narrow_cast<gid_t>(status.gid.real),
+          .priority = std::to_string(stat.priority),
+          .startup = {},
+          .vsize = static_cast<uint64_t>(stat.vsize),
+          .rsize = static_cast<uint64_t>(stat.rss * getpagesize()),
+          .utime = std::chrono::seconds{stat.utime / state_->clock_tick},
+          .stime = std::chrono::seconds{stat.stime / state_->clock_tick},
+        };
+        result.push_back(std::move(proc));
+      } catch (std::system_error&) {
+        TENZIR_DEBUG("ingoring exception for PID {}", task.id());
+      } catch (std::runtime_error&) {
+        TENZIR_DEBUG("ingoring exception for PID {}", task.id());
+      }
+    }
+  } catch (const std::system_error&) {
+    TENZIR_WARN("failed to read /proc filesystem (system error)");
+  } catch (const std::runtime_error&) {
+    TENZIR_WARN("failed to read /proc filesystem (runtime error)");
+  }
+  return result;
+}
+
 namespace {
 
-struct process {
-  std::string name;
-  uint32_t pid;
-  uint32_t ppid;
-  uid_t uid;
-  gid_t gid;
-  uid_t ruid;
-  gid_t rgid;
-  std::string priority;
-  time startup;
-  std::optional<uint64_t> vsize;
-  std::optional<uint64_t> rsize;
-  std::optional<duration> utime;
-  std::optional<duration> stime;
-};
+auto to_string(pfs::net_socket::net_state state) -> std::string {
+  switch (state) {
+    default:
+      break;
+    case pfs::net_socket::net_state::close:
+      return "CLOSED";
+    case pfs::net_socket::net_state::close_wait:
+      return "CLOSE_WAIT";
+    case pfs::net_socket::net_state::closing:
+      return "CLOSING";
+    case pfs::net_socket::net_state::established:
+      return "ESTABLISHED";
+    case pfs::net_socket::net_state::fin_wait1:
+      return "FIN_WAIT_1";
+    case pfs::net_socket::net_state::fin_wait2:
+      return "FIN_WAIT_2";
+    case pfs::net_socket::net_state::last_ack:
+      return "LAST_ACK";
+    case pfs::net_socket::net_state::listen:
+      return "LISTEN";
+    case pfs::net_socket::net_state::syn_recv:
+      return "SYN_RECEIVED";
+    case pfs::net_socket::net_state::syn_sent:
+      return "SYN_SENT";
+    case pfs::net_socket::net_state::time_wait:
+      return "TIME_WAIT";
+  }
+  return {};
+}
 
-struct socket {
-  uint32_t pid;
-  int protocol;
-  ip local_addr;
-  uint16_t local_port;
-  ip remote_addr;
-  uint16_t remote_port;
-  std::string state;
-};
+auto to_socket(const pfs::net_socket& s, uint32_t pid, int protocol) -> socket {
+  auto result = socket{};
+  result.pid = pid;
+  result.protocol = protocol;
+  if (auto addr = to<ip>(s.local_ip.to_string()))
+    result.local_addr = *addr;
+  result.local_port = s.local_port;
+  if (auto addr = to<ip>(s.remote_ip.to_string()))
+    result.remote_addr = *addr;
+  result.remote_port = s.remote_port;
+  result.state = to_string(s.net_state);
+}
 
 } // namespace
 
-#if TENZIR_MACOS
+auto linux::sockets_for(uint32_t pid) -> std::vector<socket> {
+  auto result = std::vector<socket>{};
+  auto add = [&](auto&& sockets, int proto) {
+    for (const auto& socket : sockets)
+      result.push_back(to_socket(socket, pid, proto));
+  };
+  auto net = state_->procfs.get_net(detail::narrow_cast<int>(pid));
+  add(net.get_icmp(), IPPROTO_ICMP);
+  add(net.get_icmp6(), IPPROTO_ICMP6);
+  add(net.get_raw(), IPPROTO_RAW);
+  add(net.get_raw6(), IPPROTO_RAW);
+  add(net.get_tcp(), IPPROTO_TCP);
+  add(net.get_tcp6(), IPPROTO_TCP);
+  add(net.get_udp(), IPPROTO_UDP);
+  add(net.get_udp6(), IPPROTO_UDP);
+  add(net.get_udplite(), IPPROTO_UDPLITE);
+  add(net.get_udplite6(), IPPROTO_UDPLITE);
+  return result;
+}
 
-namespace {
+#elif TENZIR_MACOS
 
-auto fetch_processes(const auto& timebase) -> std::vector<process> {
+struct darwin::state {
+  struct mach_timebase_info timebase {};
+};
+
+auto darwin::make() -> std::unique_ptr<darwin> {
+  auto result = std::unique_ptr<darwin>{new darwin};
+  if (mach_timebase_info(&result->state_->timebase) != KERN_SUCCESS) {
+    TENZIR_ERROR("failed to get MACH timebase");
+    return nullptr;
+  }
+  return result;
+}
+
+darwin::darwin() : state_{std::make_unique<state>()} {
+}
+
+darwin::~darwin() = default;
+
+auto darwin::fetch_processes() -> std::vector<process> {
   auto num_procs = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
   std::vector<pid_t> pids;
   pids.resize(num_procs);
@@ -154,6 +302,7 @@ auto fetch_processes(const auto& timebase) -> std::vector<process> {
     if (n < 0) {
       p.vsize = task.pti_virtual_size;
       p.rsize = task.pti_resident_size;
+      auto timebase = state_->timebase;
       auto utime = task.pti_total_user * timebase.numer / timebase.denom;
       auto stime = task.pti_total_system * timebase.numer / timebase.denom;
       p.utime = std::chrono::nanoseconds(utime);
@@ -163,6 +312,8 @@ auto fetch_processes(const auto& timebase) -> std::vector<process> {
   }
   return result;
 }
+
+namespace {
 
 auto socket_state_to_string(auto proto, auto state) -> std::string_view {
   switch (proto) {
@@ -202,13 +353,16 @@ auto socket_state_to_string(auto proto, auto state) -> std::string_view {
   return "";
 }
 
-auto sockets_for_pid(pid_t pid) -> std::vector<socket> {
-  auto n = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
+} // namespace
+
+auto darwin::sockets_for(uint32_t pid) -> std::vector<socket> {
+  auto p = detail::narrow_cast<pid_t>(pid);
+  auto n = proc_pidinfo(p, PROC_PIDLISTFDS, 0, nullptr, 0);
   auto fds = std::vector<proc_fdinfo>{};
   fds.resize(n);
-  n = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds.data(), n);
+  n = proc_pidinfo(p, PROC_PIDLISTFDS, 0, fds.data(), n);
   if (n <= 0) {
-    TENZIR_WARN("could not get file descriptors for process {}", pid);
+    TENZIR_WARN("could not get file descriptors for process {}", p);
     return {};
   }
   auto result = std::vector<socket>{};
@@ -217,7 +371,7 @@ auto sockets_for_pid(pid_t pid) -> std::vector<socket> {
       continue;
     auto info = socket_fdinfo{};
     errno = 0;
-    n = proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &info,
+    n = proc_pidfdinfo(p, fd.proc_fd, PROC_PIDFDSOCKETINFO, &info,
                        sizeof(socket_fdinfo));
     if (n < static_cast<int>(sizeof(socket_fdinfo)) or errno != 0)
       continue;
@@ -257,61 +411,6 @@ auto sockets_for_pid(pid_t pid) -> std::vector<socket> {
     result.push_back(std::move(s));
   }
   return result;
-}
-
-} // namespace
-
-struct darwin::state {
-  struct mach_timebase_info timebase_ {};
-};
-
-auto darwin::make() -> std::unique_ptr<darwin> {
-  auto result = std::unique_ptr<darwin>{new darwin};
-  if (mach_timebase_info(&result->state_->timebase_) != KERN_SUCCESS) {
-    TENZIR_ERROR("failed to get MACH timebase");
-    return nullptr;
-  }
-  return result;
-}
-
-darwin::darwin() : state_{std::make_unique<state>()} {
-}
-
-darwin::~darwin() = default;
-
-auto darwin::processes() -> table_slice {
-  auto builder = table_slice_builder{process_type()};
-  for (const auto& proc : fetch_processes(state_->timebase_)) {
-    auto okay = builder.add(proc.name, proc.pid, proc.ppid, proc.uid, proc.gid,
-                            proc.ruid, proc.rgid, proc.priority, proc.startup);
-    okay = builder.add(proc.vsize ? make_view(*proc.vsize) : data_view{});
-    TENZIR_ASSERT(okay);
-    okay = builder.add(proc.rsize ? make_view(*proc.rsize) : data_view{});
-    TENZIR_ASSERT(okay);
-    okay = builder.add(proc.utime ? make_view(*proc.utime) : data_view{});
-    TENZIR_ASSERT(okay);
-    okay = builder.add(proc.stime ? make_view(*proc.stime) : data_view{});
-    TENZIR_ASSERT(okay);
-  }
-  return builder.finish();
-}
-
-auto darwin::sockets() -> table_slice {
-  auto builder = table_slice_builder{socket_type()};
-  auto procs = fetch_processes(state_->timebase_);
-  for (const auto& proc : fetch_processes(state_->timebase_)) {
-    auto pid = detail::narrow_cast<pid_t>(proc.pid);
-    for (const auto& socket : sockets_for_pid(pid)) {
-      auto okay = builder.add(uint64_t{proc.pid}, proc.name,
-                              detail::narrow_cast<uint64_t>(socket.protocol),
-                              socket.local_addr, uint64_t{socket.local_port},
-                              socket.remote_addr, uint64_t{socket.remote_port},
-                              not socket.state.empty() ? make_view(socket.state)
-                                                       : data_view{});
-      TENZIR_ASSERT(okay);
-    }
-  }
-  return builder.finish();
 }
 
 #endif
