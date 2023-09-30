@@ -34,6 +34,8 @@ Available aspects:
 - `partitions`: shows all table partitions of a remote node.
 - `pipelines`: shows all managed pipelines of a remote node.
 - `plugins`: shows all loaded plugins.
+- `processes`: shows a snapshot of all processes.
+- `sockets`: shows a snapshot of all sockets.
 - `version`: shows the Tenzir version.
 
 We also offer some additional aspects for experts that want to take a deeper
@@ -71,4 +73,10 @@ Show the version of a remote node:
 
 ```
 remote show version
+```
+
+Show process ID, local, and remote IP address of all sockets:
+
+```
+show sockets | select pid, local_addr, remote_addr 
 ```
