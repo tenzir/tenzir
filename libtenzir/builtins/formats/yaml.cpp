@@ -63,7 +63,8 @@ auto parse_node(auto& guard, const YAML::Node& node,
     case YAML::NodeType::Map: {
       auto record = guard.record();
       for (const auto& element : node) {
-        auto field = record.field(element.first.Scalar());
+        const auto& name = element.first.as<std::string>();
+        auto field = record.field(name);
         parse_node(field, element.second, ctrl);
       }
       break;
@@ -81,7 +82,8 @@ auto load_document(series_builder& builder, std::string&& document,
       return;
     }
     for (const auto& element : node) {
-      auto field = record.field(element.first.as<std::string>());
+      const auto& name = element.first.as<std::string>();
+      auto field = record.field(name);
       parse_node(field, element.second, ctrl);
     }
   } catch (const YAML::Exception& err) {
