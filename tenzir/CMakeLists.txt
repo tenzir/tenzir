@@ -1,6 +1,9 @@
 add_executable(tenzir tenzir.cpp)
 TenzirTargetEnableTooling(tenzir)
 target_link_libraries(tenzir PRIVATE tenzir::internal tenzir::libtenzir)
+if (TENZIR_ENABLE_JEMALLOC)
+  target_link_libraries(tenzir PRIVATE jemalloc::jemalloc_)
+endif ()
 TenzirTargetLinkWholeArchive(tenzir PRIVATE tenzir::libtenzir_builtins)
 add_executable(tenzir::tenzir ALIAS tenzir)
 

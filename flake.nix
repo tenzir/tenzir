@@ -10,6 +10,7 @@
   };
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs/78058d810644f5ed276804ce7ea9e82d92bee293";
+  inputs.nixpkgs-darwin.url = "github:nixos/nixpkgs/9a0c85ffc5aedc46b4d81f3b9fc22d7f488e3ff9";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
@@ -20,6 +21,7 @@
   outputs = {
     self,
     nixpkgs,
+    nixpkgs-darwin,
     flake-utils,
     ...
   } @ inputs:
@@ -33,10 +35,13 @@
         };
       };
     }
-    // flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin"] (
+    // flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin" "aarch64-darwin" ] (
       system: let
         overlay = import ./nix/overlay.nix {inherit inputs versionShortOverride versionLongOverride;};
-        pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [overlay];
+        npkgs = if (system == "x86_64-darwin" || system == "aarch64-darwin")
+                then nixpkgs-darwin
+                else nixpkgs;
+        pkgs = npkgs.legacyPackages."${system}".appendOverlays [overlay];
         inherit
           (builtins.fromJSON (builtins.readFile ./version.json))
           tenzir-version-fallback

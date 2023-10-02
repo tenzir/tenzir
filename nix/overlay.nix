@@ -4,11 +4,8 @@
   versionLongOverride,
 }: final: prev: let
   inherit (final) lib;
-  inherit (final.stdenv.hostPlatform) isStatic;
-  stdenv =
-    if final.stdenv.isDarwin
-    then final.llvmPackages_16.stdenv
-    else final.stdenv;
+  inherit (final.stdenv.hostPlatform) isLinux isDarwin isStatic;
+  stdenv = final.stdenv;
 in {
   google-cloud-cpp =
     if !isStatic
@@ -44,6 +41,12 @@ in {
         };
       })
       .overrideAttrs (orig: {
+        nativeBuildInputs = orig.nativeBuildInputs ++ lib.optionals isDarwin [
+          (prev.buildPackages.writeScriptBin "libtool" ''
+            #!${stdenv.shell}
+            exec ${lib.getBin prev.buildPackages.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
+          '')
+        ];
         buildInputs = orig.buildInputs ++ [final.sqlite];
         cmakeFlags =
           orig.cmakeFlags
@@ -126,6 +129,8 @@ in {
       "-DRDKAFKA_BUILD_STATIC=ON"
       # The interceptor tests library is hard-coded to SHARED.
       "-DRDKAFKA_BUILD_TESTS=OFF"
+    ] ++ lib.optionals stdenv.cc.isClang [
+      "-DRDKAFKA_BUILD_TESTS=OFF"
     ];
   });
   mkStub = name: prev.writeShellScriptBin name ''
@@ -138,8 +143,10 @@ in {
       outputs = ["out"];
       nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")];
       # Neither systemd nor postgresql have a working static build.
-      buildInputs = [ final.musl-fts final.openssl final.libyaml ];
-      propagatedBuildInputs = [ final.musl-fts final.openssl final.libyaml ];
+      propagatedBuildInputs = [
+        final.openssl
+        final.libyaml
+      ] ++ lib.optionals isLinux [ final.musl-fts ];
       cmakeFlags = [
         "-DFLB_RELEASE=ON"
         "-DFLB_BINARY=OFF"
@@ -189,13 +196,13 @@ in {
         # The OpenSSL dependency appears in the interface of CAF, so it has to
         # be propagated downstream.
         propagatedBuildInputs = [final.openssl];
-        NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer";
+        env.NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer";
         # Building statically implies using -flto. Since we produce a final binary with
         # link time optimizaitons in Tenzir, we need to make sure that type definitions that
         # are parsed in both projects are the same, otherwise the compiler will complain
         # at the optimization stage.
         # https://github.com/NixOS/nixpkgs/issues/130963
-        NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
+        env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
         preCheck = ''
           export LD_LIBRARY_PATH=$PWD/lib
           export DYLD_LIBRARY_PATH=$PWD/lib
@@ -209,8 +216,9 @@ in {
             "-DCAF_BUILD_STATIC_ONLY=ON"
             "-DCAF_ENABLE_TESTING=OFF"
             "-DOPENSSL_USE_STATIC_LIBS=TRUE"
-            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCMAKE_POLICY_DEFAULT_CMP0069=NEW"
+          ] ++ lib.optionals isLinux [
+            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
           ];
         hardeningDisable = [
           "fortify"

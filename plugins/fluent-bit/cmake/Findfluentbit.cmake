@@ -25,14 +25,21 @@ if (NOT TARGET fluentbit::fluentbit)
     # The target dependencies need to be aligned with how the provided library
     # was built. In this case we assume the fluent-bit package from our Nix
     # scaffold.
+    set(_link_libs)
     find_package(PkgConfig)
     pkg_check_modules(PC_YAML REQUIRED IMPORTED_TARGET yaml-0.1)
-    pkg_check_modules(PC_MUSL_FTS REQUIRED IMPORTED_TARGET musl-fts)
+    list(APPEND _link_libs PkgConfig::PC_YAML)
+    if (NOT APPLE) # We should really have a check for musl here.
+      pkg_check_modules(PC_MUSL_FTS REQUIRED IMPORTED_TARGET musl-fts)
+      list(APPEND _link_libs PkgConfig::PC_MUSL_FTS)
+    endif ()
+    if (APPLE)
+      list(APPEND _link_libs resolv)
+    endif ()
     set_property(
       TARGET fluentbit::fluentbit
       APPEND
-      PROPERTY INTERFACE_LINK_LIBRARIES PkgConfig::PC_YAML
-               PkgConfig::PC_MUSL_FTS)
+      PROPERTY INTERFACE_LINK_LIBRARIES "${_link_libs}")
     # Inject the vendored static libs.
     file(GLOB FLUENT_BIT_LIBS "${FLUENT_BIT_LOCATION}/*.a")
     set_property(
