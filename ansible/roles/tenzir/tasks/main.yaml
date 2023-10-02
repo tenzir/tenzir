@@ -8,7 +8,7 @@
 
 - name: Copy tenzir config directory
   ansible.posix.synchronize:
-    src: "{{ config_dir }}/"
+    src: "{{ tenzir_config_dir }}/"
     dest: /opt/tenzir/etc/tenzir
     archive: true
     delete: true
