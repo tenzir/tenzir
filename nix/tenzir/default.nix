@@ -17,6 +17,7 @@
     arrow-cpp,
     fast_float,
     flatbuffers,
+    ftxui,
     spdlog,
     libyamlcpp,
     simdjson,
@@ -57,6 +58,7 @@
     extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
     bundledPlugins =
       [
+        "plugins/explore"
         "plugins/gcs"
         "plugins/kafka"
         "plugins/nic"
@@ -89,6 +91,7 @@
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           fast_float
+          ftxui
           libpcap
           libunwind
           libyamlcpp

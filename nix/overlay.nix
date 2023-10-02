@@ -57,6 +57,17 @@ in {
         doCheck = false;
         doInstallCheck = false;
       });
+  ftxui =
+    if !isStatic
+    then prev.ftxui
+    else
+      prev.ftxui.overrideAttrs (orig: {
+        cmakeFlags = [
+          "-DFTXUI_BUILD_EXAMPLES=OFF"
+          "-DFTXUI_BUILD_DOCS=OFF"
+          "-DFTXUI_BUILD_TESTS=OFF"
+        ];
+      });
   zeromq =
     if !isStatic
     then prev.zeromq
