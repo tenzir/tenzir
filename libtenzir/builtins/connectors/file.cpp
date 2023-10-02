@@ -38,8 +38,6 @@
 namespace tenzir::plugins::file {
 namespace {
 
-const auto std_io_path = std::string{"-"};
-
 using file_description_wrapper = std::shared_ptr<int>;
 
 /// Tries to expand paths that start with a `~`. Returns the original input
