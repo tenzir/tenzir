@@ -18,9 +18,6 @@ namespace tenzir::plugins::lines {
 
 namespace {
 
-/// The default name of the record field.
-const auto default_field_name = std::string{"data"};
-
 struct parser_args {
   std::optional<location> skip_empty;
 
