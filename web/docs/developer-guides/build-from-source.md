@@ -47,6 +47,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[librdkafka](https://github.com/confluentinc/librdkafka)||Required for building the `kafka` plugin.|
 ||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
 ||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
+||[rabbitmq-c](https://github.com/alanxz/rabbitmq-c)||Required for building the `rabbitmq` plugin.|
 ||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for Tenzir.|
