@@ -38,14 +38,16 @@ Defaults to `tenzir`.
 ### `-X|--set <key=value>` (Loader, Saver)
 
 A comma-separated list of key-value configuration options for RabbitMQ.
-`-X max_channels=42,frame_size=1024,sasl_method=external`. Please see XXX for a
-list of available options.
+`-X max_channels=42,frame_size=1024,sasl_method=external`. The example
+`rabbitmq.yaml` file below shows the available options:
 
-The `rabbitmq` operator uses these key-value pairs during setup.
+import CodeBlock from '@theme/CodeBlock';
+import Configuration from '!!raw-loader!@site/../plugins/rabbitmq/rabbitmq.yaml.example';
 
-We recommend factoring these options into the plugin-specific `rabbitmq.yaml`
-that describe your RabbitMQ deployment, so that the invocation of the `rabbitmq`
-connector can remain lean.
+<CodeBlock language="yaml">{Configuration}</CodeBlock>
+
+We recommend factoring the environment-specific options into the configuration
+file so that they are not cluttering the pipeline definition.
 
 ## Examples
 
