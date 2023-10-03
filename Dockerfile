@@ -95,6 +95,7 @@ RUN apt-get update && \
       libfmt9 \
       libhttp-parser2.9 \
       libpcap0.8 \
+      librabbitmq4 \
       librdkafka++1 \
       libre2-9 \
       libspdlog1.10 \
