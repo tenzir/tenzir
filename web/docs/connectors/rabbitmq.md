@@ -6,6 +6,7 @@ Sends and receives messages via RabbitMQ.
 
 ```
 rabbitmq [-c|--channel <number>] [-q|--queue <queue>] [-X|--set <key=value>,...]
+         [<url>]
 ```
 
 ## Description
@@ -49,12 +50,23 @@ import Configuration from '!!raw-loader!@site/../plugins/rabbitmq/rabbitmq.yaml.
 We recommend factoring the environment-specific options into the configuration
 file so that they are not cluttering the pipeline definition.
 
-## Examples
+### `<url>`
 
-Consume [JSON](../formats/json.md) from the queue `foo`:
+A URL that specifies the AMQP server. The URL must have the following format:
 
 ```
-from rabbitmq --queue foo read json
+amqp://[USERNAME[:PASSWORD]@]HOSTNAME[:PORT]/[VHOST]
+```
+
+When the URL is present, it will overwrite the corresponding values of the
+configuration options.
+
+## Examples
+
+Consume [JSON](../formats/json.md) from a specific AMQP server:
+
+```
+from rabbitmq amqp://admin:pass:@0.0.0.1:5672/vhost
 ```
 
 Send the list of all TQL operators to the `tenzir` exchange:

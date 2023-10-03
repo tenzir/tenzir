@@ -15,9 +15,11 @@
 
 #if TENZIR_MACOS
 #  include <rabbitmq-c/amqp.h>
+#  include <rabbitmq-c/ssl_socket.h>
 #  include <rabbitmq-c/tcp_socket.h>
 #else
 #  include <amqp.h>
+#  include <amqp_ssl_socket.h>
 #  include <amqp_tcp_socket.h>
 #endif
 
@@ -68,12 +70,6 @@ auto as_amqp_bytes(chunk_ptr chunk) -> amqp_bytes_t {
   };
 }
 
-/// Interprets AMQP bytes as byte span.
-auto as_bytes(amqp_bytes_t bytes) -> std::span<const std::byte> {
-  const auto* ptr = reinterpret_cast<const std::byte*>(bytes.bytes);
-  return std::span<const std::byte>{ptr, bytes.len};
-}
-
 /// Interprets AMQP bytes as string view.
 auto as_string_view(amqp_bytes_t bytes) -> std::string_view {
   const auto* ptr = reinterpret_cast<const char*>(bytes.bytes);
@@ -81,11 +77,14 @@ auto as_string_view(amqp_bytes_t bytes) -> std::string_view {
 }
 
 /// Converts a status code into an error.
-auto to_error(int status, std::string_view desc) -> caf::error {
+auto to_error(int status, std::string_view desc = "") -> caf::error {
   if (status == AMQP_STATUS_OK)
     return {};
-  return caf::make_error(
-    ec::unspecified, fmt::format("{}: {}", desc, amqp_error_string2(status)));
+  const auto* error_string = amqp_error_string2(status);
+  if (desc.empty())
+    return caf::make_error(ec::unspecified, error_string);
+  return caf::make_error(ec::unspecified,
+                         fmt::format("{}: {}", desc, error_string));
 }
 
 /// Converts an RPC reply into an error.
@@ -111,6 +110,7 @@ auto to_error(const amqp_rpc_reply_t& reply) -> caf::error {
 struct amqp_config {
   std::string hostname{"127.0.0.1"};
   uint16_t port{AMQP_PROTOCOL_PORT};
+  bool ssl{false};
   std::string vhost{"/"};
   int max_channels{AMQP_DEFAULT_MAX_CHANNELS};
   int frame_size{AMQP_DEFAULT_FRAME_SIZE};
@@ -132,6 +132,12 @@ public:
   /// Constructs an AMQP engine from a config record.
   static auto make(record settings) -> caf::expected<amqp_engine> {
     amqp_config config;
+    if (auto* hostname = get_if<std::string>(&settings, "hostname"))
+      config.hostname = std::move(*hostname);
+    if (auto* port = get_if<uint64_t>(&settings, "port"))
+      config.port = detail::narrow_cast<uint16_t>(*port);
+    if (auto* ssl = get_if<bool>(&settings, "ssl"))
+      config.ssl = *ssl;
     if (auto* vhost = get_if<std::string>(&settings, "vhost"))
       config.vhost = std::move(*vhost);
     if (auto* max_channels = get_if<uint64_t>(&settings, "max_channels"))
@@ -165,6 +171,7 @@ public:
     TENZIR_DEBUG("constructing AMQP engine with the following parameters:");
     TENZIR_DEBUG("- hostname: {}", config_.hostname);
     TENZIR_DEBUG("- port: {}", config_.port);
+    TENZIR_DEBUG("- ssl: {}", config_.ssl);
     TENZIR_DEBUG("- vhost: {}", config_.vhost);
     TENZIR_DEBUG("- max_channels: {}", config_.max_channels);
     TENZIR_DEBUG("- frame_size: {}", config_.frame_size);
@@ -173,7 +180,10 @@ public:
     TENZIR_DEBUG("- password: ***");
     TENZIR_DEBUG("- SASL method: {}", static_cast<int>(config_.sasl_method));
     TENZIR_DEBUG("creating new TCP socket");
-    socket_ = amqp_tcp_socket_new(conn_);
+    if (config_.ssl)
+      socket_ = amqp_ssl_socket_new(conn_);
+    else
+      socket_ = amqp_tcp_socket_new(conn_);
     TENZIR_ASSERT(socket_ != nullptr);
   }
 
@@ -237,7 +247,7 @@ public:
     auto status = amqp_basic_publish(conn_, channel, as_amqp_bytes(exchange),
                                      routing_key, mandatory, immediate,
                                      properties, as_amqp_bytes(chunk));
-    return to_error(status, "failed to publish AMQP message");
+    return to_error(status);
   }
 
   // TODO: need a better name for this function.
@@ -360,7 +370,7 @@ private:
     TENZIR_ASSERT(socket_ != nullptr);
     auto p = detail::narrow_cast<int>(config_.port);
     auto status = amqp_socket_open(socket_, config_.hostname.c_str(), p);
-    return to_error(status, "failed to open socket");
+    return to_error(status);
   }
 
   auto login() -> caf::error {
@@ -540,24 +550,19 @@ public:
 
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
-    auto args = parse_args(p);
-    return std::make_unique<rabbitmq_loader>(std::move(args), config_);
+    auto [args, config] = parse_args(p);
+    return std::make_unique<rabbitmq_loader>(std::move(args),
+                                             std::move(config));
   }
 
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
-    auto args = parse_args(p);
-    return std::make_unique<rabbitmq_saver>(std::move(args), config_);
+    auto [args, config] = parse_args(p);
+    return std::make_unique<rabbitmq_saver>(std::move(args), std::move(config));
   }
 
-  auto parse_args(parser_interface& p) const -> connector_args {
-    // We may consider exposing a config setting that specifies an AMQP URL of
-    // this form:
-    ///
-    ///     amqp://[$USERNAME[:$PASSWORD]\@]$HOST[:$PORT]/[$VHOST]
-    ///
-    /// The function amqp_parse_url does the parsing into an
-    /// amqp_connection_info struct, which would have then to be processed.
+  auto parse_args(parser_interface& p) const
+    -> std::pair<connector_args, record> {
     auto parser = argument_parser{
       name(),
       fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
@@ -568,7 +573,39 @@ public:
     parser.add("-X,--set", args.options, "<key=value>,...");
     parser.add(args.url, "<url>");
     parser.parse(p);
-    return args;
+    auto config = config_;
+    if (args.url) {
+      if (auto cfg = parse_url(args.url->inner))
+        config = std::move(*cfg);
+      else
+        diagnostic::error("failed to parse AMQP URL")
+          .primary(args.url->source)
+          .hint("URL must adhere to the following format")
+          .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
+          .throw_();
+    }
+    return {std::move(args), std::move(config)};
+  }
+
+  auto parse_url(std::string_view str) const -> std::optional<record> {
+    auto info = amqp_connection_info{};
+    auto copy = std::string{str};
+    if (amqp_parse_url(copy.data(), &info) != AMQP_STATUS_OK)
+      return std::nullopt;
+    auto result = config_;
+    if (info.host != nullptr)
+      result["hostname"] = std::string{info.host};
+    if (info.port != 0)
+      result["port"] = detail::narrow_cast<uint64_t>(info.port);
+    if (info.ssl != 0)
+      result["ssl"] = true;
+    if (info.vhost != nullptr)
+      result["vhost"] = std::string{info.vhost};
+    if (info.user != nullptr)
+      result["username"] = std::string{info.user};
+    if (info.password != nullptr)
+      result["password"] = std::string{info.password};
+    return result;
   }
 
   auto name() const -> std::string override {
