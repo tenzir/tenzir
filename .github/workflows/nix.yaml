@@ -86,7 +86,7 @@ jobs:
           aws-region: eu-west-1
       - name: Login to AWS ECR
         if: steps.cfg.outputs.needs-ecr == 'true'
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
       - name: Install Nix
         uses: cachix/install-nix-action@v23
         with:
