@@ -30,13 +30,13 @@ namespace tenzir::plugins::rabbitmq {
 namespace {
 
 /// The default channel number.
-constexpr amqp_channel_t default_channel = 1;
+constexpr auto default_channel = amqp_channel_t{1};
 
 /// The default queue name.
-constexpr auto default_exchange = "amq.direct";
+constexpr auto default_exchange = std::string_view{"amq.direct"};
 
 /// The default queue name.
-constexpr auto default_queue = "tenzir";
+constexpr auto default_queue = std::string_view{"tenzir"};
 
 /// Assume ownership of the memory and wrap it in a chunk.
 /// @param msg The bytes to move into a chunk.
@@ -47,8 +47,14 @@ auto move_into_chunk(amqp_bytes_t& bytes) -> chunk_ptr {
   return chunk::make(bytes.bytes, bytes.len, deleter);
 }
 
+auto as_amqp_bool(bool x) -> amqp_boolean_t {
+  return x ? 1 : 0;
+}
+
 /// Interprets a string view as AMQP bytes.
 auto as_amqp_bytes(std::string_view str) -> amqp_bytes_t {
+  if (str.empty())
+    return amqp_empty_bytes;
   // Many RabbitMQ functions take an amqp_bytes_t structure as input.
   // Unfortunately there's not const-preserving equivalent, so we have to bite
   // the const_cast bullet.
@@ -60,7 +66,8 @@ auto as_amqp_bytes(std::string_view str) -> amqp_bytes_t {
 
 /// Interprets a chunk as AMQP bytes.
 auto as_amqp_bytes(chunk_ptr chunk) -> amqp_bytes_t {
-  TENZIR_ASSERT(chunk != nullptr);
+  if (not chunk or chunk->size() == 0)
+    return amqp_empty_bytes;
   // Many RabbitMQ functions take an amqp_bytes_t structure as input.
   // Unfortunately there's not const-preserving equivalent, so we have to bite
   // the const_cast bullet.
@@ -129,6 +136,28 @@ struct amqp_config {
 /// https://livebook.manning.com/book/rabbitmq-in-depth/.
 class amqp_engine {
 public:
+  /// Aditional options for starting a consumer.
+  struct consume_options {
+    uint16_t channel{default_channel};
+    std::string_view exchange{default_exchange};
+    std::string_view queue{default_queue};
+    bool passive{false};
+    bool durable{false};
+    bool exclusive{false};
+    bool auto_delete{true};
+    bool no_local{false};
+    bool no_ack{true};
+  };
+
+  /// Aditional options for starting a consumer.
+  struct publish_options {
+    uint16_t channel{default_channel};
+    std::string_view exchange{default_exchange};
+    std::string_view queue{default_queue};
+    bool mandatory{false};
+    bool immediate{false};
+  };
+
   /// Constructs an AMQP engine from a config record.
   static auto make(record settings) -> caf::expected<amqp_engine> {
     amqp_config config;
@@ -232,57 +261,51 @@ public:
 
   /// Publishes a message as bytes.
   /// @param chunk The message payload.
-  /// @param channel The channel number.
-  /// @param exchange The name of the exchange.
-  /// @param queue The name of the queue ("routing key").
-  auto publish(chunk_ptr chunk, amqp_channel_t channel,
-               std::string_view exchange, std::string_view queue)
-    -> caf::error {
+  /// @param opts The publishing options.
+  auto publish(chunk_ptr chunk, const publish_options& opts) -> caf::error {
     TENZIR_DEBUG("publish {} bytes to queue {} at channel {}", chunk->size(),
-                 queue, channel);
-    auto routing_key = as_amqp_bytes(queue);
-    auto mandatory = amqp_boolean_t{0};
-    auto immediate = amqp_boolean_t{0};
+                 opts.queue, opts.channel);
+    auto routing_key = as_amqp_bytes(opts.queue);
     auto properties = nullptr;
-    auto status = amqp_basic_publish(conn_, channel, as_amqp_bytes(exchange),
-                                     routing_key, mandatory, immediate,
-                                     properties, as_amqp_bytes(chunk));
+    auto status = amqp_basic_publish(conn_, amqp_channel_t{opts.channel},
+                                     as_amqp_bytes(opts.exchange), routing_key,
+                                     as_amqp_bool(opts.mandatory),
+                                     as_amqp_bool(opts.immediate), properties,
+                                     as_amqp_bytes(chunk));
     return to_error(status);
   }
 
-  // TODO: need a better name for this function.
-  auto consume(amqp_channel_t channel, std::string_view exchange,
-               std::string_view queue) -> caf::error {
-    TENZIR_DEBUG("declaring queue");
-    auto passive = amqp_boolean_t{0};
-    auto durable = amqp_boolean_t{0};
-    auto exclusive = amqp_boolean_t{0};
-    auto auto_delete = amqp_boolean_t{1};
+  /// Starts a consumer by calling the basic.consume method.
+  /// @param opts The consuming options.
+  auto start_consumer(const consume_options& opts) -> caf::error {
+    TENZIR_DEBUG("declaring queue '{}'", opts.queue);
     auto arguments = amqp_empty_table;
-    auto* declare
-      = amqp_queue_declare(conn_, channel, amqp_empty_bytes, passive, durable,
-                           exclusive, auto_delete, arguments);
+    auto* declare = amqp_queue_declare(
+      conn_, amqp_channel_t{opts.channel}, amqp_empty_bytes,
+      as_amqp_bool(opts.passive), as_amqp_bool(opts.durable),
+      as_amqp_bool(opts.exclusive), as_amqp_bool(opts.auto_delete), arguments);
     if (auto err = to_error(amqp_get_rpc_reply(conn_)))
       return err;
     auto declared_queue = std::string{as_string_view(declare->queue)};
     TENZIR_DEBUG("binding queue");
-    auto routing_key = as_amqp_bytes(queue);
-    amqp_queue_bind(conn_, channel, as_amqp_bytes(declared_queue),
-                    as_amqp_bytes(exchange), routing_key, arguments);
+    auto routing_key = as_amqp_bytes(opts.queue);
+    amqp_queue_bind(conn_, amqp_channel_t{opts.channel},
+                    as_amqp_bytes(declared_queue), as_amqp_bytes(opts.exchange),
+                    routing_key, arguments);
     if (auto err = to_error(amqp_get_rpc_reply(conn_)))
       return err;
     TENZIR_DEBUG("setting up consume");
     auto consumer_tag = amqp_empty_bytes;
-    auto no_local = amqp_boolean_t{0};
-    auto no_ack = amqp_boolean_t{1};
-    amqp_basic_consume(conn_, channel, as_amqp_bytes(declared_queue),
-                       consumer_tag, no_local, no_ack, exclusive, arguments);
+    amqp_basic_consume(conn_, amqp_channel_t{opts.channel},
+                       as_amqp_bytes(declared_queue), consumer_tag,
+                       as_amqp_bool(opts.no_local), as_amqp_bool(opts.no_ack),
+                       as_amqp_bool(opts.exclusive), arguments);
     return to_error(amqp_get_rpc_reply(conn_));
   }
 
   /// Consumes a message.
   /// @returns The message from the server.
-  auto consume_message(std::optional<std::chrono::microseconds> timeout = {})
+  auto consume(std::optional<std::chrono::microseconds> timeout = {})
     -> caf::expected<chunk_ptr> {
     TENZIR_DEBUG("consuming message");
     auto envelope = amqp_envelope_t{};
@@ -407,11 +430,45 @@ struct connector_args {
   }
 };
 
+struct loader_args : connector_args {
+  bool passive{false};
+  bool durable{false};
+  bool exclusive{false};
+  bool no_auto_delete{false};
+  bool no_local{false};
+  bool ack{false};
+
+  friend auto inspect(auto& f, loader_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("loader_args")
+      .fields(f.field("channel", x.channel), f.field("queue", x.queue),
+              f.field("exchange", x.exchange), f.field("options", x.options),
+              f.field("url", x.url), f.field("passive", x.passive),
+              f.field("durable", x.durable), f.field("exclusive", x.exclusive),
+              f.field("no_auto_delete", x.no_auto_delete),
+              f.field("no_local", x.no_local), f.field("ack", x.ack));
+  }
+};
+
+struct saver_args : connector_args {
+  bool mandatory{false};
+  bool immediate{false};
+
+  friend auto inspect(auto& f, saver_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("saver_args")
+      .fields(f.field("channel", x.channel), f.field("queue", x.queue),
+              f.field("exchange", x.exchange), f.field("options", x.options),
+              f.field("url", x.url), f.field("mandatory", x.mandatory),
+              f.field("immediate", x.immediate));
+  }
+};
+
 class rabbitmq_loader final : public plugin_loader {
 public:
   rabbitmq_loader() = default;
 
-  rabbitmq_loader(connector_args args, record config)
+  rabbitmq_loader(loader_args args, record config)
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
@@ -419,32 +476,48 @@ public:
     -> std::optional<generator<chunk_ptr>> override {
     auto engine = amqp_engine::make(config_);
     if (not engine) {
-      diagnostic::error("{}", engine.error()).emit(ctrl.diagnostics());
+      diagnostic::error("failed to construct AMQP engine")
+        .note("{}", engine.error())
+        .emit(ctrl.diagnostics());
       return std::nullopt;
     }
     if (auto err = engine->connect()) {
-      diagnostic::error("{}", err).emit(ctrl.diagnostics());
+      diagnostic::error("failed to connecto to AMQP server")
+        .note("{}", engine.error())
+        .emit(ctrl.diagnostics());
       return std::nullopt;
     }
-    auto make = [&ctrl](connector_args args,
+    auto make = [&ctrl](loader_args args,
                         amqp_engine engine) mutable -> generator<chunk_ptr> {
       auto channel = args.channel ? args.channel->inner : default_channel;
+      TENZIR_DEBUG("opening channel {}", channel);
       if (auto err = engine.open(channel)) {
         diagnostic::error("failed to open AMQP channel {}", channel)
           .emit(ctrl.diagnostics());
         co_return;
       }
-      auto exchange = args.exchange ? args.exchange->inner : default_exchange;
-      auto queue = args.queue ? args.queue->inner : default_queue;
-      if (auto err = engine.consume(channel, exchange, queue)) {
+      TENZIR_DEBUG("starting consumer");
+      auto err = engine.start_consumer({
+        .channel = channel,
+        .exchange = args.exchange ? args.exchange->inner : default_exchange,
+        .queue = args.queue ? args.queue->inner : default_queue,
+        .passive = args.passive,
+        .durable = args.durable,
+        .exclusive = args.exclusive,
+        .auto_delete = not args.no_auto_delete,
+        .no_local = args.no_local,
+        .no_ack = not args.ack,
+      });
+      if (err) {
         diagnostic::error("failed to setup AMQP consume")
+          .hint("{}", err)
           .emit(ctrl.diagnostics());
         co_return;
       }
       co_yield {};
       TENZIR_DEBUG("looping over AMQP frames");
       while (true) {
-        if (auto message = engine.consume_message(500ms)) {
+        if (auto message = engine.consume(500ms)) {
           co_yield std::move(*message);
         } else {
           diagnostic::error("failed to consume message")
@@ -476,7 +549,7 @@ public:
   }
 
 private:
-  connector_args args_;
+  loader_args args_;
   record config_;
 };
 
@@ -484,7 +557,7 @@ class rabbitmq_saver final : public plugin_saver {
 public:
   rabbitmq_saver() = default;
 
-  rabbitmq_saver(connector_args args, record config)
+  rabbitmq_saver(saver_args args, record config)
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
@@ -498,18 +571,22 @@ public:
     auto channel = args_.channel ? args_.channel->inner : default_channel;
     if (auto err = engine->open(channel))
       return err;
-    auto exchange = args_.exchange ? args_.exchange->inner : default_exchange;
-    auto queue = args_.queue ? args_.queue->inner : default_queue;
+    auto opts = amqp_engine::publish_options{
+      .channel = channel,
+      .exchange = args_.exchange ? args_.exchange->inner : default_exchange,
+      .queue = args_.queue ? args_.queue->inner : default_queue,
+      .mandatory = args_.mandatory,
+      .immediate = args_.immediate,
+    };
     return [&ctrl, engine = std::make_shared<amqp_engine>(std::move(*engine)),
-            channel, exchange = std::move(exchange),
-            queue = std::move(queue)](chunk_ptr chunk) mutable {
+            opts = std::move(opts)](chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0)
         return;
-      if (auto err = engine->publish(chunk, channel, exchange, queue))
+      if (auto err = engine->publish(chunk, opts))
         diagnostic::error("failed to publish {}-byte message", chunk->size())
-          .note("channel: {}", channel)
-          .note("exchange: {}", exchange)
-          .note("queue: {}", queue)
+          .note("channel: {}", opts.channel)
+          .note("exchange: {}", opts.exchange)
+          .note("queue: {}", opts.queue)
           .hint("{}", err)
           .emit(ctrl.diagnostics());
       return;
@@ -535,7 +612,7 @@ public:
   }
 
 private:
-  connector_args args_;
+  saver_args args_;
   record config_;
 };
 
@@ -550,27 +627,38 @@ public:
 
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
-    auto [args, config] = parse_args(p);
+    auto [args, config] = parse_args<loader_args>(p);
     return std::make_unique<rabbitmq_loader>(std::move(args),
                                              std::move(config));
   }
 
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
-    auto [args, config] = parse_args(p);
+    auto [args, config] = parse_args<saver_args>(p);
     return std::make_unique<rabbitmq_saver>(std::move(args), std::move(config));
   }
 
-  auto parse_args(parser_interface& p) const
-    -> std::pair<connector_args, record> {
+  template <class Args>
+  auto parse_args(parser_interface& p) const -> std::pair<Args, record> {
     auto parser = argument_parser{
       name(),
       fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
-    auto args = connector_args{};
+    auto args = Args{};
     parser.add("-c,--channel", args.channel, "<channel>");
     parser.add("-e,--exchange", args.exchange, "<exchange>");
     parser.add("-q,--queue", args.queue, "<queue>");
     parser.add("-X,--set", args.options, "<key=value>,...");
+    if constexpr (std::is_same_v<Args, loader_args>) {
+      parser.add("--passive", args.passive);
+      parser.add("--durable", args.durable);
+      parser.add("--exclusive", args.exclusive);
+      parser.add("--no-auto-delete", args.no_auto_delete);
+      parser.add("--no-local", args.no_local);
+      parser.add("--ack", args.ack);
+    } else if constexpr (std::is_same_v<Args, saver_args>) {
+      parser.add("--mandatory", args.mandatory);
+      parser.add("--immediate", args.immediate);
+    }
     parser.add(args.url, "<url>");
     parser.parse(p);
     auto config = config_;
