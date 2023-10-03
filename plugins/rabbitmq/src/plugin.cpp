@@ -8,12 +8,18 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/config.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <caf/expected.hpp>
 
-#include <rabbitmq-c/amqp.h>
-#include <rabbitmq-c/tcp_socket.h>
+#if TENZIR_MACOS
+#  include <rabbitmq-c/amqp.h>
+#  include <rabbitmq-c/tcp_socket.h>
+#else
+#  include <amqp.h>
+#  include <amqp_tcp_socket.h>
+#endif
 
 using namespace std::chrono_literals;
 
