@@ -713,13 +713,24 @@ jobs:
           # a warning. We accept this drawback because the package we generate
           # here is built specifically as input for the plugin CI jobs and not
           # suitable for general use.
+          ###
+          # We enable the web and fluent-bit plugins here, because:
+          #  * web: Is needed as a dependency of the pipeline-manager, and
+          #    plugin dependency graphs cannot the modeled with the current
+          #    plugin API.
+          #  * fluent-bit: The plugin library links to libfluent-bit.so, which
+          #    is built by upstream without support for `dlopen()`, the
+          #    integrated build method used here works around that by linking
+          #    libfluent-bit.so to libtenzir.so directly. The alternative
+          #    workaround of using LD_PRELOAD for the standalone plugin build
+          #    does not work in the GitHub Actions Runner.
           cmake -B "$BUILD_DIR" \
             -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
-            -DTENZIR_PLUGINS:STRING="plugins/web" \
+            -DTENZIR_PLUGINS:STRING="plugins/web;plugins/fluent-bit" \
             ${{ needs.configure.outputs.cmake-version-args }} \
             ${{ matrix.tenzir.cmake-extra-flags }}
       - name: Compile All Targets
@@ -827,9 +838,6 @@ jobs:
           - name: Compaction
             target: compaction
             path: contrib/tenzir-plugins/compaction
-          - name: Fluent Bit
-            target: fluent-bit
-            path: plugins/fluent-bit
           - name: GCS
             target: gcs
             path: plugins/gcs
@@ -870,7 +878,6 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
           - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
           - {setup: {os: macos-latest}, plugin: {name: Compaction}}
-          - {setup: {os: macos-latest}, plugin: {name: Fluent Bit}}
           - {setup: {os: macos-latest}, plugin: {name: GCS}}
           - {setup: {os: macos-latest}, plugin: {name: Inventory}}
           - {setup: {os: macos-latest}, plugin: {name: Matcher}}
