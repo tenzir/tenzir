@@ -27,8 +27,10 @@ The `rabbitmq` connector enables interacting with a
 [RabbitMQ](https://www.rabbitmq.com/) server. The loader acts as *consumer* and
 the saver as *producer*.
 
-RabbitMQ supports multiple protocols, the currently implementation can only
-speak [AMQP](https://www.amqp.org/).
+The diagram below shows the key [AMQP](https://www.amqp.org/) abstractions and
+how they relate to a pipeline:
+
+![AMQP](amqp.excalidraw.svg)
 
 ### `-c|--channel <number>` (Loader, Saver)
 
