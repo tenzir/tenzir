@@ -184,16 +184,15 @@ void serialize(
 bool should_skip_index_creation(const type& type,
                                 const qualified_record_field& qf,
                                 const std::vector<index_config::rule>& rules) {
-  // String indexes are currently disabled as they are very inefficient and use
-  // too much memory. We may bring them back in the future.
-  if (caf::holds_alternative<string_type>(type)) {
-    TENZIR_DEBUG("skipping string index creation for {}", qf.name());
-    return true;
-  }
-  if (type.attribute("skip").has_value()) {
-    return true;
-  }
-  return !should_create_partition_index(qf, rules);
+  // We no longer build dense indexes as of Tenzir v4.3. Over time, they've lost
+  // much of their appeal with partition sizes growing and columnar scanning of
+  // stores becoming more effective.
+  // TODO: Rip out the parts of the code base relating to value indexes, the
+  // value index factory, and active and passive indexer actors.
+  (void)type;
+  (void)qf;
+  (void)rules;
+  return true;
 }
 
 /// Gets the ACTIVE INDEXER at a certain position.
