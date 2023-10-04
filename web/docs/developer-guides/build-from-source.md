@@ -49,7 +49,9 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
 ||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|
-||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for Tenzir.|
+||[Pandoc](https://github.com/jgm/pandoc)||Required to build the manpage for Tenzir.|
+||[bash](https://www.gnu.org/software/bash/)|>= 4.0.0|Required to run the functional tests.|
+||[bats](https://bats-core.readthedocs.io)|>= 1.8.0|Required to run the functional tests.|
 
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
@@ -126,6 +128,12 @@ Run component-level unit tests:
 
 ```bash
 ctest --test-dir build
+```
+
+Run the "black box" functional tests:
+
+```bash
+cmake --build build --target functional-test
 ```
 
 Run end-to-end integration tests:
