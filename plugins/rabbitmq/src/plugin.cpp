@@ -39,7 +39,7 @@ constexpr auto default_exchange = std::string_view{"amq.direct"};
 constexpr auto default_queue = std::string_view{};
 
 /// The default routig key.
-constexpr auto default_routing_key = std::string_view{"tenzir"};
+constexpr auto default_routing_key = std::string_view{};
 
 /// Assume ownership of the memory and wrap it in a chunk.
 /// @param msg The bytes to move into a chunk.
@@ -288,6 +288,7 @@ public:
       as_amqp_bool(opts.exclusive), as_amqp_bool(opts.auto_delete), arguments);
     if (auto err = to_error(amqp_get_rpc_reply(conn_)))
       return err;
+    TENZIR_ASSERT(declare != nullptr);
     auto declared_queue = std::string{as_string_view(declare->queue)};
     TENZIR_DEBUG("binding queue '{}' to exchange '{}' with routing key '{}'",
                  declared_queue, opts.exchange, opts.routing_key);

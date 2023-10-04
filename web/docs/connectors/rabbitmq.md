@@ -48,7 +48,7 @@ Defaults to `amq.direct`.
 
 For the loader, the name of the routing key to bind a queue to an exchange. For the saver, the routing key to publish messages with.
 
-Defaults to `tenzir`.
+Defaults to the empty string.
 
 ### `-X|--set <key=value>` (Loader, Saver)
 
