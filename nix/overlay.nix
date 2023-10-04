@@ -182,6 +182,13 @@ in {
         configureFlags = old.configureFlags ++ ["--enable-prof" "--enable-stats"];
         doCheck = !isStatic;
       });
+  rabbitmq-c =
+    if !isStatic
+    then prev.rabbitmq-c
+    else
+      prev.rabbitmq-c.override {
+        xmlto = null;
+      };
   tenzir-source = inputs.nix-filter.lib.filter {
     root = ./..;
     include = [
