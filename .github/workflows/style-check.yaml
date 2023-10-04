@@ -53,7 +53,7 @@ jobs:
 
       - name: ShellCheck
         run: |
-          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
+          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
             scripts/shellcheck.bash
 
       - name: yamllint
