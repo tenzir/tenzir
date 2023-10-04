@@ -18,7 +18,6 @@
 {"path":["index","num-active-partitions"],"type":"number"}
 {"path":["index","num-cached-partitions"],"type":"number"}
 {"path":["index","num-unpersisted-partitions"],"type":"number"}
-{"path":["index","partitions","cached",0,"id"],"type":"string"}
 {"path":["index","workers","busy"],"type":"number"}
 {"path":["index","workers","count"],"type":"number"}
 {"path":["index","workers","idle"],"type":"number"}
