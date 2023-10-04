@@ -7,18 +7,18 @@ Sends and receives messages via RabbitMQ.
 Loader:
 
 ```
-rabbitmq [-c|--channel <number>] [-q|--queue <queue>] [-X|--set <key=value>,...]
-         [--passive] [--durable] [--exclusive] [--no-auto-delete] [--no-local]
-         [--ack]
-         [<url>]
+rabbitmq [-c|--channel <number>] [-e|--exchange <exchange>]
+         [-r|--routing-key <key>] [-q|--queue <queue>]
+         [-X|--set <key=value>,...] [--passive] [--durable] [--exclusive]
+         [--no-auto-delete] [--no-local] [--ack] [<url>]
 ```
 
 Saver:
 
 ```
-rabbitmq [-c|--channel <number>] [-q|--queue <queue>] [-X|--set <key=value>,...]
-         [--mandatory] [--immediate]
-         [<url>]
+rabbitmq [-c|--channel <number>] [-e|--exchange <exchange>]
+         [-r|--routing-key <key>] [-X|--set <key=value>,...] [--mandatory]
+         [--immediate] [<url>]
 ```
 
 ## Description
@@ -42,9 +42,9 @@ The exchange to interact with.
 
 Defaults to `amq.direct`.
 
-### `-q|--queue <queue>` (Loader, Saver)
+### `-r|--routing-key <key>` (Loader, Saver)
 
-The name of the queue to use.
+For the loader, the name of the routing key to bind a queue to an exchange. For the saver, the routing key to publish messages with.
 
 Defaults to `tenzir`.
 
@@ -73,6 +73,13 @@ amqp://[USERNAME[:PASSWORD]@]HOSTNAME[:PORT]/[VHOST]
 When the URL is present, it will overwrite the corresponding values of the
 configuration options.
 
+### `-q|--queue <queue>` (Loader)
+
+The name of the queue to declare and then bind to.
+
+Defaults to the empty string, resulting in auto-generated queue names, such as
+`amq.gen-XNTLF0FwabIn9FFKKtQHzg`.
+
 ### `--passive` (Loader)
 
 If set, the server will reply with OK if an exchange already exists with the
@@ -96,8 +103,8 @@ If set, the exchange will *not* be deleted when all queues have finished using
 it.
 
 :::note Inverted Flag
-The corresponding RabbitMQ server flag is called `auto-delete`. But since this
-defaults to `true`, you can only specify the inverse via `--no-auto-delete`.
+The corresponding AMQP server flag is called `auto-delete`. Since we default to
+`true` for this flag, you can disable it by specifying `--no-auto-delete`.
 :::
 
 ### `--no-local` (Loader)
@@ -113,8 +120,8 @@ and improve reliability. Without this flag, messages can get lost if a client
 dies before they are delivered to the application.
 
 :::note Inverted Flag
-The corresponding RabbitMQ server flag is called `no-ack`. But since
-this defaults to `true`, you can only specify the inverse via `--ack`.
+The corresponding AMQP server flag is called `no-ack`. Since we default to
+`true` for this flag, you can enable it by specifying `--ack`.
 :::
 
 ### `--mandatory` (Saver)
@@ -138,8 +145,8 @@ Consume [JSON](../formats/json.md) from a specific AMQP server:
 from rabbitmq amqp://admin:pass:@0.0.0.1:5672/vhost
 ```
 
-Send the list of all TQL operators to the `tenzir` exchange:
+Send the list of all TQL operators:
 
 ```
-show operators | to rabbitmq --exchange tenzir
+show operators | to rabbitmq
 ```

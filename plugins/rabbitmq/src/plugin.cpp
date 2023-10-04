@@ -36,7 +36,10 @@ constexpr auto default_channel = amqp_channel_t{1};
 constexpr auto default_exchange = std::string_view{"amq.direct"};
 
 /// The default queue name.
-constexpr auto default_queue = std::string_view{"tenzir"};
+constexpr auto default_queue = std::string_view{};
+
+/// The default routig key.
+constexpr auto default_routing_key = std::string_view{"tenzir"};
 
 /// Assume ownership of the memory and wrap it in a chunk.
 /// @param msg The bytes to move into a chunk.
@@ -140,6 +143,7 @@ public:
   struct consume_options {
     uint16_t channel{default_channel};
     std::string_view exchange{default_exchange};
+    std::string_view routing_key{default_routing_key};
     std::string_view queue{default_queue};
     bool passive{false};
     bool durable{false};
@@ -153,7 +157,7 @@ public:
   struct publish_options {
     uint16_t channel{default_channel};
     std::string_view exchange{default_exchange};
-    std::string_view queue{default_queue};
+    std::string_view routing_key{default_routing_key};
     bool mandatory{false};
     bool immediate{false};
   };
@@ -263,15 +267,13 @@ public:
   /// @param chunk The message payload.
   /// @param opts The publishing options.
   auto publish(chunk_ptr chunk, const publish_options& opts) -> caf::error {
-    TENZIR_DEBUG("publish {} bytes to queue {} at channel {}", chunk->size(),
-                 opts.queue, opts.channel);
-    auto routing_key = as_amqp_bytes(opts.queue);
+    TENZIR_DEBUG("publishing {}-byte message with routing key {}",
+                 chunk->size(), opts.routing_key);
     auto properties = nullptr;
-    auto status = amqp_basic_publish(conn_, amqp_channel_t{opts.channel},
-                                     as_amqp_bytes(opts.exchange), routing_key,
-                                     as_amqp_bool(opts.mandatory),
-                                     as_amqp_bool(opts.immediate), properties,
-                                     as_amqp_bytes(chunk));
+    auto status = amqp_basic_publish(
+      conn_, amqp_channel_t{opts.channel}, as_amqp_bytes(opts.exchange),
+      as_amqp_bytes(opts.routing_key), as_amqp_bool(opts.mandatory),
+      as_amqp_bool(opts.immediate), properties, as_amqp_bytes(chunk));
     return to_error(status);
   }
 
@@ -281,17 +283,17 @@ public:
     TENZIR_DEBUG("declaring queue '{}'", opts.queue);
     auto arguments = amqp_empty_table;
     auto* declare = amqp_queue_declare(
-      conn_, amqp_channel_t{opts.channel}, amqp_empty_bytes,
+      conn_, amqp_channel_t{opts.channel}, as_amqp_bytes(opts.queue),
       as_amqp_bool(opts.passive), as_amqp_bool(opts.durable),
       as_amqp_bool(opts.exclusive), as_amqp_bool(opts.auto_delete), arguments);
     if (auto err = to_error(amqp_get_rpc_reply(conn_)))
       return err;
     auto declared_queue = std::string{as_string_view(declare->queue)};
-    TENZIR_DEBUG("binding queue");
-    auto routing_key = as_amqp_bytes(opts.queue);
+    TENZIR_DEBUG("binding queue '{}' to exchange '{}' with routing key '{}'",
+                 declared_queue, opts.exchange, opts.routing_key);
     amqp_queue_bind(conn_, amqp_channel_t{opts.channel},
                     as_amqp_bytes(declared_queue), as_amqp_bytes(opts.exchange),
-                    routing_key, arguments);
+                    as_amqp_bytes(opts.routing_key), arguments);
     if (auto err = to_error(amqp_get_rpc_reply(conn_)))
       return err;
     TENZIR_DEBUG("setting up consume");
@@ -416,21 +418,15 @@ private:
 /// The arguments for the saver and loader.
 struct connector_args {
   std::optional<located<unsigned short>> channel;
-  std::optional<located<std::string>> queue;
+  std::optional<located<std::string>> routing_key;
   std::optional<located<std::string>> exchange;
   std::optional<located<std::string>> options;
   std::optional<located<std::string>> url;
-
-  friend auto inspect(auto& f, connector_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("connector_args")
-      .fields(f.field("channel", x.channel), f.field("queue", x.queue),
-              f.field("exchange", x.exchange), f.field("options", x.options),
-              f.field("url", x.url));
-  }
 };
 
+/// The arguments for the loader.
 struct loader_args : connector_args {
+  std::optional<located<std::string>> queue;
   bool passive{false};
   bool durable{false};
   bool exclusive{false};
@@ -442,6 +438,7 @@ struct loader_args : connector_args {
     return f.object(x)
       .pretty_name("loader_args")
       .fields(f.field("channel", x.channel), f.field("queue", x.queue),
+              f.field("routing_key", x.routing_key),
               f.field("exchange", x.exchange), f.field("options", x.options),
               f.field("url", x.url), f.field("passive", x.passive),
               f.field("durable", x.durable), f.field("exclusive", x.exclusive),
@@ -450,6 +447,7 @@ struct loader_args : connector_args {
   }
 };
 
+/// The arguments for the saver.
 struct saver_args : connector_args {
   bool mandatory{false};
   bool immediate{false};
@@ -457,7 +455,8 @@ struct saver_args : connector_args {
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
-      .fields(f.field("channel", x.channel), f.field("queue", x.queue),
+      .fields(f.field("channel", x.channel),
+              f.field("routing_key", x.routing_key),
               f.field("exchange", x.exchange), f.field("options", x.options),
               f.field("url", x.url), f.field("mandatory", x.mandatory),
               f.field("immediate", x.immediate));
@@ -497,9 +496,12 @@ public:
         co_return;
       }
       TENZIR_DEBUG("starting consumer");
+      auto routing_key
+        = args.routing_key ? args.routing_key->inner : default_routing_key;
       auto err = engine.start_consumer({
         .channel = channel,
         .exchange = args.exchange ? args.exchange->inner : default_exchange,
+        .routing_key = routing_key,
         .queue = args.queue ? args.queue->inner : default_queue,
         .passive = args.passive,
         .durable = args.durable,
@@ -574,7 +576,8 @@ public:
     auto opts = amqp_engine::publish_options{
       .channel = channel,
       .exchange = args_.exchange ? args_.exchange->inner : default_exchange,
-      .queue = args_.queue ? args_.queue->inner : default_queue,
+      .routing_key
+      = args_.routing_key ? args_.routing_key->inner : default_routing_key,
       .mandatory = args_.mandatory,
       .immediate = args_.immediate,
     };
@@ -586,7 +589,7 @@ public:
         diagnostic::error("failed to publish {}-byte message", chunk->size())
           .note("channel: {}", opts.channel)
           .note("exchange: {}", opts.exchange)
-          .note("queue: {}", opts.queue)
+          .note("routing key: {}", opts.routing_key)
           .hint("{}", err)
           .emit(ctrl.diagnostics());
       return;
@@ -646,9 +649,10 @@ public:
     auto args = Args{};
     parser.add("-c,--channel", args.channel, "<channel>");
     parser.add("-e,--exchange", args.exchange, "<exchange>");
-    parser.add("-q,--queue", args.queue, "<queue>");
+    parser.add("-r,--routing_key", args.routing_key, "<key>");
     parser.add("-X,--set", args.options, "<key=value>,...");
     if constexpr (std::is_same_v<Args, loader_args>) {
+      parser.add("-q,--queue", args.queue, "<queue>");
       parser.add("--passive", args.passive);
       parser.add("--durable", args.durable);
       parser.add("--exclusive", args.exclusive);
