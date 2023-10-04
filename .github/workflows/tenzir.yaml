@@ -698,8 +698,10 @@ jobs:
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}
       - name: Configure
         run: |
+          echo "$PATH"
           python3 --version
           python3 -m pip --version
+          bash --version
           "$CC" --version
           "$CXX" --version
           ccache --version
