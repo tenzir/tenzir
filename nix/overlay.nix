@@ -246,6 +246,12 @@ in {
       ps.pipeline_manager
       ps.platform
     ]);
+  tenzir-functional-test-deps = let
+    bats = prev.bats.withLibraries (p: [
+      p.bats-support
+      p.bats-assert
+    ]);
+  in [ bats prev.curl prev.jq ];
   tenzir-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [

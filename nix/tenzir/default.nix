@@ -27,6 +27,8 @@
     rdkafka,
     cppzmq,
     re2,
+    tenzir-functional-test-deps,
+    tenzir-integration-test-deps,
     dpkg,
     restinio,
     versionLongOverride ? null,
@@ -36,7 +38,6 @@
     runCommand,
     makeWrapper,
     extraCmakeFlags ? [],
-    tenzir-integration-test-deps,
     disableTests ? true,
     pkgsBuildHost,
   }: let
@@ -158,6 +159,7 @@
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*
         '';
+        allowedRequisites = lib.optionals isStatic ["out"];
 
         fixupPhase = lib.optionalString isStatic ''
           rm -rf $out/nix-support
@@ -169,9 +171,10 @@
         dontStrip = true;
 
         doInstallCheck = false;
-        installCheckInputs = tenzir-integration-test-deps;
+        installCheckInputs = tenzir-functional-test-deps ++ tenzir-integration-test-deps;
         # TODO: Investigate why the disk monitor test fails in the build sandbox.
         installCheckPhase = ''
+          PATH="${placeholder "out"}/bin:$PATH" bats -T -j $NIX_BUILD_CORES ../tenzir/functional-test
           python ../tenzir/integration/integration.py \
             --app ${placeholder "out"}/bin/tenzir-ctl \
             --disable "Disk Monitor"
@@ -227,7 +230,6 @@
           install -m 644 -Dt $package package/*.deb package/*.tar.gz
           runHook postInstall
         '';
-        allowedRequisites = ["out"];
       });
   self = callPackage pkgFun ({self = self;} // args);
 in
