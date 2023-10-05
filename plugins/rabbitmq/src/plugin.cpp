@@ -286,9 +286,18 @@ public:
       conn_, amqp_channel_t{opts.channel}, as_amqp_bytes(opts.queue),
       as_amqp_bool(opts.passive), as_amqp_bool(opts.durable),
       as_amqp_bool(opts.exclusive), as_amqp_bool(opts.auto_delete), arguments);
+    if (declare == nullptr)
+      return caf::make_error(ec::unspecified,
+                             fmt::format("failed to declare queue '{}', "
+                                         "passive: {}, durable: {}, exclusive: "
+                                         "{}, auto-delete: {}",
+                                         opts.queue, opts.passive, opts.durable,
+                                         opts.exclusive, opts.auto_delete));
+    TENZIR_DEBUG("got queue '{}' with {} messages and {} consumers",
+                 as_string_view(declare->queue), declare->message_count,
+                 declare->consumer_count);
     if (auto err = to_error(amqp_get_rpc_reply(conn_)))
       return err;
-    TENZIR_ASSERT(declare != nullptr);
     auto declared_queue = std::string{as_string_view(declare->queue)};
     TENZIR_DEBUG("binding queue '{}' to exchange '{}' with routing key '{}'",
                  declared_queue, opts.exchange, opts.routing_key);
@@ -474,24 +483,23 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto engine = amqp_engine::make(config_);
-    if (not engine) {
-      diagnostic::error("failed to construct AMQP engine")
-        .note("{}", engine.error())
-        .emit(ctrl.diagnostics());
-      return std::nullopt;
-    }
-    if (auto err = engine->connect()) {
-      diagnostic::error("failed to connecto to AMQP server")
-        .note("{}", engine.error())
-        .emit(ctrl.diagnostics());
-      return std::nullopt;
-    }
-    auto make = [&ctrl](loader_args args,
-                        amqp_engine engine) mutable -> generator<chunk_ptr> {
+    auto make = [](operator_control_plane& ctrl, loader_args args,
+                   record config) mutable -> generator<chunk_ptr> {
+      auto engine = amqp_engine::make(config);
+      if (not engine) {
+        diagnostic::error("failed to construct AMQP engine")
+          .note("{}", engine.error())
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      if (auto err = engine->connect()) {
+        diagnostic::error("failed to connect to AMQP server")
+          .note("{}", engine.error())
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
       auto channel = args.channel ? args.channel->inner : default_channel;
-      TENZIR_DEBUG("opening channel {}", channel);
-      if (auto err = engine.open(channel)) {
+      if (auto err = engine->open(channel)) {
         diagnostic::error("failed to open AMQP channel {}", channel)
           .emit(ctrl.diagnostics());
         co_return;
@@ -499,7 +507,7 @@ public:
       TENZIR_DEBUG("starting consumer");
       auto routing_key
         = args.routing_key ? args.routing_key->inner : default_routing_key;
-      auto err = engine.start_consumer({
+      auto err = engine->start_consumer({
         .channel = channel,
         .exchange = args.exchange ? args.exchange->inner : default_exchange,
         .routing_key = routing_key,
@@ -512,7 +520,7 @@ public:
         .no_ack = not args.ack,
       });
       if (err) {
-        diagnostic::error("failed to setup AMQP consume")
+        diagnostic::error("failed to start AMQP consumer")
           .hint("{}", err)
           .emit(ctrl.diagnostics());
         co_return;
@@ -520,7 +528,7 @@ public:
       co_yield {};
       TENZIR_DEBUG("looping over AMQP frames");
       while (true) {
-        if (auto message = engine.consume(500ms)) {
+        if (auto message = engine->consume(500ms)) {
           co_yield std::move(*message);
         } else {
           diagnostic::error("failed to consume message")
@@ -530,7 +538,7 @@ public:
         }
       }
     };
-    return make(args_, std::move(*engine));
+    return make(ctrl, args_, config_);
   }
 
   auto to_string() const -> std::string override {
