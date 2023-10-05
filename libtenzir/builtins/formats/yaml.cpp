@@ -230,17 +230,8 @@ public:
             caf::make_error(ec::logic_error, "failed to format YAML document"));
           co_return;
         }
-        // We create a chunk out of the emitter directly, thus avoiding needing
-        // to copy out the string from the emitter's stream object. The
-        // ownership of the emitter is thus transferred into the deleter of the
-        // chunk.
-        const auto* data = out->c_str();
-        const auto size = out->size();
-        co_yield chunk::make(data, size,
-                             [out = std::move(out),
-                              array = std::move(array)]() noexcept {
-                               (void)out;
-                             });
+        co_yield chunk::copy(chunk::view_type{
+          reinterpret_cast<const std::byte*>(out->c_str()), out->size()});
       });
   }
 
