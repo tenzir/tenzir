@@ -236,9 +236,11 @@ public:
         // chunk.
         const auto* data = out->c_str();
         const auto size = out->size();
-        co_yield chunk::make(data, size, [out = std::move(out)]() noexcept {
-          (void)out;
-        });
+        co_yield chunk::make(data, size,
+                             [out = std::move(out),
+                              array = std::move(array)]() noexcept {
+                               (void)out;
+                             });
       });
   }
 
