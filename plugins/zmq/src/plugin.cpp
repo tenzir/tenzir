@@ -326,7 +326,8 @@ public:
       TENZIR_ERROR(engine.error());
       return std::nullopt;
     }
-    auto make = [&ctrl](class engine engine) mutable -> generator<chunk_ptr> {
+    auto make = [](operator_control_plane& ctrl,
+                   class engine engine) mutable -> generator<chunk_ptr> {
       while (true) {
         // Poll in larger strides when we have no peers. If we have at least one
         // peer, there is no need to wait on the monitor.
@@ -346,7 +347,7 @@ public:
         }
       }
     };
-    return make(std::move(*engine));
+    return make(ctrl, std::move(*engine));
   }
 
   auto name() const -> std::string override {
