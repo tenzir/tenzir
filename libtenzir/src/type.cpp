@@ -817,7 +817,6 @@ data type::construct() const noexcept {
 }
 
 data type::to_definition(bool expand) const noexcept {
-  TENZIR_ASSERT(*this);
   // Utility function for adding the attributes to a type definition, if
   // required.
   auto attributes_enriched_definition
@@ -852,6 +851,9 @@ data type::to_definition(bool expand) const noexcept {
   // type may still have attributes.
   TENZIR_ASSERT(name().empty());
   auto make_type_definition = detail::overload{
+    [](const null_type&) noexcept -> data {
+      return {};
+    },
     [](const basic_type auto& self) noexcept -> data {
       return fmt::to_string(self);
     },

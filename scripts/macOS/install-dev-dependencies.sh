@@ -5,8 +5,10 @@ set -euo pipefail
 brew --version
 brew install \
     apache-arrow \
+    bash \
     boost \
     ccache \
+    coreutils \
     cppzmq \
     flatbuffers \
     fmt \
@@ -16,7 +18,6 @@ brew install \
     librdkafka \
     libunwind-headers \
     llvm \
-    md5sha1sum \
     ninja \
     openssl \
     pandoc \

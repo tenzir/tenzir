@@ -282,7 +282,7 @@ macro (TenzirInstallExampleConfiguration target source prefix destination)
   # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
   if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
-    tenzirnormalizeinstalldirs()
+    TenzirNormalizeInstallDirs()
   endif ()
 
   # Set a temporary variable for the example dir location. Because we're in a
@@ -422,7 +422,7 @@ function (TenzirRegisterPlugin)
   # http://www.gnu.org/prep/standards/html_node/Directory-Variables.html
   include(GNUInstallDirs)
   if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS)
-    tenzirnormalizeinstalldirs()
+    TenzirNormalizeInstallDirs()
   endif ()
 
   # Enable compile commands for external plugins.
@@ -465,11 +465,49 @@ function (TenzirRegisterPlugin)
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.h" "")
   list(APPEND PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.h")
   add_library(${PLUGIN_TARGET} OBJECT ${PLUGIN_SOURCES})
-  tenzirtargetenabletooling(${PLUGIN_TARGET})
+  TenzirTargetEnableTooling(${PLUGIN_TARGET})
   target_link_libraries(
     ${PLUGIN_TARGET}
     PUBLIC tenzir::libtenzir
     PRIVATE tenzir::internal)
+
+  set(PLUGIN_OUTPUT_DIRECTORY
+      "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/tenzir/plugins")
+
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+    string(TOUPPER "${TENZIR_CMAKE_BUILD_TYPE}" build_type_uppercase_)
+    get_target_property(TENZIR_BINARY tenzir::tenzir
+                        IMPORTED_LOCATION_${build_type_uppercase_})
+    unset(build_type_uppercase_)
+    message(STATUS "Found tenzir executable: ${TENZIR_BINARY}")
+    get_filename_component(TENZIR_BINARY_DIR "${TENZIR_BINARY}" DIRECTORY)
+    file(
+      WRITE "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      "\
+      file(WRITE \"${CMAKE_CURRENT_BINARY_DIR}/bin/\${EXECUTABLE}\"
+      \"\\
+      #!/bin/sh
+
+      export TENZIR_PLUGIN_DIRS=\\\${TENZIR_PLUGIN_DIRS:+\\\${TENZIR_PLUGIN_DIRS}:}${PLUGIN_OUTPUT_DIRECTORY}
+      exec \\\"${TENZIR_BINARY_DIR}/\${EXECUTABLE}\\\" \\\"\\\$@\\\"\")
+      file(CHMOD \"${CMAKE_CURRENT_BINARY_DIR}/bin/\${EXECUTABLE}\"
+        FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                         GROUP_READ GROUP_WRITE GROUP_EXECUTE)")
+    add_custom_target(
+      ${PLUGIN_TARGET}-wrapper ALL
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir -P
+              "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir-ctl -P
+              "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir-node -P
+              "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      COMMAND ${CMAKE_COMMAND} -D EXECUTABLE=tenzir -P
+              "${CMAKE_CURRENT_BINARY_DIR}/make_plugin_wrapper.cmake"
+      COMMENT
+        "Creating convenience binary wrappers in ${CMAKE_CURRENT_BINARY_DIR}/bin"
+    )
+  endif ()
 
   # Set up the target's include directories.
   if (PLUGIN_INCLUDE_DIRECTORIES)
@@ -554,15 +592,15 @@ function (TenzirRegisterPlugin)
   # Create a static library target for our plugin with the entrypoint, and use
   # static versions of TENZIR_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
-  tenzirtargetenabletooling(${PLUGIN_TARGET}-static)
-  tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
+  TenzirTargetEnableTooling(${PLUGIN_TARGET}-static)
+  TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE tenzir::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
                              PRIVATE TENZIR_ENABLE_STATIC_PLUGINS)
 
   if (TENZIR_ENABLE_STATIC_PLUGINS)
     # Link our static library against the tenzir binary directly.
-    tenzirtargetlinkwholearchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
+    TenzirTargetLinkWholeArchive(tenzir PRIVATE ${PLUGIN_TARGET}-static)
   else ()
     # Override BUILD_SHARED_LIBS to force add_library to do the correct thing
     # depending on the plugin type. This must not be user-configurable for
@@ -578,8 +616,8 @@ function (TenzirRegisterPlugin)
 
     # Create a shared library target for our plugin.
     add_library(${PLUGIN_TARGET}-shared SHARED ${PLUGIN_ENTRYPOINT})
-    tenzirtargetenabletooling(${PLUGIN_TARGET}-shared)
-    tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-shared PUBLIC
+    TenzirTargetEnableTooling(${PLUGIN_TARGET}-shared)
+    TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-shared PUBLIC
                                  ${PLUGIN_TARGET})
     target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE tenzir::internal)
 
@@ -587,8 +625,7 @@ function (TenzirRegisterPlugin)
     # the library output directory accordingly.
     set_target_properties(
       ${PLUGIN_TARGET}-shared
-      PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-                 "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/tenzir/plugins"
+      PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PLUGIN_OUTPUT_DIRECTORY}"
                  OUTPUT_NAME "tenzir-plugin-${PLUGIN_TARGET}")
     install(
       TARGETS ${PLUGIN_TARGET}-shared
@@ -603,7 +640,7 @@ function (TenzirRegisterPlugin)
 
   # Install an example configuration file, if it exists at the plugin project root.
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example")
-    tenzirinstallexampleconfiguration(
+    TenzirInstallExampleConfiguration(
       ${PLUGIN_TARGET}
       "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example"
       "plugin/${PLUGIN_TARGET}/" "${PLUGIN_TARGET}.yaml")
@@ -671,12 +708,12 @@ function (TenzirRegisterPlugin)
       list(APPEND suites "${suite}")
     endforeach ()
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
-    tenzirtargetenabletooling(${PLUGIN_TARGET}-test)
+    TenzirTargetEnableTooling(${PLUGIN_TARGET}-test)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE tenzir::test
                                                         tenzir::internal)
-    tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-test PRIVATE
+    TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                  ${PLUGIN_TARGET}-static)
-    tenzirtargetlinkwholearchive(${PLUGIN_TARGET}-test PRIVATE
+    TenzirTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                  tenzir::libtenzir_builtins)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
@@ -694,6 +731,36 @@ function (TenzirRegisterPlugin)
         "plugin/${PLUGIN_TARGET}/${test_name}"
         PROPERTIES FIXTURES_REQUIRED tenzir_${PLUGIN_TARGET}_unit_test_fixture)
     endforeach ()
+  endif ()
+
+  # Ensure that a target functional-test always exists, even if a plugin does not
+  # define functional tests.
+  if (NOT TARGET functional-test)
+    add_custom_target(functional-test)
+  endif ()
+
+  # Setup functional tests.
+  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests")
+    if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+      set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
+    else ()
+      file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
+      file(CREATE_LINK "${TENZIR_DIR}/share/tenzir/functional-test"
+           "${CMAKE_BINARY_DIR}/share/tenzir/functional-test" SYMBOLIC)
+      set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
+    endif ()
+    add_custom_target(
+      functional-test-${PLUGIN_TARGET}
+      COMMAND
+        ${CMAKE_COMMAND} -E env
+        PATH="${TENZIR_PATH}:${TENZIR_PATH}/../share/tenzir/functional-test/bats/bin:\$\$PATH"
+        bats "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
+      COMMENT "Executing ${PLUGIN_TARGET} functional tests..."
+      USES_TERMINAL)
+    unset(TENZIR_PATH)
+
+    add_dependencies(functional-test-${PLUGIN_TARGET} tenzir::tenzir)
+    add_dependencies(functional-test functional-test-${PLUGIN_TARGET})
   endif ()
 
   # Ensure that a target integration always exists, even if a plugin does not
@@ -767,6 +834,6 @@ function (TenzirRegisterPlugin)
                                         "${PLUGIN_TARGET}")
   else ()
     # Provide niceties for external plugins that are usually part of Tenzir.
-    tenzirexportcompilecommands(${PLUGIN_TARGET})
+    TenzirExportCompileCommands(${PLUGIN_TARGET})
   endif ()
 endfunction ()

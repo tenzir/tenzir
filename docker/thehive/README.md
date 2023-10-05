@@ -118,7 +118,7 @@ To test the alert forwarding with some mock data, run:
 ```bash
 # from the docker/compose directory with the COMPOSE_FILE variable above
 docker compose run --no-TTY tenzir import --blocking suricata \
-    < ../../tenzir/integration/data/suricata/eve.json
+    < ../../tenzir/functional-test/data/suricata/eve.json
 ```
 
 You can also test it out on a real-world dataset:

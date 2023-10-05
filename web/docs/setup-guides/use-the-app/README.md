@@ -4,14 +4,13 @@ sidebar_position: 0
 
 # Use the app
 
-The Tenzir "app" is the cloud-native management platform at
-[app.tenzir.com](https://app.tenzir.com) to interact with your pipelines and
-nodes.
+The Tenzir *app* is the cloud-native management platform at
+[app.tenzir.com](https://app.tenzir.com) that manages your nodes and pipelines.
 
 :::note Editions
-You can use the app with the free *Community Edition* and the paid *Enterprise
-Edition*. Visit [our website](https://tenzir.com/pricing) for a detailed
-comparison of available editions.
+Using the app requires the *Community Edition* or the *Enterprise Edition*.
+Visit [our website](https://tenzir.com/pricing) for a detailed comparison of
+editions.
 :::
 
 ## Create an account
@@ -46,7 +45,7 @@ pipelines](../../user-guides/run-a-pipeline/README.md).
 #### Run a pipeline
 
 Write your pipeline in EDITOR, hit the *Run* button, and analyze the result in
-SCHEMAS and DATA.
+SCHEMAS and RESULTS.
 
 #### Deploy a pipeline
 

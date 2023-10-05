@@ -27,19 +27,20 @@ This example playbook shows how to run a Tenzir service on the machine
   roles:
     - role: tenzir
       vars:
-        config_file: ./tenzir.yaml
-        read_write_paths: [ /tmp ]
+        tenzir_config_dir: ./tenzir
+        tenzir_read_write_paths: [ /tmp ]
         tenzir_archive: ./tenzir.tar.gz
         tenzir_debian_package: ./tenzir.deb
 ```
 
 ## Variables
 
-### `config_file` (required)
+### `tenzir_config_dir` (required)
 
-A path to a [`tenzir.yaml`](../../configuration.md) relative to the playbook.
+A path to directory containing a [`tenzir.yaml`](../../configuration.md)
+relative to the playbook.
 
-### `read_write_paths`
+### `tenzir_read_write_paths`
 
 A list of paths that Tenzir shall be granted access to in addition to its own
 state and log directories.

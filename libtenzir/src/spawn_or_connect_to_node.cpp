@@ -20,6 +20,12 @@ std::variant<caf::error, node_actor, scope_linked<node_actor>>
 spawn_or_connect_to_node(caf::scoped_actor& self, const caf::settings& opts,
                          const caf::settings& node_opts) {
   TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(opts));
+  // In case we have a node actor in the process we get that.
+  // TODO: Iff we are in the connect case we should connect via the endpoint
+  //       as well and verify that the local node actor id is the same instead
+  //       of blindly returning the handle.
+  if (auto node = self->system().registry().get<node_actor>("tenzir.node"))
+    return node;
   auto convert = [](auto&& result)
     -> std::variant<caf::error, node_actor, scope_linked<node_actor>> {
     if (result)
@@ -28,7 +34,7 @@ spawn_or_connect_to_node(caf::scoped_actor& self, const caf::settings& opts,
   };
   if (caf::get_or<bool>(opts, "tenzir.node", false))
     return convert(spawn_node(self, node_opts));
-  return convert(connect_to_node(self, node_opts));
+  return convert(connect_to_node(self, opts));
 }
 
 } // namespace tenzir

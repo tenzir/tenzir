@@ -42,6 +42,8 @@ TEST(null_type) {
   CHECK_EQUAL(*lt.to_arrow_type(), *arrow::list(arrow::null()));
   CHECK_EQUAL(*ln.to_arrow_type(), *arrow::list(arrow::null()));
   CHECK_EQUAL(*ltn.to_arrow_type(), *arrow::list(arrow::null()));
+  const auto expected_definition = data{};
+  CHECK_EQUAL(tn.to_definition(), expected_definition);
 }
 
 TEST(bool_type) {
