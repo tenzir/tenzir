@@ -111,10 +111,9 @@ RUN apt-get update && \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
     apt-get -y --no-install-recommends install libarrow1300 libparquet1300 && \
-    wget -O - 'https://packages.fluentbit.io/fluentbit.key' | tee /usr/share/keyrings/fluentbit.asc >/dev/null && \
-    echo "deb [signed-by=/usr/share/keyrings/fluentbit.asc] https://packages.fluentbit.io/debian/$(lsb_release --codename --short) $(lsb_release --codename --short) main" | tee /etc/apt/sources.list.d/fluentbit.list && \
-    apt-get update && \
-    apt-get -y install fluent-bit && \
+    wget "https://storage.googleapis.com/tenzir-public-data/fluent-bit-packages/debian/bookworm/fluent-bit_2.1.10_amd64.deb" && \
+    apt-get -y --no-install-recommends install ./fluent-bit_2.1.10_amd64.deb && \
+    rm ./fluent-bit_2.1.10_amd64.deb && \
     rm -rf /var/lib/apt/lists/*
 
 USER tenzir:tenzir
