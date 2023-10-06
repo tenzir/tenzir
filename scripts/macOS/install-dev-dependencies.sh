@@ -11,6 +11,7 @@ brew install \
     coreutils \
     cppzmq \
     flatbuffers \
+    fluent-bit \
     fmt \
     gnu-sed \
     http-parser \

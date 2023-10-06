@@ -128,6 +128,47 @@ in {
       "-DRDKAFKA_BUILD_TESTS=OFF"
     ];
   });
+  mkStub = name: prev.writeShellScriptBin name ''
+    echo "stub-${name}: $@" >&2
+  '';
+  fluent-bit =
+    if !isStatic
+    then prev.fluent-bit
+    else prev.fluent-bit.overrideAttrs (orig: {
+      outputs = ["out"];
+      nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")];
+      # Neither systemd nor postgresql have a working static build.
+      buildInputs = [ final.musl-fts final.openssl final.libyaml ];
+      propagatedBuildInputs = [ final.musl-fts final.openssl final.libyaml ];
+      cmakeFlags = [
+        "-DFLB_RELEASE=ON"
+        "-DFLB_BINARY=OFF"
+        "-DFLB_SHARED_LIB=OFF"
+        "-DFLB_METRICS=ON"
+        "-DFLB_HTTP_SERVER=ON"
+        "-DFLB_LUAJIT=OFF"
+      ];
+      # The build scaffold of fluent-bit doesn't install static libraries, so we
+      # work around it by just copying them from the build directory. The
+      # blacklist is hand-written and prevents the inclusion of duplicates in
+      # the linker command line when building the fluent-bit plugin.
+      # The Findfluent-bit.cmake module then globs all archives into list for
+      # `target_link_libraries` to get a working link.
+      postInstall = let
+        archive-blacklist = [
+          "libbacktrace.a"
+          "librdkafka.a"
+          "libxxhash.a"
+        ];
+
+      in ''
+        set -x
+        mkdir -p $out/lib
+        find . -type f \( -name "*.a" ${lib.concatMapStrings (x: " ! -name \"${x}\"") archive-blacklist} \) \
+               -exec cp "{}" $out/lib/ \;
+        set +x
+      '';
+    });
   restinio = final.callPackage ./restinio {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);

@@ -17,6 +17,7 @@
     arrow-cpp,
     fast_float,
     flatbuffers,
+    fluent-bit,
     spdlog,
     libyamlcpp,
     simdjson,
@@ -59,6 +60,7 @@
     bundledPlugins =
       [
         "plugins/gcs"
+        "plugins/fluent-bit"
         "plugins/kafka"
         "plugins/nic"
         "plugins/parquet"
@@ -90,6 +92,7 @@
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           fast_float
+          fluent-bit
           libpcap
           libunwind
           libyamlcpp
@@ -128,6 +131,7 @@
             "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_PYTHON_BINDINGS=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+            "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
             "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
           ]
           ++ lib.optionals isStatic [
