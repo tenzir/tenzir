@@ -49,7 +49,7 @@ offers a transactional interface for adding and removing partitions.
 
 - [Tune catalog
   fragmentation](./setup-guides/tune-performance/README.md#tune-catalog-fragmentation)
-- [Configure catalog and partition indexes](./setup-guides/tune-performance/README.md#configure-catalog-and-partition-indexes)
+- [Configure the catalog](./setup-guides/tune-performance/README.md#configure-the-catalog)
 
 ## Connector
 
@@ -76,11 +76,10 @@ that converts events to bytes. Example formats are [`json`](./formats/json.md),
 
 Optional data structures for accelerating historical queries.
 
-Tenzir has *sparse* and *dense* indexes. Sparse indexes live in memory and point
-to [partitions](#partition), whereas dense indexes live within a partition and
-point to individual rows within the partition.
+Tenzir has *sparse* indexes. Sparse indexes live in memory and point to
+[partitions](#partition).
 
-- [Configure catalog and partition indexes](./setup-guides/tune-performance/README.md#configure-catalog-and-partition-indexes)
+- [Configure the catalog](./setup-guides/tune-performance/README.md#configure-the-catalog)
 
 ## Node
 

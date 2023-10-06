@@ -54,9 +54,7 @@ a later. The default value is 10 seconds.
 
 The central component of Tenzir's storage engine is the *catalog*. It owns the
 partitions, keeps metadata about them, and maintains a set of sparse secondary
-indexes to identify relevant partitions for a given query. In addition, a
-partition can have a set of dense secondary indexes in addition to the raw data
-stored.
+indexes to identify relevant partitions for a given query.
 
 ![Multi-Tier Indexing](multi-tier-indexing.excalidraw.svg)
 
@@ -109,7 +107,7 @@ In other words, increasing `tenzir.max-partition-size` is an effective method to
 reduce the memory footprint of the catalog, at the cost of creating larger
 partitions.
 
-### Configure catalog and partition indexes
+### Configure the catalog
 
 You can configure catalog and partition indexes under the key `tenzir.index`.
 The configuration `tenzir.index.rules` is an array of indexing rules, each of
@@ -119,7 +117,6 @@ following keys:
 - `targets`: a list of extractors to describe the set of fields whose values to
   add to the sketch.
 - `fp-rate`: an optional value to control the false-positive rate of the sketch.
-- `partition-index`: a boolean flag to disable partition indexes
 
 #### Tune catalog index parameters
 
@@ -154,33 +151,6 @@ rule includes a field extractor and the second a type extractor. The first rule
 applies to a single field, `suricata.http.http.url`, and has false-positive rate
 of 0.5%. The second rule creates one sketch for all fields of type `ip` that has
 a false-positive rate of 10%.
-
-#### Disable partition indexes
-
-Every partition has an optional set of dense indexes to further accelerate
-specific queries. These indexes only reside in memory if the corresponding
-partition is loaded.
-
-By default, Tenzir creates indexes for all fields in a partition. You can
-disable the index creation for specific fields or types in the configuration
-section `tenzir.index`. This reduces both the memory footprint of a loaded
-partition, as well as the size of the persisted partition.
-
-Here is an example that disables partition indexes:
-
-```yaml
-tenzir:
-  index:
-    rules:
-        # Don't create partition indexes the suricata.http.http.url field.
-      - targets:
-          - suricata.http.http.url
-        partition-index: false
-        # Don't create partition indexes for fields of type ip.
-      - targets:
-          - :ip
-        partition-index: false
-```
 
 ### Select the store format
 
