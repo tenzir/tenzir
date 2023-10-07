@@ -36,6 +36,10 @@ const sidebars = {
       }],
     },
     {
+      type: 'doc',
+      id: 'faqs',
+    },
+    {
       type: 'html',
       value: '<br><b>Reference<b/>',
     },
