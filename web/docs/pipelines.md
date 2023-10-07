@@ -1,0 +1,112 @@
+---
+sidebar_position: 0
+---
+
+# Pipelines
+
+A Tenzir **pipeline** is a chain of **operators** that represents a dataflow.
+Operators are the atomic building blocks that produce, transform, or consume
+data. Think of them as UNIX or Powershell commands where output from one command
+is input to the next:
+
+![Pipeline Chaining](pipeline-chaining.excalidraw.svg)
+
+There exist three types of operators: **sources** that produce data, **sinks**
+that consume data, and transformations that do both:
+
+![Pipeline Structure](pipeline-structure.excalidraw.svg)
+
+## Polymorphic Operators
+
+Tenzir pipelines make one more distinction: the elements that the operators push
+through the pipeline are *typed*. Every operator has an input and an output
+type:
+
+![Input and Output Types](operator-pieces.excalidraw.svg)
+
+When composing pipelines out of operators, the type of adjacent operators have
+to match. Otherwise the pipeline is malformed. Here's an example pipeline with
+matching operators:
+
+![Typed Pipeline](typed-pipeline.excalidraw.svg)
+
+We call any void-to-void operator sequence a **closed pipeline**. Only closed
+pipelines can execute. If a pipeline does not have a source and sink, it would
+"leak" data. If a pipeline is open, the engine auto-completes a source/sink when
+possible or rejects it.
+
+Zooming out in the above type table makes the operator types apparent:
+
+![Operator Types](operator-types.excalidraw.svg)
+
+In fact, we can define the operator type as a function of its input and output types:
+
+```
+(Input x Output) → {Source, Sink, Transformation}
+```
+
+## Multi-Schema Dataflows
+
+Tenzir dataflows are *multi-schema* in that a single pipeline can work
+with heterogeneous types of events, each of which have a different schemas.
+This allows you, for example, to perform aggregations across multiple events.
+Multi-schema dataflows require automatic schema inference at parse time. Tenzir
+parsers, such as [`json`](/formats/json) support this out of the box.
+
+This behavior is very different from execution engines that only work with
+structured data, where the unit of computation is typically a fixed set of
+tables. Schema-less systems, such as document-oriented databases, offer more
+simplicity, at the cost of performance. In the spectrum of performance and ease
+of use, Tenzir therefore fills a gap:
+
+![Structured vs. Document-Oriented](structured-vs-document-oriented.excalidraw.svg)
+
+:::info Eclectic & Super-structured Data
+[Zed](https://amyousterhout.com/papers/zed_cidr23.pdf) has a type system similar
+to Tenzir, with the difference that Zed associates types *with every single
+value*. Unlike Zed, Tenzir uses a "data frame" abstraction and relies on
+homogeneous Arrow record batches of up to 65,535 rows.
+:::
+
+If the schema in a pipeline changes, we simply create new batch of events. The
+worst case for Tenzir is a ordered stream of schema-switching events, with every
+event having a new schema than the previous one. That said, even for those data
+streams we can efficiently build homogeneous batches when the inter-event order
+does not matter significantly. Similar to predicate pushdown, Tenzir operators
+support "orderness pushdown" to signal to upstream operators that the event
+order only matters intra-schema but not inter-schema. In this case we
+transparently demultiplex a heterogeneous stream into *N* homogeneous streams,
+each of which yields batches of up to 65k events. The `import` operator is an
+example of such an operator, and it pushes the its orderness upstream so that we
+can efficiently parse, say, a diverse stream of NDJSON records, such as
+Suricata's EVE JSON or Zeek's streaming JSON.
+
+You could call multi-schema dataflows *multiplexed* and there exist dedicated
+operators to demultiplex a stream. As of now, this is hard-coded per operator.
+For example, the [`directory`](/connectors/directory) operator demultiplexes a
+stream of events and writes of the same schema to the same file: with `to
+directory write parquet` you can write a set of Parquet files, each of which
+have a fixed schema.
+
+The diagram below illustrates the multi-schema aspect of dataflows for schemas
+A, B, and C:
+
+![Multi-schema Example](multi-schema-example.excalidraw.svg)
+
+Some operators only work with exactly one instance per schema internally, such
+as [`parquet`](/formats/parquet), [`feather`](/formats/parquet), or
+[`csv`](/formats/csv). These must be combined with a demultiplexing operator,
+such as the `directory` saver.
+
+We are having ideas to make this schema (de)multiplexing explicit with a
+`per-schema` [operator modifier](/operators/modifier) that you can write in
+front of every operator. Similarly, we are going to add union types in the
+future, making it possible to convert a heterogeneous stream of structured data
+into a homogeneous one.
+
+It's important to note that most of the time you don't have to worry about
+schemas. They are there for you when you want to work with them, but it's often
+enough to just specified the fields that you want to work with, e.g., `where
+id.orig_h in 10.0.0.0/8`, or `select src_ip, dest_ip, proto`. Schemas are
+inferred automatically in parsers, but you can also seed a parser with a schema
+that you define explicitly.

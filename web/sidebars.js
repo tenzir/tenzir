@@ -44,6 +44,10 @@ const sidebars = {
       value: '<br><b>Reference<b/>',
     },
     {
+      type: 'doc',
+      id: 'pipelines',
+    },
+    {
       type: 'category',
       label: 'Language',
       link: {

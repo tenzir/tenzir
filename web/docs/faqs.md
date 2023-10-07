@@ -71,7 +71,7 @@ every account.
 
 ## Why did you invent yet another query language? Why not SQL?
 
-We opted for [our own language](language/pipelines.md) for several reasons that
+We opted for [our own language](pipelines.md) for several reasons that
 we outline below.
 
 At Tenzir, we have a clear target audience: security practitioners. They are
