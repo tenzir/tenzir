@@ -238,7 +238,6 @@ auto load_taxonomies(const caf::actor_system_config& cfg)
   std::error_code err{};
   auto dirs = get_module_dirs(cfg);
   concepts_map concepts;
-  models_map models;
   for (const auto& dir : dirs) {
     TENZIR_DEBUG("loading taxonomies from {}", dir);
     const auto dir_exists = std::filesystem::exists(dir, err);
@@ -258,19 +257,9 @@ auto load_taxonomies(const caf::actor_system_config& cfg)
       for (auto& [name, definition] : concepts)
         TENZIR_DEBUG("extracted concept {} with {} fields", name,
                      definition.fields.size());
-      if (auto err = convert(yaml, models, models_data_schema))
-        return caf::make_error(ec::parse_error,
-                               "failed to extract models from file",
-                               file.string(), err.context());
-      for (auto& [name, definition] : models) {
-        TENZIR_DEBUG("extracted model {} with {} fields", name,
-                     definition.definition.size());
-        TENZIR_TRACE("uses model mapping {} -> {}", name,
-                     definition.definition);
-      }
     }
   }
-  return tenzir::taxonomies{std::move(concepts), std::move(models)};
+  return tenzir::taxonomies{std::move(concepts)};
 }
 
 } // namespace tenzir

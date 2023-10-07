@@ -198,14 +198,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(indexes->Get(0)->index()->caf_0_18_data(), nullptr);
   MESSAGE("check value index correctness");
   CHECK_EQUAL(indexes->Get(1)->field_name()->str(), "y.z");
-  CHECK_NOT_EQUAL(indexes->Get(1)->index()->caf_0_18_data(), nullptr);
-  auto col2_idx
-    = tenzir::unpack_value_index(*indexes->Get(1)->index(), container);
-  REQUIRE(col2_idx);
-  CHECK_EQUAL(tenzir::double_type{}, col2_idx->type());
-  auto result = col2_idx->lookup(tenzir::relational_operator::less,
-                                 tenzir::make_data_view(1.0));
-  CHECK_EQUAL(unbox(result), make_ids({0, 0}));
+  CHECK_EQUAL(indexes->Get(1)->index()->caf_0_18_data(), nullptr);
 }
 
 TEST(delegate query to the store) {

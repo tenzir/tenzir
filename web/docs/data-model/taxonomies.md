@@ -39,17 +39,17 @@ schema][ocsf-schema].
 We could add [yet another data model](https://xkcd.com/927/), but our goal is
 that you pick one that you know already or like best. We envision a thriving
 community around taxonomization, as exemplified with the [OCSF][ocsf]. With
-Tenzir, we aim for leveraging the taxonomy of your choice. There are currently
-two mechanisms for this purpose:
+Tenzir, we aim for leveraging the taxonomy of your choice.
 
-- [Concept](#concepts): a field mapping/alias that lazily resolves at query time
-- [Model](#models): a set of concepts that in sum describe a specific entity
+:::info Concepts
+A [concept](#concepts) is a field mapping/alias that lazily resolves at query
+time.
+:::
 
-Concepts and models are not embedded in the schema and can therefore evolve
-independently from the data typing. This behavior is different from other
-systems that normalize by *rewriting* the data on ingest, e.g., elastic with
-[ECS][ecs]. We do not advocate for this approach, because it has the following
-drawbacks:
+Concepts are not embedded in the schema and can therefore evolve independently
+from the data typing. This behavior is different from other systems that
+normalize by *rewriting* the data on ingest, e.g., elastic with [ECS][ecs]. We
+do not advocate for this approach, because it has the following drawbacks:
 
 - **Data Lock-in**: if you want to use a different data model tomorrow, you
   would have to rewrite all your past data, which can be infeasible in some
@@ -147,66 +147,3 @@ concepts:
 You can add new mappings to an existing concept in every module. For example,
 when adding a new data source that contains an event with a source IP address
 field, you can define the concept in the corresponding module.
-
-## Models
-
-A *model* is made of one or more concepts. An event fulfills a model
-if and only if it fulfills all contained concepts.
-
-Consider again Sysmon and Suricata data for formalizing the notion of a
-`connection` that requires the following concepts to be fulfilled: `source_ip`,
-`source_port`, `dest_ip`, and `dest_port`. Both `sysmon.NetworkConnection` and
-`suricata.flow` fulfil all concepts of the model `connection`. The model
-definition looks as follows:
-
-```yaml
-models:
-  connection:
-    description: a network connection 4-tuple
-    definition:
-    - source_ip
-    - source_port
-    - destination_ip
-    - destination_port
-```
-
-Models compose like concepts: you can define a new model out of existing models
-or out of a mix of concepts and models. However, a concept cannot include a
-model.
-
-In the above example, the `connection` model consists of the `source_endpoint`
-and `destination_endpoint` model, each of which contains two concepts:
-
-![Model Composition](model-composition.excalidraw.svg)
-
-You can query a model by providing a record literal:
-
-```c
-connection = <_, _, 10.0.0.1, 80>
-```
-
-The query expression resolution begins with models, continues with concepts, and
-terminates when the query consists of extractors only. For example, consider the
-model query `destination_endpoint = <10.0.0.1, 80>` where the left-hand side
-being the name of a model and the right-hand side a record value. Tenzir resolves
-this query into a conjunction first:
-
-```
-destination_ip == 10.0.0.1 && destination_port == 80
-```
-
-Thereafter, the concept resolution takes place again, assuming that there exist
-concept definitions for `destination_port` symmetric to `destination_ip`:
-
-```c
-(sysmon.NetworkConnection.RemoteIp == 10.0.0.1
-  || suricata.flow.dest_ip == 10.0.0.1
-  || zeek.conn.id.resp_h == 10.0.0.1)
-&&
-(sysmon.NetworkConnection.RemotePort == 80
-  || suricata.flow.dest_port == 80
-  || zeek.conn.id.resp_p == 80)
-```
-
-The resolution into conjunctions and disjunctions nicely illustrates the
-duality of models as product types and concepts as sum types.
