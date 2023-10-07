@@ -62,54 +62,17 @@ using concepts_map = detail::stable_map<std::string, concept_>;
 /// to a `concepts_map`.
 extern const type concepts_data_schema;
 
-/// The definition of a model.
-struct model {
-  /// The description of the model.
-  std::string description;
-
-  /// The ordered concepts and models that the model is composed of.
-  /// If an entry is another model, its concepts must also be represented  for
-  /// a schema to be considered.
-  std::vector<std::string> definition;
-
-  friend bool operator==(const model& lhs, const model& rhs);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, model& m) {
-    return f.object(m).pretty_name("model").fields(
-      f.field("description", m.description),
-      f.field("definition", m.definition));
-  }
-
-  inline static const record_type& schema() noexcept {
-    static const auto result = record_type{
-      {"description", string_type{}},
-      {"definition", list_type{string_type{}}},
-    };
-    return result;
-  }
-};
-
-/// Maps model names to their definitions.
-using models_map = detail::stable_map<std::string, model>;
-
-/// Describes the schema of a tenzir::list of models for automatic conversion to
-/// a `models_map`.
-extern const type models_data_schema;
-
 /// A taxonomy is a combination of concepts and models. Tenzir stores all
 /// configured taxonomies in memory together, hence the plural naming.
 struct taxonomies {
   concepts_map concepts;
-  models_map models;
-
   friend bool operator==(const taxonomies& lhs, const taxonomies& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, taxonomies& t) {
     return f.object(t)
       .pretty_name("taxonomies")
-      .fields(f.field("concepts", t.concepts), f.field("models", t.models));
+      .fields(f.field("concepts", t.concepts));
   }
 };
 
@@ -123,8 +86,8 @@ std::vector<std::string>
 resolve_concepts(const concepts_map& concepts,
                  std::vector<std::string> fields_or_concepts);
 
-/// Substitutes concept and model identifiers in field extractors with
-/// replacement expressions containing only concrete field names.
+/// Substitutes concept identifiers in field extractors with replacement
+/// expressions containing only concrete field names.
 /// @param t The set of taxonomies to apply.
 /// @param e The original expression.
 /// @param schema An optional schema to restrict taxonomy resolution by.
@@ -135,22 +98,6 @@ resolve(const taxonomies& t, const expression& e, const type& schema = {});
 } // namespace tenzir
 
 namespace fmt {
-
-template <>
-struct formatter<tenzir::model> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const tenzir::model& value, FormatContext& ctx)
-    -> decltype(ctx.out()) {
-    return fmt::format_to(ctx.out(),
-                          "model {{description: {}, definition: [{}]}}",
-                          value.description, fmt::join(value.definition, ", "));
-  }
-};
 
 template <>
 struct formatter<tenzir::concept_> {

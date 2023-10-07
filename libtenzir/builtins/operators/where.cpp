@@ -67,7 +67,7 @@ public:
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    auto ts = taxonomies{.concepts = ctrl.concepts(), .models = {}};
+    auto ts = taxonomies{.concepts = ctrl.concepts()};
     auto resolved_expr = resolve(ts, expr_.inner, schema);
     if (not resolved_expr) {
       diagnostic::warning("{}", resolved_expr.error())
