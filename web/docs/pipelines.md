@@ -57,7 +57,7 @@ This behavior is very different from execution engines that only work with
 structured data, where the unit of computation is typically a fixed set of
 tables. Schema-less systems, such as document-oriented databases, offer more
 simplicity, at the cost of performance. In the spectrum of performance and ease
-of use, Tenzir therefore fills a gap:
+of use, Tenzir therefore [fills a gap](/why-tenzir):
 
 ![Structured vs. Document-Oriented](structured-vs-document-oriented.excalidraw.svg)
 
@@ -110,3 +110,57 @@ enough to just specified the fields that you want to work with, e.g., `where
 id.orig_h in 10.0.0.0/8`, or `select src_ip, dest_ip, proto`. Schemas are
 inferred automatically in parsers, but you can also seed a parser with a schema
 that you define explicitly.
+
+## Unified Live Stream Processing and Historical Queries
+
+At first, Tenzir may look like a pure streaming system. But we also offer a
+native database engine under the hood, optionally usable at any Tenzir
+node. The two primary actions supported are:
+
+1. **Ingest**: to persist data at a node, create a pipeline that ends with the
+   [`import`](operators/sinks/import.md) sink.
+2. **Query**: to run a historical query, create a pipeline that begins with the
+   [`export`](operators/sources/export.md) operator.
+
+This light-weight engine is not a full-fledged database, but rather a thin
+management layer over a set of Parquet/Feather files. The engine maintains an
+additional layer of sparse indexes (sketch data structures, such as min-max
+synopses, Bloom filters, etc.) to avoid full scans for every query.
+
+Every node also comes with a *catalog* that tracks evolving schemas, performs
+expression binding, and provides a transactional interface to add and replace
+partitions during compaction.
+
+The diagram below shows the main components of the database engine:
+
+![Database Architecture](database-architecture.excalidraw.svg)
+
+A historical query in a pipeline has the form `export | where <expression>`.
+This declarative form suggest that the pipeline *first* exports everything, and
+only *then* starts filtering, performing a full scan over the stored data. But
+this is not what's happening. Our pipelines support **predicate pushdown** for
+every operator. This means that `export` receives the filter expression when it
+starts executing, and can pass it to the catalog to materialize only the subset
+of needed partitions.
+
+Because of this transparent optimization, you can just exchange the source of a
+pipeline and switch between historical and streaming execution. For example, you
+may perform some exploratory data analysis with a few `export` pipelines, but
+then to deploy your pipeline on streaming data you'd switch to `from kafka`.
+
+The difference between `import` and `from file <path> read parquet` (or `export`
+and `to file <path> write parquet`) is that the storage engine has the extra
+catalog and indexes, managing the complexity of dealing with a large set of raw
+Parquet files.
+
+:::info Delta, Iceberg, and Hudi?
+We kept the catalog purposefully simple to iterate fast and gain experience in a
+controlled system, rather than starting Lakehouse-grade with [Delta
+Lake](https://delta.io/), [Iceberg](https://iceberg.apache.org/), or
+[Hudi](https://hudi.apache.org/). We are looking forward to having the resources
+to integrate with the existing lake management tooling.
+:::
+
+## Native Networking to Create Data Fabrics
+
+TODO
