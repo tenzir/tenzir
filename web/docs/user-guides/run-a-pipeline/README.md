@@ -5,8 +5,8 @@ sidebar_position: 0
 # Run a pipeline
 
 :::tip What is a pipeline?
-A [pipeline](../../language/pipelines.md) is a chain of operators that begins
-with a [source](../../operators/sources/README.md), optionally includes
+A [pipeline](../../pipelines.md) is a chain of operators that begins with a
+[source](../../operators/sources/README.md), optionally includes
 [transformations](../../operators/sinks/README.md) in the middle, and ends in a
 [sink](../../operators/sinks/README.md).
 :::

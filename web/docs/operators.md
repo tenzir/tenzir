@@ -1,7 +1,6 @@
 # Operators
 
-An *operator* is the execution building block of a
-[pipeline](language/pipelines.md).
+An *operator* is the execution building block of a [pipeline](pipelines.md).
 
 There exist four types:
 

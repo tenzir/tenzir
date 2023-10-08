@@ -148,10 +148,9 @@ users to think of tables, but rather domain entities. But SQL puts tables front
 and center. We'd rather put the concept of tables in the background because
 security use cases often revolve around high-level concepts. When desired, it's
 of course possible to restrict the analytics to a specific set of schemas, and
-this is why our [engine](./architecture/engine.md) offers *multi-schema*
-dataflows. This is a novel approach that fuses the ease of use from the world
-of document-oriented engines and combines it with the power of engines that
-operate on semi-structured data.
+this is why our engine offers *multi-schema* dataflows. This is a novel approach
+that fuses the ease of use from the world of document-oriented engines and
+combines it with the power of engines that operate on semi-structured data.
 
 Finally, we wanted to give users the ability to express both streaming and batch
 processing workloads *in the same* language. In particular, we designed the

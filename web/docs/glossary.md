@@ -129,7 +129,8 @@ formats are [Parquet](https://parquet.apache.org) or
 
 Combines a set of [operators](#operator) into a dataflow graph.
 
-- Understand the [pipeline language](./language/pipelines.md)
+- Understand [how pipelines work](./pipelines.md)
+- Understand the [pipeline language](./language.md)
 - [Run a pipeline](./user-guides/run-a-pipeline/README.md)
 
 ## Platform
@@ -165,7 +166,7 @@ An acronym for *Tenzir Query Language*.
 
 TQL is the language in which users write [pipelines](#pipeline).
 
-- Learn more about the [language](./language/pipelines.md)
+- Learn more about the [language](./language.md)
 
 ## Transformation
 
