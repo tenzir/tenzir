@@ -163,4 +163,54 @@ to integrate with the existing lake management tooling.
 
 ## Native Networking to Create Data Fabrics
 
-TODO
+Tenzir pipelines have built-in network communication, allowing you to create a
+distributed fabric of dataflows to express intricate use cases. There are two
+types of network connections: *implicit* and *explicit* ones:
+
+![Implicit vs. Explicit](implicit-vs-explicit-networking.excalidraw.svg)
+
+An implicit network connection exists, for example, when you use the `tenzir`
+binary on the command line to run a pipeline that ends in
+[`import`](operators/sinks/import.md):
+pipeline illustrates the concept:
+
+```bash
+tenzir 'load gcs bkt/eve.json
+       | read suricata
+       | where #schema != "suricata.stats"
+       | import
+       '
+```
+
+This results in the following pipeline execution:
+
+![Import Networking](import-networking.excalidraw.svg)
+
+A historical query, like `export | where <expr> | to <connector>`, has the
+network connection at the other end:
+
+![Export Networking](export-networking.excalidraw.svg)
+
+Tenzir pipelines are eschewing networking to minimize latency and maximize
+throughput. So we generally transfer ownership of operators between processes as
+late as possible to prefer local, high-bandwidth communication. For maximum
+control over placement of computation, you can override the automatic operator
+location with the `local` and `remote` [operator
+modifiers](/operators/modifier.md).
+
+The above examples are implicit network connections because they're not visible
+in the pipeline definition. An explicit network connection terminates a pipeline
+as source or sink:
+
+![Pipeline Fabric](pipeline-fabric.excalidraw.svg)
+
+This fictive data fabric above consists of a heterogeneous set of technologies,
+interconnected by pipelines. You can also turn any pipeline into an API using
+the [`serve`](operators/sinks/serve.md) sink, effectively creating a dataflow
+microservice that you can access with a HTTP client from the other side:
+
+![Serve Operator](operators/sinks/serve.excalidraw.svg)
+
+Because you have full control over the location where you run the pipeline, you
+can push it all the way to the "last mile.". This helps especially when there
+are compliance and data residency concerns that must be properly addressed.
