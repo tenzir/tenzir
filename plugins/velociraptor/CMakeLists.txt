@@ -10,18 +10,46 @@ include(CTest)
 find_package(Tenzir REQUIRED)
 
 file(GLOB_RECURSE velociraptor_sources CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c*")
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 TenzirRegisterPlugin(
   TARGET velociraptor
   ENTRYPOINT src/plugin.cpp
-  SOURCES ${velociraptor_sources}
-  INCLUDE_DIRECTORIES include)
+  SOURCES ${velociraptor_sources})
 
-# We currently placed the generated protobuf code such that the sources land in
-# "src" and the headers in "include/velociraptor". They are typically in the
-# same directory, hence we need to monkey-path the include path.
-target_include_directories(velociraptor PRIVATE include/velociraptor)
+find_package(protobuf CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
 
-find_package(gRPC REQUIRED)
-target_link_libraries(velociraptor PUBLIC gRPC::grpc++)
+# See this blog post for the gist on how we generate the protobuf and gRPC code:
+# https://medium.com/3yourmind/generate-grpc-source-files-using-cmake-ec3acd246b45
+
+add_library(proto OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/velociraptor.proto")
+target_link_libraries(proto PUBLIC protobuf::libprotobuf gRPC::grpc++)
+
+set(PROTO_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+
+# Generate the Protobuf code.
+protobuf_generate(
+    TARGET proto
+    OUT_VAR PROTO_GENERATED_FILES
+    PROTOC_OUT_DIR "${PROTO_BINARY_DIR}")
+
+set_source_files_properties(${PROTO_GENERATED_FILES} PROPERTIES
+                            SKIP_UNITY_BUILD_INCLUSION on)
+
+# Generate the gRPC code.
+protobuf_generate(
+    TARGET proto
+    OUT_VAR PROTO_GENERATED_FILES
+    LANGUAGE grpc
+    GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+    PLUGIN "protoc-gen-grpc=\$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+    PROTOC_OUT_DIR "${PROTO_BINARY_DIR}")
+
+set_source_files_properties(${PROTO_GENERATED_FILES} PROPERTIES
+                            SKIP_UNITY_BUILD_INCLUSION on)
+
+target_include_directories(velociraptor PUBLIC
+                           "$<BUILD_INTERFACE:${PROTO_BINARY_DIR}>")
+
+target_link_libraries(velociraptor PRIVATE proto)

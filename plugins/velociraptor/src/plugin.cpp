@@ -6,9 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "velociraptor/velociraptor.grpc.pb.h"
-#include "velociraptor/velociraptor.pb.h"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
@@ -20,6 +17,9 @@
 #include <grpcpp/client_context.h>
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
+
+#include "velociraptor.grpc.pb.h"
+#include "velociraptor.pb.h"
 
 namespace tenzir::plugins::velociraptor {
 
