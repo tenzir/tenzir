@@ -134,41 +134,61 @@ public:
     while (reader->Read(&response)) {
       auto builder = series_builder{};
       TENZIR_DEBUG("processing response item");
-      auto json = from_json(response.response());
-      if (not json) {
-        diagnostic::warning("failed to process Velociraptor RPC respone")
-          .note("{}", response.response())
-          .emit(ctrl.diagnostics());
-        continue;
-      }
-      const auto* objects = caf::get_if<list>(&*json);
-      if (objects == nullptr) {
-        diagnostic::warning("expected list in Velociraptor JSON response")
-          .note("{}", response.response())
-          .emit(ctrl.diagnostics());
-        continue;
-      }
-      for (const auto& object : *objects) {
-        const auto* rec = caf::get_if<record>(&object);
-        if (rec == nullptr) {
-          diagnostic::warning("expected objects in Velociraptor response")
+      auto us = std::chrono::microseconds(response.timestamp());
+      auto timestamp = time{std::chrono::duration_cast<duration>(us)};
+      // Velociraptor sends a stream of responses that consists of "control" and
+      // "data" messages. If the response payload is empty, then we have a
+      // control message, otherwise we have a data message.
+      if (not response.response().empty()) {
+        TENZIR_DEBUG("got a data message");
+        auto json = from_json(response.response());
+        if (not json) {
+          diagnostic::warning("failed to process Velociraptor RPC respone")
             .note("{}", response.response())
             .emit(ctrl.diagnostics());
           continue;
         }
+        const auto* objects = caf::get_if<list>(&*json);
+        if (objects == nullptr) {
+          diagnostic::warning("expected list in Velociraptor JSON response")
+            .note("{}", response.response())
+            .emit(ctrl.diagnostics());
+          continue;
+        }
+        for (const auto& object : *objects) {
+          const auto* rec = caf::get_if<record>(&object);
+          if (rec == nullptr) {
+            diagnostic::warning("expected objects in Velociraptor response")
+              .note("{}", response.response())
+              .emit(ctrl.diagnostics());
+            continue;
+          }
+          auto row = builder.record();
+          row.field("timestamp").data(timestamp);
+          row.field("query_id").data(response.query_id());
+          row.field("query").data(record{
+            {"name", response.query().name()},
+            {"vql", response.query().vql()},
+          });
+          row.field("part").data(response.part());
+          auto resp = row.field("response").record();
+          for (const auto& [field, value] : *rec)
+            resp.field(field).data(make_view(value));
+        }
+        for (auto& slice :
+             builder.finish_as_table_slice("velociraptor.response"))
+          co_yield slice;
+      } else if (not response.log().empty()) {
+        TENZIR_DEBUG("got a control message");
+        TENZIR_WARN("{}", response.log());
         auto row = builder.record();
+        row.field("timestamp").data(timestamp);
         row.field("query_id").data(response.query_id());
-        row.field("query").data(record{
-          {"name", response.query().name()},
-          {"vql", response.query().vql()},
-        });
-        row.field("part").data(response.part());
-        auto resp = row.field("response").record();
-        for (const auto& [field, value] : *rec)
-          resp.field(field).data(make_view(value));
+        row.field("log").data(response.log());
+        for (auto& slice :
+             builder.finish_as_table_slice("velociraptor.response"))
+          co_yield slice;
       }
-      for (auto& slice : builder.finish_as_table_slice("velociraptor.response"))
-        co_yield slice;
     }
     auto status = reader->Finish();
     if (not status.ok())
