@@ -4,7 +4,7 @@ This page provides answers to frequently asked questions (FAQs) about Tenzir.
 
 ## What is Tenzir?
 
-Tenzir is a platform that pioneers open source security data pipelines.
+Tenzir is a platform that pioneers open-source security data pipelines.
 
 Tenzir is also the name of the Germany-based startup behind the product.
 

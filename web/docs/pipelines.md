@@ -12,7 +12,7 @@ is input to the next:
 ![Pipeline Chaining](pipeline-chaining.excalidraw.svg)
 
 There exist three types of operators: **sources** that produce data, **sinks**
-that consume data, and transformations that do both:
+that consume data, and **transformations** that do both:
 
 ![Pipeline Structure](pipeline-structure.excalidraw.svg)
 
@@ -33,7 +33,10 @@ matching operators:
 We call any void-to-void operator sequence a **closed pipeline**. Only closed
 pipelines can execute. If a pipeline does not have a source and sink, it would
 "leak" data. If a pipeline is open, the engine auto-completes a source/sink when
-possible or rejects it.
+possible and rejects the pipeline otherwise. Auto-completion is context
+dependent: on the command line we read JSON from stdin and write it stdout. In
+the app we only auto-complete a missing sink with
+[`serve`](operators/sinks/serve.md) to display the result in the browser.
 
 Zooming out in the above type table makes the operator types apparent:
 
@@ -68,25 +71,24 @@ value*. Unlike Zed, Tenzir uses a "data frame" abstraction and relies on
 homogeneous Arrow record batches of up to 65,535 rows.
 :::
 
-If the schema in a pipeline changes, we simply create new batch of events. The
+If the schema in a pipeline changes, we simply create a new batch of events. The
 worst case for Tenzir is a ordered stream of schema-switching events, with every
 event having a new schema than the previous one. That said, even for those data
 streams we can efficiently build homogeneous batches when the inter-event order
 does not matter significantly. Similar to predicate pushdown, Tenzir operators
-support "orderness pushdown" to signal to upstream operators that the event
+support "ordering pushdown" to signal to upstream operators that the event
 order only matters intra-schema but not inter-schema. In this case we
 transparently demultiplex a heterogeneous stream into *N* homogeneous streams,
 each of which yields batches of up to 65k events. The `import` operator is an
-example of such an operator, and it pushes the its orderness upstream so that we
-can efficiently parse, say, a diverse stream of NDJSON records, such as
-Suricata's EVE JSON or Zeek's streaming JSON.
+example of such an operator, and it pushes its ordering upstream so that we can
+efficiently parse, say, a diverse stream of NDJSON records, such as Suricata's
+EVE JSON or Zeek's streaming JSON.
 
 You could call multi-schema dataflows *multiplexed* and there exist dedicated
 operators to demultiplex a stream. As of now, this is hard-coded per operator.
-For example, the [`directory`](/connectors/directory) operator demultiplexes a
-stream of events and writes of the same schema to the same file: with `to
-directory write parquet` you can write a set of Parquet files, each of which
-have a fixed schema.
+For example, [`to directory /tmp/dir write parquet`](/connectors/directory)
+demultiplexes a stream of events so that batches with the same schema go to the
+same Parquet file.
 
 The diagram below illustrates the multi-schema aspect of dataflows for schemas
 A, B, and C:
@@ -94,9 +96,11 @@ A, B, and C:
 ![Multi-schema Example](multi-schema-example.excalidraw.svg)
 
 Some operators only work with exactly one instance per schema internally, such
-as [`parquet`](/formats/parquet), [`feather`](/formats/parquet), or
-[`csv`](/formats/csv). These must be combined with a demultiplexing operator,
-such as the `directory` saver.
+as [`write`](/operators/transformations/write) when combined with the
+[`parquet`](/formats/parquet), [`feather`](/formats/feather), or
+[`csv`](/formats/csv) formats. These formats cannot handle multiple input
+schemas at once. A demultiplexing operator like `to directory .. write <format>`
+removes this limitation by writing one file per schema instead.
 
 We are having ideas to make this schema (de)multiplexing explicit with a
 `per-schema` [operator modifier](/operators/modifier) that you can write in
