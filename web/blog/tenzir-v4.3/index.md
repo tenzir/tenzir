@@ -1,9 +1,8 @@
 ---
 title: Tenzir v4.3
 authors: [mavam, jachris]
-date: 2023-10-15
-tags: [release, operators, observability, fluent-bit, json, yaml]
-draft: true
+date: 2023-10-10
+tags: [release, operators, observability, fluent-bit, json, yaml, labels]
 ---
 
 Exciting times, Tenzir v4.3 is out! The headlining feature is [Fluent
@@ -246,22 +245,53 @@ Want to try it yourself? Head over to [app.tenzir.com](https://app.tenzir.com)
 where you start for free and manage Tenzir nodes and run Tenzir and Fluent Bit
 pipelines.
 
-## JSON Parser
+## Tidbits
+
+Besides the headlining integration of Fluent Bit, the team at Tenzir has been
+working on some other improvements and features that we want to share:
+
+### JSON Parser Improvements
 
 We've revamped our JSON parser to be a lot faster and more accurate in type
 inference.
 
-TODO: Add benchmarks
-TODO: Explain what changed about type inference
+![Tenzir v4.3 JSON Improvements](tenzir-v4.3-json-improvements.excalidraw.svg)
 
-## YAML Format
+Schema inference now supports empty records and empty lists. Previously both
+were indistinguishable from `null` values. This is best illustrated on an
+example:
+
+```json
+{"foo": [], "bar": {}, "baz": "127.0.0.1"}
+{"foo": [null], "bar": null, "baz": "::1"}
+{"foo": null, "bar": {}, "baz": "localhost"}
+```
+
+With Tenzir v4.2, The fields `foo` and `bar` would've been dropped from the
+input, and `baz` had the type `string` for all three events.
+
+With Tenzir v4.3, `foo` is of type `list<null>`, `bar` of type `record {}`, and
+baz of type `ip` for the first two events, and of type `string` for the third.
+
+### YAML Format
 
 Tenzir now supports reading and writing YAML documents and document streams. Use
 `read yaml` and `write yaml` to parse and print YAML, respectively.
 
-TODO: Show some examples, and explain why users would want to have this
+For example, `show config | write yaml` shows your node's current configuration:
 
-## Data Model Tweaks
+```yaml
+---
+tenzir:
+  allow-unsafe-pipelines: true
+  operators:
+    suricata: "shell 'suricata -r /dev/stdin --set outputs.1.eve-log.filename=/dev/stdout --set logging.outputs.0.console.enabled=no' | read suricata\n"
+    zeek: "shell 'eval \"$(zkg env)\" && zeek -r - LogAscii::output_to_stdout=T JSONStreaming::disable_default_logs=T JSONStreaming::enable_log_rotation=F json-streaming-logs' | read zeek-json --no-infer\n"
+...
+```
 
-TODO: Write about empty records
-TODO: Write about the null type, and how it enables empty lists
+### Pipeline Labels
+
+Nodes now support setting labels for pipelines. This feature isn't yet enabled
+in the app, but will be available soon for all nodes already updated to v4.3 or
+newer.
