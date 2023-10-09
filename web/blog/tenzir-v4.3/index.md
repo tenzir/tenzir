@@ -1,14 +1,14 @@
 ---
 title: Tenzir v4.3
-authors: [mavam, jachris]
+authors: [jachris, mavam]
 date: 2023-10-10
 tags: [release, operators, observability, fluent-bit, json, yaml, labels]
 ---
 
 Exciting times, Tenzir v4.3 is out! The headlining feature is [Fluent
 Bit][fluentbit] support with the `fluent-bit` [source][fluentbit-source] and
-[sink][fluentbit-sink] operators. Imagine you can do everything that Fluent Bit
-can do *plus* what Tenzir already offers. What a treat!
+[sink][fluentbit-sink] operators. Imagine you can use all Fluent Bit connectors
+*plus* what Tenzir already offers. What a treat!
 
 [fluentbit]: https://fluentbit.io/
 [fluentbit-source]: /next/operators/sources/fluent-bit
@@ -247,8 +247,8 @@ pipelines.
 
 ## Tidbits
 
-Besides the headlining integration of Fluent Bit, the team at Tenzir has been
-working on some other improvements and features that we want to share:
+Besides Fluent Bit, the team at Tenzir has been working on some other
+noteworthy improvements and features that we would like to share:
 
 ### JSON Parser Improvements
 
@@ -275,10 +275,17 @@ baz of type `ip` for the first two events, and of type `string` for the third.
 
 ### YAML Format
 
-Tenzir now supports reading and writing YAML documents and document streams. Use
-`read yaml` and `write yaml` to parse and print YAML, respectively.
+The new [`yaml`](/next/formats/yaml) format supports reading and writing YAML
+documents and document streams.
 
-For example, `show config | write yaml` shows your node's current configuration:
+For example, you can now render the configuration of the current node as valid
+YAML:
+
+```
+show config | write yaml
+```
+
+This yields:
 
 ```yaml
 ---
@@ -290,8 +297,13 @@ tenzir:
 ...
 ```
 
+Another example, perhaps just a party tricks, is converting YAML to JSON:
+
+```bash
+tenzir 'read yaml | write json' < input.json
+```
+
 ### Pipeline Labels
 
 Nodes now support setting labels for pipelines. This feature isn't yet enabled
-in the app, but will be available soon for all nodes already updated to v4.3 or
-newer.
+in the app, but will be available soon for all nodes updated to v4.3 or newer.
