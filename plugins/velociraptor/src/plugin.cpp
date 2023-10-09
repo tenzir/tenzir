@@ -25,14 +25,14 @@ namespace tenzir::plugins::velociraptor {
 
 namespace {
 
-/// The IP address of the Velociraptor gRPC endpoint.
-constexpr auto default_server = "localhost";
-
-/// The port of the Velociraptor gRPC endpoint.
-constexpr auto default_port = 8001;
-
 /// The ID of an Org, e.g., "O3CLG".
 constexpr auto default_org_id = "";
+
+/// The ID of an Org, e.g., "O3CLG".
+constexpr auto default_max_rows = uint64_t{100};
+
+/// The ID of an Org, e.g., "O3CLG".
+constexpr auto default_max_wait = uint64_t{1};
 
 /// A VQL request.
 struct request {
@@ -47,8 +47,6 @@ struct request {
 
 /// The arguments passed to the operator.
 struct operator_args {
-  std::string server;
-  uint16_t port;
   uint64_t max_rows;
   uint64_t max_wait;
   std::string org_id;
@@ -57,8 +55,7 @@ struct operator_args {
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
-      .fields(f.field("server", x.server), f.field("port", x.port),
-              f.field("max_rows", x.max_rows), f.field("max_wait", x.max_wait),
+      .fields(f.field("max_rows", x.max_rows), f.field("max_wait", x.max_wait),
               f.field("org_id", x.org_id), f.field("requests", x.requests));
   }
 };
@@ -68,19 +65,59 @@ class velociraptor_operator final
 public:
   velociraptor_operator() = default;
 
-  velociraptor_operator(operator_args args) : args_{std::move(args)} {
-    // TODO: fill in details from config.
+  velociraptor_operator(operator_args args, record config)
+    : args_{std::move(args)}, config_{std::move(config)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto endpoint = fmt::format("{}:{}", args_.server, args_.port);
-    auto channel
-      = grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials());
-    auto stub = API::NewStub(channel);
-    TENZIR_DEBUG("submitting request");
-    auto args = VQLCollectorArgs{};
+    const auto* ca_certificate
+      = get_if<std::string>(&config_, "ca_certificate");
+    if (ca_certificate == nullptr) {
+      diagnostic::error("no 'ca_certificate' found in config file")
+        .hint("generate a valid config file `velociraptor config api_client`")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    const auto* client_private_key
+      = get_if<std::string>(&config_, "client_private_key");
+    if (client_private_key == nullptr) {
+      diagnostic::error("no 'client_private_key' found in config file")
+        .hint("generate a valid config file `velociraptor config api_client`")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    const auto* client_cert = get_if<std::string>(&config_, "client_cert");
+    if (client_private_key == nullptr) {
+      diagnostic::error("no 'client_cert' found in config file")
+        .hint("generate a valid config file `velociraptor config api_client`")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    const auto* api_connection_string
+      = get_if<std::string>(&config_, "api_connection_string");
+    if (api_connection_string == nullptr) {
+      diagnostic::error("no 'api_connection_string' found in config file")
+        .hint("generate a valid config file `velociraptor config api_client`")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    TENZIR_DEBUG("establishing gRPC channel to {}", *api_connection_string);
+    auto credentials = grpc::SslCredentials({
+      .pem_root_certs = *ca_certificate,
+      .pem_private_key = *client_private_key,
+      .pem_cert_chain = *client_cert,
+    });
+    auto channel_args = grpc::ChannelArguments{};
+    // Overriding the target name is necessary to connect by IP address because
+    // Velociraptor uses self-signed certs.
+    channel_args.SetSslTargetNameOverride("VelociraptorServer");
+    auto channel = grpc::CreateCustomChannel(*api_connection_string,
+                                             credentials, channel_args);
+    auto stub = proto::API::NewStub(channel);
+    auto args = proto::VQLCollectorArgs{};
     for (const auto& request : args_.requests) {
+      TENZIR_DEBUG("staging request {}: {}", request.name, request.vql);
       auto* query = args.add_query();
       query->set_name(request.name);
       query->set_vql(request.vql);
@@ -88,10 +125,12 @@ public:
     args.set_max_row(args_.max_rows);
     args.set_max_wait(args_.max_wait);
     args.set_org_id(args_.org_id);
+    TENZIR_DEBUG("submitting request: max_row = {}, max_wait = {}, org_id = {}",
+                 args_.max_rows, args_.max_wait, args_.org_id);
     auto context = grpc::ClientContext{};
     auto reader = stub->Query(&context, args);
     TENZIR_DEBUG("processing response");
-    VQLResponse response;
+    proto::VQLResponse response;
     while (reader->Read(&response)) {
       auto builder = series_builder{};
       TENZIR_DEBUG("processing response item");
@@ -131,6 +170,11 @@ public:
       for (auto& slice : builder.finish_as_table_slice("velociraptor.response"))
         co_yield slice;
     }
+    auto status = reader->Finish();
+    if (not status.ok())
+      diagnostic::error("failed to process gRPC response")
+        .note("{}", status.error_message())
+        .emit(ctrl.diagnostics());
   }
 
   auto name() const -> std::string override {
@@ -158,6 +202,7 @@ public:
 
 private:
   operator_args args_;
+  record config_;
 };
 
 class plugin final : public operator_plugin<velociraptor_operator> {
@@ -178,8 +223,6 @@ public:
     auto args = operator_args{};
     auto parser = argument_parser{name(), "https://docs.tenzir.com/operators/"
                                           "velociraptor"};
-    auto server = std::optional<located<std::string>>{};
-    auto port = std::optional<located<uint16_t>>{};
     auto org_id = std::optional<located<std::string>>{};
     auto request_name = std::optional<located<std::string>>{};
     auto max_rows = std::optional<located<uint64_t>>{};
@@ -187,15 +230,10 @@ public:
     auto request_vql = std::string{};
     parser.add("-n,--request-name", request_name, "<string>");
     parser.add("-o,--org-id", org_id, "<string>");
-    parser.add("-p,--port", port, "<number>");
     parser.add("-r,--max-rows", max_rows, "<uint64>");
-    parser.add("-s,--server", server, "<string>");
     parser.add("-w,--max-wait", max_wait, "<uint64>");
     parser.add(request_vql, "<query>");
     parser.parse(p);
-    args.org_id = org_id ? org_id->inner : default_org_id;
-    args.server = server ? server->inner : default_server;
-    args.port = port ? port->inner : default_port;
     if (not request_name) {
       request_name = located<std::string>{};
       request_name->inner = fmt::to_string(uuid::random());
@@ -204,7 +242,10 @@ public:
       .name = std::move(request_name->inner),
       .vql = std::move(request_vql),
     }};
-    return std::make_unique<velociraptor_operator>(std::move(args));
+    args.org_id = org_id ? org_id->inner : default_org_id;
+    args.max_rows = max_rows ? max_rows->inner : default_max_rows;
+    args.max_wait = max_wait ? max_wait->inner : default_max_wait;
+    return std::make_unique<velociraptor_operator>(std::move(args), config_);
   }
 
   auto name() const -> std::string override {
