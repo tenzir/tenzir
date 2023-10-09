@@ -6,7 +6,7 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 
-package tenzir.plugins.velociraptor;
+package proto;
 
 message VQLRequest {
     string Name = 2;
