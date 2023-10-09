@@ -21,9 +21,9 @@ the command line interface and do not need pipeline management features.
 
 ## Explore the demo environment
 
-Let's run a few example [pipelines](language/pipelines.md) by copying the below
-examples and pasting them into the [Explorer](https://app.tenzir.com/explorer).
-We pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
+Let's run a few example [pipelines](pipelines.md) by copying the below examples
+and pasting them into the [Explorer](https://app.tenzir.com/explorer). We
+pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
 [Suricata](https://suricata.io) logs derived from the M57 dataset that we also
 use in our [user guides](user-guides.md).
 

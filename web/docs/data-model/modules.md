@@ -5,9 +5,8 @@ sidebar_position: 2
 # Modules
 
 A **module** creates a namespace for [type
-definitions#type-construction](type-system.md),
-[pipelines](../language/pipelines.md), and [taxonomy](taxonomies.md)
-elements in single YAML file.
+definitions#type-construction](type-system.md), [pipelines](../pipelines.md),
+and [taxonomy](taxonomies.md) elements in single YAML file.
 
 :::warning Work in Progress
 While you can already [show schema

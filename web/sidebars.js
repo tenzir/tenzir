@@ -36,8 +36,16 @@ const sidebars = {
       }],
     },
     {
+      type: 'doc',
+      id: 'faqs',
+    },
+    {
       type: 'html',
       value: '<br><b>Reference<b/>',
+    },
+    {
+      type: 'doc',
+      id: 'pipelines',
     },
     {
       type: 'category',

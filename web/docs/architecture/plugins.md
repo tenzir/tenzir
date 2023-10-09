@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 2
 ---
 
 # Plugins
@@ -24,8 +24,7 @@ selectively. Here is a list of available plugin categories and plugin types.
 
 ## Pipeline
 
-The following plugin types allow for adding
-[pipeline](../language/pipelines.md) logic.
+The following plugin types allow for adding [pipeline](../pipelines.md) logic.
 
 ### Operator
 

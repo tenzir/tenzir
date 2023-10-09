@@ -12,7 +12,9 @@ serve [--buffer-size <buffer-size>] <serve-id>
 ## Description
 
 The `serve` operator bridges between pipelines and the corresponding `/serve`
-REST API endpoint.
+REST API endpoint:
+
+![Serve Operator](serve.excalidraw.svg)
 
 Pipelines ending with the `serve` operator exit when all events have been
 delivered over the corresponding endpoint.
