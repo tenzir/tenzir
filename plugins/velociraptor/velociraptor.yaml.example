@@ -1,8 +1,18 @@
-# The gRPC server host.
-server: localhost
-
-# The gRPC server port.
-port: 8001
-
-# The OrgID for an organization.
-org_id:
+# This example file was auto-generated with the following command:
+#
+#   velociraptor -c server.yaml config api_client --name tenzir client.yaml
+#
+ca_certificate: |
+  -----BEGIN CERTIFICATE-----
+  ...
+  -----END CERTIFICATE-----
+client_cert: |
+  -----BEGIN CERTIFICATE-----
+  ...
+  -----END CERTIFICATE-----
+client_private_key: |
+  -----BEGIN RSA PRIVATE KEY-----
+  ...
+  -----END RSA PRIVATE KEY-----
+api_connection_string: 127.0.0.1:8001
+name: tenzir

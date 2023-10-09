@@ -18,5 +18,10 @@ TenzirRegisterPlugin(
   SOURCES ${velociraptor_sources}
   INCLUDE_DIRECTORIES include)
 
+# We currently placed the generated protobuf code such that the sources land in
+# "src" and the headers in "include/velociraptor". They are typically in the
+# same directory, hence we need to monkey-path the include path.
+target_include_directories(velociraptor PRIVATE include/velociraptor)
+
 find_package(gRPC REQUIRED)
 target_link_libraries(velociraptor PUBLIC gRPC::grpc++)
