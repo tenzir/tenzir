@@ -1,0 +1,8 @@
+# The gRPC server host.
+server: localhost
+
+# The gRPC server port.
+port: 8001
+
+# The OrgID for an organization.
+org_id:
