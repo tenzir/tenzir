@@ -25,13 +25,13 @@ namespace tenzir::plugins::velociraptor {
 
 namespace {
 
-/// The ID of an Org, e.g., "O3CLG".
-constexpr auto default_org_id = "";
+/// The ID of an Organization.
+constexpr auto default_org_id = "root";
 
-/// The ID of an Org, e.g., "O3CLG".
-constexpr auto default_max_rows = uint64_t{100};
+/// The maximum number of rows per response.
+constexpr auto default_max_rows = uint64_t{1'000};
 
-/// The ID of an Org, e.g., "O3CLG".
+/// The number of seconds to wait on responses.
 constexpr auto default_max_wait = uint64_t{1};
 
 /// A VQL request.
