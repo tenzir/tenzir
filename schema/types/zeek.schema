@@ -383,6 +383,17 @@ type zeek.smb = record {
   _write_ts: time,
 }
 
+type zeek.smb_mapping = record {
+  ts: time,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  path: string,
+  service: string,
+  native_file_system: string,
+  share_type: string,
+  _write_ts: time,
+}
+
 type zeek.smtp = record {
   ts: timestamp,
   uid: string #index=hash,
