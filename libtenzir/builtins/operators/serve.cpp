@@ -119,10 +119,6 @@ constexpr auto SPEC_V0 = R"_(
                   type: string
                   description: A token to access the next pipeline data batch, null if the pipeline is completed.
                   example: "340ce2j"
-                dropped:
-                  type: integer
-                  description: The serve endpoint will drop responses that exceed the configured maximum message size. The number of events dropped this way is returned here. Should be 0 most of the time.
-                  example: 0
                 schemas:
                   type: array
                   items:
@@ -630,7 +626,6 @@ struct serve_handler_state {
     auto out_iter = std::back_inserter(result);
     auto seen_schemas = std::unordered_set<type>{};
     bool first = true;
-    auto num_events = size_t{0};
     for (const auto& slice : results) {
       if (slice.rows() == 0)
         continue;
@@ -650,7 +645,6 @@ struct serve_handler_state {
         TENZIR_ASSERT_CHEAP(row);
         const auto ok = printer.print(out_iter, *row);
         TENZIR_ASSERT_CHEAP(ok);
-        ++num_events;
       }
     }
     // Write schemas
@@ -671,14 +665,7 @@ struct serve_handler_state {
         = printer.print(out_iter, schema.to_definition(/*expand*/ false));
       TENZIR_ASSERT_CHEAP(ok);
     }
-    out_iter = fmt::format_to(out_iter, R"(}}], "dropped": 0}}{})", '\n');
-    if (result.size() > defaults::api::max_response_size) {
-      TENZIR_DEBUG("serve-manager discards oversized response with {} events",
-                   num_events);
-      return fmt::format(
-        R"({{"next_continuation_token":"{}","events":[],"schemas":[],"dropped":{} }})",
-        next_continuation_token, num_events);
-    }
+    out_iter = fmt::format_to(out_iter, R"(}}]}}{})", '\n');
     return result;
   }
 

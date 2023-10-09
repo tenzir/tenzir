@@ -166,9 +166,6 @@ inline constexpr const size_t rotate_files = 3;
 // -- constants for the builtin REST endpoints -------------------------
 namespace api {
 
-/// The maximum response size for one request.
-inline constexpr size_t max_response_size = size_t{64} * 1'024 * 1024; // 64 MiB
-
 namespace serve {
 
 /// The duration for which results for the last set of results of a pipeline
