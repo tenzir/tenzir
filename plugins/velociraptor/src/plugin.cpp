@@ -141,6 +141,10 @@ public:
       // control message, otherwise we have a data message.
       if (not response.response().empty()) {
         TENZIR_DEBUG("got a data message");
+        // There's an opportunity for improvement here, as we are not (yet)
+        // making use of the additional types provided in the response. We
+        // should synthesize a schema from that and provide that as hint to the
+        // series builder.
         auto json = from_json(response.response());
         if (not json) {
           diagnostic::warning("failed to process Velociraptor RPC respone")
