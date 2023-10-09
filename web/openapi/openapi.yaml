@@ -199,6 +199,22 @@ components:
         end:
           type: number
           example: 48
+    PipelineLabel:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The pipeline label text.
+          example: zeek
+        name:
+          type: string
+          description: The pipeline label color.
+          example: 3F1A24
+    PipelineLabels:
+      type: array
+      description: The user-provided labels for this pipeline.
+      items:
+        $ref: "#/components/schemas/PipelineLabel"
     PipelineInfo:
       type: object
       properties:
@@ -244,6 +260,8 @@ components:
           $ref: "#/components/schemas/Diagnostics"
         metrics:
           $ref: "#/components/schemas/Metrics"
+        labels:
+          $ref: "#/components/schemas/PipelineLabels"
   securitySchemes:
     TenzirToken:
       type: apiKey
@@ -465,6 +483,8 @@ paths:
                 restart_with_node:
                   type: boolean
                   description: Flag that specifies whether the pipeline should be restarted when the Tenzir Node is restarted.
+                labels:
+                  $ref: "#/components/schemas/PipelineLabels"
       responses:
         200:
           description: Success.

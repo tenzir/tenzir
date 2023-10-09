@@ -79,7 +79,9 @@ auto tenzir_features() -> std::vector<std::string> {
   // launch_endpoint - The pipeline manager plugin has a new `/pipeline/launch`
   //                   endpoint and can thus unify the workflows of running &
   //                   deploying pipelines.
-  return {"large_responses", "launch_endpoint"};
+  // pipeline_labels - The pipeline manager plugin supports pipeline labels that
+  //                   can be modified using the `/pipeline/update` endpoint.
+  return {"large_responses", "launch_endpoint", "pipeline_labels"};
 }
 
 } // namespace tenzir

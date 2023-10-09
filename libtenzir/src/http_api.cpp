@@ -185,8 +185,10 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
             return caf::make_error(ec::invalid_argument, "expected a list");
           auto result = tenzir::list{};
           for (auto const& x : *list) {
-            if (!caf::holds_alternative<std::string>(x))
-              return caf::make_error(ec::invalid_argument, "expected a string");
+            if (!caf::holds_alternative<std::string>(x)
+                and !caf::holds_alternative<tenzir::record>(x))
+              return caf::make_error(ec::invalid_argument,
+                                     "expected a string or record");
             auto const& x_as_string = caf::get<std::string>(x);
             auto parsed = caf::visit(
               detail::overload{
@@ -199,6 +201,16 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                   if (!result)
                     return std::move(result.error());
                   return std::move(*result);
+                },
+                [&](const record_type&) -> caf::expected<data> {
+                  // TODO: This currently works with records containing only
+                  // strings, but is untested with other value types.
+                  const auto* result = caf::get_if<record>(&x);
+                  if (!result)
+                    return caf::make_error(ec::invalid_argument,
+                                           fmt::format("invalid record "
+                                                       "syntax"));
+                  return *result;
                 },
                 [](const auto&) -> caf::expected<data> {
                   return caf::make_error(ec::invalid_argument,
