@@ -757,7 +757,7 @@ jobs:
         run: |
           VERBOSE=1 cmake --build "$BUILD_DIR" --target functional-test -j 1
       - name: Publish Functional Test Report
-        uses: mikepenz/action-junit-report@v3
+        uses: mikepenz/action-junit-report@v4
         if: always()
         with:
           report_paths: report.xml
@@ -1015,7 +1015,7 @@ jobs:
           nix --accept-flake-config develop .#functional-test-shell \
             --command bash -c "cmake --build \"$BUILD_DIR\" --target functional-test -j 1"
       - name: Publish Functional Test Report
-        uses: mikepenz/action-junit-report@v3
+        uses: mikepenz/action-junit-report@v4
         if: always()
         with:
           report_paths: report.xml
