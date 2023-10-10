@@ -75,7 +75,7 @@ teardown() {
   check tenzir "load file $DATADIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
   tenzir-ctl flush
 
-  check tenzir 'export | where resp_h == 192.168.1.104 | write ssv'
+  check --sort tenzir 'export | where resp_h == 192.168.1.104 | write ssv'
 
   # import some more to make sure accounting data is in the system.
   check -c \
@@ -95,7 +95,7 @@ teardown() {
     "tenzir-ctl status --detailed \
      | jq '.index.statistics.layouts | del(.\"tenzir.metrics\")'"
 
-  check -c \
+  check --sort -c \
     "tenzir-ctl status --detailed | jq -ec 'del(.version) | del(.system.\"swap-space-usage\") | paths(scalars) as \$p | {path:\$p, type:(getpath(\$p) | type)}' | grep -v ',[1-9][0-9]*,'"
 
   check -c \
