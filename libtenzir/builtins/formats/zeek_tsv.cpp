@@ -461,6 +461,16 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   auto document = zeek_document{};
   auto last_finish = std::chrono::steady_clock::now();
   auto line_nr = size_t{0};
+  // Helper for finishing and casting.
+  auto finish = [&] {
+    auto slice = unflatten(document.builder->finish(), ".");
+    if (document.target_schema
+        and can_cast(slice.schema(), document.target_schema)) {
+      return cast(std::move(slice), document.target_schema);
+    } else {
+      return slice;
+    }
+  };
   for (auto&& line : lines) {
     const auto now = std::chrono::steady_clock::now();
     // Yield at chunk boundaries.
@@ -468,7 +478,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         and (document.builder->rows() >= defaults::import::table_slice_size
              or last_finish + defaults::import::batch_timeout < now)) {
       last_finish = now;
-      co_yield cast(document.builder->finish(), document.target_schema);
+      co_yield finish();
     }
     if (not line) {
       if (last_finish != now) {
@@ -501,7 +511,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       if (close_parser(header, unused)) {
         if (document.builder) {
           last_finish = now;
-          co_yield cast(document.builder->finish(), document.target_schema);
+          co_yield finish();
           document = {};
         }
         continue;
@@ -512,7 +522,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       // were missing a closing tag.
       if (document.builder) {
         last_finish = now;
-        co_yield document.builder->finish();
+        co_yield finish();
         document = {};
       }
       // Now we can actually assemble the header.
@@ -638,7 +648,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       document.builder = table_slice_builder{std::move(schema)};
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
-      // TODO: This should just unflatten instead.
       auto target_schema = std::find_if(
         ctrl.schemas().begin(), ctrl.schemas().end(), [&](const auto& schema) {
           for (const auto& name : schema.names()) {
@@ -648,12 +657,8 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
           }
           return false;
         });
-      if (target_schema != ctrl.schemas().end()
-          and can_cast(document.builder->schema(), *target_schema)) {
-        document.target_schema = *target_schema;
-      } else {
-        document.target_schema = document.builder->schema();
-      }
+      document.target_schema
+        = target_schema == ctrl.schemas().end() ? type{} : *target_schema;
       // We intentionally fall through here; we create the builder lazily
       // when we encounter the first event, but that we still need to parse
       // now.
@@ -699,7 +704,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     }
   }
   if (document.builder and document.builder->rows() > 0) {
-    co_yield cast(document.builder->finish(), document.target_schema);
+    co_yield finish();
   }
 }
 
