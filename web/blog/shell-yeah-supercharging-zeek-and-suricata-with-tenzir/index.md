@@ -55,7 +55,7 @@ Let's break this down:
 
 Now that we have both Zeek and Suricata at our fingertips, how can we work with
 their output more easily? This is where Tenzir comes into play—easy
-[pipelines](/language/pipelines) for security teams to acquire,
+[pipelines](/pipelines) for security teams to acquire,
 [reshape](/user-guides/reshape-data), and route event data.
 
 Here are two examples that count the number of unique source IP addresses per
