@@ -23,8 +23,10 @@ find_package(gRPC CONFIG REQUIRED)
 # See this blog post for the gist on how we generate the protobuf and gRPC code:
 # https://medium.com/3yourmind/generate-grpc-source-files-using-cmake-ec3acd246b45
 
-add_library(proto OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/velociraptor.proto")
+add_library(proto STATIC "${CMAKE_CURRENT_SOURCE_DIR}/velociraptor.proto")
 target_link_libraries(proto PUBLIC protobuf::libprotobuf gRPC::grpc++)
+dependency_summary("protobuf" protobuf::libprotobuf "Dependencies")
+dependency_summary("gRPC" gRPC::grpc++ "Dependencies")
 
 set(PROTO_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 
@@ -49,7 +51,7 @@ protobuf_generate(
 set_source_files_properties(${PROTO_GENERATED_FILES} PROPERTIES
                             SKIP_UNITY_BUILD_INCLUSION on)
 
-target_include_directories(velociraptor PUBLIC
+target_include_directories(velociraptor SYSTEM PUBLIC
                            "$<BUILD_INTERFACE:${PROTO_BINARY_DIR}>")
 
 target_link_libraries(velociraptor PRIVATE proto)
