@@ -191,7 +191,6 @@ public:
           co_yield slice;
       } else if (not response.log().empty()) {
         TENZIR_DEBUG("got a control message");
-        TENZIR_WARN("{}", response.log());
         auto row = builder.record();
         row.field("timestamp").data(timestamp);
         row.field("query_id").data(response.query_id());
