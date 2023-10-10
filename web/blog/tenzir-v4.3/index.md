@@ -1,15 +1,14 @@
 ---
 title: Tenzir v4.3
-authors: [mavam, jachris]
-date: 2023-10-15
-tags: [release, operators, observability, fluent-bit, json, yaml]
-draft: true
+authors: [jachris, mavam]
+date: 2023-10-10
+tags: [release, operators, observability, fluent-bit, json, yaml, labels]
 ---
 
 Exciting times, Tenzir v4.3 is out! The headlining feature is [Fluent
 Bit][fluentbit] support with the `fluent-bit` [source][fluentbit-source] and
-[sink][fluentbit-sink] operators. Imagine you can do everything that Fluent Bit
-can do *plus* what Tenzir already offers. What a treat!
+[sink][fluentbit-sink] operators. Imagine you can use all Fluent Bit connectors
+*plus* what Tenzir already offers. What a treat!
 
 [fluentbit]: https://fluentbit.io/
 [fluentbit-source]: /next/operators/sources/fluent-bit
@@ -246,22 +245,65 @@ Want to try it yourself? Head over to [app.tenzir.com](https://app.tenzir.com)
 where you start for free and manage Tenzir nodes and run Tenzir and Fluent Bit
 pipelines.
 
-## JSON Parser
+## Tidbits
+
+Besides Fluent Bit, the team at Tenzir has been working on some other
+noteworthy improvements and features that we would like to share:
+
+### JSON Parser Improvements
 
 We've revamped our JSON parser to be a lot faster and more accurate in type
 inference.
 
-TODO: Add benchmarks
-TODO: Explain what changed about type inference
+![Tenzir v4.3 JSON Improvements](tenzir-v4.3-json-improvements.excalidraw.svg)
 
-## YAML Format
+Schema inference now supports empty records and empty lists. Previously both
+were indistinguishable from `null` values. This is best illustrated on an
+example:
 
-Tenzir now supports reading and writing YAML documents and document streams. Use
-`read yaml` and `write yaml` to parse and print YAML, respectively.
+```json
+{"foo": [], "bar": {}, "baz": "127.0.0.1"}
+{"foo": [null], "bar": null, "baz": "::1"}
+{"foo": null, "bar": {}, "baz": "localhost"}
+```
 
-TODO: Show some examples, and explain why users would want to have this
+With Tenzir v4.2, The fields `foo` and `bar` would've been dropped from the
+input, and `baz` had the type `string` for all three events.
 
-## Data Model Tweaks
+With Tenzir v4.3, `foo` is of type `list<null>`, `bar` of type `record {}`, and
+baz of type `ip` for the first two events, and of type `string` for the third.
 
-TODO: Write about empty records
-TODO: Write about the null type, and how it enables empty lists
+### YAML Format
+
+The new [`yaml`](/next/formats/yaml) format supports reading and writing YAML
+documents and document streams.
+
+For example, you can now render the configuration of the current node as valid
+YAML:
+
+```
+show config | write yaml
+```
+
+This yields:
+
+```yaml
+---
+tenzir:
+  allow-unsafe-pipelines: true
+  operators:
+    suricata: "shell 'suricata -r /dev/stdin --set outputs.1.eve-log.filename=/dev/stdout --set logging.outputs.0.console.enabled=no' | read suricata\n"
+    zeek: "shell 'eval \"$(zkg env)\" && zeek -r - LogAscii::output_to_stdout=T JSONStreaming::disable_default_logs=T JSONStreaming::enable_log_rotation=F json-streaming-logs' | read zeek-json --no-infer\n"
+...
+```
+
+Another example, perhaps just a party tricks, is converting YAML to JSON:
+
+```bash
+tenzir 'read yaml | write json' < input.json
+```
+
+### Pipeline Labels
+
+Nodes now support setting labels for pipelines. This feature isn't yet enabled
+in the app, but will be available soon for all nodes updated to v4.3 or newer.
