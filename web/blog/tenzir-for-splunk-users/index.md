@@ -347,5 +347,4 @@ down on SPL's great user experience.
 
 If you'd like to give Tenzir a spin, [try our community edition](/get-started)
 for free. A demo node with example pipelines is waiting for you. For more
-details about TQL, head over to the [language
-documentation](/language/pipelines).
+details about TQL, head over to the [language documentation](/pipelines).
