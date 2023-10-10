@@ -18,13 +18,19 @@
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
 
+#include <chrono>
+#include <optional>
+#include <string>
+#include <vector>
+
 #include "velociraptor.grpc.pb.h"
 #include "velociraptor.pb.h"
 
 namespace tenzir::plugins::velociraptor {
 
-namespace {
+using namespace std::chrono_literals;
 
+namespace {
 /// The ID of an Organization.
 constexpr auto default_org_id = "root";
 
@@ -32,7 +38,7 @@ constexpr auto default_org_id = "root";
 constexpr auto default_max_rows = uint64_t{1'000};
 
 /// The number of seconds to wait on responses.
-constexpr auto default_max_wait = uint64_t{1};
+constexpr auto default_max_wait = std::chrono::seconds{1};
 
 /// A VQL request.
 struct request {
@@ -48,7 +54,7 @@ struct request {
 /// The arguments passed to the operator.
 struct operator_args {
   uint64_t max_rows;
-  uint64_t max_wait;
+  std::chrono::seconds max_wait;
   std::string org_id;
   std::vector<request> requests;
 
@@ -109,8 +115,8 @@ public:
       .pem_cert_chain = *client_cert,
     });
     auto channel_args = grpc::ChannelArguments{};
-    // Overriding the target name is necessary to connect by IP address because
-    // Velociraptor uses self-signed certs.
+    // Overriding the target name is necessary to connect by IP address
+    // because Velociraptor uses self-signed certs.
     channel_args.SetSslTargetNameOverride("VelociraptorServer");
     auto channel = grpc::CreateCustomChannel(*api_connection_string,
                                              credentials, channel_args);
@@ -123,9 +129,10 @@ public:
       query->set_vql(request.vql);
     }
     args.set_max_row(args_.max_rows);
-    args.set_max_wait(args_.max_wait);
+    args.set_max_wait(args_.max_wait.count());
     args.set_org_id(args_.org_id);
-    TENZIR_DEBUG("submitting request: max_row = {}, max_wait = {}, org_id = {}",
+    TENZIR_DEBUG("submitting request: max_row = {}, max_wait = {}, org_id = "
+                 "{}",
                  args_.max_rows, args_.max_wait, args_.org_id);
     auto context = grpc::ClientContext{};
     auto reader = stub->Query(&context, args);
@@ -136,15 +143,15 @@ public:
       TENZIR_DEBUG("processing response item");
       auto us = std::chrono::microseconds(response.timestamp());
       auto timestamp = time{std::chrono::duration_cast<duration>(us)};
-      // Velociraptor sends a stream of responses that consists of "control" and
-      // "data" messages. If the response payload is empty, then we have a
+      // Velociraptor sends a stream of responses that consists of "control"
+      // and "data" messages. If the response payload is empty, then we have a
       // control message, otherwise we have a data message.
       if (not response.response().empty()) {
         TENZIR_DEBUG("got a data message");
         // There's an opportunity for improvement here, as we are not (yet)
         // making use of the additional types provided in the response. We
-        // should synthesize a schema from that and provide that as hint to the
-        // series builder.
+        // should synthesize a schema from that and provide that as hint to
+        // the series builder.
         auto json = from_json(response.response());
         if (not json) {
           diagnostic::warning("failed to process Velociraptor RPC respone")
@@ -250,25 +257,28 @@ public:
     auto org_id = std::optional<located<std::string>>{};
     auto request_name = std::optional<located<std::string>>{};
     auto max_rows = std::optional<located<uint64_t>>{};
-    auto max_wait = std::optional<located<uint64_t>>{};
+    auto max_wait = std::optional<located<duration>>{};
     auto request_vql = std::string{};
     parser.add("-n,--request-name", request_name, "<string>");
     parser.add("-o,--org-id", org_id, "<string>");
     parser.add("-r,--max-rows", max_rows, "<uint64>");
-    parser.add("-w,--max-wait", max_wait, "<uint64>");
+    parser.add("-w,--max-wait", max_wait, "<duration>");
     parser.add(request_vql, "<query>");
     parser.parse(p);
-    if (not request_name) {
-      request_name = located<std::string>{};
-      request_name->inner = fmt::to_string(uuid::random());
-    }
+    if (max_wait && max_wait->inner < 1s)
+      diagnostic::error("--max-wait too low")
+        .primary(max_wait->source)
+        .hint("value must be great than 1s")
+        .throw_();
     args.requests = {{
-      .name = std::move(request_name->inner),
+      .name = request_name ? std::move(request_name->inner)
+                           : fmt::to_string(uuid::random()),
       .vql = std::move(request_vql),
     }};
     args.org_id = org_id ? org_id->inner : default_org_id;
     args.max_rows = max_rows ? max_rows->inner : default_max_rows;
-    args.max_wait = max_wait ? max_wait->inner : default_max_wait;
+    args.max_wait = std::chrono::duration_cast<std::chrono::seconds>(
+      max_wait ? max_wait->inner : default_max_wait);
     return std::make_unique<velociraptor_operator>(std::move(args), config_);
   }
 
