@@ -216,5 +216,5 @@ microservice that you can access with a HTTP client from the other side:
 ![Serve Operator](operators/sinks/serve.excalidraw.svg)
 
 Because you have full control over the location where you run the pipeline, you
-can push it all the way to the "last mile.". This helps especially when there
+can push it all the way to the "last mile". This helps especially when there
 are compliance and data residency concerns that must be properly addressed.
