@@ -15,6 +15,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/lexer.hpp>
 
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/json_writer.hpp>
@@ -29,6 +30,8 @@ struct exec_config {
   std::string implicit_events_source = "from stdin read json";
   std::string implicit_bytes_sink = "save file -";
   std::string implicit_events_sink = "to stdout write json";
+  bool no_implicit = false;
+  bool dump_tokens = false;
   bool dump_ast = false;
   bool dump_diagnostics = false;
   bool dump_metrics = false;
@@ -263,9 +266,52 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
   }
 }
 
+void print_node(std::span<tql2::parse_tree::node> nodes, size_t index,
+                size_t indent = 0) {
+  TENZIR_ASSERT(index < nodes.size());
+  auto& node = nodes[index];
+  fmt::print("{: >{}}", "", indent);
+  fmt::print("{} @ {}..{}\n", node.kind, node.begin, node.end);
+  auto child = node.first_child;
+  while (child) {
+    print_node(nodes, child, indent + 2);
+    child = nodes[child].right_sibling;
+  }
+}
+
 auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
                const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
+  auto tokens = tql2::lex(content);
+  if (cfg.dump_tokens) {
+    auto last = size_t{0};
+    for (auto& token : tokens) {
+      fmt::print("{:>15} {:?}\n", token.kind,
+                 content.substr(last, token.end - last));
+      last = token.end;
+    }
+    return {};
+  }
+  for (auto& token : tokens) {
+    if (token.kind == tql2::token_kind::error) {
+      auto begin = size_t{0};
+      if (&token != tokens.data()) {
+        begin = (&token - 1)->end;
+      }
+      diagnostic::error("could not parse token")
+        .primary(location{begin, token.end})
+        .emit(*diag);
+      return {};
+    }
+  }
+  auto parsed = tql2::parse(tokens);
+  TENZIR_ASSERT(!parsed.nodes.empty());
+  if (cfg.dump_ast) {
+    print_node(parsed.nodes, 0);
+    return {};
+  }
+  return ec::unimplemented;
+#if 0
   auto parsed = tql::parse(std::move(content), *diag);
   if (not parsed) {
     return ec::silent;
@@ -278,6 +324,7 @@ auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   return exec_pipeline(tql::to_pipeline(std::move(*parsed)), sys,
                        std::move(diag), cfg);
+#endif
 }
 
 class diagnostic_handler_ref final : public diagnostic_handler {
@@ -301,6 +348,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
   auto cfg = exec_config{};
+  cfg.dump_tokens = caf::get_or(inv.options, "tenzir.exec.dump-tokens", false);
   cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
   cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
@@ -359,6 +407,8 @@ public:
       "exec", "execute a pipeline locally",
       command::opts("?tenzir.exec")
         .add<bool>("file,f", "load the pipeline definition from a file")
+        .add<bool>("dump-tokens",
+                   "print a textual description of the tokens and then exit")
         .add<bool>("dump-ast",
                    "print a textual description of the AST and then exit")
         .add<bool>("dump-diagnostics",
