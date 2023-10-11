@@ -16,7 +16,7 @@ that consume data, and **transformations** that do both:
 
 ![Pipeline Structure](pipeline-structure.excalidraw.svg)
 
-## Polymorphic Operators
+## Typed Operators
 
 Tenzir pipelines make one more distinction: the elements that the operators push
 through the pipeline are *typed*. Every operator has an input and an output
@@ -56,11 +56,13 @@ This allows you, for example, to perform aggregations across multiple events.
 Multi-schema dataflows require automatic schema inference at parse time. Tenzir
 parsers, such as [`json`](formats/json.md) support this out of the box.
 
-This behavior is very different from execution engines that only work with
-structured data, where the unit of computation is typically a fixed set of
-tables. Schema-less systems, such as document-oriented databases, offer more
-simplicity, at the cost of performance. In the spectrum of performance and ease
-of use, Tenzir therefore [fills a gap](why-tenzir.md):
+This behavior is different from engines that work with structured data where
+operators typically work with fixed set of tables. While Schema-less systems,
+such as document-oriented databases, offer more simplicity, their
+one-record-at-a-time processing comes at the cost of performance. In the
+spectrum of performance and ease of use, Tenzir therefore [fills a
+gap](why-tenzir.md):
+
 
 ![Structured vs. Document-Oriented](structured-vs-document-oriented.excalidraw.svg)
 
@@ -76,13 +78,13 @@ worst case for Tenzir is a ordered stream of schema-switching events, with every
 event having a new schema than the previous one. That said, even for those data
 streams we can efficiently build homogeneous batches when the inter-event order
 does not matter significantly. Similar to predicate pushdown, Tenzir operators
-support "ordering pushdown" to signal to upstream operators that the event
-order only matters intra-schema but not inter-schema. In this case we
-transparently demultiplex a heterogeneous stream into *N* homogeneous streams,
-each of which yields batches of up to 65k events. The `import` operator is an
-example of such an operator, and it pushes its ordering upstream so that we can
-efficiently parse, say, a diverse stream of NDJSON records, such as Suricata's
-EVE JSON or Zeek's streaming JSON.
+support "ordering pushdown" to signal to upstream operators that the event order
+only matters intra-schema but not inter-schema. In this case we transparently
+demultiplex a heterogeneous stream into *N* homogeneous streams, each of which
+yields batches of up to 65k events. The [`import`](operators/sinks/import.md)
+operator is an example of such an operator, and it pushes its ordering upstream
+so that we can efficiently parse, say, a diverse stream of NDJSON records, such
+as Suricata's EVE JSON or Zeek's streaming JSON.
 
 You could call multi-schema dataflows *multiplexed* and there exist dedicated
 operators to demultiplex a stream. As of now, this is hard-coded per operator.
@@ -176,7 +178,6 @@ types of network connections: *implicit* and *explicit* ones:
 An implicit network connection exists, for example, when you use the `tenzir`
 binary on the command line to run a pipeline that ends in
 [`import`](operators/sinks/import.md):
-pipeline illustrates the concept:
 
 ```bash
 tenzir 'load gcs bkt/eve.json
@@ -216,5 +217,5 @@ microservice that you can access with a HTTP client from the other side:
 ![Serve Operator](operators/sinks/serve.excalidraw.svg)
 
 Because you have full control over the location where you run the pipeline, you
-can push it all the way to the "last mile". This helps especially when there
+can push it all the way to the "last mile." This helps especially when there
 are compliance and data residency concerns that must be properly addressed.
