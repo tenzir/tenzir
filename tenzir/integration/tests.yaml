@@ -815,6 +815,10 @@ tests:
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_no_empty_and_unset_fields.log
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
+        input: data/zeek/broken_no_closing_tag.log
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
+        input: data/zeek/broken_no_data_after_open.log
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_unequal_fields_types_length.log
         expected_result: error
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
@@ -823,11 +827,6 @@ tests:
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_data_after_close_tag.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
-        input: data/zeek/broken_no_closing_tag.log
-        expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
-        input: data/zeek/broken_no_data_after_open.log
 
   Zeek TSV with Remote Import:
     fixture: ServerTester
