@@ -51,8 +51,11 @@ struct json_printer_options {
   /// Print numeric rather than human-readable durations.
   bool numeric_durations = false;
 
+  /// Emit null fields when printing.
+  bool emit_null_fields = false;
+
   /// Omit null values when printing.
-  bool omit_nulls = false;
+  bool omit_null_items = false;
 
   /// Omit empty records when printing.
   bool omit_empty_records = false;

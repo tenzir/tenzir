@@ -427,8 +427,7 @@ TEST(json printer - list of structs) {
       "baz": 2
     },
     {
-      "bar": 3,
-      "baz": null
+      "bar": 3
     }
   ]
 }
@@ -465,7 +464,7 @@ TEST(json printer - suricata netflow) {
     co_yield suricata_netflow_log.front();
     co_return;
   };
-  auto current_printer = make_printer("", slice_type);
+  auto current_printer = make_printer("--emit-null-fields", slice_type);
   auto str = std::string{
     R"({
   "timestamp": "2011-08-14T05:38:55.549713",

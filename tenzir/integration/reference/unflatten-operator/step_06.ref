@@ -9,14 +9,11 @@
   },
   "proto": "udp",
   "trans_id": 33080,
-  "rtt": null,
   "query": "WORKGROUP",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
@@ -24,8 +21,7 @@
   "Z": 1,
   "answers": [],
   "TTLs": [],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:49:58.281722",
@@ -38,14 +34,6 @@
   },
   "proto": "udp",
   "trans_id": 33074,
-  "rtt": null,
-  "query": null,
-  "qclass": null,
-  "qclass_name": null,
-  "qtype": null,
-  "qtype_name": null,
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": false,
@@ -53,8 +41,7 @@
   "Z": 0,
   "answers": [],
   "TTLs": [],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:55:30.376261",
@@ -67,7 +54,6 @@
   },
   "proto": "udp",
   "trans_id": 3561,
-  "rtt": null,
   "query": "sn21.mailshell.net",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
@@ -100,8 +86,7 @@
     "10.0s",
     "10.0s"
   ],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:55:30.390075",
@@ -114,12 +99,6 @@
   },
   "proto": "udp",
   "trans_id": 3561,
-  "rtt": null,
-  "query": null,
-  "qclass": null,
-  "qclass_name": null,
-  "qtype": null,
-  "qtype_name": null,
   "rcode": 0,
   "rcode_name": "NOERROR",
   "AA": false,
@@ -147,8 +126,7 @@
     "10.0s",
     "10.0s"
   ],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:56:05.171664",
@@ -161,7 +139,6 @@
   },
   "proto": "udp",
   "trans_id": 9067,
-  "rtt": null,
   "query": "sn21.mailshell.net",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
@@ -194,8 +171,7 @@
     "10.0s",
     "10.0s"
   ],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:56:05.182689",
@@ -208,12 +184,6 @@
   },
   "proto": "udp",
   "trans_id": 9067,
-  "rtt": null,
-  "query": null,
-  "qclass": null,
-  "qclass_name": null,
-  "qtype": null,
-  "qtype_name": null,
   "rcode": 0,
   "rcode_name": "NOERROR",
   "AA": false,
@@ -241,8 +211,7 @@
     "10.0s",
     "10.0s"
   ],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:56:06.107575",
@@ -255,14 +224,11 @@
   },
   "proto": "udp",
   "trans_id": 33074,
-  "rtt": null,
   "query": "DOMEX",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
@@ -270,8 +236,7 @@
   "Z": 1,
   "answers": [],
   "TTLs": [],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:56:06.131567",
@@ -284,14 +249,11 @@
   },
   "proto": "udp",
   "trans_id": 33077,
-  "rtt": null,
   "query": "WORKGROUP",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
@@ -299,8 +261,7 @@
   "Z": 1,
   "answers": [],
   "TTLs": [],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:56:08.380397",
@@ -313,14 +274,11 @@
   },
   "proto": "udp",
   "trans_id": 33080,
-  "rtt": null,
   "query": "WORKGROUP",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
@@ -328,8 +286,7 @@
   "Z": 1,
   "answers": [],
   "TTLs": [],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-19T07:56:06.107651",
@@ -342,14 +299,6 @@
   },
   "proto": "udp",
   "trans_id": 33074,
-  "rtt": null,
-  "query": null,
-  "qclass": null,
-  "qclass_name": null,
-  "qtype": null,
-  "qtype_name": null,
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": false,
@@ -357,6 +306,5 @@
   "Z": 0,
   "answers": [],
   "TTLs": [],
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }

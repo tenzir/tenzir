@@ -1,50 +1,38 @@
 {
-  "_path": "weird.123.190",
-  "x": null
+  "_path": "weird.123.190"
 }
 {
-  "_path": "software",
-  "x": null
+  "_path": "software"
 }
 {
-  "_path": "dhcp",
-  "x": null
+  "_path": "dhcp"
 }
 {
-  "_path": "corelight_metrics_cpu",
-  "x": null
+  "_path": "corelight_metrics_cpu"
 }
 {
-  "_path": "corelight_metrics_memory",
-  "x": null
+  "_path": "corelight_metrics_memory"
 }
 {
-  "_path": "files",
-  "x": null
+  "_path": "files"
 }
 {
-  "_path": "pe",
-  "x": null
+  "_path": "pe"
 }
 {
-  "_path": "corelight_metrics_system",
-  "x": null
+  "_path": "corelight_metrics_system"
 }
 {
-  "_path": "reporter",
-  "x": null
+  "_path": "reporter"
 }
 {
-  "_path": "corelight_metrics_bro",
-  "x": null
+  "_path": "corelight_metrics_bro"
 }
 {
-  "_path": "corelight_metrics_iface",
-  "x": null
+  "_path": "corelight_metrics_iface"
 }
 {
-  "_path": "corelight_metrics_disk",
-  "x": null
+  "_path": "corelight_metrics_disk"
 }
 {
   "_path": "sip",
@@ -132,7 +120,6 @@
   ]
 }
 {
-  "_path": null,
   "x": [
     "193.10.255.99"
   ]

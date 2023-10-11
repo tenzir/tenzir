@@ -1,3 +1,3 @@
-write "json", printer_args(null, null, null, null, null, null, null) | save "file", saver_args(located("xyz.json", location(8, 16)), null, null, null)
+write "json", printer_args(null, null, null, null, null, null, null, null) | save "file", saver_args(located("xyz.json", location(8, 16)), null, null, null)
 -----
-located("<pipeline>", [[["write", "json", printer_args(null, null, null, null, null, null, null)]], [["save", "file", saver_args(located("xyz.json", location(8, 16)), null, null, null)]]], location(0, 16))
+located("<pipeline>", [[["write", "json", printer_args(null, null, null, null, null, null, null, null)]], [["save", "file", saver_args(located("xyz.json", location(8, 16)), null, null, null)]]], location(0, 16))

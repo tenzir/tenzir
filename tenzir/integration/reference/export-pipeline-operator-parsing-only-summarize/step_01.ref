@@ -227,4 +227,4 @@
 {"SourceIp": "92.63.194.74", "distinct(SourcePort)": [14661, 18405, 19416, 22381, 30552, 37272]}
 {"SourceIp": "92.63.194.75", "distinct(SourcePort)": [17719, 20356, 25077, 27615, 55144, 55636]}
 {"SourceIp": "95.111.225.183", "distinct(SourcePort)": [51332, 57523]}
-{"SourceIp": null, "distinct(SourcePort)": []}
+{"distinct(SourcePort)": []}

@@ -1,6 +1,5 @@
 {
-  "id.orig_h": "193.10.255.99",
-  "x": null
+  "id.orig_h": "193.10.255.99"
 }
 {
   "id.orig_h": "213.32.39.37",
@@ -130,7 +129,6 @@
   ]
 }
 {
-  "id.orig_h": null,
   "x": [
     "corelight_metrics_bro",
     "corelight_metrics_cpu",

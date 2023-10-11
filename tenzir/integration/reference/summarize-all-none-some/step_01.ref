@@ -1,7 +1,4 @@
-{
-  "z": null,
-  "x": null
-}
+{}
 warning: group-by column `z` does not exist for schema `tenzir.json`
 warning: aggregation column `y` does not exist for schema `tenzir.json`
 warning: group-by column `z` does not exist for schema `zeek._0_0_2`

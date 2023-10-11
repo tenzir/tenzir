@@ -393,7 +393,7 @@ void check_to_json(Printer& p, const T& value, const char* expected) {
 TEST(JSON - omit nulls) {
   auto p = json_printer{json_printer_options{
     .oneline = true,
-    .omit_nulls = true,
+    .omit_null_items = true,
   }};
   check_to_json(p,
                 tenzir::record{{"a", 42u}, {"b", caf::none}, {"c", caf::none}},
@@ -414,7 +414,7 @@ TEST(JSON - omit nulls) {
 TEST(JSON - omit empty records) {
   auto p = json_printer{json_printer_options{
     .oneline = true,
-    .omit_nulls = true,
+    .omit_null_items = true,
     .omit_empty_records = true,
   }};
   check_to_json(p,
@@ -437,6 +437,7 @@ TEST(JSON - omit empty lists) {
   {
     auto p = json_printer{json_printer_options{
       .oneline = true,
+      .emit_null_fields = true,
       .omit_empty_records = true,
       .omit_empty_lists = true,
     }};
@@ -463,7 +464,8 @@ TEST(JSON - omit empty lists) {
   {
     auto p = json_printer{json_printer_options{
       .oneline = true,
-      .omit_nulls = true,
+      .emit_null_fields = false,
+      .omit_null_items = true,
       .omit_empty_records = true,
       .omit_empty_lists = true,
     }};
@@ -492,7 +494,7 @@ TEST(JSON - omit empty lists) {
 TEST(JSON - remove trailing zeroes) {
   auto p = json_printer{json_printer_options{
     .oneline = true,
-    .omit_nulls = true,
+    .omit_null_items = true,
   }};
   check_to_json(p, 5.0, "5.0");
   check_to_json(p, 5.10, "5.1");

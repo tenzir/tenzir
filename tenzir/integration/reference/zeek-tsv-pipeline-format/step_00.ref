@@ -8,22 +8,17 @@
     "resp_p": 67
   },
   "proto": "udp",
-  "service": null,
   "duration": "163.82ms",
   "orig_bytes": 301,
   "resp_bytes": 300,
   "conn_state": "SF",
-  "local_orig": null,
-  "local_resp": null,
   "missed_bytes": 0,
   "history": "Dd",
   "orig_pkts": 1,
   "orig_ip_bytes": 329,
   "resp_pkts": 1,
   "resp_ip_bytes": 328,
-  "tunnel_parents": [],
-  "community_id": null,
-  "_write_ts": null
+  "tunnel_parents": []
 }
 {
   "ts": "2009-11-18T08:08:00.237253",
@@ -40,17 +35,13 @@
   "orig_bytes": 350,
   "resp_bytes": 0,
   "conn_state": "S0",
-  "local_orig": null,
-  "local_resp": null,
   "missed_bytes": 0,
   "history": "D",
   "orig_pkts": 7,
   "orig_ip_bytes": 546,
   "resp_pkts": 0,
   "resp_ip_bytes": 0,
-  "tunnel_parents": [],
-  "community_id": null,
-  "_write_ts": null
+  "tunnel_parents": []
 }
 {
   "ts": "2009-11-18T08:08:13.816224",
@@ -67,17 +58,13 @@
   "orig_bytes": 350,
   "resp_bytes": 0,
   "conn_state": "S0",
-  "local_orig": null,
-  "local_resp": null,
   "missed_bytes": 0,
   "history": "D",
   "orig_pkts": 7,
   "orig_ip_bytes": 546,
   "resp_pkts": 0,
   "resp_ip_bytes": 0,
-  "tunnel_parents": [],
-  "community_id": null,
-  "_write_ts": null
+  "tunnel_parents": []
 }
 {
   "ts": "2009-11-18T08:07:15.800932",
@@ -89,22 +76,17 @@
     "resp_p": 138
   },
   "proto": "udp",
-  "service": null,
   "duration": "46.73s",
   "orig_bytes": 560,
   "resp_bytes": 0,
   "conn_state": "S0",
-  "local_orig": null,
-  "local_resp": null,
   "missed_bytes": 0,
   "history": "D",
   "orig_pkts": 3,
   "orig_ip_bytes": 644,
   "resp_pkts": 0,
   "resp_ip_bytes": 0,
-  "tunnel_parents": [],
-  "community_id": null,
-  "_write_ts": null
+  "tunnel_parents": []
 }
 {
   "ts": "2009-11-18T08:08:02.526316",
@@ -117,23 +99,17 @@
   },
   "proto": "udp",
   "trans_id": 33003,
-  "rtt": null,
   "query": "WORKGROUP",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
   "RA": false,
   "Z": 1,
-  "answers": null,
-  "TTLs": null,
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-18T08:08:00.237253",
@@ -146,23 +122,17 @@
   },
   "proto": "udp",
   "trans_id": 32997,
-  "rtt": null,
   "query": "DOMEX",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
   "RA": false,
   "Z": 1,
-  "answers": null,
-  "TTLs": null,
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-18T08:08:00.268999",
@@ -175,23 +145,17 @@
   },
   "proto": "udp",
   "trans_id": 33000,
-  "rtt": null,
   "query": "WORKGROUP",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
   "RA": false,
   "Z": 1,
-  "answers": null,
-  "TTLs": null,
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-18T08:08:13.816224",
@@ -204,23 +168,17 @@
   },
   "proto": "udp",
   "trans_id": 33002,
-  "rtt": null,
   "query": "DOMEX",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
   "RA": false,
   "Z": 1,
-  "answers": null,
-  "TTLs": null,
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }
 {
   "ts": "2009-11-18T08:08:13.825465",
@@ -233,21 +191,15 @@
   },
   "proto": "udp",
   "trans_id": 33005,
-  "rtt": null,
   "query": "WORKGROUP",
   "qclass": 1,
   "qclass_name": "C_INTERNET",
   "qtype": 32,
   "qtype_name": "NB",
-  "rcode": null,
-  "rcode_name": null,
   "AA": false,
   "TC": false,
   "RD": true,
   "RA": false,
   "Z": 1,
-  "answers": null,
-  "TTLs": null,
-  "rejected": false,
-  "_write_ts": null
+  "rejected": false
 }

@@ -948,8 +948,9 @@ struct printer_args {
   std::optional<location> compact_output;
   std::optional<location> color_output;
   std::optional<location> monochrome_output;
+  std::optional<location> emit_null_fields;
   std::optional<location> omit_empty;
-  std::optional<location> omit_nulls;
+  std::optional<location> omit_null_items;
   std::optional<location> omit_empty_objects;
   std::optional<location> omit_empty_lists;
 
@@ -960,8 +961,9 @@ struct printer_args {
       .fields(f.field("compact_output", x.compact_output),
               f.field("color_output", x.color_output),
               f.field("monochrome_output", x.monochrome_output),
+              f.field("emit_null_fields", x.emit_null_fields),
               f.field("omit_empty", x.omit_empty),
-              f.field("omit_nulls", x.omit_nulls),
+              f.field("omit_null_items", x.omit_null_items),
               f.field("omit_empty_objects", x.omit_empty_objects),
               f.field("omit_empty_lists", x.omit_empty_lists));
   }
@@ -986,14 +988,15 @@ public:
       style = no_style();
     else if (args_.color_output)
       style = jq_style();
-    const auto omit_nulls
-      = args_.omit_nulls.has_value() or args_.omit_empty.has_value();
+    const auto emit_null_fields = args_.emit_null_fields.has_value();
+    const auto omit_null_items
+      = args_.omit_null_items.has_value() or args_.omit_empty.has_value();
     const auto omit_empty_objects
       = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
     const auto omit_empty_lists
       = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
     return printer_instance::make(
-      [compact, style, omit_nulls, omit_empty_objects,
+      [compact, style, emit_null_fields, omit_null_items, omit_empty_objects,
        omit_empty_lists](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
@@ -1002,7 +1005,8 @@ public:
         auto printer = tenzir::json_printer{{
           .style = style,
           .oneline = compact,
-          .omit_nulls = omit_nulls,
+          .emit_null_fields = emit_null_fields,
+          .omit_null_items = omit_null_items,
           .omit_empty_records = omit_empty_objects,
           .omit_empty_lists = omit_empty_lists,
         }};
@@ -1085,8 +1089,9 @@ public:
     parser.add("-c,--compact-output", args.compact_output);
     parser.add("-C,--color-output", args.color_output);
     parser.add("-M,--monochrome-output", args.color_output);
+    parser.add("--emit-null-fields", args.emit_null_fields);
     parser.add("--omit-empty", args.omit_empty);
-    parser.add("--omit-nulls", args.omit_nulls);
+    parser.add("--omit-null-items", args.omit_null_items);
     parser.add("--omit-empty-objects", args.omit_empty_objects);
     parser.add("--omit-empty-lists", args.omit_empty_lists);
     parser.parse(p);

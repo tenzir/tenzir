@@ -15,7 +15,8 @@ Printer:
 
 ```
 json [-c|--compact-output] [-C|--color-output] [-M|--monochrome-output]
-     [--omit-nulls] [--omit-empty-objects] [--omit-empty-lists] [--omit-empty]
+     [--emit-null-fields] [--omit-empty] [--omit-null-items]
+     [--omit-empty-objects] [--omit-empty-lists]
 ```
 
 ## Description
@@ -129,9 +130,10 @@ This is currently the default. In the future, we will perform TTY detection and
 colorize the output when write to stdout. Use this option today if you want to
 avoid an implicit upgrade to colors in the future.
 
-### `--omit-nulls` (Printer)
+### `--emit-null-fields` (Printer)
 
-Strips `null` fields from the output.
+By default, fields with `null` values are always omitted. When this option is
+specified, such fields are printed instead.
 
 Example:
 
@@ -146,13 +148,40 @@ Example:
 }
 ```
 
-With `--omit-nulls`, this example becomes:
+When `--emit-null-fields` is specified, the input is returned unchanged. Without
+this option, and thus by default, the result would instead be:
+
+```json
+{
+  "b": [42, null, 43],
+  "c": {
+    "e": 42
+  }
+}
+```
+
+### `--omit-null-items` (Printer)
+
+Strips all `null` items from lists.
+
+Example:
+
+```json
+{
+  "b": [42, null, 43],
+  "c": {
+    "d": [[null]]
+  }
+}
+```
+
+With `--omit-null-items`, this example becomes:
 
 ```json
 {
   "b": [42, 43],
   "c": {
-    "e": 42
+    "d": [[]]
   }
 }
 ```
@@ -165,7 +194,7 @@ Example:
 
 ```json
 {
-  "w": null,
+  "w": 42,
   "x": {},
   "y": {
     "z": {}
@@ -173,11 +202,11 @@ Example:
 }
 ```
 
-With `--omit-empty-objects`, this example becomes:
+With `--omit-empty-objects` and `--emit-null-fields`, this example becomes:
 
 ```json
 {
-  "w": 42,
+  "w": 42
 }
 ```
 

@@ -1102,7 +1102,7 @@ writer::writer(std::unique_ptr<std::ostream> out, const caf::settings& options)
       .flattened = get_or(options, "tenzir.export.json.flatten", false),
       .numeric_durations
       = get_or(options, "tenzir.export.json.numeric-durations", false),
-      .omit_nulls
+      .omit_null_items
       = get_or(options, "tenzir.export.json.omit-nulls",
                get_or(options, "tenzir.export.json.omit-empty", false)),
       .omit_empty_records

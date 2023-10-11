@@ -1,138 +1,102 @@
 {
-  "_path": "sip",
-  "x": null
+  "_path": "sip"
 }
 {
-  "_path": "ssl",
-  "x": null
+  "_path": "ssl"
 }
 {
-  "_path": "tunnel",
-  "x": null
+  "_path": "tunnel"
 }
 {
-  "_path": "weird.123.190",
-  "x": null
+  "_path": "weird.123.190"
 }
 {
-  "_path": "notice",
-  "x": null
+  "_path": "notice"
 }
 {
-  "_path": "software",
-  "x": null
+  "_path": "software"
 }
 {
-  "_path": "dhcp",
-  "x": null
+  "_path": "dhcp"
 }
 {
-  "_path": "corelight_metrics_cpu",
-  "x": null
+  "_path": "corelight_metrics_cpu"
 }
 {
-  "_path": "smtp",
-  "x": null
+  "_path": "smtp"
 }
 {
-  "_path": "conn",
-  "x": null
+  "_path": "conn"
 }
 {
-  "_path": "rdp",
-  "x": null
+  "_path": "rdp"
 }
 {
-  "_path": "_0_0_2",
-  "x": null
+  "_path": "_0_0_2"
 }
 {
-  "_path": "syslog",
-  "x": null
+  "_path": "syslog"
 }
 {
-  "_path": "corelight_metrics_memory",
-  "x": null
+  "_path": "corelight_metrics_memory"
 }
 {
-  "_path": "files",
-  "x": null
+  "_path": "files"
 }
 {
-  "_path": "weird",
-  "x": null
+  "_path": "weird"
 }
 {
-  "_path": "dnp3",
-  "x": null
+  "_path": "dnp3"
 }
 {
-  "_path": "modbus",
-  "x": null
+  "_path": "modbus"
 }
 {
-  "_path": "irc",
-  "x": null
+  "_path": "irc"
 }
 {
-  "_path": "pe",
-  "x": null
+  "_path": "pe"
 }
 {
-  "_path": "conn_long",
-  "x": null
+  "_path": "conn_long"
+}
+{}
+{
+  "_path": "corelight_metrics_system"
 }
 {
-  "_path": null,
-  "x": null
+  "_path": "reporter"
 }
 {
-  "_path": "corelight_metrics_system",
-  "x": null
+  "_path": "ftp"
 }
 {
-  "_path": "reporter",
-  "x": null
+  "_path": "kerberos"
 }
 {
-  "_path": "ftp",
-  "x": null
+  "_path": "radius"
 }
 {
-  "_path": "kerberos",
-  "x": null
+  "_path": "dpd"
 }
 {
-  "_path": "radius",
-  "x": null
+  "_path": "corelight_metrics_bro"
 }
 {
-  "_path": "dpd",
-  "x": null
+  "_path": "dns"
 }
 {
-  "_path": "corelight_metrics_bro",
-  "x": null
+  "_path": "snmp"
 }
 {
-  "_path": "dns",
-  "x": null
+  "_path": "http"
 }
 {
-  "_path": "snmp",
-  "x": null
+  "_path": "corelight_metrics_iface"
 }
 {
-  "_path": "http",
-  "x": null
-}
-{
-  "_path": "corelight_metrics_iface",
-  "x": null
-}
-{
-  "_path": "corelight_metrics_disk",
-  "x": null
+  "_path": "corelight_metrics_disk"
 }
 warning: group-by column `_path` does not exist for schema `tenzir.json`
 warning: aggregation column `y` does not exist for schema `tenzir.json`

@@ -16,6 +16,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/view.hpp"
 
+#include <caf/sum_type.hpp>
 #include <fmt/format.h>
 
 #include <optional>
@@ -115,7 +116,7 @@ struct json_printer : printer_base<json_printer> {
       bool printed_once = false;
       out_ = fmt::format_to(out_, options_.style.array, "[");
       for (const auto& element : x) {
-        if (should_skip(element))
+        if (should_skip(element, false))
           continue;
         if (!printed_once) {
           indent();
@@ -140,7 +141,7 @@ struct json_printer : printer_base<json_printer> {
       bool printed_once = false;
       out_ = fmt::format_to(out_, options_.style.array, "[");
       for (const auto& element : x) {
-        if (should_skip(element.second))
+        if (should_skip(element.second, false))
           continue;
         if (!printed_once) {
           indent();
@@ -179,7 +180,7 @@ struct json_printer : printer_base<json_printer> {
       if (!options_.flattened || prefix.empty())
         out_ = fmt::format_to(out_, options_.style.object, "{{");
       for (const auto& element : x) {
-        if (should_skip(element.second))
+        if (should_skip(element.second, true))
           continue;
         if (!printed_once) {
           if (!options_.flattened) {
@@ -226,15 +227,16 @@ struct json_printer : printer_base<json_printer> {
     }
 
   private:
-    auto should_skip(view<data> x) noexcept -> bool {
-      if (options_.omit_nulls && caf::holds_alternative<caf::none_t>(x)) {
-        return true;
+    auto should_skip(view<data> x, bool is_field) noexcept -> bool {
+      if (caf::holds_alternative<caf::none_t>(x)) {
+        auto omit_null_fields = not options_.emit_null_fields;
+        return is_field ? omit_null_fields : options_.omit_null_items;
       }
       if (options_.omit_empty_lists && caf::holds_alternative<view<list>>(x)) {
         const auto& ys = caf::get<view<list>>(x);
         return std::all_of(ys.begin(), ys.end(),
                            [this](const view<data>& y) noexcept {
-                             return should_skip(y);
+                             return should_skip(y, false);
                            });
       }
       if (options_.omit_empty_maps && caf::holds_alternative<view<map>>(x)) {
@@ -242,7 +244,7 @@ struct json_printer : printer_base<json_printer> {
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<map>::view_type::value_type& y) noexcept {
-            return should_skip(y.second);
+            return should_skip(y.second, false);
           });
       }
       if (options_.omit_empty_records
@@ -251,7 +253,7 @@ struct json_printer : printer_base<json_printer> {
         return std::all_of(
           ys.begin(), ys.end(),
           [this](const view<record>::view_type::value_type& y) noexcept {
-            return should_skip(y.second);
+            return should_skip(y.second, false);
           });
       }
       return false;

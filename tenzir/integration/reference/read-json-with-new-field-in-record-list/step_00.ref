@@ -1,8 +1,7 @@
 {
   "list_rec": [
     {
-      "bool": true,
-      "new_field": null
+      "bool": true
     }
   ]
 }

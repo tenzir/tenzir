@@ -1,7 +1,6 @@
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -107,8 +106,7 @@
               "tcp.connection.syn": "",
               "_ws.expert.message": "Connection establish request (SYN): server port 22",
               "_ws.expert.severity": "2097152",
-              "_ws.expert.group": "33554432",
-              "tcp.connection.synack": null
+              "_ws.expert.group": "33554432"
             }
           },
           "tcp.flags.fin": "0",
@@ -158,19 +156,14 @@
         "Timestamps": {
           "tcp.time_relative": "0.000000000",
           "tcp.time_delta": "0.000000000"
-        },
-        "tcp.analysis": null,
-        "tcp.window_size_scalefactor": null,
-        "tcp.payload": null
-      },
-      "ssh": null
+        }
+      }
     }
   }
 }
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -273,7 +266,6 @@
           "tcp.flags.syn": "1",
           "tcp.flags.syn_tree": {
             "_ws.expert": {
-              "tcp.connection.syn": null,
               "_ws.expert.message": "Connection establish acknowledge (SYN+ACK): server port 22",
               "_ws.expert.severity": "2097152",
               "_ws.expert.group": "33554432",
@@ -318,9 +310,7 @@
           "tcp.options.sack_perm_tree": {
             "tcp.option_kind": "4",
             "tcp.option_len": "2"
-          },
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.024369000",
@@ -328,22 +318,15 @@
         },
         "tcp.analysis": {
           "tcp.analysis.acks_frame": "1",
-          "tcp.analysis.ack_rtt": "0.024369000",
-          "tcp.analysis.initial_rtt": null,
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null
-        },
-        "tcp.window_size_scalefactor": null,
-        "tcp.payload": null
-      },
-      "ssh": null
+          "tcp.analysis.ack_rtt": "0.024369000"
+        }
+      }
     }
   }
 }
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -444,7 +427,6 @@
           "tcp.flags.push": "0",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
@@ -455,25 +437,17 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:b9:9e:5c:3f:02:c9:82:4a",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:b9:9e:5c:3f:02:c9:82:4a",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163263",
             "tcp.options.timestamp.tsecr": "46760522"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.024443000",
@@ -482,21 +456,16 @@
         "tcp.analysis": {
           "tcp.analysis.acks_frame": "2",
           "tcp.analysis.ack_rtt": "0.000074000",
-          "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null
+          "tcp.analysis.initial_rtt": "0.024443000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
   }
 }
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -597,7 +566,6 @@
           "tcp.flags.push": "1",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
@@ -608,33 +576,23 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:b9:9e:5c:3f:02:c9:82:4a",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:b9:9e:5c:3f:02:c9:82:4a",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163263",
             "tcp.options.timestamp.tsecr": "46760522"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.025048000",
           "tcp.time_delta": "0.000605000"
         },
         "tcp.analysis": {
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null,
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "21",
           "tcp.analysis.push_bytes_sent": "21"
@@ -644,9 +602,7 @@
       },
       "ssh": {
         "ssh.protocol": "SSH-2.0-OpenSSH_7.7",
-        "ssh.direction": "0",
-        "SSH Version 2": null,
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null
+        "ssh.direction": "0"
       }
     }
   }
@@ -654,7 +610,6 @@
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -755,7 +710,6 @@
           "tcp.flags.push": "0",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
@@ -766,25 +720,17 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:02:c9:82:63:b9:9e:5c:3f",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:02:c9:82:63:b9:9e:5c:3f",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760547",
             "tcp.options.timestamp.tsecr": "3114163263"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.049585000",
@@ -793,21 +739,16 @@
         "tcp.analysis": {
           "tcp.analysis.acks_frame": "4",
           "tcp.analysis.ack_rtt": "0.024537000",
-          "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null
+          "tcp.analysis.initial_rtt": "0.024443000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
   }
 }
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -908,7 +849,6 @@
           "tcp.flags.push": "1",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
@@ -919,33 +859,23 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:02:c9:82:6e:b9:9e:5c:3f",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:02:c9:82:6e:b9:9e:5c:3f",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760558",
             "tcp.options.timestamp.tsecr": "3114163263"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.059519000",
           "tcp.time_delta": "0.009934000"
         },
         "tcp.analysis": {
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null,
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "21",
           "tcp.analysis.push_bytes_sent": "21"
@@ -955,9 +885,7 @@
       },
       "ssh": {
         "ssh.protocol": "SSH-2.0-OpenSSH_7.7",
-        "ssh.direction": "1",
-        "SSH Version 2": null,
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null
+        "ssh.direction": "1"
       }
     }
   }
@@ -965,7 +893,6 @@
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -1066,7 +993,6 @@
           "tcp.flags.push": "0",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
@@ -1077,25 +1003,17 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:b9:9e:5c:60:02:c9:82:6e",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:b9:9e:5c:60:02:c9:82:6e",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163296",
             "tcp.options.timestamp.tsecr": "46760558"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.059647000",
@@ -1104,21 +1022,16 @@
         "tcp.analysis": {
           "tcp.analysis.acks_frame": "6",
           "tcp.analysis.ack_rtt": "0.000128000",
-          "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null
+          "tcp.analysis.initial_rtt": "0.024443000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
   }
 }
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -1219,7 +1132,6 @@
           "tcp.flags.push": "1",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
@@ -1230,33 +1142,23 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:b9:9e:5c:63:02:c9:82:6e",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:b9:9e:5c:63:02:c9:82:6e",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163299",
             "tcp.options.timestamp.tsecr": "46760558"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.063355000",
           "tcp.time_delta": "0.003708000"
         },
         "tcp.analysis": {
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null,
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "1360",
           "tcp.analysis.push_bytes_sent": "1360"
@@ -1265,7 +1167,6 @@
         "tcp.payload": "00:00:05:4c:05:14:f8:12:c1:f0:5e:2a:89:91:94:13:e7:3c:e7:69:07:aa:00:00:01:30:63:75:72:76:65:32:35:35:31:39:2d:73:68:61:32:35:36:2c:63:75:72:76:65:32:35:35:31:39:2d:73:68:61:32:35:36:40:6c:69:62:73:73:68:2e:6f:72:67:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:33:38:34:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:35:32:31:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:2d:65:78:63:68:61:6e:67:65:2d:73:68:61:32:35:36:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:36:2d:73:68:61:35:31:32:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:38:2d:73:68:61:35:31:32:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:2d:65:78:63:68:61:6e:67:65:2d:73:68:61:31:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:34:2d:73:68:61:32:35:36:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:34:2d:73:68:61:31:2c:65:78:74:2d:69:6e:66:6f:2d:63:00:00:01:22:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:33:38:34:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:35:32:31:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:33:38:34:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:35:32:31:2c:73:73:68:2d:65:64:32:35:35:31:39:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:73:73:68:2d:72:73:61:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:73:73:68:2d:65:64:32:35:35:31:39:2c:72:73:61:2d:73:68:61:32:2d:35:31:32:2c:72:73:61:2d:73:68:61:32:2d:32:35:36:2c:73:73:68:2d:72:73:61:00:00:00:6c:63:68:61:63:68:61:32:30:2d:70:6f:6c:79:31:33:30:35:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:31:32:38:2d:63:74:72:2c:61:65:73:31:39:32:2d:63:74:72:2c:61:65:73:32:35:36:2d:63:74:72:2c:61:65:73:31:32:38:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:32:35:36:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:6c:63:68:61:63:68:61:32:30:2d:70:6f:6c:79:31:33:30:35:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:31:32:38:2d:63:74:72:2c:61:65:73:31:39:32:2d:63:74:72:2c:61:65:73:32:35:36:2d:63:74:72:2c:61:65:73:31:32:38:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:32:35:36:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:d5:75:6d:61:63:2d:36:34:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:31:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:36:34:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2c:68:6d:61:63:2d:73:68:61:31:00:00:00:d5:75:6d:61:63:2d:36:34:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:31:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:36:34:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2c:68:6d:61:63:2d:73:68:61:31:00:00:00:1a:6e:6f:6e:65:2c:7a:6c:69:62:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:7a:6c:69:62:00:00:00:1a:6e:6f:6e:65:2c:7a:6c:69:62:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:7a:6c:69:62:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
       },
       "ssh": {
-        "ssh.protocol": null,
         "ssh.direction": "0",
         "SSH Version 2": {
           "ssh.packet_length": "1356",
@@ -1297,16 +1198,12 @@
               "ssh.first_kex_packet_follows": "0",
               "ssh.kex.reserved": "00:00:00:00",
               "ssh.kex.hassh_algorithms": "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1,ext-info-c;chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com;umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1;none,zlib@openssh.com,zlib",
-              "ssh.kex.hassh": "06046964c022c6407d15a27b12a6a4fb",
-              "ssh.kex.hasshserver_algorithms": null,
-              "ssh.kex.hasshserver": null
+              "ssh.kex.hassh": "06046964c022c6407d15a27b12a6a4fb"
             }
           },
           "ssh.padding_string": "00:00:00:00:00",
-          "ssh.seq_num": "0",
-          "Key Exchange (method:curve25519-sha256)": null
-        },
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null
+          "ssh.seq_num": "0"
+        }
       }
     }
   }
@@ -1314,7 +1211,6 @@
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -1415,7 +1311,6 @@
           "tcp.flags.push": "1",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
@@ -1426,33 +1321,23 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:02:c9:82:87:b9:9e:5c:60",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:02:c9:82:87:b9:9e:5c:60",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760583",
             "tcp.options.timestamp.tsecr": "3114163296"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.085493000",
           "tcp.time_delta": "0.022138000"
         },
         "tcp.analysis": {
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null,
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "1080",
           "tcp.analysis.push_bytes_sent": "1080"
@@ -1461,7 +1346,6 @@
         "tcp.payload": "00:00:04:34:06:14:f0:ed:48:66:05:9a:78:89:01:dd:dc:49:a5:cd:33:d9:00:00:01:02:63:75:72:76:65:32:35:35:31:39:2d:73:68:61:32:35:36:2c:63:75:72:76:65:32:35:35:31:39:2d:73:68:61:32:35:36:40:6c:69:62:73:73:68:2e:6f:72:67:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:33:38:34:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:35:32:31:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:2d:65:78:63:68:61:6e:67:65:2d:73:68:61:32:35:36:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:36:2d:73:68:61:35:31:32:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:38:2d:73:68:61:35:31:32:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:34:2d:73:68:61:32:35:36:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:34:2d:73:68:61:31:00:00:00:41:73:73:68:2d:72:73:61:2c:72:73:61:2d:73:68:61:32:2d:35:31:32:2c:72:73:61:2d:73:68:61:32:2d:32:35:36:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2c:73:73:68:2d:65:64:32:35:35:31:39:00:00:00:6c:63:68:61:63:68:61:32:30:2d:70:6f:6c:79:31:33:30:35:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:31:32:38:2d:63:74:72:2c:61:65:73:31:39:32:2d:63:74:72:2c:61:65:73:32:35:36:2d:63:74:72:2c:61:65:73:31:32:38:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:32:35:36:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:6c:63:68:61:63:68:61:32:30:2d:70:6f:6c:79:31:33:30:35:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:31:32:38:2d:63:74:72:2c:61:65:73:31:39:32:2d:63:74:72:2c:61:65:73:32:35:36:2d:63:74:72:2c:61:65:73:31:32:38:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:32:35:36:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:d5:75:6d:61:63:2d:36:34:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:31:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:36:34:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2c:68:6d:61:63:2d:73:68:61:31:00:00:00:d5:75:6d:61:63:2d:36:34:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:31:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:36:34:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2c:68:6d:61:63:2d:73:68:61:31:00:00:00:15:6e:6f:6e:65:2c:7a:6c:69:62:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:15:6e:6f:6e:65:2c:7a:6c:69:62:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
       },
       "ssh": {
-        "ssh.protocol": null,
         "ssh.direction": "1",
         "SSH Version 2": {
           "ssh.packet_length": "1076",
@@ -1492,17 +1376,13 @@
               "ssh.languages_server_to_client": "",
               "ssh.first_kex_packet_follows": "0",
               "ssh.kex.reserved": "00:00:00:00",
-              "ssh.kex.hassh_algorithms": null,
-              "ssh.kex.hassh": null,
               "ssh.kex.hasshserver_algorithms": "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1;chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com;umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1;none,zlib@openssh.com",
               "ssh.kex.hasshserver": "b12d2871a1189eff20364cf5333619ee"
             }
           },
           "ssh.padding_string": "00:00:00:00:00:00",
-          "ssh.seq_num": "0",
-          "Key Exchange (method:curve25519-sha256)": null
-        },
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null
+          "ssh.seq_num": "0"
+        }
       }
     }
   }
@@ -1510,7 +1390,6 @@
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -1611,7 +1490,6 @@
           "tcp.flags.push": "0",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
@@ -1622,25 +1500,17 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:b9:9e:5c:79:02:c9:82:87",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:b9:9e:5c:79:02:c9:82:87",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163321",
             "tcp.options.timestamp.tsecr": "46760583"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.085560000",
@@ -1649,21 +1519,16 @@
         "tcp.analysis": {
           "tcp.analysis.acks_frame": "9",
           "tcp.analysis.ack_rtt": "0.000067000",
-          "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null
+          "tcp.analysis.initial_rtt": "0.024443000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
   }
 }
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -1764,7 +1629,6 @@
           "tcp.flags.push": "0",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
@@ -1775,25 +1639,17 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:02:c9:82:b5:b9:9e:5c:63",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:02:c9:82:b5:b9:9e:5c:63",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760629",
             "tcp.options.timestamp.tsecr": "3114163299"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.131098000",
@@ -1802,21 +1658,16 @@
         "tcp.analysis": {
           "tcp.analysis.acks_frame": "8",
           "tcp.analysis.ack_rtt": "0.067743000",
-          "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null
+          "tcp.analysis.initial_rtt": "0.024443000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
   }
 }
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -1917,7 +1768,6 @@
           "tcp.flags.push": "1",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
@@ -1928,33 +1778,23 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:b9:9e:5c:a5:02:c9:82:b5",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:b9:9e:5c:a5:02:c9:82:b5",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163365",
             "tcp.options.timestamp.tsecr": "46760629"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.131130000",
           "tcp.time_delta": "0.000032000"
         },
         "tcp.analysis": {
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null,
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "48",
           "tcp.analysis.push_bytes_sent": "48"
@@ -1963,25 +1803,18 @@
         "tcp.payload": "00:00:00:2c:06:1e:00:00:00:20:69:f1:52:95:ed:c0:bc:08:a7:58:4b:85:cf:28:d7:1f:68:63:43:d8:4b:47:9c:0a:4c:4c:a8:8e:02:7c:9c:6a:00:00:00:00:00:00"
       },
       "ssh": {
-        "ssh.protocol": null,
         "ssh.direction": "0",
         "SSH Version 2": {
           "ssh.packet_length": "44",
           "ssh.padding_length": "6",
-          "Key Exchange": null,
           "ssh.padding_string": "00:00:00:00:00:00",
           "ssh.seq_num": "1",
           "Key Exchange (method:curve25519-sha256)": {
             "ssh.message_code": "30",
             "ssh.ecdh.q_c_length": "32",
-            "ssh.ecdh.q_c": "69:f1:52:95:ed:c0:bc:08:a7:58:4b:85:cf:28:d7:1f:68:63:43:d8:4b:47:9c:0a:4c:4c:a8:8e:02:7c:9c:6a",
-            "KEX host key (type: ecdsa-sha2-nistp256)": null,
-            "ssh.ecdh.q_s_length": null,
-            "ssh.ecdh.q_s": null,
-            "KEX host signature (type: ecdsa-sha2-nistp256)": null
+            "ssh.ecdh.q_c": "69:f1:52:95:ed:c0:bc:08:a7:58:4b:85:cf:28:d7:1f:68:63:43:d8:4b:47:9c:0a:4c:4c:a8:8e:02:7c:9c:6a"
           }
-        },
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null
+        }
       }
     }
   }
@@ -1989,7 +1822,6 @@
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -2090,7 +1922,6 @@
           "tcp.flags.push": "0",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
@@ -2101,25 +1932,17 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:02:c9:82:cd:b9:9e:5c:a5",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:02:c9:82:cd:b9:9e:5c:a5",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760653",
             "tcp.options.timestamp.tsecr": "3114163365"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.155234000",
@@ -2128,21 +1951,16 @@
         "tcp.analysis": {
           "tcp.analysis.acks_frame": "12",
           "tcp.analysis.ack_rtt": "0.024104000",
-          "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null
+          "tcp.analysis.initial_rtt": "0.024443000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
   }
 }
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -2243,7 +2061,6 @@
           "tcp.flags.push": "1",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
@@ -2254,33 +2071,23 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:02:c9:82:d9:b9:9e:5c:a5",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:02:c9:82:d9:b9:9e:5c:a5",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760665",
             "tcp.options.timestamp.tsecr": "3114163365"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.168360000",
           "tcp.time_delta": "0.013126000"
         },
         "tcp.analysis": {
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null,
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "452",
           "tcp.analysis.push_bytes_sent": "452"
@@ -2289,18 +2096,14 @@
         "tcp.payload": "00:00:01:04:0a:1f:00:00:00:68:00:00:00:13:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:00:00:00:08:6e:69:73:74:70:32:35:36:00:00:00:41:04:17:bb:98:b3:06:9d:30:e3:07:fe:5b:e4:99:85:9d:6f:fb:e4:12:ff:d1:81:b7:45:45:e0:f3:f9:17:d5:4a:e0:59:b7:65:fb:14:29:72:97:d4:cf:e2:3b:e4:a2:c7:e8:57:3e:29:d7:f0:96:73:9f:5e:f4:5e:78:c1:f8:c5:fc:00:00:00:20:55:7a:6c:0e:3b:84:cb:15:f3:08:3f:94:ef:4d:01:da:d4:27:0b:d8:03:94:fe:1a:9a:16:14:f7:1e:62:00:7c:00:00:00:64:00:00:00:13:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:00:00:00:49:00:00:00:21:00:8e:1a:95:7f:df:d4:66:9b:4c:9b:13:9b:5b:c5:68:45:67:a3:1c:00:7b:00:cd:c7:21:f1:8c:b2:e5:18:51:4e:00:00:00:20:4d:b3:23:f2:92:80:7a:fb:76:74:45:f0:0b:ff:f1:49:0e:14:dc:f5:8a:33:07:d2:ce:c4:b5:5f:c1:a0:6e:19:00:00:00:00:00:00:00:00:00:00:00:00:00:0c:0a:15:00:00:00:00:00:00:00:00:00:00:63:25:1c:d6:95:dd:d0:6e:2c:91:06:db:2a:3d:bc:15:c4:f0:16:c8:6c:11:fe:9a:6e:50:ea:89:96:cd:dd:71:40:c3:68:0a:69:ef:61:3c:b3:1a:6e:6b:df:a2:a8:d7:fe:92:13:b2:b9:99:9d:ff:a8:8a:62:05:a6:1c:ef:8c:c1:cd:09:08:a9:7c:39:dc:0c:6e:f4:b8:61:cd:e4:45:4e:ed:64:84:58:57:31:59:09:88:7d:89:10:07:6a:18:c4:72:28:96:db:13:8f:61:fb:12:c1:a1:a3:99:7d:41:09:29:4b:7b:44:52:d2:96:32:ca:6c:b7:3a:80:cf:b3:77:e3:f1:9b:55:c7:d8:9d:13:bf:6f:02:83:d5:fc:08:b1:37:3f:51:e5:81:8c:7a:1d:3f:c7:b6:9f:84:5b:dd:22:81:3c:96:67:20:cd:46:5d:96:7c:64"
       },
       "ssh": {
-        "ssh.protocol": null,
         "ssh.direction": "1",
         "SSH Version 2": {
           "ssh.packet_length": "260",
           "ssh.padding_length": "10",
-          "Key Exchange": null,
           "ssh.padding_string": "00:00:00:00:00:00:00:00:00:00",
           "ssh.seq_num": "1",
           "Key Exchange (method:curve25519-sha256)": {
             "ssh.message_code": "31",
-            "ssh.ecdh.q_c_length": null,
-            "ssh.ecdh.q_c": null,
             "KEX host key (type: ecdsa-sha2-nistp256)": {
               "ssh.host_key.length": "104",
               "ssh.host_key.type_length": "19",
@@ -2335,7 +2138,6 @@
 {
   "_index": "packets-2018-10-30",
   "_type": "doc",
-  "_score": null,
   "_source": {
     "layers": {
       "frame": {
@@ -2436,7 +2238,6 @@
           "tcp.flags.push": "0",
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
-          "tcp.flags.syn_tree": null,
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
@@ -2447,25 +2248,17 @@
         "tcp.urgent_pointer": "0",
         "tcp.options": "01:01:08:0a:b9:9e:5c:c9:02:c9:82:d9",
         "tcp.options_tree": {
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
           "tcp.options.nop": "01",
           "tcp.options.nop_tree": {
             "tcp.option_kind": "1"
           },
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
           "tcp.options.timestamp": "08:0a:b9:9e:5c:c9:02:c9:82:d9",
           "tcp.options.timestamp_tree": {
             "tcp.option_kind": "8",
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163401",
             "tcp.options.timestamp.tsecr": "46760665"
-          },
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.168431000",
@@ -2474,14 +2267,10 @@
         "tcp.analysis": {
           "tcp.analysis.acks_frame": "14",
           "tcp.analysis.ack_rtt": "0.000071000",
-          "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null
+          "tcp.analysis.initial_rtt": "0.024443000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
   }
 }
@@ -2617,9 +2406,7 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "16",
-          "tcp.analysis.push_bytes_sent": "16",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "16"
         },
         "tcp.window_size_scalefactor": "64",
         "tcp.payload": "00:00:00:0c:0a:15:00:00:00:00:00:00:00:00:00:00"
@@ -2637,8 +2424,7 @@
         "ssh.direction": "0"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -2771,18 +2557,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "16",
           "tcp.analysis.ack_rtt": "0.067692000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -2888,10 +2669,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2048",
         "tcp.window_size": "131072",
@@ -2910,15 +2688,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163472",
             "tcp.options.timestamp.tsecr": "46760739"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.241126000",
@@ -2927,24 +2697,17 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "44",
-          "tcp.analysis.push_bytes_sent": "44",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "44"
         },
         "tcp.window_size_scalefactor": "64",
         "tcp.payload": "30:7d:b4:ee:6b:17:64:2d:aa:eb:d8:18:59:7d:fb:41:f8:de:4f:33:32:a3:90:7c:cf:65:78:d3:99:54:6d:20:5a:c2:cc:08:57:77:ae:c3:b7:3e:2d:f6"
       },
       "ssh": {
         "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": "",
-        "ssh.direction": "0",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": null,
-        "SSH Version 2": null
+        "ssh.direction": "0"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -3050,10 +2813,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "63",
         "tcp.window_size": "32256",
@@ -3072,15 +2832,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760763",
             "tcp.options.timestamp.tsecr": "3114163472"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.265452000",
@@ -3088,18 +2840,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "18",
           "tcp.analysis.ack_rtt": "0.024326000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -3205,10 +2952,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "63",
         "tcp.window_size": "32256",
@@ -3227,15 +2971,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760763",
             "tcp.options.timestamp.tsecr": "3114163472"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.265600000",
@@ -3244,24 +2980,17 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "44",
-          "tcp.analysis.push_bytes_sent": "44",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "44"
         },
         "tcp.window_size_scalefactor": "512",
         "tcp.payload": "39:8f:ee:a9:0e:3a:38:22:69:c6:11:b2:8c:e2:32:38:24:ab:71:36:5e:38:4a:df:2a:c3:45:4a:1d:b7:57:57:70:9d:4f:32:0d:da:a8:4d:08:42:e2:42"
       },
       "ssh": {
         "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": "",
-        "ssh.direction": "1",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": null,
-        "SSH Version 2": null
+        "ssh.direction": "1"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -3367,10 +3096,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2047",
         "tcp.window_size": "131008",
@@ -3389,15 +3115,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163496",
             "tcp.options.timestamp.tsecr": "46760763"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.265651000",
@@ -3405,18 +3123,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "20",
           "tcp.analysis.ack_rtt": "0.000051000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -3522,10 +3235,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2048",
         "tcp.window_size": "131072",
@@ -3544,15 +3254,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163496",
             "tcp.options.timestamp.tsecr": "46760763"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.265686000",
@@ -3561,24 +3263,17 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
           "tcp.analysis.bytes_in_flight": "68",
-          "tcp.analysis.push_bytes_sent": "68",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "68"
         },
         "tcp.window_size_scalefactor": "64",
         "tcp.payload": "de:8c:b0:e7:b1:d7:0f:18:25:be:62:b5:4b:a7:8a:5e:2a:21:0f:d2:14:9f:f2:1c:21:11:c1:34:00:37:a4:40:8b:22:fa:9d:77:53:15:26:45:a9:9a:ae:4c:df:a5:a0:78:37:ea:11:71:94:2c:ad:36:3c:e2:0f:f2:18:7a:49:35:75:04:1d"
       },
       "ssh": {
         "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": "",
-        "ssh.direction": "0",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": null,
-        "SSH Version 2": null
+        "ssh.direction": "0"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -3684,10 +3379,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "63",
         "tcp.window_size": "32256",
@@ -3706,15 +3398,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46760787",
             "tcp.options.timestamp.tsecr": "3114163496"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.289457000",
@@ -3732,15 +3416,10 @@
       },
       "ssh": {
         "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": "",
-        "ssh.direction": "1",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": null,
-        "SSH Version 2": null
+        "ssh.direction": "1"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -3846,10 +3525,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2047",
         "tcp.window_size": "131008",
@@ -3868,15 +3544,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114163519",
             "tcp.options.timestamp.tsecr": "46760787"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.289490000",
@@ -3884,18 +3552,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "23",
           "tcp.analysis.ack_rtt": "0.000033000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -4001,10 +3664,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2048",
         "tcp.window_size": "2048",
@@ -4023,41 +3683,26 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114181479",
             "tcp.options.timestamp.tsecr": "46718747"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.000000000",
           "tcp.time_delta": "0.000000000"
         },
         "tcp.analysis": {
-          "tcp.analysis.initial_rtt": null,
           "tcp.analysis.bytes_in_flight": "52",
-          "tcp.analysis.push_bytes_sent": "52",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "52"
         },
         "tcp.window_size_scalefactor": "-1",
         "tcp.payload": "e6:fa:77:83:7d:ac:b3:6e:7f:16:11:21:03:2f:71:7f:7b:a0:60:20:d0:ec:29:d9:8e:fa:c9:e6:bf:cc:64:f4:1a:e8:cf:25:96:d2:35:d7:29:79:bf:a6:54:c9:39:ff:dc:83:ef:cd"
       },
       "ssh": {
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null,
         "ssh.direction": "0",
         "ssh.packet_length_encrypted": "e6:fa:77:83",
-        "ssh.encrypted_packet": "7d:ac:b3:6e:7f:16:11:21:03:2f:71:7f:7b:a0:60:20:d0:ec:29:d9:8e:fa:c9:e6:bf:cc:64:f4:1a:e8:cf:25:96:d2:35:d7:29:79:bf:a6:54:c9:39:ff:dc:83:ef:cd",
-        "ssh.protocol": null,
-        "SSH Version 2": null
+        "ssh.encrypted_packet": "7d:ac:b3:6e:7f:16:11:21:03:2f:71:7f:7b:a0:60:20:d0:ec:29:d9:8e:fa:c9:e6:bf:cc:64:f4:1a:e8:cf:25:96:d2:35:d7:29:79:bf:a6:54:c9:39:ff:dc:83:ef:cd"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -4163,10 +3808,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "73",
         "tcp.window_size": "73",
@@ -4185,22 +3827,13 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46778847",
             "tcp.options.timestamp.tsecr": "3114181479"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.023953000",
           "tcp.time_delta": "0.023953000"
         },
         "tcp.analysis": {
-          "tcp.analysis.initial_rtt": null,
           "tcp.analysis.bytes_in_flight": "28",
           "tcp.analysis.push_bytes_sent": "28",
           "tcp.analysis.acks_frame": "25",
@@ -4210,16 +3843,12 @@
         "tcp.payload": "23:4e:cc:dd:2b:83:3f:98:3b:a5:83:52:30:f6:0f:3b:96:b3:8b:15:5a:0e:1d:5d:59:1c:03:95"
       },
       "ssh": {
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null,
         "ssh.direction": "1",
         "ssh.packet_length_encrypted": "23:4e:cc:dd",
-        "ssh.encrypted_packet": "2b:83:3f:98:3b:a5:83:52:30:f6:0f:3b:96:b3:8b:15:5a:0e:1d:5d:59:1c:03:95",
-        "ssh.protocol": null,
-        "SSH Version 2": null
+        "ssh.encrypted_packet": "2b:83:3f:98:3b:a5:83:52:30:f6:0f:3b:96:b3:8b:15:5a:0e:1d:5d:59:1c:03:95"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -4325,10 +3954,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2047",
         "tcp.window_size": "2047",
@@ -4347,34 +3973,20 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114181502",
             "tcp.options.timestamp.tsecr": "46778847"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.023979000",
           "tcp.time_delta": "0.000026000"
         },
         "tcp.analysis": {
-          "tcp.analysis.initial_rtt": null,
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "26",
           "tcp.analysis.ack_rtt": "0.000026000"
         },
-        "tcp.window_size_scalefactor": "-1",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "-1"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -4494,11 +4106,9 @@
               "tcp.connection.fin_active": "",
               "_ws.expert.message": "This frame initiates the connection closing",
               "_ws.expert.severity": "4194304",
-              "_ws.expert.group": "33554432",
-              "tcp.connection.fin_passive": null
+              "_ws.expert.group": "33554432"
             }
-          },
-          "tcp.flags.syn_tree": null
+          }
         },
         "tcp.window_size_value": "2048",
         "tcp.window_size": "131072",
@@ -4517,28 +4127,16 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114185714",
             "tcp.options.timestamp.tsecr": "46760787"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "22.577006000",
           "tcp.time_delta": "22.287516000"
         },
-        "tcp.analysis": null,
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -4655,14 +4253,12 @@
           },
           "tcp.flags.str_tree": {
             "_ws.expert": {
-              "tcp.connection.fin_active": null,
               "_ws.expert.message": "This frame undergoes the connection closing",
               "_ws.expert.severity": "4194304",
               "_ws.expert.group": "33554432",
               "tcp.connection.fin_passive": ""
             }
-          },
-          "tcp.flags.syn_tree": null
+          }
         },
         "tcp.window_size_value": "63",
         "tcp.window_size": "32256",
@@ -4681,15 +4277,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46783100",
             "tcp.options.timestamp.tsecr": "3114185714"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "22.601556000",
@@ -4697,18 +4285,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "28",
           "tcp.analysis.ack_rtt": "0.024550000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -4814,10 +4397,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2048",
         "tcp.window_size": "131072",
@@ -4836,15 +4416,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114185738",
             "tcp.options.timestamp.tsecr": "46783100"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "22.601602000",
@@ -4852,18 +4424,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.024443000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "29",
           "tcp.analysis.ack_rtt": "0.000046000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -4970,15 +4537,12 @@
           "tcp.flags.syn": "1",
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑CE¬∑¬∑¬∑¬∑S¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
           "tcp.flags.syn_tree": {
             "_ws.expert": {
               "tcp.connection.syn": "",
               "_ws.expert.message": "Connection establish request (SYN): server port 22",
               "_ws.expert.severity": "2097152",
-              "_ws.expert.group": "33554432",
-              "tcp.connection.synack": null
+              "_ws.expert.group": "33554432"
             }
           }
         },
@@ -5026,15 +4590,10 @@
         "Timestamps": {
           "tcp.time_relative": "0.000000000",
           "tcp.time_delta": "0.000000000"
-        },
-        "tcp.analysis": null,
-        "tcp.window_size_scalefactor": null,
-        "tcp.payload": null
-      },
-      "ssh": null
+        }
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -5141,11 +4700,8 @@
           "tcp.flags.syn": "1",
           "tcp.flags.fin": "0",
           "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑S¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
           "tcp.flags.syn_tree": {
             "_ws.expert": {
-              "tcp.connection.syn": null,
               "_ws.expert.message": "Connection establish acknowledge (SYN+ACK): server port 22",
               "_ws.expert.severity": "2097152",
               "_ws.expert.group": "33554432",
@@ -5188,28 +4744,19 @@
           "tcp.options.sack_perm_tree": {
             "tcp.option_kind": "4",
             "tcp.option_len": "2"
-          },
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.023015000",
           "tcp.time_delta": "0.023015000"
         },
         "tcp.analysis": {
-          "tcp.analysis.initial_rtt": null,
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "31",
           "tcp.analysis.ack_rtt": "0.023015000"
-        },
-        "tcp.window_size_scalefactor": null,
-        "tcp.payload": null
-      },
-      "ssh": null
+        }
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -5315,10 +4862,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2070",
         "tcp.window_size": "132480",
@@ -5337,15 +4881,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114187099",
             "tcp.options.timestamp.tsecr": "46784469"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.023078000",
@@ -5353,18 +4889,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "32",
           "tcp.analysis.ack_rtt": "0.000063000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -5470,10 +5001,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2070",
         "tcp.window_size": "132480",
@@ -5492,15 +5020,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114187099",
             "tcp.options.timestamp.tsecr": "46784469"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.023313000",
@@ -5509,24 +5029,17 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
           "tcp.analysis.bytes_in_flight": "21",
-          "tcp.analysis.push_bytes_sent": "21",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "21"
         },
         "tcp.window_size_scalefactor": "64",
         "tcp.payload": "53:53:48:2d:32:2e:30:2d:4f:70:65:6e:53:53:48:5f:37:2e:37:0d:0a"
       },
       "ssh": {
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null,
         "ssh.direction": "0",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": "SSH-2.0-OpenSSH_7.7",
-        "SSH Version 2": null
+        "ssh.protocol": "SSH-2.0-OpenSSH_7.7"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -5632,10 +5145,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "57",
         "tcp.window_size": "29184",
@@ -5654,15 +5164,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46784527",
             "tcp.options.timestamp.tsecr": "3114187099"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.090358000",
@@ -5670,18 +5172,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "34",
           "tcp.analysis.ack_rtt": "0.067045000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -5787,10 +5284,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "57",
         "tcp.window_size": "29184",
@@ -5809,15 +5303,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46784542",
             "tcp.options.timestamp.tsecr": "3114187099"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.122211000",
@@ -5826,24 +5312,17 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
           "tcp.analysis.bytes_in_flight": "21",
-          "tcp.analysis.push_bytes_sent": "21",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "21"
         },
         "tcp.window_size_scalefactor": "512",
         "tcp.payload": "53:53:48:2d:32:2e:30:2d:4f:70:65:6e:53:53:48:5f:37:2e:37:0d:0a"
       },
       "ssh": {
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null,
         "ssh.direction": "1",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": "SSH-2.0-OpenSSH_7.7",
-        "SSH Version 2": null
+        "ssh.protocol": "SSH-2.0-OpenSSH_7.7"
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -5949,10 +5428,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2069",
         "tcp.window_size": "132416",
@@ -5971,15 +5447,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114187197",
             "tcp.options.timestamp.tsecr": "46784542"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.122272000",
@@ -5987,18 +5455,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "36",
           "tcp.analysis.ack_rtt": "0.000061000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -6104,10 +5567,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2069",
         "tcp.window_size": "132416",
@@ -6126,15 +5586,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114187197",
             "tcp.options.timestamp.tsecr": "46784542"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.122986000",
@@ -6143,19 +5595,13 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
           "tcp.analysis.bytes_in_flight": "1360",
-          "tcp.analysis.push_bytes_sent": "1360",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "1360"
         },
         "tcp.window_size_scalefactor": "64",
         "tcp.payload": "00:00:05:4c:05:14:c0:03:e9:39:00:ce:18:02:2e:59:2b:96:5a:0f:5a:8b:00:00:01:30:63:75:72:76:65:32:35:35:31:39:2d:73:68:61:32:35:36:2c:63:75:72:76:65:32:35:35:31:39:2d:73:68:61:32:35:36:40:6c:69:62:73:73:68:2e:6f:72:67:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:33:38:34:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:35:32:31:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:2d:65:78:63:68:61:6e:67:65:2d:73:68:61:32:35:36:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:36:2d:73:68:61:35:31:32:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:38:2d:73:68:61:35:31:32:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:2d:65:78:63:68:61:6e:67:65:2d:73:68:61:31:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:34:2d:73:68:61:32:35:36:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:34:2d:73:68:61:31:2c:65:78:74:2d:69:6e:66:6f:2d:63:00:00:01:22:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:33:38:34:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:35:32:31:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:33:38:34:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:35:32:31:2c:73:73:68:2d:65:64:32:35:35:31:39:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:73:73:68:2d:72:73:61:2d:63:65:72:74:2d:76:30:31:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:73:73:68:2d:65:64:32:35:35:31:39:2c:72:73:61:2d:73:68:61:32:2d:35:31:32:2c:72:73:61:2d:73:68:61:32:2d:32:35:36:2c:73:73:68:2d:72:73:61:00:00:00:6c:63:68:61:63:68:61:32:30:2d:70:6f:6c:79:31:33:30:35:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:31:32:38:2d:63:74:72:2c:61:65:73:31:39:32:2d:63:74:72:2c:61:65:73:32:35:36:2d:63:74:72:2c:61:65:73:31:32:38:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:32:35:36:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:6c:63:68:61:63:68:61:32:30:2d:70:6f:6c:79:31:33:30:35:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:31:32:38:2d:63:74:72:2c:61:65:73:31:39:32:2d:63:74:72:2c:61:65:73:32:35:36:2d:63:74:72:2c:61:65:73:31:32:38:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:32:35:36:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:d5:75:6d:61:63:2d:36:34:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:31:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:36:34:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2c:68:6d:61:63:2d:73:68:61:31:00:00:00:d5:75:6d:61:63:2d:36:34:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:31:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:36:34:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2c:68:6d:61:63:2d:73:68:61:31:00:00:00:1a:6e:6f:6e:65:2c:7a:6c:69:62:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:7a:6c:69:62:00:00:00:1a:6e:6f:6e:65:2c:7a:6c:69:62:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:7a:6c:69:62:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
       },
       "ssh": {
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null,
         "ssh.direction": "0",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": null,
         "SSH Version 2": {
           "ssh.packet_length": "1356",
           "ssh.padding_length": "5",
@@ -6186,19 +5632,15 @@
               "ssh.first_kex_packet_follows": "0",
               "ssh.kex.reserved": "00:00:00:00",
               "ssh.kex.hassh_algorithms": "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1,ext-info-c;chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com;umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1;none,zlib@openssh.com,zlib",
-              "ssh.kex.hassh": "06046964c022c6407d15a27b12a6a4fb",
-              "ssh.kex.hasshserver_algorithms": null,
-              "ssh.kex.hasshserver": null
+              "ssh.kex.hassh": "06046964c022c6407d15a27b12a6a4fb"
             }
           },
           "ssh.padding_string": "00:00:00:00:00",
-          "ssh.seq_num": "0",
-          "Key Exchange (method:curve25519-sha256)": null
+          "ssh.seq_num": "0"
         }
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -6304,10 +5746,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "57",
         "tcp.window_size": "29184",
@@ -6326,15 +5765,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46784603",
             "tcp.options.timestamp.tsecr": "3114187197"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.159574000",
@@ -6343,19 +5774,13 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
           "tcp.analysis.bytes_in_flight": "1080",
-          "tcp.analysis.push_bytes_sent": "1080",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "1080"
         },
         "tcp.window_size_scalefactor": "512",
         "tcp.payload": "00:00:04:34:06:14:b3:ef:35:2e:e9:42:15:68:d5:ef:d6:6c:e2:a7:79:c5:00:00:01:02:63:75:72:76:65:32:35:35:31:39:2d:73:68:61:32:35:36:2c:63:75:72:76:65:32:35:35:31:39:2d:73:68:61:32:35:36:40:6c:69:62:73:73:68:2e:6f:72:67:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:33:38:34:2c:65:63:64:68:2d:73:68:61:32:2d:6e:69:73:74:70:35:32:31:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:2d:65:78:63:68:61:6e:67:65:2d:73:68:61:32:35:36:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:36:2d:73:68:61:35:31:32:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:38:2d:73:68:61:35:31:32:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:34:2d:73:68:61:32:35:36:2c:64:69:66:66:69:65:2d:68:65:6c:6c:6d:61:6e:2d:67:72:6f:75:70:31:34:2d:73:68:61:31:00:00:00:41:73:73:68:2d:72:73:61:2c:72:73:61:2d:73:68:61:32:2d:35:31:32:2c:72:73:61:2d:73:68:61:32:2d:32:35:36:2c:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:2c:73:73:68:2d:65:64:32:35:35:31:39:00:00:00:6c:63:68:61:63:68:61:32:30:2d:70:6f:6c:79:31:33:30:35:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:31:32:38:2d:63:74:72:2c:61:65:73:31:39:32:2d:63:74:72:2c:61:65:73:32:35:36:2d:63:74:72:2c:61:65:73:31:32:38:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:32:35:36:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:6c:63:68:61:63:68:61:32:30:2d:70:6f:6c:79:31:33:30:35:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:31:32:38:2d:63:74:72:2c:61:65:73:31:39:32:2d:63:74:72:2c:61:65:73:32:35:36:2d:63:74:72:2c:61:65:73:31:32:38:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:61:65:73:32:35:36:2d:67:63:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:d5:75:6d:61:63:2d:36:34:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:31:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:36:34:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2c:68:6d:61:63:2d:73:68:61:31:00:00:00:d5:75:6d:61:63:2d:36:34:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:31:2d:65:74:6d:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:36:34:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:75:6d:61:63:2d:31:32:38:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:2c:68:6d:61:63:2d:73:68:61:32:2d:32:35:36:2c:68:6d:61:63:2d:73:68:61:32:2d:35:31:32:2c:68:6d:61:63:2d:73:68:61:31:00:00:00:15:6e:6f:6e:65:2c:7a:6c:69:62:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:15:6e:6f:6e:65:2c:7a:6c:69:62:40:6f:70:65:6e:73:73:68:2e:63:6f:6d:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
       },
       "ssh": {
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null,
         "ssh.direction": "1",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": null,
         "SSH Version 2": {
           "ssh.packet_length": "1076",
           "ssh.padding_length": "6",
@@ -6385,20 +5810,16 @@
               "ssh.languages_server_to_client": "",
               "ssh.first_kex_packet_follows": "0",
               "ssh.kex.reserved": "00:00:00:00",
-              "ssh.kex.hassh_algorithms": null,
-              "ssh.kex.hassh": null,
               "ssh.kex.hasshserver_algorithms": "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1;chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com;umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1;none,zlib@openssh.com",
               "ssh.kex.hasshserver": "b12d2871a1189eff20364cf5333619ee"
             }
           },
           "ssh.padding_string": "00:00:00:00:00:00",
-          "ssh.seq_num": "0",
-          "Key Exchange (method:curve25519-sha256)": null
+          "ssh.seq_num": "0"
         }
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -6504,10 +5925,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2052",
         "tcp.window_size": "131328",
@@ -6526,15 +5944,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114187232",
             "tcp.options.timestamp.tsecr": "46784603"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.159657000",
@@ -6542,18 +5952,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "39",
           "tcp.analysis.ack_rtt": "0.000083000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -6659,10 +6064,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "63",
         "tcp.window_size": "32256",
@@ -6681,15 +6083,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46784646",
             "tcp.options.timestamp.tsecr": "3114187197"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.198934000",
@@ -6697,18 +6091,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "38",
           "tcp.analysis.ack_rtt": "0.075948000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -6814,10 +6203,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2052",
         "tcp.window_size": "131328",
@@ -6836,15 +6222,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114187269",
             "tcp.options.timestamp.tsecr": "46784646"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.198959000",
@@ -6853,39 +6231,27 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
           "tcp.analysis.bytes_in_flight": "48",
-          "tcp.analysis.push_bytes_sent": "48",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "48"
         },
         "tcp.window_size_scalefactor": "64",
         "tcp.payload": "00:00:00:2c:06:1e:00:00:00:20:e5:eb:20:ba:ee:48:8f:9b:f6:b8:3a:e8:7a:81:b2:e3:15:40:df:a0:94:4c:ea:7f:b0:f8:cd:d8:27:cc:1d:0e:00:00:00:00:00:00"
       },
       "ssh": {
-        "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": null,
         "ssh.direction": "0",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": null,
         "SSH Version 2": {
           "ssh.packet_length": "44",
           "ssh.padding_length": "6",
-          "Key Exchange": null,
           "ssh.padding_string": "00:00:00:00:00:00",
           "ssh.seq_num": "1",
           "Key Exchange (method:curve25519-sha256)": {
             "ssh.message_code": "30",
             "ssh.ecdh.q_c_length": "32",
-            "ssh.ecdh.q_c": "e5:eb:20:ba:ee:48:8f:9b:f6:b8:3a:e8:7a:81:b2:e3:15:40:df:a0:94:4c:ea:7f:b0:f8:cd:d8:27:cc:1d:0e",
-            "KEX host key (type: ecdsa-sha2-nistp256)": null,
-            "ssh.ecdh.q_s_length": null,
-            "ssh.ecdh.q_s": null,
-            "KEX host signature (type: ecdsa-sha2-nistp256)": null
+            "ssh.ecdh.q_c": "e5:eb:20:ba:ee:48:8f:9b:f6:b8:3a:e8:7a:81:b2:e3:15:40:df:a0:94:4c:ea:7f:b0:f8:cd:d8:27:cc:1d:0e"
           }
         }
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -6991,10 +6357,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "63",
         "tcp.window_size": "32256",
@@ -7013,15 +6376,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46784669",
             "tcp.options.timestamp.tsecr": "3114187269"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.221835000",
@@ -7029,18 +6384,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "42",
           "tcp.analysis.ack_rtt": "0.022876000"
         },
-        "tcp.window_size_scalefactor": "512",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "512"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -7146,10 +6496,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑AP¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "63",
         "tcp.window_size": "32256",
@@ -7168,15 +6515,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "46784681",
             "tcp.options.timestamp.tsecr": "3114187269"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.233601000",
@@ -7185,9 +6524,7 @@
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
           "tcp.analysis.bytes_in_flight": "452",
-          "tcp.analysis.push_bytes_sent": "452",
-          "tcp.analysis.acks_frame": null,
-          "tcp.analysis.ack_rtt": null
+          "tcp.analysis.push_bytes_sent": "452"
         },
         "tcp.window_size_scalefactor": "512",
         "tcp.payload": "00:00:01:04:09:1f:00:00:00:68:00:00:00:13:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:00:00:00:08:6e:69:73:74:70:32:35:36:00:00:00:41:04:17:bb:98:b3:06:9d:30:e3:07:fe:5b:e4:99:85:9d:6f:fb:e4:12:ff:d1:81:b7:45:45:e0:f3:f9:17:d5:4a:e0:59:b7:65:fb:14:29:72:97:d4:cf:e2:3b:e4:a2:c7:e8:57:3e:29:d7:f0:96:73:9f:5e:f4:5e:78:c1:f8:c5:fc:00:00:00:20:52:57:d3:f5:3e:34:71:d1:5a:11:a3:0c:a7:58:69:93:83:fd:59:92:15:07:d4:16:06:8e:40:c9:0f:0d:b6:55:00:00:00:65:00:00:00:13:65:63:64:73:61:2d:73:68:61:32:2d:6e:69:73:74:70:32:35:36:00:00:00:4a:00:00:00:21:00:e3:a0:fc:aa:2d:a3:a9:11:28:a4:eb:f9:e9:99:b0:24:2c:b6:ea:fd:5e:28:bc:d0:6a:62:47:44:c0:15:80:40:00:00:00:21:00:ab:e6:11:d6:96:21:0e:eb:ad:36:c7:ac:be:e5:96:c5:15:f9:11:5a:27:f2:f5:de:91:9e:98:17:9c:14:23:7d:00:00:00:00:00:00:00:00:00:00:00:00:0c:0a:15:00:00:00:00:00:00:00:00:00:00:be:a6:7a:00:b6:49:fd:5b:f4:3a:63:c3:65:4f:7d:a4:e1:63:1f:5a:29:32:a1:2f:6d:7c:b2:77:39:df:46:0a:5d:e8:de:40:c6:70:8e:e1:07:96:03:87:c5:d0:fb:0e:5b:db:65:c7:52:5b:49:9d:c0:db:42:52:bf:ba:50:c8:60:df:43:6a:26:ef:ac:93:78:b7:6f:ae:dc:25:39:69:22:e5:e0:46:a5:3d:f4:69:54:e9:13:c4:31:6d:13:e8:e7:86:55:ca:aa:ae:86:17:1b:26:a3:ab:0f:a7:5c:33:ea:dd:6c:86:93:8f:9d:e5:e2:82:6f:63:a0:8f:6d:0f:0f:a3:b2:46:8a:24:f7:df:b2:74:21:af:0c:25:a5:76:cb:ce:20:a4:f3:38:eb:93:f0:2a:ec:c8:12:b7:e1:8e:c7:87:16:c6:16:42:1b:63:59:95:9f:c7"
@@ -7195,19 +6532,13 @@
       "ssh": {
         "SSH Version 2 (encryption:chacha20-poly1305@openssh.com compression:none)": "",
         "ssh.direction": "1",
-        "ssh.packet_length_encrypted": null,
-        "ssh.encrypted_packet": null,
-        "ssh.protocol": null,
         "SSH Version 2": {
           "ssh.packet_length": "260",
           "ssh.padding_length": "9",
-          "Key Exchange": null,
           "ssh.padding_string": "00:00:00:00:00:00:00:00:00",
           "ssh.seq_num": "1",
           "Key Exchange (method:curve25519-sha256)": {
             "ssh.message_code": "31",
-            "ssh.ecdh.q_c_length": null,
-            "ssh.ecdh.q_c": null,
             "KEX host key (type: ecdsa-sha2-nistp256)": {
               "ssh.host_key.length": "104",
               "ssh.host_key.type_length": "19",
@@ -7236,8 +6567,7 @@
         }
       }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
@@ -7343,10 +6673,7 @@
           "tcp.flags.reset": "0",
           "tcp.flags.syn": "0",
           "tcp.flags.fin": "0",
-          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑",
-          "tcp.flags.fin_tree": null,
-          "tcp.flags.str_tree": null,
-          "tcp.flags.syn_tree": null
+          "tcp.flags.str": "¬∑¬∑¬∑¬∑¬∑¬∑¬∑A¬∑¬∑¬∑¬∑"
         },
         "tcp.window_size_value": "2045",
         "tcp.window_size": "130880",
@@ -7365,15 +6692,7 @@
             "tcp.option_len": "10",
             "tcp.options.timestamp.tsval": "3114187300",
             "tcp.options.timestamp.tsecr": "46784681"
-          },
-          "tcp.options.mss": null,
-          "tcp.options.mss_tree": null,
-          "tcp.options.wscale": null,
-          "tcp.options.wscale_tree": null,
-          "tcp.options.sack_perm": null,
-          "tcp.options.sack_perm_tree": null,
-          "tcp.options.eol": null,
-          "tcp.options.eol_tree": null
+          }
         },
         "Timestamps": {
           "tcp.time_relative": "0.233619000",
@@ -7381,18 +6700,13 @@
         },
         "tcp.analysis": {
           "tcp.analysis.initial_rtt": "0.023078000",
-          "tcp.analysis.bytes_in_flight": null,
-          "tcp.analysis.push_bytes_sent": null,
           "tcp.analysis.acks_frame": "44",
           "tcp.analysis.ack_rtt": "0.000018000"
         },
-        "tcp.window_size_scalefactor": "64",
-        "tcp.payload": null
-      },
-      "ssh": null
+        "tcp.window_size_scalefactor": "64"
+      }
     }
-  },
-  "_score": null
+  }
 }
 {
   "_index": "packets-2018-10-30",
