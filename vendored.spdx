@@ -231,3 +231,14 @@ LicenseInfoInFile: BSD-3-Clause
 LicenseComments: Includes code from https://github.com/actor-framework/actor-framework
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-test-detail-streambuf-cpp
+
+FileName: ./plugins/velociraptor/cmake/protobuf-generate.cmake
+SPDXID: SPDXRef-file-plugins-velociraptor-cmake-protobuf-generate-cmake
+FileChecksum: SHA1: 653e4eaf8fb14152c5bdee8246aac809b1a2d18e
+FileChecksum: SHA256: 6bfb30947d358b420bc929954d4f0700ff45b068ee23ceb74323ea767402f06a
+FileCopyrightText: Copyright 2008 Google Inc.  All rights reserved.
+LicenseConcluded: BSD-3-Clause
+LicenseInfoInFile: BSD-3-Clause
+LicenseComments: Includes code from https://github.com/protocolbuffers/protobuf
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-plugins-velociraptor-cmake-protobuf-generate-cmake
