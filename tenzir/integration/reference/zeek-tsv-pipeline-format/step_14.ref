@@ -1,2 +1,2 @@
-error: !! logic_error: 'write "zeek-tsv", anonymous(null, null, null, true)' does not support heterogeneous outputs; cannot initialize for 'zeek-tsv' after 'zeek.conn'
- = note: from `write "zeek-tsv", anonymous(null, null, null, true)`
+error: failed to parse Zeek document: missing #path
+ = note: line 12
