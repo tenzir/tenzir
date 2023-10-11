@@ -54,13 +54,13 @@ Tenzir dataflows are *multi-schema* in that a single pipeline can work
 with heterogeneous types of events, each of which have a different schemas.
 This allows you, for example, to perform aggregations across multiple events.
 Multi-schema dataflows require automatic schema inference at parse time. Tenzir
-parsers, such as [`json`](/formats/json) support this out of the box.
+parsers, such as [`json`](formats/json.md) support this out of the box.
 
 This behavior is very different from execution engines that only work with
 structured data, where the unit of computation is typically a fixed set of
 tables. Schema-less systems, such as document-oriented databases, offer more
 simplicity, at the cost of performance. In the spectrum of performance and ease
-of use, Tenzir therefore [fills a gap](/why-tenzir):
+of use, Tenzir therefore [fills a gap](why-tenzir.md):
 
 ![Structured vs. Document-Oriented](structured-vs-document-oriented.excalidraw.svg)
 
@@ -86,7 +86,7 @@ EVE JSON or Zeek's streaming JSON.
 
 You could call multi-schema dataflows *multiplexed* and there exist dedicated
 operators to demultiplex a stream. As of now, this is hard-coded per operator.
-For example, [`to directory /tmp/dir write parquet`](/connectors/directory)
+For example, [`to directory /tmp/dir write parquet`](connectors/directory.md)
 demultiplexes a stream of events so that batches with the same schema go to the
 same Parquet file.
 
@@ -96,14 +96,14 @@ A, B, and C:
 ![Multi-schema Example](multi-schema-example.excalidraw.svg)
 
 Some operators only work with exactly one instance per schema internally, such
-as [`write`](/operators/transformations/write) when combined with the
-[`parquet`](/formats/parquet), [`feather`](/formats/feather), or
-[`csv`](/formats/csv) formats. These formats cannot handle multiple input
+as [`write`](operators/transformations/write.md) when combined with the
+[`parquet`](formats/parquet.md), [`feather`](formats/feather.md), or
+[`csv`](formats/csv.md) formats. These formats cannot handle multiple input
 schemas at once. A demultiplexing operator like `to directory .. write <format>`
 removes this limitation by writing one file per schema instead.
 
 We are having ideas to make this schema (de)multiplexing explicit with a
-`per-schema` [operator modifier](/operators/modifier) that you can write in
+`per-schema` [operator modifier](operators/modifier.md) that you can write in
 front of every operator. Similarly, we are going to add union types in the
 future, making it possible to convert a heterogeneous stream of structured data
 into a homogeneous one.
@@ -200,7 +200,7 @@ throughput. So we generally transfer ownership of operators between processes as
 late as possible to prefer local, high-bandwidth communication. For maximum
 control over placement of computation, you can override the automatic operator
 location with the `local` and `remote` [operator
-modifiers](/operators/modifier.md).
+modifiers](operators/modifier.md).
 
 The above examples are implicit network connections because they're not visible
 in the pipeline definition. An explicit network connection terminates a pipeline
