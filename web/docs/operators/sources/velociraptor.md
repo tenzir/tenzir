@@ -6,7 +6,8 @@ Submits VQL to a Velociraptor server and returns the response as events.
 
 ```
 velociraptor [-n|--request-name <string>] [-o|--org-id <string>]
-             [-r|--max-rows <uint64>] [-w|--max-wait <duration>] <vql>
+             [-r|--max-rows <uint64>] [-s|--subscribe <artifact>]
+             [-q|--query <vql>] [-w|--max-wait <duration>]
 ```
 
 ## Description
@@ -57,7 +58,24 @@ directory as `velociraptor.yaml` so that the operator can find it:
 cp client.yaml /etc/tenzir/plugin/velociraptor.yaml
 ```
 
-Now you are ready to run VQL queries!
+Now you are ready to run VQL queries! There are two ways to do this:
+
+1. Send a [VQL][vql] query to a server and process the response:
+   ```bash
+   velociraptor --query "<vql>"
+   ```
+
+2. Use the `--subscribe <artifact>` option to hook into a continuous feed of
+   artifacts that match the `<artifact>` regular expression. Whenever a hunt
+   runs that contains this artifact, the server will forward it to the pipeline
+   and emit the artifact payload in the response field `HuntResults`. Here is an
+   example subscribing to Windows-related artifacts:
+   ```bash
+   velociraptor --subscribe Windows
+   ```
+
+Special thanks to [Christoph Lobmeyer](https://github.com/lo-chr) for providing
+the massive VQL that's behind the `--subscribe` functionality.
 
 ### `-n|--request-name <string>`
 
@@ -71,6 +89,10 @@ The ID of the Velociraptor organization.
 
 Defaults to `root`.
 
+### `-q|--query <vql>`
+
+The [VQL][vql] query string.
+
 ### `-r|--max-rows <uint64>`
 
 The maxium number of rows to return in a the stream gRPC messages returned by
@@ -78,20 +100,30 @@ the server.
 
 Defaults to 1,000.
 
+### `-s|--subscribe <artifact>`
+
+Subscribes to a flow artifact.
+
+This option generates a larger VQL expression under the hood that creates one
+event per flow and artifact. The response contains a field `HuntResult` that
+contains the result of the hunt.
+
 ### `-w|--max-wait <duration>`
 
 Controls how long to wait before releasing a partial result set.
 
 Defaults to `1 sec`.
 
-### `<vql>`
-
-The [VQL][vql] query string.
-
 ## Examples
 
 Show all processes:
 
 ```
-velociraptor "select * from pslist()"
+velociraptor --query "select * from pslist()"
+```
+
+Subscribe to hunt that contains the `Windows` artifact:
+
+```
+velociraptor --subscribe Windows
 ```

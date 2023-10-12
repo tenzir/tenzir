@@ -31,6 +31,7 @@ namespace tenzir::plugins::velociraptor {
 using namespace std::chrono_literals;
 
 namespace {
+
 /// The ID of an Organization.
 constexpr auto default_org_id = "root";
 
@@ -65,6 +66,56 @@ struct operator_args {
               f.field("org_id", x.org_id), f.field("requests", x.requests));
   }
 };
+
+/// Christoph Lobmeyer (https://github.com/lo-chr) devised this query and
+/// provided the use case to subscribe to a specific set of artifacts from
+/// multiple clients.
+constexpr auto subscribe_artifact_vql = R"__(
+LET subscribe_artifact = {}
+
+LET completions = SELECT *
+                  FROM watch_monitoring(artifact="System.Flow.Completion")
+                  WHERE Flow.artifacts_with_results =~ subscribe_artifact
+
+SELECT *
+FROM foreach(
+  row=completions,
+  query={{
+     SELECT *
+     FROM foreach(
+       row=Flow.artifacts_with_results,
+       query={{
+         SELECT *
+         FROM if(
+          condition=(_value =~ subscribe_artifact),
+          then={{
+             SELECT
+               {{
+                 SELECT *
+                 FROM source(
+                   client_id=ClientId,
+                   flow_id=Flow.session_id,
+                   artifact=_value)
+               }} AS HuntResult,
+               _value AS Artifact,
+               client_info(client_id=ClientId).os_info.hostname AS Hostname,
+               timestamp(epoch=now()) AS timestamp,
+               ClientId,
+               Flow.session_id AS FlowId
+             FROM source(
+               client_id=ClientId,
+               flow_id=Flow.session_id,
+               artifact=_value)
+             GROUP BY
+               artifact
+          }})
+        }})
+  }})
+)__";
+
+auto make_subscribe_query(std::string_view artifact) -> std::string {
+  return fmt::format(subscribe_artifact_vql, artifact);
+}
 
 class velociraptor_operator final
   : public crtp_operator<velociraptor_operator> {
@@ -256,24 +307,40 @@ public:
     auto org_id = std::optional<located<std::string>>{};
     auto request_name = std::optional<located<std::string>>{};
     auto max_rows = std::optional<located<uint64_t>>{};
+    auto subscribe = std::optional<located<std::string>>{};
     auto max_wait = std::optional<located<duration>>{};
-    auto request_vql = std::string{};
+    auto query = std::optional<located<std::string>>{};
     parser.add("-n,--request-name", request_name, "<string>");
     parser.add("-o,--org-id", org_id, "<string>");
+    parser.add("-q,--query", query, "<vql>");
     parser.add("-r,--max-rows", max_rows, "<uint64>");
+    parser.add("-s,--subscribe", subscribe, "<artifact>");
     parser.add("-w,--max-wait", max_wait, "<duration>");
-    parser.add(request_vql, "<query>");
     parser.parse(p);
     if (max_wait && max_wait->inner < 1s)
       diagnostic::error("--max-wait too low")
         .primary(max_wait->source)
         .hint("value must be great than 1s")
         .throw_();
-    args.requests = {{
-      .name = request_name ? std::move(request_name->inner)
-                           : fmt::to_string(uuid::random()),
-      .vql = std::move(request_vql),
-    }};
+    if (query) {
+      args.requests.push_back(request{
+        .name = request_name ? std::move(request_name->inner)
+                             : fmt::to_string(uuid::random()),
+        .vql = std::move(query->inner),
+      });
+    }
+    if (subscribe) {
+      args.requests.push_back(request{
+        .name = request_name ? std::move(request_name->inner)
+                             : fmt::to_string(uuid::random()),
+        .vql = make_subscribe_query(subscribe->inner),
+      });
+    }
+    if (args.requests.empty())
+      diagnostic::error("no artifact subscription or VQL expression provided")
+        .hint("use -s,--subscirbe <artifact> for a subscription")
+        .hint("use -q,--query <vql> to run a VQL expression")
+        .throw_();
     args.org_id = org_id ? org_id->inner : default_org_id;
     args.max_rows = max_rows ? max_rows->inner : default_max_rows;
     args.max_wait = std::chrono::duration_cast<std::chrono::seconds>(
