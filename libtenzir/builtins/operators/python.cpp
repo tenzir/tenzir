@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/format/arrow.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/chunk.hpp>
@@ -18,113 +21,245 @@
 #include <tenzir/si_literals.hpp>
 #include <tenzir/type.hpp>
 
+#include <arrow/api.h>
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
 #include <boost/asio.hpp>
 #include <boost/process.hpp>
-#include <boost/process/v2.hpp>
 #include <caf/detail/scope_guard.hpp>
 
 #include <mutex>
 #include <queue>
 #include <thread>
 
-namespace asio = boost::asio;
-namespace bp = boost::process::v2;
+namespace bp = boost::process;
 
 namespace tenzir::plugins::python {
 namespace {
 
-using namespace tenzir::binary_byte_literals;
+auto python_preamble = R"_(
 
-struct pipe {
-  boost::asio::readable_pipe read;
-  boost::asio::writable_pipe write;
+import sys
+import pyarrow as pa
+import types
+import pytenzir.utils.arrow
+#import requests
+#import json
+
+def log(*args):
+  prefix = "    "
+  z = " ".join(map(str, args))
+  y = prefix + " " + z.replace("\n", "\n" + prefix + " ")
+  print(y, file=sys.stderr)
+
+istream = pa.input_stream(sys.stdin.buffer)
+ostream = pa.output_stream(sys.stdout.buffer)
+
+def execute_user_code(__batch, __code):
+  __d = __batch.to_pydict()
+  __result = {}
+  for __i in range(__batch.num_rows):
+    for __key, __values in __d.items():
+      locals()[__key] = __values[__i]
+    # =============
+    exec(__code, globals(), locals())
+    # =============
+    for __key, __value in dict(locals()).items():
+      if isinstance(__value, types.ModuleType):
+        continue
+      if not __key.startswith("_"):
+        if __key not in __result:
+          __result[__key] = []
+        # TODO: Key might be missing.
+        __result[__key].append(__value)
+  return __result
+
+
+while True:
+  try:
+    reader = pa.ipc.RecordBatchStreamReader(istream)
+    batch = reader.read_next_batch()
+    result = execute_user_code(batch, CODE)
+    result_batch = pa.RecordBatch.from_pydict(result)
+    writer = pa.ipc.RecordBatchStreamWriter(ostream, result_batch.schema)
+    writer.write(result_batch)
+    sys.stdout.flush()
+  except pa.lib.ArrowInvalid:
+    break
+
+
+)_";
+
+class arrow_fd_istream : public ::arrow::io::InputStream {
+public:
+  explicit arrow_fd_istream(int fd) : fd_{fd} {
+  }
+
+  arrow::Status Close() override {
+    TENZIR_ASSERT_CHEAP(::close(fd_) == 0);
+    fd_ = -1;
+    return arrow::Status::OK();
+  }
+
+  bool closed() const override {
+    return fd_ == -1;
+  }
+
+  ::arrow::Result<int64_t> Tell() const override {
+    return pos_;
+  }
+
+  ::arrow::Result<int64_t> Read(int64_t nbytes, void* out) override {
+    auto n = ::read(fd_, out, nbytes);
+    TENZIR_ASSERT_CHEAP(n >= 0);
+    pos_ += n;
+    return n;
+  }
+
+  ::arrow::Result<std::shared_ptr<::arrow::Buffer>>
+  Read(int64_t nbytes) override {
+    ARROW_ASSIGN_OR_RAISE(auto buffer,
+                          ::arrow::AllocateResizableBuffer(nbytes));
+    ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
+                          Read(nbytes, buffer->mutable_data()));
+    ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
+    buffer->ZeroPadding();
+    return std::move(buffer);
+  }
+
+private:
+  int fd_;
+  int64_t pos_ = 0;
 };
 
-struct PreservedFds : boost::process::detail::handler,
-                      boost::process::detail::uses_handles {
-  std::vector<int> fds;
-  PreservedFds(std::vector<int> pfds) : fds(pfds) {
+class python_operator final : public crtp_operator<python_operator> {
+public:
+  python_operator() = default;
+
+  explicit python_operator(std::string code, bool script_mode)
+    : code_{std::move(code)}, script_mode_(script_mode) {
   }
 
-  std::vector<int>& get_used_handles() {
-    return fds;
+  auto execute_nonscript(generator<table_slice> input,
+                         operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    // auto preamble = chunk::mmap("./preamble.py");
+    // TENZIR_ASSERT_CHEAP(preamble);
+    // auto preamble_string = std::string{reinterpret_cast<const
+    // char*>((*preamble)->data()), (*preamble)->size()};
+    try {
+      bp::pipe std_out;
+      bp::pipe std_in;
+      auto path = bp::search_path("python");
+      TENZIR_INFO("path: {}", path.string());
+      auto child
+        = bp::child{path, "-c", "CODE = '''" + code_ + "'''" + python_preamble,
+                    bp::std_out > std_out, bp::std_in < std_in};
+      for (auto&& slice : input) {
+        if (slice.rows() == 0) {
+          co_yield {};
+          continue;
+        }
+        auto batch = to_record_batch(slice);
+        auto stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
+        auto writer = arrow::ipc::MakeStreamWriter(
+                        stream, slice.schema().to_arrow_schema())
+                        .ValueOrDie();
+        auto status = writer->WriteRecordBatch(*batch);
+        TENZIR_ASSERT_CHEAP(status.ok());
+        auto result = stream->Finish().ValueOrDie();
+        std_in.write(reinterpret_cast<const char*>(result->data()),
+                     detail::narrow<int>(result->size()));
+        auto file = arrow_fd_istream{std_out.native_source()};
+        auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
+        if (!reader.status().ok()) {
+          ctrl.abort(caf::make_error(
+            ec::logic_error, fmt::format("failed to open reader: {}",
+                                         reader.status().CodeAsString())));
+          co_return;
+        }
+        auto foo = (*reader)->ReadNext();
+        if (!foo.status().ok()) {
+          ctrl.abort(caf::make_error(ec::logic_error,
+                                     fmt::format("failed to read batch: {}",
+                                                 foo.status().CodeAsString())));
+          co_return;
+        }
+        auto output = table_slice{foo->batch};
+        auto new_type = type{"tenzir.python", output.schema()};
+        auto actual_result = arrow::RecordBatch::Make(
+          new_type.to_arrow_schema(), output.rows(), foo->batch->columns());
+        output = table_slice{actual_result, new_type};
+        co_yield output;
+      }
+      std_in.close();
+      child.wait();
+    } catch (const std::exception& ex) {
+      ctrl.abort(caf::make_error(ec::logic_error, fmt::to_string(ex.what())));
+    }
+    co_return;
   }
 
-  class python_operator final
-    : public schematic_operator<python_operator, pipe> {
-  public:
-    using state_type = pipe;
+  auto execute_script(generator<table_slice> input,
+                      operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    TENZIR_TODO(); // TODO!
+  }
 
-    python_operator() = default;
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    if (script_mode_)
+      return execute_script(std::move(input), ctrl);
+    else
+      return execute_nonscript(std::move(input), ctrl);
+  }
 
-    std::string code_ = {};
-    std::optional<bp::process> proc_ = {};
-    asio::io_context ctx;
-    asio::any_io_executor executor = ctx.get_executor();
-    asio::local::datagram_protocol::socket socket1{ctx};
-    asio::local::datagram_protocol::socket socket2{ctx};
-    explicit python_operator(std::string code) : code_{std::move(code)} {
-      asio::local::connect_pair(socket1, socket2);
-      proc_ = bp::process(ctx, "python", {"-c", code_},
-                          bp::process_stdio{{}, {}, {}});
-    }
+  auto to_string() const -> std::string override {
+    return code_;
+  }
 
-    auto initialize(const type&, operator_control_plane&) const
-      -> caf::expected<state_type> override {
-      auto result = caf::expected{state_type{asio::readable_pipe{executor},
-                                             asio::writable_pipe{executor}}};
-      asio::connect_pipe(result->read, result->write);
-      return result;
-    }
+  auto name() const -> std::string override {
+    return "python";
+  }
 
-    auto process(table_slice slice, state_type& state) const
-      -> table_slice override {
-      // write_end.write(state.read.native_handle());
-      return slice;
-    }
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // Note: The `unordered` means that we do not necessarily return the first
+    // `limit_` events.
+    (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::unordered, copy()};
+  }
 
-    auto to_string() const -> std::string override {
-      return code_;
-    }
+  friend auto inspect(auto& f, python_operator& x) -> bool {
+    return f.apply(x.code_);
+  }
 
-    auto name() const -> std::string override {
-      return "python";
-    }
+private:
+  std::string code_ = {};
+  bool script_mode_ = {};
+};
 
-    auto optimize(expression const& filter, event_order order) const
-      -> optimize_result override {
-      // Note: The `unordered` means that we do not necessarily return the first
-      // `limit_` events.
-      (void)filter, (void)order;
-      return optimize_result{std::nullopt, event_order::unordered, copy()};
-    }
+class plugin final : public virtual operator_plugin<python_operator> {
+public:
+  auto signature() const -> operator_signature override {
+    return {
+      .source = true,
+      .transformation = true,
+    };
+  }
 
-    friend auto inspect(auto& f, python_operator& x) -> bool {
-      return f.apply(x.code_);
-    }
-
-  private:
-  };
-
-  class plugin final : public virtual operator_plugin<python_operator> {
-  public:
-    auto signature() const -> operator_signature override {
-      return {
-        .source = true,
-        .transformation = true,
-      };
-    }
-
-    auto parse_operator(parser_interface& p) const -> operator_ptr override {
-      auto command = std::string{};
-      auto parser
-        = argument_parser{"python", "https://docs.tenzir.com/next/"
-                                    "operators/transformations/python"};
-      parser.add(command, "<command>");
-      parser.parse(p);
-      return std::make_unique<python_operator>(std::move(command));
-    }
-  };
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto command = std::string{};
+    auto script_mode = bool{};
+    auto parser = argument_parser{"python", "https://docs.tenzir.com/next/"
+                                            "operators/transformations/python"};
+    parser.add(command, "<command>");
+    parser.add("--script", script_mode);
+    parser.parse(p);
+    return std::make_unique<python_operator>(std::move(command), script_mode);
+  }
+};
 
 } // namespace
 } // namespace tenzir::plugins::python

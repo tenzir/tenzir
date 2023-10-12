@@ -1,0 +1,11 @@
+
+from file input.json | python '
+import requests
+import json
+
+if alert == True:
+    requests.post(
+            "https://hooks.slack.com/services/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",
+        data=json.dumps({"text": message})
+    )
+'
