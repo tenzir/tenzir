@@ -72,16 +72,20 @@ auto tenzir_features() -> std::vector<std::string> {
   // This is intended to support the rollout of potentially breaking new
   // features, so that downstream API consumers can adjust their behavior
   // depending on the capabilities of the node.
-  //
-  // large_responses - The platform plugin understands the
-  //                   `alternate_payload_destination` field and can send
-  //                   out-of-band responses.
-  // launch_endpoint - The pipeline manager plugin has a new `/pipeline/launch`
-  //                   endpoint and can thus unify the workflows of running &
-  //                   deploying pipelines.
-  // pipeline_labels - The pipeline manager plugin supports pipeline labels that
-  //                   can be modified using the `/pipeline/update` endpoint.
-  return {"large_responses", "launch_endpoint", "pipeline_labels"};
+  return {
+    // The platform plugin understands the `alternate_payload_destination` field
+    // and can send out-of-band responses.
+    "large_responses",
+    // The pipeline manager plugin has a new `/pipeline/launch` endpoint and can
+    // thus unify the workflows of running & deploying pipelines.
+    "launch_endpoint",
+    // The pipeline manager plugin supports pipeline labels that can be modified
+    // using the `/pipeline/update` endpoint.
+    "pipeline_labels",
+    // The pipeline manager can autostart and autodelete pipelines, as per the
+    // user's requests.
+    "extended_pipeline_actions",
+  };
 }
 
 } // namespace tenzir
