@@ -54,24 +54,11 @@ Tenzir dataflows are *multi-schema* in that a single pipeline can work
 with heterogeneous types of events, each of which have a different schemas.
 This allows you, for example, to perform aggregations across multiple events.
 Multi-schema dataflows require automatic schema inference at parse time. Tenzir
-parsers, such as [`json`](formats/json.md) support this out of the box.
-
-This behavior is different from engines that work with structured data where
+parsers, such as [`json`](formats/json.md) support this out of the box. This
+behavior is different from engines that work with structured data where
 operators typically work with fixed set of tables. While Schema-less systems,
 such as document-oriented databases, offer more simplicity, their
-one-record-at-a-time processing comes at the cost of performance. In the
-spectrum of performance and ease of use, Tenzir therefore [fills a
-gap](why-tenzir.md):
-
-
-![Structured vs. Document-Oriented](structured-vs-document-oriented.excalidraw.svg)
-
-:::info Eclectic & Super-structured Data
-[Zed](https://amyousterhout.com/papers/zed_cidr23.pdf) has a type system similar
-to Tenzir, with the difference that Zed associates types *with every single
-value*. Unlike Zed, Tenzir uses a "data frame" abstraction and relies on
-homogeneous Arrow record batches of up to 65,535 rows.
-:::
+one-record-at-a-time processing comes at the cost of performance.
 
 If the schema in a pipeline changes, we simply create a new batch of events. The
 worst case for Tenzir is a ordered stream of schema-switching events, with every
@@ -167,7 +154,7 @@ Lake](https://delta.io/), [Iceberg](https://iceberg.apache.org/), or
 to integrate with the existing lake management tooling.
 :::
 
-## Native Networking to Create Data Fabrics
+## Built-in Networking to Create Data Fabrics
 
 Tenzir pipelines have built-in network communication, allowing you to create a
 distributed fabric of dataflows to express intricate use cases. There are two

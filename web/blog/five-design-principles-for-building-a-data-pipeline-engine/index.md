@@ -66,7 +66,7 @@ fundamentally requires a solution that can seamlessly cross all layers of this
 pyramid, as the boundaries are the places where efficiency leaks. The following
 principles allowed us to get there.
 
-## P1: Separation of Data Concerns
+## P1: Separation of Concerns
 
 A central realization for us was that different types of data need different
 abstractions that coherently fit together. When following the data journey
@@ -315,7 +315,16 @@ Lake](https://delta.io/), [Iceberg](https://iceberg.apache.org/), or
 to integrate with the existing lake management tooling.
 :::
 
-## P5: Native Networking to Create Data Fabrics
+## P5: Built-in Networking to Create Data Fabrics
+
+:::info Control Plane vs. Data Plane
+The term *data fabric* is woven into many meanings. From a Tenzir perspective,
+the set of interconnected pipelines through which data flows constitutes the
+**data plane**, whereas the surrounding management platform at
+[app.tenzir.com](https://app.tenzir.com) to control the nodes constitute the
+**control plane**. When we refer to "data fabric" we mean to the data plane
+aspect.
+:::
 
 Tenzir pipelines have built-in network communication, allowing you to create a
 distributed fabric of dataflows to express intricate use cases. There are two
