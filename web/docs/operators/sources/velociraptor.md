@@ -24,58 +24,44 @@ Velociraptor server. The client request contains a query written in the
 
 [vql]: https://docs.velociraptor.app/docs/vql
 
-All Velociraptor client-to-server communication is mutually authenticated and
-encrypted via TLS client and server certificates. This means you must provide
-client-side key material to connect.
+You can either send a raw VQL query via `velociraptor --query "<vql>"` to a
+server and processs the response, or hook into a continuous feed of artifacts
+via `velociraptor --subscribe <artifact>`. Whenever a hunt runs that contains
+this artifact, the server will forward it to the pipeline and emit the artifact
+payload in the response field `HuntResults`.
 
-The following steps illustrate how you can create the certificate in
-order to use `velociraptor` as API client.
+All Velociraptor client-to-server communication is mutually authenticated and
+encrypted via TLS certificates. This means you must provide client-side
+certificate, which you can generate as follows. (Velociraptor ships as a static
+binary that we refer to as `velociraptor-binary` here.)
 
 1. Create a server configuration `server.yaml`:
    ```bash
-   velociraptor config generate > server.yaml
+   velociraptor-binary config generate > server.yaml
    ```
 
 1. Create a `tenzir` user with `api` role:
    ```bash
-   velociraptor -c server.yaml user add --role=api tenzir
+   velociraptor-binary -c server.yaml user add --role=api tenzir
    ```
 
 1. Run the frontend with the server configuration:
    ```bash
-   velociraptor -c server.yaml frontend
+   velociraptor-binary -c server.yaml frontend
    ```
 
 1. Create an API client:
    ```bash
-   velociraptor -c server.yaml config api_client --name tenzir client.yaml
+   velociraptor-binary -c server.yaml config api_client --name tenzir client.yaml
    ```
 
-Finally, copy the generated `client.yaml` to your Tenzir plugin configuration
-directory as `velociraptor.yaml` so that the operator can find it:
-
-```bash
-cp client.yaml /etc/tenzir/plugin/velociraptor.yaml
-```
-
-Now you are ready to run VQL queries! There are two ways to do this:
-
-1. Send a [VQL][vql] query to a server and process the response:
+1. Copy the generated `client.yaml` to your Tenzir plugin configuration
+   directory as `velociraptor.yaml` so that the operator can find it:
    ```bash
-   velociraptor --query "<vql>"
+   cp client.yaml /etc/tenzir/plugin/velociraptor.yaml
    ```
 
-2. Use the `--subscribe <artifact>` option to hook into a continuous feed of
-   artifacts that match the `<artifact>` regular expression. Whenever a hunt
-   runs that contains this artifact, the server will forward it to the pipeline
-   and emit the artifact payload in the response field `HuntResults`. Here is an
-   example subscribing to Windows-related artifacts:
-   ```bash
-   velociraptor --subscribe Windows
-   ```
-
-Special thanks to [Christoph Lobmeyer](https://github.com/lo-chr) for providing
-the massive VQL that's behind the `--subscribe` functionality.
+Now you are ready to run VQL queries!
 
 ### `-n|--request-name <string>`
 
@@ -122,7 +108,7 @@ Show all processes:
 velociraptor --query "select * from pslist()"
 ```
 
-Subscribe to hunt that contains the `Windows` artifact:
+Subscribe to a hunt flow that contains the `Windows` artifact:
 
 ```
 velociraptor --subscribe Windows
