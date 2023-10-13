@@ -94,9 +94,9 @@ NDJSON requires that exactly one event exists per line. This allows for better
 error recovery in cases of malformed input, as unlike for the regular JSON
 parser malformed lines can be skipped.
 
-Popular examples of NDJSON include the Suricat Eve JSON and the Zeek Streaming
-JSON formats. Tenzir supports [`suricata`][suricata.md] and
-[`zeek-json`][zeek-json.md] parsers out of the box that utilize this mechanism.
+Popular examples of NDJSON include the Suricata Eve JSON and the Zeek Streaming
+JSON formats. Tenzir supports [`suricata`](suricata.md) and
+[`zeek-json`](zeek-json.md) parsers out of the box that utilize this mechanism.
 
 ### `--raw` (Parser)
 

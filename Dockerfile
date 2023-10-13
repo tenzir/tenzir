@@ -93,8 +93,10 @@ RUN apt-get update && \
       libc++abi1 \
       libflatbuffers2 \
       libfmt9 \
+      libgrpc++1.51 \
       libhttp-parser2.9 \
       libpcap0.8 \
+      libprotobuf32 \
       librdkafka++1 \
       libre2-9 \
       libspdlog1.10 \

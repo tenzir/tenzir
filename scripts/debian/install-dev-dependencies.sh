@@ -21,8 +21,10 @@ apt-get -y --no-install-recommends install \
     libboost-filesystem1.81-dev \
     libflatbuffers-dev \
     libfmt-dev \
+    libgrpc-dev \
     libhttp-parser-dev \
     libpcap-dev tcpdump \
+    libprotobuf-dev \
     librdkafka-dev \
     libre2-dev \
     libspdlog-dev \
@@ -35,6 +37,8 @@ apt-get -y --no-install-recommends install \
     ninja-build \
     pandoc \
     pkg-config \
+    protobuf-compiler \
+    protobuf-compiler-grpc \
     python3-dev \
     python3-openssl \
     python3-pip \

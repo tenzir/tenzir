@@ -47,6 +47,8 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[librdkafka](https://github.com/confluentinc/librdkafka)||Required for building the `kafka` plugin.|
 ||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
 ||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
+||[Protocol Buffers](https://protobuf.dev)||>= 1.4.1|Required for building the `velociraptor` plugin.|
+||[gRPC](https://grpci.io)||>= 1.51|Required for building the `velociraptor` plugin.|
 ||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build the manpage for Tenzir.|

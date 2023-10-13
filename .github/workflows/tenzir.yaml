@@ -865,6 +865,9 @@ jobs:
           - name: Sigma
             target: sigma
             path: plugins/sigma
+          - name: Velociraptor
+            target: velociraptor
+            path: plugins/velociraptor
           - name: ZeroMQ
             target: zmq
             path: plugins/zmq
@@ -885,6 +888,7 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Pipeline Manager}}
           - {setup: {os: macos-latest}, plugin: {name: Sigma}}
           - {setup: {os: macos-latest}, plugin: {name: Kafka}}
+          - {setup: {os: macos-latest}, plugin: {name: Velociraptor}}
           - {setup: {os: macos-latest}, plugin: {name: ZeroMQ}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"

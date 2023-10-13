@@ -18,6 +18,8 @@
     fast_float,
     flatbuffers,
     fluent-bit,
+    protobuf,
+    grpc,
     spdlog,
     libyamlcpp,
     simdjson,
@@ -65,6 +67,7 @@
         "plugins/nic"
         "plugins/parquet"
         "plugins/sigma"
+        "plugins/velociraptor"
         "plugins/web"
         "plugins/zmq"
       ]
@@ -88,14 +91,17 @@
         nativeBuildInputs = [
           cmake
           dpkg
+          protobuf
         ];
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           fast_float
           fluent-bit
+          grpc
           libpcap
           libunwind
           libyamlcpp
+          protobuf
           rdkafka
           cppzmq
           re2

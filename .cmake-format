@@ -62,6 +62,23 @@ with section("parse"):
                 "nargs": 3,
             },
         },
+        "protobuf_generate": {
+            "spelling": "protobuf_generate",
+            "kwargs": {
+                "TARGET": 1,
+                "LANGUAGE": 1,
+                "OUT_VAR": 1,
+                "EXPORT_MACRO": 1,
+                "PROTOC_OUT_DIR": 1,
+                "PLUGIN": 1,
+                "PLUGIN_OPTIONS": 1,
+                "DEPENDENCIES": 1,
+                "PROTOS": "*",
+                "IMPORT_DIRS": "*",
+                "GENERATE_EXTENSIONS": "*",
+                "PROTOC_OPTIONS": "*",
+            },
+        },
     }
 
     # Override configurations per-command where available

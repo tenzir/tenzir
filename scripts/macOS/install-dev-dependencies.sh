@@ -14,6 +14,7 @@ brew install \
     fluent-bit \
     fmt \
     gnu-sed \
+    grpc \
     http-parser \
     libpcap \
     librdkafka \
@@ -22,8 +23,9 @@ brew install \
     ninja \
     openssl \
     pandoc \
-    poetry \
     pkg-config \
+    poetry \
+    protobuf \
     rsync \
     simdjson \
     spdlog \
