@@ -25,8 +25,12 @@ in
         ];
       # To build libcaf_openssl with bundled CAF.
       buildInputs = [pkgs.openssl];
+      shellHook = ''
+        # Prepend pytenzir to the PYTHONPATH.
+        export PYTHONPATH=$PWD/python''${PYTHONPATH:+:}$PYTHONPATH
+      '';
     }
     // lib.optionalAttrs isStatic {
       # Signal static build mode to CMake via the environment.
-      TENZIR_ENABLE_STATIC_EXECUTABLE = "ON";
+      env.TENZIR_ENABLE_STATIC_EXECUTABLE = "ON";
     })

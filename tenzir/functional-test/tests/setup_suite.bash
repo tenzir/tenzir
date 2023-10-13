@@ -16,6 +16,8 @@ export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${SCRIPT_DIR}/..
 BATS_SUITE_DIRNAME="${BATS_TEST_DIRNAME}"
 export BATS_SUITE_DIRNAME
 
+export PYTHONPATH=$PYTHONPATH${PYTHONPATH:+:}$SCRIPT_DIR/../../../python
+
 unset "${!TENZIR@}"
 # Enable bare mode so settings in ~/.config/tenzir or the build configuration
 # have no effect.

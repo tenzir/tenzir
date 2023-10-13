@@ -293,10 +293,18 @@ in {
       p.bats-assert
     ]);
   in [ bats prev.curl prev.jq ];
+  pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+      (
+        python-final: python-prev: {
+          dynaconf = python-final.callPackage ./dynaconf {};
+        }
+      )
+    ];
   tenzir-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [
         coloredlogs
+        dynaconf
         jsondiff
         pyarrow
         pyyaml
