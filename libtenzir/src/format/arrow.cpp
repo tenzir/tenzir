@@ -108,6 +108,41 @@ arrow_istream_wrapper::Read(int64_t nbytes) {
   return std::move(buffer);
 }
 
+arrow_fd_wrapper::arrow_fd_wrapper(int fd) : fd_{fd} {
+}
+
+::arrow::Status arrow_fd_wrapper::Close() {
+  TENZIR_ASSERT_CHEAP(::close(fd_) == 0);
+  fd_ = -1;
+  return ::arrow::Status::OK();
+}
+
+auto arrow_fd_wrapper::closed() const -> bool {
+  return fd_ == -1;
+}
+
+auto arrow_fd_wrapper::Tell() const -> ::arrow::Result<int64_t> {
+  return pos_;
+}
+
+auto arrow_fd_wrapper::Read(int64_t nbytes, void* out)
+  -> ::arrow::Result<int64_t> {
+  auto n = ::read(fd_, out, nbytes);
+  TENZIR_ASSERT_CHEAP(n >= 0);
+  pos_ += n;
+  return n;
+}
+
+auto arrow_fd_wrapper::Read(int64_t nbytes)
+  -> ::arrow::Result<std::shared_ptr<::arrow::Buffer>> {
+  ARROW_ASSIGN_OR_RAISE(auto buffer, ::arrow::AllocateResizableBuffer(nbytes));
+  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
+                        Read(nbytes, buffer->mutable_data()));
+  ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
+  buffer->ZeroPadding();
+  return std::move(buffer);
+}
+
 reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   : tenzir::format::reader(options),
     input_(std::make_unique<arrow_istream_wrapper>(std::move(in))) {

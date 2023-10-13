@@ -15,6 +15,7 @@
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/generator.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -37,124 +38,76 @@ namespace bp = boost::process;
 namespace tenzir::plugins::python {
 namespace {
 
-auto python_preamble = R"_(
+auto PYTHON_SCAFFOLD = R"_(
+from pytenzir.tools.python_operator_executor import main
 
-import sys
-import pyarrow as pa
-import types
-import pytenzir.utils.arrow
-#import requests
-#import json
-
-def log(*args):
-  prefix = "    "
-  z = " ".join(map(str, args))
-  y = prefix + " " + z.replace("\n", "\n" + prefix + " ")
-  print(y, file=sys.stderr)
-
-istream = pa.input_stream(sys.stdin.buffer)
-ostream = pa.output_stream(sys.stdout.buffer)
-
-def execute_user_code(__batch, __code):
-  __d = __batch.to_pydict()
-  __result = {}
-  for __i in range(__batch.num_rows):
-    for __key, __values in __d.items():
-      locals()[__key] = __values[__i]
-    # =============
-    exec(__code, globals(), locals())
-    # =============
-    for __key, __value in dict(locals()).items():
-      if isinstance(__value, types.ModuleType):
-        continue
-      if not __key.startswith("_"):
-        if __key not in __result:
-          __result[__key] = []
-        # TODO: Key might be missing.
-        __result[__key].append(__value)
-  return __result
-
-
-while True:
-  try:
-    reader = pa.ipc.RecordBatchStreamReader(istream)
-    batch = reader.read_next_batch()
-    result = execute_user_code(batch, CODE)
-    result_batch = pa.RecordBatch.from_pydict(result)
-    writer = pa.ipc.RecordBatchStreamWriter(ostream, result_batch.schema)
-    writer.write(result_batch)
-    sys.stdout.flush()
-  except pa.lib.ArrowInvalid:
-    break
-
-
+main()
 )_";
 
-class arrow_fd_istream : public ::arrow::io::InputStream {
-public:
-  explicit arrow_fd_istream(int fd) : fd_{fd} {
+/// Yields each line, including the trailing newline.
+auto each_line(const std::string& code) -> generator<std::string_view> {
+  auto left = 0ull;
+  auto right = code.find('\n');
+  while (right != std::string::npos) {
+    co_yield std::string_view{code.begin() + left, code.begin() + right + 1};
+    left = right + 1;
+    right = code.find('\n', left);
   }
+}
 
-  arrow::Status Close() override {
-    TENZIR_ASSERT_CHEAP(::close(fd_) == 0);
-    fd_ = -1;
-    return arrow::Status::OK();
+auto strip_leading_indentation(std::string code) -> std::string {
+  auto prefix = std::string_view{};
+  for (auto line : each_line(code)) {
+    if (auto x = line.find_first_not_of(" \t\n"); x != std::string::npos) {
+      prefix = line.substr(0, x);
+      break;
+    }
   }
-
-  bool closed() const override {
-    return fd_ == -1;
+  if (prefix.empty())
+    return code;
+  auto stripped_code = std::string{};
+  for (auto line : each_line(code)) {
+    if (line.starts_with(prefix))
+      line.remove_prefix(prefix.size());
+    stripped_code += line;
   }
-
-  ::arrow::Result<int64_t> Tell() const override {
-    return pos_;
-  }
-
-  ::arrow::Result<int64_t> Read(int64_t nbytes, void* out) override {
-    auto n = ::read(fd_, out, nbytes);
-    TENZIR_ASSERT_CHEAP(n >= 0);
-    pos_ += n;
-    return n;
-  }
-
-  ::arrow::Result<std::shared_ptr<::arrow::Buffer>>
-  Read(int64_t nbytes) override {
-    ARROW_ASSIGN_OR_RAISE(auto buffer,
-                          ::arrow::AllocateResizableBuffer(nbytes));
-    ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
-                          Read(nbytes, buffer->mutable_data()));
-    ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
-    buffer->ZeroPadding();
-    return std::move(buffer);
-  }
-
-private:
-  int fd_;
-  int64_t pos_ = 0;
-};
+  return stripped_code;
+}
 
 class python_operator final : public crtp_operator<python_operator> {
 public:
   python_operator() = default;
 
-  explicit python_operator(std::string code, bool script_mode)
-    : code_{std::move(code)}, script_mode_(script_mode) {
+  explicit python_operator(std::string code, bool keep_leading_indent) {
+    // "Fix" empty input here, rather than bother with trying to pass zero
+    // bytes through a pipe.
+    if (code.empty())
+      code = " ";
+    if (keep_leading_indent)
+      code_ = std::move(code);
+    else
+      code_ = strip_leading_indentation(std::move(code));
   }
 
-  auto execute_nonscript(generator<table_slice> input,
-                         operator_control_plane& ctrl) const
+  auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    // auto preamble = chunk::mmap("./preamble.py");
-    // TENZIR_ASSERT_CHEAP(preamble);
-    // auto preamble_string = std::string{reinterpret_cast<const
-    // char*>((*preamble)->data()), (*preamble)->size()};
     try {
       bp::pipe std_out;
       bp::pipe std_in;
       auto path = bp::search_path("python");
-      TENZIR_INFO("path: {}", path.string());
-      auto child
-        = bp::child{path, "-c", "CODE = '''" + code_ + "'''" + python_preamble,
-                    bp::std_out > std_out, bp::std_in < std_in};
+      TENZIR_DEBUG("using {} as python executable", path.string());
+      bp::opstream codepipe; // pipe to transmit the code
+      auto env = bp::environment{};
+      env["TENZIR_PYTHON_OPERATOR_CODEFD"]
+        = fmt::to_string(codepipe.pipe().native_source());
+      auto child = bp::child{path,
+                             "-c",
+                             PYTHON_SCAFFOLD,
+                             env,
+                             bp::std_out > std_out,
+                             bp::std_in < std_in};
+      codepipe << code_;
+      codepipe.close();
       for (auto&& slice : input) {
         if (slice.rows() == 0) {
           co_yield {};
@@ -166,16 +119,25 @@ public:
                         stream, slice.schema().to_arrow_schema())
                         .ValueOrDie();
         auto status = writer->WriteRecordBatch(*batch);
-        TENZIR_ASSERT_CHEAP(status.ok());
-        auto result = stream->Finish().ValueOrDie();
-        std_in.write(reinterpret_cast<const char*>(result->data()),
-                     detail::narrow<int>(result->size()));
-        auto file = arrow_fd_istream{std_out.native_source()};
+        if (!status.ok()) {
+          ctrl.abort(caf::make_error(
+            ec::system_error, fmt::format("failed to write record batch")));
+          co_return;
+        }
+        auto result = stream->Finish();
+        if (!result.status().ok()) {
+          ctrl.abort(caf::make_error(ec::system_error,
+                                     fmt::format("failed to write input")));
+          co_return;
+        }
+        std_in.write(reinterpret_cast<const char*>((*result)->data()),
+                     detail::narrow<int>((*result)->size()));
+        auto file = format::arrow::arrow_fd_wrapper{std_out.native_source()};
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
         if (!reader.status().ok()) {
           ctrl.abort(caf::make_error(
-            ec::logic_error, fmt::format("failed to open reader: {}",
-                                         reader.status().CodeAsString())));
+            ec::system_error, fmt::format("failed to open reader: {}",
+                                          reader.status().CodeAsString())));
           co_return;
         }
         auto foo = (*reader)->ReadNext();
@@ -187,8 +149,10 @@ public:
         }
         auto output = table_slice{foo->batch};
         auto new_type = type{"tenzir.python", output.schema()};
-        auto actual_result = arrow::RecordBatch::Make(
-          new_type.to_arrow_schema(), output.rows(), foo->batch->columns());
+        auto actual_result
+          = arrow::RecordBatch::Make(new_type.to_arrow_schema(),
+                                     static_cast<int64_t>(output.rows()),
+                                     foo->batch->columns());
         output = table_slice{actual_result, new_type};
         co_yield output;
       }
@@ -200,19 +164,10 @@ public:
     co_return;
   }
 
-  auto execute_script(generator<table_slice> input,
-                      operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    TENZIR_TODO(); // TODO!
-  }
-
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    if (script_mode_)
-      return execute_script(std::move(input), ctrl);
-    else
-      return execute_nonscript(std::move(input), ctrl);
+    return execute(std::move(input), ctrl);
   }
 
   auto to_string() const -> std::string override {
@@ -223,11 +178,10 @@ public:
     return "python";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& /*filter*/, event_order /*order*/) const
     -> optimize_result override {
     // Note: The `unordered` means that we do not necessarily return the first
     // `limit_` events.
-    (void)filter, (void)order;
     return optimize_result{std::nullopt, event_order::unordered, copy()};
   }
 
@@ -237,27 +191,26 @@ public:
 
 private:
   std::string code_ = {};
-  bool script_mode_ = {};
 };
 
 class plugin final : public virtual operator_plugin<python_operator> {
 public:
   auto signature() const -> operator_signature override {
     return {
-      .source = true,
       .transformation = true,
     };
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto command = std::string{};
-    auto script_mode = bool{};
+    auto keep_leading_indent = bool{};
     auto parser = argument_parser{"python", "https://docs.tenzir.com/next/"
                                             "operators/transformations/python"};
     parser.add(command, "<command>");
-    parser.add("--script", script_mode);
+    parser.add("--keep-leading-indent", keep_leading_indent);
     parser.parse(p);
-    return std::make_unique<python_operator>(std::move(command), script_mode);
+    return std::make_unique<python_operator>(std::move(command),
+                                             keep_leading_indent);
   }
 };
 

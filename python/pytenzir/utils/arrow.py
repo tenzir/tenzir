@@ -1,7 +1,9 @@
 import json
+import sys
 import ipaddress as ip
 from typing import Iterable, Optional, Sequence, SupportsBytes, SupportsIndex
-
+from pyarrow import RecordBatch, DataType, schema, field
+from ipaddress import IPv4Address, IPv6Address, IPv4Network, IPv6Network
 import pyarrow as pa
 
 
@@ -52,6 +54,7 @@ class SubnetType(pa.ExtensionType):
         pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
 
     def __arrow_ext_serialize__(self) -> bytes:
+        """Explains how to serialize the type metadata"""
         return self.ext_name.encode()
 
     @classmethod
@@ -182,7 +185,7 @@ def extension_array(obj: Sequence, type: pa.DataType) -> pa.Array:
     `pyarrow.ExtensionArray` if the type is an extension type."""
     match type:
         case IPType():
-            arr = [pack_ip(e) for e in obj]
+            arr = (pack_ip(e) for e in obj)
             storage = pa.array(arr, pa.binary(16))
             return pa.ExtensionArray.from_storage(type, storage)
         case SubnetType():
@@ -208,6 +211,54 @@ def extension_array(obj: Sequence, type: pa.DataType) -> pa.Array:
             return pa.ExtensionArray.from_storage(type, storage)
         case _:
             return pa.array(obj, type)
+
+
+def infer_type(obj) -> DataType:
+    """
+    Map a python type to the corresponding Arrow type.
+    """
+    if isinstance(obj, IPv4Address) or isinstance(obj, IPv6Address):
+        return IPType()
+    elif isinstance(obj, ip.IPv4Network) or isinstance(obj, ip.IPv6Network):
+        return SubnetType()
+    elif isinstance(obj, str):
+        return pa.string()
+    elif isinstance(obj, bool):
+        return pa.bool_()
+    # In python `isinstance(True, int) == True` so this needs to be after
+    # the check for bool type.
+    elif isinstance(obj, int):
+        return pa.int64()
+    else:
+        print(f"unknown type {type(obj)}", file=sys.stderr)
+        return None  # TODO
+
+
+def make_record_batch(data: dict[str, list], type_hints: dict[str, type] = {}):
+    """
+    Create a record batch from a python object where values are allowed to have any
+    type mappable to the Tenzir type system.
+    """
+
+    def find_first_nonnull(xs):
+        for x in xs:
+            if x is not None:
+                return x
+        return None
+
+    arrays = []
+    fields = []
+    for name, value in data.items():
+        if len(value) == 0:
+            continue
+        type_ = (
+            type_hints[name]
+            if name in type_hints
+            else infer_type(find_first_nonnull(value))
+        )
+        fields.append(field(name, type_))
+        arrays.append(extension_array(value, type_))
+    return RecordBatch.from_arrays(arrays=arrays, schema=schema(fields))
 
 
 # Modules are intialized exactly once, so we can perform the registration here.
