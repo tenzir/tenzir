@@ -26,6 +26,8 @@ it is a good sign to have found the right solution for a particular problem.
 What we are describing here are the lessons learned from studying other systems,
 distilled as principles to follow for others.
 
+![Five Design Principles](five-design-principles.excalidraw.svg)
+
 <!--truncate-->
 
 This article comes from the data engineering perspective. What makes a data
