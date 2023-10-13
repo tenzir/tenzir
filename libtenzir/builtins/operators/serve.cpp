@@ -747,6 +747,10 @@ public:
     // executor indicated that the pipeline started.
     auto serve_manager = serve_manager_actor{};
     // Step 1: Get a handle to the SERVE MANAGER actor.
+    // NOTE: It is important that we let this actor run until the end of the
+    // operator. The SERVE MANAGER monitors the actor that sends it the start
+    // atom, and assumes that the operator shut down when it receives the
+    // corresponding down message.
     auto blocking = caf::scoped_actor{ctrl.self().system()};
     blocking
       ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
