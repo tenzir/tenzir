@@ -71,7 +71,7 @@ struct operator_args {
 /// provided the use case to subscribe to a specific set of artifacts from
 /// multiple clients.
 constexpr auto subscribe_artifact_vql = R"__(
-LET subscribe_artifact = {}
+LET subscribe_artifact = "{}"
 
 LET completions = SELECT *
                   FROM watch_monitoring(artifact="System.Flow.Completion")
