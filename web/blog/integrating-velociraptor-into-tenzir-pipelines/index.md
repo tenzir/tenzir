@@ -1,11 +1,11 @@
 ---
 title: Integrating Velociraptor into Tenzir Pipelines
 authors:
-   - mavam
    - name: Christoph Lobmeyer
-    title: Senior Expert Incident Response (External)
-    url: https://github.com/lo-chr
-    image_url: https://github.com/lo-chr.png
+     title: Senior Expert Incident Response (External)
+     url: https://github.com/lo-chr
+     image_url: https://github.com/lo-chr.png
+   - mavam
 date: 2023-10-17
 tags: [velociraptor, operator, dfir]
 draft: true
@@ -51,9 +51,10 @@ interact with a Velociraptor server:
 1. Send a [VQL][vql] query to a server and process the response.
 
 2. Use the `--subscribe <artifact>` option to hook into a continuous feed of
-   artifacts that match the `<artifact>` regular expression. Whenever a client responds to a hunt
-   that contains this artifact, the response will be forwarded to the pipeline
-   and emit the artifact payload in the response field `HuntResults`.
+   artifacts that match the `<artifact>` regular expression. Whenever a client
+   responds to a hunt that contains this artifact, the response will be
+   forwarded to the pipeline and emit the artifact payload in the response field
+   `HuntResults`.
 
 ### Raw VQL
 
@@ -77,17 +78,32 @@ velociraptor --query "select * from pslist()"
 
 ### Artifact Subscription
 
-If you use Velociraptor to perform interactive investigations in DFIR cases, you probably hunt for forensic artifacts (like dropped files or specific entries in the Windows registry) on assets connected to your Velociraptor server. For enrichment or to correlate the results with other security related data, you might want to post-process results of Velociraptor hunts.
+If you use Velociraptor to perform interactive investigations in DFIR cases, you
+probably hunt for forensic artifacts (like dropped files or specific entries in
+the Windows registry) on assets connected to your Velociraptor server. For
+enrichment or to correlate the results with other security related data, you
+might want to post-process results of Velociraptor hunts.
 
-With this feature Tenzir can subscribe to results of hunts, containing Velociraptor artifacts of your choice [like the ones shipped with Velociraptor](https://docs.velociraptor.app/artifact_references/). Everytime a client reports back on an artifact that matches the given Regex (like `Windows` or `Windows.Sys.StartupItems`) Tenzir will ingest the result of the underlying query into the pipeline.
+With this feature Tenzir can subscribe to results of hunts, containing
+Velociraptor artifacts of your choice [like the ones shipped with
+Velociraptor](https://docs.velociraptor.app/artifact_references/). Every time a
+client reports back on an artifact that matches the given Regex (like `Windows`
+or `Windows.Sys.StartupItems`) Tenzir will ingest the result of the underlying
+query into the pipeline.
 
 ```bash
 velociraptor --subscribe Windows.Sys.StartupItems | import
 ```
 
-There are many examples of anomalies to search for, like malware families persisting in Windows RunKeys. You can find some inspirations in the procedure examples of [MITRE ATT&CK Sub-Technique T1547.001](https://attack.mitre.org/techniques/T1547/001/).
+There are many examples of anomalies to search for, like malware families
+persisting in Windows RunKeys. You can find some inspirations in the procedure
+examples of [MITRE ATT&CK Sub-Technique
+T1547.001](https://attack.mitre.org/techniques/T1547/001/).
 
-The implementation of this feature - specifically the underlying VQL query - is inspired by the built-in capability of Velociraptor to upload results of hunts (the flows) to an elastic server utilizing the [Elastic.Flows.Upload artifact](https://docs.velociraptor.app/artifact_references/pages/elastic.flows.upload/).
+The implementation of this feature—specifically the underlying VQL query—is
+inspired by the built-in capability of Velociraptor to upload results of hunts
+(the flows) to an elastic server utilizing the [Elastic.Flows.Upload
+artifact](https://docs.velociraptor.app/artifact_references/pages/elastic.flows.upload/).
 
 ## Preparation
 
@@ -129,5 +145,5 @@ Now you are ready to run VQL queries!
 :::note Acknowledgements
 Big thanks to [Christoph Lobmeyer](https://github.com/lo-chr) who
 contributed the intricate expression that is behind the `--subscribe <artifact>`
-option. 🙏
+option and wrote parts of this blog post. 🙏
 :::
