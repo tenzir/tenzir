@@ -244,7 +244,6 @@ public:
         TENZIR_DEBUG("got a control message");
         auto row = builder.record();
         row.field("timestamp").data(timestamp);
-        row.field("query_id").data(response.query_id());
         row.field("log").data(response.log());
         for (auto& slice :
              builder.finish_as_table_slice("velociraptor.response"))
