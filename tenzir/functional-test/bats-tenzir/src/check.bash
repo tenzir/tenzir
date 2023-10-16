@@ -4,6 +4,7 @@
 # TODO: Add documentation.
 check() {
   local expect_error=0
+  local sort_output=0
   local args=()
   if [[ -v step_nr_ ]]; then
     step_nr_=$(( step_nr_ + 1 ))
@@ -19,6 +20,10 @@ check() {
       '!')
         shift # past argument
         expect_error=1
+        ;;
+      --sort)
+        sort_output=1
+        shift # past argument
         ;;
       --bg)
         shift # past argument
@@ -57,25 +62,30 @@ check() {
       fi
       if [[ -n "${output}" ]]; then
         mkdir -p "${ref_path}"
-        local sorted
-        sorted="$(printf '%s' "${output}" | LC_ALL=C sort)"
+        if [ $sort_output = 1 ]; then
+          output="$(printf '%s' "${output}" | LC_ALL=C sort)"
+        fi
         if [[ -f "${ref_path}/${step}.ref" ]]; then
           local expected
           expected="$(<"${ref_path}/${step}.ref")"
-          if [[ $sorted != "$expected" ]]; then
+          if [[ $output != "$expected" ]]; then
             debug 0 "updating ${ref_path}/${step}.ref"
-            printf '%s' "${sorted}" > "${ref_path}/${step}.ref"
+            printf '%s' "${output}" > "${ref_path}/${step}.ref"
           else
             debug 1 "keeping ${ref_path}/${step}.ref"
           fi
         else
           debug 0 "creating ${ref_path}/${step}.ref"
-          printf '%s' "${sorted}" > "${ref_path}/${step}.ref"
+          printf '%s' "${output}" > "${ref_path}/${step}.ref"
         fi
       fi
     else
       if [[ -f "${ref_path}/${step}.ref" ]]; then
-        assert_sorted - < "${ref_path}/${step}.ref"
+        if [ $sort_output = 1 ]; then
+          assert_sorted - < "${ref_path}/${step}.ref"
+        else
+          assert_output - < "${ref_path}/${step}.ref"
+        fi
       else
         assert_output ""
       fi

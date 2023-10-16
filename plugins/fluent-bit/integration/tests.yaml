@@ -1,8 +1,0 @@
-config-file: tenzir.yaml
-
-tests:
-  FluentBit:
-    tags: [fluent-bit]
-    steps:
-      - command: "@./tests.sh"
-        prepend_tenzir: false
