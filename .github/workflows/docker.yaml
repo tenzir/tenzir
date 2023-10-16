@@ -108,7 +108,7 @@ jobs:
           aws-region: eu-west-1
       - name: Login to AWS ECR
         if: steps.cfg.outputs.needs-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
       - name: Publish Docker Images
         run: |
           # Expand the registries arrays and output each entry together with
