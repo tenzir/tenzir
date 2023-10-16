@@ -688,6 +688,10 @@ public:
     }
   }
 
+  void finish(parser_state&) {
+    // Nothing to validate here.
+  }
+
 private:
   std::size_t lines_processed_ = 0u;
 };
@@ -754,6 +758,15 @@ public:
     handle_truncated_bytes(state);
   }
 
+  void finish(parser_state& state) {
+    if (not buffer_.view().empty()) {
+      ctrl_.abort(
+        caf::make_error(ec::parse_error, fmt::format("parser input ended with "
+                                                     "incomplete object")));
+      state.abort_requested = true;
+    }
+  }
+
 private:
   auto handle_truncated_bytes(parser_state& state) -> void {
     auto truncated_bytes = stream_.truncated_bytes();
@@ -815,6 +828,10 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
     if (state.abort_requested) {
       co_return;
     }
+  }
+  parser_impl.finish(state);
+  if (state.abort_requested) {
+    co_return;
   }
   // Flush all entries.
   for (auto&& entry : non_empty_entries(state)) {

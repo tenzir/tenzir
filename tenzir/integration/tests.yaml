@@ -678,6 +678,12 @@ tests:
     steps:
       - command: exec 'from file @./data/json/record-in-list.json read json | write json'
 
+  Read incomplete JSON object:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/incomplete-object.json'
+        expected_result: error
+
   Type mismatch in a column:
     tags: [pipelines]
     steps:
