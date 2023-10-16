@@ -249,6 +249,8 @@ public:
         for (auto& slice :
              builder.finish_as_table_slice("velociraptor.response"))
           co_yield slice;
+      } else {
+        co_yield {};
       }
     }
     auto status = reader->Finish();
