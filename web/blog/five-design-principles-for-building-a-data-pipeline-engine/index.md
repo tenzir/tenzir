@@ -3,6 +3,7 @@ title: Five Design Principles for Building a Data Pipeline Engine
 authors: [mavam]
 date: 2023-10-17
 tags: [pipelines, design]
+comments: true
 ---
 
 One thing we are observing is that organizations are actively seeking out
@@ -18,7 +19,7 @@ In this article I am explaining the underlying design principles for developing
 our own data pipeline engine, coming from the perspective of security teams that
 are building out their detection and response architecture. These principles
 emerged during design and implementation. Many times, we asked ourselves "what's
-the right way of solving this problem?". We often went back to the drawing board
+the right way of solving this problem?" We often went back to the drawing board
 and started challenging existing approaches, such as what a data source is, or
 what a connector should do. To our surprise, we found a coherent way to answer
 these questions without having to make compromises. When things feel Just Right,
