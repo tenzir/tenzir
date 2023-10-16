@@ -119,25 +119,20 @@ refer to as `velociraptor-binary` here.)
    velociraptor-binary config generate > server.yaml
    ```
 
-1. Create a `tenzir` user with `api` role:
-   ```bash
-   velociraptor-binary -c server.yaml user add --role=api tenzir
-   ```
-
-1. Run the frontend with the server configuration:
-   ```bash
-   velociraptor-binary -c server.yaml frontend
-   ```
-
-1. Create an API client:
+2. Create an API client:
    ```bash
    velociraptor-binary -c server.yaml config api_client --name tenzir client.yaml
    ```
 
-1. Copy the generated `client.yaml` to your Tenzir plugin configuration
+   Copy the generated `client.yaml` to your Tenzir plugin configuration
    directory as `velociraptor.yaml` so that the operator can find it:
    ```bash
    cp client.yaml /etc/tenzir/plugin/velociraptor.yaml
+   ```
+
+3. Run the frontend with the server configuration:
+   ```bash
+   velociraptor-binary -c server.yaml frontend
    ```
 
 Now you are ready to run VQL queries!
