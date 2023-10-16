@@ -11,3 +11,4 @@ compile_commands.json
 nix/
 !README.md
 !VERSIONING.md
+cmake-build-*/

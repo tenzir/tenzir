@@ -571,6 +571,19 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
       }
+      // Verify that the field names are unique
+      {
+        auto sorted_fields = document.fields;
+        std::ranges::sort(sorted_fields);
+        if (auto it = std::ranges::adjacent_find(sorted_fields);
+            it != sorted_fields.end()) {
+          diagnostic::error(
+            "failed to parse Zeek document: duplicate #field name `{}`", *it)
+            .note("line {}", line_nr)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+      }
       continue;
     }
     // If we don't have a builder yet, then we create one lazily.

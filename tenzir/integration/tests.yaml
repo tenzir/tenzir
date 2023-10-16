@@ -833,6 +833,9 @@ tests:
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_data_after_close_tag.log
         expected_result: error
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
+        input: data/zeek/duplicate_field_name.log
+        expected_result: error
 
   Zeek TSV with Remote Import:
     fixture: ServerTester
