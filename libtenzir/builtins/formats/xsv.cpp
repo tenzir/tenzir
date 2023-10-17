@@ -123,6 +123,10 @@ struct xsv_printer_impl {
       return true;
     }
 
+    auto operator()(view<blob> x) noexcept -> bool {
+      return (*this)(detail::base64::encode(x));
+    }
+
     auto operator()(const view<list>& x) noexcept -> bool {
       sequence_empty = true;
       for (const auto& v : x) {

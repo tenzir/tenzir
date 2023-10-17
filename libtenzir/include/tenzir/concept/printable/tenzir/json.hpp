@@ -13,6 +13,7 @@
 #include "tenzir/concept/printable/tenzir/json_printer_options.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/view.hpp"
 
@@ -85,6 +86,11 @@ struct json_printer : printer_base<json_printer> {
       out_ = fmt::format_to(out_, options_.style.string, "{}",
                             detail::json_escape(x));
       return true;
+    }
+
+    auto operator()(view<blob> x) noexcept -> bool {
+      // TODO: Do we want to prefix the encoded string, e.g., `base64:...`?
+      return (*this)(detail::base64::encode(x));
     }
 
     auto operator()(view<pattern> x) noexcept -> bool {

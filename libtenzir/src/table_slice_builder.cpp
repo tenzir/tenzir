@@ -349,6 +349,13 @@ append_builder(const string_type&,
 }
 
 arrow::Status
+append_builder(const blob_type&, type_to_arrow_builder_t<blob_type>& builder,
+               const view<type_to_data_t<blob_type>>& view) noexcept {
+  return builder.Append(
+    std::string_view{reinterpret_cast<const char*>(view.data()), view.size()});
+}
+
+arrow::Status
 append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
                const view<type_to_data_t<ip_type>>& view) noexcept {
   const auto bytes = as_bytes(view);

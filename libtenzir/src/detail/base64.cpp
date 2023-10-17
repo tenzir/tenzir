@@ -57,6 +57,11 @@ std::string encode(std::string_view str) {
   return result;
 }
 
+std::string encode(std::basic_string_view<std::byte> str) {
+  return encode(
+    std::string_view{reinterpret_cast<const char*>(str.data()), str.size()});
+}
+
 std::pair<size_t, size_t> decode(void* dst, char const* src, size_t len) {
   auto out = static_cast<char*>(dst);
   auto in = reinterpret_cast<unsigned char const*>(src);

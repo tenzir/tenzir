@@ -140,7 +140,7 @@ auto packet_record_type() -> type {
       {"timestamp", timestamp_type},
       {"captured_packet_length", uint64_type{}},
       {"original_packet_length", uint64_type{}},
-      {"data", type{string_type{}, {{"skip"}}}},
+      {"data", type{blob_type{}, {{"skip"}}}},
     },
   };
 }

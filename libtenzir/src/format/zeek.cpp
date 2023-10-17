@@ -118,6 +118,9 @@ std::string to_zeek_string(const type& t) {
     [](const string_type&) -> std::string {
       return "string";
     },
+    [](const blob_type&) -> std::string {
+      return "string";
+    },
     [](const ip_type&) -> std::string {
       return "addr";
     },
@@ -531,6 +534,25 @@ public:
       } else {
         *out++ = c;
       }
+    return true;
+  }
+
+  bool operator()(Iterator& out, const view<blob>& x) const {
+    for (auto b : x) {
+      // We escape a bit too much here (all non-byte UTF-8 code points), but
+      // this should be fine for now.
+      auto c = static_cast<unsigned char>(b);
+      auto high = (c & 0b1000'0000) != 0;
+      if (high || std::iscntrl(c) || c == separator || c == set_separator) {
+        auto hex = detail::byte_to_hex(c);
+        *out++ = '\\';
+        *out++ = 'x';
+        *out++ = hex.first;
+        *out++ = hex.second;
+      } else {
+        *out++ = c;
+      }
+    }
     return true;
   }
 

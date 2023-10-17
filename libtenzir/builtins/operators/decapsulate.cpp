@@ -328,10 +328,10 @@ public:
         continue;
       }
       auto [data_field, data_array] = data_index->get(slice);
-      auto data_values = caf::get_if<arrow::StringArray>(&*data_array);
+      auto data_values = caf::get_if<arrow::BinaryArray>(&*data_array);
       if (!data_values) {
         diagnostic::warning("got a malformed 'pcap.packet' event")
-          .note("field 'data' not of type string")
+          .note("field 'data' not of type blob")
           .emit(ctrl.diagnostics());
         co_yield {};
         continue;

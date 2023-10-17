@@ -272,6 +272,9 @@ value_at([[maybe_unused]] const Type& type,
     };
     return record_view_handle{
       record_view_ptr{caf::make_counted<record_view>(type, arr.fields(), row)}};
+  } else if constexpr (std::is_same_v<Type, blob_type>) {
+    const auto str = arr.GetView(row);
+    return {reinterpret_cast<const std::byte*>(str.data()), str.size()};
   } else {
     static_assert(detail::always_false_v<Type>, "unhandled type");
   }

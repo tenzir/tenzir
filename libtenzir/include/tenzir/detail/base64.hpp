@@ -61,6 +61,7 @@ size_t encode(void* dst, const void* src, size_t len);
 /// @param str The string to encode.
 /// @returns The Base64-encoded version of *str*.
 std::string encode(std::string_view str);
+std::string encode(std::basic_string_view<std::byte> str);
 
 // Decodes a Base64-encoded string into a sequence of bytes.
 // @param dst The destination buffer.

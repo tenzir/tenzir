@@ -425,7 +425,6 @@ auto to_packet_record(auto row) -> std::pair<packet_record, uint32_t> {
   auto pkt = packet_record{};
   auto linktype = uint32_t{0};
   auto timestamp = time{};
-  auto pkt_data = std::string_view{};
   // NB: the API for record_view feels iffy. It should expose a field-based
   // access method, as opposed to just key-value pairs.
   for (const auto& [key, value] : row) {
@@ -437,9 +436,9 @@ auto to_packet_record(auto row) -> std::pair<packet_record, uint32_t> {
       pkt.header.captured_packet_length = caf::get<uint64_t>(value);
     else if (key == "original_packet_length")
       pkt.header.original_packet_length = caf::get<uint64_t>(value);
-    else if (key == "data")
-      pkt_data = caf::get<std::string_view>(value);
-    else
+    else if (key == "data") {
+      pkt.data = caf::get<view<blob>>(value);
+    } else
       TENZIR_WARN("got invalid PCAP header field ''", key);
   }
   // Split the timestamp in two pieces.
@@ -447,11 +446,9 @@ auto to_packet_record(auto row) -> std::pair<packet_record, uint32_t> {
   auto secs = std::chrono::duration_cast<std::chrono::seconds>(ns);
   auto fraction = ns - secs;
   auto timestamp_fraction = detail::narrow_cast<uint32_t>(fraction.count());
-  pkt.header.timestamp = detail::narrow_cast<uint32_t>(secs.count()),
+  pkt.header.timestamp = detail::narrow_cast<uint32_t>(secs.count());
   pkt.header.timestamp_fraction = timestamp_fraction;
   // Translate the string to raw packet data.
-  pkt.data = std::span<const std::byte>{
-    reinterpret_cast<const std::byte*>(pkt_data.data()), pkt_data.size()};
   return {pkt, linktype};
 }
 

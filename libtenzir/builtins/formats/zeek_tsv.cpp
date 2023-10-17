@@ -274,6 +274,9 @@ struct zeek_printer {
       [](const string_type&) -> std::string {
         return "string";
       },
+      [](const blob_type&) -> std::string {
+        return "string";
+      },
       [](const ip_type&) -> std::string {
         return "addr";
       },
@@ -388,6 +391,34 @@ struct zeek_printer {
         } else {
           *out++ = c;
         }
+      return true;
+    }
+
+    auto operator()(view<blob> x) noexcept -> bool {
+      if (x.empty()) {
+        // TODO: Is this actually correct? An empty blob is not unset.
+        out = std::copy(printer.unset_field.begin(), printer.unset_field.end(),
+                        out);
+        return true;
+      }
+      // We do not base64 encode it here, because Zeek strings can contain
+      // arbitrary binary data (as long as it is escaped).
+      for (auto b : x) {
+        // We escape a bit too much here (all non-byte UTF-8 code points), but
+        // this should be fine for now.
+        auto c = static_cast<unsigned char>(b);
+        auto high = (c & 0b1000'0000) != 0;
+        if (high || std::iscntrl(c) || c == printer.sep
+            || c == printer.set_sep) {
+          auto hex = detail::byte_to_hex(c);
+          *out++ = '\\';
+          *out++ = 'x';
+          *out++ = hex.first;
+          *out++ = hex.second;
+        } else {
+          *out++ = c;
+        }
+      }
       return true;
     }
 
@@ -650,6 +681,10 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                                          ? document.set_separator
                                          : std::string{})
                      .then([&](type_to_data_t<Type> value) {
+                       // TODO: A zeek `string` is not necessarily valid UTF-8,
+                       // but our `string_type` requires it. We must use `blob`
+                       // here instead of the string turns out to contain
+                       // invalid UTF-8.
                        return document.builder->add(value);
                      });
         };
