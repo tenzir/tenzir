@@ -86,6 +86,8 @@ public:
   /// Initializes the builder, optionally with a given type (see above).
   series_builder(std::optional<std::reference_wrapper<const tenzir::type>> ty
                  = std::nullopt);
+  series_builder(const tenzir::type& ty) : series_builder(std::optional{ty}) {
+  }
 
   ~series_builder();
   series_builder(const series_builder&) = delete;
@@ -182,6 +184,9 @@ struct data_view2
   : caf::detail::tl_apply_t<caf::detail::tl_map_t<data::types, view_trait>,
                             variant> {
   using variant::variant;
+
+  explicit(false) data_view2(const data& x) : data_view2(make_view(x)) {
+  }
 
   explicit(false) data_view2(data_view x) {
     caf::visit(

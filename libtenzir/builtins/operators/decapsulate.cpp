@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/community_id.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/ether_type.hpp>
@@ -17,6 +17,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/mac.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 #include <arrow/record_batch.h>
 #include <netinet/in.h>
@@ -199,52 +200,36 @@ struct segment {
 /// Parses a packet in a sequence where each step is split into two parts:
 /// 1. Reconstruct the header structure into a dedicated structure.
 /// 2. Append the structure to the builder.
-auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
-  -> std::optional<diagnostic> {
-  auto fail = [](auto err) -> diagnostic {
-    return diagnostic::warning("failed to add record field")
-      .note(to_string(std::move(err)))
-      .done();
-  };
+auto parse(record_ref builder, std::span<const std::byte> bytes,
+           frame_type type) -> std::optional<diagnostic> {
   // Parse layer 2.
   auto frame = frame::make(bytes, type);
   if (!frame) {
     TENZIR_TRACE("failed to parse layer-2 frame");
     return std::nullopt;
   }
-  auto ether = builder.push_field("ether").push_record();
+  auto ether = builder.field("ether").record();
   auto src_str = fmt::to_string(frame->src);
   auto dst_str = fmt::to_string(frame->dst);
-  if (auto err = ether.push_field("src").add(std::string_view{src_str}))
-    return fail(err);
-  if (auto err = ether.push_field("dst").add(std::string_view{dst_str}))
-    return fail(err);
+  ether.field("src").data(std::string_view{src_str});
+  ether.field("dst").data(std::string_view{dst_str});
   if (frame->outer_vid) {
-    auto vlan = builder.push_field("vlan").push_record();
-    if (auto err = vlan.push_field("outer").add(
-          static_cast<uint64_t>(*frame->outer_vid)))
-      return fail(err);
+    auto vlan = builder.field("vlan").record();
+    vlan.field("outer").data(static_cast<uint64_t>(*frame->outer_vid));
     if (frame->inner_vid)
-      if (auto err = vlan.push_field("inner").add(
-            static_cast<uint64_t>(*frame->inner_vid)))
-        return fail(err);
+      vlan.field("inner").data(static_cast<uint64_t>(*frame->inner_vid));
   }
-  if (auto err
-      = ether.push_field("type").add(static_cast<uint64_t>(frame->type)))
-    return fail(err);
+  ether.field("type").data(static_cast<uint64_t>(frame->type));
   // Parse layer 3.
   auto packet = packet::make(frame->payload, frame->type);
   if (!packet) {
     TENZIR_TRACE("failed to parse layer-3 packet");
     return std::nullopt;
   }
-  auto ip = builder.push_field("ip").push_record();
-  if (auto err = ip.push_field("src").add(packet->src))
-    return fail(err);
-  if (auto err = ip.push_field("dst").add(packet->dst))
-    return fail(err);
-  if (auto err = ip.push_field("type").add(static_cast<uint64_t>(packet->type)))
-    return fail(err);
+  auto ip = builder.field("ip").record();
+  ip.field("src").data(packet->src);
+  ip.field("dst").data(packet->dst);
+  ip.field("type").data(static_cast<uint64_t>(packet->type));
   // Parse layer 4.
   auto segment = segment::make(packet->payload, packet->type);
   if (!segment) {
@@ -253,27 +238,21 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
   }
   switch (segment->type) {
     case port_type::icmp: {
-      auto icmp = builder.push_field("icmp").push_record();
-      if (auto err = icmp.push_field("type").add(uint64_t{segment->src}))
-        return fail(err);
-      if (auto err = icmp.push_field("code").add(uint64_t{segment->dst}))
-        return fail(err);
+      auto icmp = builder.field("icmp").record();
+      icmp.field("type").data(uint64_t{segment->src});
+      icmp.field("code").data(uint64_t{segment->dst});
       break;
     }
     case port_type::tcp: {
-      auto tcp = builder.push_field("tcp").push_record();
-      if (auto err = tcp.push_field("src_port").add(uint64_t{segment->src}))
-        return fail(err);
-      if (auto err = tcp.push_field("dst_port").add(uint64_t{segment->dst}))
-        return fail(err);
+      auto tcp = builder.field("tcp").record();
+      tcp.field("src_port").data(uint64_t{segment->src});
+      tcp.field("dst_port").data(uint64_t{segment->dst});
       break;
     }
     case port_type::udp: {
-      auto udp = builder.push_field("udp").push_record();
-      if (auto err = udp.push_field("src_port").add(uint64_t{segment->src}))
-        return fail(err);
-      if (auto err = udp.push_field("dst_port").add(uint64_t{segment->dst}))
-        return fail(err);
+      auto udp = builder.field("udp").record();
+      udp.field("src_port").data(uint64_t{segment->src});
+      udp.field("dst_port").data(uint64_t{segment->dst});
       break;
     }
     case port_type::icmp6:
@@ -285,8 +264,7 @@ auto parse(auto& builder, std::span<const std::byte> bytes, frame_type type)
   auto conn = make_flow(packet->src, packet->dst, segment->src, segment->dst,
                         segment->type);
   auto cid = community_id::compute<policy::base64>(conn);
-  if (auto err = builder.push_field("community_id").add(cid))
-    return fail(err);
+  builder.field("community_id").data(cid);
   return std::nullopt;
 }
 
@@ -358,13 +336,13 @@ public:
         co_yield {};
         continue;
       }
-      auto builder = adaptive_table_slice_builder{};
+      auto builder = series_builder{};
       for (auto i = 0u; i < slice.rows(); ++i) {
         auto linktype = (*linktype_values)[i];
         auto data = (*data_values)[i];
         if (!data)
           continue;
-        auto row = builder.push_row();
+        auto row = builder.record();
         auto raw_frame = std::span<const std::byte>{
           reinterpret_cast<const std::byte*>(data->data()), data->size()};
         auto inferred_type = static_cast<frame_type>(linktype ? *linktype : 0);
@@ -372,21 +350,22 @@ public:
           ctrl.diagnostics().emit(std::move(*diag));
       }
       // Add back the untouched data column at the end before yielding.
-      auto new_slice = builder.finish("tenzir.packet");
-      auto transformation = indexed_transformation{
-        .index = {caf::get<record_type>(new_slice.schema()).num_fields() - 1},
-        .fun = [&](struct record_type::field in_field,
-                   std::shared_ptr<arrow::Array> in_array)
-          -> indexed_transformation::result_type {
-          return {
-            {std::move(in_field), std::move(in_array)},
-            {{"pcap", slice.schema()},
-             to_record_batch(slice)->ToStructArray().ValueOrDie()},
-          };
-        },
-      };
-      auto result = transform_columns(new_slice, {std::move(transformation)});
-      co_yield std::move(result);
+      for (auto&& new_slice : builder.finish_as_table_slice("tenzir.packet")) {
+        auto transformation = indexed_transformation{
+          .index = {caf::get<record_type>(new_slice.schema()).num_fields() - 1},
+          .fun = [&](struct record_type::field in_field,
+                     std::shared_ptr<arrow::Array> in_array)
+            -> indexed_transformation::result_type {
+            return {
+              {std::move(in_field), std::move(in_array)},
+              {{"pcap", slice.schema()},
+               to_record_batch(slice)->ToStructArray().ValueOrDie()},
+            };
+          },
+        };
+        auto result = transform_columns(new_slice, {std::move(transformation)});
+        co_yield std::move(result);
+      }
     }
   }
 

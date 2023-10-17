@@ -7,12 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/actors.hpp>
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/catalog.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/si_literals.hpp>
+#include <tenzir/table_slice_builder.hpp>
 
 #include <caf/scoped_actor.hpp>
 
