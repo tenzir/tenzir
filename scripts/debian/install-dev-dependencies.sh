@@ -19,6 +19,7 @@ apt-get -y --no-install-recommends install \
     jq \
     libboost1.81-dev \
     libboost-filesystem1.81-dev \
+    libboost-url1.81-dev \
     libflatbuffers-dev \
     libfmt-dev \
     libgrpc-dev \
