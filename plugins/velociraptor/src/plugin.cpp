@@ -71,7 +71,7 @@ struct operator_args {
 /// provided the use case to subscribe to a specific set of artifacts from
 /// multiple clients.
 constexpr auto subscribe_artifact_vql = R"__(
-LET subscribe_artifact = {}
+LET subscribe_artifact = "{}"
 
 LET completions = SELECT *
                   FROM watch_monitoring(artifact="System.Flow.Completion")
@@ -115,6 +115,55 @@ FROM foreach(
 
 auto make_subscribe_query(std::string_view artifact) -> std::string {
   return fmt::format(subscribe_artifact_vql, artifact);
+}
+
+/// Parses a response as table slice.
+auto parse(const proto::VQLResponse& response)
+  -> caf::expected<std::vector<table_slice>> {
+  auto builder = series_builder{};
+  auto us = std::chrono::microseconds(response.timestamp());
+  auto timestamp = time{std::chrono::duration_cast<duration>(us)};
+  // Velociraptor sends a stream of responses that consists of "control"
+  // and "data" messages. If the response payload is empty, then we have a
+  // control message, otherwise we have a data message.
+  if (not response.response().empty()) {
+    TENZIR_DEBUG("got a data message");
+    // There's an opportunity for improvement here, as we are not (yet)
+    // making use of the additional types provided in the response. We
+    // should synthesize a schema from that and provide that as hint to
+    // the series builder.
+    auto json = from_json(response.response());
+    if (not json)
+      return caf::make_error(ec::parse_error,
+                             "Velociraptor response not in JSON format");
+    const auto* objects = caf::get_if<list>(&*json);
+    if (objects == nullptr)
+      return caf::make_error(ec::parse_error,
+                             "expected JSON array in Velociraptor response");
+    for (const auto& object : *objects) {
+      const auto* rec = caf::get_if<record>(&object);
+      if (rec == nullptr)
+        return caf::make_error(ec::parse_error,
+                               "expected objects in Velociraptor response");
+      auto row = builder.record();
+      row.field("timestamp").data(timestamp);
+      row.field("query_id").data(response.query_id());
+      row.field("query").data(record{
+        {"name", response.query().name()},
+        {"vql", response.query().vql()},
+      });
+      row.field("part").data(response.part());
+      auto resp = row.field("response").record();
+      for (const auto& [field, value] : *rec)
+        resp.field(field).data(make_view(value));
+    }
+  } else if (not response.log().empty()) {
+    TENZIR_DEBUG("got a control message");
+    auto row = builder.record();
+    row.field("timestamp").data(timestamp);
+    row.field("log").data(response.log());
+  }
+  return builder.finish_as_table_slice("velociraptor.response");
 }
 
 class velociraptor_operator final
@@ -186,74 +235,58 @@ public:
                  "{}",
                  args_.max_rows, args_.max_wait, args_.org_id);
     auto context = grpc::ClientContext{};
-    auto reader = stub->Query(&context, args);
-    TENZIR_DEBUG("processing response");
-    proto::VQLResponse response;
-    while (reader->Read(&response)) {
-      auto builder = series_builder{};
-      TENZIR_DEBUG("processing response item");
-      auto us = std::chrono::microseconds(response.timestamp());
-      auto timestamp = time{std::chrono::duration_cast<duration>(us)};
-      // Velociraptor sends a stream of responses that consists of "control"
-      // and "data" messages. If the response payload is empty, then we have a
-      // control message, otherwise we have a data message.
-      if (not response.response().empty()) {
-        TENZIR_DEBUG("got a data message");
-        // There's an opportunity for improvement here, as we are not (yet)
-        // making use of the additional types provided in the response. We
-        // should synthesize a schema from that and provide that as hint to
-        // the series builder.
-        auto json = from_json(response.response());
-        if (not json) {
-          diagnostic::warning("failed to process Velociraptor RPC respone")
-            .note("{}", response.response())
-            .emit(ctrl.diagnostics());
-          continue;
+    auto completion_queue = grpc::CompletionQueue{};
+    auto reader = stub->AsyncQuery(&context, args, &completion_queue, nullptr);
+    auto done = false;
+    auto read = true;
+    auto response = proto::VQLResponse{};
+    auto input_tag = uint64_t{0};
+    co_yield {};
+    while (not done) {
+      TENZIR_DEBUG("reading response");
+      if (read) {
+        ++input_tag;
+        reader->Read(&response, reinterpret_cast<void*>(input_tag));
+        read = false;
+      }
+      auto deadline = std::chrono::system_clock::now() + 250ms;
+      auto output_tag = uint64_t{0};
+      auto ok = false;
+      auto result = completion_queue.AsyncNext(
+        reinterpret_cast<void**>(&output_tag), &ok, deadline);
+      switch (result) {
+        case grpc::CompletionQueue::SHUTDOWN: {
+          TENZIR_DEBUG("drained completion queue");
+          TENZIR_ASSERT(not ok);
+          done = true;
+          break;
         }
-        const auto* objects = caf::get_if<list>(&*json);
-        if (objects == nullptr) {
-          diagnostic::warning("expected list in Velociraptor JSON response")
-            .note("{}", response.response())
-            .emit(ctrl.diagnostics());
-          continue;
-        }
-        for (const auto& object : *objects) {
-          const auto* rec = caf::get_if<record>(&object);
-          if (rec == nullptr) {
-            diagnostic::warning("expected objects in Velociraptor response")
-              .note("{}", response.response())
-              .emit(ctrl.diagnostics());
-            continue;
+        case grpc::CompletionQueue::GOT_EVENT: {
+          TENZIR_DEBUG("got event #{} (ok = {})", output_tag, ok);
+          if (ok) {
+            if (auto slices = parse(response))
+              for (const auto& slice : *slices)
+                co_yield slice;
+            if (output_tag == input_tag)
+              read = true;
+          } else {
+            // When `ok` is false, future calls to Next() will never return true
+            // again, so we can exit our loop.
+            done = true;
           }
-          auto row = builder.record();
-          row.field("timestamp").data(timestamp);
-          row.field("query_id").data(response.query_id());
-          row.field("query").data(record{
-            {"name", response.query().name()},
-            {"vql", response.query().vql()},
-          });
-          row.field("part").data(response.part());
-          auto resp = row.field("response").record();
-          for (const auto& [field, value] : *rec)
-            resp.field(field).data(make_view(value));
+          break;
         }
-        for (auto& slice :
-             builder.finish_as_table_slice("velociraptor.response"))
-          co_yield slice;
-      } else if (not response.log().empty()) {
-        TENZIR_DEBUG("got a control message");
-        auto row = builder.record();
-        row.field("timestamp").data(timestamp);
-        row.field("query_id").data(response.query_id());
-        row.field("log").data(response.log());
-        for (auto& slice :
-             builder.finish_as_table_slice("velociraptor.response"))
-          co_yield slice;
+        case grpc::CompletionQueue::TIMEOUT: {
+          TENZIR_ASSERT(not ok);
+          co_yield {};
+          break;
+        }
       }
     }
-    auto status = reader->Finish();
+    auto status = grpc::Status{};
+    reader->Finish(&status, nullptr);
     if (not status.ok())
-      diagnostic::error("failed to process gRPC response")
+      diagnostic::warning("failed to finish Velociraptor gRPC stream")
         .note("{}", status.error_message())
         .emit(ctrl.diagnostics());
   }
