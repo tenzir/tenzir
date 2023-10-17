@@ -27,6 +27,16 @@
 
 namespace tenzir {
 
+struct chunk_metadata {
+  std::optional<std::string> content_type = {};
+
+  friend auto inspect(auto& f, chunk_metadata& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.chunk_metadata")
+      .fields(f.field("content_type", x.content_type));
+  }
+};
+
 /// A reference-counted contiguous block of memory. A chunk supports custom
 /// deleters for custom deallocations when the last instance goes out of scope.
 class chunk final : public caf::ref_counted {
@@ -58,15 +68,19 @@ public:
   /// @param data The raw byte data.
   /// @param size The number of bytes *data* points to.
   /// @param deleter The function to delete the data.
+  /// @param metadata The metadata associated with the chunk.
   /// @returns A chunk pointer or `nullptr` on failure.
   static chunk_ptr
-  make(const void* data, size_type size, deleter_type&& deleter) noexcept;
+  make(const void* data, size_type size, deleter_type&& deleter,
+       chunk_metadata metadata = {}) noexcept;
 
   /// Constructs a chunk of particular size and pointer to data.
   /// @param view The span holding the raw data.
   /// @param deleter The function to delete the data.
+  /// @param metadata The metadata associated with the chunk.
   /// @returns A chunk pointer or `nullptr` on failure.
-  static chunk_ptr make(view_type view, deleter_type&& deleter) noexcept;
+  static chunk_ptr make(view_type view, deleter_type&& deleter,
+                        chunk_metadata metadata = {}) noexcept;
 
   /// Constructs an empty chunk
   static chunk_ptr make_empty() noexcept;
@@ -74,6 +88,7 @@ public:
   /// Construct a chunk from a byte buffer, and bind the lifetime of the chunk
   /// to the buffer.
   /// @param buffer The byte buffer.
+  /// @param metadata The metadata associated with the chunk.
   /// @note This overload can only be selected if the buffer is an
   /// rvalue-reference, and an overload of *as_bytes* exists for the buffer. This
   /// is intended to guard against accidental copies when calling this function.
@@ -83,56 +98,67 @@ public:
              requires(const Buffer& buffer) {
                { as_bytes(buffer) } -> std::convertible_to<view_type>;
              })
-  static auto make(Buffer&& buffer) -> chunk_ptr {
+  static auto make(Buffer&& buffer, chunk_metadata metadata = {}) -> chunk_ptr {
     // Move the buffer into a unique pointer; otherwise, we might run into
     // issues when moving the buffer invalidates the span, e.g., for strings
     // with small buffer optimizations.
     auto movable_buffer = std::make_unique<Buffer>(std::exchange(buffer, {}));
     const auto view = static_cast<view_type>(as_bytes(*movable_buffer));
-    return make(view, [buffer = std::move(movable_buffer)]() noexcept {
-      static_cast<void>(buffer);
-    });
+    return make(
+      view,
+      [buffer = std::move(movable_buffer)]() noexcept {
+        static_cast<void>(buffer);
+      },
+      std::move(metadata));
   }
 
   /// Construct a chunk from an Arrow buffer, and bind the lifetime of the chunk
   /// to the buffer.
   /// @param buffer The Arrow buffer.
+  /// @param metadata The metadata associated with the chunk.
   /// @returns A chunk pointer or `nullptr` on failure.
-  static chunk_ptr make(std::shared_ptr<arrow::Buffer> buffer) noexcept;
+  static chunk_ptr make(std::shared_ptr<arrow::Buffer> buffer,
+                        chunk_metadata metadata = {}) noexcept;
 
   /// Avoid the common mistake of binding ownership to a span.
   template <class Byte, size_t Extent>
-  static auto make(std::span<Byte, Extent>&&) = delete;
+  static auto make(std::span<Byte, Extent>&&, chunk_metadata = {}) = delete;
 
   /// Avoid the common mistake of binding ownership to a string view.
-  static auto make(std::string_view&&) = delete;
+  static auto make(std::string_view&&, chunk_metadata = {}) = delete;
 
   /// Construct a chunk from a byte buffer by copying it.
   /// @param buffer The byte buffer.
+  /// @param buffer The metadata associated with the chunk.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
     requires requires(const Buffer& buffer) {
       { as_bytes(buffer) } -> std::convertible_to<view_type>;
     }
-  static auto copy(const Buffer& buffer) -> chunk_ptr {
+  static auto copy(const Buffer& buffer, chunk_metadata metadata = {})
+    -> chunk_ptr {
     const auto view = static_cast<view_type>(as_bytes(buffer));
     auto copy = std::make_unique<value_type[]>(view.size());
     const auto data = copy.get();
     std::memcpy(data, view.data(), view.size());
-    return make(data, view.size(), [copy = std::move(copy)]() noexcept {
-      static_cast<void>(copy);
-    });
+    return make(
+      data, view.size(),
+      [copy = std::move(copy)]() noexcept {
+        static_cast<void>(copy);
+      },
+      std::move(metadata));
   }
 
   /// Memory-maps a chunk from a read-only file.
   /// @param filename The name of the file to memory-map.
   /// @param size The number of bytes to map. If 0, map the entire file.
   /// @param offset Where to start in terms of number of bytes from the start.
+  /// @param metadata The metadata associate with the chunk.
   /// @returns A chunk pointer or an error on failure. The returned chunk
   /// pointer is never `nullptr`.
   static caf::expected<chunk_ptr>
   mmap(const std::filesystem::path& filename, size_type size = 0,
-       size_type offset = 0);
+       size_type offset = 0, chunk_metadata metadata = {});
 
   /// Compresses a view of bytes into a chunk.
   /// @param bytes The bytes to compress.
@@ -150,6 +176,9 @@ public:
   /// @relates compress
   static caf::expected<chunk_ptr>
   decompress(view_type bytes, size_t decompressed_size) noexcept;
+
+  /// @returns The metadata associated with the chunk.
+  auto metadata() const noexcept -> const chunk_metadata&;
 
   // -- container facade -------------------------------------------------------
 
@@ -223,7 +252,8 @@ public:
   friend std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept;
   friend caf::error
   write(const std::filesystem::path& filename, const chunk_ptr& x);
-  friend caf::error read(const std::filesystem::path& filename, chunk_ptr& x);
+  friend caf::error read(const std::filesystem::path& filename, chunk_ptr& x,
+                         chunk_metadata metadata);
 
 private:
   // -- implementation details -------------------------------------------------
@@ -234,7 +264,9 @@ private:
   /// Constructs a chunk from a span and a deleter.
   /// @param view The span holding the raw data.
   /// @param deleter The function to delete the data.
-  chunk(view_type view, deleter_type&& deleter) noexcept;
+  /// @param metadata The metadata associated with the chunk.
+  chunk(view_type view, deleter_type&& deleter,
+        chunk_metadata metadata) noexcept;
 
   template <class Inspector>
   friend bool load_impl(Inspector& f, chunk_ptr& x) {
@@ -256,9 +288,15 @@ private:
         x = nullptr;
         return false;
       }
-    x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
-      static_cast<void>(buffer);
-    });
+    // Loading the metadata can fail as it wasn't present before Tenzir v4.4.
+    auto metadata = chunk_metadata{};
+    (void)f.apply(metadata);
+    x = chunk::make(
+      data, size,
+      [buffer = std::move(buffer)]() noexcept {
+        static_cast<void>(buffer);
+      },
+      std::move(metadata));
     return true;
   }
 
@@ -272,6 +310,8 @@ private:
     for (auto byte : *x)
       if (!f.apply(byte))
         return false;
+    if (not f.apply(x->metadata()))
+      return false;
     return true;
   }
 
@@ -280,6 +320,8 @@ private:
 
   /// The function to delete the data.
   deleter_type deleter_;
+
+  chunk_metadata metadata_ = {};
 };
 
 template <class Inspector>
@@ -290,6 +332,9 @@ bool inspect(Inspector& f, chunk_ptr& x) {
     return save_impl(f, x);
   }
 }
+
+caf::error read(const std::filesystem::path& filename, chunk_ptr& x,
+                chunk_metadata metadata = {});
 
 } // namespace tenzir
 

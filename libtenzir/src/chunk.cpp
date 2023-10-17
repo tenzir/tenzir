@@ -193,31 +193,40 @@ chunk::~chunk() noexcept {
 
 // -- factory functions ------------------------------------------------------
 
-chunk_ptr
-chunk::make(const void* data, size_type size, deleter_type&& deleter) noexcept {
-  return make(view_type{static_cast<pointer>(data), size}, std::move(deleter));
+chunk_ptr chunk::make(const void* data, size_type size, deleter_type&& deleter,
+                      chunk_metadata metadata) noexcept {
+  return make(view_type{static_cast<pointer>(data), size}, std::move(deleter),
+              std::move(metadata));
 }
 
-chunk_ptr chunk::make(view_type view, deleter_type&& deleter) noexcept {
-  return chunk_ptr{new chunk{view, std::move(deleter)}, false};
+chunk_ptr chunk::make(view_type view, deleter_type&& deleter,
+                      chunk_metadata metadata) noexcept {
+  return chunk_ptr{new chunk{view, std::move(deleter), std::move(metadata)},
+                   false};
 }
 
-chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer) noexcept {
+chunk_ptr chunk::make(std::shared_ptr<arrow::Buffer> buffer,
+                      chunk_metadata metadata) noexcept {
   if (!buffer)
     return nullptr;
   const auto* data = buffer->data();
   const auto size = buffer->size();
-  return make(data, size, [buffer = std::move(buffer)]() noexcept {
-    static_cast<void>(buffer);
-  });
+  return make(
+    data, size,
+    [buffer = std::move(buffer)]() noexcept {
+      static_cast<void>(buffer);
+    },
+    std::move(metadata));
 }
 
 chunk_ptr chunk::make_empty() noexcept {
-  return chunk_ptr{new chunk{view_type{}, deleter_type{}}, false};
+  return chunk_ptr{new chunk{view_type{}, deleter_type{}, chunk_metadata{}},
+                   false};
 }
 
-caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
-                                     size_type size, size_type offset) {
+caf::expected<chunk_ptr>
+chunk::mmap(const std::filesystem::path& filename, size_type size,
+            size_type offset, chunk_metadata metadata) {
   // Open and memory-map the file.
   const auto fd = ::open(filename.c_str(), O_RDONLY, 0644);
   if (fd == -1)
@@ -245,7 +254,7 @@ caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
   auto deleter = [=]() noexcept {
     ::munmap(map, size);
   };
-  return make(map, size, std::move(deleter));
+  return make(map, size, std::move(deleter), std::move(metadata));
 }
 
 caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
@@ -296,6 +305,10 @@ chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
   TENZIR_ASSERT(buffer.size()
                 == detail::narrow_cast<size_t>(length.ValueUnsafe()));
   return chunk::make(std::move(buffer));
+}
+
+auto chunk::metadata() const noexcept -> const chunk_metadata& {
+  return metadata_;
 }
 
 // -- container facade ---------------------------------------------------------
@@ -352,9 +365,12 @@ chunk_ptr chunk::slice(view_type view) const {
   TENZIR_ASSERT(view.begin() >= begin());
   TENZIR_ASSERT(view.end() <= end());
   this->ref();
-  return make(view, [this]() noexcept {
-    this->deref();
-  });
+  return make(
+    view,
+    [this]() noexcept {
+      this->deref();
+    },
+    metadata());
 }
 
 // -- free functions ----------------------------------------------------------
@@ -393,7 +409,8 @@ caf::error write(const std::filesystem::path& filename, const chunk_ptr& x) {
   return io::save(filename, as_bytes(x));
 }
 
-caf::error read(const std::filesystem::path& filename, chunk_ptr& x) {
+caf::error read(const std::filesystem::path& filename, chunk_ptr& x,
+                chunk_metadata metadata) {
   std::error_code err{};
   const auto size = std::filesystem::file_size(filename, err);
   if (size == static_cast<std::uintmax_t>(-1)) {
@@ -409,16 +426,20 @@ caf::error read(const std::filesystem::path& filename, chunk_ptr& x) {
     x = nullptr;
     return err;
   }
-  x = chunk::make(view, [buffer = std::move(buffer)]() noexcept {
-    static_cast<void>(buffer);
-  });
+  x = chunk::make(
+    view,
+    [buffer = std::move(buffer)]() noexcept {
+      static_cast<void>(buffer);
+    },
+    std::move(metadata));
   return caf::none;
 }
 
 // -- implementation details ---------------------------------------------------
 
-chunk::chunk(view_type view, deleter_type&& deleter) noexcept
-  : view_{view}, deleter_{std::move(deleter)} {
+chunk::chunk(view_type view, deleter_type&& deleter,
+             chunk_metadata metadata) noexcept
+  : view_{view}, deleter_{std::move(deleter)}, metadata_{std::move(metadata)} {
   auto data = view.data();
   auto sz = view.size();
   TENZIR_TRACEPOINT(chunk_make, data, sz);
