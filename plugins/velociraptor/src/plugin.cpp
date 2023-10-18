@@ -267,16 +267,26 @@ public:
         case grpc::CompletionQueue::GOT_EVENT: {
           TENZIR_DEBUG("got event #{} (ok = {})", output_tag, ok);
           if (ok) {
-            if (auto slices = parse(response)) {
-              for (const auto& slice : *slices)
-                co_yield slice;
-            } else {
-              diagnostic::warning("failed to parse Velociraptor gRPC response")
-                .note("{}", slices.error())
-                .emit(ctrl.diagnostics());
-            }
-            if (output_tag == input_tag)
+            if (output_tag == input_tag) {
+              if (auto slices = parse(response)) {
+                for (const auto& slice : *slices)
+                  co_yield slice;
+              } else {
+                diagnostic::warning(
+                  "failed to parse Velociraptor gRPC response")
+                  .note("{}", slices.error())
+                  .note("response: '{}'", response.response())
+                  .note("query_id: '{}'", response.query_id())
+                  .note("part: '{}'", response.part())
+                  .note("query name: '{}'", response.query().name())
+                  .note("query VQL: '{}'", response.query().vql())
+                  .note("timestamp: '{}'", response.timestamp())
+                  .note("total_rows: '{}'", response.total_rows())
+                  .note("log: '{}'", response.log())
+                  .emit(ctrl.diagnostics());
+              }
               read = true;
+            }
           } else {
             // When `ok` is false, future calls to Next() will never return true
             // again, so we can exit our loop.
