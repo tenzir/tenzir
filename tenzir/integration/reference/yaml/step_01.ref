@@ -8,4 +8,6 @@ tenzir:
   export:
     zeek:
       disable-timestamp-tags: true
+  plugins:
+    []
 ...
