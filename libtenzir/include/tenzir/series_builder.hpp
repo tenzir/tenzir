@@ -301,6 +301,11 @@ public:
     return detail::field_ref{origin_, name};
   }
 
+  /// SAme as `field(name).data(value)`.
+  void field(std::string_view name, data_view2 value) {
+    field(name).data(std::move(value));
+  }
+
 private:
   detail::typed_builder<record_type>* origin_;
 };
