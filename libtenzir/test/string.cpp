@@ -176,27 +176,47 @@ TEST(splitting) {
   CHECK_EQUAL(s[1], "a");
   CHECK_EQUAL(s[2], "b");
   CHECK_EQUAL(s[3], "c");
-  MESSAGE("split with escaping");
-  str = "a*,b,c";
-  s = split(str, ",", "*");
-  REQUIRE(s.size() == 2);
-  CHECK_EQUAL(s[0], "a*,b");
-  CHECK_EQUAL(s[1], "c");
   MESSAGE("split with max splits");
   str = "a,b,c,d,e,f";
-  s = split(str, ",", "", 1);
+  s = split(str, ",", 1);
   REQUIRE(s.size() == 2);
   CHECK_EQUAL(s[0], "a");
   CHECK_EQUAL(s[1], "b,c,d,e,f");
+  MESSAGE("split with that includes the delimiter");
+  str = "a,b,c";
+  s = split(str, ",", -1, true);
+  REQUIRE(s.size() == 5);
+  CHECK_EQUAL(s[0], "a");
+  CHECK_EQUAL(s[1], ",");
+  CHECK_EQUAL(s[2], "b");
+  CHECK_EQUAL(s[3], ",");
+  CHECK_EQUAL(s[4], "c");
+}
+
+TEST(escaped splitting) {
+  using namespace std::string_literals;
+  MESSAGE("split with escaping");
+  auto str = "a*,b,c"s;
+  auto s = split_escaped(str, ",", "*");
+  REQUIRE(s.size() == 2);
+  CHECK_EQUAL(s[0], "a,b");
+  CHECK_EQUAL(s[1], "c");
+  MESSAGE("escaped split that includes the delimiter");
   str = "a-b-c*-d";
-  MESSAGE("split that includes the delimiter");
-  s = split(str, "-", "*", -1, true);
+  s = split_escaped(str, "-", "*", -1, true);
   REQUIRE(s.size() == 5);
   CHECK_EQUAL(s[0], "a");
   CHECK_EQUAL(s[1], "-");
   CHECK_EQUAL(s[2], "b");
   CHECK_EQUAL(s[3], "-");
-  CHECK_EQUAL(s[4], "c*-d");
+  CHECK_EQUAL(s[4], "c-d");
+  MESSAGE("escaped split with max splits");
+  str = "a,b*,c,d,e,f";
+  s = split_escaped(str, ",", "*", 2);
+  REQUIRE(s.size() == 3);
+  CHECK_EQUAL(s[0], "a");
+  CHECK_EQUAL(s[1], "b,c");
+  CHECK_EQUAL(s[2], "d,e,f");
 }
 
 TEST(join) {

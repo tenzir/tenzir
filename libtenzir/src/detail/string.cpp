@@ -98,70 +98,68 @@ std::string replace_all(std::string str, std::string_view search,
                         std::string_view replace) {
   auto pos = std::string::size_type{0};
   while ((pos = str.find(search, pos)) != std::string::npos) {
-     str.replace(pos, search.length(), replace);
-     pos += replace.length();
+    str.replace(pos, search.length(), replace);
+    pos += replace.length();
   }
   return str;
 }
 
 std::vector<std::string_view> split(std::string_view str, std::string_view sep,
-                                    std::string_view esc, size_t max_splits,
-                                    bool include_sep) {
+                                    size_t max_splits, bool include_sep) {
   TENZIR_ASSERT(!sep.empty());
-  std::vector<std::string_view> pos;
+  std::vector<std::string_view> out;
+  auto it = str.begin();
   size_t splits = 0;
-  auto end = str.end();
-  auto begin = str.begin();
-  auto i = begin;
-  auto prev = i;
-  auto push = [&](auto first, auto last) {
-    using std::distance;
-    pos.emplace_back(str.substr(distance(begin, first), distance(first, last)));
-  };
-  while (i != end) {
-    // Find a separator that fits in the string.
-    if (*i != sep[0] || i + sep.size() > end) {
-      ++i;
-      continue;
-    }
-    // Check remaining separator characters.
-    size_t j = 1;
-    auto s = i;
-    while (j < sep.size())
-      if (*++s != sep[j])
-        break;
-      else
-        ++j;
-    // No separator match.
-    if (j != sep.size()) {
-      ++i;
-      continue;
-    }
-    // Make sure it's not an escaped match.
-    if (!esc.empty() && esc.size() < static_cast<size_t>(i - begin)) {
-      auto escaped = true;
-      auto esc_start = i - esc.size();
-      for (size_t j = 0; j < esc.size(); ++j)
-        if (esc_start[j] != esc[j]) {
-          escaped = false;
-          break;
-        }
-      if (escaped) {
-        ++i;
+  while (it != str.end() && splits++ != max_splits) {
+    auto next_sep = std::ranges::search(std::string_view{it, str.end()}, sep);
+    out.emplace_back(it, next_sep.begin());
+    if (include_sep && !next_sep.empty())
+      out.emplace_back(next_sep.begin(), next_sep.end());
+    it = next_sep.end();
+  }
+  if (it != str.end())
+    out.emplace_back(it, str.end());
+  return out;
+}
+
+std::vector<std::string>
+split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
+              size_t max_splits, bool include_sep) {
+  TENZIR_ASSERT(!sep.empty());
+  TENZIR_ASSERT(!esc.empty());
+  std::vector<std::string> out;
+  auto it = str.begin();
+  std::string current{};
+  size_t splits = 0;
+  while (it != str.end()) {
+    auto next_sep = std::ranges::search(std::string_view{it, str.end()}, sep);
+    if (std::distance(it, next_sep.begin()) >= std::ssize(esc)) {
+      // Possibly escaped separator
+      auto possible_esc = std::string_view{
+        std::prev(next_sep.begin(), std::ssize(esc)), next_sep.begin()};
+      if (possible_esc == esc) {
+        current.append(std::string_view{it, possible_esc.begin()});
+        current.append(std::string_view{next_sep.begin(), next_sep.end()});
+        it = next_sep.end();
         continue;
       }
     }
-    if (splits++ == max_splits)
+    current.append(std::string_view{it, next_sep.begin()});
+    if (splits++ == max_splits) {
+      it = next_sep.begin();
       break;
-    push(prev, i);
-    if (include_sep)
-      push(i, i + sep.size());
-    i += sep.size();
-    prev = i;
+    }
+    out.emplace_back(std::move(current));
+    if (include_sep && !next_sep.empty())
+      out.emplace_back(next_sep.begin(), next_sep.end());
+    current = {};
+    it = next_sep.end();
   }
-  if (prev != end)
-      push(prev, end);
-  return pos;
+  if (it != str.end()) {
+    current.append(std::string_view{it, str.end()});
+    out.emplace_back(std::move(current));
+  }
+  return out;
 }
 
 std::vector<std::string> to_strings(const std::vector<std::string_view>& v) {

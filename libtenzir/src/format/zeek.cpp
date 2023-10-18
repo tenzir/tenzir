@@ -336,7 +336,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
 caf::expected<std::string>
 parse_header_line(const std::string& line, const std::string& sep,
                   const std::string& prefix) {
-  auto s = detail::split(line, sep, "", 1);
+  auto s = detail::split(line, sep, 1);
   if (!(s.size() == 2
         && std::equal(prefix.begin(), prefix.end(), s[0].begin(), s[0].end())))
     return caf::make_error(ec::format_error,

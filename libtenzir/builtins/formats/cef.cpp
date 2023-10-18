@@ -64,12 +64,12 @@ std::string unescape(std::string_view value) {
 /// A shallow representation a of a CEF message.
 struct message_view {
   uint16_t cef_version;
-  std::string_view device_vendor;
-  std::string_view device_product;
-  std::string_view device_version;
-  std::string_view signature_id;
-  std::string_view name;
-  std::string_view severity;
+  std::string device_vendor;
+  std::string device_product;
+  std::string device_version;
+  std::string signature_id;
+  std::string name;
+  std::string severity;
   record extension;
 };
 
@@ -79,7 +79,7 @@ struct message_view {
 /// @returns A vector of key-value pairs with properly unescaped values.
 caf::expected<record> parse_extension(std::string_view extension) {
   record result;
-  auto splits = detail::split(extension, "=", "\\");
+  auto splits = detail::split_escaped(extension, "=", "\\");
   if (splits.size() < 2)
     return caf::make_error(ec::parse_error, fmt::format("need at least one "
                                                         "key=value pair: {}",
@@ -131,7 +131,7 @@ caf::expected<record> parse_extension(std::string_view extension) {
 caf::error convert(std::string_view line, message_view& msg) {
   using namespace std::string_view_literals;
   // Pipes in the extension field do not need escaping.
-  auto fields = detail::split(line, "|", "\\", 8);
+  auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() != 8)
     return caf::make_error(ec::parse_error, //
                            fmt::format("need exactly 8 fields, got '{}'",
@@ -142,18 +142,19 @@ caf::error convert(std::string_view line, message_view& msg) {
     return caf::make_error(ec::parse_error, //
                            fmt::format("CEF version requires ':', got '{}'",
                                        fields[0]));
-  auto cef_version_str = fields[0].substr(i + 1);
+  auto cef_version_str
+    = std::string_view{std::next(fields[0].begin(), i + 1), fields[0].end()};
   if (!parsers::u16(cef_version_str, msg.cef_version))
     return caf::make_error(ec::parse_error, //
                            fmt::format("failed to parse CEF version, got '{}'",
                                        cef_version_str));
   // Fields 1-6.
-  msg.device_vendor = fields[1];
-  msg.device_product = fields[2];
-  msg.device_version = fields[3];
-  msg.signature_id = fields[4];
-  msg.name = fields[5];
-  msg.severity = fields[6];
+  msg.device_vendor = std::move(fields[1]);
+  msg.device_product = std::move(fields[2]);
+  msg.device_version = std::move(fields[3]);
+  msg.signature_id = std::move(fields[4]);
+  msg.name = std::move(fields[5]);
+  msg.severity = std::move(fields[6]);
   // Field 7: Extension
   if (auto kvps = parse_extension(fields[7]))
     msg.extension = std::move(*kvps);
