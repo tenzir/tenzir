@@ -101,9 +101,11 @@ caf::expected<record> parse_extension(std::string_view extension) {
   // Converts a raw, unescaped string to a data instance.
   auto to_data = [](std::string_view str) -> data {
     auto unescaped = unescape(str);
-    if (auto x = to<data>(unescaped))
-      return std::move(*x);
-    return unescaped;
+    auto parsed = data{};
+    if (not(parsers::data - parsers::pattern)(unescaped, parsed)) {
+      parsed = unescaped;
+    }
+    return parsed;
   };
   for (auto i = 1u; i < splits.size() - 1; ++i) {
     auto split = splits[i];
