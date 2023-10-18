@@ -6,9 +6,8 @@ authors:
      url: https://github.com/lo-chr
      image_url: https://github.com/lo-chr.png
    - mavam
-date: 2023-10-17
+date: 2023-10-19
 tags: [velociraptor, operator, dfir]
-draft: true
 ---
 
 The new [`velociraptor`][velociraptor-operator] operator allows you to run
