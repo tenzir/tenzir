@@ -84,7 +84,7 @@ public:
       }
     }
     if (synopses.size() % max_rows != 0) { // no empty slices
-      for (auto result : builder.finish_as_table_slice("tenzir.partition")) {
+      for (auto&& result : builder.finish_as_table_slice("tenzir.partition")) {
         co_yield std::move(result);
       }
     }
