@@ -77,7 +77,7 @@ public:
       event.field("schema_id")
         .data(synopsis.synopsis->schema.make_fingerprint());
       if ((i + 1) % max_rows == 0) {
-        for (auto result : builder.finish_as_table_slice("tenzir.partition")) {
+        for (auto&& result : builder.finish_as_table_slice("tenzir.partition")) {
           co_yield std::move(result);
         }
       }
