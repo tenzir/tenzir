@@ -8,6 +8,7 @@ authors:
    - mavam
 date: 2023-10-19
 tags: [velociraptor, operator, dfir]
+comments: true
 ---
 
 The new [`velociraptor`][velociraptor-operator] operator allows you to run
