@@ -653,11 +653,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
       return;
     }
     run_scheduled = true;
-    // It is critical that we send an _ordinary_ message to the scheduler here
-    // for the internal run loop, as opposed to a _system_ message, e.g., by
-    // scheduling an action directly on the clock. Otherwise, an operator using
-    // `request(...).await(...); co_yield {};`  may unexpectedly be scheduled
-    // too early again.
     self->send(self, atom::internal_v, atom::run_v);
   }
 
