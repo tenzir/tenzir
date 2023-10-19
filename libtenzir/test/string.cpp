@@ -182,15 +182,10 @@ TEST(splitting) {
   REQUIRE(s.size() == 2);
   CHECK_EQUAL(s[0], "a");
   CHECK_EQUAL(s[1], "b,c,d,e,f");
-  MESSAGE("split with that includes the delimiter");
-  str = "a,b,c";
-  s = split(str, ",", -1, true);
-  REQUIRE(s.size() == 5);
-  CHECK_EQUAL(s[0], "a");
-  CHECK_EQUAL(s[1], ",");
-  CHECK_EQUAL(s[2], "b");
-  CHECK_EQUAL(s[3], ",");
-  CHECK_EQUAL(s[4], "c");
+  MESSAGE("split with empty input");
+  str = "";
+  s = split(str, ",");
+  REQUIRE(s.empty());
 }
 
 TEST(escaped splitting) {
@@ -201,15 +196,6 @@ TEST(escaped splitting) {
   REQUIRE(s.size() == 2);
   CHECK_EQUAL(s[0], "a,b");
   CHECK_EQUAL(s[1], "c");
-  MESSAGE("escaped split that includes the delimiter");
-  str = "a-b-c*-d";
-  s = split_escaped(str, "-", "*", -1, true);
-  REQUIRE(s.size() == 5);
-  CHECK_EQUAL(s[0], "a");
-  CHECK_EQUAL(s[1], "-");
-  CHECK_EQUAL(s[2], "b");
-  CHECK_EQUAL(s[3], "-");
-  CHECK_EQUAL(s[4], "c-d");
   MESSAGE("escaped split with max splits");
   str = "a,b*,c,d,e,f";
   s = split_escaped(str, ",", "*", 2);
@@ -217,6 +203,10 @@ TEST(escaped splitting) {
   CHECK_EQUAL(s[0], "a");
   CHECK_EQUAL(s[1], "b,c");
   CHECK_EQUAL(s[2], "d,e,f");
+  MESSAGE("escaped split with empty input");
+  str = "";
+  s = split_escaped(str, ",", "*");
+  REQUIRE(s.empty());
 }
 
 TEST(join) {

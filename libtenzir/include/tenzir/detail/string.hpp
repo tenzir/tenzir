@@ -139,15 +139,12 @@ replace_all(std::string str, std::string_view search, std::string_view replace);
 /// @param str The string to split.
 /// @param sep The separator where to split.
 /// @param max_splits The maximum number of splits to perform.
-/// @param include_sep If `true`, also include the separator after each
-///                    match.
 /// @pre `!sep.empty()`
 /// @warning The lifetime of the returned substrings are bound to the lifetime
 /// of the string pointed to by `str`.
 /// @returns A vector of substrings.
 std::vector<std::string_view>
-split(std::string_view str, std::string_view sep, size_t max_splits = -1,
-      bool include_sep = false);
+split(std::string_view str, std::string_view sep, size_t max_splits = -1);
 
 /// Splits a character sequence into a vector of substrings, with escaping of
 /// the separator.
@@ -157,13 +154,11 @@ split(std::string_view str, std::string_view sep, size_t max_splits = -1,
 ///            *sep*, then *sep* will not count as a separator.
 ///            In that case, *esc* will not be included in the output.
 /// @param max_splits The maximum number of splits to perform.
-/// @param include_sep If `true`, also include the separator after each
-///                    match, without including a possible escape string.
 /// @pre `!sep.empty() && !esc.empty()`
 /// @returns A vector of substrings, with the separator escape strings removed.
 std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
-              size_t max_splits = -1, bool include_sep = false);
+              size_t max_splits = -1);
 
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.

@@ -105,7 +105,7 @@ std::string replace_all(std::string str, std::string_view search,
 }
 
 std::vector<std::string_view> split(std::string_view str, std::string_view sep,
-                                    size_t max_splits, bool include_sep) {
+                                    size_t max_splits) {
   TENZIR_ASSERT(!sep.empty());
   std::vector<std::string_view> out;
   auto it = str.begin();
@@ -113,8 +113,6 @@ std::vector<std::string_view> split(std::string_view str, std::string_view sep,
   while (it != str.end() && splits++ != max_splits) {
     auto next_sep = std::ranges::search(std::string_view{it, str.end()}, sep);
     out.emplace_back(it, next_sep.begin());
-    if (include_sep && !next_sep.empty())
-      out.emplace_back(next_sep.begin(), next_sep.end());
     it = next_sep.end();
   }
   if (it != str.end())
@@ -124,7 +122,7 @@ std::vector<std::string_view> split(std::string_view str, std::string_view sep,
 
 std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
-              size_t max_splits, bool include_sep) {
+              size_t max_splits) {
   TENZIR_ASSERT(!sep.empty());
   TENZIR_ASSERT(!esc.empty());
   std::vector<std::string> out;
@@ -150,8 +148,6 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
       break;
     }
     out.emplace_back(std::move(current));
-    if (include_sep && !next_sep.empty())
-      out.emplace_back(next_sep.begin(), next_sep.end());
     current = {};
     it = next_sep.end();
   }
