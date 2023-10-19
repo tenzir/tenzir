@@ -37,3 +37,6 @@ Enable fast matching mode.
 ### `<rule>`
 
 The path to the Yara rule(s).
+
+If the path is a directory, the operator attempts to recursively add all
+contained files as Yara rules.

@@ -194,20 +194,32 @@ public:
   compiler(const compiler&) = delete;
   auto operator=(const compiler&) -> compiler& = delete;
 
-  /// Adds a file as Yara rule.
-  /// @param str The rule.
+  /// Adds a single rule or directory of rule.
+  /// @param path The path to the rule file/directory.
   /// @returns An error upon failure.
-  auto add(const std::filesystem::path& filename) -> caf::error {
-    // TODO: who is responsible for closing?!
-    auto file = std::fopen(filename.string().c_str(), "r");
-    auto name_space = nullptr;
-    auto num_errors = yr_compiler_add_file(compiler_, file, name_space,
-                                           filename.string().c_str());
-    if (num_errors > 0)
-      return caf::make_error(ec::unspecified,
-                             fmt::format("got {} error(s) while compiling Yara "
-                                         "rule: {}",
-                                         num_errors, filename));
+  auto add(const std::filesystem::path& path) -> caf::error {
+    if (std::filesystem::is_directory(path)) {
+      for (const std::filesystem::directory_entry& entry :
+           std::filesystem::recursive_directory_iterator(path)) {
+        if (auto err = add(entry.path()))
+          return err;
+      }
+    } else {
+      auto* file = std::fopen(path.string().c_str(), "r");
+      if (not file)
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("failed to open file: {}", path));
+      auto name_space = nullptr;
+      auto num_errors = yr_compiler_add_file(compiler_, file, name_space,
+                                             path.string().c_str());
+      auto result = std::fclose(file);
+      (void)result;
+      if (num_errors > 0)
+        return caf::make_error(
+          ec::unspecified, fmt::format("got {} error(s) while compiling Yara "
+                                       "rule: {}",
+                                       num_errors, path));
+    }
     return {};
   }
 
