@@ -10,6 +10,7 @@
 #include <tenzir/die.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 #include <yara.h>
 
@@ -96,17 +97,18 @@ public:
   auto operator=(const rules&) -> rules& = delete;
 
   /// Scans a buffer of bytes.
-  auto scan(std::span<const std::byte> bytes, scan_options opts) -> caf::error {
+  auto scan(std::span<const std::byte> bytes, scan_options opts)
+    -> caf::expected<std::vector<table_slice>> {
     auto flags = 0;
     if (opts.fast_scan)
       flags |= SCAN_FLAGS_FAST_MODE;
     auto buffer = reinterpret_cast<const uint8_t*>(bytes.data());
     auto buffer_size = bytes.size();
-    auto user_data = nullptr;
     auto timeout = detail::narrow_cast<int>(opts.timeout.count());
-    auto result = yr_rules_scan_mem(rules_, buffer, buffer_size, flags,
-                                    callback, user_data, timeout);
-    switch (result) {
+    auto builder = series_builder{};
+    auto status = yr_rules_scan_mem(rules_, buffer, buffer_size, flags,
+                                    callback, &builder, timeout);
+    switch (status) {
       default:
         die("unhandled result value for yr_rules_scan_mem");
       case ERROR_SUCCESS:
@@ -123,26 +125,30 @@ public:
       case ERROR_TOO_MANY_MATCHES:
         return caf::make_error(ec::unspecified, "too many matches");
     }
-    return {};
+    return builder.finish_as_table_slice("tenzir.yara");
   }
 
 private:
   static auto callback(YR_SCAN_CONTEXT* context, int message,
                        void* message_data, void* user_data) -> int {
+    TENZIR_ASSERT(user_data != nullptr);
+    auto* builder = reinterpret_cast<series_builder*>(user_data);
     if (message == CALLBACK_MSG_RULE_MATCHING) {
       auto* rule = reinterpret_cast<YR_RULE*>(message_data);
-      TENZIR_INFO("got a match for rule {}", rule->identifier);
-      // TODO: handle match
+      TENZIR_DEBUG("got a match for rule {}", rule->identifier);
+      auto row = builder->record();
+      row.field("match").data(true);
     } else if (message == CALLBACK_MSG_RULE_NOT_MATCHING) {
       auto* rule = reinterpret_cast<YR_RULE*>(message_data);
-      TENZIR_INFO("got no match for rule {}", rule->identifier);
-      // TODO: handle not match
+      TENZIR_DEBUG("got no match for rule {}", rule->identifier);
+      auto row = builder->record();
+      row.field("match").data(false);
     } else if (message == CALLBACK_MSG_IMPORT_MODULE) {
       auto* module = reinterpret_cast<YR_MODULE_IMPORT*>(message_data);
-      TENZIR_INFO("importing module: {}", module->module_name);
+      TENZIR_DEBUG("importing module: {}", module->module_name);
     } else if (message == CALLBACK_MSG_MODULE_IMPORTED) {
       auto* object = reinterpret_cast<YR_OBJECT_STRUCTURE*>(message_data);
-      TENZIR_INFO("imported module: {}", object->identifier);
+      TENZIR_DEBUG("imported module: {}", object->identifier);
     } else if (message == CALLBACK_MSG_TOO_MANY_MATCHES) {
       auto* yr_string = reinterpret_cast<YR_STRING*>(message_data);
       auto string = std::string_view{
@@ -151,9 +157,9 @@ private:
       TENZIR_WARN("too many matches for string: {}", string);
     } else if (message == CALLBACK_MSG_CONSOLE_LOG) {
       auto* str = reinterpret_cast<char*>(message_data);
-      TENZIR_INFO("{}", str);
+      TENZIR_DEBUG("{}", str);
     } else if (message == CALLBACK_MSG_SCAN_FINISHED) {
-      TENZIR_INFO("completed scan");
+      TENZIR_DEBUG("completed scan");
     } else {
       die("unhandled message type in Yara callback");
     }
@@ -306,11 +312,15 @@ public:
       auto opts = scan_options{
         .fast_scan = args_.fast_scan,
       };
-      if (auto err = rules->scan(as_bytes(chunk), opts))
+      if (auto slices = rules->scan(as_bytes(chunk), opts)) {
+        for (auto&& slice : *slices)
+          co_yield slice;
+      } else {
         diagnostic::warning("failed to scan bytes with Yara rules")
+          .hint("{}", slices.error())
           .emit(ctrl.diagnostics());
-      // TODO: yield scan result as structured data.
-      co_yield {};
+        co_yield {};
+      }
     }
   }
 
