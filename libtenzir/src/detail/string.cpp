@@ -104,9 +104,11 @@ std::string replace_all(std::string str, std::string_view search,
   return str;
 }
 
-std::vector<std::string_view> split(std::string_view str, std::string_view sep,
-                                    size_t max_splits) {
+std::vector<std::string_view>
+split(std::string_view str, std::string_view sep, size_t max_splits) {
   TENZIR_ASSERT(!sep.empty());
+  if (str.empty())
+    return {""};
   std::vector<std::string_view> out;
   auto it = str.begin();
   size_t splits = 0;
@@ -114,6 +116,10 @@ std::vector<std::string_view> split(std::string_view str, std::string_view sep,
     auto next_sep = std::ranges::search(std::string_view{it, str.end()}, sep);
     out.emplace_back(it, next_sep.begin());
     it = next_sep.end();
+    // Final char in `str` is a separator ->
+    // add empty element
+    if (!next_sep.empty() && it == str.end())
+      out.emplace_back("");
   }
   if (it != str.end())
     out.emplace_back(it, str.end());
@@ -125,6 +131,8 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
               size_t max_splits) {
   TENZIR_ASSERT(!sep.empty());
   TENZIR_ASSERT(!esc.empty());
+  if (str.empty())
+    return {""};
   std::vector<std::string> out;
   auto it = str.begin();
   std::string current{};
@@ -142,14 +150,14 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
         continue;
       }
     }
-    current.append(std::string_view{it, next_sep.begin()});
-    if (splits++ == max_splits) {
-      it = next_sep.begin();
+    if (splits++ == max_splits)
       break;
-    }
+    current.append(std::string_view{it, next_sep.begin()});
     out.emplace_back(std::move(current));
     current = {};
     it = next_sep.end();
+    if (!next_sep.empty() && it == str.end())
+      out.emplace_back("");
   }
   if (it != str.end()) {
     current.append(std::string_view{it, str.end()});
