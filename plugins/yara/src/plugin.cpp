@@ -78,14 +78,22 @@ public:
     return result;
   }
 
-  rules(const rules&) = delete;
-  auto operator=(const rules&) -> rules& = delete;
-  rules(rules&&) = default;
-  auto operator=(rules&&) -> rules& = default;
+  rules(rules&& other) noexcept : rules_{other.rules_} {
+    other.rules_ = nullptr;
+  }
+
+  auto operator=(rules&& other) noexcept -> rules& {
+    std::swap(rules_, other.rules_);
+    return *this;
+  }
 
   ~rules() {
-    yr_rules_destroy(rules_);
+    if (rules_)
+      yr_rules_destroy(rules_);
   }
+
+  rules(const rules&) = delete;
+  auto operator=(const rules&) -> rules& = delete;
 
   /// Scans a buffer of bytes.
   auto scan(std::span<const std::byte> bytes, scan_options opts) -> caf::error {
@@ -169,14 +177,22 @@ public:
     return result;
   }
 
+  compiler(compiler&& other) noexcept : compiler_{other.compiler_} {
+    other.compiler_ = nullptr;
+  }
+
+  auto operator=(compiler&& other) noexcept -> compiler& {
+    std::swap(compiler_, other.compiler_);
+    return *this;
+  }
+
   ~compiler() {
-    yr_compiler_destroy(compiler_);
+    if (compiler_)
+      yr_compiler_destroy(compiler_);
   }
 
   compiler(const compiler&) = delete;
   auto operator=(const compiler&) -> compiler& = delete;
-  compiler(compiler&&) = default;
-  auto operator=(compiler&&) -> compiler& = default;
 
   /// Adds a file as Yara rule.
   /// @param str The rule.
