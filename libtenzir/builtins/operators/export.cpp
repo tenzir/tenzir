@@ -56,6 +56,10 @@ public:
     auto current_slice = std::optional<table_slice>{};
     auto query_context
       = tenzir::query_context::make_extract("export", blocking_self, expr_);
+    query_context.id = uuid::random();
+    TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
+                 "expression {}",
+                 query_context.id, expr_);
     auto current_result = catalog_lookup_result{};
     auto current_error = caf::error{};
     ctrl.self()
@@ -123,10 +127,10 @@ public:
     -> optimize_result override {
     (void)order;
     auto clauses = std::vector<expression>{};
-    if (expr_ != caf::none) {
+    if (expr_ != caf::none and expr_ != trivially_true_expression()) {
       clauses.push_back(expr_);
     }
-    if (filter != trivially_true_expression()) {
+    if (filter != caf::none and filter != trivially_true_expression()) {
       clauses.push_back(filter);
     }
     auto expr = clauses.empty() ? expression{}

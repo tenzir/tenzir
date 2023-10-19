@@ -90,13 +90,30 @@ catalog_state::lookup(const expression& expr) const {
   auto start = stopwatch::now();
   auto total_candidates = catalog_lookup_result{};
   auto num_candidates = size_t{0};
-  auto pruned = prune(expr, unprunable_fields);
+  auto normalized = normalize_and_validate(expr);
+  if (not normalized) {
+    return caf::make_error(ec::lookup_error,
+                           fmt::format("{} failed to normalized and validate "
+                                       "expression {}: {}",
+                                       *self, expr, normalized.error()));
+  }
+  auto pruned = prune(*normalized, unprunable_fields);
   for (const auto& [type, _] : synopses_per_type) {
     auto resolved = resolve(taxonomies, pruned, type);
     if (!resolved) {
       return resolved.error();
     }
-    auto candidates_per_type = lookup_impl(*resolved, type);
+    auto tailored = tailor(*resolved, type);
+    if (not tailored) {
+      // Failing to tailor is not an error.
+      TENZIR_DEBUG("{} skips expression {} for schema {} because it cannot be "
+                   "tailored",
+                   *self, expr, type);
+      continue;
+    }
+    TENZIR_TRACE("{} starts lookup for schema {} with expression {}", *self,
+                 type, *tailored);
+    auto candidates_per_type = lookup_impl(*tailored, type);
     // Sort partitions by their max import time, returning the most recent
     // partitions first.
     std::sort(candidates_per_type.partition_infos.begin(),
@@ -355,6 +372,13 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             return search(pred);
           }();
           return result;
+        },
+        [&](const data_extractor& lhs,
+            const data& d) -> catalog_lookup_result::candidate_info {
+          if (compatible(lhs.type, x.op, d)) {
+            return all_partitions();
+          }
+          return {};
         },
         [&](const auto&, const auto&) -> catalog_lookup_result::candidate_info {
           TENZIR_WARN("{} cannot process predicate: {}",

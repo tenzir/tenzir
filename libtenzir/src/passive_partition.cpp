@@ -158,9 +158,9 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
     indexer = self->spawn(passive_indexer, id, std::move(value_index));
     return indexer;
   }
-  TENZIR_WARN("passive-partition ({}) failed to deserialize value index for "
-              "field {}",
-              id, qualified_index->field_name()->string_view());
+  TENZIR_DEBUG("passive-partition ({}) failed to deserialize value index for "
+               "field {}",
+               id, qualified_index->field_name()->string_view());
   return {};
 }
 
