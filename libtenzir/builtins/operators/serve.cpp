@@ -294,6 +294,10 @@ struct serve_manager_state {
   /// The serve operators currently observed by the serve-manager.
   std::vector<managed_serve_operator> ops = {};
 
+  /// A list of previously known serve ids that were expired. This exists only
+  /// for returning better error messages to the user.
+  std::unordered_set<std::string> expired_ids = {};
+
   auto handle_down_msg(const caf::down_msg& msg) -> void {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
@@ -321,6 +325,7 @@ struct serve_manager_state {
               return op.source == source;
             });
         if (found != ops.end()) {
+          expired_ids.insert(found->serve_id);
           ops.erase(found);
         }
       });
@@ -410,9 +415,16 @@ struct serve_manager_state {
           return op.serve_id == request.serve_id;
         });
     if (found == ops.end()) {
+      if (expired_ids.contains(request.serve_id)) {
+        return caf::make_error(
+          ec::logic_error,
+          fmt::format("{} got request for events with expired serve id {}; the "
+                      "pipeline serving this data is no longer available",
+                      *self, request.serve_id));
+      }
       return caf::make_error(ec::invalid_argument,
                              fmt::format("{} got request for events with "
-                                         "unknown for serve id {}",
+                                         "unknown serve id {}",
                                          *self, request.serve_id));
     }
     if (not found->continuation_token.empty()
