@@ -18,17 +18,6 @@ namespace tenzir::plugins::yara {
 
 namespace {
 
-/// A type that represents an description of a NIC.
-auto yara_type() -> type {
-  TENZIR_TODO();
-  return type{
-    "tenzir.yara",
-    record_type{
-      {"rule_id", string_type{}},
-    },
-  };
-}
-
 /// Arguments to the operator.
 struct operator_args {
   bool compiled_rules;
