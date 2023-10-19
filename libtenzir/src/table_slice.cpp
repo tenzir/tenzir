@@ -841,7 +841,11 @@ auto resolve_operand(const table_slice& slice, const operand& op)
   auto array = std::shared_ptr<arrow::Array>{};
   // Helper function that binds a fixed value.
   auto bind_value = [&](const data& value) {
-    inferred_type = type::infer(value);
+    auto tmp_inferred_type = type::infer(value);
+    if (not tmp_inferred_type) {
+      return;
+    }
+    inferred_type = *tmp_inferred_type;
     if (not inferred_type) {
       inferred_type = type{string_type{}};
       // Tenzir has no N/A type equivalent for Arrow, so we just use a string

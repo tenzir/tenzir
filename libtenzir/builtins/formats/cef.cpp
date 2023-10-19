@@ -177,7 +177,7 @@ type infer(const message_view& msg) {
   };
   // Infer extension record, if present.
   auto deduce = [](const data& value) -> type {
-    if (auto t = type::infer(value))
+    if (auto t = type::infer(value).value_or(type{}))
       return t;
     return type{string_type{}};
   };
