@@ -4,6 +4,7 @@ import ipaddress as ip
 from typing import Iterable, Optional, Sequence, SupportsBytes, SupportsIndex
 from pyarrow import RecordBatch, DataType, schema, field
 from ipaddress import IPv4Address, IPv6Address, IPv4Network, IPv6Network
+from datetime import datetime
 import pyarrow as pa
 
 
@@ -216,6 +217,11 @@ def extension_array(obj: Sequence, type: pa.DataType) -> pa.Array:
 def infer_type(obj) -> DataType:
     """
     Map a python type to the corresponding Arrow type.
+
+    Note that the arrow -> python mapping is not completely static,
+    for example timestamp[ns] is converted to `pandas.Timestamp` if pandas
+    is installed or `datetime.datetime` otherwise. Therefore this function
+    can also only give a best-effort estimate of the reverse mapping.
     """
     if isinstance(obj, IPv4Address) or isinstance(obj, IPv6Address):
         return IPType()
@@ -229,6 +235,10 @@ def infer_type(obj) -> DataType:
     # the check for bool type.
     elif isinstance(obj, int):
         return pa.int64()
+    elif isinstance(obj, float):
+        return pa.float64()
+    elif isinstance(obj, datetime.datetime):
+        return pa.timestamp('ns')
     else:
         print(f"unknown type {type(obj)}", file=sys.stderr)
         return None  # TODO

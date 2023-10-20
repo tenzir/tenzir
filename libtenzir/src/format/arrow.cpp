@@ -112,8 +112,10 @@ arrow_fd_wrapper::arrow_fd_wrapper(int fd) : fd_{fd} {
 }
 
 ::arrow::Status arrow_fd_wrapper::Close() {
-  TENZIR_ASSERT_CHEAP(::close(fd_) == 0);
+  int result = ::close(fd_);
   fd_ = -1;
+  if (result != 0)
+    return ::arrow::Status::IOError();
   return ::arrow::Status::OK();
 }
 
@@ -128,7 +130,8 @@ auto arrow_fd_wrapper::Tell() const -> ::arrow::Result<int64_t> {
 auto arrow_fd_wrapper::Read(int64_t nbytes, void* out)
   -> ::arrow::Result<int64_t> {
   auto n = ::read(fd_, out, nbytes);
-  TENZIR_ASSERT_CHEAP(n >= 0);
+  if (n < 0)
+    return ::arrow::Status::IOError();
   pos_ += n;
   return n;
 }

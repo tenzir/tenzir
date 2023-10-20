@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/strip_leading_indentation.hpp"
 #include "tenzir/format/arrow.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -44,36 +45,6 @@ from pytenzir.tools.python_operator_executor import main
 main()
 )_";
 
-/// Yields each line, including the trailing newline.
-auto each_line(const std::string& code) -> generator<std::string_view> {
-  auto left = 0ull;
-  auto right = code.find('\n');
-  while (right != std::string::npos) {
-    co_yield std::string_view{code.begin() + left, code.begin() + right + 1};
-    left = right + 1;
-    right = code.find('\n', left);
-  }
-}
-
-auto strip_leading_indentation(std::string code) -> std::string {
-  auto prefix = std::string_view{};
-  for (auto line : each_line(code)) {
-    if (auto x = line.find_first_not_of(" \t\n"); x != std::string::npos) {
-      prefix = line.substr(0, x);
-      break;
-    }
-  }
-  if (prefix.empty())
-    return code;
-  auto stripped_code = std::string{};
-  for (auto line : each_line(code)) {
-    if (line.starts_with(prefix))
-      line.remove_prefix(prefix.size());
-    stripped_code += line;
-  }
-  return stripped_code;
-}
-
 class python_operator final : public crtp_operator<python_operator> {
 public:
   python_operator() = default;
@@ -86,7 +57,7 @@ public:
     if (keep_leading_indent)
       code_ = std::move(code);
     else
-      code_ = strip_leading_indentation(std::move(code));
+      code_ = detail::strip_leading_indentation(std::move(code));
   }
 
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
@@ -100,6 +71,8 @@ public:
       auto env = bp::environment{};
       env["TENZIR_PYTHON_OPERATOR_CODEFD"]
         = fmt::to_string(codepipe.pipe().native_source());
+      // TODO: We should probably also redirect stderr here and attempt
+      //       to attach it to the error message in case of an error.
       auto child = bp::child{path,
                              "-c",
                              PYTHON_SCAFFOLD,
@@ -154,6 +127,7 @@ public:
                                      static_cast<int64_t>(output.rows()),
                                      foo->batch->columns());
         output = table_slice{actual_result, new_type};
+        output = tenzir::unflatten(output, ".");
         co_yield output;
       }
       std_in.close();

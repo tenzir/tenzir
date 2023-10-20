@@ -27,6 +27,13 @@ teardown() {
 END
 }
 
+@test "python operator build info" {
+  check tenzir -f /dev/stdin << END
+    show build
+    | python "sanitizers.address = 3; del sanitizers.undefined_behavior; del type"
+END
+}
+
 @test "python operator HTTP requests" {
   check tenzir -f /dev/stdin << END
     show version
