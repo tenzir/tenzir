@@ -290,12 +290,13 @@ def run_step(
             else:
                 baseline_lines = []
                 if baseline.exists():
-                    baseline_lines = open(baseline).readlines()
-                diff = difflib.unified_diff(
+                    baseline_lines = open(baseline, "rb").readlines()
+                diff = difflib.diff_bytes(
+                    difflib.unified_diff,
                     baseline_lines,
                     output_lines,
-                    fromfile=str(baseline),
-                    tofile=str(stdout),
+                    fromfile=str(baseline).encode(),
+                    tofile=str(stdout).encode(),
                 )
                 delta = list(diff)
                 if delta:
@@ -304,7 +305,9 @@ def run_step(
                         and expected_result != Result.IGNORE
                     ):
                         LOGGER.warning("baseline comparison failed")
-                        sys.stdout.writelines(delta)
+                        sys.stdout.writelines(
+                            [d.decode("utf-8", "replace") for d in delta]
+                        )
                     return Result.FAILURE
     except subprocess.CalledProcessError as err:
         if expected_result != Result.ERROR and expected_result != Result.IGNORE:
