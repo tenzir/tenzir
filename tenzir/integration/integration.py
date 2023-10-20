@@ -273,7 +273,7 @@ def run_step(
                         timeout=STEP_TIMEOUT,
                         shell=True,
                         env=env,
-                    ).stdout.decode("utf8")
+                    ).stdout
                 except subprocess.TimeoutExpired:
                     LOGGER.error(f"timeout reached, terminating transformation")
                     return Result.TIMEOUT
