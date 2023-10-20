@@ -377,7 +377,7 @@ struct zeek_printer {
 
     auto operator()(view<std::string> x) noexcept -> bool {
       if (x.empty()) {
-        out = std::copy(printer.unset_field.begin(), printer.unset_field.end(),
+        out = std::copy(printer.empty_field.begin(), printer.empty_field.end(),
                         out);
         return true;
       }
@@ -397,7 +397,7 @@ struct zeek_printer {
     auto operator()(view<blob> x) noexcept -> bool {
       if (x.empty()) {
         // TODO: Is this actually correct? An empty blob is not unset.
-        out = std::copy(printer.unset_field.begin(), printer.unset_field.end(),
+        out = std::copy(printer.empty_field.begin(), printer.empty_field.end(),
                         out);
         return true;
       }
