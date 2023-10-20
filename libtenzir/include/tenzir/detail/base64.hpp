@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstddef>
+#include <ranges>
 #include <string>
 
 /// [Base64](https://en.wikipedia.org/wiki/Base64) coding.
@@ -61,7 +62,15 @@ size_t encode(void* dst, const void* src, size_t len);
 /// @param str The string to encode.
 /// @returns The Base64-encoded version of *str*.
 std::string encode(std::string_view str);
-std::string encode(std::basic_string_view<std::byte> str);
+
+template <class R>
+  requires std::ranges::contiguous_range<R>
+           && std::same_as<std::ranges::range_value_t<R>, std::byte>
+std::string encode(R&& range) {
+  return encode(
+    std::string_view{reinterpret_cast<const char*>(std::ranges::data(range)),
+                     std::ranges::size(range)});
+}
 
 // Decodes a Base64-encoded string into a sequence of bytes.
 // @param dst The destination buffer.
