@@ -114,7 +114,7 @@ public:
       case ERROR_TOO_MANY_MATCHES:
         return caf::make_error(ec::unspecified, "too many matches");
     }
-    return builder.finish_as_table_slice("tenzir.yara");
+    return builder.finish_as_table_slice("yara.match");
   }
 
 private:
@@ -125,8 +125,37 @@ private:
     if (message == CALLBACK_MSG_RULE_MATCHING) {
       auto* rule = reinterpret_cast<YR_RULE*>(message_data);
       TENZIR_DEBUG("got a match for rule {}", rule->identifier);
-      auto row = builder->record();
-      row.field("match").data(true);
+      YR_STRING* string = nullptr;
+      yr_rule_strings_foreach(rule, string) {
+        auto row = builder->record();
+        auto rec = row.field("rule").record();
+        rec.field("identifier").data(rule->identifier);
+        rec.field("namespace").data(std::string_view{rule->ns->name});
+        auto rule_string
+          = std::string_view{reinterpret_cast<const char*>(string->string),
+                             detail::narrow_cast<size_t>(string->length)};
+        rec.field("string").data(rule_string);
+        YR_MATCH* match = nullptr;
+        auto list = rec.field("matches").list();
+        yr_string_matches_foreach(context, string, match) {
+          auto match_rec = list.record();
+          match_rec.field("identifier").data(string->identifier);
+          match_rec.field("base").data(match->base);
+          match_rec.field("offset").data(match->offset);
+          match_rec.field("match_length")
+            .data(detail::narrow_cast<uint64_t>(match->match_length));
+          match_rec.field("data_length")
+            .data(detail::narrow_cast<uint64_t>(match->data_length));
+          match_rec.field("xor_key").data(uint64_t{match->xor_key});
+          // TODO: switch to new bytes type once available.
+          auto bytes = std::span<const std::byte>{
+            reinterpret_cast<const std::byte*>(match->data),
+            detail::narrow_cast<size_t>(match->data_length)};
+          auto str = std::string_view{
+            reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+          row.field("data").data(str);
+        }
+      }
     } else if (message == CALLBACK_MSG_RULE_NOT_MATCHING) {
       auto* rule = reinterpret_cast<YR_RULE*>(message_data);
       TENZIR_DEBUG("got no match for rule {}", rule->identifier);
