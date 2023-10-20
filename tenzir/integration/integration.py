@@ -258,7 +258,7 @@ def run_step(
                 baseline_dir.mkdir(parents=True)
         else:
             LOGGER.debug("comparing step output to baseline")
-        with open(stdout) as out_handle:
+        with open(stdout, "rb") as out_handle:
             out = None
             if step.transformation:
                 LOGGER.debug(f"transforming output with `{step.transformation}`")
@@ -284,7 +284,7 @@ def run_step(
             if sort_output:
                 output_lines = sorted(output_lines)
             if update_baseline:
-                with open(baseline, "w") as ref_handle:
+                with open(baseline, "wb") as ref_handle:
                     for line in output_lines:
                         ref_handle.write(line)
             else:

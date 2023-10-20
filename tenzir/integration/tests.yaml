@@ -1098,3 +1098,19 @@ tests:
     #tags: [pipelines]
     #steps:
       #- command: exec 'from s3 s3://sentinel-cogs/sentinel-s2-l2a-cogs/1/C/CV/2023/1/S2B_1CCV_20230101_0_L2A/tileinfo_metadata.json | write json'
+
+  Blob Type:
+    fixture: ServerTester
+    tags: [pipelines]
+    steps:
+      - command: exec 'read suricata | where :blob != null | import'
+        input: data/suricata/eve.json
+      - command: flush
+      - command: exec 'export | where :blob != null'
+      - command: exec 'export | write csv'
+      - command: exec 'export | write feather'
+      - command: exec 'export | write json'
+      - command: exec 'export | write pcap'
+      # TODO: Re-enable once #950 is fixed.
+      # - command: exec 'export | write yaml'
+      - command: exec 'export | write zeek-tsv'

@@ -164,6 +164,9 @@ value_at([[maybe_unused]] const Type& type,
   } else if constexpr (std::is_same_v<Type, string_type>) {
     const auto str = arr.GetView(row);
     return {str.data(), str.size()};
+  } else if constexpr (std::is_same_v<Type, blob_type>) {
+    const auto str = arr.GetView(row);
+    return {reinterpret_cast<const std::byte*>(str.data()), str.size()};
   } else if constexpr (std::is_same_v<Type, ip_type>) {
     TENZIR_ASSERT(arr.byte_width() == 16);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -272,9 +275,6 @@ value_at([[maybe_unused]] const Type& type,
     };
     return record_view_handle{
       record_view_ptr{caf::make_counted<record_view>(type, arr.fields(), row)}};
-  } else if constexpr (std::is_same_v<Type, blob_type>) {
-    const auto str = arr.GetView(row);
-    return {reinterpret_cast<const std::byte*>(str.data()), str.size()};
   } else {
     static_assert(detail::always_false_v<Type>, "unhandled type");
   }
@@ -295,6 +295,9 @@ value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
 
 data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
                    int64_t row) noexcept {
+  TENZIR_WARN("type = {}, id = {}, arr_id = {}", type,
+              static_cast<int>(type.to_arrow_type()->id()),
+              static_cast<int>(arr.type_id()));
   TENZIR_ASSERT(type.to_arrow_type()->id() == arr.type_id());
   if (arr.IsNull(row))
     return caf::none;
