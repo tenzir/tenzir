@@ -295,9 +295,6 @@ value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
 
 data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
                    int64_t row) noexcept {
-  TENZIR_WARN("type = {}, id = {}, arr_id = {}", type,
-              static_cast<int>(type.to_arrow_type()->id()),
-              static_cast<int>(arr.type_id()));
   TENZIR_ASSERT(type.to_arrow_type()->id() == arr.type_id());
   if (arr.IsNull(row))
     return caf::none;

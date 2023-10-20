@@ -20,7 +20,6 @@ struct generic_blob_printer : printer_base<generic_blob_printer<T>> {
 
   template <class Iterator>
   bool print(Iterator& out, const attribute& x) const {
-    // TODO: Check that this works as expected.
     static auto escaper = detail::make_extra_print_escaper("\"");
     static auto p = "b\"" << printers::escape(escaper) << '"';
     return p(out, std::string_view{reinterpret_cast<const char*>(x.data()),

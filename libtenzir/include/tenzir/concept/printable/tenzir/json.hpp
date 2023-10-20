@@ -89,7 +89,6 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view<blob> x) noexcept -> bool {
-      // TODO: Do we want to prefix the encoded string, e.g., `base64:...`?
       return (*this)(detail::base64::encode(x));
     }
 

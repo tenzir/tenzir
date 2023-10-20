@@ -1349,14 +1349,12 @@ public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 16;
 
-  // TODO: Or LargeBinaryType?
   /// The corresponding Arrow DataType.
   using arrow_type = arrow::BinaryType;
 
   /// Returns a view of the underlying binary representation.
   friend std::span<const std::byte> as_bytes(const blob_type&) noexcept;
 
-  // TODO: Or chunk_ptr?
   /// Constructs data from the type.
   [[nodiscard]] static blob construct() noexcept;
 
