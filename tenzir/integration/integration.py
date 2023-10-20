@@ -215,7 +215,7 @@ def run_step(
         client = spawn(
             cmd,
             stdin=(subprocess.PIPE if step.input else subprocess.DEVNULL),
-            stdout=open(stdout, "w+"),
+            stdout=open(stdout, "wb+"),
             stderr=open(stderr, "w"),
             cwd=work_dir,
         )
@@ -290,7 +290,9 @@ def run_step(
             else:
                 baseline_lines = []
                 if baseline.exists():
-                    baseline_lines = open(baseline, "rb").readlines()
+                    baseline_lines = (
+                        open(baseline, "rb").read().splitlines(keepends=True)
+                    )
                 diff = difflib.diff_bytes(
                     difflib.unified_diff,
                     baseline_lines,
@@ -306,7 +308,7 @@ def run_step(
                     ):
                         LOGGER.warning("baseline comparison failed")
                         sys.stdout.writelines(
-                            [d.decode("utf-8", "replace") for d in delta]
+                            [d.decode("utf-8", "backslashreplace") for d in delta]
                         )
                     return Result.FAILURE
     except subprocess.CalledProcessError as err:

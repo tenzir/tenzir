@@ -3,8 +3,6 @@
 #empty_field	(empty)
 #unset_field	-
 #path	suricata.alert
-#open	2023-10-20-12-00-03.433812
 #fields	timestamp	flow_id	pcap_cnt	vlan	in_iface	src_ip	src_port	dest_ip	dest_port	proto	event_type	community_id	alert.app_proto	alert.action	alert.gid	alert.signature_id	alert.rev	alert.signature	alert.category	alert.severity	alert.source.ip	alert.source.port	alert.target.ip	alert.target.port	flow.pkts_toserver	flow.pkts_toclient	flow.bytes_toserver	flow.bytes_toclient	flow.start	flow.end	flow.age	flow.state	flow.reason	flow.alerted	payload	payload_printable	stream	packet	packet_info.linktype
 #types	time	count	count	vector[count]	string	addr	port	addr	port	string	string	string	string	string	count	count	count	string	string	count	addr	port	addr	port	count	count	count	count	time	time	count	string	string	bool	string	string	count	string	count
 2011-08-12T12:52:57.716360	1031464864740687	83	(empty)	-	147.32.84.165	1181	78.40.125.4	6667	TCP	alert	-	-	allowed	1	2017318	4	ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command	Potentially Bad Traffic	2	-	-	-	-	27	35	2302	4520	2011-08-12T12:47:24.357711	-	-	-	-	-	PRIVMSG #zarasa48 : smss.exe (368)\x0D\x0A	PRIVMSG #zarasa48 : smss.exe (368)\x0D\x0A	0	\x00\x1EI\xDB\x19\xC3\x08\x00'\xB5\xB7\x19\x08\x00E\x00\x00L\x19^@\x00\x80\x06.\\x93 T\xA5N(}\x04\x04\x9D\x1A\x0B\xF0\xD1\x0B\xC0\xC5E\x87uP\x18\xFA\xB0\x8B\xE2\x00\x00PRIVMSG #zarasa48 : smss.exe (368)\x0D\x0A	1
-#close	2023-10-20-12-00-03.435107
