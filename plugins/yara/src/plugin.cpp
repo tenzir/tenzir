@@ -135,25 +135,40 @@ private:
           = std::string_view{reinterpret_cast<const char*>(string->string),
                              detail::narrow_cast<size_t>(string->length)};
         rec.field("string").data(rule_string);
+        const char* tag = nullptr;
+        auto tags = rec.field("tags").list();
+        yr_rule_tags_foreach(rule, tag) {
+          tags.data(std::string_view{tag});
+        }
+        auto metas = rec.field("meta").list();
+        YR_META* meta = nullptr;
+        yr_rule_metas_foreach(rule, meta) {
+          auto meta_rec = metas.record();
+          meta_rec.field("key").data(std::string_view{meta->identifier});
+          if (meta->type == META_TYPE_INTEGER)
+            meta_rec.field("value").data(int64_t{meta->integer});
+          else if (meta->type == META_TYPE_BOOLEAN)
+            meta_rec.field("value").data(meta->integer != 0);
+          else
+            meta_rec.field("value").data(std::string_view{meta->string});
+        }
         YR_MATCH* match = nullptr;
         auto list = rec.field("matches").list();
         yr_string_matches_foreach(context, string, match) {
           auto match_rec = list.record();
           match_rec.field("identifier").data(string->identifier);
+          auto bytes = std::span<const std::byte>{
+            reinterpret_cast<const std::byte*>(match->data),
+            detail::narrow_cast<size_t>(match->data_length)};
+          // TODO: switch to new bytes type once available.
+          auto str = std::string_view{
+            reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+          match_rec.field("data").data(str);
           match_rec.field("base").data(match->base);
           match_rec.field("offset").data(match->offset);
           match_rec.field("match_length")
             .data(detail::narrow_cast<uint64_t>(match->match_length));
-          match_rec.field("data_length")
-            .data(detail::narrow_cast<uint64_t>(match->data_length));
           match_rec.field("xor_key").data(uint64_t{match->xor_key});
-          // TODO: switch to new bytes type once available.
-          auto bytes = std::span<const std::byte>{
-            reinterpret_cast<const std::byte*>(match->data),
-            detail::narrow_cast<size_t>(match->data_length)};
-          auto str = std::string_view{
-            reinterpret_cast<const char*>(bytes.data()), bytes.size()};
-          row.field("data").data(str);
         }
       }
     } else if (message == CALLBACK_MSG_RULE_NOT_MATCHING) {
