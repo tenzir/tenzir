@@ -174,8 +174,6 @@ private:
     } else if (message == CALLBACK_MSG_RULE_NOT_MATCHING) {
       auto* rule = reinterpret_cast<YR_RULE*>(message_data);
       TENZIR_DEBUG("got no match for rule {}", rule->identifier);
-      auto row = builder->record();
-      row.field("match").data(false);
     } else if (message == CALLBACK_MSG_IMPORT_MODULE) {
       auto* module = reinterpret_cast<YR_MODULE_IMPORT*>(message_data);
       TENZIR_DEBUG("importing module: {}", module->module_name);
