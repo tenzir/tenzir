@@ -32,4 +32,5 @@ brew install \
     tcpdump \
     xxhash \
     yaml-cpp \
+    yara \
     yarn
