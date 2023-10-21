@@ -40,3 +40,108 @@ The path to the Yara rule(s).
 
 If the path is a directory, the operator attempts to recursively add all
 contained files as Yara rules.
+
+## Examples
+
+Consider this example rule:
+
+```yara
+rule test {
+  meta:
+    string = "string meta data"
+    integer = 42
+    boolean = true
+
+  strings:
+    $foo = "foo"
+    $bar = "bar"
+
+  condition:
+    $foo and $bar
+}
+```
+
+You can produce some test matches easily on the command line by feeding bytes
+into the `yara` operator:
+
+```bash
+echo 'foo barbar baz' |
+  tenzir 'load stdin | yara /tmp/test.yara'
+```
+
+The resulting `yara.match` events look as follows:
+
+```json
+{
+  "rule": {
+    "identifier": "test",
+    "namespace": "default",
+    "string": "foo",
+    "tags": [],
+    "meta": [
+      {
+        "key": "string",
+        "value": "\"string meta data\""
+      },
+      {
+        "key": "integer",
+        "value": "42"
+      },
+      {
+        "key": "boolean",
+        "value": "true"
+      }
+    ],
+    "matches": [
+      {
+        "identifier": "$foo",
+        "data": "foo",
+        "base": 0,
+        "offset": 0,
+        "match_length": 3,
+        "xor_key": 0
+      }
+    ]
+  }
+}
+{
+  "rule": {
+    "identifier": "test",
+    "namespace": "default",
+    "string": "bar",
+    "tags": [],
+    "meta": [
+      {
+        "key": "string",
+        "value": "\"string meta data\""
+      },
+      {
+        "key": "integer",
+        "value": "42"
+      },
+      {
+        "key": "boolean",
+        "value": "true"
+      }
+    ],
+    "matches": [
+      {
+        "identifier": "$bar",
+        "data": "bar",
+        "base": 0,
+        "offset": 4,
+        "match_length": 3,
+        "xor_key": 0
+      },
+      {
+        "identifier": "$bar",
+        "data": "bar",
+        "base": 0,
+        "offset": 7,
+        "match_length": 3,
+        "xor_key": 0
+      }
+    ]
+  }
+}
+```
