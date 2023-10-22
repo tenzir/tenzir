@@ -115,7 +115,7 @@ arrow_fd_wrapper::arrow_fd_wrapper(int fd) : fd_{fd} {
   int result = ::close(fd_);
   fd_ = -1;
   if (result != 0)
-    return ::arrow::Status::IOError();
+    return ::arrow::Status::IOError("close(2): ", std::strerror(errno));
   return ::arrow::Status::OK();
 }
 
@@ -131,7 +131,7 @@ auto arrow_fd_wrapper::Read(int64_t nbytes, void* out)
   -> ::arrow::Result<int64_t> {
   auto n = ::read(fd_, out, nbytes);
   if (n < 0)
-    return ::arrow::Status::IOError();
+    return ::arrow::Status::IOError("read(2): ", std::strerror(errno));
   pos_ += n;
   return n;
 }
