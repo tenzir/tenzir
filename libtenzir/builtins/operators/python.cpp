@@ -49,15 +49,8 @@ class python_operator final : public crtp_operator<python_operator> {
 public:
   python_operator() = default;
 
-  explicit python_operator(std::string code, bool keep_leading_indent) {
-    // "Fix" empty input here, rather than bother with trying to pass zero
-    // bytes through a pipe.
-    if (code.empty())
-      code = " ";
-    if (keep_leading_indent)
-      code_ = std::move(code);
-    else
-      code_ = detail::strip_leading_indentation(std::move(code));
+  explicit python_operator(std::string code) {
+    code_ = std::move(code);
   }
 
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
@@ -177,14 +170,11 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto command = std::string{};
-    auto keep_leading_indent = bool{};
     auto parser = argument_parser{"python", "https://docs.tenzir.com/next/"
                                             "operators/transformations/python"};
     parser.add(command, "<command>");
-    parser.add("--keep-leading-indent", keep_leading_indent);
     parser.parse(p);
-    return std::make_unique<python_operator>(std::move(command),
-                                             keep_leading_indent);
+    return std::make_unique<python_operator>(std::move(command));
   }
 };
 
