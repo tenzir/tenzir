@@ -160,7 +160,7 @@ private:
           auto bytes = std::span<const std::byte>{
             reinterpret_cast<const std::byte*>(match->data),
             detail::narrow_cast<size_t>(match->data_length)};
-          // TODO: switch to new bytes type once available.
+          // TODO: switch to blob type once available.
           auto str = std::string_view{
             reinterpret_cast<const char*>(bytes.data()), bytes.size()};
           match_rec.field("data").data(str);
@@ -168,7 +168,10 @@ private:
           match_rec.field("offset").data(match->offset);
           match_rec.field("match_length")
             .data(detail::narrow_cast<uint64_t>(match->match_length));
-          match_rec.field("xor_key").data(uint64_t{match->xor_key});
+          // TODO: Once we can upgrade to newer versions of libyara, uncomment
+          // the line below. YR_MATCH::xor_key is not available in the version
+          // we get on Debian.
+          // match_rec.field("xor_key").data(uint64_t{match->xor_key});
         }
       }
     } else if (message == CALLBACK_MSG_RULE_NOT_MATCHING) {
