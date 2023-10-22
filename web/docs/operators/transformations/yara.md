@@ -13,6 +13,8 @@ yara [-C|--compiled-rules] [-f|--fast-scan] <rule> [<rule>..]
 The `yara` operator applies [Yara](https://virustotal.github.io/yara/) rules to
 an input of bytes, emitting rule context upon a match.
 
+![Yara Operator](yara-operator.excalidraw.svg)
+
 We modeled the operator after the official [`yara` command-line
 utility](https://yara.readthedocs.io/en/stable/commandline.html) to enable a
 familiar experience for the command users. Similar to the official `yara`
@@ -111,8 +113,7 @@ The resulting `yara.match` events look as follows:
         "data": "foo",
         "base": 0,
         "offset": 0,
-        "match_length": 3,
-        "xor_key": 0
+        "match_length": 3
       }
     ]
   }
@@ -143,16 +144,14 @@ The resulting `yara.match` events look as follows:
         "data": "bar",
         "base": 0,
         "offset": 4,
-        "match_length": 3,
-        "xor_key": 0
+        "match_length": 3
       },
       {
         "identifier": "$bar",
         "data": "bar",
         "base": 0,
         "offset": 7,
-        "match_length": 3,
-        "xor_key": 0
+        "match_length": 3
       }
     ]
   }
