@@ -4,23 +4,34 @@
 
 namespace tenzir::detail {
 
-auto strip_leading_indentation(std::string code) -> std::string {
+auto strip_leading_indentation(std::string&& code) -> std::string {
   /// Yields each line, including the trailing newline.
-  auto each_line = [](const std::string& code) -> generator<std::string_view> {
+  auto each_line = [](std::string_view code) -> generator<std::string_view> {
     auto left = 0ull;
     auto right = code.find('\n');
-    while (right != std::string::npos) {
+    while (right != std::string_view::npos) {
       co_yield std::string_view{code.begin() + left, code.begin() + right + 1};
       left = right + 1;
       right = code.find('\n', left);
     }
   };
+  auto common_prefix = [](std::string_view lhs, std::string_view rhs) {
+    return std::string_view{
+      lhs.begin(),
+      std::mismatch(lhs.begin(), lhs.end(), rhs.begin(), rhs.end()).first};
+  };
 
   auto indentation = std::string_view{};
+  auto start = true;
   for (auto line : each_line(code)) {
     if (auto x = line.find_first_not_of(" \t\n"); x != std::string::npos) {
-      indentation = line.substr(0, x);
-      break;
+      auto indent = line.substr(0, x);
+      if (start) {
+        indentation = indent;
+        start = false;
+      } else {
+        indentation = common_prefix(indentation, indent);
+      }
     }
   }
   if (indentation.empty())

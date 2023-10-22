@@ -15,12 +15,12 @@ using namespace tenzir::detail;
 
 TEST(empty) {
   auto code = ""s;
-  CHECK_EQUAL(strip_leading_indentation(code), code);
+  CHECK_EQUAL(strip_leading_indentation(std::string{code}), code);
 }
 
 TEST(no indentation - single line) {
   auto code = "pass"s;
-  CHECK_EQUAL(strip_leading_indentation(code), code);
+  CHECK_EQUAL(strip_leading_indentation(std::string{code}), code);
 }
 
 TEST(no indentation - multiline) {
@@ -31,12 +31,12 @@ def main():
     if True:
         pass
 )_"s;
-  CHECK_EQUAL(strip_leading_indentation(code), code);
+  CHECK_EQUAL(strip_leading_indentation(std::string{code}), code);
 }
 
 TEST(indentation - spaces) {
   auto code_indented = R"_(
-
+        # :<
     import math
 
     def main():
@@ -45,14 +45,14 @@ TEST(indentation - spaces) {
 )_"s;
 
   auto code = R"_(
-
+    # :<
 import math
 
 def main():
     if True:
       pass
 )_"s;
-  CHECK_EQUAL(strip_leading_indentation(code_indented), code);
+  CHECK_EQUAL(strip_leading_indentation(std::move(code_indented)), code);
 }
 
 TEST(indentation - tabs) {
@@ -77,5 +77,5 @@ def main():
 	if False:
 	  pass # <- Mixed tabs and spaces
 )_"s;
-  CHECK_EQUAL(strip_leading_indentation(code_indented), code);
+  CHECK_EQUAL(strip_leading_indentation(std::move(code_indented)), code);
 }

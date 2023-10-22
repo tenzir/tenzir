@@ -18,6 +18,6 @@ namespace tenzir::detail {
 /// uses the character sequence from the beginning of the line to
 /// that character as the indentation to strip.
 /// @param code A newline-delimited multiline string.
-auto strip_leading_indentation(std::string code) -> std::string;
+auto strip_leading_indentation(std::string&& code) -> std::string;
 
 } // namespace tenzir::detail
