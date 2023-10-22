@@ -50,7 +50,11 @@ public:
   python_operator() = default;
 
   explicit python_operator(std::string code) {
-    code_ = std::move(code);
+    if (code == "") {
+      code_ = "pass";
+    } else {
+      code_ = std::move(code);
+    }
   }
 
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
@@ -69,7 +73,7 @@ public:
                              fmt::to_string(codepipe.pipe().native_source()),
                              bp::std_out > std_out,
                              bp::std_in < std_in};
-      codepipe << code_;
+      codepipe << detail::strip_leading_indentation(std::string{code_});
       codepipe.close();
       for (auto&& slice : input) {
         if (slice.rows() == 0) {
