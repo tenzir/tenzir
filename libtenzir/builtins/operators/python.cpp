@@ -61,15 +61,12 @@ public:
       auto path = bp::search_path("python");
       TENZIR_DEBUG("using {} as python executable", path.string());
       bp::opstream codepipe; // pipe to transmit the code
-      auto env = bp::environment{};
-      env["TENZIR_PYTHON_OPERATOR_CODEFD"]
-        = fmt::to_string(codepipe.pipe().native_source());
       // TODO: We should probably also redirect stderr here and attempt
       //       to attach it to the error message in case of an error.
       auto child = bp::child{path,
                              "-c",
                              PYTHON_SCAFFOLD,
-                             env,
+                             fmt::to_string(codepipe.pipe().native_source()),
                              bp::std_out > std_out,
                              bp::std_in < std_in};
       codepipe << code_;

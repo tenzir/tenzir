@@ -194,7 +194,7 @@ def _execute_user_code(__batch: pa.RecordBatch, __code: str):
 
 
 def main():
-    codepipe = int(os.environ["TENZIR_PYTHON_OPERATOR_CODEFD"])
+    codepipe = int(sys.argv[1])
     code = os.read(codepipe, 128 * 1024)
 
     istream = pa.input_stream(sys.stdin.buffer)
