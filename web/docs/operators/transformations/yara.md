@@ -43,7 +43,21 @@ contained files as Yara rules.
 
 ## Examples
 
-Consider this example rule:
+Scan a file with a set of Yara rules:
+
+```
+load file --mmap evil | yara rule.yara
+```
+
+:::caution
+Note the `--mmap` flag: we need it to deliver a single block of data to the
+`yara` operator. Without `--mmap`, the [`file`](../../connectors/file.md) loader
+will generate a stream of byte chunks and feed them incrementally to `yara`,
+attempting to match `rule.yara` individualy on *every chunk*. This will cause
+false negatives when rule matches would span chunk boundaries.
+:::
+
+Let's unpack a concrete example:
 
 ```yara
 rule test {
@@ -61,8 +75,7 @@ rule test {
 }
 ```
 
-You can produce some test matches easily on the command line by feeding bytes
-into the `yara` operator:
+You can produce test matches by feeding bytes into the `yara` operator:
 
 ```bash
 echo 'foo barbar baz' |
