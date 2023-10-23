@@ -90,7 +90,7 @@ The resulting `yara.match` events look as follows:
     "matches": [
       {
         "identifier": "$foo",
-        "data": "foo",
+        "data": "Zm9v",
         "base": 0,
         "offset": 0,
         "match_length": 3
@@ -112,14 +112,14 @@ The resulting `yara.match` events look as follows:
     "matches": [
       {
         "identifier": "$bar",
-        "data": "bar",
+        "data": "YmFy",
         "base": 0,
         "offset": 4,
         "match_length": 3
       },
       {
         "identifier": "$bar",
-        "data": "bar",
+        "data": "YmFy",
         "base": 0,
         "offset": 7,
         "match_length": 3
@@ -132,8 +132,12 @@ The resulting `yara.match` events look as follows:
 Each event represents a rule match on a rule string. The output has a `rule`
 field that describes the metadata of the rule, and a `matches` array with a list
 of all matches for a given rule string. Each match includes the string
-`identifier`, e.g., `$foo`, the matching data, and details about the location of
-the match.
+`identifier`, e.g., `$foo`, an excerpt of the matching data in field `data` as
+blob,[^1] and details about the location of the match.
+
+[^1]: JSON doesn't distinguish binary blobs from strings. However, our type
+    system does, so we encode blob values as Base64-encoded strings for formats
+    that do not have a native blog representation.
 
 ## Mixing and matching loaders
 

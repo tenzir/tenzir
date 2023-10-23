@@ -101,7 +101,7 @@ The resulting `yara.match` events look as follows:
     "matches": [
       {
         "identifier": "$foo",
-        "data": "foo",
+        "data": "Zm9v",
         "base": 0,
         "offset": 0,
         "match_length": 3
@@ -123,14 +123,14 @@ The resulting `yara.match` events look as follows:
     "matches": [
       {
         "identifier": "$bar",
-        "data": "bar",
+        "data": "YmFy",
         "base": 0,
         "offset": 4,
         "match_length": 3
       },
       {
         "identifier": "$bar",
-        "data": "bar",
+        "data": "YmFy",
         "base": 0,
         "offset": 7,
         "match_length": 3

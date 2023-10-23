@@ -159,10 +159,9 @@ private:
           auto bytes = std::span<const std::byte>{
             reinterpret_cast<const std::byte*>(match->data),
             detail::narrow_cast<size_t>(match->data_length)};
-          // TODO: switch to blob type once available.
-          auto str = std::string_view{
-            reinterpret_cast<const char*>(bytes.data()), bytes.size()};
-          match_rec.field("data").data(str);
+          auto blob_view
+            = std::basic_string_view<std::byte>{bytes.data(), bytes.size()};
+          match_rec.field("data").data(blob_view);
           match_rec.field("base").data(match->base);
           match_rec.field("offset").data(match->offset);
           match_rec.field("match_length")
