@@ -28,6 +28,10 @@ table String {
   value: string;
 }
 
+table Blob {
+  value: [ubyte];
+}
+
 table PatternOptions {
   case_insensitive: bool;
 }
@@ -88,6 +92,7 @@ union Data {
   list: List,
   map: Map,
   record: Record,
+  blob: Blob,
 }
 
 namespace tenzir.fbs;

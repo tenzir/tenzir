@@ -215,7 +215,7 @@ def run_step(
         client = spawn(
             cmd,
             stdin=(subprocess.PIPE if step.input else subprocess.DEVNULL),
-            stdout=open(stdout, "w+"),
+            stdout=open(stdout, "wb+"),
             stderr=open(stderr, "w"),
             cwd=work_dir,
         )
@@ -258,7 +258,7 @@ def run_step(
                 baseline_dir.mkdir(parents=True)
         else:
             LOGGER.debug("comparing step output to baseline")
-        with open(stdout) as out_handle:
+        with open(stdout, "rb") as out_handle:
             out = None
             if step.transformation:
                 LOGGER.debug(f"transforming output with `{step.transformation}`")
@@ -273,7 +273,7 @@ def run_step(
                         timeout=STEP_TIMEOUT,
                         shell=True,
                         env=env,
-                    ).stdout.decode("utf8")
+                    ).stdout
                 except subprocess.TimeoutExpired:
                     LOGGER.error(f"timeout reached, terminating transformation")
                     return Result.TIMEOUT
@@ -284,18 +284,21 @@ def run_step(
             if sort_output:
                 output_lines = sorted(output_lines)
             if update_baseline:
-                with open(baseline, "w") as ref_handle:
+                with open(baseline, "wb") as ref_handle:
                     for line in output_lines:
                         ref_handle.write(line)
             else:
                 baseline_lines = []
                 if baseline.exists():
-                    baseline_lines = open(baseline).readlines()
-                diff = difflib.unified_diff(
+                    baseline_lines = (
+                        open(baseline, "rb").read().splitlines(keepends=True)
+                    )
+                diff = difflib.diff_bytes(
+                    difflib.unified_diff,
                     baseline_lines,
                     output_lines,
-                    fromfile=str(baseline),
-                    tofile=str(stdout),
+                    fromfile=str(baseline).encode(),
+                    tofile=str(stdout).encode(),
                 )
                 delta = list(diff)
                 if delta:
@@ -304,7 +307,9 @@ def run_step(
                         and expected_result != Result.IGNORE
                     ):
                         LOGGER.warning("baseline comparison failed")
-                        sys.stdout.writelines(delta)
+                        sys.stdout.writelines(
+                            [d.decode("utf-8", "backslashreplace") for d in delta]
+                        )
                     return Result.FAILURE
     except subprocess.CalledProcessError as err:
         if expected_result != Result.ERROR and expected_result != Result.IGNORE:

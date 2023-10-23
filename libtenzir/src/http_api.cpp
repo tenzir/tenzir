@@ -170,6 +170,10 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
             return caf::make_error(ec::invalid_argument, "expected string");
           return param_data;
         },
+        [&](const blob_type&) -> caf::expected<data> {
+          return caf::make_error(ec::invalid_argument,
+                                 "blob parameters are not supported");
+        },
         [&](const bool_type&) -> caf::expected<data> {
           if (!is_string)
             return caf::make_error(ec::invalid_argument, "expected bool");
@@ -194,6 +198,10 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
               detail::overload{
                 [&](const string_type&) -> caf::expected<data> {
                   return x_as_string;
+                },
+                [&](const blob_type&) -> caf::expected<data> {
+                  return caf::make_error(ec::invalid_argument,
+                                         "blob parameters are not supported");
                 },
                 [&]<basic_type Type>(const Type&) -> caf::expected<data> {
                   using data_t = type_to_data_t<Type>;
