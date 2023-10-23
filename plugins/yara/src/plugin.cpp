@@ -225,7 +225,7 @@ public:
     return *this;
   }
 
-  ~compiler() {
+  ~compiler() noexcept {
     if (compiler_)
       yr_compiler_destroy(compiler_);
   }
