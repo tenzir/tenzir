@@ -197,7 +197,7 @@ components:
           type: string
           description: The pipeline label text.
           example: zeek
-        name:
+        color:
           type: string
           description: The pipeline label color.
           example: 3F1A24

@@ -194,6 +194,17 @@ Location:
     end:
       type: number
       example: 48
+PipelineLabel:
+  type: object
+  properties:
+    text:
+      type: string
+      description: The pipeline label text.
+      example: zeek
+    color:
+      type: string
+      description: The pipeline label color.
+      example: 3F1A24
 PipelineLabels:
   type: array
   description: The user-provided labels for this pipeline.
