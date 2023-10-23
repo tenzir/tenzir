@@ -140,17 +140,16 @@ private:
         yr_rule_tags_foreach(rule, tag) {
           tags.data(std::string_view{tag});
         }
-        auto metas = rec.field("meta").list();
+        auto meta_rec = rec.field("meta").record();
         YR_META* meta = nullptr;
         yr_rule_metas_foreach(rule, meta) {
-          auto meta_rec = metas.record();
-          meta_rec.field("key").data(std::string_view{meta->identifier});
+          auto identifier = std::string_view{meta->identifier};
           if (meta->type == META_TYPE_INTEGER)
-            meta_rec.field("value").data(int64_t{meta->integer});
+            meta_rec.field(identifier).data(int64_t{meta->integer});
           else if (meta->type == META_TYPE_BOOLEAN)
-            meta_rec.field("value").data(meta->integer != 0);
+            meta_rec.field(identifier).data(meta->integer != 0);
           else
-            meta_rec.field("value").data(std::string_view{meta->string});
+            meta_rec.field(identifier).data(std::string_view{meta->string});
         }
         YR_MATCH* match = nullptr;
         auto list = rec.field("matches").list();

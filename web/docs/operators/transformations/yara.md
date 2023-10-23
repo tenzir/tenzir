@@ -93,20 +93,11 @@ The resulting `yara.match` events look as follows:
     "namespace": "default",
     "string": "foo",
     "tags": [],
-    "meta": [
-      {
-        "key": "string",
-        "value": "\"string meta data\""
-      },
-      {
-        "key": "integer",
-        "value": "42"
-      },
-      {
-        "key": "boolean",
-        "value": "true"
-      }
-    ],
+    "meta": {
+      "string": "string meta data",
+      "integer": 42,
+      "boolean": true
+    },
     "matches": [
       {
         "identifier": "$foo",
@@ -124,20 +115,11 @@ The resulting `yara.match` events look as follows:
     "namespace": "default",
     "string": "bar",
     "tags": [],
-    "meta": [
-      {
-        "key": "string",
-        "value": "\"string meta data\""
-      },
-      {
-        "key": "integer",
-        "value": "42"
-      },
-      {
-        "key": "boolean",
-        "value": "true"
-      }
-    ],
+    "meta": {
+      "string": "string meta data",
+      "integer": 42,
+      "boolean": true
+    },
     "matches": [
       {
         "identifier": "$bar",
