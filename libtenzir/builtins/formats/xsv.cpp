@@ -6,16 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/adaptive_table_slice_builder.hpp"
 #include "tenzir/argument_parser.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/concept/parseable/string/quoted_string.hpp"
+#include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql/basic.hpp"
 #include "tenzir/view.hpp"
@@ -122,6 +123,10 @@ struct xsv_printer_impl {
       return true;
     }
 
+    auto operator()(view<blob> x) noexcept -> bool {
+      return (*this)(detail::base64::encode(x));
+    }
+
     auto operator()(const view<list>& x) noexcept -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
@@ -217,15 +222,17 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
                                                    name)));
     co_return;
   }
-  auto b = adaptive_table_slice_builder{};
+  auto b = series_builder{};
   for (; it != lines.end(); ++it) {
     auto line = *it;
     const auto now = std::chrono::steady_clock::now();
-    if (b.rows()
+    if (b.length()
           >= detail::narrow_cast<int64_t>(defaults::import::table_slice_size)
         or last_finish + defaults::import::batch_timeout < now) {
       last_finish = now;
-      co_yield b.finish();
+      for (auto&& slice : b.finish_as_table_slice()) {
+        co_yield std::move(slice);
+      }
     }
     if (not line) {
       if (last_finish != now) {
@@ -236,7 +243,6 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
     if (line->empty()) {
       continue;
     }
-    auto row = b.push_row();
     auto values = std::vector<std::string>{};
     if (!split_parser(*line, values)) {
       ctrl.warn(
@@ -253,15 +259,22 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
                     name, fields.size(), values.size())));
       continue;
     }
+    auto row = b.record();
     for (const auto& [field, value] : detail::zip(fields, values)) {
-      auto field_guard = row.push_field(field);
-      if (auto err = field_guard.add(value))
-        ctrl.warn(std::move(err));
-      // TODO: Check what add() does with strings.
+      auto parsed = data{};
+      if (not(parsers::data - parsers::pattern)(value, parsed)) {
+        parsed = value;
+      }
+      auto result = row.field(field).try_data(parsed);
+      if (not result) {
+        ctrl.warn(result.error());
+      }
     }
   }
-  if (b.rows() > 0) {
-    co_yield b.finish();
+  if (b.length() > 0) {
+    for (auto&& slice : b.finish_as_table_slice()) {
+      co_yield std::move(slice);
+    }
   }
 }
 

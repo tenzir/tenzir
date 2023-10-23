@@ -90,6 +90,13 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::string,
                              value_offset.Union());
     },
+    [&](const blob& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto* data = reinterpret_cast<const uint8_t*>(value.data());
+      const auto value_offset = fbs::data::CreateBlob(
+        builder, builder.CreateVector(data, value.size()));
+      return fbs::CreateData(builder, fbs::data::Data::blob,
+                             value_offset.Union());
+    },
     [&](const pattern& value) -> flatbuffers::Offset<fbs::Data> {
       auto options = fbs::data::CreatePatternOptions(
         builder, value.options().case_insensitive);
@@ -196,6 +203,12 @@ caf::error unpack(const fbs::Data& from, data& to) {
     }
     case fbs::data::Data::string: {
       to = from.data_as_string()->value()->str();
+      return caf::none;
+    }
+    case fbs::data::Data::blob: {
+      const auto* vec = from.data_as_blob()->value();
+      const auto* data = reinterpret_cast<const std::byte*>(vec->data());
+      to = blob{data, data + vec->size()};
       return caf::none;
     }
     case fbs::data::Data::pattern: {
@@ -884,6 +897,9 @@ void print(YAML::Emitter& out, const data& x) {
     },
     [&out](const std::string& x) {
       out << x;
+    },
+    [&out](const blob& x) {
+      out << detail::base64::encode(x);
     },
     [&out](const pattern& x) {
       out << to_string(x);

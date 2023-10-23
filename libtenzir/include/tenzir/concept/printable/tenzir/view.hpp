@@ -14,6 +14,7 @@
 #include "tenzir/concept/printable/print.hpp"
 #include "tenzir/concept/printable/std/chrono.hpp"
 #include "tenzir/concept/printable/string.hpp"
+#include "tenzir/concept/printable/tenzir/blob.hpp"
 #include "tenzir/concept/printable/tenzir/ip.hpp"
 #include "tenzir/concept/printable/tenzir/none.hpp"
 #include "tenzir/concept/printable/tenzir/port.hpp"
@@ -22,6 +23,8 @@
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/view.hpp"
+
+#include <string_view>
 
 namespace tenzir {
 
@@ -136,6 +139,11 @@ struct printer_registry<view<map>> {
 template <>
 struct printer_registry<view<record>> {
   using type = record_view_printer;
+};
+
+template <>
+struct printer_registry<view<blob>> {
+  using type = generic_blob_printer<view<blob>>;
 };
 
 } // namespace tenzir

@@ -65,6 +65,9 @@ bool is_equal(const data& x, const data_view& y) {
       else
         return false;
     },
+    [&](const blob& lhs, const view<blob>& rhs) {
+      return std::ranges::equal(make_view(lhs), rhs);
+    },
     [&](const pattern& lhs, const view<pattern>& rhs) {
       return lhs.string() == rhs.string();
     },
@@ -150,6 +153,10 @@ data_view make_view(const data& x) {
 
 std::string materialize(std::string_view x) {
   return std::string{x};
+}
+
+blob materialize(view<blob> x) {
+  return {x.begin(), x.end()};
 }
 
 pattern materialize(pattern_view x) {

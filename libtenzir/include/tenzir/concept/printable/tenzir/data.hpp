@@ -13,6 +13,7 @@
 #include "tenzir/concept/printable/print.hpp"
 #include "tenzir/concept/printable/std/chrono.hpp"
 #include "tenzir/concept/printable/string.hpp"
+#include "tenzir/concept/printable/tenzir/blob.hpp"
 #include "tenzir/concept/printable/tenzir/ip.hpp"
 #include "tenzir/concept/printable/tenzir/none.hpp"
 #include "tenzir/concept/printable/tenzir/pattern.hpp"
@@ -105,6 +106,11 @@ struct record_printer : printer_base<record_printer> {
 template <>
 struct printer_registry<record> {
   using type = record_printer;
+};
+
+template <>
+struct printer_registry<blob> {
+  using type = generic_blob_printer<blob>;
 };
 
 } // namespace tenzir

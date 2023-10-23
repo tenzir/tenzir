@@ -53,7 +53,7 @@ using concrete_types
   = caf::detail::type_list<null_type, bool_type, int64_type, uint64_type,
                            double_type, duration_type, time_type, string_type,
                            ip_type, subnet_type, enumeration_type, list_type,
-                           map_type, record_type>;
+                           map_type, record_type, blob_type>;
 
 /// Reification of the variant inhabitants of `type`.
 using type_kind = caf::detail::tl_apply_t<concrete_types, tag_variant>;
@@ -1340,6 +1340,33 @@ public:
   friend record_type flatten(const record_type& type) noexcept;
 };
 
+// -- blob_type --------------------------------------------------------------
+
+/// An sequence of bytes.
+/// @relates type
+class blob_type final {
+public:
+  /// Returns the type index.
+  static constexpr uint8_t type_index = 16;
+
+  /// The corresponding Arrow DataType.
+  using arrow_type = arrow::BinaryType;
+
+  /// Returns a view of the underlying binary representation.
+  friend std::span<const std::byte> as_bytes(const blob_type&) noexcept;
+
+  /// Constructs data from the type.
+  [[nodiscard]] static blob construct() noexcept;
+
+  /// Converts the type into an Arrow DataType.
+  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
+
+  /// Creates an Arrow ArrayBuilder from the type.
+  [[nodiscard]] static std::shared_ptr<
+    typename arrow::TypeTraits<arrow_type>::BuilderType>
+  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
+};
+
 } // namespace tenzir
 
 // -- misc --------------------------------------------------------------------
@@ -2135,6 +2162,12 @@ struct formatter<T> {
       }
     }
     return fmt::format_to(out, "}}");
+  }
+
+  template <class FormatContext>
+  auto format(const tenzir::blob_type&, FormatContext& ctx) const
+    -> decltype(ctx.out()) {
+    return fmt::format_to(ctx.out(), "blob");
   }
 };
 

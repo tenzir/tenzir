@@ -14,6 +14,7 @@
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/concept/printable/tenzir/view.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
+#include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/type_traits.hpp"
 #include "tenzir/error.hpp"
@@ -77,6 +78,10 @@ caf::error render(output_iterator& out, const view<std::string>& x) {
   auto p = '"' << printers::escape(escaper) << '"';
   p.print(out, x);
   return caf::none;
+}
+
+caf::error render(output_iterator& out, const view<blob>& x) {
+  return render(out, std::string_view{detail::base64::encode(x)});
 }
 
 caf::error render(output_iterator& out, const view<data>& x);

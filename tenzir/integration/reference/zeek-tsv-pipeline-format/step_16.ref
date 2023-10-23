@@ -1,0 +1,2 @@
+error: failed to parse Zeek document: duplicate #field name `a.b`
+ = note: line 7

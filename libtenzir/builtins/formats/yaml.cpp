@@ -11,6 +11,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/base64.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -109,6 +110,8 @@ auto print_node(auto& out, const View& value) -> void {
     out << value;
   } else if constexpr (std::is_same_v<View, view<std::string>>) {
     out << std::string{value};
+  } else if constexpr (std::is_same_v<View, view<blob>>) {
+    out << detail::base64::encode(value);
   } else if constexpr (detail::is_any_v<View, view<double>, view<duration>,
                                         view<time>, view<pattern>, view<ip>,
                                         view<subnet>, view<enumeration>>) {

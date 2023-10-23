@@ -21,7 +21,7 @@
 #include <tenzir/format/reader.hpp>
 #include <tenzir/module.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
@@ -64,12 +64,12 @@ std::string unescape(std::string_view value) {
 /// A shallow representation a of a CEF message.
 struct message_view {
   uint16_t cef_version;
-  std::string_view device_vendor;
-  std::string_view device_product;
-  std::string_view device_version;
-  std::string_view signature_id;
-  std::string_view name;
-  std::string_view severity;
+  std::string device_vendor;
+  std::string device_product;
+  std::string device_version;
+  std::string signature_id;
+  std::string name;
+  std::string severity;
   record extension;
 };
 
@@ -79,7 +79,7 @@ struct message_view {
 /// @returns A vector of key-value pairs with properly unescaped values.
 caf::expected<record> parse_extension(std::string_view extension) {
   record result;
-  auto splits = detail::split(extension, "=", "\\");
+  auto splits = detail::split_escaped(extension, "=", "\\");
   if (splits.size() < 2)
     return caf::make_error(ec::parse_error, fmt::format("need at least one "
                                                         "key=value pair: {}",
@@ -101,9 +101,11 @@ caf::expected<record> parse_extension(std::string_view extension) {
   // Converts a raw, unescaped string to a data instance.
   auto to_data = [](std::string_view str) -> data {
     auto unescaped = unescape(str);
-    if (auto x = to<data>(unescaped))
-      return std::move(*x);
-    return unescaped;
+    auto parsed = data{};
+    if (not(parsers::data - parsers::pattern)(unescaped, parsed)) {
+      parsed = unescaped;
+    }
+    return parsed;
   };
   for (auto i = 1u; i < splits.size() - 1; ++i) {
     auto split = splits[i];
@@ -129,7 +131,7 @@ caf::expected<record> parse_extension(std::string_view extension) {
 caf::error convert(std::string_view line, message_view& msg) {
   using namespace std::string_view_literals;
   // Pipes in the extension field do not need escaping.
-  auto fields = detail::split(line, "|", "\\", 8);
+  auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() != 8)
     return caf::make_error(ec::parse_error, //
                            fmt::format("need exactly 8 fields, got '{}'",
@@ -140,18 +142,19 @@ caf::error convert(std::string_view line, message_view& msg) {
     return caf::make_error(ec::parse_error, //
                            fmt::format("CEF version requires ':', got '{}'",
                                        fields[0]));
-  auto cef_version_str = fields[0].substr(i + 1);
+  auto cef_version_str
+    = std::string_view{std::next(fields[0].begin(), i + 1), fields[0].end()};
   if (!parsers::u16(cef_version_str, msg.cef_version))
     return caf::make_error(ec::parse_error, //
                            fmt::format("failed to parse CEF version, got '{}'",
                                        cef_version_str));
   // Fields 1-6.
-  msg.device_vendor = fields[1];
-  msg.device_product = fields[2];
-  msg.device_version = fields[3];
-  msg.signature_id = fields[4];
-  msg.name = fields[5];
-  msg.severity = fields[6];
+  msg.device_vendor = std::move(fields[1]);
+  msg.device_product = std::move(fields[2]);
+  msg.device_version = std::move(fields[3]);
+  msg.signature_id = std::move(fields[4]);
+  msg.name = std::move(fields[5]);
+  msg.severity = std::move(fields[6]);
   // Field 7: Extension
   if (auto kvps = parse_extension(fields[7]))
     msg.extension = std::move(*kvps);
@@ -191,36 +194,21 @@ type infer(const message_view& msg) {
 /// Parses a line of ASCII as CEF message.
 /// @param msg The CEF message.
 /// @param builder The table slice builder to add the message to.
-caf::error add(const message_view& msg, table_slice_builder& builder) {
-  auto append = [&](const auto& x) -> caf::error {
-    if (!builder.add(make_data_view(x)))
-      return caf::make_error(ec::parse_error, //
-                             fmt::format("failed to add value: {}", x));
-    return caf::none;
-  };
-  // High-order helper function for the monadic caf::error::eval utility.
-  auto f = [&](const auto& x) {
-    return [&]() {
-      return append(x);
-    };
-  };
-  // Append first 7 fields.
-  if (auto err
-      = caf::error::eval(f(uint64_t{msg.cef_version}), f(msg.device_vendor),
-                         f(msg.device_product), f(msg.device_version),
-                         f(msg.signature_id), f(msg.name), f(msg.severity)))
-    return err;
-  // Append extension fields.
-  for (const auto& [_, value] : msg.extension) {
-    if (auto err = append(value))
-      return err;
-  }
-  return caf::none;
+void add(const message_view& msg, builder_ref builder) {
+  auto event = builder.record();
+  event.field("cef_version", uint64_t{msg.cef_version});
+  event.field("device_vendor", msg.device_vendor);
+  event.field("device_product", msg.device_product);
+  event.field("device_version", msg.device_version);
+  event.field("signature_id", msg.signature_id);
+  event.field("name", msg.name);
+  event.field("severity", msg.severity);
+  event.field("extension", msg.extension);
 }
 
-class reader : public format::multi_schema_reader {
+class reader : public format::reader {
 public:
-  using super = multi_schema_reader;
+  using super = format::reader;
 
   /// Constructs a CEF reader.
   /// @param options Additional options.
@@ -278,16 +266,23 @@ protected:
     TENZIR_ASSERT(max_events > 0);
     TENZIR_ASSERT(max_slice_size > 0);
     size_t produced = 0;
-    table_slice_builder_ptr bptr = nullptr;
+    auto builder = series_builder{};
+    auto finish = [&] {
+      for (auto&& slice : builder.finish_as_table_slice("cef.event")) {
+        cons(std::move(slice));
+      }
+    };
     while (produced < max_events) {
-      if (lines_->done())
-        return finish(cons, caf::make_error(ec::end_of_input, "input "
-                                                              "exhausted"));
+      if (lines_->done()) {
+        finish();
+        return caf::make_error(ec::end_of_input, "input exhausted");
+      }
       if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
           && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
         TENZIR_DEBUG("{} reached batch timeout",
                      detail::pretty_type_name(this));
-        return finish(cons, ec::timeout);
+        finish();
+        return ec::timeout;
       }
       bool timed_out = lines_->next_timeout(read_timeout_);
       if (timed_out) {
@@ -311,23 +306,15 @@ protected:
         continue;
       }
       auto schema = infer(*msg);
-      bptr = builder(schema);
-      if (bptr == nullptr)
-        return caf::make_error(ec::parse_error, "unable to get a builder");
-      if (auto err = add(*msg, *bptr)) {
-        TENZIR_WARN("{} failed to parse line {}: {} ({})",
-                    detail::pretty_type_name(this), lines_->line_number(), line,
-                    err);
-        ++num_invalid_lines_;
-        continue;
-      }
+      add(*msg, builder);
       produced++;
       batch_events_++;
-      if (bptr->rows() == max_slice_size)
-        if (auto err = finish(cons, bptr))
-          return err;
+      if (detail::narrow<size_t>(builder.length()) == max_slice_size) {
+        finish();
+      }
     }
-    return finish(cons);
+    finish();
+    return caf::none;
   }
 
 private:
@@ -339,8 +326,9 @@ private:
 
 auto impl(generator<std::optional<std::string_view>> lines,
           operator_control_plane& ctrl) -> generator<table_slice> {
-  auto builder = std::optional<table_slice_builder>{};
+  auto builder = series_builder{};
   for (auto&& line : lines) {
+    // TODO: Flush builder if maximum batch size or timeout is reached.
     if (!line) {
       co_yield {};
       continue;
@@ -358,24 +346,10 @@ auto impl(generator<std::optional<std::string_view>> lines,
                                             msg.error(), *line)));
       continue;
     }
-    auto schema = infer(*msg);
-    if (!builder || builder->schema() != schema) {
-      if (builder) {
-        co_yield builder->finish();
-      }
-      builder = table_slice_builder{schema};
-    }
-    if (auto error = add(*msg, *builder)) {
-      ctrl.warn(
-        caf::make_error(ec::parse_error, fmt::format("CEF parser failed "
-                                                     "to add message: {} "
-                                                     "(line: '{}')",
-                                                     error, line)));
-      continue;
-    }
+    add(*msg, builder);
   }
-  if (builder) {
-    co_yield builder->finish();
+  for (auto& slice : builder.finish_as_table_slice("cef.event")) {
+    co_yield std::move(slice);
   }
 }
 

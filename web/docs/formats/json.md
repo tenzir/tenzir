@@ -26,7 +26,8 @@ JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects.
 ### `--schema=<schema>` (Parser)
 
 Provide the name of a [schema](../data-model/schemas.md) to be used by the
-parser.
+parser. If the schema uses the `blob` type, then the JSON parser expects
+base64-encoded strings.
 
 The `--schema` option is incompatible with the `--selector` option.
 

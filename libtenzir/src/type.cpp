@@ -80,6 +80,7 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -115,6 +116,7 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -314,6 +316,7 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -400,6 +403,7 @@ type::type(std::string_view name, const type& nested,
         case fbs::type::Type::duration_type:
         case fbs::type::Type::time_type:
         case fbs::type::Type::string_type:
+        case fbs::type::Type::blob_type:
         case fbs::type::Type::ip_type:
         case fbs::type::Type::subnet_type:
         case fbs::type::Type::enumeration_type:
@@ -532,6 +536,9 @@ type type::infer(const data& value) noexcept {
     [](const std::string&) noexcept -> type {
       return type{string_type{}};
     },
+    [](const blob&) noexcept -> type {
+      return type{blob_type{}};
+    },
     [](const pattern&) noexcept -> type {
       return type{string_type{}};
     },
@@ -627,7 +634,10 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
     [&](const legacy_time_type&) noexcept {
       return type{other.name(), time_type{}, std::move(attributes)};
     },
-    [&](const legacy_string_type&) noexcept {
+    [&](const legacy_string_type& string) noexcept {
+      if (string.name() == "blob") {
+        return type{blob_type{}, std::move(attributes)};
+      }
       return type{other.name(), string_type{}, std::move(attributes)};
     },
     [&](const legacy_pattern_type&) noexcept -> type {
@@ -697,6 +707,9 @@ legacy_type type::to_legacy_type() const noexcept {
     },
     [&](const string_type&) noexcept -> legacy_type {
       return legacy_string_type{};
+    },
+    [&](const blob_type&) noexcept -> legacy_type {
+      return legacy_string_type{}.name("blob");
     },
     [&](const ip_type&) noexcept -> legacy_type {
       return legacy_address_type{};
@@ -1081,6 +1094,7 @@ std::string_view type::name() const& noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1115,6 +1129,7 @@ generator<std::string_view> type::names() const& noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1150,6 +1165,7 @@ type::attribute(const char* key) const& noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1189,6 +1205,7 @@ bool type::has_attributes() const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1226,6 +1243,7 @@ type::attributes(type::recurse recurse) const& noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1270,6 +1288,7 @@ generator<type> type::aliases() const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1307,6 +1326,7 @@ bool is_container(const type& type) noexcept {
     case fbs::type::Type::duration_type:
     case fbs::type::Type::time_type:
     case fbs::type::Type::string_type:
+    case fbs::type::Type::blob_type:
     case fbs::type::Type::ip_type:
     case fbs::type::Type::subnet_type:
     case fbs::type::Type::enumeration_type:
@@ -1859,7 +1879,6 @@ std::span<const std::byte> as_bytes(const string_type&) noexcept {
                                       string_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
-
     TENZIR_ASSERT(result.size() == reserved_size);
     return result;
   }();
@@ -1876,6 +1895,40 @@ std::shared_ptr<string_type::arrow_type> string_type::to_arrow_type() noexcept {
 
 std::shared_ptr<typename arrow::TypeTraits<string_type::arrow_type>::BuilderType>
 string_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+  return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
+    to_arrow_type(), pool);
+}
+
+// -- blob_type --------------------------------------------------------------
+
+static_assert(blob_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::blob_type));
+
+std::span<const std::byte> as_bytes(const blob_type&) noexcept {
+  static const auto buffer = []() noexcept {
+    constexpr auto reserved_size = 32;
+    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
+    const auto blob_type = fbs::type::CreateBlobType(builder);
+    const auto type
+      = fbs::CreateType(builder, fbs::type::Type::blob_type, blob_type.Union());
+    builder.Finish(type);
+    auto result = builder.Release();
+    TENZIR_ASSERT(result.size() == reserved_size);
+    return result;
+  }();
+  return as_bytes(buffer);
+}
+
+blob blob_type::construct() noexcept {
+  return {};
+}
+
+std::shared_ptr<blob_type::arrow_type> blob_type::to_arrow_type() noexcept {
+  return std::static_pointer_cast<arrow_type>(arrow::binary());
+}
+
+std::shared_ptr<typename arrow::TypeTraits<blob_type::arrow_type>::BuilderType>
+blob_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
   return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
     to_arrow_type(), pool);
 }
@@ -2621,6 +2674,7 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2690,6 +2744,7 @@ size_t record_type::num_leaves() const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2746,6 +2801,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2808,6 +2864,7 @@ record_type::resolve_key(std::string_view key) const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2901,6 +2958,7 @@ record_type::resolve_key_suffix(std::string_view key,
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -3008,6 +3066,7 @@ generator<offset> record_type::resolve_type_extractor(
         TENZIR_MATCH(duration)
         TENZIR_MATCH(time)
         TENZIR_MATCH(string)
+        TENZIR_MATCH(blob)
         TENZIR_MATCH(ip)
         TENZIR_MATCH(subnet)
         TENZIR_MATCH(enumeration)
@@ -3140,6 +3199,7 @@ size_t record_type::flat_index(const offset& index) const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
+      case fbs::type::Type::blob_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:

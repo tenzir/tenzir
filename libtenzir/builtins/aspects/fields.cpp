@@ -7,12 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/actors.hpp>
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/catalog.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 #include <caf/scoped_actor.hpp>
 
@@ -120,42 +120,30 @@ auto traverse(type t) -> generator<schema_context> {
 // TODO: this feels like it should be a generic function that works on any
 // inspectable type.
 /// Adds a schema (= named record type) to a builder, with one row per field.
-auto add_field(auto& builder, const type& t) -> caf::error {
+auto add_field(builder_ref builder, const type& t) {
   for (const auto& ctx : traverse(t)) {
-    auto row = builder.push_row();
-    if (auto err = row.push_field("schema").add(t.name()))
-      return err;
-    if (auto err = row.push_field("schema_id").add(t.make_fingerprint()))
-      return err;
-    if (auto err = row.push_field("field").add(ctx.field.name))
-      return err;
-    auto path = row.push_field("path").push_list();
+    auto row = builder.record();
+    row.field("schema").data(t.name());
+    row.field("schema_id").data(t.make_fingerprint());
+    row.field("field").data(ctx.field.name);
+    auto path = row.field("path").list();
     for (const auto& p : ctx.field.path)
-      if (auto err = path.add(p))
-        return err;
-    auto index = row.push_field("index").push_list();
+      path.data(p);
+    auto index = row.field("index").list();
     for (auto i : ctx.field.index)
-      if (auto err = index.add(uint64_t{i}))
-        return err;
-    auto type = row.push_field("type").push_record();
-    if (auto err = type.push_field("kind").add(to_string(ctx.type.kind)))
-      return err;
-    if (auto err = type.push_field("category").add(ctx.type.category))
-      return err;
-    if (auto err = type.push_field("lists").add(ctx.type.lists))
-      return err;
-    if (auto err = type.push_field("name").add(ctx.type.name))
-      return err;
-    auto attrs = type.push_field("attributes").push_list();
+      index.data(uint64_t{i});
+    auto type = row.field("type").record();
+    type.field("kind").data(to_string(ctx.type.kind));
+    type.field("category").data(ctx.type.category);
+    type.field("lists").data(ctx.type.lists);
+    type.field("name").data(ctx.type.name);
+    auto attrs = type.field("attributes").list();
     for (const auto& [key, value] : ctx.type.attributes) {
-      auto attr = attrs.push_record();
-      if (auto err = attr.push_field("key").add(key))
-        return err;
-      if (auto err = attr.push_field("value").add(value))
-        return err;
+      auto attr = attrs.record();
+      attr.field("key").data(key);
+      attr.field("value").data(value);
     }
   }
-  return {};
 }
 
 class plugin final : public virtual aspect_plugin {
@@ -201,14 +189,13 @@ public:
     auto schemas = std::set<type>{};
     for (const auto& synopsis : synopses)
       schemas.insert(synopsis.synopsis->schema);
-    auto builder = adaptive_table_slice_builder{field_type()};
+    auto builder = series_builder{field_type()};
     for (const auto& schema : schemas) {
-      if (auto err = add_field(builder, schema))
-        diagnostic::error("failed to add type to builder")
-          .note("full type: {}", fmt::to_string(schema))
-          .emit(ctrl.diagnostics());
+      add_field(builder, schema);
     }
-    co_yield builder.finish();
+    for (auto&& slice : builder.finish_as_table_slice()) {
+      co_yield std::move(slice);
+    }
   }
 };
 

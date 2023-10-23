@@ -31,10 +31,15 @@ The following tables summarizes the basic types.
 | `double`   | A 64-bit double (IEEE 754)
 | `duration` | A time span (nanosecond granularity)
 | `time`     | A time point (nanosecond granularity)
-| `string`   | A sequence of characters
+| `string`   | A UTF-8 encoded string
+| `blob`     | An arbitrary sequence of bytes
 | `pattern`  | A regular expression
 | `ip`       | An IPv4 or IPv6 address
 | `subnet`   | An IPv4 or IPv6 subnet
+
+:::warning Experimental
+The `blob` type is still experimental and not yet fully supported.
+:::
 
 ### Complex Types
 

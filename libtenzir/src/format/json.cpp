@@ -9,6 +9,7 @@
 #include "tenzir/format/json.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/cast.hpp"
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/json.hpp"
 #include "tenzir/concept/parseable/tenzir/pattern.hpp"
@@ -102,6 +103,9 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
     [&](const string_type&) noexcept -> data {
       return ::simdjson::to_string(values);
     },
+    [&](const blob_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
@@ -160,6 +164,9 @@ data extract(int64_t value, const type& type) {
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
     },
+    [&](const blob_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
@@ -214,6 +221,9 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
     },
     [&](const string_type&) noexcept -> data {
       return ::simdjson::to_string(value);
+    },
+    [&](const blob_type&) noexcept -> data {
+      return caf::none;
     },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
@@ -319,6 +329,9 @@ data extract(uint64_t value, const type& type) {
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
     },
+    [&](const blob_type&) noexcept -> data {
+      return caf::none;
+    },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
@@ -376,6 +389,9 @@ data extract(double value, const type& type) {
     },
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
+    },
+    [&](const blob_type&) noexcept -> data {
+      return caf::none;
     },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
@@ -452,6 +468,10 @@ data extract(std::string_view value, const type& type) {
     [&](const string_type&) noexcept -> data {
       return std::string{value};
     },
+    [&](const blob_type&) noexcept -> data {
+      // TODO: Is this okay?
+      return caf::none;
+    },
     [&](const ip_type&) noexcept -> data {
       if (auto result = to<ip>(value))
         return *result;
@@ -509,6 +529,9 @@ data extract(bool value, const type& type) {
     },
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
+    },
+    [&](const blob_type&) noexcept -> data {
+      return caf::none;
     },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
@@ -643,6 +666,10 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(fmt::to_string(value));
       TENZIR_ASSERT(added);
     },
+    [&](const blob_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      TENZIR_ASSERT(added);
+    },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       TENZIR_ASSERT(added);
@@ -719,6 +746,10 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(fmt::to_string(value));
       TENZIR_ASSERT(added);
     },
+    [&](const blob_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      TENZIR_ASSERT(added);
+    },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       TENZIR_ASSERT(added);
@@ -790,6 +821,10 @@ void add(double value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(fmt::to_string(value));
       TENZIR_ASSERT(added);
     },
+    [&](const blob_type&) noexcept {
+      const auto added = builder.add(caf::none);
+      TENZIR_ASSERT(added);
+    },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       TENZIR_ASSERT(added);
@@ -849,6 +884,10 @@ void add(bool value, const type& type, table_slice_builder& builder) {
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(fmt::to_string(value));
+      TENZIR_ASSERT(added);
+    },
+    [&](const blob_type&) noexcept {
+      const auto added = builder.add(caf::none);
       TENZIR_ASSERT(added);
     },
     [&](const ip_type&) noexcept {
@@ -967,6 +1006,15 @@ void add(std::string_view value, const type& type,
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(value);
+      TENZIR_ASSERT(added);
+    },
+    [&](const blob_type&) noexcept {
+      if (auto result = cast_value(string_type{}, value, blob_type{})) {
+        const auto added = builder.add(*result);
+        TENZIR_ASSERT(added);
+        return;
+      }
+      const auto added = builder.add(caf::none);
       TENZIR_ASSERT(added);
     },
     [&](const ip_type&) noexcept {

@@ -294,6 +294,10 @@ struct serve_manager_state {
   /// The serve operators currently observed by the serve-manager.
   std::vector<managed_serve_operator> ops = {};
 
+  /// A list of previously known serve ids that were expired. This exists only
+  /// for returning better error messages to the user.
+  std::unordered_set<std::string> expired_ids = {};
+
   auto handle_down_msg(const caf::down_msg& msg) -> void {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
@@ -321,6 +325,7 @@ struct serve_manager_state {
               return op.source == source;
             });
         if (found != ops.end()) {
+          expired_ids.insert(found->serve_id);
           ops.erase(found);
         }
       });
@@ -410,9 +415,16 @@ struct serve_manager_state {
           return op.serve_id == request.serve_id;
         });
     if (found == ops.end()) {
+      if (expired_ids.contains(request.serve_id)) {
+        return caf::make_error(
+          ec::logic_error,
+          fmt::format("{} got request for events with expired serve id {}; the "
+                      "pipeline serving this data is no longer available",
+                      *self, request.serve_id));
+      }
       return caf::make_error(ec::invalid_argument,
                              fmt::format("{} got request for events with "
-                                         "unknown for serve id {}",
+                                         "unknown serve id {}",
                                          *self, request.serve_id));
     }
     if (not found->continuation_token.empty()
@@ -746,39 +758,41 @@ public:
     // a started pipeline containing a serve operator once it the pipeline
     // executor indicated that the pipeline started.
     auto serve_manager = serve_manager_actor{};
-    {
-      // Step 1: Get a handle to the SERVE MANAGER actor.
-      auto blocking = caf::scoped_actor{ctrl.self().system()};
-      blocking
-        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-                  "serve-manager")
-        .receive(
-          [&](std::vector<caf::actor>& actors) {
-            TENZIR_ASSERT(actors.size() == 1);
-            serve_manager
-              = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
-          },
-          [&](const caf::error& err) { //
-            ctrl.abort(caf::make_error(
-              ec::logic_error,
-              fmt::format("failed to find serve-manager: {}", err)));
-          });
-      // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
-      blocking
-        ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
-                  buffer_size_)
-        .receive(
-          [&]() {
-            TENZIR_DEBUG("serve for id {} is now available",
-                         escape_operator_arg(serve_id_));
-          },
-          [&](const caf::error& err) { //
-            ctrl.abort(caf::make_error(
-              ec::logic_error,
-              fmt::format("failed to register at serve-manager: {}", err)));
-          });
-      co_yield {};
-    }
+    // Step 1: Get a handle to the SERVE MANAGER actor.
+    // NOTE: It is important that we let this actor run until the end of the
+    // operator. The SERVE MANAGER monitors the actor that sends it the start
+    // atom, and assumes that the operator shut down when it receives the
+    // corresponding down message.
+    auto blocking = caf::scoped_actor{ctrl.self().system()};
+    blocking
+      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
+                "serve-manager")
+      .receive(
+        [&](std::vector<caf::actor>& actors) {
+          TENZIR_ASSERT(actors.size() == 1);
+          serve_manager
+            = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
+        },
+        [&](const caf::error& err) { //
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("failed to find serve-manager: {}", err)));
+        });
+    // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
+    blocking
+      ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
+                buffer_size_)
+      .receive(
+        [&]() {
+          TENZIR_DEBUG("serve for id {} is now available",
+                       escape_operator_arg(serve_id_));
+        },
+        [&](const caf::error& err) { //
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("failed to register at serve-manager: {}", err)));
+        });
+    co_yield {};
     // Step 3: Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
       // Send slice to SERVE MANAGER.

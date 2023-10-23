@@ -78,6 +78,9 @@ table RecordType {
   fields: [detail.RecordField] (required);
 }
 
+/// A sequence of bytes.
+table BlobType {}
+
 namespace tenzir.fbs.type;
 
 /// The sum type of all possible types.
@@ -99,6 +102,7 @@ union Type {
   map_type: MapType,
   record_type: RecordType,
   enriched_type: detail.EnrichedType,
+  blob_type: BlobType,
 }
 
 namespace tenzir.fbs;

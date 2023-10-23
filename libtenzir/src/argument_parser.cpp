@@ -59,7 +59,7 @@ void argument_parser::parse_impl(parser_interface& p) const {
                          && !has_positional_expression);
     if (is_option) {
       TENZIR_DIAG_ASSERT(arg == p.accept_shell_arg());
-      auto split = detail::split(arg->inner, "=", "", 1);
+      auto split = detail::split(arg->inner, "=", 1);
       auto name = located<std::string_view>{};
       auto value = std::optional<located<std::string_view>>{};
       if (split.size() == 1) {

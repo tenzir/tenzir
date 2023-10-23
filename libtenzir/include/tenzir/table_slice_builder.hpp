@@ -169,6 +169,10 @@ append_builder(const string_type&,
                const view<type_to_data_t<string_type>>& view) noexcept;
 
 arrow::Status
+append_builder(const blob_type&, type_to_arrow_builder_t<blob_type>& builder,
+               const view<type_to_data_t<blob_type>>& view) noexcept;
+
+arrow::Status
 append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
                const view<type_to_data_t<ip_type>>& view) noexcept;
 

@@ -7,13 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/actors.hpp>
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/catalog.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/partition_synopsis.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 #include <caf/scoped_actor.hpp>
 
@@ -55,66 +55,50 @@ auto type_type() -> type {
 // TODO: harmonize this with type::to_definition. The goal was to create a
 // single fixed schema, but it's still clunky due to nested records.
 /// Adds one type definition per row to a builder.
-auto add_type(auto& builder, const type& t) -> caf::error {
-  auto row = builder.push_row();
-  auto err = row.push_field("name").add(t.name());
-  TENZIR_ASSERT_CHEAP(!err);
-  auto layout = row.push_field("layout").push_record();
+auto add_type(builder_ref builder, const type& t) {
+  auto row = builder.record();
+  row.field("name").data(t.name());
+  auto layout = row.field("layout").record();
   auto f = detail::overload{
-    [&](const auto&) -> caf::error {
-      return layout.push_field("basic").add(fmt::to_string(t));
+    [&](const auto&) {
+      layout.field("basic").data(fmt::to_string(t));
     },
-    [&](const enumeration_type& e) -> caf::error {
-      auto enum_field = layout.push_field("enum");
-      auto list = enum_field.push_list();
+    [&](const enumeration_type& e) {
+      auto enum_field = layout.field("enum");
+      auto list = enum_field.list();
       for (auto field : e.fields()) {
-        auto field_record = list.push_record();
-        auto name = field_record.push_field("name");
-        if (auto err = name.add(field.name))
-          return err;
-        auto key = field_record.push_field("key");
-        if (auto err = key.add(uint64_t{field.key}))
-          return err;
+        auto field_record = list.record();
+        field_record.field("name").data(field.name);
+        field_record.field("key").data(uint64_t{field.key});
       }
-      return {};
     },
-    [&](const list_type& l) -> caf::error {
+    [&](const list_type& l) {
       // TODO: recurse into nested records.
-      auto list = layout.push_field("list");
-      return list.add(fmt::to_string(l.value_type()));
+      layout.field("list").data(fmt::to_string(l.value_type()));
     },
-    [&](const map_type&) -> caf::error {
+    [&](const map_type&) {
       die("unreachable");
     },
-    [&](const record_type& r) -> caf::error {
-      auto record = layout.push_field("record");
-      auto list = record.push_list();
+    [&](const record_type& r) {
+      auto record = layout.field("record");
+      auto list = record.list();
       for (const auto& field : r.fields()) {
-        auto field_record = list.push_record();
-        auto field_name = field_record.push_field("name");
-        if (auto err = field_name.add(field.name))
-          return err;
-        auto field_type = field_record.push_field("type");
-        if (auto err = field_type.add(fmt::to_string(field.type)))
-          return err;
+        auto field_record = list.record();
+        field_record.field("name").data(field.name);
+        field_record.field("type").data(fmt::to_string(field.type));
       }
-      return {};
     },
   };
-  if (auto err = caf::visit(f, t))
-    return err;
+  caf::visit(f, t);
   auto attributes = collect(t.attributes());
   if (attributes.empty())
-    return {};
-  auto list = row.push_field("attributes").push_list();
+    return;
+  auto list = row.field("attributes").list();
   for (auto& attribute : attributes) {
-    auto record = list.push_record();
-    if (auto err = record.push_field("key").add(attribute.key))
-      return err;
-    if (auto err = record.push_field("value").add(attribute.value))
-      return err;
+    auto record = list.record();
+    record.field("key").data(attribute.key);
+    record.field("value").data(attribute.value);
   }
-  return {};
 }
 class plugin final : public virtual aspect_plugin {
 public:
@@ -156,14 +140,13 @@ public:
       ctrl.abort(std::move(error));
       co_return;
     }
-    auto builder = adaptive_table_slice_builder{type_type()};
+    auto builder = series_builder{type_type()};
     for (const auto& type : types) {
-      if (auto err = add_type(builder, type))
-        diagnostic::error("failed to add type to builder")
-          .note("full type: {}", fmt::to_string(type))
-          .emit(ctrl.diagnostics());
+      add_type(builder, type);
     }
-    co_yield builder.finish();
+    for (auto&& slice : builder.finish_as_table_slice()) {
+      co_yield std::move(slice);
+    }
   }
 };
 

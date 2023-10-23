@@ -77,7 +77,7 @@ to_config_key(std::string_view key, std::string_view prefix) {
 
 caf::expected<caf::config_value> to_config_value(std::string_view value) {
   // Lists of strings can show up as `foo,bar,baz`.
-  auto xs = detail::split(value, ",", "\\");
+  auto xs = detail::split_escaped(value, ",", "\\");
   if (xs.size() == 1)
     return caf::config_value::parse(value); // no list
   std::vector<caf::config_value> result;
