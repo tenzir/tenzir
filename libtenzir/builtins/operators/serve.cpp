@@ -62,6 +62,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/query_cursor.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
 
@@ -478,13 +479,16 @@ struct serve_manager_state {
     for (const auto& op : ops) {
       auto& entry = caf::get<record>(requests.emplace_back(record{}));
       entry.emplace("serve_id", op.serve_id);
-      entry.emplace("continuation_token", op.continuation_token.empty()
-                                            ? data{}
-                                            : op.continuation_token);
+      const auto lingering = op.continuation_token == FINAL_CONTINUATION_TOKEN;
+      entry.emplace("continuation_token",
+                    op.continuation_token.empty() or lingering
+                      ? data{}
+                      : op.continuation_token);
       entry.emplace("buffer_size", op.buffer_size);
       entry.emplace("num_buffered", rows(op.buffer));
       entry.emplace("num_requested", op.requested);
       entry.emplace("num_delivered", op.delivered);
+      entry.emplace("lingering", lingering);
       entry.emplace("done", op.done);
       if (verbosity >= status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
@@ -862,10 +866,65 @@ private:
 
 class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
-                     public virtual operator_plugin<serve_operator> {
+                     public virtual operator_plugin<serve_operator>,
+                     public virtual aspect_plugin {
 public:
   auto component_name() const -> std::string override {
     return "serve-manager";
+  }
+
+  auto aspect_name() const -> std::string override {
+    return "serves";
+  }
+
+  // this is for the aspect plugin
+  auto location() const -> operator_location override {
+    return operator_location::remote;
+  }
+
+  auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice> override {
+    auto serve_manager = serve_manager_actor{};
+    auto blocking = caf::scoped_actor{ctrl.self().system()};
+    blocking
+      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
+                "serve-manager")
+      .receive(
+        [&](std::vector<caf::actor>& actors) {
+          TENZIR_ASSERT(actors.size() == 1);
+          serve_manager
+            = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
+        },
+        [&](const caf::error& err) { //
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("failed to find serve-manager: {}", err)));
+        });
+    co_yield {};
+    auto serves = list{};
+    blocking
+      ->request(serve_manager, caf::infinite, atom::status_v,
+                status_verbosity::debug, duration{std::chrono::seconds{10}})
+      .receive(
+        [&](record& response) {
+          TENZIR_ASSERT(response.size() == 1);
+          TENZIR_ASSERT(response.contains("requests"));
+          TENZIR_ASSERT(caf::holds_alternative<list>(response["requests"]));
+          serves = std::move(caf::get<list>(response["requests"]));
+        },
+        [&](const caf::error& err) {
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("failed to get status of serve-manager: {}", err)));
+        });
+    co_yield {};
+    auto builder = series_builder{};
+    for (const auto& serve : serves) {
+      builder.data(serve);
+    }
+    for (auto&& result : builder.finish_as_table_slice("tenzir.serve")) {
+      co_yield std::move(result);
+    }
   }
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
