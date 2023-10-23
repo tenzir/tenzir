@@ -7,9 +7,9 @@ tags: [yara, operator, dfir, detection engineering]
 comments: true
 ---
 
-The new [`yara`][yara-operator] operator matches [YARA][yara] rules on byte
-pipelines, producing a structured match output to conveniently integrate
-alerting tools or trigger next processing steps in your detection workflows.
+The new [`yara`][yara-operator] operator matches [YARA][yara] rules on bytes,
+producing a structured match output to conveniently integrate alerting tools or
+trigger next processing steps in your detection workflows.
 
 [yara]: https://virustotal.github.io/yara/
 [yara-operator]: /next/operators/transformations/yara
