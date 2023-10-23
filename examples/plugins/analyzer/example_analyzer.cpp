@@ -29,8 +29,10 @@ namespace tenzir::plugins {
 using example_actor = caf::typed_actor<
   // Update the configuration of the EXAMPLE actor.
   auto(atom::config, record)->caf::result<void>>
-  // Conform to the protocol of the PLUGIN ANALYZER actor.
-  ::extend_with<analyzer_plugin_actor>;
+  // Conform to the protocol of the STREAM SINK ACTOR actor.
+  ::extend_with<stream_sink_actor<table_slice>>
+  // Conform to the protocol of the COMPONENT PLUGIN actor.
+  ::extend_with<component_plugin_actor>::unwrap;
 
 /// The state of the EXAMPLE actor.
 struct example_actor_state;
@@ -126,8 +128,7 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
 }
 
 /// An example plugin.
-class example_plugin final : public virtual analyzer_plugin,
-                             public virtual command_plugin {
+class example_plugin final : public virtual command_plugin {
 public:
   /// Loading logic.
   example_plugin() {
@@ -154,20 +155,6 @@ public:
   std::string name() const override {
     return "example-analyzer";
   }
-
-  /// Creates an actor that hooks into the input table slice stream.
-  /// @param node A pointer to the NODE actor handle.
-  analyzer_plugin_actor
-  make_analyzer(node_actor::stateful_pointer<node_state> node) const override {
-    // Create a scoped actor for interaction with actors from non-actor
-    // contexts.
-    auto self = caf::scoped_actor{node->system()};
-    // Spawn the actor.
-    auto actor = self->spawn(example);
-    // Send the configuration to the actor.
-    self->send(actor, atom::config_v, config_);
-    return actor;
-  };
 
   /// Creates additional commands.
   std::pair<std::unique_ptr<command>, command::factory>

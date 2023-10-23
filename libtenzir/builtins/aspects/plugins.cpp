@@ -40,7 +40,6 @@ public:
       types.data(#category);                                                   \
     }                                                                          \
   } while (false)
-      TENZIR_ADD_PLUGIN_TYPE(analyzer);
       TENZIR_ADD_PLUGIN_TYPE(aggregation_function);
       TENZIR_ADD_PLUGIN_TYPE(aspect);
       TENZIR_ADD_PLUGIN_TYPE(component);
