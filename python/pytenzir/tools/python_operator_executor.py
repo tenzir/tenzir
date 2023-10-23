@@ -1,20 +1,76 @@
-import copy
 import sys
 import os
 import types
-import math
 import pyarrow as pa
-from typing import Dict, Tuple, Generator
-from pytenzir.utils.arrow import make_record_batch, infer_type, extension_array
+from typing import Any, Dict, Iterable, List, Tuple, Generator
+from pytenzir.utils.arrow import infer_type, extension_array
 from pyarrow import RecordBatch
-from collections.abc import MutableMapping
 from collections import defaultdict
-from box import Box
 
 """
 NOTE: This script is used by and developed alongside the built-in `python` 
 pipeline operator in libtenzir, and has little use outside of that narrow use-case.
 """
+
+
+class DotDict(dict):
+    # https://stackoverflow.com/a/70665030/913098
+    """
+    Example:
+    m = Map({'first_name': 'Eduardo'}, last_name='Pool', age=24, sports=['Soccer'])
+
+    Iterable are assumed to have a constructor taking list as input.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(DotDict, self).__init__(*args, **kwargs)
+
+        args_with_kwargs = []
+        for arg in args:
+            args_with_kwargs.append(arg)
+        args_with_kwargs.append(kwargs)
+        args = args_with_kwargs
+
+        for arg in args:
+            if isinstance(arg, dict):
+                for k, v in arg.items():
+                    self[k] = v
+                    if isinstance(v, dict):
+                        self[k] = DotDict(v)
+                    elif isinstance(v, str) or isinstance(v, bytes):
+                        self[k] = v
+                    elif isinstance(v, Iterable):
+                        klass = type(v)
+                        map_value: List[Any] = []
+                        for e in v:
+                            map_e = DotDict(e) if isinstance(e, dict) else e
+                            map_value.append(map_e)
+                        self[k] = klass(map_value)
+
+
+
+    def __getattr__(self, attr):
+        return self.get(attr)
+
+    def __setattr__(self, key, value):
+        self.__setitem__(key, value)
+
+    def __setitem__(self, key, value):
+        super(DotDict, self).__setitem__(key, value)
+        self.__dict__.update({key: value})
+
+    def __delattr__(self, item):
+        self.__delitem__(item)
+
+    def __delitem__(self, key):
+        super(DotDict, self).__delitem__(key)
+        del self.__dict__[key]
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
 
 def _log(*args):
@@ -44,8 +100,8 @@ class _ValueWrapper(object):
     def wrap_recursive(fieldname, obj):
         if isinstance(obj, dict):
             items = ( (key, _ValueWrapper.wrap_recursive(fieldname + "." + key, value)) for key, value in obj.items() )
-            # Use `Box` to allow dot-notation for value access in user code.
-            return Box(items)
+            # Use `DotDict` to allow dot-notation for value access in user code.
+            return DotDict(items)
         else:
             # TODO: Do we also need to special-case lists here?
             return _ValueWrapper(fieldname, obj)
@@ -78,10 +134,10 @@ def _flatten_dict(d: dict, parent_key: str, original_dict: dict) -> Generator:
             yield new_key, value, touched
 
 
-def _flatten_box(parent_key: str, dw: Box) -> Generator:
+def _flatten_box(parent_key: str, dw: DotDict) -> Generator:
     for key, value in dw.items():
         new_key = parent_key + "." + key
-        if isinstance(value, Box):
+        if isinstance(value, DotDict):
             yield from _flatten_box(new_key, value)
         elif isinstance(value, _ValueWrapper):
             changed = value._fieldname != new_key
@@ -138,7 +194,7 @@ class _ResultsBuffer:
                 self.output_values[key].append(value._wrapped_obj)
                 if key != value._fieldname:
                     self.changed.add(key)
-            elif isinstance(value, Box):
+            elif isinstance(value, DotDict):
                 for flat_key, value, was_touched in _flatten_box(key, value):
                     self.output_values[flat_key].append(value)
                     if was_touched:
