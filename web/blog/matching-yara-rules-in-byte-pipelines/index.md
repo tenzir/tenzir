@@ -64,9 +64,9 @@ operator](/blog/integrating-velociraptor-into-tenzir-pipelines).
 
 ## The `yara` operator
 
-Our new [`yara`](/operators/transformations/yara) operator is a transformation
-that accepts bytes as input and produces events as output. Let's take the simple
-case of running the above example on string input:
+Our new [`yara`][yara-operator] operator is a transformation that accepts bytes
+as input and produces events as output. Let's take the simple case of running
+the above example on string input:
 
 ```bash
 echo 'foo barbar baz' |
