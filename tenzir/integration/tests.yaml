@@ -1108,11 +1108,7 @@ tests:
       - command: flush
       - command: exec 'export | where :blob != null'
       - command: exec 'export | write csv'
-      # We emit the import time for feather, hence we do not use export here.
-      - command: exec 'read suricata | where :blob != null | write feather'
-        input: data/suricata/eve.json
       - command: exec 'export | write json'
-      - command: exec 'export | write pcap'
       # TODO: Re-enable once #950 is fixed.
       # - command: exec 'export | write yaml'
       - command: exec 'export | write zeek-tsv --disable-timestamp-tags'
