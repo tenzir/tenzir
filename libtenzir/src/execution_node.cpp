@@ -770,7 +770,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
         if (this->current_demand or this->outbound_buffer_size > 0) {
           TENZIR_DEBUG("{} forcibly delivers batches", op->name());
           deliver_batches(now, true);
-          schedule_run();
           return;
         }
         TENZIR_ASSERT(not this->current_demand);
@@ -802,7 +801,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
     // consider this the case when neither the input nor the output have
     // stalled, i.e., when there is more input to be consumed and room for
     // output to be produced or further output desired.
-    if (not input_stalled and not output_stalled) {
+    if (not input_stalled or not output_stalled) {
       schedule_run();
     }
     // Adjust performance counters for this run.
