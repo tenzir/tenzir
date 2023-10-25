@@ -77,6 +77,12 @@ public:
       co_return;
     }
     for (const auto& [type, info] : current_result.candidate_infos) {
+      auto bound_expr = tailor(info.exp, type);
+      if (not bound_expr) {
+        // failing to bind is not an error.
+        continue;
+      }
+      query_context.expr = std::move(*bound_expr);
       for (const auto& partition_info : info.partition_infos) {
         const auto& uuid = partition_info.uuid;
         auto partition = blocking_self->spawn(
