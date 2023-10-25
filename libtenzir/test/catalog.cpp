@@ -436,18 +436,23 @@ TEST(catalog messages) {
       auto msg = fmt::format("unexpected error {}", render(e));
       FAIL(msg);
     });
-  // Sending NEITHER an expression nor ids should return an error.
+  // Sending NEITHER an expression nor ids should return all partitions.
   query_context.expr = tenzir::expression{};
   query_context.ids = tenzir::ids{};
-  auto neither_response = self->request(catalog_act, caf::infinite,
-                                        atom::candidates_v, query_context);
+  auto hdl = self->request(catalog_act, caf::infinite, atom::candidates_v,
+                           query_context);
   run();
-  neither_response.receive(
-    [](catalog_lookup_result&) {
-      FAIL("expected an error");
+  hdl.receive(
+    [](catalog_lookup_result& result) {
+      const auto num_partitions = std::transform_reduce(
+        result.candidate_infos.begin(), result.candidate_infos.end(), size_t{},
+        std::plus<>{}, [](const auto& candidate) {
+          return candidate.second.partition_infos.size();
+        });
+      CHECK_EQUAL(num_partitions, size_t{4});
     },
-    [](const caf::error&) {
-      // nop
+    [](const caf::error& err) {
+      FAIL("did not expect an error; got " << err);
     });
 }
 
