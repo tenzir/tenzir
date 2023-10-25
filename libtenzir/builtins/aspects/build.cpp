@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/version.hpp>
 
 namespace tenzir::plugins::build {
 
@@ -26,17 +27,20 @@ public:
 
   auto show(operator_control_plane&) const -> generator<table_slice> override {
     auto builder = series_builder{};
-    builder.data(record{
-      {"type", tenzir::version::build::type},
-      {"tree_hash", tenzir::version::build::tree_hash},
-      {"assertions", tenzir::version::build::has_assertions},
-      {"sanitizers",
-       record{
-         {"address", tenzir::version::build::has_address_sanitizer},
-         {"undefined_behavior",
-          tenzir::version::build::has_undefined_behavior_sanitizer},
-       }},
-    });
+    auto build = builder.record();
+    build.field("type").data(version::build::type);
+    build.field("tree_hash").data(version::build::tree_hash);
+    build.field("assertions").data(version::build::has_assertions);
+    build.field("sanitizers")
+      .data(record{
+        {"address", version::build::has_address_sanitizer},
+        {"undefined_behavior",
+         version::build::has_undefined_behavior_sanitizer},
+      });
+    auto features = build.field("features").list();
+    for (const auto& feature : tenzir_features()) {
+      features.data(feature);
+    }
     for (auto&& slice : builder.finish_as_table_slice("tenzir.build")) {
       co_yield std::move(slice);
     }
