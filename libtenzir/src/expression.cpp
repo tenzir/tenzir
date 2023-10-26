@@ -289,7 +289,6 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
       return true;
     },
     [&](caf::none_t) {
-      TENZIR_ASSERT(!"invalid expression node");
       return false;
     },
   };
