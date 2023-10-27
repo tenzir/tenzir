@@ -401,6 +401,9 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record batch after the transformation.
   TENZIR_ASSERT(layer.fields.size() == layer.arrays.size());
+  TENZIR_ASSERT(std::ranges::all_of(layer.arrays, [](const auto& x) -> bool {
+    return x != nullptr;
+  }));
   auto new_schema = type{record_type{layer.fields}};
   new_schema.assign_metadata(schema);
   auto arrow_fields = arrow::FieldVector{};

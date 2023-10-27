@@ -795,6 +795,27 @@ tests:
       - command: exec 'load file - | read cef | repeat 5 | measure | summarize sum(events) by schema | write json'
         input: data/cef/forcepoint.log
 
+  Heterogeneous Lists:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from - read json | put foo=["true", false]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | extend foo=["true", false]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | replace d=["true", false]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | put foo=[["true"], false]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | put foo=[["true"], [false]]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | put foo=[["true"], ["false"]]'
+        input: data/json/basic-types.json
+
   Zeek TSV Pipeline Format:
     tags: [pipelines, zeek]
     steps:

@@ -123,7 +123,8 @@ public:
           continue;
         }
         if (auto event = filter(slice, *expr)) {
-          const auto rule_schema = caf::get<record_type>(type::infer(yaml));
+          const auto rule_schema
+            = caf::get<record_type>(type::infer(yaml).value_or(type{}));
           const auto result_schema = type{
             "tenzir.sigma",
             record_type{
