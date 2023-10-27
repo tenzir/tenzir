@@ -440,13 +440,20 @@ time table_slice::import_time() const noexcept {
 void table_slice::import_time(time import_time) noexcept {
   if (import_time == this->import_time())
     return;
+  modify_state([&](auto& state) {
+    state.import_time(import_time);
+  });
+}
+
+template <class F>
+void table_slice::modify_state(F&& f) {
   // We work around the uniqueness requirement for the const_cast below by
   // creating a new table slice here that points to the same data as the current
   // table slice. This implies that the table slice is no longer in one
   // contiguous buffer.
   if (chunk_ && !chunk_->unique())
     *this = table_slice{to_record_batch(*this), schema()};
-  auto f = detail::overload{
+  auto g = detail::overload{
     []() noexcept {
       die("cannot assign import time to invalid table slice");
     },
@@ -455,10 +462,10 @@ void table_slice::import_time(time import_time) noexcept {
         = const_cast<std::add_lvalue_reference_t<std::remove_const_t<
           std::remove_reference_t<decltype(*state(encoded, state_))>>>>(
           *state(encoded, state_));
-      mutable_state.import_time(import_time);
+      f(mutable_state);
     },
   };
-  visit(f, as_flatbuffer(chunk_));
+  visit(g, as_flatbuffer(chunk_));
 }
 
 bool table_slice::is_serialized() const noexcept {
@@ -826,6 +833,9 @@ auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
         return {};
       }
       return import_time;
+    }
+    case meta_extractor::internal: {
+      return slice.schema().attribute("internal").has_value();
     }
   }
   die("unhandled meta extractor kind");

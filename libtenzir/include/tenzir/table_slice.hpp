@@ -257,6 +257,11 @@ public:
 private:
   // -- implementation details -------------------------------------------------
 
+  /// Calls the given functor with mutable reference to the inner state. If the
+  /// inner state is shared, a unique copy is created first.
+  template <class F>
+  void modify_state(F&& f);
+
   /// A pointer to the underlying chunk, which contains a
   /// `tenzir.fbs.TableSlice` FlatBuffers table.
   /// @note On construction and destruction, the ref-count of `chunk_` is used

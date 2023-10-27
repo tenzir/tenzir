@@ -391,6 +391,30 @@ bool evaluate_meta_extractor(const table_slice& slice,
       }
       die("unreachable");
     }
+    case meta_extractor::kind::internal: {
+      switch (op) {
+#define TENZIR_EVAL_DISPATCH(op)                                               \
+  case relational_operator::op: {                                              \
+    auto f = [&](const auto& rhs) noexcept {                                   \
+      return cell_evaluator<relational_operator::op>::evaluate(                \
+        slice.schema().attribute("internal").has_value(), rhs);                \
+    };                                                                         \
+    return caf::visit(f, rhs);                                                 \
+  }
+        TENZIR_EVAL_DISPATCH(equal);
+        TENZIR_EVAL_DISPATCH(not_equal);
+        TENZIR_EVAL_DISPATCH(in);
+        TENZIR_EVAL_DISPATCH(less);
+        TENZIR_EVAL_DISPATCH(not_in);
+        TENZIR_EVAL_DISPATCH(greater);
+        TENZIR_EVAL_DISPATCH(greater_equal);
+        TENZIR_EVAL_DISPATCH(less_equal);
+        TENZIR_EVAL_DISPATCH(ni);
+        TENZIR_EVAL_DISPATCH(not_ni);
+#undef TENZIR_EVAL_DISPATCH
+      }
+      die("unreachable");
+    }
   }
   __builtin_unreachable();
 }

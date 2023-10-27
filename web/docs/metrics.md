@@ -1,106 +1,118 @@
 # Metrics
 
-Tenzir collects various metrics during execution. This reference describes what
-metrics are available and what they mean. We describe how to [collect
-metrics](setup-guides/collect-metrics.md) in the corresponding user guide.
+:::caution Experimental
+This page describes the new, experimental metrics system. It should be
+considered unstable and may change at any time. The documentation for the
+legacy metrics system is available [here](metrics/legacy_metrics.md).
+:::
 
-For the reference table below, these symbols indicate presense of additional
-metadata:
+Metrics are stored as internal events in the database. To access these events,
+use `export --internal` followed by `where #schema == "<name>"`, where `<name>`
+is one of the following:
 
-|Symbol|Key|Value|
-|-:|-|-|
-|🔎|`query`|A UUID to identify the query.|
-|🪪|`issuer`|A human-readable identifier of the query issuer.|
-|💽|`partition-type`|One of "active" or "passive".|
-|#️⃣|`partition-version`|The internal partition version.|
-|💾|`store-type`|One of "parquet" or "feather".|
-|🗂️|`schema`|The schema name.|
+## `tenzir.metrics.operator`
 
-For all keys that show throughput rates in #events/second, e.g.,
-`<component>.rate`, the keys `<component>.events` and `<component>.duration` are
-dividend and divisor, respectively. They are not listed explicitly in the below
-table.
+Contains input and output measurements over some amount of time for a single
+operator instantiation.
 
-Generally, counts are reset after a component sends out a telemetry report.
-E.g., the total number of invalid lines the JSON parser encountered is reflected
-by the sum of all `json-reader.invalid-line` events.
+|Field|Type|Description|
+|-:|:-|-|
+|`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
+|`hidden`|`bool`|True if the pipeline is running for the explorer.|
+|`operator_id`|`uint64`|The ID of the operator inside the pipeline referenced above.|
+|`source`|`bool`|True if this is the first operator in the pipeline.|
+|`transformation`|`bool`|True if this is neither the first nor the last operator.|
+|`sink`|`bool`|True if this is the last operator in the pipeline.|
+|`timestamp`|`time`|The time when this event was emitted (immediately after the collection period).|
+|`input`|`record`|Measurement of the incoming data stream.|
+|`output`|`record`|Measurement of the outgoing data stream.|
 
-## Reference
+The records `input` and `output` have the following schema:
 
-|Key|Description|Unit|Metadata|
-|-:|-|-|-|
-|`accountant.startup`|The first event in the lifetime of Tenzir.|constant `0`||
-|`accountant.shutdown`|The last event in the lifetime of Tenzir.|constant `0`||
-|`archive.rate`|The rate of events processed by the archive component.|#events/second||
-|`arrow-writer.rate`|The rate of events processed by the Arrow sink.|#events/second||
-|`ascii-writer.rate`|The rate of events processed by the ascii sink.|#events/second||
-|`csv-reader.rate`|The rate of events processed by the CSV source.|#events/second||
-|`csv-writer.rate`|The rate of events processed by the CSV sink.|#events/second||
-|`importer.rate`|The rate of events processed by the importer component.|#events/second||
-|`index.memory-usage`|The rough estimate of memory used by the index|#bytes||
-|`ingest.rate`|The ingest rate keyed by the schema name.|#events/second|🗂️|
-|`ingest-total.rate`|The total ingest rate of all schemas.|#events/second||
-|`json-reader.invalid-line`|The number of invalid NDJSON lines.|#events||
-|`json-reader.rate`|The rate of events processed by the JSON source.|#events/second||
-|`json-reader.unknown-layout`|The number if NDJSON lines with an unknown layout.|#event||
-|`json-writer.rate`|The rate of events processed by the JSON sink.|#events/second||
-|`catalog.lookup.candidates`|The number of candidate partitions considered for a query.|#partitions|🔎🪪|
-|`catalog.lookup.runtime`|The duration of a query evaluation in the catalog.|#milliseconds|🔎🪪|
-|`catalog.lookup.hits`|The number of results of a query in the catalog.|#events|🔎🪪|
-|`catalog.memory-usage`|The rough estimate of memory used by the catalog|#bytes||
-|`catalog.num-partitions`|The number of partitions registered in the catalog per schema.|#partitions|🗂️#️⃣|
-|`catalog.num-events`|The number of events registered in the catalog per schema.|#events|🗂️#️⃣|
-|`catalog.num-partitions-total`|The sum of all partitions registered in the catalog.|#partitions||
-|`catalog.num-events-total`|The sum of all events registered in the catalog.|#events||
-|`node_throughput.rate`|The rate of events processed by the node component.|#events/second||
-|`null-writer.rate`|The rate of events processed by the null sink.|#events/second||
-|`partition.events-written`|The number of events written in one partition.|#events|🗂|
-|`partition.lookup.runtime`|The duration of a query evaluation in one partition.|#milliseconds|🔎🪪💽|
-|`partition.lookup.hits`|The number of results of a query in one partition.|#events|🔎🪪💽|
-|`pcap-reader.discard-rate`|The rate of packets discarded.|#events-dropped/#events-received||
-|`pcap-reader.discard`|The number of packets discarded by the reader.|#events||
-|`pcap-reader.drop-rate`|The rate of packets dropped.|#events-dropped/#events-received||
-|`pcap-reader.drop`|The number of packets dropped by the reader.|#events||
-|`pcap-reader.ifdrop`|The number of packets dropped by the network interface.|#events||
-|`pcap-reader.rate`|The rate of events processed by the PCAP source.|#events/second||
-|`pcap-reader.recv`|The number of packets received.|#events||
-|`pcap-writer.rate`|The rate of events processed by the PCAP sink.|#events/second||
-|`rebuilder.partitions.remaining`|The number of partitions scheduled for rebuilding.|#partitions||
-|`rebuilder.partitions.rebuilding`|The number of partitions currently being rebuilt.|#partitions||
-|`rebuilder.partitions.completed`|The number of partitions rebuilt in the current run.|#partitions||
-|`scheduler.backlog.custom`|The number of custom priority queries in the backlog.|#queries||
-|`scheduler.backlog.low`|The number of low priority queries in the backlog.|#queries||
-|`scheduler.backlog.normal`|The number of normal priority queries in the backlog.|#queries||
-|`scheduler.backlog.high`|The number of high priority queries in the backlog.|#queries||
-|`scheduler.partition.current-lookups`|The number of partition lookups that are currently running.|#workers||
-|`scheduler.partition.lookups`|Query lookups executed on individual partitions.|#partition-lookups||
-|`scheduler.partition.materializations`|Partitions loaded from disk.|#partitions||
-|`scheduler.partition.pending`|The number of queued partitions.|#partitions||
-|`scheduler.partition.remaining-capacity`|The number of partition lookups that could be scheduled immediately.|#workers||
-|`scheduler.partition.scheduled`|The number of scheduled partitions.|#partitions||
-|`active-store.lookup.runtime`|The number of results of a query in an active store.|#events|🔎🪪💾|
-|`active-store.lookup.hits`|The number of results of a query in an active store.|#events|🔎🪪💾|
-|`passive-store.lookup.runtime`|The number of results of a query in a passive store.|#events|🔎🪪💾|
-|`passive-store.lookup.hits`|The number of results of a query in a passive store.|#events|🔎🪪💾|
-|`passive-store.init.runtime`|Time until the store is ready serve queries.|nanoseconds|💾|
-|`posix-filesystem.checks.failed`|The number of failed file checks since process start.|||
-|`posix-filesystem.checks.successful`|The number of successful file checks since process start.|||
-|`posix-filesystem.erases.bytes`|The number of bytes erased since process start.|#bytes||
-|`posix-filesystem.erases.failed`|The number of failed file erasures since process start.|||
-|`posix-filesystem.erases.successful`|The number of successful file erasures since process start.|||
-|`posix-filesystem.mmaps.bytes`|The number of bytes memory-mapped since process start.|#bytes||
-|`posix-filesystem.mmaps.failed`|The number of failed file memory-maps since process start.|||
-|`posix-filesystem.mmaps.successful`|The number of successful file memory-maps since process start.|||
-|`posix-filesystem.moves.failed`|The number of failed file moves since process start.|||
-|`posix-filesystem.moves.successful`|The number of successful file moves since process start.|||
-|`posix-filesystem.reads.bytes`|The number of bytes read since process start.|#bytes||
-|`posix-filesystem.reads.failed`|The number of success file reads since process start.|||
-|`posix-filesystem.reads.successful`|The number of success file reads since process start.|||
-|`posix-filesystem.writes.bytes`|The number of bytes written since process start.|#bytes||
-|`posix-filesystem.writes.failed`|The number of failed file writes since process start.|||
-|`posix-filesystem.writes.successful`|The number of successful file writes since process start.|||
-|`source.start`|Timepoint when the source started.|nanoseconds since epoch||
-|`source.stop`|Timepoint when the source stopped.|nanoseconds since epoch||
-|`syslog-reader.rate`|The rate of events processed by the syslog source.|#events/second||
-|`test-reader.rate`|The rate of events processed by the test source.|#events/second||
-|`zeek-reader.rate`|The rate of events processed by the Zeek source.|#events/second||
+|Field|Type|Description|
+|-:|:-|-|
+|`unit`|`string`|The type of the elements, which is `void`, `bytes` or `events`.|
+|`elements`|`uint64`|Number of elements that were seen during the collection period.|
+|`approx_bytes`|`uint64`|An approximation for the number of bytes transmitted.|
+
+### Examples
+
+Show the total pipeline ingress in bytes for every day over the last week,
+excluding pipelines are only run for the explorer:
+
+~~~c
+export --internal |
+where #schema == "tenzir.metrics.operator" |
+where timestamp > 1 week ago |
+where hidden == false && source == true  |
+summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "timestamp": "2023-11-08T00:00:00.000000",
+  "bytes": 79927223
+}
+{
+  "timestamp": "2023-11-09T00:00:00.000000",
+  "bytes": 51788928
+}
+{
+  "timestamp": "2023-11-10T00:00:00.000000",
+  "bytes": 80740352
+}
+{
+  "timestamp": "2023-11-11T00:00:00.000000",
+  "bytes": 75497472
+}
+{
+  "timestamp": "2023-11-12T00:00:00.000000",
+  "bytes": 55497472
+}
+{
+  "timestamp": "2023-11-13T00:00:00.000000",
+  "bytes": 76546048
+}
+{
+  "timestamp": "2023-11-14T00:00:00.000000",
+  "bytes": 68643200
+}
+~~~
+</details>
+
+Show the three operator instantiations that produced the most events in total
+and their pipeline:
+
+~~~c
+export --internal |
+where #schema == "tenzir.metrics.operator" |
+where output.unit == "events" |
+summarize events=max(output.elements) by pipeline_id, operator_id |
+sort events desc |
+head 3
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "pipeline_id": "13",
+  "operator_id": 0,
+  "events": 391008694
+}
+{
+  "pipeline_id": "12",
+  "operator_id": 0,
+  "events": 246914949
+}
+{
+  "pipeline_id": "0",
+  "operator_id": 1,
+  "events": 83013294
+}
+~~~
+</details>

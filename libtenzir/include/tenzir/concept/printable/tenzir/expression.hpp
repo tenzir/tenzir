@@ -68,6 +68,8 @@ struct expression_printer : printer_base<expression_printer> {
           return printers::str(out_, "#schema_id");
         case meta_extractor::import_time:
           return printers::str(out_, "#import_time");
+        case meta_extractor::internal:
+          return printers::str(out_, "#internal");
       }
       die("unreachable");
     }

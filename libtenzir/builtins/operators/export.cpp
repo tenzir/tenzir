@@ -110,8 +110,8 @@ public:
     co_yield {};
     auto [importer] = std::move(*components);
     auto bridge = ctrl.self().spawn(make_bridge, importer);
-    table_slice next;
     while (true) {
+      auto next = table_slice{};
       ctrl.self()
         .request(bridge, caf::infinite, atom::get_v)
         .await(
@@ -121,7 +121,13 @@ public:
           [&ctrl](caf::error e) {
             diagnostic::error("{}", e).emit(ctrl.diagnostics());
           });
-      co_yield next;
+      if (next.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      for (auto&& out : select(next, expr_, ids{})) {
+        co_yield std::move(out);
+      }
     }
   }
 
@@ -263,9 +269,19 @@ public:
     auto parser = argument_parser{"export", "https://docs.tenzir.com/next/"
                                             "operators/sources/export"};
     bool live = false;
+    auto internal = false;
     parser.add("--live", live);
+    parser.add("--internal", internal);
     parser.parse(p);
-    return std::make_unique<export_operator>(trivially_true_expression(), live);
+    return std::make_unique<export_operator>(
+      expression{
+        predicate{
+          meta_extractor{meta_extractor::internal},
+          relational_operator::equal,
+          data{internal},
+        },
+      },
+      live);
   }
 };
 

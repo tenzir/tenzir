@@ -318,18 +318,17 @@ struct serve_manager_state {
     // We delay the actual removal because we support fetching the
     // last set of events again by reusing the last continuation token.
     found->done = true;
-    detail::weak_run_delayed(
-      self, defaults::api::serve::retention_time,
-      [this, source = msg.source]() {
-        const auto found
-          = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-              return op.source == source;
-            });
-        if (found != ops.end()) {
-          expired_ids.insert(found->serve_id);
-          ops.erase(found);
-        }
-      });
+    detail::weak_run_delayed(self, defaults::api::serve::retention_time,
+                             [this, source = msg.source]() {
+                               const auto found = std::find_if(
+                                 ops.begin(), ops.end(), [&](const auto& op) {
+                                   return op.source == source;
+                                 });
+                               if (found != ops.end()) {
+                                 expired_ids.insert(found->serve_id);
+                                 ops.erase(found);
+                               }
+                             });
   }
 
   auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {

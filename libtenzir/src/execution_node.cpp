@@ -701,7 +701,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
           = metrics->values.outbound_measurement.num_elements;
       } else {
         metrics->values.outbound_measurement.num_approx_bytes
-          = num_approx_bytes(lhs);
+          += num_approx_bytes(lhs);
       }
       this->outbound_buffer = std::move(rhs);
       this->outbound_buffer_size
@@ -866,7 +866,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
         = metrics->values.inbound_measurement.num_elements;
     } else {
       metrics->values.inbound_measurement.num_approx_bytes
-        = num_approx_bytes(input);
+        += num_approx_bytes(input);
     }
     this->inbound_buffer.insert(this->inbound_buffer.end(),
                                 std::make_move_iterator(input.begin()),
