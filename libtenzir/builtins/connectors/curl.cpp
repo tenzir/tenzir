@@ -107,8 +107,8 @@ public:
       const auto* ptr
         = reinterpret_cast<const char*>(args_.options.http.body.data.data());
       auto size = args_.options.http.body.data.size();
-      diagnostic::warning("ignoring non-empty HTTP request body")
-        .hint("{}", detail::byte_escape(std::string_view{ptr, size}))
+      diagnostic::warning("ignoring non-empty HTTP request body arguments")
+        .note("{}", detail::byte_escape(std::string_view{ptr, size}))
         .emit(ctrl.diagnostics());
     }
     return [&ctrl, args = args_,
