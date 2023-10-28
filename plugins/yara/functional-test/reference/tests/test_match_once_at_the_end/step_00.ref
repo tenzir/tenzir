@@ -1,0 +1,58 @@
+{
+  "rule": {
+    "identifier": "test",
+    "namespace": "default",
+    "string": "foo",
+    "tags": [],
+    "meta": {
+      "string": "string meta data",
+      "integer": 42,
+      "boolean": true
+    },
+    "matches": [
+      {
+        "identifier": "$foo",
+        "data": "Zm9v",
+        "base": 0,
+        "offset": 0,
+        "match_length": 3
+      },
+      {
+        "identifier": "$foo",
+        "data": "Zm9v",
+        "base": 8,
+        "offset": 0,
+        "match_length": 3
+      }
+    ]
+  }
+}
+{
+  "rule": {
+    "identifier": "test",
+    "namespace": "default",
+    "string": "bar",
+    "tags": [],
+    "meta": {
+      "string": "string meta data",
+      "integer": 42,
+      "boolean": true
+    },
+    "matches": [
+      {
+        "identifier": "$bar",
+        "data": "YmFy",
+        "base": 0,
+        "offset": 4,
+        "match_length": 3
+      },
+      {
+        "identifier": "$bar",
+        "data": "YmFy",
+        "base": 8,
+        "offset": 4,
+        "match_length": 3
+      }
+    ]
+  }
+}
