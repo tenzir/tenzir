@@ -12,6 +12,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 
+#include <deque>
 #include <yara.h>
 
 namespace tenzir::plugins::yara {
@@ -20,6 +21,7 @@ namespace {
 
 /// Arguments to the operator.
 struct operator_args {
+  bool blockwise;
   bool compiled_rules;
   bool fast_scan;
   std::vector<std::string> rules;
@@ -27,7 +29,8 @@ struct operator_args {
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
-      .fields(f.field("compiled_rules", x.compiled_rules),
+      .fields(f.field("blockwise", x.blockwise),
+              f.field("compiled_rules", x.compiled_rules),
               f.field("fast_scan", x.fast_scan), f.field("rules", x.rules));
   }
 };
@@ -38,33 +41,149 @@ struct scan_options {
   std::chrono::seconds timeout{1'000'000};
 };
 
+/// Translates a YARA status code to an error.
+auto to_error(int status) -> caf::error {
+  switch (status) {
+    default:
+      die(fmt::format("unhandled status value: {}", status));
+    case ERROR_SUCCESS:
+      break;
+    case ERROR_INSUFFICIENT_MEMORY:
+      return caf::make_error(ec::unspecified,
+                             "insufficient memory to load rule");
+    case ERROR_COULD_NOT_ATTACH_TO_PROCESS:
+      return caf::make_error(ec::unspecified, "could not attach to process");
+    case ERROR_COULD_NOT_OPEN_FILE:
+      return caf::make_error(ec::unspecified, "could not open file");
+    case ERROR_COULD_NOT_MAP_FILE:
+      return caf::make_error(ec::unspecified, "could not mmap file");
+    case ERROR_INVALID_FILE:
+      return caf::make_error(ec::unspecified, "invalid Yara rule");
+    case ERROR_CORRUPT_FILE:
+      return caf::make_error(ec::unspecified, "corrupt Yara rule");
+    case ERROR_UNSUPPORTED_FILE_VERSION:
+      return caf::make_error(ec::unspecified, "unsupported Yara file version");
+    case ERROR_TOO_MANY_SCAN_THREADS:
+      return caf::make_error(ec::unspecified, "too many scan threads");
+    case ERROR_SCAN_TIMEOUT:
+      return caf::make_error(ec::unspecified, "scan timeout");
+    case ERROR_CALLBACK_ERROR:
+      return caf::make_error(ec::unspecified, "callback error");
+    case ERROR_TOO_MANY_MATCHES:
+      return caf::make_error(ec::unspecified, "too many matches");
+    case ERROR_BLOCK_NOT_READY:
+      return caf::make_error(ec::incomplete);
+  }
+  return {};
+}
+
+/// Constructs a sequence of memory blocks that work with the incremental
+/// scanning functions that YARA provides.
+class memory_block_vector {
+public:
+  memory_block_vector() noexcept
+    : iterator_{
+      .context = this,
+      .first = next,
+      .next = next,
+      .file_size = nullptr,
+      .last_error = ERROR_SUCCESS,
+    } {
+  }
+
+  ~memory_block_vector() noexcept = default;
+
+  memory_block_vector(const memory_block_vector&) = delete;
+  auto operator=(const memory_block_vector&) -> memory_block_vector& = delete;
+  memory_block_vector(memory_block_vector&&) = delete;
+  auto operator=(memory_block_vector&&) -> memory_block_vector& = delete;
+
+  /// Adds a new block at the end.
+  auto push_back(chunk_ptr chunk) {
+    // The *base* of a chunk is its byte offset in the sequence of all chunks
+    // seen. This is similar to what YARA does for scanning process memory. See
+    // https://github.com/VirusTotal/yara/issues/1356 for a more detailed
+    // discussion.
+    auto base = uint64_t{0};
+    if (not blocks_.empty()) {
+      auto& last = blocks_.back().first;
+      base = last->base + last->size;
+    }
+    auto block = std::make_unique<YR_MEMORY_BLOCK>(YR_MEMORY_BLOCK{
+      .size = chunk->size(),
+      .base = base,
+      // The const_cast is needed by the C API and safe because it is only
+      // passed through as user context and later casted back to a const
+      // uint8_t* in fetch().
+      .context = const_cast<std::byte*>(chunk->data()),
+      .fetch_data = fetch,
+    });
+    blocks_.emplace_back(std::move(block), std::move(chunk));
+  }
+
+  /// Relinquishes a block of memory from the beginning.
+  auto pop_front() -> bool {
+    if (blocks_.empty())
+      return false;
+    blocks_.pop_front();
+    --offset_;
+    return true;
+  }
+
+  /// Signal that no further blocks are being added. This results in the block
+  /// iterator returning `ERROR_SUCCESS` instead of `ERROR_BLOCK_NOT_READY`, and
+  /// thereby triggering a scan.
+  auto done() -> void {
+    done_ = true;
+  }
+
+  /// Retrieve the underlying block iterator for the YARA API.
+  auto iterator() -> YR_MEMORY_BLOCK_ITERATOR* {
+    return &iterator_;
+  }
+
+private:
+  static auto fetch(YR_MEMORY_BLOCK* self) -> const uint8_t* {
+    return reinterpret_cast<const uint8_t*>(self->context);
+  }
+
+  static auto next(YR_MEMORY_BLOCK_ITERATOR* iterator) -> YR_MEMORY_BLOCK* {
+    auto* self = reinterpret_cast<memory_block_vector*>(iterator->context);
+    TENZIR_ASSERT(self->offset_ <= self->blocks_.size());
+    if (self->offset_ == self->blocks_.size()) {
+      // If we have returned all buffered blocks, we must decide whether we are
+      // truly done or whether more blocks are expected.
+      TENZIR_DEBUG("reached last block (offset = {}, done = {})", self->offset_,
+                   self->done_);
+      self->iterator_.last_error
+        = self->done_ ? ERROR_SUCCESS : ERROR_BLOCK_NOT_READY;
+      return nullptr;
+    }
+    TENZIR_DEBUG("returning next block (offset = {}, done = {})", self->offset_,
+                 self->done_);
+    self->iterator_.last_error = ERROR_SUCCESS;
+    return self->blocks_[self->offset_++].first.get();
+  }
+
+  YR_MEMORY_BLOCK_ITERATOR iterator_;
+  std::deque<std::pair<std::unique_ptr<YR_MEMORY_BLOCK>, chunk_ptr>> blocks_;
+  size_t offset_ = 0;
+  bool done_ = false;
+};
+
 /// A set of Yara rules.
 class rules {
   friend class compiler;
+  friend class scanner;
 
 public:
   /// Loads a compiled rule.
   /// @param filename The path to the rule file.
   static auto load(const std::string& filename) -> caf::expected<rules> {
     auto result = rules{};
-    switch (yr_rules_load(filename.c_str(), &result.rules_)) {
-      default:
-        die("unhandled return value of yr_rules_load");
-      case ERROR_SUCCESS:
-        break;
-      case ERROR_INSUFFICIENT_MEMORY:
-        return caf::make_error(ec::unspecified,
-                               "insufficient memory to load rule");
-      case ERROR_COULD_NOT_OPEN_FILE:
-        return caf::make_error(ec::unspecified, "failed to open Yara rule");
-      case ERROR_INVALID_FILE:
-        return caf::make_error(ec::unspecified, "invalid Yara rule");
-      case ERROR_CORRUPT_FILE:
-        return caf::make_error(ec::unspecified, "corrupt Yara rule");
-      case ERROR_UNSUPPORTED_FILE_VERSION:
-        return caf::make_error(ec::unspecified,
-                               "unsupported Yara file version");
-    }
+    auto status = yr_rules_load(filename.c_str(), &result.rules_);
+    if (auto err = to_error(status))
+      return err;
     return result;
   }
 
@@ -85,35 +204,71 @@ public:
   rules(const rules&) = delete;
   auto operator=(const rules&) -> rules& = delete;
 
-  /// Scans a buffer of bytes.
-  auto scan(std::span<const std::byte> bytes, scan_options opts)
-    -> caf::expected<std::vector<table_slice>> {
+private:
+  rules() = default;
+  YR_RULES* rules_ = nullptr;
+};
+
+/// A YARA rule scanner.
+class scanner {
+public:
+  static auto make(const rules& rules, scan_options opts = {})
+    -> std::optional<scanner> {
+    // Create scanner from rules.
+    auto result = scanner{std::move(opts)};
+    auto status = yr_scanner_create(rules.rules_, &result.scanner_);
+    if (status == ERROR_INSUFICIENT_MEMORY)
+      return std::nullopt;
+    TENZIR_ASSERT(status == ERROR_SUCCESS);
+    // Set flags.
     auto flags = 0;
     if (opts.fast_scan)
       flags |= SCAN_FLAGS_FAST_MODE;
+    yr_scanner_set_flags(result.scanner_, flags);
+    // Set timeout.
+    auto timeout = detail::narrow_cast<int>(opts.timeout.count());
+    yr_scanner_set_timeout(result.scanner_, timeout);
+    return result;
+  }
+
+  scanner(scanner&& other) noexcept : scanner_{other.scanner_} {
+    other.scanner_ = nullptr;
+  }
+
+  auto operator=(scanner&& other) noexcept -> scanner& {
+    std::swap(scanner_, other.scanner_);
+    return *this;
+  }
+
+  ~scanner() noexcept {
+    if (scanner_)
+      yr_scanner_destroy(scanner_);
+  }
+
+  scanner(const scanner&) = delete;
+  auto operator=(const scanner&) -> scanner& = delete;
+
+  /// Performs a one-shot scan of a given block of memory.
+  auto scan(std::span<const std::byte> bytes)
+    -> caf::expected<std::vector<table_slice>> {
     auto buffer = reinterpret_cast<const uint8_t*>(bytes.data());
     auto buffer_size = bytes.size();
-    auto timeout = detail::narrow_cast<int>(opts.timeout.count());
     auto builder = series_builder{};
-    auto status = yr_rules_scan_mem(rules_, buffer, buffer_size, flags,
-                                    callback, &builder, timeout);
-    switch (status) {
-      default:
-        die("unhandled result value for yr_rules_scan_mem");
-      case ERROR_SUCCESS:
-        break;
-      case ERROR_INSUFFICIENT_MEMORY:
-        return caf::make_error(ec::unspecified,
-                               "insufficient memory to scan bytes");
-      case ERROR_TOO_MANY_SCAN_THREADS:
-        return caf::make_error(ec::unspecified, "too many scan threads");
-      case ERROR_SCAN_TIMEOUT:
-        return caf::make_error(ec::unspecified, "scan timeout");
-      case ERROR_CALLBACK_ERROR:
-        return caf::make_error(ec::unspecified, "callback error");
-      case ERROR_TOO_MANY_MATCHES:
-        return caf::make_error(ec::unspecified, "too many matches");
-    }
+    yr_scanner_set_callback(scanner_, callback, &builder);
+    auto status = yr_scanner_scan_mem(scanner_, buffer, buffer_size);
+    if (auto err = to_error(status))
+      return err;
+    return builder.finish_as_table_slice("yara.match");
+  }
+
+  /// Checks a sequence of memory blocks for rule matches.
+  auto scan(memory_block_vector& blocks)
+    -> caf::expected<std::vector<table_slice>> {
+    auto builder = series_builder{};
+    yr_scanner_set_callback(scanner_, callback, &builder);
+    auto status = yr_scanner_scan_mem_blocks(scanner_, blocks.iterator());
+    if (auto err = to_error(status))
+      return err;
     return builder.finish_as_table_slice("yara.match");
   }
 
@@ -198,8 +353,11 @@ private:
     return CALLBACK_CONTINUE;
   }
 
-  rules() = default;
-  YR_RULES* rules_ = nullptr;
+  scanner(scan_options opts) : opts_{std::move(opts)} {
+  }
+
+  YR_SCANNER* scanner_ = nullptr;
+  scan_options opts_;
 };
 
 /// Compiles Yara rules.
@@ -336,22 +494,59 @@ public:
       }
       rules = compiler->compile();
     }
-    for (auto&& chunk : input) {
-      if (not chunk) {
-        co_yield {};
-        continue;
+    auto opts = scan_options{
+      .fast_scan = args_.fast_scan,
+    };
+    auto scanner = scanner::make(*rules, opts);
+    if (not scanner) {
+      diagnostic::warning("failed to construct YARA scanner")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    if (args_.blockwise) {
+      for (auto&& chunk : input) {
+        if (not chunk) {
+          co_yield {};
+          continue;
+        }
+        if (auto slices = scanner->scan(as_bytes(chunk))) {
+          for (auto&& slice : *slices)
+            co_yield slice;
+        } else {
+          diagnostic::warning("failed to scan block with YARA rules")
+            .hint("{}", slices.error())
+            .emit(ctrl.diagnostics());
+          co_yield {};
+        }
       }
-      auto opts = scan_options{
-        .fast_scan = args_.fast_scan,
-      };
-      if (auto slices = rules->scan(as_bytes(chunk), opts)) {
+    } else {
+      memory_block_vector blocks;
+      for (auto&& chunk : input) {
+        if (not chunk) {
+          co_yield {};
+          continue;
+        }
+        blocks.push_back(chunk);
+        if (auto slices = scanner->scan(blocks)) {
+          for (auto&& slice : *slices)
+            co_yield slice;
+        } else if (slices.error() == ec::incomplete) {
+          co_yield {};
+        } else {
+          diagnostic::error("failed to scan block with YARA rules")
+            .hint("{}", slices.error())
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+      }
+      blocks.done();
+      if (auto slices = scanner->scan(blocks)) {
         for (auto&& slice : *slices)
           co_yield slice;
       } else {
-        diagnostic::warning("failed to scan bytes with Yara rules")
+        diagnostic::error("failed to scan blocks with YARA rules")
           .hint("{}", slices.error())
           .emit(ctrl.diagnostics());
-        co_yield {};
       }
     }
   }
@@ -401,6 +596,8 @@ public:
           args.compiled_rules = true;
         else if (arg->inner == "-f" || arg->inner == "--fast-scan")
           args.fast_scan = true;
+        else if (arg->inner == "-B" || arg->inner == "--blockwise")
+          args.blockwise = true;
         else
           args.rules.push_back(std::move(arg->inner));
       }

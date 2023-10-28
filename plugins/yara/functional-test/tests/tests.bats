@@ -22,3 +22,13 @@ setup() {
 @test "remain silent for true negatives" {
   echo 'qux quux' | check tenzir "load stdin | yara ${RULE_DIR}/test.yara"
 }
+
+@test "match blockwise per chunk" {
+  echo 'foo bar' |
+    check tenzir 'load stdin | repeat 2 | yara -B -C test.yarac'
+}
+
+@test "match once at the end" {
+  echo 'foo bar' |
+    check tenzir 'load stdin | repeat 2 | yara -C test.yarac'
+}

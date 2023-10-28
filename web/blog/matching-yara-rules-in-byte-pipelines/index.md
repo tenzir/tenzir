@@ -1,5 +1,5 @@
 ---
-title: Matching Yara Rules in Byte Pipelines
+title: Matching YARA Rules in Byte Pipelines
 authors:
    - mavam
 date: 2023-10-24
@@ -14,7 +14,7 @@ trigger next processing steps in your detection workflows.
 [yara]: https://virustotal.github.io/yara/
 [yara-operator]: /next/operators/transformations/yara
 
-![Yara Operator](yara-operator.excalidraw.svg)
+![YARA Operator](yara-operator.excalidraw.svg)
 
 <!--truncate-->
 
@@ -23,7 +23,7 @@ data. Malware analysts develop them based on sandbox results or threat reports,
 incident responders capture the attacker's toolchain on disk images or in
 memory, and security engineers share them with their peers.
 
-## Operationalizing YARA rules
+## Operationalize YARA rules
 
 The most straight-forward way to execute a YARA rule is the official [`yara`
 command-line utility](https://yara.readthedocs.io/en/stable/commandline.html).
@@ -139,7 +139,7 @@ blob,[^1] and details about the location of the match.
     system does, so we encode blob values as Base64-encoded strings for formats
     that do not have a native blog representation.
 
-## Mixing and matching loaders
+## Mix and match loaders
 
 The [`stdin`](/connectors/stdin) loader in the above example produces chunks of
 bytes. But you can use any connector of your choice that yields bytes. In
@@ -168,10 +168,10 @@ while leaving the remainder of `yara` pipeline in place.
 
 [separation-of-concerns]: /blog/five-design-principles-for-building-a-data-pipeline-engine#p1-separation-of-concerns
 
-## Post-processing matches
+## Post-process matches
 
 Because the matches are structured events, you can use all existing operators to
-post-process them. For example, send them to a Slack channel via Fluent Bit:
+post-process them. For example, send them to a Slack channel via [`fluent-bit`](./sinks/fluent-bit):
 
 ```
 load file --mmap /tmp/test.txt
@@ -188,11 +188,41 @@ load file --mmap /tmp/test.txt
 | import
 ```
 
+## Create a YARA rule matching service
+
+Using just a few pipelines, you can quickly deploy a YARA rule scanning service
+that sends the matches to a Slack webhook. Let's that you want to scan malware
+sample that you receive over a [Kafka](../../connectors/kafka) topic
+`malware`. Launch the processing pipeline as follows:
+
+```
+load kafka --topic malware
+| yara --blockwise /path/to/rules
+| fluent-bit slack webhook=URL
+```
+
+This pipeline requires that every Kafka message is a self-contained malware
+sample. Because the pipeline runs continuously, we supply the `--blockwise`
+option so that the `yara` triggers a scan for every Kafka message, as opposed to
+accumulating all messages indefinitely and only initiating a scan when the input
+exhausts.
+
+You can now submit a malware sample by sending it to the `malware` Kafka topic:
+
+```
+load file --mmap evil.exe | save kafka --topic malware
+```
+
+The matches should now arrive as JSON message in the Slack channel associated
+with the webhook.
+
 ## Summary
 
 We've introduced the [`yara`][yara-operator] operator as a byte-to-events
 transformation that exposes YARA rule matches as structured events, making them
-easy to post-process with the existing collection of Tenzir operators.
+easy to post-process with the existing collection of Tenzir operators. We also
+explained how you can create a simple YARA rule scanning service that accepts
+malware samples via Kafka and sends the matches to a Slack channel.
 
 Try it yourself. Deploy detection pipelines with the `yara` operator for free
 with our Community Edition at [app.tenzir.com](https://app.tenzir.com). Missing
