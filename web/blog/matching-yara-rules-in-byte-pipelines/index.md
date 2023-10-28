@@ -2,7 +2,7 @@
 title: Matching YARA Rules in Byte Pipelines
 authors:
    - mavam
-date: 2023-10-24
+date: 2023-11-02
 tags: [yara, operator, dfir, detection engineering]
 comments: true
 ---
