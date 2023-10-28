@@ -2,7 +2,8 @@
 
 : "${BATS_TEST_TIMEOUT:=120}"
 
-RULE_DIR="$BATS_SUITE_DIRNAME"
+RULE_DIR="${BATS_SUITE_DIRNAME}"
+TMP_DIR="${BATS_TEST_DIRNAME}"
 
 setup() {
   bats_load_library bats-support
@@ -15,8 +16,9 @@ setup() {
 }
 
 @test "generate matches for compiled rule" {
-  yarac ${RULE_DIR}/test.yara test.yarac
-  echo 'foo barbar baz' | check tenzir 'load stdin | yara -C test.yarac'
+  yarac "${RULE_DIR}/test.yara" "${TMP_DIR}/test.yarac"
+  echo 'foo barbar baz' |
+    check tenzir "load stdin | yara -C ${TMP_DIR}/test.yarac"
 }
 
 @test "remain silent for true negatives" {
@@ -25,10 +27,10 @@ setup() {
 
 @test "match blockwise per chunk" {
   echo 'foo bar' |
-    check tenzir 'load stdin | repeat 2 | yara -B -C test.yarac'
+    check tenzir "load stdin | repeat 2 | yara -B -C ${TMP_DIR}/test.yarac"
 }
 
 @test "match once at the end" {
   echo 'foo bar' |
-    check tenzir 'load stdin | repeat 2 | yara -C test.yarac'
+    check tenzir "load stdin | repeat 2 | yara -C ${TMP_DIR}/test.yarac"
 }
