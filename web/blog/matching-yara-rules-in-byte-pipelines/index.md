@@ -228,3 +228,9 @@ Try it yourself. Deploy detection pipelines with the `yara` operator for free
 with our Community Edition at [app.tenzir.com](https://app.tenzir.com). Missing
 any other operators that operationalize detections? Swing by our [Discord
 server](/discord) and let us know!
+
+:::note Acknowledgements
+Thanks to [Thomas Patzke](https://github.com/thomaspatzke) for reviewing this
+blog post and suggesting to make the default behavior of the operator more safe
+to use. 🙏
+:::
