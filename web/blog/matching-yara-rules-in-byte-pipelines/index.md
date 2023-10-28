@@ -55,18 +55,16 @@ default:test [] test.txt
 0x7:3:$bar: bar
 ```
 
-There are other ways to operationalize YARA rules, e.g., the
-[ClamAV](https://www.clamav.net/) scanner,
+There are other ways to execute YARA rules, e.g.,
+[ClamAV](https://www.clamav.net/),
 [osquery](https://osquery.readthedocs.io/en/stable/deployment/yara/), or
 [Velociraptor](https://docs.velociraptor.app/vql_reference/plugin/yara/)—which
 we also [integrated as pipeline
 operator](/blog/integrating-velociraptor-into-tenzir-pipelines).
 
-## The `yara` operator
-
-Our new [`yara`][yara-operator] operator is a transformation that accepts bytes
-as input and produces events as output. Let's take the simple case of running
-the above example on string input:
+And now there's also Tenzir, with a [`yara`][yara-operator] operator that
+accepts bytes as input and produces events as output. Let's take the simple case
+of running the above example on string input:
 
 ```bash
 echo 'foo barbar baz' |
@@ -149,21 +147,15 @@ particular, you can use the [`file`](/connectors/file) loader:
 tenzir 'load file --mmap /tmp/test.txt | yara /tmp/test.yara'
 ```
 
-Note the `--mmap` flag: we need it to deliver a single block of data to the
-`yara` operator. Without `--mmap`, the `file` loader will generate a stream of
-byte chunks and feed them incrementally to the `yara` operator, attempting to
-match `rule.yara` individually on *every chunk*. This will cause false negatives
-when rule matches span chunk boundaries.
-
-If you have a Kafka topic where you publish malware samples to be scanned, then
-you only need to change the pipeline source:
+If you have a [ZeroMQ socket](/connectors/zmq) where you publish malware samples
+to be scanned, then you only need to change the pipeline source:
 
 ```bash
-tenzir 'load kafka --topic malware-samples | yara /tmp/test.yara'
+tenzir 'load zmq | yara /tmp/test.yara'
 ```
 
 This is where the [separation between structured and unstructured
-data][separation-of-concerns] in our pipelines pays off. You plug in any loader
+data][separation-of-concerns] in pipelines pays off. You plug in any loader
 while leaving the remainder of `yara` pipeline in place.
 
 [separation-of-concerns]: /blog/five-design-principles-for-building-a-data-pipeline-engine#p1-separation-of-concerns
@@ -171,7 +163,8 @@ while leaving the remainder of `yara` pipeline in place.
 ## Post-process matches
 
 Because the matches are structured events, you can use all existing operators to
-post-process them. For example, send them to a Slack channel via [`fluent-bit`](./sinks/fluent-bit):
+post-process them. For example, send them to a Slack channel via
+[`fluent-bit`](/operators/sinks/fluent-bit):
 
 ```
 load file --mmap /tmp/test.txt
