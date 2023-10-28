@@ -58,11 +58,11 @@ auto to_error(int status) -> caf::error {
     case ERROR_COULD_NOT_MAP_FILE:
       return caf::make_error(ec::unspecified, "could not mmap file");
     case ERROR_INVALID_FILE:
-      return caf::make_error(ec::unspecified, "invalid Yara rule");
+      return caf::make_error(ec::unspecified, "invalid YARA rule");
     case ERROR_CORRUPT_FILE:
-      return caf::make_error(ec::unspecified, "corrupt Yara rule");
+      return caf::make_error(ec::unspecified, "corrupt YARA rule");
     case ERROR_UNSUPPORTED_FILE_VERSION:
-      return caf::make_error(ec::unspecified, "unsupported Yara file version");
+      return caf::make_error(ec::unspecified, "unsupported YARA file version");
     case ERROR_TOO_MANY_SCAN_THREADS:
       return caf::make_error(ec::unspecified, "too many scan threads");
     case ERROR_SCAN_TIMEOUT:
@@ -171,7 +171,7 @@ private:
   bool done_ = false;
 };
 
-/// A set of Yara rules.
+/// A set of YARA rules.
 class rules {
   friend class compiler;
   friend class scanner;
@@ -348,7 +348,7 @@ private:
     } else if (message == CALLBACK_MSG_SCAN_FINISHED) {
       TENZIR_DEBUG("completed scan");
     } else {
-      die("unhandled message type in Yara callback");
+      die("unhandled message type in YARA callback");
     }
     return CALLBACK_CONTINUE;
   }
@@ -360,7 +360,7 @@ private:
   scan_options opts_;
 };
 
-/// Compiles Yara rules.
+/// Compiles YARA rules.
 class compiler {
 public:
   /// Constructs a compiler.
@@ -412,14 +412,14 @@ public:
       (void)result;
       if (num_errors > 0)
         return caf::make_error(
-          ec::unspecified, fmt::format("got {} error(s) while compiling Yara "
+          ec::unspecified, fmt::format("got {} error(s) while compiling YARA "
                                        "rule: {}",
                                        num_errors, path));
     }
     return {};
   }
 
-  /// Adds a string representation of a Yara rule.
+  /// Adds a string representation of a YARA rule.
   /// @param str The rule.
   /// @returns An error upon failure.
   auto add(const std::string& str) -> caf::error {
@@ -428,7 +428,7 @@ public:
       = yr_compiler_add_string(compiler_, str.c_str(), name_space);
     if (num_errors > 0)
       return caf::make_error(ec::unspecified,
-                             fmt::format("got {} error(s) while compiling Yara "
+                             fmt::format("got {} error(s) while compiling YARA "
                                          "rule: '{}'",
                                          num_errors, str));
     return {};
@@ -469,7 +469,7 @@ public:
     auto rules = caf::expected<class rules>{caf::error{}};
     auto compiler = compiler::make();
     if (not compiler) {
-      diagnostic::error("insufficient memory to create Yara compiler")
+      diagnostic::error("insufficient memory to create YARA compiler")
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -477,7 +477,7 @@ public:
       TENZIR_ASSERT(args_.rules.size() == 1);
       rules = rules::load(args_.rules[0]);
       if (not rules) {
-        diagnostic::error("failed to load compiled Yara rules")
+        diagnostic::error("failed to load compiled YARA rules")
           .note("{}", rules.error())
           .emit(ctrl.diagnostics());
         co_return;
@@ -485,7 +485,7 @@ public:
     } else {
       for (const auto& rule : args_.rules) {
         if (auto err = compiler->add(std::filesystem::path{rule})) {
-          diagnostic::error("failed to add Yara rule to compiler")
+          diagnostic::error("failed to add YARA rule to compiler")
             .note("rule: {}", rule)
             .note("error: {}", err)
             .emit(ctrl.diagnostics());
