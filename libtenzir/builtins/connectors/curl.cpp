@@ -151,7 +151,7 @@ private:
 
 /// A key-value pair passed on the command line.
 struct request_item {
-  std::string_view type;
+  std::string type;
   std::string key;
   std::string value;
 };
@@ -195,11 +195,11 @@ auto parse_http_options(http_options& opts,
         .primary(request_item.source)
         .throw_();
     if (item->type == "header") {
-      headers[std::string{item->key}] = std::string{item->value};
+      headers[item->key] = std::move(item->value);
     } else if (item->type == "data") {
       if (opts.method.empty())
         opts.method = "POST";
-      body[std::string{item->key}] = std::string{item->value};
+      body[item->key] = std::move(item->value);
     } else if (item->type == "data-json") {
       if (opts.method.empty())
         opts.method = "POST";
@@ -208,7 +208,7 @@ auto parse_http_options(http_options& opts,
         diagnostic::error("invalid JSON value")
           .primary(request_item.source)
           .throw_();
-      body[std::string{item->key}] = std::move(*data);
+      body[item->key] = std::move(*data);
     } else {
       diagnostic::error("unsupported request item type")
         .primary(request_item.source)
