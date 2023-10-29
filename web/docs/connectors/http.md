@@ -11,7 +11,8 @@ Loads and saves bytes via HTTP.
 ## Synopsis
 
 ```
-http [-f|--form] [-j|--json] [-v|--verbose] [<method>] <url> [<item>..]
+http [--chunked] [-f|--form] [-j|--json] [-v|--verbose] [<method>]
+     <url> [<item>..]
 ```
 
 ## Description
@@ -41,6 +42,18 @@ from http PUT pie.dev/put X-API-Token:123 foo=bar
 
 More generally, if your HTTPie command line is `http X` then you can write `from
 http X` to obtain an event stream or `load http X` for a byte stream.
+
+### `--chunked`
+
+Enable [chunked transfer
+encoding](https://en.wikipedia.org/wiki/Chunked_transfer_encoding) by setting
+the `Transfer-Encoding` header to `chunked`.
+
+In a loader context, specifying this option encodes the (single) HTTP request
+body as a HTTP chunk. In a saver context, this option will encode and forward
+each incoming chunk of bytes as a HTTP chunk, enabling to create a pipeline that
+ends in a [HTTP persistent
+connection](https://en.wikipedia.org/wiki/HTTP_persistent_connection).
 
 ### `-f|--form`
 

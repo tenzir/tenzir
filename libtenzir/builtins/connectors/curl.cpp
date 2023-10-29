@@ -115,7 +115,7 @@ public:
             handle = std::move(handle)](chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0)
         return;
-      // TODO: make this smarter and provide the contentt type. We currently
+      // TODO: make this smarter and provide the content type. We currently
       // blindly assume application/json.
       if (auto err = handle->upload(as_bytes(chunk))) {
         diagnostic::error("failed to upload chunk ({} bytes) to {}",
@@ -294,6 +294,8 @@ private:
         } else if (arg->inner == "-f" || arg->inner == "--form") {
           result.options.http.body.content_type
             = "application/x-www-form-urlencoded";
+        } else if (arg->inner == "--chunked") {
+          result.options.http.headers["Transfer-Encoding"] = "chunked";
         } else {
           items.push_back(std::move(*arg));
         }
