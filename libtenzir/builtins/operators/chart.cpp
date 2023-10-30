@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/cast.hpp>
+#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -55,37 +55,8 @@ struct chart_options {
       f.field("description", opt.description));
   }
 
-  // not private to enable aggregate initialization
+private:
   mutable std::vector<type::attribute_view> cached_attrs_{};
-};
-
-struct chart_arguments {
-  located<std::string> type;
-  std::optional<located<std::string>> label;
-  std::optional<located<std::string>> x;
-  std::optional<located<std::string>> x_unit;
-  std::optional<located<std::string>> y;
-  std::optional<located<std::string>> y_unit;
-  std::optional<located<std::string>> value;
-  std::optional<located<std::string>> description;
-
-  auto make_chart_options() && -> chart_options {
-    // TODO: replace with optional::transform in C++23
-    auto unwrap_located = [](std::optional<located<std::string>>&& val)
-      -> std::optional<std::string> {
-      if (val)
-        return {std::move(val->inner)};
-      return std::nullopt;
-    };
-    return chart_options{.type = std::move(type.inner),
-                         .label = unwrap_located(std::move(label)),
-                         .x = unwrap_located(std::move(x)),
-                         .x_unit = unwrap_located(std::move(x_unit)),
-                         .y = unwrap_located(std::move(y)),
-                         .y_unit = unwrap_located(std::move(y_unit)),
-                         .value = unwrap_located(std::move(value)),
-                         .description = unwrap_located(std::move(description))};
-  }
 };
 
 class chart_operator final : public crtp_operator<chart_operator> {
@@ -120,8 +91,16 @@ public:
   }
 
   auto to_string() const -> std::string override {
+    const auto format_attr_view = [](const type::attribute_view& attr) {
+      if (attr.value.find_first_of(" \n\r\t\v\f") != std::string_view::npos)
+        // Add quotes if `value` has whitespace
+        return fmt::format("{}=\"{}\"", attr.key, attr.value);
+      return fmt::format("{}={}", attr.key, attr.value);
+    };
     return fmt::format("chart {}",
-                       fmt::join(options_.get_attribute_list(), " "));
+                       fmt::join(options_.get_attribute_list()
+                                   | std::views::transform(format_attr_view),
+                                 " "));
   }
 
   auto optimize(const expression& filter, event_order order) const
@@ -150,10 +129,11 @@ private:
         return true;
       if (record.resolve_key(*field))
         return true;
-      ctrl.warn(caf::make_error(
-        ec::unspecified, fmt::format("field '{}' not found in input, "
-                                     "but the {} operator expected it for '{}'",
-                                     *field, name(), field_name)));
+      ctrl.warn(caf::make_error(ec::unspecified,
+                                fmt::format("field '{}' not found in input, "
+                                            "but the chart operator expected "
+                                            "it for '{}'",
+                                            *field, field_name)));
       return false;
     };
     return check_field_presence(options_.label, "label")
@@ -173,63 +153,125 @@ public:
     return {.transformation = true};
   }
 
-  auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"chart", ""};
-    chart_arguments args;
-    parser.add(args.type, "<type>");
-    parser.add("-l,--label", args.label, "<label>");
-    parser.add("-x,--x,--x-value", args.x, "<x-value>");
-    parser.add("-xu,--x-unit", args.x_unit, "<x-unit>");
-    parser.add("-y,--y,--y-value", args.y, "<y-value>");
-    parser.add("-yu,--y-unit", args.y_unit, "<y-unit>");
-    parser.add("-v,--value", args.value, "<value>");
-    parser.add("-d,--description", args.description, "<description>");
-    parser.parse(p);
-    check_args(args, p, parser);
-    return std::make_unique<chart_operator>(
-      std::move(args).make_chart_options());
+  auto make_operator(std::string_view pipeline) const
+    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws_or_comment,
+      parsers::optional_ws_or_comment, parsers::alnum, parsers::chr,
+      parsers::qqstr;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto name_char = (alnum | chr{'-'} | chr{'_'});
+    const auto field_name_parser = +name_char;
+    const auto object_name_parser
+      = (field_name_parser % '.').then([](std::vector<std::string> in) {
+          return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
+        });
+    const auto type_argument_parser
+      = field_name_parser.then([](std::string in) {
+          return parsed_argument_list{{std::string{"type"}, std::move(in)}};
+        });
+    // Arguments are in the format of key=value,
+    // where value can also be a "quoted string with spaces"
+    const auto arguments_parser
+      = (field_name_parser >> optional_ws_or_comment >> '='
+         >> optional_ws_or_comment >> (qqstr | object_name_parser))
+        % required_ws_or_comment;
+    const auto p = required_ws_or_comment >> type_argument_parser
+                   >> ~(required_ws_or_comment >> arguments_parser)
+                   >> optional_ws_or_comment >> end_of_pipeline_operator;
+    parsed_argument_list parsed_arguments;
+    if (!p(f, l, parsed_arguments))
+      return {std::string_view{f, l},
+              caf::make_error(
+                ec::syntax_error,
+                fmt::format("failed to parse chart operator: '{}'", pipeline))};
+    auto options = make_options(parsed_arguments);
+    if (not options)
+      return {std::string_view{f, l}, options.error()};
+    return {std::string_view{f, l},
+            std::make_unique<chart_operator>(std::move(*options))};
   }
 
 private:
-  static void check_args(const chart_arguments& args, parser_interface& p,
-                         const argument_parser& parser) {
-    const auto require_field = [&](const auto& field, std::string_view name) {
-      if (field)
-        return;
-      diagnostic::error("chart type '{}' requires field '{}'", args.type.inner,
-                        name)
-        .primary(p.current_span())
-        .usage(parser.usage())
-        .throw_();
+  using parsed_argument_list
+    = std::vector<std::tuple<std::string, std::string>>;
+
+  static auto make_options(parsed_argument_list& args)
+    -> caf::expected<chart_options> {
+    const auto keys_projection = [](const auto& x) {
+      return std::get<0>(x);
     };
-    const auto disallow_field = [&](const auto& field, std::string_view name) {
-      if (not field)
-        return;
-      diagnostic::error("chart type '{}' disallows field '{}'", args.type.inner,
-                        name)
-        .primary(field->source)
-        .usage(parser.usage())
-        .throw_();
+    // Removes arg with key `key` from `args`, and returns the value
+    const auto extract_arg_by_key
+      = [&](std::string_view key) -> std::optional<std::string> {
+      const auto it = std::ranges::find(args, key, keys_projection);
+      if (it == args.end())
+        return std::nullopt;
+      auto elem = std::move(*it);
+      args.erase(it);
+      return std::string{std::move(std::get<1>(elem))};
     };
-    if (args.type.inner == "stacked-area") {
-      require_field(args.x, "x");
-      require_field(args.y, "y");
-      disallow_field(args.value, "value");
-      return;
+    chart_options options{};
+    options.type = *extract_arg_by_key("type");
+    const auto require_field
+      = [&](std::optional<std::string>& field, std::string_view name) {
+          auto value = extract_arg_by_key(name);
+          if (not value)
+            throw caf::make_error(ec::syntax_error,
+                                  fmt::format("chart type '{}' requires field "
+                                              "'{}'",
+                                              options.type, name));
+          field = std::move(*value);
+        };
+    const auto allow_field
+      = [&](std::optional<std::string>& field, std::string_view name) {
+          auto value = extract_arg_by_key(name);
+          if (not value)
+            return;
+          field = std::move(*value);
+        };
+    const auto disallow_field = [&](std::string_view name) {
+      auto value = extract_arg_by_key(name);
+      if (value)
+        throw caf::make_error(
+          ec::syntax_error, fmt::format("chart type '{}' disallows field '{}'",
+                                        options.type, name));
+    };
+    try {
+      if (options.type == "stacked-area") {
+        require_field(options.x, "x");
+        require_field(options.y, "y");
+        allow_field(options.x_unit, "x_unit");
+        allow_field(options.y_unit, "y_unit");
+        allow_field(options.label, "label");
+        allow_field(options.description, "description");
+        disallow_field("value");
+      } else if (options.type == "donut" || options.type == "bar") {
+        require_field(options.value, "value");
+        allow_field(options.label, "label");
+        allow_field(options.description, "description");
+        disallow_field("x");
+        disallow_field("x_unit");
+        disallow_field("y");
+        disallow_field("y_unit");
+      } else {
+        return caf::make_error(ec::syntax_error,
+                               fmt::format("invalid chart type '{}', allowed "
+                                           "types are: 'stacked-area', "
+                                           "'donut', and 'bar'",
+                                           options.type));
+      }
+      if (not args.empty()) {
+        return caf::make_error(
+          ec::syntax_error,
+          fmt::format("invalid argument given to chart: '{}' "
+                      "with value '{}'",
+                      std::get<0>(args.front()), std::get<1>(args.front())));
+      }
+    } catch (const caf::error& err) {
+      return err;
     }
-    if (args.type.inner == "donut" || args.type.inner == "bar") {
-      require_field(args.value, "value");
-      disallow_field(args.x, "x");
-      disallow_field(args.x_unit, "x_unit");
-      disallow_field(args.y, "y");
-      disallow_field(args.y_unit, "y_unit");
-      return;
-    }
-    diagnostic::error("invalid chart type")
-      .primary(args.type.source)
-      .note("Allowed values are: 'stacked-area', 'donut', and 'bar'")
-      .usage(parser.usage())
-      .throw_();
+    return options;
   }
 };
 
