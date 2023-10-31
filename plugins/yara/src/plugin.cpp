@@ -84,7 +84,7 @@ public:
   memory_block_vector() noexcept
     : iterator_{
       .context = this,
-      .first = next,
+      .first = first,
       .next = next,
       .file_size = nullptr,
       .last_error = ERROR_SUCCESS,
@@ -147,19 +147,26 @@ private:
     return reinterpret_cast<const uint8_t*>(self->context);
   }
 
+  static auto first(YR_MEMORY_BLOCK_ITERATOR* iterator) -> YR_MEMORY_BLOCK* {
+    auto* self = reinterpret_cast<memory_block_vector*>(iterator->context);
+    TENZIR_DEBUG("setting iterator to first block");
+    self->offset_ = 0;
+    return next(iterator);
+  }
+
   static auto next(YR_MEMORY_BLOCK_ITERATOR* iterator) -> YR_MEMORY_BLOCK* {
     auto* self = reinterpret_cast<memory_block_vector*>(iterator->context);
     TENZIR_ASSERT(self->offset_ <= self->blocks_.size());
     if (self->offset_ == self->blocks_.size()) {
       // If we have returned all buffered blocks, we must decide whether we are
       // truly done or whether more blocks are expected.
-      TENZIR_DEBUG("reached last block (offset = {}, done = {})", self->offset_,
+      TENZIR_DEBUG("reached last block {} (done = {})", self->offset_,
                    self->done_);
       self->iterator_.last_error
         = self->done_ ? ERROR_SUCCESS : ERROR_BLOCK_NOT_READY;
       return nullptr;
     }
-    TENZIR_DEBUG("returning next block (offset = {}, done = {})", self->offset_,
+    TENZIR_DEBUG("returning next block {} (done = {})", self->offset_,
                  self->done_);
     self->iterator_.last_error = ERROR_SUCCESS;
     return self->blocks_[self->offset_++].first.get();
