@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
 
 project(
-  rabbitmq
-  DESCRIPTION "RabbitMQ plugin for Tenzir"
+  amqp
+  DESCRIPTION "AMQP plugin for Tenzir"
   LANGUAGES CXX)
 
 include(CTest)
@@ -13,7 +13,7 @@ file(GLOB_RECURSE rabbitmq_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 TenzirRegisterPlugin(
-  TARGET rabbitmq
+  TARGET amqp
   ENTRYPOINT src/plugin.cpp
   SOURCES ${rabbitmq_sources}
   INCLUDE_DIRECTORIES include)
@@ -25,4 +25,4 @@ if (NOT rabbitmq-c_FOUND)
   list(POP_BACK CMAKE_MODULE_PATH)
 endif ()
 
-target_link_libraries(rabbitmq PUBLIC rabbitmq::rabbitmq)
+target_link_libraries(amqp PUBLIC rabbitmq::rabbitmq)

@@ -25,7 +25,7 @@
 
 using namespace std::chrono_literals;
 
-namespace tenzir::plugins::rabbitmq {
+namespace tenzir::plugins::amqp {
 
 namespace {
 
@@ -546,7 +546,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "rabbitmq";
+    return "amqp";
   }
 
   auto default_parser() const -> std::string override {
@@ -606,7 +606,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "rabbitmq";
+    return "amqp";
   }
 
   auto default_printer() const -> std::string override {
@@ -710,7 +710,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "rabbitmq";
+    return "amqp";
   }
 
 private:
@@ -719,6 +719,6 @@ private:
 
 } // namespace
 
-} // namespace tenzir::plugins::rabbitmq
+} // namespace tenzir::plugins::amqp
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::rabbitmq::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::amqp::plugin)

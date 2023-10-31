@@ -1,36 +1,38 @@
-# rabbitmq
+# amqp
 
-Sends and receives messages via RabbitMQ.
+Sends and receives messages via AMQP.
 
 ## Synopsis
 
 Loader:
 
 ```
-rabbitmq [-c|--channel <number>] [-e|--exchange <exchange>]
-         [-r|--routing-key <key>] [-q|--queue <queue>]
-         [-X|--set <key=value>,...] [--passive] [--durable] [--exclusive]
-         [--no-auto-delete] [--no-local] [--ack] [<url>]
+amqp [-c|--channel <number>] [-e|--exchange <exchange>]
+     [-r|--routing-key <key>] [-q|--queue <queue>]
+     [-X|--set <key=value>,...] [--passive] [--durable] [--exclusive]
+     [--no-auto-delete] [--no-local] [--ack] [<url>]
 ```
 
 Saver:
 
 ```
-rabbitmq [-c|--channel <number>] [-e|--exchange <exchange>]
-         [-r|--routing-key <key>] [-X|--set <key=value>,...] [--mandatory]
-         [--immediate] [<url>]
+amqp [-c|--channel <number>] [-e|--exchange <exchange>]
+     [-r|--routing-key <key>] [-X|--set <key=value>,...] [--mandatory]
+     [--immediate] [<url>]
 ```
 
 ## Description
 
-The `rabbitmq` connector enables interacting with a
-[RabbitMQ](https://www.rabbitmq.com/) server. The loader acts as *consumer* and
-the saver as *producer*.
+The `amqp` connector is an [AMQP](https://www.amqp.org/) 0-9-1 client that
+enables interacting with an AMQP server. The loader acts as *consumer* and the
+saver as *producer*.
 
-The diagram below shows the key [AMQP](https://www.amqp.org/) abstractions and
-how they relate to a pipeline:
+The diagram below shows the key abstractions and how they relate to a pipeline:
 
 ![AMQP](amqp.excalidraw.svg)
+
+The implementation of this connector relies on the [RabbitMQ C client
+library](https://github.com/alanxz/rabbitmq-c).
 
 ### `-c|--channel <number>` (Loader, Saver)
 
@@ -52,12 +54,12 @@ Defaults to the empty string.
 
 ### `-X|--set <key=value>` (Loader, Saver)
 
-A comma-separated list of key-value configuration options for RabbitMQ.
+A comma-separated list of key-value configuration options for RabbitMQ, e.g.,
 `-X max_channels=42,frame_size=1024,sasl_method=external`. The example
-`rabbitmq.yaml` file below shows the available options:
+`amqp.yaml` file below shows the available options:
 
 import CodeBlock from '@theme/CodeBlock';
-import Configuration from '!!raw-loader!@site/../plugins/rabbitmq/rabbitmq.yaml.example';
+import Configuration from '!!raw-loader!@site/../plugins/amqp/amqp.yaml.example';
 
 <CodeBlock language="yaml">{Configuration}</CodeBlock>
 
@@ -144,11 +146,11 @@ with no guarantee that it will ever be consumed.
 Consume [JSON](../formats/json.md) from a specific AMQP server:
 
 ```
-from rabbitmq amqp://admin:pass:@0.0.0.1:5672/vhost
+from amqp amqp://admin:pass:@0.0.0.1:5672/vhost
 ```
 
 Send the list of all TQL operators:
 
 ```
-show operators | to rabbitmq
+show operators | to amqp
 ```
