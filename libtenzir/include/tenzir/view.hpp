@@ -131,6 +131,12 @@ struct view_trait<record> {
   using type = record_view_handle;
 };
 
+/// @relates view_trait
+template <>
+struct view_trait<blob> {
+  using type = std::basic_string_view<std::byte>;
+};
+
 // clang-format off
 /// A type-erased view over various types of data.
 /// @relates view_trait
@@ -149,7 +155,8 @@ using data_view = caf::variant<
   view<enumeration>,
   view<list>,
   view<map>,
-  view<record>
+  view<record>,
+  view<blob>
 >;
 // clang-format on
 
@@ -417,8 +424,8 @@ private:
 template <class T>
 view<T> make_view(const T& x) {
   constexpr auto directly_constructible
-    = detail::is_any_v<T, caf::none_t, bool, int64_t, uint64_t, double,
-                       duration, time, std::string, ip, subnet, enumeration>;
+    = detail::is_any_v<T, caf::none_t, bool, int64_t, uint64_t, double, duration,
+                       time, std::string, blob, ip, subnet, enumeration>;
   if constexpr (directly_constructible) {
     return x;
   } else if constexpr (std::is_same_v<T, pattern>) {
@@ -451,6 +458,11 @@ constexpr view<std::string> make_view(std::string_view xs) {
   return xs;
 }
 
+/// @relates view_trait
+constexpr view<blob> make_view(view<blob> xs) {
+  return xs;
+}
+
 /// @relates view data
 data_view make_view(const data& x);
 
@@ -476,6 +488,8 @@ constexpr auto materialize(caf::none_t x) {
 }
 
 std::string materialize(std::string_view x);
+
+blob materialize(view<blob> x);
 
 pattern materialize(pattern_view x);
 

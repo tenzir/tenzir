@@ -40,8 +40,11 @@ template <>
 struct lexer_traits<identifier> {
   static auto parser() {
     // TODO: This clearly shows the weakness of the current approach.
-    return ((parsers::alpha | parsers::chr{'_'})
-            >> *(parsers::alnum | parsers::chr{'_'}))
+    // TODO: The plugin parser in
+    //       `include/tenzir/concept/parseable/tenzir/identifier.hpp`
+    //       needs to get aligned with this.
+    using namespace parsers;
+    return ((alpha | chr{'_'}) >> *(alnum | chr{'_'} | chr{'-'})) //
            - "true" - "false";
   }
 

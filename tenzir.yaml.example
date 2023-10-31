@@ -182,7 +182,6 @@ tenzir:
     #   partition-index - Tenzir will not create dense index when set to false
     #   - targets: [:ip]
     #     fp-rate: 0.01
-    #     partition-index: false
 
   # The `tenzir-ctl start` command starts a new Tenzir server process.
   start:

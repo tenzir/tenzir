@@ -57,19 +57,8 @@ const type concepts_data_schema = type{map_type{
   },
 }};
 
-bool operator==(const model& lhs, const model& rhs) {
-  return lhs.definition == rhs.definition;
-}
-
-const type models_data_schema = type{map_type{
-  type{string_type{}, {{"key", "model.name"}}},
-  record_type{
-    {"model", model::schema()},
-  },
-}};
-
 bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
-  return lhs.concepts == rhs.concepts && lhs.models == rhs.models;
+  return lhs.concepts == rhs.concepts;
 }
 
 std::vector<std::string>
@@ -170,142 +159,9 @@ resolve(const taxonomies& ts, const expression& e, const type& schema) {
             return expression{d};
         }
       };
-      auto resolve_models
-        = [&](const std::string& field_name, relational_operator op,
-              const tenzir::data& data,
-              auto make_predicate) -> caf::expected<expression> {
-        auto r = caf::get_if<record>(&data);
-        if (!r)
-          // Models can only be compared to records, so if the data side is
-          // not a record, we move to the concept substitution phase directly.
-          return resolve_concepts(field_name, op, data, make_predicate);
-        if (r->empty())
-          return expression{caf::none};
-        auto it = ts.models.find(field_name);
-        if (it == ts.models.end())
-          return resolve_concepts(field_name, op, data, make_predicate);
-        // We have a model predicate.
-        // ==========================
-        // The model definition forms a tree that contains models as non-leaf
-        // nodes and concepts as leafs. For model substition we need to iterate
-        // over the leafs in the order of definition, which is left to right.
-        // The levels stack is used to keep track of the current position at
-        // each level of the tree.
-        auto level_1 = std::pair{it->second.definition.begin(),
-                                 it->second.definition.end()};
-        auto levels = std::stack{std::vector{std::move(level_1)}};
-        auto descend = [&] {
-          for (auto child_component = ts.models.find(*levels.top().first);
-               child_component != ts.models.end();
-               child_component = ts.models.find(*levels.top().first)) {
-            auto& child_def = child_component->second.definition;
-            levels.emplace(child_def.begin(), child_def.end());
-          }
-        };
-        // Move the cursor to the leftmost leaf in the tree.
-        descend();
-        auto next_leaf = [&] {
-          // Update the levels stack; explicit scope for clarity.
-          while (!levels.empty() && ++levels.top().first == levels.top().second)
-            levels.pop();
-          if (!levels.empty()) {
-            descend();
-            // Empty models ought to be rejected at load time.
-            TENZIR_ASSERT(levels.top().first != levels.top().second);
-          }
-        };
-        // The conjunction for all model concepts that are restriced by a value
-        // in rec.
-        conjunction restricted;
-        // The conjunction for all model concepts that aren't specified in rec.
-        conjunction unrestricted;
-        auto abs_op = is_negated(op) ? negate(op) : op;
-        auto insert_meta_field_predicate = [&] {
-          auto make_meta_field_predicate =
-            [&]([[maybe_unused]] relational_operator op, const tenzir::data&) {
-              return [](std::string item) {
-                return predicate{field_extractor{std::move(item)},
-                                 relational_operator::not_equal,
-                                 tenzir::data{}};
-              };
-            };
-          unrestricted.emplace_back(
-            resolve_concepts(*levels.top().first, relational_operator::equal,
-                             caf::none, make_meta_field_predicate));
-        };
-        auto named = !r->begin()->first.empty();
-        if (named) {
-          // TODO: Nested records of the form
-          // <src_endpoint: <1.2.3.4, _>, process_filename: "svchost.exe">
-          // are currently not supported.
-          for (; !levels.empty(); next_leaf()) {
-            // TODO: Use `ends_with` for better ergonomics.
-            // TODO: Remove matched entries and check mismatched concepts.
-            auto concept_field = r->find(*levels.top().first);
-            if (concept_field == r->end())
-              insert_meta_field_predicate();
-            else
-              restricted.emplace_back(
-                resolve_concepts(*levels.top().first, abs_op,
-                                 concept_field->second, make_predicate));
-          }
-        } else {
-          auto value_iterator = r->begin();
-          for (; !levels.empty(); next_leaf(), ++value_iterator) {
-            if (value_iterator == r->end())
-              // The provided record is shorter than the matched concept.
-              // TODO: This error could be rendered in a way that makes it
-              // clear how the mismatch happened. For example:
-              //   src_ip, src_port,  dst_ip, dst_port, proto
-              // <      _,        _, 1.2.3.4,        _>
-              //                                        ^~~~~
-              //                                        not enough fields provided
-              return caf::make_error(ec::invalid_query, *r,
-                                     "doesn't match the model:", it->first);
-            if (caf::holds_alternative<caf::none_t>(value_iterator->second))
-              insert_meta_field_predicate();
-            else
-              restricted.emplace_back(
-                resolve_concepts(*levels.top().first, abs_op,
-                                 value_iterator->second, make_predicate));
-          }
-          if (value_iterator != r->end()) {
-            // The provided record is longer than the matched concept.
-            // TODO: This error could be rendered in a way that makes it
-            // clear how the mismatch happened. For example:
-            //   src_ip, src_port,  dst_ip, dst_port, proto
-            // <      _,        _, 1.2.3.4,        _,     _, "tcp">
-            //                                               ^~~~~
-            //                                               too many fields
-            //                                               provided
-            return caf::make_error(ec::invalid_query, *r,
-                                   "doesn't match the model:", it->first);
-          }
-        }
-        expression expr;
-        switch (restricted.size()) {
-          case 0: {
-            return unrestricted;
-          }
-          case 1: {
-            expr = restricted[0];
-            break;
-          }
-          default: {
-            expr = expression{std::move(restricted)};
-            break;
-          }
-        }
-        if (is_negated(op))
-          expr = negation{std::move(expr)};
-        if (unrestricted.empty())
-          return expr;
-        unrestricted.push_back(expr);
-        return unrestricted;
-      };
       if (auto data = caf::get_if<tenzir::data>(&pred.rhs)) {
         if (auto fe = caf::get_if<field_extractor>(&pred.lhs)) {
-          return resolve_models(
+          return resolve_concepts(
             fe->field, pred.op, *data,
             [&](relational_operator op, const tenzir::data& o) {
               return [&, op](const std::string& item) {
@@ -316,7 +172,7 @@ resolve(const taxonomies& ts, const expression& e, const type& schema) {
       }
       if (auto data = caf::get_if<tenzir::data>(&pred.lhs)) {
         if (auto fe = caf::get_if<field_extractor>(&pred.rhs)) {
-          return resolve_models(
+          return resolve_concepts(
             fe->field, pred.op, *data,
             [&](relational_operator op, const tenzir::data& o) {
               return [&, op](const std::string& item) {

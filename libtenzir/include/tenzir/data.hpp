@@ -61,7 +61,8 @@ constexpr auto to_data_type() {
   } else if constexpr (std::is_convertible_v<T, std::string>)
     return std::string{};
   else if constexpr (detail::is_any_v<T, caf::none_t, int64_t, duration, time,
-                                      pattern, ip, subnet, list, map, record>)
+                                      pattern, ip, subnet, list, map, record,
+                                      blob>)
     return T{};
   else
     return invalid_data_type{};
@@ -104,7 +105,8 @@ public:
     enumeration,
     list,
     map,
-    record
+    record,
+    blob
   >;
   // clang-format on
 

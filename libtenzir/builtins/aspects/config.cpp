@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 namespace tenzir::plugins::config {
 
@@ -37,15 +37,12 @@ public:
     return operator_location::local;
   }
 
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
-    auto builder = adaptive_table_slice_builder{};
-    if (auto err = builder.add_row(make_view(config_))) {
-      diagnostic::error("failed to add config: {}", err)
-        .emit(ctrl.diagnostics());
-      co_return;
+  auto show(operator_control_plane&) const -> generator<table_slice> override {
+    auto builder = series_builder{};
+    builder.data(make_view(config_));
+    for (auto&& slice : builder.finish_as_table_slice("tenzir.config")) {
+      co_yield std::move(slice);
     }
-    co_yield builder.finish("tenzir.config");
   }
 
 private:

@@ -107,7 +107,7 @@ public:
   /// @param expr The expression to lookup.
   /// @returns A lookup result of candidate partitions categorized by type.
   [[nodiscard]] caf::expected<catalog_lookup_result>
-  lookup(const expression& expr) const;
+  lookup(expression expr) const;
 
   [[nodiscard]] catalog_lookup_result::candidate_info
   lookup_impl(const expression& expr, const type& schema) const;

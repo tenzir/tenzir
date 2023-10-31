@@ -96,12 +96,3 @@
     concepts:
       - net.outer_vlan
       - net.inner_vlan
-
-- model:
-    name: net.connection
-    definition:
-      - net.src.ip
-      - net.src.port
-      - net.dst.ip
-      - net.dst.port
-      - net.proto

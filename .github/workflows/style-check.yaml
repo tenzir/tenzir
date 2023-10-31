@@ -51,6 +51,11 @@ jobs:
             xargs -0 --no-run-if-empty black || true
           git diff --exit-code
 
+      - name: ShellCheck
+        run: |
+          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
+            scripts/shellcheck.bash
+
       - name: yamllint
         run: |
           pip install --upgrade yamllint

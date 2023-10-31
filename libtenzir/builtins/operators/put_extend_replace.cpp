@@ -94,6 +94,13 @@ auto make_extend(const table_slice& slice, const configuration& config,
         operand.emplace(std::move(*field_as_operand));
       }
       auto [type, array] = resolve_operand(slice, *operand);
+      if (not type && not array) {
+        ctrl.abort(caf::make_error(
+          ec::invalid_argument, fmt::format("{} operator requires lists to "
+                                            "have a homogeneous element type",
+                                            operator_name(Mode))));
+        continue;
+      }
       result.insert(result.begin(), {{field, type}, array});
     }
     if (not override) {
@@ -104,15 +111,23 @@ auto make_extend(const table_slice& slice, const configuration& config,
   };
 }
 
-auto make_replace(const table_slice& slice, const operand& op) {
+auto make_replace(const table_slice& slice, const operand& op,
+                  operator_control_plane& ctrl) {
   return [&](struct record_type::field input_field,
              std::shared_ptr<arrow::Array>)
            -> std::vector<std::pair<struct record_type::field,
                                     std::shared_ptr<arrow::Array>>> {
-    auto resolved = resolve_operand(slice, op);
+    auto [type, array] = resolve_operand(slice, op);
+    if (not type && not array) {
+      ctrl.abort(caf::make_error(ec::invalid_argument,
+                                 fmt::format("{} operator requires lists to "
+                                             "have a homogeneous element type",
+                                             operator_name(mode::replace))));
+      return {};
+    }
     return {{
-      {input_field.name, resolved.first},
-      resolved.second,
+      {input_field.name, type},
+      array,
     }};
   };
 }
@@ -211,7 +226,8 @@ public:
         index_to_operand.erase(duplicate_it, index_to_operand.end());
         // Create the transformation.
         for (const auto& [index, operand] : index_to_operand) {
-          transformations.push_back({index, make_replace(slice, *operand)});
+          transformations.push_back(
+            {index, make_replace(slice, *operand, ctrl)});
         }
         break;
       }

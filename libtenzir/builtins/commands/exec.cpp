@@ -95,7 +95,6 @@ auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
 auto format_metric(const metric& metric) {
   auto result = std::string{};
   auto it = std::back_inserter(result);
-  const auto locale = std::locale("en_US.UTF-8");
   constexpr auto indent = std::string_view{"  "};
   it = fmt::format_to(it, "operator #{} ({})\n", metric.operator_index + 1,
                       metric.operator_name);
@@ -118,7 +117,7 @@ auto format_metric(const metric& metric) {
   if (metric.inbound_measurement.unit != "void") {
     it = fmt::format_to(it, "{}inbound:\n", indent);
     it = fmt::format_to(
-      it, locale, "{}{}{}: {:L} at a rate of {:.2f}/s\n", indent, indent,
+      it, "{}{}{}: {} at a rate of {:.2f}/s\n", indent, indent,
       metric.inbound_measurement.unit, metric.inbound_measurement.num_elements,
       static_cast<double>(metric.inbound_measurement.num_elements)
         / std::chrono::duration_cast<
@@ -127,8 +126,8 @@ auto format_metric(const metric& metric) {
             .count());
     if (metric.inbound_measurement.unit != operator_type_name<chunk_ptr>()) {
       it = fmt::format_to(
-        it, locale, "{}{}bytes: {:L} at a rate of {:.2f}/s (estimate)\n",
-        indent, indent, metric.inbound_measurement.num_approx_bytes,
+        it, "{}{}bytes: {} at a rate of {:.2f}/s (estimate)\n", indent, indent,
+        metric.inbound_measurement.num_approx_bytes,
         static_cast<double>(metric.inbound_measurement.num_approx_bytes)
           / std::chrono::duration_cast<
               std::chrono::duration<double, std::chrono::seconds::period>>(
@@ -136,7 +135,7 @@ auto format_metric(const metric& metric) {
               .count());
     }
     it = fmt::format_to(
-      it, locale, "{}{}batches: {:L} ({:.2f} {}/batch)\n", indent, indent,
+      it, "{}{}batches: {} ({:.2f} {}/batch)\n", indent, indent,
       metric.inbound_measurement.num_batches,
       static_cast<double>(metric.inbound_measurement.num_elements)
         / static_cast<double>(metric.inbound_measurement.num_batches),
@@ -145,7 +144,7 @@ auto format_metric(const metric& metric) {
   if (metric.outbound_measurement.unit != "void") {
     it = fmt::format_to(it, "{}outbound:\n", indent);
     it = fmt::format_to(
-      it, locale, "{}{}{}: {:L} at a rate of {:.2f}/s\n", indent, indent,
+      it, "{}{}{}: {} at a rate of {:.2f}/s\n", indent, indent,
       metric.outbound_measurement.unit,
       metric.outbound_measurement.num_elements,
       static_cast<double>(metric.outbound_measurement.num_elements)
@@ -155,8 +154,8 @@ auto format_metric(const metric& metric) {
             .count());
     if (metric.outbound_measurement.unit != operator_type_name<chunk_ptr>()) {
       it = fmt::format_to(
-        it, locale, "{}{}bytes: {:L} at a rate of {:.2f}/s (estimate)\n",
-        indent, indent, metric.outbound_measurement.num_approx_bytes,
+        it, "{}{}bytes: {} at a rate of {:.2f}/s (estimate)\n", indent, indent,
+        metric.outbound_measurement.num_approx_bytes,
         static_cast<double>(metric.outbound_measurement.num_approx_bytes)
           / std::chrono::duration_cast<
               std::chrono::duration<double, std::chrono::seconds::period>>(
@@ -164,7 +163,7 @@ auto format_metric(const metric& metric) {
               .count());
     }
     it = fmt::format_to(
-      it, locale, "{}{}batches: {:L} ({:.2f} {}/batch)\n", indent, indent,
+      it, "{}{}batches: {} ({:.2f} {}/batch)\n", indent, indent,
       metric.outbound_measurement.num_batches,
       static_cast<double>(metric.outbound_measurement.num_elements)
         / static_cast<double>(metric.outbound_measurement.num_batches),

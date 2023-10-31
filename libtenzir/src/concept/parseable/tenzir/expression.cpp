@@ -106,7 +106,7 @@ struct expander {
 /// 2. Apply type-specific expansion that results in a compound expression
 static expression expand(data x) {
   auto infer_type = [](const auto& d) -> type {
-    return type::infer(d);
+    return type::infer(d).value_or(type{});
   };
   auto lhs = type_extractor{caf::visit(infer_type, x)};
   auto rhs = operand{std::move(x)};

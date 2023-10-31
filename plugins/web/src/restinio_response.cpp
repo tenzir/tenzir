@@ -33,6 +33,8 @@ restinio_response::restinio_response(request_handle_t&& handle,
     response_(request_->create_response<restinio::user_controlled_output_t>()) {
   response_.append_header(restinio::http_field::content_type,
                           content_type_to_string(endpoint.content_type));
+  response_.header().status_code(
+    restinio::http_status_code_t{restinio::status_code::internal_server_error});
 }
 
 restinio_response::~restinio_response() {
@@ -46,6 +48,8 @@ void restinio_response::append(std::string body) {
 }
 
 void restinio_response::finish(caf::expected<std::string> body) {
+  response_.header().status_code(
+    restinio::http_status_code_t{restinio::status_code::ok});
   auto text = body ? *body : fmt::format("{}", body.error());
   body_size_ += text.size();
   response_.append_body(std::move(text));

@@ -12,6 +12,7 @@
 
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
+#include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/passthrough.hpp"
 #include "tenzir/die.hpp"
 #include "tenzir/table_slice_builder.hpp"
@@ -22,82 +23,6 @@
 namespace tenzir {
 
 namespace detail {
-
-template <class...>
-struct supported_casts;
-
-template <>
-struct supported_casts<null_type> {
-  // TODO: This is not accurate, as the null type can be cast to any other type.
-  // However, we leave this as is for now because this will probably be removed
-  // in the future.
-  using types = caf::detail::type_list<null_type>;
-};
-
-template <>
-struct supported_casts<bool_type> {
-  using types = caf::detail::type_list<bool_type, uint64_type, int64_type,
-                                       double_type, string_type>;
-};
-
-template <>
-struct supported_casts<int64_type> {
-  using types
-    = caf::detail::type_list<int64_type, double_type, uint64_type, bool_type,
-                             duration_type, enumeration_type, string_type>;
-};
-template <>
-struct supported_casts<uint64_type> {
-  using types
-    = caf::detail::type_list<uint64_type, double_type, int64_type, bool_type,
-                             duration_type, enumeration_type, string_type>;
-};
-template <>
-struct supported_casts<double_type> {
-  using types
-    = caf::detail::type_list<double_type, int64_type, uint64_type, bool_type,
-                             duration_type, enumeration_type, string_type>;
-};
-template <>
-struct supported_casts<duration_type> {
-  using types = caf::detail::type_list<duration_type, double_type, int64_type,
-                                       uint64_type, time_type, string_type>;
-};
-template <>
-struct supported_casts<time_type> {
-  using types = caf::detail::type_list<time_type, duration_type, string_type>;
-};
-template <>
-struct supported_casts<string_type> {
-  using types = concrete_types;
-};
-template <>
-struct supported_casts<ip_type> {
-  using types = caf::detail::type_list<ip_type, string_type>;
-};
-template <>
-struct supported_casts<subnet_type> {
-  using types = caf::detail::type_list<subnet_type, string_type>;
-};
-
-template <>
-struct supported_casts<enumeration_type> {
-  using types = caf::detail::type_list<enumeration_type, double_type,
-                                       int64_type, uint64_type, string_type>;
-};
-template <>
-struct supported_casts<list_type> {
-  using types = caf::detail::type_list<list_type, string_type>;
-};
-template <>
-struct supported_casts<map_type> {
-  using types = caf::detail::type_list<map_type, string_type>;
-};
-
-template <>
-struct supported_casts<record_type> {
-  using types = caf::detail::type_list<record_type, string_type>;
-};
 
 template <type_or_concrete_type FromType, type_or_concrete_type ToType>
 struct cast_helper {
@@ -262,6 +187,14 @@ struct cast_helper<Type, Type> {
                          const string_type&) noexcept
     -> caf::expected<type_to_data_t<Type>>
     requires(std::same_as<string_type, Type>)
+  {
+    return materialize(view);
+  }
+
+  static auto
+  cast_value(const blob_type&, view<blob> view, const blob_type&) noexcept
+    -> caf::expected<type_to_data_t<Type>>
+    requires(std::same_as<blob_type, Type>)
   {
     return materialize(view);
   }
@@ -1084,6 +1017,20 @@ struct cast_helper<string_type, ToType> {
                            fmt::format("unable to convert {} into a map: "
                                        "map_type is deprecated",
                                        in));
+  }
+
+  static auto from_str(std::string_view in, const blob_type&)
+    -> caf::expected<blob> {
+    // TODO: This conversion might be specific to JSON.
+    auto decoded = blob{};
+    decoded.resize(base64::decoded_size(in.size()));
+    auto [written, read] = base64::decode(decoded.data(), in.data(), in.size());
+    if (read != in.size()) {
+      return caf::make_error(
+        ec::convert_error, fmt::format("unable to convert {} into a blob", in));
+    }
+    decoded.resize(written);
+    return decoded;
   }
 
   static auto can_cast(const string_type&, const ToType&) noexcept

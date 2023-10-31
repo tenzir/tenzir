@@ -17,6 +17,7 @@
       - zeek.rdp.id.orig_h
       - zeek.sip.id.orig_h
       - zeek.smb.id.orig_h
+      - zeek.smb_mapping.id.orig_h
       - zeek.smtp.id.orig_h
       - zeek.snmp.id.orig_h
       - zeek.ssh.id.orig_h
@@ -43,6 +44,7 @@
       - zeek.rdp.id.resp_h
       - zeek.sip.id.resp_h
       - zeek.smb.id.resp_h
+      - zeek.smb_mapping.id.resp_h
       - zeek.smtp.id.resp_h
       - zeek.snmp.id.resp_h
       - zeek.ssh.id.resp_h
@@ -69,6 +71,7 @@
       - zeek.rdp.id.orig_p
       - zeek.sip.id.orig_p
       - zeek.smb.id.orig_p
+      - zeek.smb_mapping.id.orig_p
       - zeek.smtp.id.orig_p
       - zeek.snmp.id.orig_p
       - zeek.ssh.id.orig_p
@@ -95,6 +98,7 @@
       - zeek.rdp.id.resp_p
       - zeek.sip.id.resp_p
       - zeek.smb.id.resp_p
+      - zeek.smb_mapping.id.resp_p
       - zeek.smtp.id.resp_p
       - zeek.snmp.id.resp_p
       - zeek.ssh.id.resp_p

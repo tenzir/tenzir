@@ -14,6 +14,7 @@
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/concept/parseable/string.hpp>
+#include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/concept/parseable/tenzir/option_set.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/data.hpp>
@@ -63,16 +64,6 @@ auto offset_parser() {
   // auto stop = "3@" >> i64;
   // return beginning | end | stored | value | start | stop;
   return beginning | end | stored | value;
-}
-
-auto kvp_parser() {
-  using namespace parsers;
-  using namespace parser_literals;
-  using parsers::printable;
-  auto key = *(printable - '=');
-  auto value = *(printable - ',');
-  auto kvp = key >> '=' >> value;
-  return kvp % ',';
 }
 
 struct loader_args {
@@ -136,7 +127,7 @@ public:
     // Override configuration with arguments.
     if (args_.options) {
       std::vector<std::pair<std::string, std::string>> options;
-      if (!kvp_parser()(args_.options->inner, options)) {
+      if (!parsers::kvp_list(args_.options->inner, options)) {
         ctrl.diagnostics().emit(
           diagnostic::error("invalid list of key=value pairs")
             .primary(args_.options->source)

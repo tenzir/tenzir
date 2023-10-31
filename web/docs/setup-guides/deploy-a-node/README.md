@@ -69,15 +69,14 @@ distributions and unpack it into `/opt/tenzir`:
 tar xzf tenzir-static-x86_64-linux.tar.gz -C /
 ```
 
+[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-x86_64-linux.tar.gz
+
 We also offer prebuilt statically linked binaries for every Git commit to the
 `main` branch.
 
 ```bash
-version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-curl -fsSL "https://storage.googleapis.com/tenzir-dist-public/packages/main/tenzir-${version}-linux-static.tar.gz"
+curl -O https://storage.googleapis.com/tenzir-dist-public/packages/main/tarball/tenzir-static-main.gz
 ```
-
-[tenzir-tarball]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-x86_64-linux.tar.gz
 
 </TabItem>
 </Tabs>

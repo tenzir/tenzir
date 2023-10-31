@@ -29,7 +29,7 @@ convert_to_caf_compatible_list_arg(const std::string& comma_separated_list_arg) 
   const auto arg_name = std::string_view{begin, begin + separation_index};
   const auto arg
     = std::string_view(arg_start_it, comma_separated_list_arg.end());
-  const auto split_args = detail::split(arg, ",", "\\");
+  const auto split_args = detail::split_escaped(arg, ",", "\\");
   if (arg.starts_with('"') && arg.ends_with('"'))
     return fmt::format("{}{}[{}]", arg_name, arg_value_seperator,
                        fmt::join(split_args, "\",\""));

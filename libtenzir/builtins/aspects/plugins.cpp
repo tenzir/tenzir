@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/adaptive_table_slice_builder.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
 namespace tenzir::plugins::plugins {
 
@@ -25,25 +25,19 @@ public:
   }
 
   auto show(operator_control_plane&) const -> generator<table_slice> override {
-    auto builder = adaptive_table_slice_builder{};
+    auto builder = series_builder{};
     for (const auto& plugin : tenzir::plugins::get()) {
-      auto row = builder.push_row();
-      auto err = row.push_field("name").add(plugin->name());
-      TENZIR_ASSERT_CHEAP(not err);
+      auto row = builder.record();
+      row.field("name").data(plugin->name());
       auto version
         = std::string{plugin.version() ? plugin.version() : "bundled"};
-      err = row.push_field("version").add(version);
-      TENZIR_ASSERT_CHEAP(not err);
-      auto type = row.push_field("type");
-      err = row.push_field("kind").add(fmt::to_string(plugin.type()));
-      TENZIR_ASSERT_CHEAP(not err);
-      auto types_field = row.push_field("types");
-      auto types = types_field.push_list();
+      row.field("version").data(version);
+      row.field("kind").data(fmt::to_string(plugin.type()));
+      auto types = row.field("types").list();
 #define TENZIR_ADD_PLUGIN_TYPE(category)                                       \
   do {                                                                         \
     if (plugin.as<category##_plugin>()) {                                      \
-      err = types.add(#category);                                              \
-      TENZIR_ASSERT_CHEAP(not err);                                            \
+      types.data(#category);                                                   \
     }                                                                          \
   } while (false)
       TENZIR_ADD_PLUGIN_TYPE(analyzer);
@@ -68,10 +62,9 @@ public:
       TENZIR_ADD_PLUGIN_TYPE(writer);
 #undef TENZIR_ADD_PLUGIN_TYPE
     }
-    auto result = builder.finish();
-    auto renamed_schema
-      = type{"tenzir.plugin", caf::get<record_type>(result.schema())};
-    co_yield cast(std::move(result), renamed_schema);
+    for (auto&& slice : builder.finish_as_table_slice("tenzir.plugin")) {
+      co_yield std::move(slice);
+    }
   }
 };
 

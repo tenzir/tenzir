@@ -77,7 +77,7 @@ to_config_key(std::string_view key, std::string_view prefix) {
 
 caf::expected<caf::config_value> to_config_value(std::string_view value) {
   // Lists of strings can show up as `foo,bar,baz`.
-  auto xs = detail::split(value, ",", "\\");
+  auto xs = detail::split_escaped(value, ",", "\\");
   if (xs.size() == 1)
     return caf::config_value::parse(value); // no list
   std::vector<caf::config_value> result;
@@ -409,18 +409,17 @@ caf::error configuration::parse(int argc, char** argv) {
   // Do not use builtin config directories in "bare mode". We're checking this
   // here and putting directly into the actor_system_config because
   // the function config_dirs() relies on this already being there.
+  auto falsy_env_values = std::set<std::string_view>{"", "0", "false", "FALSE"};
   if (auto it
       = std::find(command_line.begin(), command_line.end(), "--bare-mode");
       it != command_line.end()) {
     caf::put(content, "tenzir.bare-mode", true);
   } else if (auto tenzir_bare_mode = detail::getenv("TENZIR_BARE_MODE")) {
-    if (*tenzir_bare_mode == "true") {
-      caf::put(content, "tenzir.bare-mode", true);
-    }
+    caf::put(content, "tenzir.bare-mode",
+             not falsy_env_values.contains(*tenzir_bare_mode));
   } else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE")) {
-    if (*vast_bare_mode == "true") {
-      caf::put(content, "tenzir.bare-mode", true);
-    }
+    caf::put(content, "tenzir.bare-mode",
+             not falsy_env_values.contains(*vast_bare_mode));
   }
   // Gather and parse all to-be-considered configuration files.
   std::vector<std::string> cli_configs;

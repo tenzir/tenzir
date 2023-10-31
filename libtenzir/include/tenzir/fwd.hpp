@@ -128,6 +128,7 @@ namespace tenzir {
 class active_store;
 class aggregation_function;
 class bitmap;
+class blob_type;
 class bool_type;
 class chunk;
 class command;
@@ -307,6 +308,9 @@ using time = caf::timestamp;
 /// Enumeration type.
 using enumeration = uint8_t;
 
+/// Blob type.
+using blob = std::basic_string<std::byte>;
+
 namespace fbs {
 
 struct Bitmap;
@@ -396,6 +400,7 @@ constexpr inline caf::type_id_t first_tenzir_type_id = 800;
 CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
 
   TENZIR_ADD_TYPE_ID((tenzir::bitmap))
+  TENZIR_ADD_TYPE_ID((tenzir::blob))
   TENZIR_ADD_TYPE_ID((tenzir::chunk_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::conjunction))
   TENZIR_ADD_TYPE_ID((tenzir::count_query_context))

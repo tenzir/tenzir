@@ -44,6 +44,7 @@ else ()
   add_subdirectory(aux)
   list(POP_FRONT CMAKE_MODULE_PATH)
 endif ()
+dependency_summary("restinio" restinio::restinio "Dependencies")
 target_link_libraries(web PRIVATE restinio::restinio)
 
 # Compile the web FlatBuffers schemas.

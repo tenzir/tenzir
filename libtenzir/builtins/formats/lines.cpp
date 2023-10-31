@@ -111,7 +111,7 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/docs/formats/{}", name())};
     auto args = parser_args{};
-    parser.add("-s,--skip-empty-lines", args.skip_empty);
+    parser.add("-s,--skip-empty", args.skip_empty);
     parser.parse(p);
     return std::make_unique<lines_parser>(std::move(args));
   }

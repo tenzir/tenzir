@@ -1,0 +1,60 @@
+// This is the offical proto file from the Velociraptor Python bindings at
+// https://github.com/Velocidex/pyvelociraptor, with small adaptations to fit
+// the Tenzir code base.
+
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package proto;
+
+message VQLRequest {
+    string Name = 2;
+    string VQL = 1;
+}
+
+message VQLEnv {
+    string key = 1;
+    string value = 2;
+}
+
+message VQLCollectorArgs {
+    repeated VQLEnv env = 3;
+    repeated VQLRequest Query = 2;
+    uint64 max_row = 4;
+    uint64 max_wait = 6;
+    float ops_per_second = 24;
+    string org_id = 35;
+}
+
+message VQLTypeMap {
+    string column = 1;
+    string type = 2;
+}
+
+message VQLResponse {
+    string Response = 1;
+    repeated string Columns = 2;
+    repeated VQLTypeMap types = 8;
+    uint64 query_id = 5;
+    uint64 part = 6;
+    VQLRequest Query = 3;
+    uint64 timestamp = 4;
+    uint64 total_rows = 7;
+    string log = 9;
+}
+
+message VFSFileBuffer {
+    string client_id = 1;
+
+    uint64 offset = 3;
+    uint32 length = 4;
+    bytes data = 5;
+    repeated string components = 6;
+}
+
+service API {
+   rpc Query(VQLCollectorArgs) returns (stream VQLResponse) {}
+   rpc VFSGetBuffer(VFSFileBuffer) returns (VFSFileBuffer) {}
+   rpc WriteEvent(VQLResponse) returns (google.protobuf.Empty) {}
+}

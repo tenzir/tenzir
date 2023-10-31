@@ -652,23 +652,16 @@ struct exec_node_state : inbound_state_mixin<Input>,
     if (paused or run_scheduled or not instance) {
       return;
     }
-    // We *always* use the delayed variant here instead of scheduling
-    // immediately as that has two distinct advantages:
-    // - It allows for using a weak actor pointer on the click, i.e., it does
-    //   not prohibit shutdown.
-    // - It does not get run immediately, which would conflict with operators
-    //   using `ctrl.self().request(...).await(...)`.
-    auto action = [this] {
-      auto time_scheduled_guard
-        = make_timer_guard(metrics->values.time_scheduled);
-      run_scheduled = false;
-      run();
-    };
     run_scheduled = true;
-    self->clock().schedule(self->clock().now(),
-                           caf::make_action(std::move(action),
-                                            caf::action::state::waiting),
-                           caf::weak_actor_ptr{self->ctrl()});
+    self->send(self, atom::internal_v, atom::run_v);
+  }
+
+  auto internal_run() -> caf::result<void> {
+    auto time_scheduled_guard
+      = make_timer_guard(metrics->values.time_scheduled);
+    run_scheduled = false;
+    run();
+    return {};
   }
 
   auto deliver_batches(std::chrono::steady_clock::time_point now, bool force)
@@ -777,7 +770,6 @@ struct exec_node_state : inbound_state_mixin<Input>,
         if (this->current_demand or this->outbound_buffer_size > 0) {
           TENZIR_DEBUG("{} forcibly delivers batches", op->name());
           deliver_batches(now, true);
-          schedule_run();
           return;
         }
         TENZIR_ASSERT(not this->current_demand);
@@ -920,6 +912,9 @@ auto exec_node(
       metrics->emit();
     });
   return {
+    [self](atom::internal, atom::run) -> caf::result<void> {
+      return self->state.internal_run();
+    },
     [self](atom::start,
            std::vector<caf::actor>& previous) -> caf::result<void> {
       return self->state.start(std::move(previous));

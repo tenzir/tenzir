@@ -47,10 +47,14 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[librdkafka](https://github.com/confluentinc/librdkafka)||Required for building the `kafka` plugin.|
 ||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
 ||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
+||[Protocol Buffers](https://protobuf.dev)||>= 1.4.1|Required for building the `velociraptor` plugin.|
+||[gRPC](https://grpci.io)||>= 1.51|Required for building the `velociraptor` plugin.|
 ||[rabbitmq-c](https://github.com/alanxz/rabbitmq-c)||Required for building the `rabbitmq` plugin.|
 ||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|
-||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for Tenzir.|
+||[Pandoc](https://github.com/jgm/pandoc)||Required to build the manpage for Tenzir.|
+||[bash](https://www.gnu.org/software/bash/)|>= 4.0.0|Required to run the functional tests.|
+||[bats](https://bats-core.readthedocs.io)|>= 1.8.0|Required to run the functional tests.|
 
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
@@ -127,6 +131,12 @@ Run component-level unit tests:
 
 ```bash
 ctest --test-dir build
+```
+
+Run the "black box" functional tests:
+
+```bash
+cmake --build build --target functional-test
 ```
 
 Run end-to-end integration tests:

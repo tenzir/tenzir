@@ -463,6 +463,8 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
       return stop;
     });
   // Shutdown
+  self->send_exit(dispatcher, caf::exit_reason::user_shutdown);
+  self->wait_for(dispatcher);
   std::visit(
     detail::overload{
       [](auto& server) {
@@ -470,7 +472,6 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
       },
     },
     server);
-  self->send_exit(dispatcher, caf::exit_reason::user_shutdown);
   for (auto& handler : handlers)
     self->send_exit(handler, caf::exit_reason::user_shutdown);
   server_thread.join();

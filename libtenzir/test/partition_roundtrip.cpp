@@ -319,7 +319,9 @@ TEST(full partition roundtrip) {
   // For the query `x == 0`, we expect one result.
   test_expression(x_equals_zero, 1);
   // For the query `x == 1`, we expect zero results.
-  test_expression(x_equals_one, 0);
+  // This test is disabld as of Tenzir v4.3, for which this yields one result
+  // because the dense indexes were disabled.
+  // test_expression(x_equals_one, 0);
   // For the query `foo == 1`, we expect zero results.
   test_expression(foo_equals_one, 0);
   // For the query `#schema == "x"`, we expect one result.

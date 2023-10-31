@@ -170,6 +170,10 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
             return caf::make_error(ec::invalid_argument, "expected string");
           return param_data;
         },
+        [&](const blob_type&) -> caf::expected<data> {
+          return caf::make_error(ec::invalid_argument,
+                                 "blob parameters are not supported");
+        },
         [&](const bool_type&) -> caf::expected<data> {
           if (!is_string)
             return caf::make_error(ec::invalid_argument, "expected bool");
@@ -185,13 +189,19 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
             return caf::make_error(ec::invalid_argument, "expected a list");
           auto result = tenzir::list{};
           for (auto const& x : *list) {
-            if (!caf::holds_alternative<std::string>(x))
-              return caf::make_error(ec::invalid_argument, "expected a string");
+            if (!caf::holds_alternative<std::string>(x)
+                and !caf::holds_alternative<tenzir::record>(x))
+              return caf::make_error(ec::invalid_argument,
+                                     "expected a string or record");
             auto const& x_as_string = caf::get<std::string>(x);
             auto parsed = caf::visit(
               detail::overload{
                 [&](const string_type&) -> caf::expected<data> {
                   return x_as_string;
+                },
+                [&](const blob_type&) -> caf::expected<data> {
+                  return caf::make_error(ec::invalid_argument,
+                                         "blob parameters are not supported");
                 },
                 [&]<basic_type Type>(const Type&) -> caf::expected<data> {
                   using data_t = type_to_data_t<Type>;
@@ -199,6 +209,16 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
                   if (!result)
                     return std::move(result.error());
                   return std::move(*result);
+                },
+                [&](const record_type&) -> caf::expected<data> {
+                  // TODO: This currently works with records containing only
+                  // strings, but is untested with other value types.
+                  const auto* result = caf::get_if<record>(&x);
+                  if (!result)
+                    return caf::make_error(ec::invalid_argument,
+                                           fmt::format("invalid record "
+                                                       "syntax"));
+                  return *result;
                 },
                 [](const auto&) -> caf::expected<data> {
                   return caf::make_error(ec::invalid_argument,

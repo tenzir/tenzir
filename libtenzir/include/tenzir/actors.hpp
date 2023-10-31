@@ -402,6 +402,8 @@ using exec_node_sink_actor = typed_actor_fwd<
 
 /// The interface of a EXEC NODE actor.
 using exec_node_actor = typed_actor_fwd<
+  // Resume the internal event loop.
+  auto(atom::internal, atom::run)->caf::result<void>,
   // Start an execution node. Returns after the operator has yielded for the
   // first time.
   auto(atom::start, std::vector<caf::actor> previous)->caf::result<void>,

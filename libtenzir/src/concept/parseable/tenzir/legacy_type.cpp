@@ -52,6 +52,7 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     | "duration"_p  ->* type_factory<legacy_duration_type>
     | "time"_p      ->* type_factory<legacy_time_type>
     | "string"_p    ->* type_factory<legacy_string_type>
+    | "blob"_p      ->* []() { return legacy_type{legacy_string_type{}.name("blob")}; }
     // We removed support for pattern types with Tenzir v3.0.
     // | "pattern"_p   ->* type_factory<legacy_pattern_type>
     | "ip"_p        ->* type_factory<legacy_address_type>

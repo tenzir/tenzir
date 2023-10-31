@@ -12,7 +12,21 @@
     "dvchost": "10.1.1.40",
     "msg": "log server connection established",
     "deviceFacility": "Logging System",
-    "rt": "Jan 17 2020 08:52:10"
+    "rt": "Jan 17 2020 08:52:10",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -29,7 +43,21 @@
     "dvchost": "10.1.1.40",
     "msg": "Communication error: No route to host (-3, 5, 0)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -44,17 +72,23 @@
     "deviceExternalId": "Master FW node 1",
     "dvc": "10.1.1.40",
     "dvchost": "10.1.1.40",
+    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:52:09",
     "src": "10.37.205.252",
     "dst": "10.1.1.40",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Allow",
-    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:52:09",
     "app": "Dest. Unreachable (Host Unreachable)",
     "cs1Label": "RuleID",
-    "cs1": 2097157.1
+    "cs1": 2097157.1,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -69,17 +103,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "172.16.1.1",
-    "dst": "255.255.255.255",
-    "spt": 68,
-    "dpt": 67,
-    "proto": 17,
-    "deviceOutboundInterface": 255,
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:21",
+    "src": "172.16.1.1",
+    "dst": "255.255.255.255",
+    "proto": 17,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "BOOTPS (UDP)",
     "cs1Label": "RuleID",
-    "cs1": 605.0
+    "cs1": 605.0,
+    "spt": 68,
+    "dpt": 67,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -94,16 +134,23 @@
     "deviceExternalId": "Firewall-1 node 1",
     "dvc": "10.1.1.1",
     "dvchost": "10.1.1.1",
+    "msg": null,
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:56:23",
     "src": "172.16.1.1",
     "dst": "192.168.1.1",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Refuse",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:56:23",
     "app": "Echo Request (No Code)",
     "cs1Label": "RuleID",
-    "cs1": 601.0
+    "cs1": 601.0,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -118,13 +165,21 @@
     "deviceExternalId": "Firewall-6 node 1",
     "dvc": "10.1.1.6",
     "dvchost": "10.1.1.6",
-    "proto": 6,
-    "deviceOutboundInterface": 255,
-    "destinationServiceName": "YouTube",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:20",
+    "src": null,
+    "dst": null,
+    "proto": 6,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "TCP",
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": "YouTube",
+    "suser": "alice",
     "in": 32526,
     "out": 27366
   }
@@ -141,10 +196,23 @@
     "deviceExternalId": "Firewall-3 node 1",
     "dvc": "10.1.1.3",
     "dvchost": "10.1.1.3",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:33"
+    "rt": "Jan 17 2020 08:56:33",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -159,10 +227,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:31"
+    "rt": "Jan 17 2020 08:56:31",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -177,10 +258,23 @@
     "deviceExternalId": "Firewall-8 node 1",
     "dvc": "10.1.1.8",
     "dvchost": "10.1.1.8",
-    "src": "172.16.2.1",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:26"
+    "rt": "Jan 17 2020 08:56:26",
+    "src": "172.16.2.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "alice",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -197,7 +291,21 @@
     "dvchost": "10.1.1.40",
     "msg": "TLS: Couldn't establish TLS connection (11, N/A)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -214,7 +322,21 @@
     "dvchost": "10.1.1.40",
     "msg": "log server connection established",
     "deviceFacility": "Logging System",
-    "rt": "Jan 17 2020 08:52:10"
+    "rt": "Jan 17 2020 08:52:10",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -231,7 +353,21 @@
     "dvchost": "10.1.1.40",
     "msg": "Communication error: No route to host (-3, 5, 0)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -246,17 +382,23 @@
     "deviceExternalId": "Master FW node 1",
     "dvc": "10.1.1.40",
     "dvchost": "10.1.1.40",
+    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:52:09",
     "src": "10.37.205.252",
     "dst": "10.1.1.40",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Allow",
-    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:52:09",
     "app": "Dest. Unreachable (Host Unreachable)",
     "cs1Label": "RuleID",
-    "cs1": 2097157.1
+    "cs1": 2097157.1,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -271,17 +413,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "172.16.1.1",
-    "dst": "255.255.255.255",
-    "spt": 68,
-    "dpt": 67,
-    "proto": 17,
-    "deviceOutboundInterface": 255,
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:21",
+    "src": "172.16.1.1",
+    "dst": "255.255.255.255",
+    "proto": 17,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "BOOTPS (UDP)",
     "cs1Label": "RuleID",
-    "cs1": 605.0
+    "cs1": 605.0,
+    "spt": 68,
+    "dpt": 67,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -296,16 +444,23 @@
     "deviceExternalId": "Firewall-1 node 1",
     "dvc": "10.1.1.1",
     "dvchost": "10.1.1.1",
+    "msg": null,
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:56:23",
     "src": "172.16.1.1",
     "dst": "192.168.1.1",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Refuse",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:56:23",
     "app": "Echo Request (No Code)",
     "cs1Label": "RuleID",
-    "cs1": 601.0
+    "cs1": 601.0,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -320,13 +475,21 @@
     "deviceExternalId": "Firewall-6 node 1",
     "dvc": "10.1.1.6",
     "dvchost": "10.1.1.6",
-    "proto": 6,
-    "deviceOutboundInterface": 255,
-    "destinationServiceName": "YouTube",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:20",
+    "src": null,
+    "dst": null,
+    "proto": 6,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "TCP",
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": "YouTube",
+    "suser": "alice",
     "in": 32526,
     "out": 27366
   }
@@ -343,10 +506,23 @@
     "deviceExternalId": "Firewall-3 node 1",
     "dvc": "10.1.1.3",
     "dvchost": "10.1.1.3",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:33"
+    "rt": "Jan 17 2020 08:56:33",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -361,10 +537,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:31"
+    "rt": "Jan 17 2020 08:56:31",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -379,10 +568,23 @@
     "deviceExternalId": "Firewall-8 node 1",
     "dvc": "10.1.1.8",
     "dvchost": "10.1.1.8",
-    "src": "172.16.2.1",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:26"
+    "rt": "Jan 17 2020 08:56:26",
+    "src": "172.16.2.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "alice",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -399,7 +601,21 @@
     "dvchost": "10.1.1.40",
     "msg": "TLS: Couldn't establish TLS connection (11, N/A)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -416,7 +632,21 @@
     "dvchost": "10.1.1.40",
     "msg": "log server connection established",
     "deviceFacility": "Logging System",
-    "rt": "Jan 17 2020 08:52:10"
+    "rt": "Jan 17 2020 08:52:10",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -433,7 +663,21 @@
     "dvchost": "10.1.1.40",
     "msg": "Communication error: No route to host (-3, 5, 0)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -448,17 +692,23 @@
     "deviceExternalId": "Master FW node 1",
     "dvc": "10.1.1.40",
     "dvchost": "10.1.1.40",
+    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:52:09",
     "src": "10.37.205.252",
     "dst": "10.1.1.40",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Allow",
-    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:52:09",
     "app": "Dest. Unreachable (Host Unreachable)",
     "cs1Label": "RuleID",
-    "cs1": 2097157.1
+    "cs1": 2097157.1,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -473,17 +723,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "172.16.1.1",
-    "dst": "255.255.255.255",
-    "spt": 68,
-    "dpt": 67,
-    "proto": 17,
-    "deviceOutboundInterface": 255,
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:21",
+    "src": "172.16.1.1",
+    "dst": "255.255.255.255",
+    "proto": 17,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "BOOTPS (UDP)",
     "cs1Label": "RuleID",
-    "cs1": 605.0
+    "cs1": 605.0,
+    "spt": 68,
+    "dpt": 67,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -498,16 +754,23 @@
     "deviceExternalId": "Firewall-1 node 1",
     "dvc": "10.1.1.1",
     "dvchost": "10.1.1.1",
+    "msg": null,
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:56:23",
     "src": "172.16.1.1",
     "dst": "192.168.1.1",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Refuse",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:56:23",
     "app": "Echo Request (No Code)",
     "cs1Label": "RuleID",
-    "cs1": 601.0
+    "cs1": 601.0,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -522,13 +785,21 @@
     "deviceExternalId": "Firewall-6 node 1",
     "dvc": "10.1.1.6",
     "dvchost": "10.1.1.6",
-    "proto": 6,
-    "deviceOutboundInterface": 255,
-    "destinationServiceName": "YouTube",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:20",
+    "src": null,
+    "dst": null,
+    "proto": 6,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "TCP",
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": "YouTube",
+    "suser": "alice",
     "in": 32526,
     "out": 27366
   }
@@ -545,10 +816,23 @@
     "deviceExternalId": "Firewall-3 node 1",
     "dvc": "10.1.1.3",
     "dvchost": "10.1.1.3",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:33"
+    "rt": "Jan 17 2020 08:56:33",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -563,10 +847,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:31"
+    "rt": "Jan 17 2020 08:56:31",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -581,10 +878,23 @@
     "deviceExternalId": "Firewall-8 node 1",
     "dvc": "10.1.1.8",
     "dvchost": "10.1.1.8",
-    "src": "172.16.2.1",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:26"
+    "rt": "Jan 17 2020 08:56:26",
+    "src": "172.16.2.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "alice",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -601,7 +911,21 @@
     "dvchost": "10.1.1.40",
     "msg": "TLS: Couldn't establish TLS connection (11, N/A)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -618,7 +942,21 @@
     "dvchost": "10.1.1.40",
     "msg": "log server connection established",
     "deviceFacility": "Logging System",
-    "rt": "Jan 17 2020 08:52:10"
+    "rt": "Jan 17 2020 08:52:10",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -635,7 +973,21 @@
     "dvchost": "10.1.1.40",
     "msg": "Communication error: No route to host (-3, 5, 0)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -650,17 +1002,23 @@
     "deviceExternalId": "Master FW node 1",
     "dvc": "10.1.1.40",
     "dvchost": "10.1.1.40",
+    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:52:09",
     "src": "10.37.205.252",
     "dst": "10.1.1.40",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Allow",
-    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:52:09",
     "app": "Dest. Unreachable (Host Unreachable)",
     "cs1Label": "RuleID",
-    "cs1": 2097157.1
+    "cs1": 2097157.1,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -675,17 +1033,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "172.16.1.1",
-    "dst": "255.255.255.255",
-    "spt": 68,
-    "dpt": 67,
-    "proto": 17,
-    "deviceOutboundInterface": 255,
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:21",
+    "src": "172.16.1.1",
+    "dst": "255.255.255.255",
+    "proto": 17,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "BOOTPS (UDP)",
     "cs1Label": "RuleID",
-    "cs1": 605.0
+    "cs1": 605.0,
+    "spt": 68,
+    "dpt": 67,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -700,16 +1064,23 @@
     "deviceExternalId": "Firewall-1 node 1",
     "dvc": "10.1.1.1",
     "dvchost": "10.1.1.1",
+    "msg": null,
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:56:23",
     "src": "172.16.1.1",
     "dst": "192.168.1.1",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Refuse",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:56:23",
     "app": "Echo Request (No Code)",
     "cs1Label": "RuleID",
-    "cs1": 601.0
+    "cs1": 601.0,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -724,13 +1095,21 @@
     "deviceExternalId": "Firewall-6 node 1",
     "dvc": "10.1.1.6",
     "dvchost": "10.1.1.6",
-    "proto": 6,
-    "deviceOutboundInterface": 255,
-    "destinationServiceName": "YouTube",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:20",
+    "src": null,
+    "dst": null,
+    "proto": 6,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "TCP",
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": "YouTube",
+    "suser": "alice",
     "in": 32526,
     "out": 27366
   }
@@ -747,10 +1126,23 @@
     "deviceExternalId": "Firewall-3 node 1",
     "dvc": "10.1.1.3",
     "dvchost": "10.1.1.3",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:33"
+    "rt": "Jan 17 2020 08:56:33",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -765,10 +1157,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:31"
+    "rt": "Jan 17 2020 08:56:31",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -783,10 +1188,23 @@
     "deviceExternalId": "Firewall-8 node 1",
     "dvc": "10.1.1.8",
     "dvchost": "10.1.1.8",
-    "src": "172.16.2.1",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:26"
+    "rt": "Jan 17 2020 08:56:26",
+    "src": "172.16.2.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "alice",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -803,7 +1221,21 @@
     "dvchost": "10.1.1.40",
     "msg": "TLS: Couldn't establish TLS connection (11, N/A)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -820,7 +1252,21 @@
     "dvchost": "10.1.1.40",
     "msg": "log server connection established",
     "deviceFacility": "Logging System",
-    "rt": "Jan 17 2020 08:52:10"
+    "rt": "Jan 17 2020 08:52:10",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -837,7 +1283,21 @@
     "dvchost": "10.1.1.40",
     "msg": "Communication error: No route to host (-3, 5, 0)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -852,17 +1312,23 @@
     "deviceExternalId": "Master FW node 1",
     "dvc": "10.1.1.40",
     "dvchost": "10.1.1.40",
+    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:52:09",
     "src": "10.37.205.252",
     "dst": "10.1.1.40",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Allow",
-    "msg": "Referred connection: 10.1.1.40 -> 10.37.133.35 frag=0x4000 TCP 47413->3020",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:52:09",
     "app": "Dest. Unreachable (Host Unreachable)",
     "cs1Label": "RuleID",
-    "cs1": 2097157.1
+    "cs1": 2097157.1,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -877,17 +1343,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "172.16.1.1",
-    "dst": "255.255.255.255",
-    "spt": 68,
-    "dpt": 67,
-    "proto": 17,
-    "deviceOutboundInterface": 255,
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:21",
+    "src": "172.16.1.1",
+    "dst": "255.255.255.255",
+    "proto": 17,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "BOOTPS (UDP)",
     "cs1Label": "RuleID",
-    "cs1": 605.0
+    "cs1": 605.0,
+    "spt": 68,
+    "dpt": 67,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -902,16 +1374,23 @@
     "deviceExternalId": "Firewall-1 node 1",
     "dvc": "10.1.1.1",
     "dvchost": "10.1.1.1",
+    "msg": null,
+    "deviceFacility": "Packet Filtering",
+    "rt": "Jan 17 2020 08:56:23",
     "src": "172.16.1.1",
     "dst": "192.168.1.1",
     "proto": 1,
     "deviceOutboundInterface": 255,
     "act": "Refuse",
-    "deviceFacility": "Packet Filtering",
-    "rt": "Jan 17 2020 08:56:23",
     "app": "Echo Request (No Code)",
     "cs1Label": "RuleID",
-    "cs1": 601.0
+    "cs1": 601.0,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }
 {
@@ -926,13 +1405,21 @@
     "deviceExternalId": "Firewall-6 node 1",
     "dvc": "10.1.1.6",
     "dvchost": "10.1.1.6",
-    "proto": 6,
-    "deviceOutboundInterface": 255,
-    "destinationServiceName": "YouTube",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Packet Filtering",
     "rt": "Jan 17 2020 08:56:20",
+    "src": null,
+    "dst": null,
+    "proto": 6,
+    "deviceOutboundInterface": 255,
+    "act": null,
     "app": "TCP",
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": "YouTube",
+    "suser": "alice",
     "in": 32526,
     "out": 27366
   }
@@ -949,10 +1436,23 @@
     "deviceExternalId": "Firewall-3 node 1",
     "dvc": "10.1.1.3",
     "dvchost": "10.1.1.3",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:33"
+    "rt": "Jan 17 2020 08:56:33",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -967,10 +1467,23 @@
     "deviceExternalId": "Firewall-10 node 1",
     "dvc": "10.1.1.10",
     "dvchost": "10.1.1.10",
-    "src": "192.168.1.1",
-    "suser": "bob",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:31"
+    "rt": "Jan 17 2020 08:56:31",
+    "src": "192.168.1.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "bob",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -985,10 +1498,23 @@
     "deviceExternalId": "Firewall-8 node 1",
     "dvc": "10.1.1.8",
     "dvchost": "10.1.1.8",
-    "src": "172.16.2.1",
-    "suser": "alice",
+    "msg": null,
     "deviceFacility": "Endpoint Context Agent",
-    "rt": "Jan 17 2020 08:56:26"
+    "rt": "Jan 17 2020 08:56:26",
+    "src": "172.16.2.1",
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": "alice",
+    "in": null,
+    "out": null
   }
 }
 {
@@ -1005,6 +1531,20 @@
     "dvchost": "10.1.1.40",
     "msg": "TLS: Couldn't establish TLS connection (11, N/A)",
     "deviceFacility": "Management",
-    "rt": "Jan 17 2020 08:52:09"
+    "rt": "Jan 17 2020 08:52:09",
+    "src": null,
+    "dst": null,
+    "proto": null,
+    "deviceOutboundInterface": null,
+    "act": null,
+    "app": null,
+    "cs1Label": null,
+    "cs1": null,
+    "spt": null,
+    "dpt": null,
+    "destinationServiceName": null,
+    "suser": null,
+    "in": null,
+    "out": null
   }
 }

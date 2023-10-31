@@ -76,10 +76,10 @@ type suricata.alert = suricata.component.common + record {
     }
   },
   flow: suricata.component.flow,
-  payload: string,
+  payload: blob,
   payload_printable: string,
   stream: uint64,
-  packet: string,
+  packet: blob,
   packet_info: record {
     linktype: uint64
   }

@@ -89,12 +89,15 @@ RUN apt-get update && \
       gnupg2 \
       libasan6 \
       libboost-filesystem++1.81 \
+      libboost-url1.81 \
       libc++1 \
       libc++abi1 \
       libflatbuffers2 \
       libfmt9 \
+      libgrpc++1.51 \
       libhttp-parser2.9 \
       libpcap0.8 \
+      libprotobuf32 \
       librabbitmq4 \
       librdkafka++1 \
       libre2-9 \
@@ -112,6 +115,9 @@ RUN apt-get update && \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
     apt-get -y --no-install-recommends install libarrow1300 libparquet1300 && \
+    wget "https://storage.googleapis.com/tenzir-public-data/fluent-bit-packages/debian/bookworm/fluent-bit_2.1.10_amd64.deb" && \
+    apt-get -y --no-install-recommends install ./fluent-bit_2.1.10_amd64.deb && \
+    rm ./fluent-bit_2.1.10_amd64.deb && \
     rm -rf /var/lib/apt/lists/*
 
 USER tenzir:tenzir

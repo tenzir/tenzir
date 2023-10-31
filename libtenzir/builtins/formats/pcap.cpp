@@ -366,38 +366,48 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
   if (begin == xs.end() || *begin == std::nullopt)
     return std::nullopt;
   for (const auto& [key, value] : **begin) {
+    // TODO: Make this more robust, and give a helpful error message if the
+    // types are not as expected. This also applies to `to_packet_record`.
     if (key == "magic_number") {
-      result.magic_number
-        = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      auto magic_number = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(magic_number);
+      result.magic_number = detail::narrow_cast<uint32_t>(*magic_number);
       continue;
     }
     if (key == "major_version") {
-      result.major_version
-        = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
+      auto major_version = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(major_version);
+      result.major_version = detail::narrow_cast<uint16_t>(*major_version);
       continue;
     }
     if (key == "minor_version") {
-      result.minor_version
-        = detail::narrow_cast<uint16_t>(caf::get<uint64_t>(value));
+      auto minor_version = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(minor_version);
+      result.minor_version = detail::narrow_cast<uint16_t>(*minor_version);
       continue;
     }
     if (key == "reserved1") {
-      result.reserved1
-        = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      auto reserved1 = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(reserved1);
+      result.reserved1 = detail::narrow_cast<uint32_t>(*reserved1);
       continue;
     }
     if (key == "reserved2") {
-      result.reserved2
-        = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      auto reserved2 = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(reserved2);
+      result.reserved2 = detail::narrow_cast<uint32_t>(*reserved2);
       continue;
     }
     if (key == "snaplen") {
-      result.snaplen = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      auto snaplen = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(snaplen);
+      result.snaplen = detail::narrow_cast<uint32_t>(*snaplen);
       continue;
     }
     if (key == "linktype") {
-      result.linktype
-        = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
+      auto linktype = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(linktype);
+      result.linktype = detail::narrow_cast<uint32_t>(*linktype);
       continue;
     }
     TENZIR_DEBUG("ignoring unknown PCAP file header key '{}' with value {}",
@@ -425,33 +435,48 @@ auto to_packet_record(auto row) -> std::pair<packet_record, uint32_t> {
   auto pkt = packet_record{};
   auto linktype = uint32_t{0};
   auto timestamp = time{};
-  auto pkt_data = std::string_view{};
   // NB: the API for record_view feels iffy. It should expose a field-based
   // access method, as opposed to just key-value pairs.
   for (const auto& [key, value] : row) {
-    if (key == "linktype")
-      linktype = detail::narrow_cast<uint32_t>(caf::get<uint64_t>(value));
-    else if (key == "timestamp")
-      timestamp = caf::get<time>(value);
-    else if (key == "captured_packet_length")
-      pkt.header.captured_packet_length = caf::get<uint64_t>(value);
-    else if (key == "original_packet_length")
-      pkt.header.original_packet_length = caf::get<uint64_t>(value);
-    else if (key == "data")
-      pkt_data = caf::get<std::string_view>(value);
-    else
+    if (key == "linktype") {
+      auto linktype_ptr = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(linktype_ptr);
+      linktype = detail::narrow_cast<uint32_t>(*linktype_ptr);
+    } else if (key == "timestamp") {
+      auto timestamp_ptr = caf::get_if<time>(&value);
+      TENZIR_ASSERT_CHEAP(timestamp_ptr);
+      timestamp = *timestamp_ptr;
+    } else if (key == "captured_packet_length") {
+      auto captured_packet_length = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(captured_packet_length);
+      pkt.header.captured_packet_length = *captured_packet_length;
+    } else if (key == "original_packet_length") {
+      auto original_packet_length = caf::get_if<uint64_t>(&value);
+      TENZIR_ASSERT_CHEAP(original_packet_length);
+      pkt.header.original_packet_length = *original_packet_length;
+    } else if (key == "data") {
+      if (auto str_data = caf::get_if<view<std::string>>(&value)) {
+        // TODO: Remove this fallback eventually.
+        pkt.data = std::span<const std::byte>{
+          reinterpret_cast<const std::byte*>(str_data->data()),
+          str_data->size()};
+      } else {
+        auto data = caf::get_if<view<blob>>(&value);
+        TENZIR_ASSERT_CHEAP(data);
+        pkt.data = *data;
+      }
+    } else {
       TENZIR_WARN("got invalid PCAP header field ''", key);
+    }
   }
   // Split the timestamp in two pieces.
   auto ns = timestamp.time_since_epoch();
   auto secs = std::chrono::duration_cast<std::chrono::seconds>(ns);
   auto fraction = ns - secs;
   auto timestamp_fraction = detail::narrow_cast<uint32_t>(fraction.count());
-  pkt.header.timestamp = detail::narrow_cast<uint32_t>(secs.count()),
+  pkt.header.timestamp = detail::narrow_cast<uint32_t>(secs.count());
   pkt.header.timestamp_fraction = timestamp_fraction;
   // Translate the string to raw packet data.
-  pkt.data = std::span<const std::byte>{
-    reinterpret_cast<const std::byte*>(pkt_data.data()), pkt_data.size()};
   return {pkt, linktype};
 }
 

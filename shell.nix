@@ -7,9 +7,13 @@ in
       hardeningDisable = ["fortify"] ++ lib.optional isStatic "pic";
       inputsFrom = [pkgs.tenzir-de];
       nativeBuildInputs =
-        [pkgs.ccache pkgs.speeve pkgs.clang-tools_16]
-        ++ pkgs.tenzir-integration-test-deps
-        ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
+        [
+          pkgs.ccache
+          pkgs.speeve
+          pkgs.clang-tools_16
+        ] ++ pkgs.tenzir-functional-test-deps
+          ++ pkgs.tenzir-integration-test-deps
+          ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
           # Make clang available as alternative compiler when it isn't the default.
           pkgs.clang_16
           # Bintools come with a wrapped lld for faster linking.

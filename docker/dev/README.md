@@ -9,7 +9,7 @@ install the Poetry dependencies locally.
 
 The build context should be set to the root of the Tenzir repository. This script
 copies the Tenzir Python bindings (`python/`) and test data
-(`tenzir/integration/data`) to the `/tenzir` directory of the container, maintaining
+(`tenzir/functional-test/data`) to the `/tenzir` directory of the container, maintaining
 their relative structure identical.
 
 Build arguments:

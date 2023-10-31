@@ -187,30 +187,6 @@ tests:
       - command: status catalog
         transformation: jq -ec '.catalog."num-partitions"'
 
-  Server Zeek conn log:
-    tags: [server, import-export, zeek]
-    fixture: ServerTester
-    steps:
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: export ascii 'where resp_h == 192.168.1.104'
-      # import some more to make sure accounting data is in the system.
-      - command: import -b --batch-size=10 zeek
-        input: data/zeek/conn.log.gz
-      - command: import -b --batch-size=1000 zeek
-        input: data/zeek/conn.log.gz
-      - command: import -b --batch-size=100000 zeek
-        input: data/zeek/conn.log.gz
-      - command: import -b --batch-size=1 -n 242 zeek
-        input: data/zeek/conn.log.gz
-      - command: flush
-      - command: status --detailed
-        transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
-      - command: status --detailed
-        transformation: jq -ec 'del(.version) | del(.system."swap-space-usage") | del(.index.patitions.cached) | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
-      - command: status --detailed index importer
-        transformation: jq -ec 'del(.index.patitions.cached) | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
-
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
@@ -329,14 +305,6 @@ tests:
       - command: import -b suricata
         input: data/pcap/suricata/eve.json.gz
       - command: count "net.src.ip == 192.168.168.100"
-      - command: count "net.connection == <192.168.168.100, _, 72.247.178.18, _, _>"
-      # We omit the whitespace after the colon on purpose, otherwise pyyaml
-      # thinks this is a key-value pair.
-      - command: count 'net.connection == <net.src.ip:192.168.168.100, net.dst.port:80>'
-      - command: count 'net.connection != <net.src.ip:192.168.168.100, net.dst.port:80>'
-      - command: count "net.connection == <_, _, _, _, _>"
-      - command: count "net.connection == <_, _, _, 80, _>"
-      - command: count "net.connection != <_, _, _, 80, _>"
 
   Arrow Full Data Model:
     tags: [export, arrow]
@@ -710,6 +678,12 @@ tests:
     steps:
       - command: exec 'from file @./data/json/record-in-list.json read json | write json'
 
+  Read incomplete JSON object:
+    tags: [json]
+    steps:
+      - command: exec 'from file @./data/json/incomplete-object.json'
+        expected_result: error
+
   Type mismatch in a column:
     tags: [pipelines]
     steps:
@@ -766,9 +740,9 @@ tests:
     steps:
       - command: 'exec "read cef | put fingerprint = #schema_id | write json"'
         input: data/cef/forcepoint.log
-      - command: 'exec "read cef | where #schema_id == \"212b9111d2ee64a0\" | write json"'
+      - command: 'exec "read cef | where #schema_id == \"6aeddcaa9adee9b9\" | write json"'
         input: data/cef/forcepoint.log
-      - command: 'exec "read cef | where #schema_id != \"212b9111d2ee64a0\" | write json"'
+      - command: 'exec "read cef | where #schema_id != \"6aeddcaa9adee9b9\" | write json"'
         input: data/cef/forcepoint.log
 
   Measure Events:
@@ -821,6 +795,27 @@ tests:
       - command: exec 'load file - | read cef | repeat 5 | measure | summarize sum(events) by schema | write json'
         input: data/cef/forcepoint.log
 
+  Heterogeneous Lists:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from - read json | put foo=["true", false]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | extend foo=["true", false]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | replace d=["true", false]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | put foo=[["true"], false]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | put foo=[["true"], [false]]'
+        input: data/json/basic-types.json
+        expected_result: error
+      - command: exec 'from - read json | put foo=[["true"], ["false"]]'
+        input: data/json/basic-types.json
+
   Zeek TSV Pipeline Format:
     tags: [pipelines, zeek]
     steps:
@@ -847,6 +842,10 @@ tests:
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_no_empty_and_unset_fields.log
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
+        input: data/zeek/broken_no_closing_tag.log
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
+        input: data/zeek/broken_no_data_after_open.log
+      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
         input: data/zeek/broken_unequal_fields_types_length.log
         expected_result: error
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
@@ -856,10 +855,8 @@ tests:
         input: data/zeek/broken_data_after_close_tag.log
         expected_result: error
       - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
-        input: data/zeek/broken_no_closing_tag.log
+        input: data/zeek/duplicate_field_name.log
         expected_result: error
-      - command: exec 'from stdin read zeek-tsv | write zeek-tsv --disable-timestamp-tags'
-        input: data/zeek/broken_no_data_after_open.log
 
   Zeek TSV with Remote Import:
     fixture: ServerTester
@@ -1068,6 +1065,14 @@ tests:
       - command: exec 'read suricata | head 1 | flatten | write json --omit-empty'
         input: data/suricata/rrdata-eve.json
 
+  YAML:
+    tags: [pipeline]
+    steps:
+      - command: exec 'from file @./tests.yaml | put tags=tests.YAML.tags, steps=tests.YAML.steps'
+      - command: exec 'show config | drop tenzir.config | write yaml'
+      - command: exec 'from file @./data/zeek/zeek.json read zeek-json | head 5 | write yaml'
+      - command: exec 'show plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
+
   PCAP Format:
     tags: [pipelines, parser, printer, pcap]
     steps:
@@ -1114,3 +1119,17 @@ tests:
     #tags: [pipelines]
     #steps:
       #- command: exec 'from s3 s3://sentinel-cogs/sentinel-s2-l2a-cogs/1/C/CV/2023/1/S2B_1CCV_20230101_0_L2A/tileinfo_metadata.json | write json'
+
+  Blob Type:
+    fixture: ServerTester
+    tags: [pipelines]
+    steps:
+      - command: exec 'read suricata | where :blob != null | import'
+        input: data/suricata/eve.json
+      - command: flush
+      - command: exec 'export | where :blob != null'
+      - command: exec 'export | write csv'
+      - command: exec 'export | write json'
+      # TODO: Re-enable once #950 is fixed.
+      # - command: exec 'export | write yaml'
+      - command: exec 'export | write zeek-tsv --disable-timestamp-tags'

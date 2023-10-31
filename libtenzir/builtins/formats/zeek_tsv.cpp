@@ -274,6 +274,9 @@ struct zeek_printer {
       [](const string_type&) -> std::string {
         return "string";
       },
+      [](const blob_type&) -> std::string {
+        return "string";
+      },
       [](const ip_type&) -> std::string {
         return "addr";
       },
@@ -374,7 +377,7 @@ struct zeek_printer {
 
     auto operator()(view<std::string> x) noexcept -> bool {
       if (x.empty()) {
-        out = std::copy(printer.unset_field.begin(), printer.unset_field.end(),
+        out = std::copy(printer.empty_field.begin(), printer.empty_field.end(),
                         out);
         return true;
       }
@@ -388,6 +391,34 @@ struct zeek_printer {
         } else {
           *out++ = c;
         }
+      return true;
+    }
+
+    auto operator()(view<blob> x) noexcept -> bool {
+      if (x.empty()) {
+        // TODO: Is this actually correct? An empty blob is not unset.
+        out = std::copy(printer.empty_field.begin(), printer.empty_field.end(),
+                        out);
+        return true;
+      }
+      // We do not base64 encode it here, because Zeek strings can contain
+      // arbitrary binary data (as long as it is escaped).
+      for (auto b : x) {
+        // We escape a bit too much here (all non-byte UTF-8 code points), but
+        // this should be fine for now.
+        auto c = static_cast<unsigned char>(b);
+        auto high = (c & 0b1000'0000) != 0;
+        if (high || std::iscntrl(c) || c == printer.sep
+            || c == printer.set_sep) {
+          auto hex = detail::byte_to_hex(c);
+          *out++ = '\\';
+          *out++ = 'x';
+          *out++ = hex.first;
+          *out++ = hex.second;
+        } else {
+          *out++ = c;
+        }
+      }
       return true;
     }
 
@@ -461,6 +492,16 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
   auto document = zeek_document{};
   auto last_finish = std::chrono::steady_clock::now();
   auto line_nr = size_t{0};
+  // Helper for finishing and casting.
+  auto finish = [&] {
+    auto slice = unflatten(document.builder->finish(), ".");
+    if (document.target_schema
+        and can_cast(slice.schema(), document.target_schema)) {
+      return cast(std::move(slice), document.target_schema);
+    } else {
+      return slice;
+    }
+  };
   for (auto&& line : lines) {
     const auto now = std::chrono::steady_clock::now();
     // Yield at chunk boundaries.
@@ -468,7 +509,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         and (document.builder->rows() >= defaults::import::table_slice_size
              or last_finish + defaults::import::batch_timeout < now)) {
       last_finish = now;
-      co_yield cast(document.builder->finish(), document.target_schema);
+      co_yield finish();
     }
     if (not line) {
       if (last_finish != now) {
@@ -501,7 +542,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       if (close_parser(header, unused)) {
         if (document.builder) {
           last_finish = now;
-          co_yield cast(document.builder->finish(), document.target_schema);
+          co_yield finish();
           document = {};
         }
         continue;
@@ -512,7 +553,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       // were missing a closing tag.
       if (document.builder) {
         last_finish = now;
-        co_yield document.builder->finish();
+        co_yield finish();
         document = {};
       }
       // Now we can actually assemble the header.
@@ -560,6 +601,19 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
         diagnostic::warning("invalid Zeek header: {}", *line)
           .note("line {}", line_nr)
           .emit(ctrl.diagnostics());
+      }
+      // Verify that the field names are unique
+      {
+        auto sorted_fields = document.fields;
+        std::ranges::sort(sorted_fields);
+        if (auto it = std::ranges::adjacent_find(sorted_fields);
+            it != sorted_fields.end()) {
+          diagnostic::error(
+            "failed to parse Zeek document: duplicate #field name `{}`", *it)
+            .note("line {}", line_nr)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
       }
       continue;
     }
@@ -627,6 +681,10 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
                                          ? document.set_separator
                                          : std::string{})
                      .then([&](type_to_data_t<Type> value) {
+                       // TODO: A zeek `string` is not necessarily valid UTF-8,
+                       // but our `string_type` requires it. We must use `blob`
+                       // here instead of the string turns out to contain
+                       // invalid UTF-8.
                        return document.builder->add(value);
                      });
         };
@@ -638,7 +696,6 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       document.builder = table_slice_builder{std::move(schema)};
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
-      // TODO: This should just unflatten instead.
       auto target_schema = std::find_if(
         ctrl.schemas().begin(), ctrl.schemas().end(), [&](const auto& schema) {
           for (const auto& name : schema.names()) {
@@ -648,12 +705,8 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
           }
           return false;
         });
-      if (target_schema != ctrl.schemas().end()
-          and can_cast(document.builder->schema(), *target_schema)) {
-        document.target_schema = *target_schema;
-      } else {
-        document.target_schema = document.builder->schema();
-      }
+      document.target_schema
+        = target_schema == ctrl.schemas().end() ? type{} : *target_schema;
       // We intentionally fall through here; we create the builder lazily
       // when we encounter the first event, but that we still need to parse
       // now.
@@ -699,7 +752,7 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
     }
   }
   if (document.builder and document.builder->rows() > 0) {
-    co_yield cast(document.builder->finish(), document.target_schema);
+    co_yield finish();
   }
 }
 

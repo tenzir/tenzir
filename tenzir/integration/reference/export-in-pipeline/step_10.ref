@@ -42,6 +42,12 @@
     "cs5Label": "Matched Category",
     "cs5": "Business / Economy",
     "deviceCustomDate2": 1508150533713,
-    "deviceCustomDate2Label": "This field is made up"
+    "deviceCustomDate2Label": "This field is made up",
+    "cn1Label": null,
+    "cs1Label": null,
+    "cs4Label": null,
+    "cs4": null,
+    "msg": null,
+    "fileHash": null
   }
 }

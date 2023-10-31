@@ -45,6 +45,9 @@ generate(const std::vector<table_slice>& xs, caf::settings options = {}) {
   REQUIRE(!stream.str().empty());
   auto lines = detail::to_strings(detail::split(stream.str(), "\n"));
   REQUIRE(!lines.empty());
+  if (lines.back().empty())
+    lines.pop_back();
+  REQUIRE(!lines.empty());
   return lines;
 }
 

@@ -62,6 +62,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/query_cursor.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
 
@@ -119,10 +120,6 @@ constexpr auto SPEC_V0 = R"_(
                   type: string
                   description: A token to access the next pipeline data batch, null if the pipeline is completed.
                   example: "340ce2j"
-                dropped:
-                  type: integer
-                  description: The serve endpoint will drop responses that exceed the configured maximum message size. The number of events dropped this way is returned here. Should be 0 most of the time.
-                  example: 0
                 schemas:
                   type: array
                   items:
@@ -298,6 +295,10 @@ struct serve_manager_state {
   /// The serve operators currently observed by the serve-manager.
   std::vector<managed_serve_operator> ops = {};
 
+  /// A list of previously known serve ids that were expired. This exists only
+  /// for returning better error messages to the user.
+  std::unordered_set<std::string> expired_ids = {};
+
   auto handle_down_msg(const caf::down_msg& msg) -> void {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
@@ -325,6 +326,7 @@ struct serve_manager_state {
               return op.source == source;
             });
         if (found != ops.end()) {
+          expired_ids.insert(found->serve_id);
           ops.erase(found);
         }
       });
@@ -414,9 +416,16 @@ struct serve_manager_state {
           return op.serve_id == request.serve_id;
         });
     if (found == ops.end()) {
+      if (expired_ids.contains(request.serve_id)) {
+        return caf::make_error(
+          ec::logic_error,
+          fmt::format("{} got request for events with expired serve id {}; the "
+                      "pipeline serving this data is no longer available",
+                      *self, request.serve_id));
+      }
       return caf::make_error(ec::invalid_argument,
                              fmt::format("{} got request for events with "
-                                         "unknown for serve id {}",
+                                         "unknown serve id {}",
                                          *self, request.serve_id));
     }
     if (not found->continuation_token.empty()
@@ -470,13 +479,16 @@ struct serve_manager_state {
     for (const auto& op : ops) {
       auto& entry = caf::get<record>(requests.emplace_back(record{}));
       entry.emplace("serve_id", op.serve_id);
-      entry.emplace("continuation_token", op.continuation_token.empty()
-                                            ? data{}
-                                            : op.continuation_token);
+      const auto lingering = op.continuation_token == FINAL_CONTINUATION_TOKEN;
+      entry.emplace("continuation_token",
+                    op.continuation_token.empty() or lingering
+                      ? data{}
+                      : op.continuation_token);
       entry.emplace("buffer_size", op.buffer_size);
       entry.emplace("num_buffered", rows(op.buffer));
       entry.emplace("num_requested", op.requested);
       entry.emplace("num_delivered", op.delivered);
+      entry.emplace("lingering", lingering);
       entry.emplace("done", op.done);
       if (verbosity >= status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
@@ -630,7 +642,6 @@ struct serve_handler_state {
     auto out_iter = std::back_inserter(result);
     auto seen_schemas = std::unordered_set<type>{};
     bool first = true;
-    auto num_events = size_t{0};
     for (const auto& slice : results) {
       if (slice.rows() == 0)
         continue;
@@ -650,7 +661,6 @@ struct serve_handler_state {
         TENZIR_ASSERT_CHEAP(row);
         const auto ok = printer.print(out_iter, *row);
         TENZIR_ASSERT_CHEAP(ok);
-        ++num_events;
       }
     }
     // Write schemas
@@ -671,14 +681,7 @@ struct serve_handler_state {
         = printer.print(out_iter, schema.to_definition(/*expand*/ false));
       TENZIR_ASSERT_CHEAP(ok);
     }
-    out_iter = fmt::format_to(out_iter, R"(}}], "dropped": 0}}{})", '\n');
-    if (result.size() > defaults::api::max_response_size) {
-      TENZIR_DEBUG("serve-manager discards oversized response with {} events",
-                   num_events);
-      return fmt::format(
-        R"({{"next_continuation_token":"{}","events":[],"schemas":[],"dropped":{} }})",
-        next_continuation_token, num_events);
-    }
+    out_iter = fmt::format_to(out_iter, R"(}}]}}{})", '\n');
     return result;
   }
 
@@ -759,39 +762,41 @@ public:
     // a started pipeline containing a serve operator once it the pipeline
     // executor indicated that the pipeline started.
     auto serve_manager = serve_manager_actor{};
-    {
-      // Step 1: Get a handle to the SERVE MANAGER actor.
-      auto blocking = caf::scoped_actor{ctrl.self().system()};
-      blocking
-        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-                  "serve-manager")
-        .receive(
-          [&](std::vector<caf::actor>& actors) {
-            TENZIR_ASSERT(actors.size() == 1);
-            serve_manager
-              = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
-          },
-          [&](const caf::error& err) { //
-            ctrl.abort(caf::make_error(
-              ec::logic_error,
-              fmt::format("failed to find serve-manager: {}", err)));
-          });
-      // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
-      blocking
-        ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
-                  buffer_size_)
-        .receive(
-          [&]() {
-            TENZIR_DEBUG("serve for id {} is now available",
-                         escape_operator_arg(serve_id_));
-          },
-          [&](const caf::error& err) { //
-            ctrl.abort(caf::make_error(
-              ec::logic_error,
-              fmt::format("failed to register at serve-manager: {}", err)));
-          });
-      co_yield {};
-    }
+    // Step 1: Get a handle to the SERVE MANAGER actor.
+    // NOTE: It is important that we let this actor run until the end of the
+    // operator. The SERVE MANAGER monitors the actor that sends it the start
+    // atom, and assumes that the operator shut down when it receives the
+    // corresponding down message.
+    auto blocking = caf::scoped_actor{ctrl.self().system()};
+    blocking
+      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
+                "serve-manager")
+      .receive(
+        [&](std::vector<caf::actor>& actors) {
+          TENZIR_ASSERT(actors.size() == 1);
+          serve_manager
+            = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
+        },
+        [&](const caf::error& err) { //
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("failed to find serve-manager: {}", err)));
+        });
+    // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
+    blocking
+      ->request(serve_manager, caf::infinite, atom::start_v, serve_id_,
+                buffer_size_)
+      .receive(
+        [&]() {
+          TENZIR_DEBUG("serve for id {} is now available",
+                       escape_operator_arg(serve_id_));
+        },
+        [&](const caf::error& err) { //
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("failed to register at serve-manager: {}", err)));
+        });
+    co_yield {};
     // Step 3: Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
       // Send slice to SERVE MANAGER.
@@ -861,10 +866,65 @@ private:
 
 class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
-                     public virtual operator_plugin<serve_operator> {
+                     public virtual operator_plugin<serve_operator>,
+                     public virtual aspect_plugin {
 public:
   auto component_name() const -> std::string override {
     return "serve-manager";
+  }
+
+  auto aspect_name() const -> std::string override {
+    return "serves";
+  }
+
+  // this is for the aspect plugin
+  auto location() const -> operator_location override {
+    return operator_location::remote;
+  }
+
+  auto show(operator_control_plane& ctrl) const
+    -> generator<table_slice> override {
+    auto serve_manager = serve_manager_actor{};
+    auto blocking = caf::scoped_actor{ctrl.self().system()};
+    blocking
+      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
+                "serve-manager")
+      .receive(
+        [&](std::vector<caf::actor>& actors) {
+          TENZIR_ASSERT(actors.size() == 1);
+          serve_manager
+            = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
+        },
+        [&](const caf::error& err) { //
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("failed to find serve-manager: {}", err)));
+        });
+    co_yield {};
+    auto serves = list{};
+    blocking
+      ->request(serve_manager, caf::infinite, atom::status_v,
+                status_verbosity::debug, duration{std::chrono::seconds{10}})
+      .receive(
+        [&](record& response) {
+          TENZIR_ASSERT(response.size() == 1);
+          TENZIR_ASSERT(response.contains("requests"));
+          TENZIR_ASSERT(caf::holds_alternative<list>(response["requests"]));
+          serves = std::move(caf::get<list>(response["requests"]));
+        },
+        [&](const caf::error& err) {
+          ctrl.abort(caf::make_error(
+            ec::logic_error,
+            fmt::format("failed to get status of serve-manager: {}", err)));
+        });
+    co_yield {};
+    auto builder = series_builder{};
+    for (const auto& serve : serves) {
+      builder.data(serve);
+    }
+    for (auto&& result : builder.finish_as_table_slice("tenzir.serve")) {
+      co_yield std::move(result);
+    }
   }
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const

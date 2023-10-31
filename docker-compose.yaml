@@ -2,7 +2,7 @@
 # file for setup instructions.
 services:
   tenzir-node:
-    image: tenzir/tenzir:main
+    image: ${TENZIR_IMAGE:-tenzir/tenzir:main}
     build:
       target: tenzir
     environment:
@@ -20,7 +20,7 @@ services:
       - tenzir-node:/var/log/tenzir/
 
   tenzir-api:
-    image: tenzir/tenzir:main
+    image: ${TENZIR_IMAGE:-tenzir/tenzir:main}
     build:
       target: tenzir
     depends_on:
@@ -38,7 +38,7 @@ services:
       - --bind=0.0.0.0
 
   tenzir:
-    image: tenzir/tenzir:main
+    image: ${TENZIR_IMAGE:-tenzir/tenzir:main}
     build:
       target: tenzir
     profiles:

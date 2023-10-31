@@ -81,9 +81,15 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   auto detach_filesystem
     = detach_components ? detach_components::yes : detach_components::no;
   auto actor = self->spawn(node, id, abs_dir, detach_filesystem);
-  actor->attach_functor([=, pid_file = std::move(pid_file)](
+  actor->attach_functor([=, pid_file = std::move(pid_file),
+                         &system = self->system()](
                           const caf::error&) -> caf::result<void> {
     TENZIR_DEBUG("node removes PID lock: {}", pid_file);
+    // TODO: This works because the scope_linked framing around the actor handle
+    //       sends an implicit exit message to the node in its destructor.
+    //       In case we change this to RAII we need to add `scope_lock` like
+    //       callback functionality to `scope_linked` instead.
+    system.registry().erase("tenzir.node");
     std::error_code err{};
     std::filesystem::remove_all(pid_file, err);
     if (err)
@@ -92,6 +98,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
                                          pid_file, err.message()));
     return {};
   });
+  self->system().registry().put("tenzir.node", actor);
   scope_linked<node_actor> node{std::move(actor)};
   auto spawn_component = [&](std::string name) {
     caf::error result = caf::none;

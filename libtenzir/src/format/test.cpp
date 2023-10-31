@@ -183,6 +183,14 @@ struct randomizer {
       c = static_cast<char>(unif_char(gen));
   }
 
+  void operator()(const blob_type&, blob& vec) {
+    lcg gen{static_cast<lcg::result_type>(sample())};
+    std::uniform_int_distribution<unsigned int> unif{0, 256};
+    vec.resize(static_cast<size_t>(unif(gen)));
+    for (auto& c : vec)
+      c = static_cast<std::byte>(unif(gen));
+  }
+
   void operator()(const ip_type&, ip& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.
