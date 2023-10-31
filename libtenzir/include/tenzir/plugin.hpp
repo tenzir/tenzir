@@ -17,6 +17,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/pp.hpp"
 #include "tenzir/detail/weak_handle.hpp"
+#include "tenzir/expression.hpp"
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
@@ -698,6 +699,18 @@ private:
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> final;
+};
+
+// -- lookup table plugin -----------
+
+class lookup_table_plugin : public virtual plugin {
+public:
+  virtual auto apply_lookup(std::vector<table_slice> slices,
+                            std::vector<std::string> fields) const
+    -> std::vector<table_slice>
+    = 0;
+
+  virtual auto update(const record& r) -> void = 0;
 };
 
 // -- aspect plugin ------------------------------------------------------------
