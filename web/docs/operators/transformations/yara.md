@@ -90,74 +90,61 @@ rule test {
   strings:
     $foo = "foo"
     $bar = "bar"
+    $baz = "baz"
 
   condition:
-    $foo and $bar
+    ($foo and $bar) or $baz
 }
 ```
 
 You can produce test matches by feeding bytes into the `yara` operator:
 
 ```bash
-echo 'foo barbar baz' |
-  tenzir 'load stdin | yara /tmp/test.yara'
+echo 'foo bar' | tenzir 'load stdin | yara /tmp/test.yara'
 ```
 
-The resulting `yara.match` events look as follows:
+You will get one `yara.match` per matching rule:
 
 ```json
 {
   "rule": {
     "identifier": "test",
     "namespace": "default",
-    "string": "foo",
     "tags": [],
     "meta": {
       "string": "string meta data",
       "integer": 42,
       "boolean": true
     },
-    "matches": [
+    "strings": {
+      "$foo": "foo",
+      "$bar": "bar",
+      "$baz": "baz"
+    }
+  },
+  "matches": {
+    "$foo": [
       {
-        "identifier": "$foo",
         "data": "Zm9v",
         "base": 0,
         "offset": 0,
         "match_length": 3
       }
-    ]
-  }
-}
-{
-  "rule": {
-    "identifier": "test",
-    "namespace": "default",
-    "string": "bar",
-    "tags": [],
-    "meta": {
-      "string": "string meta data",
-      "integer": 42,
-      "boolean": true
-    },
-    "matches": [
+    ],
+    "$bar": [
       {
-        "identifier": "$bar",
         "data": "YmFy",
         "base": 0,
         "offset": 4,
-        "match_length": 3
-      },
-      {
-        "identifier": "$bar",
-        "data": "YmFy",
-        "base": 0,
-        "offset": 7,
         "match_length": 3
       }
     ]
   }
 }
 ```
+
+Each match has a `rule` field describing the rule and a `matches` record
+indexed by string identifier to report a list of matches per rule string.
 
 ### Build a YARA scanning service
 

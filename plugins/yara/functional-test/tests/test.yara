@@ -7,7 +7,8 @@ rule test {
   strings:
     $foo = "foo"
     $bar = "bar"
+    $baz = "baz"
 
   condition:
-    $foo and $bar
+    ($foo and $bar) or $baz
 }

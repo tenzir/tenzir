@@ -287,51 +287,61 @@ private:
     if (message == CALLBACK_MSG_RULE_MATCHING) {
       auto* rule = reinterpret_cast<YR_RULE*>(message_data);
       TENZIR_DEBUG("got a match for rule {}", rule->identifier);
+      auto row = builder->record();
+      auto rec = row.field("rule").record();
+      rec.field("identifier").data(rule->identifier);
+      rec.field("namespace").data(std::string_view{rule->ns->name});
+      const char* tag = nullptr;
+      auto tags = rec.field("tags").list();
+      yr_rule_tags_foreach(rule, tag) {
+        tags.data(std::string_view{tag});
+      }
+      auto meta_rec = rec.field("meta").record();
+      YR_META* meta = nullptr;
+      yr_rule_metas_foreach(rule, meta) {
+        auto identifier = std::string_view{meta->identifier};
+        if (meta->type == META_TYPE_INTEGER)
+          meta_rec.field(identifier).data(int64_t{meta->integer});
+        else if (meta->type == META_TYPE_BOOLEAN)
+          meta_rec.field(identifier).data(meta->integer != 0);
+        else
+          meta_rec.field(identifier).data(std::string_view{meta->string});
+      }
+      // First we bring all strings to the attention of the user. This is
+      // valuable rule context in case the rule is not immediately handly.
+      auto strings = rec.field("strings").record();
       YR_STRING* string = nullptr;
       yr_rule_strings_foreach(rule, string) {
-        auto row = builder->record();
-        auto rec = row.field("rule").record();
-        rec.field("identifier").data(rule->identifier);
-        rec.field("namespace").data(std::string_view{rule->ns->name});
+        // TODO: should this be byte?
         auto rule_string
           = std::string_view{reinterpret_cast<const char*>(string->string),
                              detail::narrow_cast<size_t>(string->length)};
-        rec.field("string").data(rule_string);
-        const char* tag = nullptr;
-        auto tags = rec.field("tags").list();
-        yr_rule_tags_foreach(rule, tag) {
-          tags.data(std::string_view{tag});
-        }
-        auto meta_rec = rec.field("meta").record();
-        YR_META* meta = nullptr;
-        yr_rule_metas_foreach(rule, meta) {
-          auto identifier = std::string_view{meta->identifier};
-          if (meta->type == META_TYPE_INTEGER)
-            meta_rec.field(identifier).data(int64_t{meta->integer});
-          else if (meta->type == META_TYPE_BOOLEAN)
-            meta_rec.field(identifier).data(meta->integer != 0);
-          else
-            meta_rec.field(identifier).data(std::string_view{meta->string});
-        }
-        YR_MATCH* match = nullptr;
-        auto list = rec.field("matches").list();
-        yr_string_matches_foreach(context, string, match) {
-          auto match_rec = list.record();
-          match_rec.field("identifier").data(string->identifier);
-          auto bytes = std::span<const std::byte>{
-            reinterpret_cast<const std::byte*>(match->data),
-            detail::narrow_cast<size_t>(match->data_length)};
-          auto blob_view
-            = std::basic_string_view<std::byte>{bytes.data(), bytes.size()};
-          match_rec.field("data").data(blob_view);
-          match_rec.field("base").data(match->base);
-          match_rec.field("offset").data(match->offset);
-          match_rec.field("match_length")
-            .data(detail::narrow_cast<uint64_t>(match->match_length));
-          // TODO: Once we can upgrade to newer versions of libyara, uncomment
-          // the line below. YR_MATCH::xor_key is not available in the version
-          // we get on Debian.
-          // match_rec.field("xor_key").data(uint64_t{match->xor_key});
+        strings.field(string->identifier).data(rule_string);
+      }
+      // Second we go through the subset of strings that have matches.
+      auto matches = row.field("matches").record();
+      string = nullptr;
+      yr_rule_strings_foreach(rule, string) {
+        if (context->matches[string->idx].head != nullptr) {
+          auto list = matches.field(string->identifier).list();
+          YR_MATCH* match = nullptr;
+          yr_string_matches_foreach(context, string, match) {
+            auto match_rec = list.record();
+            auto bytes = std::span<const std::byte>{
+              reinterpret_cast<const std::byte*>(match->data),
+              detail::narrow_cast<size_t>(match->data_length)};
+            auto blob_view
+              = std::basic_string_view<std::byte>{bytes.data(), bytes.size()};
+            match_rec.field("data").data(blob_view);
+            match_rec.field("base").data(match->base);
+            match_rec.field("offset").data(match->offset);
+            match_rec.field("match_length")
+              .data(detail::narrow_cast<uint64_t>(match->match_length));
+            // TODO: Once we can upgrade to newer versions of libyara, uncomment
+            // the line below. YR_MATCH::xor_key is not available in the version
+            // we get on Debian.
+            // match_rec.field("xor_key").data(uint64_t{match->xor_key});
+          }
         }
       }
     } else if (message == CALLBACK_MSG_RULE_NOT_MATCHING) {
