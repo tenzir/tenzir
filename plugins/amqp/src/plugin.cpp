@@ -8,7 +8,9 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
+#include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/config.hpp>
+#include <tenzir/data.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <caf/expected.hpp>
@@ -92,7 +94,7 @@ auto to_error(int status, std::string_view desc = "") -> caf::error {
     return {};
   const auto* error_string = amqp_error_string2(status);
   if (desc.empty())
-    return caf::make_error(ec::unspecified, error_string);
+    return caf::make_error(ec::unspecified, std::string{error_string});
   return caf::make_error(ec::unspecified,
                          fmt::format("{}: {}", desc, error_string));
 }
@@ -494,13 +496,14 @@ public:
       }
       if (auto err = engine->connect()) {
         diagnostic::error("failed to connect to AMQP server")
-          .note("{}", engine.error())
+          .note("{}", err)
           .emit(ctrl.diagnostics());
         co_return;
       }
       auto channel = args.channel ? args.channel->inner : default_channel;
       if (auto err = engine->open(channel)) {
         diagnostic::error("failed to open AMQP channel {}", channel)
+          .note("{}", err)
           .emit(ctrl.diagnostics());
         co_return;
       }
@@ -684,6 +687,27 @@ public:
           .hint("URL must adhere to the following format")
           .hint("amqp://[USERNAME[:PASSWORD]\\@]HOSTNAME[:PORT]/[VHOST]")
           .throw_();
+    }
+    if (args.options) {
+      std::vector<std::pair<std::string, std::string>> kvps;
+      if (not parsers::kvp_list(args.options->inner, kvps))
+        diagnostic::error("invalid list of key=value pairs")
+          .primary(args.options->source)
+          .throw_();
+      // For all string keys, we don't attempt automatic conversion.
+      auto strings = std::set<std::string>{"hostname", "vhost", "sasl_method",
+                                           "username", "password"};
+      for (auto& [key, value] : kvps) {
+        if (strings.contains(key))
+          config[key] = std::move(value);
+        else if (auto x = from_yaml(value))
+          config[key] = std::move(*x);
+        else
+          diagnostic::error("failed to parse value in key-value pair")
+            .primary(args.options->source)
+            .note("value: {}", value)
+            .throw_();
+      }
     }
     return {std::move(args), std::move(config)};
   }
