@@ -1,3 +1,8 @@
-write "json", printer_args(null, null, null, null, null, null, null) | save "file", saver_args(located("xyz.json", location(8, 16)), null, null, null)
------
-located("<pipeline>", [[["write", "json", printer_args(null, null, null, null, null, null, null)]], [["save", "file", saver_args(located("xyz.json", location(8, 16)), null, null, null)]]], location(0, 16))
+error: loader `schema` could not be found
+ --> <input>:1:6
+  |
+1 | from schema://foo.json read json
+  |      ^^^^^^ 
+  |
+  = hint: must be one of -, file, ftp, ftps, http, https, s3, stdin
+  = docs: https://docs.tenzir.com/next/connectors

@@ -270,6 +270,7 @@ public:
     }
     auto loader = std::unique_ptr<plugin_loader>{};
     if (auto split = l_name->inner.find("://"); split != std::string::npos) {
+      // Has "://", assuming to be a URI
       auto substr
         = [](located<std::string> x, size_t pos,
              size_t count = std::string::npos) -> located<std::string> {
@@ -290,12 +291,17 @@ public:
       auto r = prepend_token{std::move(path), q};
       loader = l_plugin->parse_loader(r);
       TENZIR_DIAG_ASSERT(r.at_end());
-    } else {
-      auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner);
-      if (!l_plugin) {
-        throw_loader_not_found(*l_name);
-      }
+    } else if (auto l_plugin
+               = plugins::find<loader_parser_plugin>(l_name->inner)) {
+      // Matches a plugin name, use that
       loader = l_plugin->parse_loader(q);
+    } else {
+      // Try `file` loader, may be a path
+      l_plugin = plugins::find<loader_parser_plugin>("file");
+      TENZIR_DIAG_ASSERT(l_plugin);
+      auto r = prepend_token{std::move(*l_name), q};
+      loader = l_plugin->parse_loader(r);
+      TENZIR_DIAG_ASSERT(r.at_end());
     }
     TENZIR_DIAG_ASSERT(loader);
     TENZIR_DIAG_ASSERT(q.at_end());

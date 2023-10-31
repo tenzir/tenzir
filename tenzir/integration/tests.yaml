@@ -77,6 +77,8 @@ tests:
       - command: exec --dump-ast "local remote local pass"
       - command: exec --dump-ast "where :ip == 1.2.3.4"
       - command: exec --dump-ast "to file xyz.json"
+      - command: exec "from schema://foo.json read json"
+        expected_result: error
 
   Conn log counting:
     tags: [node, counting, zeek]
