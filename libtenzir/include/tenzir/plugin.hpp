@@ -706,11 +706,9 @@ private:
 class lookup_table_plugin : public virtual plugin {
 public:
   virtual auto apply_lookup(std::vector<table_slice> slices,
-                            std::vector<std::string> fields) const
-    -> std::vector<table_slice>
+                            std::unordered_set<std::string> fields,
+                            record indicators) const -> std::vector<table_slice>
     = 0;
-
-  virtual auto update(const record& r) -> void = 0;
 };
 
 // -- aspect plugin ------------------------------------------------------------
