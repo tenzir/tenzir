@@ -269,32 +269,17 @@ public:
         .throw_();
     }
     auto loader = std::unique_ptr<plugin_loader>{};
-    if (auto split = l_name->inner.find("://"); split != std::string::npos) {
-      // Has "://", assuming to be a URI
-      auto substr
-        = [](located<std::string> x, size_t pos,
-             size_t count = std::string::npos) -> located<std::string> {
-        auto sub = x.inner.substr(pos, count);
-        auto sub_source = location::unknown;
-        if (x.source && (x.source.end - x.source.begin) == x.inner.size()) {
-          sub_source.begin = x.source.begin + pos;
-          sub_source.end = sub_source.begin + sub.length();
-        }
-        return {std::move(sub), sub_source};
-      };
-      auto scheme = substr(*l_name, 0, split);
-      auto path = substr(*l_name, split + 3);
-      auto l_plugin = plugins::find<loader_parser_plugin>(scheme.inner);
-      if (!l_plugin) {
-        throw_loader_not_found(scheme);
-      }
-      auto r = prepend_token{std::move(path), q};
-      loader = l_plugin->parse_loader(r);
-      TENZIR_DIAG_ASSERT(r.at_end());
-    } else if (auto l_plugin
-               = plugins::find<loader_parser_plugin>(l_name->inner)) {
+    if (auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner)) {
       // Matches a plugin name, use that
       loader = l_plugin->parse_loader(q);
+    } else if (auto uri = try_plugin_by_uri(*l_name); uri.loader_found()) {
+      // Valid URI with a matching plugin name
+      auto r = prepend_token{uri.non_scheme, q};
+      loader = uri.loader->parse_loader(r);
+      TENZIR_DIAG_ASSERT(r.at_end());
+    } else if (uri.valid_uri_parsed()) {
+      // Valid URI, but no matching plugin name -> error
+      throw_loader_not_found(uri.scheme);
     } else {
       // Try `file` loader, may be a path
       l_plugin = plugins::find<loader_parser_plugin>("file");
@@ -330,6 +315,55 @@ public:
     ops.push_back(std::make_unique<load_operator>(std::move(loader)));
     ops.push_back(std::make_unique<class read_operator>(std::move(parser)));
     return std::make_unique<pipeline>(std::move(ops));
+  }
+
+private:
+  auto get_located_uri_fragment(const located<std::string>& uri, size_t pos,
+                                size_t count = std::string::npos) const
+    -> located<std::string> {
+    auto sub = uri.inner.substr(pos, count);
+    auto source = location::unknown;
+    if (uri.source && (uri.source.end - uri.source.begin) == uri.inner.size()) {
+      source.begin = uri.source.begin + pos;
+      source.end = source.begin + sub.length();
+    }
+    return {std::move(sub), source};
+  }
+
+  struct try_plugin_by_uri_result {
+    const loader_parser_plugin* loader{nullptr};
+    located<std::string> scheme{};
+    located<std::string> non_scheme{};
+
+    bool loader_found() const {
+      return loader != nullptr;
+    }
+    bool valid_uri_parsed() const {
+      return !scheme.inner.empty();
+    }
+  };
+
+  auto try_plugin_by_uri(const located<std::string>& src) const
+    -> try_plugin_by_uri_result {
+    // Not using caf::uri for anything else but checking for URI validity
+    // This is because it makes the interaction with located<...> very difficult
+    if (!caf::uri::can_parse(src.inner))
+      return {};
+    // In a valid URI, the first ':' is guaranteed to separate the scheme from
+    // the rest
+    TENZIR_ASSERT(src.inner.find(':') != std::string::npos);
+    try_plugin_by_uri_result result{};
+    auto scheme_len = src.inner.find(':');
+    result.scheme = get_located_uri_fragment(src, 0, scheme_len);
+    auto non_scheme_offset = scheme_len + 1;
+    if (caf::starts_with(caf::string_view{src.inner}.substr(non_scheme_offset),
+                         "//"))
+      // If the URI has an `authority` component, it starts with "//"
+      // We need to skip that before forwarding it to the loader
+      non_scheme_offset += 2;
+    result.non_scheme = get_located_uri_fragment(src, non_scheme_offset);
+    result.loader = plugins::find<loader_parser_plugin>(result.scheme.inner);
+    return result;
   }
 };
 

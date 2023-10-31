@@ -1,0 +1,6 @@
+error: the file `foo.json` does not exist
+ --> <input>:1:11
+  |
+1 | from file:foo.json read json
+  |           ^^^^^^^^ 
+  |
