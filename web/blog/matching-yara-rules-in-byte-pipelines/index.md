@@ -119,6 +119,33 @@ excerpt for the match is `YmFy` (= `"bar"`).[^1]
     system does, so we encode blob values as Base64-encoded strings for formats
     that do not have a native blog representation.
 
+## Building a YARA streaming engine
+
+:::note Implementation Details
+You can skip this section if you are not interested in the inner workings, but
+may help understand how YARA works under the hood.
+:::
+
+Internally, YARA scanners work with blocks of data. Rule matches can span
+multiple blocks, but the scanner engine needs a signal to know that it now has
+all blocks and start scanning:
+
+![YARA scanner blocks](yara-implementation.excalidraw.svg)
+
+Because a scanner [may perform *multiple* passes over the given sequence of
+blocks](https://github.com/VirusTotal/yara/issues/1994#issuecomment-1784082573),
+it's not possible to build a one-pass, multi-block YARA streaming engine that
+can release the memory blocks that it fed to a scanner.
+
+This is the reason why the `yara` operator supports two modes of operation:
+
+1. **Accumulating**: start scanning after the last chunk of bytes. (default)
+2. **Blockwise**: scan each block of memory as self-contained unit.
+   (`--blockwise`)
+
+Mode (1) requires buffering all chunks whereas (2) can work in a streaming
+manner.
+
 ## Mix and match loaders
 
 The [`stdin`](/connectors/stdin) loader in the above example produces chunks of
@@ -128,6 +155,14 @@ particular, you can use the [`file`](/connectors/file) loader:
 ```bash
 tenzir 'load file --mmap /tmp/test.txt | yara /tmp/test.yara'
 ```
+
+:::note Memory-mapping files
+Passing `--mmap` to the `file` loader is purely an optimization that results in
+the creation of a single memory block as input to the `yara` operator. This
+means the YARA scanner doesn't have to iterate over multiple blocks of memory,
+which may be beneficial for intricate rules that require random access into the
+file.
+:::
 
 If you have a [ZeroMQ socket](/connectors/zmq) where you publish malware samples
 to be scanned, then you only need to change the pipeline source:
