@@ -18,10 +18,10 @@ trigger next processing steps in your detection workflows.
 
 <!--truncate-->
 
-[YARA][yara] is a bedrock tool when it comes to writing detections on binary
-data. Malware analysts develop them based on sandbox results or threat reports,
-incident responders capture the attacker's toolchain on disk images or in
-memory, and security engineers share them with their peers.
+[YARA][yara] rules are a bedrock piece when it comes to writing detections on
+binary data. Malware analysts develop them based on sandbox results or threat
+reports, incident responders capture the attacker's toolchain on disk images or
+in memory, and security engineers share them with their peers.
 
 ## Operationalize YARA rules
 
