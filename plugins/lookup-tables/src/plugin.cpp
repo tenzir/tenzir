@@ -54,8 +54,6 @@ public:
     }
     std::vector<table_slice> new_slices;
     for (auto&& slice : slices) {
-      TENZIR_ERROR("slice");
-      TENZIR_ERROR(indicators);
       if (not caf::holds_alternative<record_type>(slice.schema())) {
         continue;
       }
@@ -72,17 +70,15 @@ public:
           }
           if (auto it = hash_map.find(a.second); it != hash_map.end()) {
             found_indicators.emplace(it->second);
-            TENZIR_ERROR("found: {} {}", *it, a.second);
           }
         }
-        TENZIR_ERROR(found_indicators);
         if (not found_indicators.empty()) {
           auto l = list{found_indicators.begin(), found_indicators.end()};
           const auto result_schema = type{
             "tenzir.sighting",
             record_type{
               {"event", resolved_slice.schema()},
-              //{"indicators", type{list_type{string_type{}}}},
+              {"indicators", type{list_type{string_type{}}}},
             },
           };
           auto result_builder
@@ -99,13 +95,13 @@ public:
                    .field_builder(0)),
               *row);
             TENZIR_ASSERT(append_event_result.ok());
-            // TODO: How to append lists?
-            /*const auto append_indicators_result = append_builder(
+            const auto append_indicators_result = append_builder(
               list_type{string_type{}},
               caf::get<arrow::ListBuilder>(
-                *caf::get<arrow::ListBuilder>(*result_builder).child_builder(0)),
+                *caf::get<arrow::StructBuilder>(*result_builder)
+                   .child_builder(1)),
               caf::get<view<list>>(make_data_view(l)));
-            TENZIR_ASSERT(append_indicators_result.ok());*/
+            TENZIR_ASSERT(append_indicators_result.ok());
           }
           auto result = result_builder->Finish().ValueOrDie();
           auto rb = arrow::RecordBatch::Make(
