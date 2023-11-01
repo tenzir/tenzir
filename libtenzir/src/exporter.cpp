@@ -69,6 +69,14 @@ void attach_result_stream(
         auto& results = state.self_ptr->state.sink_buffer;
         (void)hint; // We could consider using `hint`.
         if (!results.empty()) {
+          if (state.self_ptr->state.accountant) {
+            state.self_ptr->send(
+              state.self_ptr->state.accountant, atom::metrics_v,
+              "exporter.shipped", results.front().rows(),
+              metrics_metadata{
+                {"query",
+                 fmt::to_string(state.self_ptr->state.query_context.id)}});
+          }
           out.push(std::move(results.front()));
           results.pop_front();
         }
