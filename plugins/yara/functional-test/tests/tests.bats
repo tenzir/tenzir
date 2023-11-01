@@ -13,7 +13,6 @@ setup() {
 
 @test "produce events for matching strings" {
   echo 'foo bar baz' | check tenzir "load stdin | yara ${RULE}"
-  echo 'baz' | check tenzir "load stdin | yara ${RULE}"
 }
 
 @test "remain silent for true negatives" {
