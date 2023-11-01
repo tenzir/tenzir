@@ -87,6 +87,10 @@ tests:
         expected_result: error
       - command: exec "from file:foo.json read json"
         expected_result: error
+      - command: exec "load file foo.json | read json"
+        expected_result: error
+      - command: exec "load file://foo.json | read json"
+        expected_result: error
 
   Conn log counting:
     tags: [node, counting, zeek]

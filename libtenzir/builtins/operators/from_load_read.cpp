@@ -16,22 +16,25 @@
 namespace tenzir::plugins::from {
 namespace {
 
+template <typename String>
 class prepend_token final : public parser_interface {
 public:
-  prepend_token(located<std::string> token, parser_interface& next)
+  prepend_token(located<String> token, parser_interface& next)
     : token_{std::move(token)}, next_{next} {
   }
 
   auto accept_shell_arg() -> std::optional<located<std::string>> override {
     if (token_) {
-      return std::exchange(token_, std::nullopt);
+      auto tmp = make_located_string();
+      token_ = std::nullopt;
+      return tmp;
     }
     return next_.accept_shell_arg();
   }
 
   auto peek_shell_arg() -> std::optional<located<std::string>> override {
     if (token_) {
-      return token_;
+      return make_located_string();
     }
     return next_.peek_shell_arg();
   }
@@ -88,7 +91,12 @@ public:
   }
 
 private:
-  std::optional<located<std::string>> token_;
+  auto make_located_string() const -> located<std::string> {
+    TENZIR_ASSERT(token_);
+    return {std::string{token_->inner}, token_->source};
+  }
+
+  std::optional<located<String>> token_;
   parser_interface& next_;
 };
 
@@ -222,7 +230,8 @@ auto parse_default_parser(std::string definition)
   return parser;
 }
 
-[[noreturn]] void throw_loader_not_found(const located<std::string>& x) {
+template <typename String>
+[[noreturn]] void throw_loader_not_found(const located<String>& x) {
   auto available = std::vector<std::string>{};
   for (auto const* p : plugins::get<loader_parser_plugin>()) {
     available.push_back(p->name());
@@ -246,6 +255,89 @@ auto parse_default_parser(std::string definition)
     .throw_();
 }
 
+template <typename String>
+auto get_located_uri_fragment(const located<String>& uri, size_t pos,
+                              size_t count = std::string::npos)
+  -> located<std::string_view> {
+  auto sub = std::string_view{uri.inner}.substr(pos, count);
+  auto source = location::unknown;
+  if (uri.source && (uri.source.end - uri.source.begin) == uri.inner.size()) {
+    source.begin = uri.source.begin + pos;
+    source.end = source.begin + sub.length();
+  }
+  return {sub, source};
+}
+
+struct try_plugin_by_uri_result {
+  const loader_parser_plugin* loader{nullptr};
+  located<std::string_view> scheme{};
+  located<std::string_view> non_scheme{};
+
+  [[nodiscard]] bool loader_found() const {
+    return loader != nullptr;
+  }
+  [[nodiscard]] bool valid_uri_parsed() const {
+    return !scheme.inner.empty();
+  }
+};
+
+auto try_plugin_by_uri(const located<std::string>& src)
+  -> try_plugin_by_uri_result {
+  // Not using caf::uri for anything else but checking for URI validity
+  // This is because it makes the interaction with located<...> very difficult
+  if (!caf::uri::can_parse(src.inner))
+    return {};
+  // In a valid URI, the first ':' is guaranteed to separate the scheme from
+  // the rest
+  TENZIR_ASSERT(src.inner.find(':') != std::string::npos);
+  try_plugin_by_uri_result result{};
+  auto scheme_len = src.inner.find(':');
+  result.scheme = get_located_uri_fragment(src, 0, scheme_len);
+  auto non_scheme_offset = scheme_len + 1;
+  if (caf::starts_with(caf::string_view{src.inner}.substr(non_scheme_offset),
+                       "//"))
+    // If the URI has an `authority` component, it starts with "//"
+    // We need to skip that before forwarding it to the loader
+    non_scheme_offset += 2;
+  result.non_scheme = get_located_uri_fragment(src, non_scheme_offset);
+  result.loader = plugins::find<loader_parser_plugin>(result.scheme.inner);
+  return result;
+}
+
+template <typename Parser>
+auto get_loader(Parser& q, const char* usage, const char* docs)
+  -> std::unique_ptr<plugin_loader> {
+  auto l_name = q.accept_shell_arg();
+  if (not l_name) {
+    diagnostic::error("expected loader name")
+      .primary(q.current_span())
+      .usage(usage)
+      .docs(docs)
+      .throw_();
+  }
+  if (auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner)) {
+    // Matches a plugin name, use that
+    return l_plugin->parse_loader(q);
+  }
+  if (auto uri = try_plugin_by_uri(*l_name); uri.loader_found()) {
+    // Valid URI, with a matching plugin name
+    auto r = prepend_token{uri.non_scheme, q};
+    auto loader = uri.loader->parse_loader(r);
+    TENZIR_DIAG_ASSERT(r.at_end());
+    return loader;
+  } else if (uri.valid_uri_parsed()) {
+    // Valid URI, but no matching plugin name -> error
+    throw_loader_not_found(uri.scheme);
+  }
+  // Try `file` loader, may be a path
+  auto l_plugin = plugins::find<loader_parser_plugin>("file");
+  TENZIR_DIAG_ASSERT(l_plugin);
+  auto r = prepend_token{std::move(*l_name), q};
+  auto loader = l_plugin->parse_loader(r);
+  TENZIR_DIAG_ASSERT(r.at_end());
+  return loader;
+}
+
 class from_plugin final : public virtual operator_parser_plugin {
 public:
   auto signature() const -> operator_signature override {
@@ -260,34 +352,7 @@ public:
     auto usage = "from <loader> <args>... [read <parser> <args>...]";
     auto docs = "https://docs.tenzir.com/next/operators/sources/from";
     auto q = until_keyword_parser{"read", p};
-    auto l_name = q.accept_shell_arg();
-    if (not l_name) {
-      diagnostic::error("expected loader name")
-        .primary(q.current_span())
-        .usage(usage)
-        .docs(docs)
-        .throw_();
-    }
-    auto loader = std::unique_ptr<plugin_loader>{};
-    if (auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner)) {
-      // Matches a plugin name, use that
-      loader = l_plugin->parse_loader(q);
-    } else if (auto uri = try_plugin_by_uri(*l_name); uri.loader_found()) {
-      // Valid URI with a matching plugin name
-      auto r = prepend_token{uri.non_scheme, q};
-      loader = uri.loader->parse_loader(r);
-      TENZIR_DIAG_ASSERT(r.at_end());
-    } else if (uri.valid_uri_parsed()) {
-      // Valid URI, but no matching plugin name -> error
-      throw_loader_not_found(uri.scheme);
-    } else {
-      // Try `file` loader, may be a path
-      l_plugin = plugins::find<loader_parser_plugin>("file");
-      TENZIR_DIAG_ASSERT(l_plugin);
-      auto r = prepend_token{std::move(*l_name), q};
-      loader = l_plugin->parse_loader(r);
-      TENZIR_DIAG_ASSERT(r.at_end());
-    }
+    auto loader = get_loader(q, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
     TENZIR_DIAG_ASSERT(q.at_end());
     auto parser = std::unique_ptr<plugin_parser>{};
@@ -316,55 +381,6 @@ public:
     ops.push_back(std::make_unique<class read_operator>(std::move(parser)));
     return std::make_unique<pipeline>(std::move(ops));
   }
-
-private:
-  auto get_located_uri_fragment(const located<std::string>& uri, size_t pos,
-                                size_t count = std::string::npos) const
-    -> located<std::string> {
-    auto sub = uri.inner.substr(pos, count);
-    auto source = location::unknown;
-    if (uri.source && (uri.source.end - uri.source.begin) == uri.inner.size()) {
-      source.begin = uri.source.begin + pos;
-      source.end = source.begin + sub.length();
-    }
-    return {std::move(sub), source};
-  }
-
-  struct try_plugin_by_uri_result {
-    const loader_parser_plugin* loader{nullptr};
-    located<std::string> scheme{};
-    located<std::string> non_scheme{};
-
-    bool loader_found() const {
-      return loader != nullptr;
-    }
-    bool valid_uri_parsed() const {
-      return !scheme.inner.empty();
-    }
-  };
-
-  auto try_plugin_by_uri(const located<std::string>& src) const
-    -> try_plugin_by_uri_result {
-    // Not using caf::uri for anything else but checking for URI validity
-    // This is because it makes the interaction with located<...> very difficult
-    if (!caf::uri::can_parse(src.inner))
-      return {};
-    // In a valid URI, the first ':' is guaranteed to separate the scheme from
-    // the rest
-    TENZIR_ASSERT(src.inner.find(':') != std::string::npos);
-    try_plugin_by_uri_result result{};
-    auto scheme_len = src.inner.find(':');
-    result.scheme = get_located_uri_fragment(src, 0, scheme_len);
-    auto non_scheme_offset = scheme_len + 1;
-    if (caf::starts_with(caf::string_view{src.inner}.substr(non_scheme_offset),
-                         "//"))
-      // If the URI has an `authority` component, it starts with "//"
-      // We need to skip that before forwarding it to the loader
-      non_scheme_offset += 2;
-    result.non_scheme = get_located_uri_fragment(src, non_scheme_offset);
-    result.loader = plugins::find<loader_parser_plugin>(result.scheme.inner);
-    return result;
-  }
 };
 
 class load_plugin final : virtual public operator_plugin<load_operator> {
@@ -376,19 +392,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "load <loader> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sources/load";
-    auto name = p.accept_shell_arg();
-    if (!name) {
-      diagnostic::error("expected loader name", p.current_span())
-        .primary(p.current_span())
-        .usage(usage)
-        .docs(docs)
-        .throw_();
-    }
-    auto plugin = plugins::find<loader_parser_plugin>(name->inner);
-    if (!plugin) {
-      throw_loader_not_found(*name);
-    }
-    auto loader = plugin->parse_loader(p);
+    auto loader = get_loader(p, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
     return std::make_unique<load_operator>(std::move(loader));
   }
