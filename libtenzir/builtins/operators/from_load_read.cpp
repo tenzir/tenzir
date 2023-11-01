@@ -6,99 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
+#include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
-#include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 
 namespace tenzir::plugins::from {
 namespace {
-
-template <typename String>
-class prepend_token final : public parser_interface {
-public:
-  prepend_token(located<String> token, parser_interface& next)
-    : token_{std::move(token)}, next_{next} {
-  }
-
-  auto accept_shell_arg() -> std::optional<located<std::string>> override {
-    if (token_) {
-      auto tmp = make_located_string();
-      token_ = std::nullopt;
-      return tmp;
-    }
-    return next_.accept_shell_arg();
-  }
-
-  auto peek_shell_arg() -> std::optional<located<std::string>> override {
-    if (token_) {
-      return make_located_string();
-    }
-    return next_.peek_shell_arg();
-  }
-
-  auto accept_identifier() -> std::optional<identifier> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_identifier();
-  }
-
-  auto peek_identifier() -> std::optional<identifier> override {
-    TENZIR_ASSERT(not token_);
-    return next_.peek_identifier();
-  }
-
-  auto accept_equals() -> std::optional<location> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_equals();
-  }
-
-  auto accept_char(char c) -> std::optional<location> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_char(c);
-  }
-
-  auto parse_operator() -> located<operator_ptr> override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_operator();
-  }
-
-  auto parse_expression() -> tql::expression override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_expression();
-  }
-
-  auto parse_legacy_expression() -> located<expression> override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_legacy_expression();
-  }
-
-  auto parse_extractor() -> tql::extractor override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_extractor();
-  }
-
-  auto at_end() -> bool override {
-    return not token_ && next_.at_end();
-  }
-
-  auto current_span() -> location override {
-    if (token_) {
-      return token_->source;
-    }
-    return next_.current_span();
-  }
-
-private:
-  auto make_located_string() const -> located<std::string> {
-    TENZIR_ASSERT(token_);
-    return {std::string{token_->inner}, token_->source};
-  }
-
-  std::optional<located<String>> token_;
-  parser_interface& next_;
-};
 
 class load_operator final : public crtp_operator<load_operator> {
 public:
@@ -255,87 +170,21 @@ template <typename String>
     .throw_();
 }
 
-template <typename String>
-auto get_located_uri_fragment(const located<String>& uri, size_t pos,
-                              size_t count = std::string::npos)
-  -> located<std::string_view> {
-  auto sub = std::string_view{uri.inner}.substr(pos, count);
-  auto source = location::unknown;
-  if (uri.source && (uri.source.end - uri.source.begin) == uri.inner.size()) {
-    source.begin = uri.source.begin + pos;
-    source.end = source.begin + sub.length();
-  }
-  return {sub, source};
-}
-
-struct try_plugin_by_uri_result {
-  const loader_parser_plugin* loader{nullptr};
-  located<std::string_view> scheme{};
-  located<std::string_view> non_scheme{};
-
-  [[nodiscard]] bool loader_found() const {
-    return loader != nullptr;
-  }
-  [[nodiscard]] bool valid_uri_parsed() const {
-    return !scheme.inner.empty();
-  }
-};
-
-auto try_plugin_by_uri(const located<std::string>& src)
-  -> try_plugin_by_uri_result {
-  // Not using caf::uri for anything else but checking for URI validity
-  // This is because it makes the interaction with located<...> very difficult
-  if (!caf::uri::can_parse(src.inner))
-    return {};
-  // In a valid URI, the first ':' is guaranteed to separate the scheme from
-  // the rest
-  TENZIR_ASSERT(src.inner.find(':') != std::string::npos);
-  try_plugin_by_uri_result result{};
-  auto scheme_len = src.inner.find(':');
-  result.scheme = get_located_uri_fragment(src, 0, scheme_len);
-  auto non_scheme_offset = scheme_len + 1;
-  if (caf::starts_with(caf::string_view{src.inner}.substr(non_scheme_offset),
-                       "//"))
-    // If the URI has an `authority` component, it starts with "//"
-    // We need to skip that before forwarding it to the loader
-    non_scheme_offset += 2;
-  result.non_scheme = get_located_uri_fragment(src, non_scheme_offset);
-  result.loader = plugins::find<loader_parser_plugin>(result.scheme.inner);
-  return result;
-}
-
-template <typename Parser>
-auto get_loader(Parser& q, const char* usage, const char* docs)
+auto get_loader(parser_interface& p, const char* usage, const char* docs)
   -> std::unique_ptr<plugin_loader> {
-  auto l_name = q.accept_shell_arg();
+  auto l_name = p.accept_shell_arg();
   if (not l_name) {
     diagnostic::error("expected loader name")
-      .primary(q.current_span())
+      .primary(p.current_span())
       .usage(usage)
       .docs(docs)
       .throw_();
   }
-  if (auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner)) {
-    // Matches a plugin name, use that
-    return l_plugin->parse_loader(q);
+  auto [loader, name] = detail::resolve_loader(p, *l_name);
+  if (not loader) {
+    throw_loader_not_found(name);
   }
-  if (auto uri = try_plugin_by_uri(*l_name); uri.loader_found()) {
-    // Valid URI, with a matching plugin name
-    auto r = prepend_token{uri.non_scheme, q};
-    auto loader = uri.loader->parse_loader(r);
-    TENZIR_DIAG_ASSERT(r.at_end());
-    return loader;
-  } else if (uri.valid_uri_parsed()) {
-    // Valid URI, but no matching plugin name -> error
-    throw_loader_not_found(uri.scheme);
-  }
-  // Try `file` loader, may be a path
-  auto l_plugin = plugins::find<loader_parser_plugin>("file");
-  TENZIR_DIAG_ASSERT(l_plugin);
-  auto r = prepend_token{std::move(*l_name), q};
-  auto loader = l_plugin->parse_loader(r);
-  TENZIR_DIAG_ASSERT(r.at_end());
-  return loader;
+  return std::move(loader);
 }
 
 class from_plugin final : public virtual operator_parser_plugin {
