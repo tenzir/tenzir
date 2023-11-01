@@ -123,6 +123,18 @@ struct try_plugin_by_uri_result {
   }
 };
 
+auto plugin_name_for_scheme(std::string_view scheme) -> std::string_view {
+  using namespace std::string_view_literals;
+  constexpr auto scheme_to_plugin_map = std::array{std::pair{"gs"sv, "gcs"sv}};
+  auto map_it
+    = std::ranges::find(scheme_to_plugin_map, scheme, [](const auto& pair) {
+        return pair.first;
+      });
+  if (map_it == scheme_to_plugin_map.end())
+    return scheme;
+  return map_it->second;
+}
+
 template <typename Plugin>
 auto try_plugin_by_uri(const located<std::string>& src)
   -> try_plugin_by_uri_result<Plugin> {
@@ -137,13 +149,13 @@ auto try_plugin_by_uri(const located<std::string>& src)
   auto scheme_len = src.inner.find(':');
   result.scheme = make_located_string_view(src, 0, scheme_len);
   auto non_scheme_offset = scheme_len + 1;
-  if (caf::starts_with(caf::string_view{src.inner}.substr(non_scheme_offset),
-                       "//"))
+  if (src.inner.substr(non_scheme_offset).starts_with("//"))
     // If the URI has an `authority` component, it starts with "//"
     // We need to skip that before forwarding it to the loader
     non_scheme_offset += 2;
   result.non_scheme = make_located_string_view(src, non_scheme_offset);
-  result.plugin = plugins::find<Plugin>(result.scheme.inner);
+  result.plugin
+    = plugins::find<Plugin>(plugin_name_for_scheme(result.scheme.inner));
   return result;
 }
 

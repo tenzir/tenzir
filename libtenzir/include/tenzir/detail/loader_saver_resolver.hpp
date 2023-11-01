@@ -17,6 +17,6 @@ auto resolve_loader(parser_interface& parser, const located<std::string>& name)
   -> std::pair<std::unique_ptr<plugin_loader>, located<std::string_view>>;
 
 auto resolve_saver(parser_interface& parser, const located<std::string>& name)
--> std::pair<std::unique_ptr<plugin_saver>, located<std::string_view>>;
+  -> std::pair<std::unique_ptr<plugin_saver>, located<std::string_view>>;
 
 } // namespace tenzir::detail
