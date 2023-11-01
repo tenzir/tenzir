@@ -14,7 +14,7 @@ check() {
   local step
   step="step_$(printf '%02d' "${step_nr_}")"
   export step
-  
+
   while [[ $# -gt 0 ]]; do
     case $1 in
       '!')
