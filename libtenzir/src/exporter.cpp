@@ -57,6 +57,7 @@ void attach_result_stream(
   struct stream_state {
     exporter_actor self;
     exporter_actor::stateful_pointer<exporter_state> self_ptr{nullptr};
+    size_t num_shipped = 0;
   };
   self->state.result_stream = // [formatting]
     caf::attach_stream_source(
@@ -69,14 +70,7 @@ void attach_result_stream(
         auto& results = state.self_ptr->state.sink_buffer;
         (void)hint; // We could consider using `hint`.
         if (!results.empty()) {
-          if (state.self_ptr->state.accountant) {
-            state.self_ptr->send(
-              state.self_ptr->state.accountant, atom::metrics_v,
-              "exporter.shipped", results.front().rows(),
-              metrics_metadata{
-                {"query",
-                 fmt::to_string(state.self_ptr->state.query_context.id)}});
-          }
+          state.num_shipped += results.front().rows();
           out.push(std::move(results.front()));
           results.pop_front();
         }
@@ -87,8 +81,17 @@ void attach_result_stream(
         auto should_end = state.self_ptr->state.executor.unsafe_current()
                             == state.self_ptr->state.executor.end()
                           && state.self_ptr->state.sink_buffer.empty();
-        if (should_end)
+        if (should_end) {
+          if (state.self_ptr->state.accountant) {
+            state.self_ptr->send(
+              state.self_ptr->state.accountant, atom::metrics_v,
+              "exporter.shipped", state.num_shipped,
+              metrics_metadata{
+                {"query",
+                 fmt::to_string(state.self_ptr->state.query_context.id)}});
+          }
           shutdown_stream(state.self_ptr->state.result_stream);
+        }
         return should_end;
       })
       .ptr();
