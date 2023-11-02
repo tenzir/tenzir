@@ -123,7 +123,7 @@ excerpt for the match is `YmFy` (= `"bar"`).[^1]
 
 :::note Implementation Details
 You can skip this section if you are not interested in the inner workings, but
-may help understand how YARA works under the hood.
+it may help understand how YARA works under the hood.
 :::
 
 Internally, YARA scanners work with blocks of data. Rule matches can span
