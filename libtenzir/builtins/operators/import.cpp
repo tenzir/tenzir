@@ -78,17 +78,17 @@ public:
     // can offer a better mechanism here.
     auto blocking_self = caf::scoped_actor{ctrl.self().system()};
     auto components
-      = get_node_components<index_actor>(blocking_self, ctrl.node());
+      = get_node_components<importer_actor>(blocking_self, ctrl.node());
     if (!components) {
       ctrl.abort(std::move(components.error()));
       co_return;
     }
     co_yield {};
-    auto [index] = std::move(*components);
+    auto [importer] = std::move(*components);
     auto num_events = uint64_t{};
     auto source = caf::detail::make_stream_source<import_source_driver>(
       &ctrl.self(), input, num_events, ctrl);
-    source->add_outbound_path(index);
+    source->add_outbound_path(importer);
     for (const auto& plugin : plugins::get<analyzer_plugin>()) {
       // We can safely assert that the analyzer was already initialized. The
       // pipeline API guarantees that remote operators run after the node was
