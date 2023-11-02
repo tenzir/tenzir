@@ -240,10 +240,17 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
           auto result = record{};
           for (const auto& x : *parsed) {
             auto parse_result = false;
-            if (!parsers::boolean(caf::get<std::string>(x.second),
-                                  parse_result)) {
+            const auto* str = caf::get_if<std::string>(&x.second);
+            if (not str) {
               return caf::make_error(ec::invalid_argument,
-                                     "currently only boolean values in records "
+                                     "currently only non-null boolean values "
+                                     "in nested records "
+                                     "are supported");
+            }
+            if (!parsers::boolean(*str, parse_result)) {
+              return caf::make_error(ec::invalid_argument,
+                                     "currently only non-null boolean values "
+                                     "in nested records "
                                      "are supported");
             }
             result[x.first] = parse_result;
