@@ -537,27 +537,15 @@ public:
         }
       }
     } else {
-      memory_block_vector blocks;
+      std::vector<std::byte> buffer;
       for (auto&& chunk : input) {
         if (not chunk) {
           co_yield {};
           continue;
         }
-        blocks.push_back(chunk);
-        if (auto slices = scanner->scan(blocks)) {
-          for (auto&& slice : *slices)
-            co_yield slice;
-        } else if (slices.error() == ec::incomplete) {
-          co_yield {};
-        } else {
-          diagnostic::error("failed to scan block with YARA rules")
-            .hint("{}", slices.error())
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
+        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
       }
-      blocks.done();
-      if (auto slices = scanner->scan(blocks)) {
+      if (auto slices = scanner->scan(as_bytes(buffer))) {
         for (auto&& slice : *slices)
           co_yield slice;
       } else {
