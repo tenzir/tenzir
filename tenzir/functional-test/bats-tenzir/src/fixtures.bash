@@ -1,13 +1,15 @@
 # SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 # SPDX-License-Identifier: BSD-3-Clause
 
-setup_db() {
-  export TENZIR_DB_DIRECTORY="tenzir-functional-test-state/$BATS_TEST_NAME"
-  rm -rf "$TENZIR_DB_DIRECTORY"
+setup_state_dir() {
+  export BATS_TEST_STATE_DIR="tenzir-functional-test-state/$BATS_TEST_NAME"
+  rm -rf "$BATS_TEST_STATE_DIR"
+  mkdir -p "$BATS_TEST_STATE_DIR"
+  export TENZIR_DB_DIRECTORY="${BATS_TEST_STATE_DIR}/db"
 }
-teardown_db() {
+teardown_state_dir() {
   if [ -n  "$BATS_TEST_COMPLETED" ] && [  "$BATS_TEST_COMPLETED" -eq 1 ]; then
-    rm -rf "$TENZIR_DB_DIRECTORY"
+    rm -rf "$BATS_TEST_STATE_DIR"
   fi
 }
 
@@ -37,15 +39,13 @@ teardown_node() {
   exec {NODE_OUT}<&-
 }
 
-setup_state_dir() {
-  mkdir -p tenzir-functional-test-state
-}
-
 try_remove_state_dir() {
-  # Remove the state dir if all tests cleaned up after themselves.
-  if [ "$(ls -A tenzir-functional-test-state)" == "" ]; then
-    rmdir tenzir-functional-test-state
-  else
-    debug 0 "Keeping tenzir-functional-test-state directory."
+  if [ -d tenzir-functional-test-state ]; then
+    # Remove the state dir if all tests cleaned up after themselves.
+    if [ "$(ls -A tenzir-functional-test-state)" == "" ]; then
+      rmdir tenzir-functional-test-state
+    else
+      debug 0 "Keeping tenzir-functional-test-state directory."
+    fi
   fi
 }

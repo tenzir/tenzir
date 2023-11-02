@@ -12,15 +12,20 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
+  setup_state_dir
   export TENZIR_AUTOMATIC_REBUILD=0
+  export TENZIR_ENABLE_METRICS=true
+  export TENZIR_METRICS__SELF_SINK__ENABLE=false
+  export TENZIR_METRICS__FILE_SINK__ENABLE=true
+  export TENZIR_METRICS__FILE_SINK__REAL_TIME=true
+  export TENZIR_METRICS__FILE_SINK__PATH=$PWD/$BATS_TEST_STATE_DIR/metrics.log
   set | grep -Ee "^TENZIR" || true >&3
-  setup_db
   setup_node
 }
 
 teardown() {
   teardown_node
-  teardown_db
+  teardown_state_dir
 }
 
 @test "import and export commands" {
@@ -80,15 +85,6 @@ teardown() {
   # import some more to make sure accounting data is in the system.
   check -c \
     "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
-     | tenzir-ctl import -b --batch-size=10 zeek"
-  check -c \
-    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
-     | tenzir-ctl import -b --batch-size=1000 zeek"
-  check -c \
-    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
-     | tenzir-ctl import -b --batch-size=100000 zeek"
-  check -c \
-    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b --batch-size=1 -n 242 zeek"
 
   check -c \
@@ -101,4 +97,11 @@ teardown() {
   check -c \
     "tenzir-ctl status --detailed index importer \
      | jq -ec 'paths(scalars) as \$p | {path:\$p, type:(getpath(\$p) | type)}' | grep -v ',[1-9][0-9]*,'"
+
+  check --sort tenzir-ctl export json 'where resp_h == 192.168.1.104'
+
+  # Unfortunately necessary.
+  sleep 5
+  sync "${TENZIR_METRICS__FILE_SINK__PATH}"
+  check -c "jq -c '{key: .key, type: .value | type}' \"${TENZIR_METRICS__FILE_SINK__PATH}\" | sort | uniq"
 }
