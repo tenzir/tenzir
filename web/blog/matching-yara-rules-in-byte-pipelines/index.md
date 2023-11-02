@@ -3,6 +3,7 @@ title: Matching YARA Rules in Byte Pipelines
 authors:
    - mavam
 date: 2023-11-01
+last_updated: 2023-11-02
 tags: [yara, operator, dfir, detection engineering]
 comments: true
 ---
@@ -123,28 +124,35 @@ excerpt for the match is `YmFy` (= `"bar"`).[^1]
 
 :::note Implementation Details
 You can skip this section if you are not interested in the inner workings, but
-may help understand how YARA works under the hood.
+it may help understand how YARA works under the hood.
 :::
 
-Internally, YARA scanners work with blocks of data. Rule matches can span
-multiple blocks, but the scanner engine needs a signal to know that it now has
-all blocks and start scanning:
+Tenzir byte pipelines consist of a stream of variable-size chunks of memory.
+E.g., when loading the raw bytes of file via `load file`, the dataflow may
+consist of multiple chunks. YARA scanners can also operate on multiple blocks of
+data. It might be tempting to treat these as contiguous, adjacent blocks of
+memory (we did this initially) and think that it should be possible to match a
+rule across adjacent a blocks, like this:
 
 ![YARA scanner blocks](yara-implementation.excalidraw.svg)
 
-Because a scanner [may perform *multiple* passes over the given sequence of
-blocks](https://github.com/VirusTotal/yara/issues/1994#issuecomment-1784082573),
-it's not possible to build a one-pass, multi-block YARA streaming engine that
-can release the memory blocks that it fed to a scanner.
+[This is not the case](https://github.com/VirusTotal/yara/issues/1994). While it
+*may* work, it's possible to write rules where this fails. As a result, simply
+keeping the input blocks in memory and feeding them to a scanner *might cause
+false negatives* if you have a rule that should match across chunk boundaries.
+In other words, it's not possible to build an incremental streaming engine with
+the current YARA architecture. Moreover, YARA may perform multiple passes over
+the input, so it's neither possible to construct a one-pass streaming engine.
 
 This is the reason why the `yara` operator supports two modes of operation:
 
-1. **Accumulating**: start scanning after the last chunk of bytes. (default)
+1. **Accumulating**: Accumulate all chunks perform a scan at the end. (default)
 2. **Blockwise**: scan each block of memory as self-contained unit.
    (`--blockwise`)
 
-Mode (1) requires buffering all chunks whereas (2) can work in a streaming
-manner.
+Mode (1) copies all chunks in a single buffer. Mode (2) does work in streaming
+mode, but it only makes sense if each chunk of memory is a self-contained unit,
+e.g., when getting memory chunks from a message broker.
 
 ## Mix and match loaders
 
