@@ -272,10 +272,6 @@ components:
         error:
           type: string
           description: The error that the pipeline may have encountered during running.
-        restart_with_node:
-          type: boolean
-          description: A flag specifying whether this pipeline should start upon launching the parent node.
-          default: false
         operators:
           type: array
           items:
