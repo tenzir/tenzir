@@ -35,6 +35,7 @@ apt-get -y --no-install-recommends install \
     libunwind-dev \
     libxxhash-dev \
     libyaml-cpp-dev \
+    libyara-dev \
     lsb-release \
     ninja-build \
     pandoc \
@@ -47,7 +48,8 @@ apt-get -y --no-install-recommends install \
     python3-venv \
     robin-map-dev \
     software-properties-common \
-    wget
+    wget \
+    yara
 
 codename="$(lsb_release --codename --short)"
 

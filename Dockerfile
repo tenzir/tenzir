@@ -105,6 +105,7 @@ RUN apt-get update && \
       libunwind8 \
       libxxhash-dev \
       libyaml-cpp0.7 \
+      libyara9 \
       libzmq5 \
       lsb-release \
       openssl \
