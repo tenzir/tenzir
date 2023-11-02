@@ -5,27 +5,29 @@ date: 2023-11-02
 tags: [release, operators, velociraptor, yara]
 ---
 
-We are incredibly excited to announce the release of [Tenzir
-v4.4](https://github.com/tenzir/tenzir/releases/tag/v4.4.0). In keeping with our
-commitment to advance with the rapidly-evolving field of security data
-pipelines, we've focused this release on integrations with two pillars of the
-security ecosystem: YARA and Velociraptor.
+[Tenzir v4.4](https://github.com/tenzir/tenzir/releases/tag/v4.4.0) is out!
+We've focused this release on integrations with two pillars of the digital
+forensics and incident response (DFIR) ecosystem: [YARA][yara] and
+[Velociraptor][velociraptor].
 
+[yara]: https://yara.readthedocs.io
+[velocirator]: https://docs.velociraptor.app
 ![Tenzir v4.4](tenzir-v4.4.excalidraw.svg)
 
 <!-- truncate -->
 
 ## YARA Operator
 
-The star feature of this release is the new YARA operator. You can now match
-YARA rules directly within byte pipelines. This is a game-changer for threat
+The star feature of this release is the new [`yara`
+operator](/next/operators/transformations/yara). You can now match [YARA][yara]
+rules directly within byte pipelines. This is a game-changer for threat
 intelligence and cybersecurity workflows, as it brings together all of Tenzir's
 connectors with the community's rich ecosystem of YARA rules for efficient
-malware detection. Evaluating a set of rules on a file located in an S3 bucket
-has never been easier:
+malware detection and analysis. Evaluating a set of rules on a file located in
+an S3 bucket has never been easier:
 
 ```
-load s3 bucket/file.ext
+load s3 bucket/file.exe
 | yara path/to/rules/
 ```
 
@@ -37,22 +39,23 @@ Pipelines](blog/matching-yara-rules-in-byte-pipelines)
 
 ## Velociraptor Operator
 
-Velociraptor is an advanced digital forensic and incident response tool that
-enhances your visibility into your endpoints. Not unlike Tenzir with TQL,
+[Velociraptor][velocirator] is an advanced DFIR tool that enhances your
+visibility into your endpoints. Not unlike [our own TQL](/language),
 Velociraptor comes with its own language for interacting with it
-programmatically: VQL. The `velocirator` operator makes it possible to query
-Velociraptor directly from within Tenzir.
+programmatically: VQL. The `velocirator` operator makes it possible to submit
+VQL queries to a Velociraptor server, as well as subscribe to artificats
+artifacts in hunt flows over a large fleet of assets, making endpoint telemetry
+collection and processing a breeze.
 
 :::info
-Read our blog post on how we built this integration and how you can utilize it
-to learn more: [Integrating Velociraptor into Tenzir
+Read our blog post on how we built this integration and how you can utilize it:
+[Integrating Velociraptor into Tenzir
 Pipelines](blog/integrating-velociraptor-into-tenzir-pipelines)
 :::
 
 ## Noteworthy Improvements
 
-We provide a full list of changes [in our changelog](changelog#v440). Besides
-the new operators, I would like to highlight the following changes to Tenzir:
+Besides the new operators, I would like to highlight the following changes:
 
 - **Blob Type:** We've added a new `blob` type that allows you to handle binary
   data. Use the `blob` type over the `string` type for binary payloads that are
@@ -69,9 +72,11 @@ the new operators, I would like to highlight the following changes to Tenzir:
   _Failed_. The states reflect whether a pipeline was manually stopped, ended
   naturally, or encountered an error, respectively.
 
-- **Label Support for Pipelines:** Now, you can visually group related pipelines
+- **Label Support for Pipelines:** You can now visually group related pipelines
   using the new labels feature. This helps you in organizing your pipelines
   better for improved visibility and accessibility.
+
+We provide a full list of changes [in our changelog](changelog#v440).
 
 Check out the new features on [app.tenzir.com](https://app.tenzir.com). We're
 excited to see the amazing things you will accomplish with them!
