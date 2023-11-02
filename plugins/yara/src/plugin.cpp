@@ -537,15 +537,28 @@ public:
         }
       }
     } else {
+      // Small optimization: in case the entire input consists of a single
+      // chunk, we don't want to copy it at all. This actually may happen
+      // frequently when memory-mapping files, so it's worthwhile addressing.
+      auto first = chunk_ptr{};
       std::vector<std::byte> buffer;
       for (auto&& chunk : input) {
         if (not chunk) {
           co_yield {};
           continue;
         }
-        buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+        if (not buffer.empty()) {
+          buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+        } else if (not first) {
+          first = chunk;
+        } else {
+          buffer.reserve(first->size() + chunk->size());
+          buffer.insert(buffer.end(), first->begin(), first->end());
+          buffer.insert(buffer.end(), chunk->begin(), chunk->end());
+        }
       }
-      if (auto slices = scanner->scan(as_bytes(buffer))) {
+      auto bytes = buffer.empty() ? as_bytes(first) : as_bytes(buffer);
+      if (auto slices = scanner->scan(bytes)) {
         for (auto&& slice : *slices)
           co_yield slice;
       } else {
