@@ -1,7 +1,7 @@
 ---
 title: Tenzir v4.4
 authors: [dominiklohmann]
-date: 2023-11-02
+date: 2023-11-03
 tags: [release, operators, velociraptor, yara]
 ---
 
