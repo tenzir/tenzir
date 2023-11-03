@@ -1,0 +1,103 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include "tenzir/dissector.hpp"
+
+#include "tenzir/concept/parseable/core.hpp"
+#include "tenzir/concept/parseable/string.hpp"
+#include "tenzir/concept/parseable/tenzir/data.hpp"
+#include "tenzir/diagnostics.hpp"
+
+namespace tenzir {
+
+namespace {
+
+using namespace parser_literals;
+
+auto make_dissect_parser() {
+  auto make_field = [](std::string str) {
+    return dissector::token{dissector::field{
+      .name = std::move(str),
+      .parser = parsers::data,
+    }};
+  };
+  auto make_literal = [](std::string str) {
+    return dissector::token{dissector::literal{
+      .parser = parsers::str{std::move(str)},
+    }};
+  };
+  auto field_char = parsers::printable - '}';
+  auto field = "%{"_p >> *field_char >> '}';
+  auto skip_char = parsers::printable - '%';
+  auto skip = +skip_char - '{';
+  // clang-format off
+  auto section
+    = field ->* make_field
+    | skip ->* make_literal
+    ;
+  // clang-format on
+  auto parser = +section;
+  return parser;
+}
+
+} // namespace
+
+auto dissector::make(std::string_view pattern, dissector_style style)
+  -> caf::expected<dissector> {
+  auto result = dissector{};
+  switch (style) {
+    case dissector_style::grok:
+      return caf::make_error(ec::unimplemented);
+    case dissector_style::dissect: {
+      static auto parser = make_dissect_parser();
+      if (not parser(pattern, result.tokens_))
+        // TODO: use diagnostics
+        return caf::make_error(ec::parse_error);
+      break;
+    }
+    case dissector_style::kv:
+      return caf::make_error(ec::unimplemented);
+  }
+  return result;
+}
+
+auto dissector::dissect(std::string_view input) -> std::optional<record> {
+  auto result = record{};
+  const auto* begin = input.begin();
+  const auto* end = input.end();
+  for (const auto& section : tokens_) {
+    auto f = detail::overload{
+      [&](const field& field) -> std::optional<diagnostic> {
+        auto x = data{};
+        if (field.parser(begin, end, x))
+          result.emplace(field.name, std::move(x));
+        else
+          return diagnostic::error("failed to dissect field")
+            .note("field: {}", field.name)
+            .done();
+        return std::nullopt;
+      },
+      [&](const literal& literal) -> std::optional<diagnostic> {
+        if (not literal.parser(begin, end))
+          return diagnostic::error("failed to dissect literal").done();
+        return std::nullopt;
+      },
+    };
+    if (auto diag = std::visit(f, section)) {
+      TENZIR_ERROR(diag);
+      return std::nullopt;
+    }
+  }
+  return result;
+}
+
+auto dissector::tokens() -> const std::vector<token>& {
+  return tokens_;
+}
+
+} // namespace tenzir
