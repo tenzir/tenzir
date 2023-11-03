@@ -228,9 +228,9 @@ public:
   }
 
   /// Infers a type from a given data.
-  /// @note Returns a none type if the type cannot be inferred.
+  /// @note Returns an empty optional if the type cannot be inferred.
   /// @relates data
-  [[nodiscard]] static type infer(const data& value) noexcept;
+  [[nodiscard]] static std::optional<type> infer(const data& value) noexcept;
 
   /// Constructs a type from a legacy_type.
   /// @relates legacy_type

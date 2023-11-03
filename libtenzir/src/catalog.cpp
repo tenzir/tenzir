@@ -31,6 +31,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/prune.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/report.hpp"
@@ -86,17 +87,31 @@ void catalog_state::erase(const uuid& partition) {
 }
 
 caf::expected<catalog_lookup_result>
-catalog_state::lookup(const expression& expr) const {
+catalog_state::lookup(expression expr) const {
   auto start = stopwatch::now();
   auto total_candidates = catalog_lookup_result{};
-  auto num_candidates = size_t{0};
-  auto pruned = prune(expr, unprunable_fields);
+  auto num_candidate_partitions = size_t{0};
+  auto num_candidate_events = size_t{0};
+  if (expr == caf::none) {
+    expr = trivially_true_expression();
+  }
+  auto normalized = normalize_and_validate(expr);
+  if (not normalized) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("{} failed to normalize and validate "
+                                       "epxression {}: {}",
+                                       *self, expr, normalized.error()));
+  }
   for (const auto& [type, _] : synopses_per_type) {
-    auto resolved = resolve(taxonomies, pruned, type);
-    if (!resolved) {
-      return resolved.error();
+    auto resolved = resolve(taxonomies, *normalized, type);
+    if (not resolved) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("{} failed to resolve epxression {}: "
+                                         "{}",
+                                         *self, expr, resolved.error()));
     }
-    auto candidates_per_type = lookup_impl(*resolved, type);
+    auto pruned = prune(*resolved, unprunable_fields);
+    auto candidates_per_type = lookup_impl(pruned, type);
     // Sort partitions by their max import time, returning the most recent
     // partitions first.
     std::sort(candidates_per_type.partition_infos.begin(),
@@ -104,14 +119,22 @@ catalog_state::lookup(const expression& expr) const {
               [&](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time > rhs.max_import_time;
               });
-    num_candidates += candidates_per_type.partition_infos.size();
+    num_candidate_partitions += candidates_per_type.partition_infos.size();
+    num_candidate_events
+      += std::transform_reduce(candidates_per_type.partition_infos.begin(),
+                               candidates_per_type.partition_infos.end(),
+                               size_t{0}, std::plus<>{},
+                               [](const auto& partition) {
+                                 return partition.events;
+                               });
     total_candidates.candidate_infos[type] = std::move(candidates_per_type);
   }
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     stopwatch::now() - start);
-  TENZIR_VERBOSE("catalog lookup found {} candidates in {} microseconds",
-                 num_candidates, delta.count());
-  TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidates);
+  TENZIR_VERBOSE("catalog found {} candidate partitions ({} events) in "
+                 "{} microseconds",
+                 num_candidate_partitions, num_candidate_events, delta.count());
+  TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
   return total_candidates;
 }
 
@@ -133,7 +156,6 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         || partition_synopses.empty())
       return memoized_partitions;
     for (const auto& [partition_id, synopsis] : partition_synopses) {
-      memoized_partitions.exp = expr;
       memoized_partitions.partition_infos.emplace_back(partition_id, *synopsis);
     }
     return memoized_partitions;
@@ -256,7 +278,6 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 // short, so we're probably not hitting the allocator due to
                 // SSO.
                 if (evaluate(std::string{fqf.schema_name()}, x.op, d)) {
-                  result.exp = expr;
                   result.partition_infos.emplace_back(part_id, *part_syn);
                   break;
                 }
@@ -268,7 +289,6 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
           }
           if (lhs.kind == meta_extractor::schema_id) {
             auto result = catalog_lookup_result::candidate_info{};
-            result.exp = expr;
             for (const auto& [part_id, part_syn] : partition_synopses) {
               TENZIR_ASSERT(part_syn->schema == schema);
             }
@@ -293,7 +313,6 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
               };
               auto add = ts.lookup(x.op, caf::get<tenzir::time>(d));
               if (!add || *add) {
-                result.exp = expr;
                 result.partition_infos.emplace_back(part_id, *part_syn);
               }
             }
@@ -387,7 +406,8 @@ size_t catalog_state::memusage() const {
 
 void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   for (auto const& [field, synopsis] : ps.field_synopses_)
-    if (synopsis != nullptr && field.type() == string_type{})
+    if (synopsis != nullptr
+        && caf::holds_alternative<string_type>(field.type()))
       unprunable_fields.insert(std::string{field.name()});
   // TODO/BUG: We also need to prevent pruning for enum types,
   // which also use string literals for lookup. We must be even
@@ -713,20 +733,20 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [self](atom::candidates, const tenzir::query_context& query_context)
       -> caf::result<catalog_lookup_result> {
       TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(query_context));
-      bool has_expression = query_context.expr != tenzir::expression{};
-      bool has_ids = !query_context.ids.empty();
-      if (has_ids)
+      if (not query_context.ids.empty()) {
         return caf::make_error(ec::invalid_argument, "catalog expects queries "
                                                      "not to have ids");
-      if (!has_expression)
-        return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                     "to have an expression");
+      }
       auto start = std::chrono::steady_clock::now();
       auto result = self->state.lookup(query_context.expr);
       if (!result) {
         return result.error();
       }
-      auto total_candidate_amount = result->size();
+      auto total_candidate_amount = std::transform_reduce(
+        result->candidate_infos.begin(), result->candidate_infos.end(),
+        size_t{0}, std::plus<>{}, [](const auto& candidate) {
+          return candidate.second.partition_infos.size();
+        });
       auto id_str = fmt::to_string(query_context.id);
       duration runtime = std::chrono::steady_clock::now() - start;
       self->send(self->state.accountant, atom::metrics_v,

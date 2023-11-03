@@ -510,93 +510,94 @@ type::type(const type& nested,
   // nop
 }
 
-type type::infer(const data& value) noexcept {
+std::optional<type> type::infer(const data& value) noexcept {
+  auto infer_list_element_type = [&](auto&& list) -> std::optional<type> {
+    // First, find first non-null element for the purposes of comparison
+    type first_inferred{};
+    auto it = list.begin();
+    for (; it != list.end(); ++it)
+      if (auto inferred = infer(*it); !inferred)
+        return std::nullopt;
+      else if (*inferred) {
+        first_inferred = std::move(*inferred);
+        ++it;
+        break;
+      }
+    // Then, compare the remaining elements to find if they are either null,
+    // or the same as the first non-null element
+    for (; it != list.end(); ++it)
+      if (auto inferred = infer(*it); !inferred)
+        return std::nullopt;
+      else if (*inferred && *inferred != first_inferred)
+        return std::nullopt;
+    return first_inferred;
+  };
+
   auto f = detail::overload{
-    [](caf::none_t) noexcept -> type {
-      return {};
+    [](caf::none_t) noexcept -> std::optional<type> {
+      return type{};
     },
-    [](const bool&) noexcept -> type {
+    [](const bool&) noexcept -> std::optional<type> {
       return type{bool_type{}};
     },
-    [](const int64_t&) noexcept -> type {
+    [](const int64_t&) noexcept -> std::optional<type> {
       return type{int64_type{}};
     },
-    [](const uint64_t&) noexcept -> type {
+    [](const uint64_t&) noexcept -> std::optional<type> {
       return type{uint64_type{}};
     },
-    [](const double&) noexcept -> type {
+    [](const double&) noexcept -> std::optional<type> {
       return type{double_type{}};
     },
-    [](const duration&) noexcept -> type {
+    [](const duration&) noexcept -> std::optional<type> {
       return type{duration_type{}};
     },
-    [](const time&) noexcept -> type {
+    [](const time&) noexcept -> std::optional<type> {
       return type{time_type{}};
     },
-    [](const std::string&) noexcept -> type {
+    [](const std::string&) noexcept -> std::optional<type> {
       return type{string_type{}};
     },
-    [](const blob&) noexcept -> type {
+    [](const blob&) noexcept -> std::optional<type> {
       return type{blob_type{}};
     },
-    [](const pattern&) noexcept -> type {
+    [](const pattern&) noexcept -> std::optional<type> {
       return type{string_type{}};
     },
-    [](const ip&) noexcept -> type {
+    [](const ip&) noexcept -> std::optional<type> {
       return type{ip_type{}};
     },
-    [](const subnet&) noexcept -> type {
+    [](const subnet&) noexcept -> std::optional<type> {
       return type{subnet_type{}};
     },
-    [](const enumeration&) noexcept -> type {
+    [](const enumeration&) noexcept -> std::optional<type> {
       // Enumeration types cannot be inferred.
-      return {};
+      return std::nullopt;
     },
-    [](const list& list) noexcept -> type {
-      // List types cannot be inferred from empty lists.
-      if (list.empty())
-        return type{list_type{type{}}};
-      // Technically lists can contain heterogeneous data, but for optimization
-      // purposes we only check the first element when assertions are disabled.
-      auto value_type = infer(*list.begin());
-      TENZIR_ASSERT(std::all_of(list.begin() + 1, list.end(),
-                                [&](const auto& elem) noexcept {
-                                  return value_type.type_index()
-                                         == infer(elem).type_index();
-                                }),
-                    "expected a homogenous list");
-      return type{list_type{value_type}};
+    [&](const list& list) noexcept -> std::optional<type> {
+      if (auto elem_type = infer_list_element_type(list); !elem_type)
+        return std::nullopt;
+      else
+        return type{list_type{*elem_type}};
     },
-    [](const map& map) noexcept -> type {
-      // Map types cannot be inferred from empty maps.
-      if (map.empty())
-        return type{map_type{type{}, type{}}};
-      // Technically maps can contain heterogeneous data, but for optimization
-      // purposes we only check the first element when assertions are disabled.
-      auto key_type = infer(map.begin()->first);
-      auto value_type = infer(map.begin()->second);
-      TENZIR_ASSERT(
-        std::all_of(map.begin() + 1, map.end(),
-                    [&](const auto& elem) noexcept {
-                      return key_type.type_index()
-                               == infer(elem.first).type_index()
-                             && value_type.type_index()
-                                  == infer(elem.second).type_index();
-                    }),
-        "expected a homogenous map");
-      return type{map_type{key_type, value_type}};
+    [&](const map& map) noexcept -> std::optional<type> {
+      auto key_type = infer_list_element_type(map | std::views::keys);
+      auto value_type = infer_list_element_type(map | std::views::values);
+      if (!key_type || !value_type)
+        return std::nullopt;
+      return type{map_type{*key_type, *value_type}};
     },
-    [](const record& record) noexcept -> type {
+    [](const record& record) noexcept -> std::optional<type> {
       // Record types cannot be inferred from empty records.
       if (record.empty())
-        return {};
+        return std::nullopt;
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(record.size());
       for (const auto& field : record)
-        fields.push_back({
-          field.first,
-          infer(field.second),
-        });
+        if (auto inferred = infer(field.second); !inferred)
+          return std::nullopt;
+        else
+          fields.push_back({field.first, *inferred});
       return type{record_type{fields}};
     },
   };

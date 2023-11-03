@@ -708,12 +708,16 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(ip{}), ip_type{});
   CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
   // Enumeration types cannot be inferred.
-  CHECK_EQUAL(type::infer(enumeration{0}), type{});
+  CHECK_EQUAL(type::infer(enumeration{0}), std::nullopt);
   // List and map types can only be inferred if the nested values can be
   // inferred.
   CHECK_EQUAL(type::infer(list{}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{caf::none}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{bool{}}), list_type{bool_type{}});
+  CHECK_EQUAL(type::infer(list{caf::none, int64_t{}}), list_type{int64_type{}});
+  CHECK_EQUAL(type::infer(list{int64_t{}, uint64_t{}}), std::nullopt);
+  CHECK_EQUAL(type::infer(list{caf::none, int64_t{}, uint64_t{}}),
+              std::nullopt);
   CHECK_EQUAL(type::infer(map{}), (map_type{type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}),
               (map_type{type{}, type{}}));

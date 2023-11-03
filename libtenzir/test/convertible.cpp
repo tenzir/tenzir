@@ -42,7 +42,7 @@ struct X {
       return result;
     } else {
       static const auto result = record_type{
-        {"value", type::infer(From{})},
+        {"value", type::infer(From{}).value_or(type{})},
       };
       return result;
     }

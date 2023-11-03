@@ -126,7 +126,7 @@ struct zeek_parser<ip_type> {
 template <>
 struct zeek_parser<subnet_type> {
   auto operator()(const subnet_type&, char, const std::string&) const {
-    return parsers::ip;
+    return parsers::net;
   }
 };
 

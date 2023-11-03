@@ -45,8 +45,8 @@ API][api] and [Python library][pyvelociraptor] that ship with the
 
 ## Usage
 
-The `velociraptor` is a source that emits events. We implemented two ways to
-interact with a Velociraptor server:
+The `velociraptor` operator is a source that emits events. We implemented two
+ways to interact with a Velociraptor server:
 
 1. Send a [VQL][vql] query to a server and process the response.
 
