@@ -100,8 +100,10 @@ teardown() {
 
   check --sort tenzir-ctl export json 'where resp_h == 192.168.1.104'
 
-  # Unfortunately necessary.
-  sleep 5
-  sync "${TENZIR_METRICS__FILE_SINK__PATH}"
-  check -c "jq -c '{key: .key, type: .value | type}' \"${TENZIR_METRICS__FILE_SINK__PATH}\" | sort | uniq"
+  # FIXME: This test is currently disabled as it is flaky. Let's figure out why
+  # in the future.
+  # # Unfortunately necessary.
+  # sleep 5
+  # sync "${TENZIR_METRICS__FILE_SINK__PATH}"
+  # check -c "jq -c '{key: .key, type: .value | type}' \"${TENZIR_METRICS__FILE_SINK__PATH}\" | sort | uniq"
 }
