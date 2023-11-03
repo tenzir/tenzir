@@ -12,6 +12,7 @@ forensics and incident response (DFIR) ecosystem: [YARA][yara] and
 
 [yara]: https://yara.readthedocs.io
 [velocirator]: https://docs.velociraptor.app
+
 ![Tenzir v4.4](tenzir-v4.4.excalidraw.svg)
 
 <!-- truncate -->
@@ -34,7 +35,7 @@ load s3 bucket/file.exe
 :::info
 We've written a blog post on the YARA operator that shows just how it works and
 explains in-depth how you can use it: [Matching YARA Rules in Byte
-Pipelines](blog/matching-yara-rules-in-byte-pipelines)
+Pipelines](/blog/matching-yara-rules-in-byte-pipelines)
 :::
 
 ## Velociraptor Operator
@@ -50,7 +51,7 @@ collection and processing a breeze.
 :::info
 Read our blog post on how we built this integration and how you can utilize it:
 [Integrating Velociraptor into Tenzir
-Pipelines](blog/integrating-velociraptor-into-tenzir-pipelines)
+Pipelines](/blog/integrating-velociraptor-into-tenzir-pipelines)
 :::
 
 ## Noteworthy Improvements
@@ -76,7 +77,7 @@ Besides the new operators, I would like to highlight the following changes:
   using the new labels feature. This helps you in organizing your pipelines
   better for improved visibility and accessibility.
 
-We provide a full list of changes [in our changelog](changelog#v440).
+We provide a full list of changes [in our changelog](/changelog#v440).
 
 Check out the new features on [app.tenzir.com](https://app.tenzir.com). We're
 excited to see the amazing things you will accomplish with them!
