@@ -40,7 +40,7 @@ constexpr auto default_exchange = std::string_view{"amq.direct"};
 /// The default queue name.
 constexpr auto default_queue = std::string_view{};
 
-/// The default routig key.
+/// The default routing key.
 constexpr auto default_routing_key = std::string_view{};
 
 /// Assume ownership of the memory and wrap it in a chunk.
@@ -105,14 +105,14 @@ auto to_error(const amqp_rpc_reply_t& reply) -> caf::error {
     case AMQP_RESPONSE_NORMAL:
       break;
     case AMQP_RESPONSE_NONE:
-      return caf::make_error(ec::unspecified, "got EOF from socket");
+      return caf::make_error(ec::end_of_input, "got EOF from socket");
     case AMQP_RESPONSE_SERVER_EXCEPTION:
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to execute RPC method {}",
                                          reply.reply.id));
     case AMQP_RESPONSE_LIBRARY_EXCEPTION:
       return caf::make_error(
-        ec::unspecified, fmt::format("failed perform action: {}",
+        ec::unspecified, fmt::format("failed to perform action: {}",
                                      amqp_error_string2(reply.library_error)));
   }
   return {};

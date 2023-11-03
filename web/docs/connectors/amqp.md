@@ -146,7 +146,7 @@ with no guarantee that it will ever be consumed.
 Consume [JSON](../formats/json.md) from a specific AMQP server:
 
 ```
-from amqp amqp://admin:pass:@0.0.0.1:5672/vhost
+from amqp amqp://admin:pass@0.0.0.1:5672/vhost
 ```
 
 Send the list of all TQL operators:
