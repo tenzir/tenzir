@@ -35,6 +35,8 @@ auto make_data_parser() {
 
 auto make_dissect_parser() {
   auto make_literal = [](std::string str) {
+    // FIXME
+    fmt::print("literal: '{}'\n", str);
     return dissector::token{dissector::literal{
       .parser = parsers::str{std::move(str)},
     }};
@@ -49,6 +51,8 @@ auto make_dissect_parser() {
       skip = true;
       str.erase(str.begin());
     }
+    // FIXME
+    fmt::print("field: '{}'\n", str);
     return dissector::token{dissector::field{
       .name = std::move(str),
       .skip = skip,
@@ -98,6 +102,9 @@ auto dissector::dissect(std::string_view input) -> std::optional<record> {
     auto f = detail::overload{
       [&](const field& field) -> std::optional<diagnostic> {
         auto x = data{};
+        // FIXME
+        fmt::print("[{}, {}): {} = '{}'\n", begin - input.begin(),
+                   end - input.begin(), field.name, std::string{begin, end});
         if (field.parser(begin, end, x)) {
           if (not field.skip)
             result.emplace(field.name, std::move(x));
@@ -112,6 +119,9 @@ auto dissector::dissect(std::string_view input) -> std::optional<record> {
         return std::nullopt;
       },
       [&](const literal& literal) -> std::optional<diagnostic> {
+        // FIXME
+        fmt::print("[{}, {}): literal with '{}'\n", begin - input.begin(),
+                   end - input.begin(), std::string{begin, end});
         if (not literal.parser(begin, end))
           return diagnostic::error("failed to dissect literal").done();
         return std::nullopt;
