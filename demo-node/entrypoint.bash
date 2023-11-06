@@ -45,7 +45,7 @@ curl -X POST \
 
 # !! Not started because the data has already been imported while building the image.
 # Newlines improve readability in the app.
-suricata_pipe="tenzir 'load https https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst \n| decompress zstd \n| read suricata \n| import'"
+suricata_pipe="tenzir 'load https https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst \n| decompress zstd \n| read suricata \n| where #schema != \\\"suricata.stats\\\" \n| import'"
 curl -X POST \
   -H "Content-Type: application/json" \
   -d "{\"name\": \"M57 Suricata Import\", \"definition\": \"${suricata_pipe}\", \"start_when_created\": false}" \
