@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/dissector.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
@@ -19,13 +20,13 @@ namespace {
 
 struct operator_args {
   std::string field;
-  std::string expr;
+  std::string pattern;
 };
 
 auto inspect(auto& f, operator_args& x) -> bool {
   return f.object(x)
     .pretty_name("tenzir.plugins.dissect.operator_args")
-    .fields(f.field("field", x.field), f.field("expr", x.expr));
+    .fields(f.field("field", x.field), f.field("pattern", x.pattern));
 }
 
 class dissect_operator final : public crtp_operator<dissect_operator> {
@@ -39,10 +40,18 @@ public:
     return "dissect";
   }
 
-  auto operator()(generator<table_slice> input) const
+  auto
+  operator()(operator_control_plane& ctrl, generator<table_slice> input) const
     -> generator<table_slice> {
+    auto dissector = dissector::make(args_.pattern);
+    if (not dissector) {
+      diagnostic::error("failed to construct dissector")
+        .hint("", dissector.error())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
     for (auto&& slice : input) {
-      // TODO: Apply function on every field.
+      // TODO: Apply function on selected field.
       co_yield slice;
     }
   }
@@ -77,7 +86,7 @@ public:
                                           "operators/transformations/dissect"};
     auto args = operator_args{};
     parser.add(args.field, "<field>");
-    parser.add(args.expr, "<expr>");
+    parser.add(args.pattern, "<pattern>");
     parser.parse(p);
     return std::make_unique<dissect_operator>(std::move(args));
   }
