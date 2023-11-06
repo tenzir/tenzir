@@ -276,20 +276,6 @@ PipelineInfo:
     error:
       type: string
       description: The error that the pipeline may have encountered during running.
-    operators:
-      type: array
-      items:
-        type: object
-        properties:
-          id:
-            type: string
-            description: The pipeline operator ID.
-          definition:
-            type: string
-            description: The pipeline operator definition.
-          instrumented:
-            type: boolean
-            description: Flag that enables subscribing to this operator's metrics and warnings under /pipeline/(pipeline-id)/(operator-id).
     diagnostics:
       $ref: '#/components/schemas/Diagnostics'
     metrics:
