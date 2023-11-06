@@ -85,16 +85,16 @@ public:
       };
     };
     for (const auto& field_name : config_.fields) {
-      for (const auto& index : caf::get<record_type>(schema).resolve_key_suffix(
-             field_name, schema.name())) {
-        auto index_type = caf::get<record_type>(schema).field(index).type;
+      if (auto index = caf::get<record_type>(schema).resolve_key(field_name)) {
+        auto index_type = caf::get<record_type>(schema).field(*index).type;
         if (!caf::holds_alternative<ip_type>(index_type)) {
           TENZIR_DEBUG("pseudonymize operator skips field '{}' of unsupported "
                        "type '{}'",
                        field_name, index_type.name());
           continue;
         }
-        transformations.push_back({index, std::move(transformation)});
+        transformations.push_back(
+          {std::move(*index), std::move(transformation)});
       }
     }
     std::sort(transformations.begin(), transformations.end());
