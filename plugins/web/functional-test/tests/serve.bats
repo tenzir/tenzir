@@ -6,7 +6,7 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
-  setup_db
+  setup_state_dir
   TENZIR_START__COMMANDS="web server --mode=dev --port=5160"
   export TENZIR_START__COMMANDS
   setup_node
@@ -14,7 +14,7 @@ setup() {
 
 teardown() {
   teardown_node
-  teardown_db
+  teardown_state_dir
 }
 
 wait_for_http() {

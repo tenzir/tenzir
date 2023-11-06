@@ -450,12 +450,18 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
                      self->state.query_status.expected,
                      tenzir::to_string(runtime));
         TENZIR_TRACEPOINT(query_done, self->state.id.as_u64().first);
-        if (self->state.accountant)
-          self->send(
-            self->state.accountant, atom::metrics_v, "exporter.hits.runtime",
-            runtime,
-            metrics_metadata{
-              {"query", fmt::to_string(self->state.query_context.id)}});
+        if (self->state.accountant) {
+          auto r = report {
+            .data = {
+              {"exporter.hits.runtime", runtime},
+              {"exporter.shipped", self->state.query_status.shipped},
+            },
+            .metadata =
+              metrics_metadata{
+                {"query", fmt::to_string(self->state.query_context.id)}},
+          };
+          self->send(self->state.accountant, atom::metrics_v, std::move(r));
+        }
         if (!self->state.result_stream)
           self->send_exit(self->state.sink, caf::exit_reason::user_shutdown);
       }
