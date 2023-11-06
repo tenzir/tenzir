@@ -23,23 +23,116 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
+#include <caf/attach_stream_sink.hpp>
 #include <caf/attach_stream_source.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/scheduled_actor.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/stateful_actor.hpp>
 #include <caf/timespan.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <queue>
+
 namespace tenzir::plugins::export_ {
+
+struct bridge_state {
+  std::queue<table_slice> buffer;
+  caf::typed_response_promise<table_slice> rp;
+};
+
+caf::behavior
+make_bridge(caf::stateful_actor<bridge_state>* self, importer_actor importer) {
+  self
+    ->request(importer, caf::infinite,
+              caf::actor_cast<stream_sink_actor<table_slice>>(self))
+    .then([](caf::outbound_stream_slot<table_slice>) {},
+          [self](caf::error err) {
+            self->quit(err);
+          });
+
+  return {
+    [self](
+      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+      return caf::attach_stream_sink(
+               self, in,
+               [](caf::unit_t&) {
+                 // nop
+               },
+               [=](caf::unit_t&, table_slice slice) {
+                 if (self->state.rp.pending())
+                   self->state.rp.deliver(std::move(slice));
+                 else
+                   self->state.buffer.push(std::move(slice));
+               },
+               [=](caf::unit_t&, const caf::error& err) {
+                 if (err)
+                   TENZIR_ERROR("{} got error during streaming: {}", *self,
+                                err);
+               })
+        .inbound_slot();
+    },
+    [self](atom::get) -> caf::result<table_slice> {
+      if (self->state.rp.pending()) {
+        return caf::make_error(ec::logic_error,
+                               "live exporter bride promise out of sync.");
+      }
+      if (self->state.buffer.empty()) {
+        self->state.rp = self->make_response_promise<table_slice>();
+        return self->state.rp;
+      }
+      auto result = std::move(self->state.buffer.front());
+      self->state.buffer.pop();
+      return result;
+    },
+  };
+};
 
 class export_operator final : public crtp_operator<export_operator> {
 public:
   export_operator() = default;
 
-  explicit export_operator(expression expr) : expr_{std::move(expr)} {
+  explicit export_operator(expression expr, bool live)
+    : expr_{std::move(expr)}, live_{live} {
+  }
+
+  auto run_live(operator_control_plane& ctrl) const -> generator<table_slice> {
+    // TODO: Some of the the requests this operator makes are blocking, so we
+    // have to create a scoped actor here; once the operator API uses async we
+    // can offer a better mechanism here.
+    auto blocking_self = caf::scoped_actor(ctrl.self().system());
+    auto components
+      = get_node_components<importer_actor>(blocking_self, ctrl.node());
+    if (!components) {
+      ctrl.abort(std::move(components.error()));
+      co_return;
+    }
+    co_yield {};
+    auto [importer] = std::move(*components);
+    auto bridge = ctrl.self().spawn(make_bridge, importer);
+    table_slice next;
+    while (true) {
+      ctrl.self()
+        .request(bridge, caf::infinite, atom::get_v)
+        .await(
+          [&next](table_slice& response) {
+            next = std::move(response);
+          },
+          [&ctrl](caf::error e) {
+            diagnostic::error("{}", e).emit(ctrl.diagnostics());
+          });
+      co_yield next;
+    }
   }
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    if (live_) {
+      for (auto x : run_live(ctrl)) {
+        co_yield x;
+      }
+      co_return;
+    }
     // TODO: Some of the the requests this operator makes are blocking, so we
     // have to create a scoped actor here; once the operator API uses async we
     // can offer a better mechanism here.
@@ -122,6 +215,8 @@ public:
   }
 
   auto detached() const -> bool override {
+    if (live_)
+      return false;
     return true;
   }
 
@@ -132,6 +227,8 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)order;
+    if (live_)
+      return do_not_optimize(*this);
     auto clauses = std::vector<expression>{};
     if (expr_ != caf::none and expr_ != trivially_true_expression()) {
       clauses.push_back(expr_);
@@ -142,15 +239,18 @@ public:
     auto expr = clauses.empty() ? trivially_true_expression()
                                 : expression{conjunction{std::move(clauses)}};
     return optimize_result{trivially_true_expression(), event_order::ordered,
-                           std::make_unique<export_operator>(std::move(expr))};
+                           std::make_unique<export_operator>(std::move(expr),
+                                                             live_)};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {
-    return f.apply(x.expr_);
+    return f.object(x).fields(f.field("expression", x.expr_),
+                              f.field("live", x.live_));
   }
 
 private:
   expression expr_;
+  bool live_;
 };
 
 class plugin final : public virtual operator_plugin<export_operator> {
@@ -162,8 +262,10 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"export", "https://docs.tenzir.com/next/"
                                             "operators/sources/export"};
+    bool live = false;
+    parser.add("--live", live);
     parser.parse(p);
-    return std::make_unique<export_operator>(trivially_true_expression());
+    return std::make_unique<export_operator>(trivially_true_expression(), live);
   }
 };
 
