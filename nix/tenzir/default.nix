@@ -27,6 +27,7 @@
     jemalloc,
     libunwind,
     xxHash,
+    rabbitmq-c,
     yara,
     rdkafka,
     cppzmq,
@@ -104,6 +105,7 @@
           libunwind
           libyamlcpp
           protobuf
+          rabbitmq-c
           rdkafka
           cppzmq
           re2

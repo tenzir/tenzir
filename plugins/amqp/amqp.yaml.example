@@ -1,0 +1,10 @@
+hostname: 127.0.0.1
+port: 5672
+ssl: false
+vhost: /
+max_channels: 2047
+frame_size: 131072
+heartbeat: 0
+sasl_method: plain
+username: guest
+password: guest

@@ -26,6 +26,7 @@ apt-get -y --no-install-recommends install \
     libhttp-parser-dev \
     libpcap-dev tcpdump \
     libprotobuf-dev \
+    librabbitmq-dev \
     librdkafka-dev \
     libre2-dev \
     libspdlog-dev \

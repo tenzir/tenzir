@@ -98,6 +98,7 @@ RUN apt-get update && \
       libhttp-parser2.9 \
       libpcap0.8 \
       libprotobuf32 \
+      librabbitmq4 \
       librdkafka++1 \
       libre2-9 \
       libspdlog1.10 \

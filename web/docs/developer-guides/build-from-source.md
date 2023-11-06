@@ -49,6 +49,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
 ||[Protocol Buffers](https://protobuf.dev)||>= 1.4.1|Required for building the `velociraptor` plugin.|
 ||[gRPC](https://grpci.io)||>= 1.51|Required for building the `velociraptor` plugin.|
+||[rabbitmq-c](https://github.com/alanxz/rabbitmq-c)||Required for building the `rabbitmq` plugin.|
 ||[yara](https://yara.readthedocs.io/)||>= 4.4.0|Required for building the `yara` plugin.|
 ||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|

@@ -825,34 +825,34 @@ jobs:
             cxx: clang++
             package-suffix: Release-Clang
         plugin:
+          - name: AMQP
+            target: amqp
+            path: plugins/amqp
+          - name: Compaction
+            target: compaction
+            path: contrib/tenzir-plugins/compaction
           - name: Example Analyzer
             target: example-analyzer
             path: examples/plugins/analyzer
             debian-dependencies:
-          - name: Parquet
-            target: parquet
-            path: plugins/parquet
-          - name: NIC
-            target: nic
-            path: plugins/nic
-          - name: Compaction
-            target: compaction
-            path: contrib/tenzir-plugins/compaction
-          - name: GCS
-            target: gcs
-            path: plugins/gcs
-          # - name: Inventory
-          #   target: inventory
-          #   path: contrib/tenzir-plugins/inventory
           - name: Kafka
             target: kafka
             path: plugins/kafka
+          # - name: Inventory
+          #   target: inventory
+          #   path: contrib/tenzir-plugins/inventory
+          - name: NIC
+            target: nic
+            path: plugins/nic
           - name: Matcher
             target: matcher
             path: contrib/tenzir-plugins/matcher
           - name: Netflow
             target: netflow
             path: contrib/tenzir-plugins/netflow
+          - name: Parquet
+            target: parquet
+            path: plugins/parquet
           # The pipeline manager integration tests require that the web
           # plugin exists, which is why we're building the web plugin
           # already in the main Tenzir job.
@@ -875,22 +875,24 @@ jobs:
             target: zmq
             path: plugins/zmq
         exclude:
+          - {setup: {os: macos-latest}, plugin: {name: AMQP}}
+          - {setup: {os: macos-latest}, plugin: {name: Compaction}}
+          # Disable proprietary and example plugins on macOS to shorten CI
+          # turnaround. GitHub does not run more than 5 jobs in parallel on
+          # macOS.
+          - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
+          - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
+          - {setup: {os: macos-latest}, plugin: {name: GCS}}
+          - {setup: {os: macos-latest}, plugin: {name: Kafka}}
+          - {setup: {os: macos-latest}, plugin: {name: Inventory}}
+          - {setup: {os: macos-latest}, plugin: {name: Matcher}}
+          - {setup: {os: macos-latest}, plugin: {name: Netflow}}
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
           # instruction as of Arrow 10.0.0.
           - {setup: {os: macos-latest}, plugin: {name: Parquet}}
-          # Disable proprietary and example plugins on macOS to shorten CI turnaround.
-          # GitHub does not run more than 5 jobs in parallel on macOS.
-          - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
-          - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
-          - {setup: {os: macos-latest}, plugin: {name: Compaction}}
-          - {setup: {os: macos-latest}, plugin: {name: GCS}}
-          - {setup: {os: macos-latest}, plugin: {name: Inventory}}
-          - {setup: {os: macos-latest}, plugin: {name: Matcher}}
-          - {setup: {os: macos-latest}, plugin: {name: Netflow}}
           - {setup: {os: macos-latest}, plugin: {name: Pipeline Manager}}
           - {setup: {os: macos-latest}, plugin: {name: Sigma}}
-          - {setup: {os: macos-latest}, plugin: {name: Kafka}}
           - {setup: {os: macos-latest}, plugin: {name: Velociraptor}}
           - {setup: {os: macos-latest}, plugin: {name: Yara}}
           - {setup: {os: macos-latest}, plugin: {name: ZeroMQ}}
