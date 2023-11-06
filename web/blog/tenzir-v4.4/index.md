@@ -44,9 +44,9 @@ Pipelines](/blog/matching-yara-rules-in-byte-pipelines)
 [Velociraptor][velociraptor] is an advanced DFIR tool that enhances your
 visibility into your endpoints. Not unlike [our own TQL](/language),
 Velociraptor comes with its own language for interacting with it
-programmatically: VQL. The `velocirator` operator makes it possible to submit
-VQL queries to a Velociraptor server, as well as subscribe to artificats
-artifacts in hunt flows over a large fleet of assets, making endpoint telemetry
+programmatically: VQL. The `velociraptor` operator makes it possible to submit
+VQL queries to a Velociraptor server, as well as subscribe to artifacts
+in hunt flows over a large fleet of assets, making endpoint telemetry
 collection and processing a breeze.
 
 :::info
@@ -58,7 +58,7 @@ Pipelines](/blog/integrating-velociraptor-into-tenzir-pipelines)
 ## AMQP Connector
 
 The new [`amqp`](/next/connectors/amqp) connector brings a full-fledged AMQP
-0-9-1 client to the table. Relying on the battle-broven [RabbitMQ C client
+0-9-1 client to the table. Relying on the battle-proven [RabbitMQ C client
 library](https://github.com/alanxz/rabbitmq-c), the operator makes it possible
 you to interact with queues and exchanges as shown in the diagram below:
 
