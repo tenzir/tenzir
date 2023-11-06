@@ -169,6 +169,12 @@ in {
         set +x
       '';
     });
+  yara =
+    if !isStatic
+    then prev.yara
+    else prev.yara.overrideAttrs (orig: {
+      NIX_CFLAGS_LINK="-lz";
+    });
   restinio = final.callPackage ./restinio {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
