@@ -32,6 +32,7 @@ public:
   /// A section that will end up in the output record.
   struct field {
     std::string name;
+    bool skip;
     rule<std::string_view::iterator, data> parser;
   };
 

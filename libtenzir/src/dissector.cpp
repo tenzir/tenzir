@@ -20,15 +20,25 @@ namespace {
 using namespace parser_literals;
 
 auto make_dissect_parser() {
-  auto make_field = [](std::string str) {
-    return dissector::token{dissector::field{
-      .name = std::move(str),
-      .parser = parsers::data,
-    }};
-  };
   auto make_literal = [](std::string str) {
     return dissector::token{dissector::literal{
       .parser = parsers::str{std::move(str)},
+    }};
+  };
+  auto make_field = [](std::string str) {
+    // The skip field notation is %{?foo} or %{}. Skipped fields are equivalent
+    // to literals, i.e., we parse them but don't add them to the output.
+    auto skip = false;
+    if (str.empty()) {
+      skip = true;
+    } else if (str.starts_with("?")) {
+      skip = true;
+      str.erase(str.begin());
+    }
+    return dissector::token{dissector::field{
+      .name = std::move(str),
+      .skip = skip,
+      .parser = parsers::data,
     }};
   };
   auto field_char = parsers::printable - '}';
@@ -74,12 +84,14 @@ auto dissector::dissect(std::string_view input) -> std::optional<record> {
     auto f = detail::overload{
       [&](const field& field) -> std::optional<diagnostic> {
         auto x = data{};
-        if (field.parser(begin, end, x))
-          result.emplace(field.name, std::move(x));
-        else
+        if (field.parser(begin, end, x)) {
+          if (not field.skip)
+            result.emplace(field.name, std::move(x));
+        } else {
           return diagnostic::error("failed to dissect field")
             .note("field: {}", field.name)
             .done();
+        }
         return std::nullopt;
       },
       [&](const literal& literal) -> std::optional<diagnostic> {
