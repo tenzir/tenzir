@@ -44,14 +44,16 @@ curl -X POST \
 #  http://127.0.0.1:5160/api/v0/pipeline/create
 
 # !! Not started because the data has already been imported while building the image.
-suricata_pipe="tenzir 'load https https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst | decompress zstd | read suricata | import'"
+# Newlines improve readability in the app.
+suricata_pipe="tenzir 'load https https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst \n| decompress zstd \n| read suricata \n| import'"
 curl -X POST \
   -H "Content-Type: application/json" \
   -d "{\"name\": \"M57 Suricata Import\", \"definition\": \"${suricata_pipe}\", \"start_when_created\": false}" \
   http://127.0.0.1:5160/api/v0/pipeline/create
 
 # !! Not started because the data has already been imported while building the image.
-zeek_pipe="tenzir 'load https https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst | decompress zstd | read zeek-tsv | import'"
+# Newlines improve readability in the app.
+zeek_pipe="tenzir 'load https https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst \n| decompress zstd \n| read zeek-tsv \n| import'"
 
 curl -X POST \
   -H "Content-Type: application/json" \
