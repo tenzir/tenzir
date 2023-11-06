@@ -5,7 +5,7 @@ Retrieves events from a Tenzir node. The dual to [`import`](../sinks/import.md).
 ## Synopsis
 
 ```
-export
+export [--live]
 ```
 
 ## Description
@@ -19,6 +19,11 @@ written to disk.
 We recommend running `tenzir-ctl flush` before exporting events to make sure
 they're available for downstream consumption.
 :::
+
+### `--live`
+
+Work on all events that are imported with `import` operators in real-time
+instead of on events persisted at a Tenzir node.
 
 ## Examples
 
