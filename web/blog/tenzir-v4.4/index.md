@@ -12,7 +12,7 @@ forensics and incident response (DFIR) ecosystem: [YARA][yara] and
 [Velociraptor][velociraptor].
 
 [yara]: https://yara.readthedocs.io
-[velocirator]: https://docs.velociraptor.app
+[velociraptor]: https://docs.velociraptor.app
 
 ![Tenzir v4.4](tenzir-v4.4.excalidraw.svg)
 
@@ -41,7 +41,7 @@ Pipelines](/blog/matching-yara-rules-in-byte-pipelines)
 
 ## Velociraptor Operator
 
-[Velociraptor][velocirator] is an advanced DFIR tool that enhances your
+[Velociraptor][velociraptor] is an advanced DFIR tool that enhances your
 visibility into your endpoints. Not unlike [our own TQL](/language),
 Velociraptor comes with its own language for interacting with it
 programmatically: VQL. The `velocirator` operator makes it possible to submit
