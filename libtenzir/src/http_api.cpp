@@ -233,6 +233,30 @@ auto parse_endpoint_parameters(const tenzir::rest_endpoint& endpoint,
           }
           return result;
         },
+        [&](const record_type&) -> caf::expected<data> {
+          const auto* parsed = caf::get_if<record>(&param_data);
+          if (!parsed)
+            return caf::make_error(ec::invalid_argument, "expected a record");
+          auto result = record{};
+          for (const auto& x : *parsed) {
+            auto parse_result = false;
+            const auto* str = caf::get_if<std::string>(&x.second);
+            if (not str) {
+              return caf::make_error(ec::invalid_argument,
+                                     "currently only non-null boolean values "
+                                     "in nested records "
+                                     "are supported");
+            }
+            if (!parsers::boolean(*str, parse_result)) {
+              return caf::make_error(ec::invalid_argument,
+                                     "currently only non-null boolean values "
+                                     "in nested records "
+                                     "are supported");
+            }
+            result[x.first] = parse_result;
+          }
+          return result;
+        },
         [&]<basic_type Type>(const Type&) -> caf::expected<data> {
           using data_t = type_to_data_t<Type>;
           if (!is_string)

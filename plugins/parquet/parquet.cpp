@@ -286,9 +286,9 @@ std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
   if (!arrow_metadata.ok())
     return {};
   auto decoded = detail::base64::decode(*arrow_metadata);
-  auto schema_buf = arrow::Buffer(decoded);
-  arrow::ipc::DictionaryMemo dict_memo;
-  arrow::io::BufferReader input(schema_buf);
+  auto schema_buf = std::make_shared<arrow::Buffer>(std::move(decoded));
+  auto dict_memo = arrow::ipc::DictionaryMemo{};
+  auto input = arrow::io::BufferReader{std::move(schema_buf)};
   auto arrow_schema = arrow::ipc::ReadSchema(&input, &dict_memo);
   if (!arrow_schema.ok())
     return {};

@@ -24,8 +24,8 @@
       },
       {
         "data": "Zm9v",
-        "base": 8,
-        "offset": 0,
+        "base": 0,
+        "offset": 8,
         "match_length": 3
       }
     ],
@@ -38,8 +38,8 @@
       },
       {
         "data": "YmFy",
-        "base": 8,
-        "offset": 4,
+        "base": 0,
+        "offset": 12,
         "match_length": 3
       }
     ]

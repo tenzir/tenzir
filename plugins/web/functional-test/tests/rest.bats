@@ -8,12 +8,12 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
-  setup_db
+  setup_state_dir
   export TENZIR_START__COMMANDS
 }
 
 teardown() {
-  teardown_db
+  teardown_state_dir
 }
 
 wait_for_http() {

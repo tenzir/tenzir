@@ -28,6 +28,7 @@
     libunwind,
     xxHash,
     rabbitmq-c,
+    yara,
     rdkafka,
     cppzmq,
     re2,
@@ -70,6 +71,7 @@
         "plugins/sigma"
         "plugins/velociraptor"
         "plugins/web"
+        "plugins/yara"
         "plugins/zmq"
       ]
       ++ extraPlugins';
@@ -108,6 +110,7 @@
           cppzmq
           re2
           restinio
+          yara
         ];
         propagatedBuildInputs = [
           arrow-cpp
