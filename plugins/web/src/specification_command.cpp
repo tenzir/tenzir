@@ -101,12 +101,6 @@ CreateParameters:
       type: string
       example: export | where foo | publish /bar
       description: The pipeline definition.
-    start_when_created:
-      type: boolean
-      description: |
-        Start this pipeline upon creation.
-        This parameter must be true if the `hidden` parameter is also true.
-      default: false
     name:
       type: string
       description: The human-readable name of the pipeline.
@@ -126,13 +120,10 @@ CreateParameters:
         This parameter must be defined if the `hidden` parameter is true.
       default: ~
       example: 5.0m
-    restart_with_node:
-      type: boolean
-      default: false
-      description: |
-        Check if the pipeline should be restarted when the Tenzir Node is restarted.
-        This parameter must be false if the `hidden` parameter is true.
-      example: false
+    autostart:
+      $ref: "#/components/schemas/PipelineAutostart"
+    autodelete:
+      $ref: "#/components/schemas/PipelineAutodelete"
 LaunchParameters:
   allOf:
     - $ref: "#/components/schemas/CreateParameters"
@@ -203,11 +194,65 @@ Location:
     end:
       type: number
       example: 48
+PipelineLabel:
+  type: object
+  properties:
+    text:
+      type: string
+      description: The pipeline label text.
+      example: zeek
+    color:
+      type: string
+      description: The pipeline label color.
+      example: 3F1A24
 PipelineLabels:
   type: array
   description: The user-provided labels for this pipeline.
   items:
     $ref: "#/components/schemas/PipelineLabel"
+PipelineAutostart:
+  type: object
+  description: Flags that specify on which state to restart the pipeline.
+  properties:
+    created:
+      type: boolean
+      description: Autostart the pipeline upon creation.
+      default: false
+      example: true
+    completed:
+      type: boolean
+      description: Autostart the pipeline upon completion.
+      default: false
+      example: false
+    failed:
+      type: boolean
+      description: Autostart the pipeline upon failure.
+      default: false
+      example: false
+    stopped:
+      type: boolean
+      description: Autostart the pipeline when it stops before completing.
+      default: false
+      example: true
+PipelineAutodelete:
+  type: object
+  description: Flags that specify on which state to delete the pipeline.
+  properties:
+    completed:
+      type: boolean
+      description: Autodelete the pipeline upon completion.
+      default: false
+      example: false
+    failed:
+      type: boolean
+      description: Autodelete the pipeline upon failure.
+      default: false
+      example: true
+    stopped:
+      type: boolean
+      description: Autodelete the pipeline when it stops before completing.
+      default: false
+      example: false
 PipelineInfo:
   type: object
   properties:
@@ -231,10 +276,6 @@ PipelineInfo:
     error:
       type: string
       description: The error that the pipeline may have encountered during running.
-    restart_with_node:
-      type: boolean
-      description: A flag specifying whether this pipeline should start upon launching the parent node.
-      default: false
     operators:
       type: array
       items:
@@ -255,6 +296,14 @@ PipelineInfo:
       $ref: '#/components/schemas/Metrics'
     labels:
       $ref: "#/components/schemas/PipelineLabels"
+    autostart:
+      $ref: "#/components/schemas/PipelineAutostart"
+    autodelete:
+      $ref: "#/components/schemas/PipelineAutodelete"
+    ttl_expires_in_ns:
+      type: integer
+      description: If a TTL exists for this pipeline, the remaining TTL in nanoseconds.
+      example: 23400569058
   )_");
   TENZIR_ASSERT_CHEAP(schemas);
   // clang-format off
