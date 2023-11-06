@@ -68,6 +68,9 @@ you to interact with queues and exchanges as shown in the diagram below:
 
 Besides the new operators, I would like to highlight the following changes:
 
+- **Live Exports:** Start your pipeline with `export --live` to get all events
+  in one pipeline as they are imported.
+
 - **Blob Type:** We've added a new `blob` type that allows you to handle binary
   data. Use the `blob` type over the `string` type for binary payloads that are
   not UTF8-encoded.
