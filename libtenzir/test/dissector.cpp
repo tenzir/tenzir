@@ -38,3 +38,19 @@ TEST(dissect optional) {
   const auto& third = std::get<dissector::field>(tokens.at(2));
   CHECK(third.name.empty());
 }
+
+// TODO: pick juicy examples from the official test suites at the links below
+// and ensure compatibility.
+//
+// https://github.com/logstash-plugins/logstash-filter-dissect/blob/main/spec/filters/dissect_spec.rb
+// https://github.com/logstash-plugins/logstash-filter-dissect/blob/main/spec/fixtures/dissect_tests.json
+
+TEST(logstash - when the delimiters contain braces) {
+  auto dissector
+    = dissector::make("{%{a}}{%{b}}%{rest}", dissector_style::dissect);
+  REQUIRE(dissector);
+  auto result = dissector->dissect("{foo}{bar}");
+  REQUIRE(result);
+  auto expected = record{{"a", "foo"}, {"b", "bar"}, {"rest", {}}};
+  CHECK_EQUAL(*result, expected);
+}

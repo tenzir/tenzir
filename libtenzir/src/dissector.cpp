@@ -9,7 +9,6 @@
 #include "tenzir/dissector.hpp"
 
 #include "tenzir/concept/parseable/core.hpp"
-#include "tenzir/concept/parseable/string.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/diagnostics.hpp"
 
@@ -18,6 +17,21 @@ namespace tenzir {
 namespace {
 
 using namespace parser_literals;
+
+auto make_data_parser() {
+  auto str = +(parsers::printable - '}');
+  // clang-format off
+  auto p
+    = parsers::time
+    | parsers::duration
+    | parsers::net
+    | parsers::ip
+    | parsers::number
+    | parsers::boolean
+    | str;
+  // clang-format on
+  return p;
+}
 
 auto make_dissect_parser() {
   auto make_literal = [](std::string str) {
@@ -38,13 +52,13 @@ auto make_dissect_parser() {
     return dissector::token{dissector::field{
       .name = std::move(str),
       .skip = skip,
-      .parser = parsers::data,
+      .parser = make_data_parser(),
     }};
   };
   auto field_char = parsers::printable - '}';
   auto field = "%{"_p >> *field_char >> '}';
   auto skip_char = parsers::printable - '%';
-  auto skip = +skip_char - '{';
+  auto skip = +skip_char;
   // clang-format off
   auto section
     = field ->* make_field
@@ -87,6 +101,9 @@ auto dissector::dissect(std::string_view input) -> std::optional<record> {
         if (field.parser(begin, end, x)) {
           if (not field.skip)
             result.emplace(field.name, std::move(x));
+        } else if (begin == end) {
+          if (not field.skip)
+            result.emplace(field.name, data{});
         } else {
           return diagnostic::error("failed to dissect field")
             .note("field: {}", field.name)
