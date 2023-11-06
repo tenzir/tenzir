@@ -69,7 +69,7 @@ Send events to
 [Splunk](https://docs.fluentbit.io/manual/pipeline/outputs/splunk):
 
 ```
-fluent-bit splunk host=127.0.0.1 port=8088 tls=on tls.verify=off
+fluent-bit splunk host=127.0.0.1 port=8088 tls=on tls.verify=off splunk_token=11111111-2222-3333-4444-555555555555
 ```
 
 Send events to
