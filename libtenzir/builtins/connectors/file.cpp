@@ -180,7 +180,7 @@ struct loader_args {
 
 struct saver_args {
   located<std::string> path;
-  std::optional<location> appending;
+  std::optional<location> append;
   std::optional<location> real_time;
   std::optional<location> uds;
 
@@ -188,7 +188,7 @@ struct saver_args {
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
-      .fields(f.field("path", x.path), f.field("appending", x.appending),
+      .fields(f.field("path", x.path), f.field("append", x.append),
               f.field("real_time", x.real_time), f.field("uds", x.uds));
   }
 };
@@ -409,7 +409,7 @@ public:
         }
       }
       // We use `fopen` because we want buffered writes.
-      auto handle = std::fopen(path.c_str(), args_.appending ? "ab" : "wb");
+      auto handle = std::fopen(path.c_str(), args_.append ? "ab" : "wb");
       if (handle == nullptr) {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("failed to open {}: {}", path,
@@ -517,13 +517,13 @@ public:
     auto parser = argument_parser{"file", "https://docs.tenzir.com/next/"
                                           "connectors/file"};
     parser.add(args.path, "<path>");
-    parser.add("-a,--appending", args.appending);
+    parser.add("-a,--append", args.append);
     parser.add("-r,--real-time", args.real_time);
     parser.add("--uds", args.uds);
     parser.parse(p);
     // TODO: Better argument validation
     if (args.path.inner == "-") {
-      for (auto& other : {args.appending, args.real_time, args.uds}) {
+      for (auto& other : {args.append, args.real_time, args.uds}) {
         if (other) {
           diagnostic::error("flags are mutually exclusive")
             .primary(*other)

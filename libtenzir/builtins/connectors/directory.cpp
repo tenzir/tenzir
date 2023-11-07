@@ -21,14 +21,14 @@ namespace tenzir::plugins::directory {
 
 struct saver_args {
   std::string path;
-  bool appending;
+  bool append;
   bool real_time;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
-      .fields(f.field("path", x.path), f.field("appending", x.appending),
+      .fields(f.field("path", x.path), f.field("append", x.append),
               f.field("real_time", x.real_time));
   }
 };
@@ -70,8 +70,8 @@ public:
     }
     auto diag = null_diagnostic_handler{};
     auto file_pipeline = escape_operator_arg(file_path.string());
-    if (args_.appending)
-      file_pipeline += " --appending";
+    if (args_.append)
+      file_pipeline += " --append";
     if (args_.real_time)
       file_pipeline += " --real-time";
     // TODO: We should probably use a better mechanism here than escaping and
@@ -125,7 +125,7 @@ public:
                                           "connectors/directory"};
     auto args = saver_args{};
     parser.add(args.path, "<path>");
-    parser.add("-a,--appending", args.appending);
+    parser.add("-a,--append", args.append);
     parser.add("-r,--real-time", args.real_time);
     parser.parse(p);
     return std::make_unique<directory_saver>(std::move(args));
