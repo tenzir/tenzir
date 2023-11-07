@@ -1,0 +1,7 @@
+error: could not parse `chart` operator
+ --> <input>:1:20
+  |
+1 | from - read json | chart donuttt value=b
+  |                    ^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: !! syntax_error: invalid chart type `donuttt`, allowed types are: `stacked-area`, `donut`, and `bar`
