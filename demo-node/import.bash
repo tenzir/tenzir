@@ -12,8 +12,8 @@ coproc NODE { exec tenzir-node --print-endpoint; }
 # shellcheck disable=SC2034
 read -r -u "${NODE[0]}" DUMMY
 
-tenzir 'read suricata | where #schema != "suricata.stats" | import' < suricata.json
-tenzir 'read zeek-tsv | import' < zeek-all.log
+tenzir 'load https https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst | decompress zstd | read suricata | where #schema != "suricata.stats" | import'
+tenzir 'load https https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst | decompress zstd | read zeek-tsv | import'
 
 tenzir-ctl flush
 tenzir-ctl rebuild --undersized

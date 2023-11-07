@@ -223,7 +223,6 @@ RUN apt-get update && \
         zstd && \
     rm -rf /var/lib/apt/lists/*
 
-RUN /demo-node/load.bash
 RUN /demo-node/import.bash
 ENTRYPOINT ["/demo-node/entrypoint.bash"]
 
