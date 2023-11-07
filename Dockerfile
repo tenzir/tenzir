@@ -214,7 +214,6 @@ ENTRYPOINT ["tenzir-node"]
 FROM tenzir-ce AS tenzir-demo
 
 USER root:root
-COPY demo-node /demo-node
 RUN apt-get update && \
     apt install -y \
         curl \
@@ -222,7 +221,9 @@ RUN apt-get update && \
         procps \
         zstd && \
     rm -rf /var/lib/apt/lists/*
-
+COPY demo-node /demo-node
+ENV SURICATA_PIPE='load https https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst | decompress zstd | read suricata | where #schema != "suricata.stats" | import'
+ENV ZEEK_PIPE='load https https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst | decompress zstd | read zeek-tsv | import'
 RUN /demo-node/import.bash
 ENTRYPOINT ["/demo-node/entrypoint.bash"]
 
