@@ -1133,3 +1133,31 @@ tests:
       # TODO: Re-enable once #950 is fixed.
       # - command: exec 'export | write yaml'
       - command: exec 'export | write zeek-tsv --disable-timestamp-tags'
+
+  Get and Set Attributes:
+    tags: [pipelines]
+    steps:
+      - command: exec 'show version | set-attributes foo=bar abc=def | get-attributes'
+      - command: exec 'show version | set-attributes first=123 | set-attributes second=456 | get-attributes'
+
+  Chart Attributes:
+    tags: [pipelines]
+    steps:
+      - command: exec 'from - read json | chart donut value=b'
+        input: data/json/all-types.json
+      - command: exec 'from - read json | chart donut value=b | get-attributes'
+        input: data/json/all-types.json
+      - command: exec 'from - read json | chart donut value=a'
+        input: data/json/all-types.json
+      - command: exec 'from - read json | chart donut'
+        input: data/json/all-types.json
+        expected_result: error
+      - command: exec 'from - read json | chart donut x=b'
+        input: data/json/all-types.json
+        expected_result: error
+      - command: exec 'from - read json | chart donut value=b x=e'
+        input: data/json/all-types.json
+        expected_result: error
+      - command: exec 'from - read json | chart donuttt value=b'
+        input: data/json/all-types.json
+        expected_result: error

@@ -72,9 +72,9 @@ private:
       if (record.resolve_key(attr.value))
         continue;
       return caf::make_error(ec::unspecified,
-                             fmt::format("field '{}' not found in input, "
+                             fmt::format("field `{}` not found in input, "
                                          "but the chart operator expected "
-                                         "it for '{}'",
+                                         "it for `{}`",
                                          attr.value, attr.key));
     }
     return {};
@@ -103,7 +103,7 @@ public:
     if (not p(first, last, chart_type))
       return {std::string_view{first, last},
               caf::make_error(ec::syntax_error,
-                              fmt::format("failed to parse chart type: '{}'",
+                              fmt::format("failed to parse chart type: `{}`",
                                           pipeline))};
     set_attributes_operator_helper helper{
       configuration{{std::pair{"type", std::move(chart_type)}}}};
@@ -133,8 +133,8 @@ private:
     const auto require_field = [&](std::string_view name) {
       if (not remove_arg_if_present(name))
         throw caf::make_error(ec::syntax_error,
-                              fmt::format("chart type '{}' requires field "
-                                          "'{}'",
+                              fmt::format("chart type `{}` requires field "
+                                          "`{}`",
                                           type, name));
     };
     const auto allow_field = [&](std::string_view name) {
@@ -144,7 +144,7 @@ private:
       if (remove_arg_if_present(name))
         throw caf::make_error(
           ec::syntax_error,
-          fmt::format("chart type '{}' disallows field '{}'", type, name));
+          fmt::format("chart type `{}` disallows field `{}`", type, name));
     };
     try {
       if (type == "stacked-area") {
@@ -165,9 +165,9 @@ private:
         disallow_field("y_unit");
       } else {
         return caf::make_error(ec::syntax_error,
-                               fmt::format("invalid chart type '{}', allowed "
-                                           "types are: 'stacked-area', "
-                                           "'donut', and 'bar'",
+                               fmt::format("invalid chart type `{}`, allowed "
+                                           "types are: `stacked-area`, "
+                                           "`donut`, and `bar`",
                                            type));
       }
       // Above, every time we found an attribute in `attributes` which we
@@ -177,8 +177,8 @@ private:
       if (not attributes.empty()) {
         return caf::make_error(
           ec::syntax_error,
-          fmt::format("invalid argument given to chart: '{}' "
-                      "with value '{}'",
+          fmt::format("invalid argument given to chart: `{}` "
+                      "with value `{}`",
                       attributes.front().key, attributes.front().value));
       }
     } catch (const caf::error& err) {

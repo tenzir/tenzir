@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/cast.hpp>
+#include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/set_attributes_operator_helper.hpp>
 #include <tenzir/pipeline.hpp>
@@ -76,10 +77,10 @@ auto set_attributes_operator_helper::process(table_slice&& slice,
     return {};
   }
   auto schema = slice.schema();
-  if (auto e = verify(schema, cfg_); e)
+  if (auto e = verify(schema, cfg_))
     return {{}, e};
-  for (auto&& attr : cfg_.get_attributes())
-    schema = type{schema, {attr}};
+  schema
+    = type{schema, collect(cfg_.get_attributes(), cfg_.count_attributes())};
   TENZIR_ASSERT(schema);
   return {cast(std::move(slice), schema), {}};
 }
