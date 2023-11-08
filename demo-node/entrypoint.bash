@@ -29,11 +29,14 @@ done
 #   http://127.0.0.1:5160/api/v0/pipeline/create
 
 # Continuously import system load data from `vmstat -a -n 1`.
-stat_pipe="shell /demo-node/csvstat.sh | read csv | replace #schema=\"vmstat.all\" | unflatten | import"
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d "{\"name\": \"System Load\", \"definition\": \"${stat_pipe}\", \"start_when_created\": true}" \
-  http://127.0.0.1:5160/api/v0/pipeline/create
+# !! Currently disabled because the source shell command is too cryptic
+# stat_pipe="shell /demo-node/csvstat.sh | read csv | replace #schema=\\\"vmstat.all\\\" | unflatten | import"
+# echo $stat_pipe
+# curl -X POST \
+#   -H "Content-Type: application/json" \
+#   -d "{\"name\": \"System Load\", \"definition\": \"${stat_pipe}\", \"start_when_created\": true}" \
+#   http://127.0.0.1:5160/api/v0/pipeline/create
+# echo
 
 # Ingest CVEs from https://services.nvd.nist.gov/rest/json/cves/2.0.
 # !! Currently disabled because of a scheduling bug.
@@ -43,23 +46,22 @@ curl -X POST \
 #  -d "{\"name\": \"Live CVE Notifications from the NIST API\", \"definition\": \"${cve_pipe}\", \"start_when_created\": true}" \
 #  http://127.0.0.1:5160/api/v0/pipeline/create
 
-# The shell operator decompresses the data and writes it to `read suricata` on
-# the fly.
 # !! Not started because the data has already been imported while building the image.
-suricata_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.zst | tar -x --zstd --to-stdout\\\"' | read suricata | where #schema != \\\"suricata.stats\\\" | import"
+suricata_pipe_formatted=$(echo $SURICATA_PIPE | sed -r 's/ \| /\\n| /g' | sed -r 's/"/\\\\\\\"/g' )
+echo $suricata_pipe_formatted
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d "{\"name\": \"M57 Suricata Import\", \"definition\": \"${suricata_pipe}\", \"start_when_created\": false}" \
+  -d "{\"name\": \"M57 Suricata Import\", \"definition\": \"tenzir '${suricata_pipe_formatted}'\", \"start_when_created\": false}" \
   http://127.0.0.1:5160/api/v0/pipeline/create
+echo
 
-# The shell operator "streams" the data into a `Zeek/` directory on disk, calls
-# `sync` to flush the OS write buffers, and finally sends the concatenation of
-# the logs into `read zeek-tsv`.
 # !! Not started because the data has already been imported while building the image.
-zeek_pipe="shell 'bash -c \\\"curl -s -L https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.zst | tar -x --zstd; sync; cat Zeek/*.log\\\"' | read zeek-tsv | import"
+zeek_pipe_formatted=$(echo $ZEEK_PIPE | sed -r 's/ \| /\\n| /g' | sed -r 's/"/\\\\\\\"/g' )
+echo $suricata_pipe_formatted
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d "{\"name\": \"M57 Zeek Import\", \"definition\": \"${zeek_pipe}\", \"start_when_created\": false}" \
+  -d "{\"name\": \"M57 Zeek Import\", \"definition\": \"tenzir '${zeek_pipe_formatted}'\", \"start_when_created\": false}" \
   http://127.0.0.1:5160/api/v0/pipeline/create
+echo
 
 wait "$NODE_PID"

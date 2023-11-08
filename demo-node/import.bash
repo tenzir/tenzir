@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 export TENZIR_AUTOMATIC_REBUILD="${TENZIR_AUTOMATIC_REBUILD:-0}"
 export TENZIR_ALLOW_UNSAFE_PIPELINES=true
 
@@ -9,9 +11,9 @@ trap 'trap " " SIGTERM; kill 0; wait' SIGINT SIGTERM
 coproc NODE { exec tenzir-node --print-endpoint; }
 # shellcheck disable=SC2034
 read -r -u "${NODE[0]}" DUMMY
-
-tenzir 'read suricata | where #schema != "suricata.stats" | import' < Suricata/eve.json
-cat Zeek/*.log | tenzir 'read zeek-tsv | import'
+echo $SURICATA_PIPE
+tenzir "$SURICATA_PIPE"
+tenzir "$ZEEK_PIPE"
 
 tenzir-ctl flush
 tenzir-ctl rebuild --undersized
