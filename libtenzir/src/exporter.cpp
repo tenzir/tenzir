@@ -83,12 +83,20 @@ void attach_result_stream(
                           && state.self_ptr->state.sink_buffer.empty();
         if (should_end) {
           if (state.self_ptr->state.accountant) {
-            state.self_ptr->send(
-              state.self_ptr->state.accountant, atom::metrics_v,
-              "exporter.shipped", state.num_shipped,
-              metrics_metadata{
-                {"query",
-                 fmt::to_string(state.self_ptr->state.query_context.id)}});
+            caf::timespan runtime
+              = std::chrono::system_clock::now() - state.self_ptr->state.start;
+            auto r = report {
+              .data = {
+                {"exporter.hits.runtime", runtime},
+                {"exporter.shipped", state.num_shipped},
+              },
+              .metadata =
+                metrics_metadata{
+                  {"query",
+                   fmt::to_string(state.self_ptr->state.query_context.id)}},
+            };
+            state.self->send(state.self_ptr->state.accountant, atom::metrics_v,
+                             std::move(r));
           }
           shutdown_stream(state.self_ptr->state.result_stream);
         }
@@ -461,12 +469,6 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
                      self->state.query_status.expected,
                      tenzir::to_string(runtime));
         TENZIR_TRACEPOINT(query_done, self->state.id.as_u64().first);
-        if (self->state.accountant)
-          self->send(
-            self->state.accountant, atom::metrics_v, "exporter.hits.runtime",
-            runtime,
-            metrics_metadata{
-              {"query", fmt::to_string(self->state.query_context.id)}});
         if (!self->state.result_stream)
           self->send_exit(self->state.sink, caf::exit_reason::user_shutdown);
       }
