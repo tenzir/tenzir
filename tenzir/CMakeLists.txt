@@ -62,48 +62,54 @@ TenzirInstallExampleConfiguration(
 
 # -- init system integration ---------------------------------------------------
 
-# TODO: This should be behind an option, and work for Linux as well.
+option(TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
+       "Integrate with init systems when installing" ON)
+add_feature_info(
+  "TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION" TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
+  "integrate with init systems when installing")
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
-  # Install rc.d script on FreeBSD into PREFIX/etc/rc.d.
-  # TODO: Technically this can break for relocatable binaries when the install
-  # prefix at build-time is different than the install prefix at install-time.
-  # The macOS installation below handles this correctly, and the FreeBSD
-  # installation should be adapted to work similarly.
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/rc.d/tenzir.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/tenzir" @ONLY)
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/tenzir"
-    DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/rc.d"
-    PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE
-    COMPONENT Runtime)
-elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  # Install launchd script on macOS into ~/Library/LaunchAgents
-  install(
-    CODE "\
-    if (NOT IS_ABSOLUTE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
-      string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
-    endif ()
-    set(TENZIR_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
-    set(TENZIR_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/tenzir\")
-    message(STATUS
-      \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\")
+if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
+  if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+    # Install rc.d script on FreeBSD into PREFIX/etc/rc.d.
+    # TODO: Technically this can break for relocatable binaries when the install
+    # prefix at build-time is different than the install prefix at install-time.
+    # The macOS installation below handles this correctly, and the FreeBSD
+    # installation should be adapted to work similarly.
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/rc.d/tenzir.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/tenzir" @ONLY)
+    install(
+      FILES "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/tenzir"
+      DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/rc.d"
+      PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE
+      COMPONENT Runtime)
+  elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+    # Install launchd script on macOS into ~/Library/LaunchAgents
+    install(
+      CODE "\
+      if (NOT IS_ABSOLUTE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
+        string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
+      endif ()
+      set(TENZIR_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
+      set(TENZIR_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/tenzir\")
+      message(STATUS
+        \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\")
+      configure_file(
+        \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.tenzir.plist.in\"
+        \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\" @ONLY)"
+      COMPONENT Runtime)
+  elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+    # Not all Linux distros use systemd, but those we care about at the moment do.
+    # TODO: We don't consider CPACK_PACKAGE_INSTALL_PREFIX here, this could
+    # potentially be solved with a more involved CPack setup. See also the
+    # comment at the beginning of cmake/Package.cmake.
     configure_file(
-      \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.tenzir.plist.in\"
-      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\" @ONLY)"
-    COMPONENT Runtime)
-elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-  # Not all Linux distros use systemd, but those we care about at the moment do.
-  # TODO: We don't consider CPACK_PACKAGE_INSTALL_PREFIX here, this could
-  # potentially be solved with a more involved CPack setup. See also the
-  # comment at the beginning of cmake/Package.cmake.
-  configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/tenzir-node.service.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/tenzir-node.service" @ONLY)
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir-node.service"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system/"
-    COMPONENT Runtime)
+      "${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/tenzir-node.service.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/tenzir-node.service" @ONLY)
+    install(
+      FILES "${CMAKE_CURRENT_BINARY_DIR}/tenzir-node.service"
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system/"
+      COMPONENT Runtime)
+  endif ()
 endif ()
 
 # -- functional tests ----------------------------------------------------------
