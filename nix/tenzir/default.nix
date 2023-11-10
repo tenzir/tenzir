@@ -72,8 +72,12 @@
         "plugins/sigma"
         "plugins/velociraptor"
         "plugins/web"
-        "plugins/yara"
         "plugins/zmq"
+      ]
+      # Temporarily disable yara on the static mac build because of issues
+      # building protobufc.
+      ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
+        "plugins/yara"
       ]
       ++ extraPlugins';
   in
@@ -114,6 +118,7 @@
           cppzmq
           re2
           restinio
+        ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
           yara
         ];
         propagatedBuildInputs = [
