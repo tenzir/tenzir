@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   tenzir:
-    name: Tenzir (${{ runner.os }} ${{ runner.arch }})
+    name: Tenzir
     runs-on: ${{ fromJSON(inputs.config).editions[0].gha-runner-labels }}
     steps:
       - name: Prevent pushing protected editions to public repos
