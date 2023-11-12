@@ -71,7 +71,8 @@ def push_images [
   image_registries: list<string>
   container_tags # annotation breaks in nu 0.78 : list<string>
 ] {
-  if ($image_registries == [] or $container_tags == []) {
+  let os = (uname -s)
+  if ($os != "Linux" or $image_registries == [] or $container_tags == []) {
     return
   }
   # We always push two images: `tenzir` and `tenzir-node`.
