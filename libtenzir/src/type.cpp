@@ -1474,16 +1474,25 @@ bool compatible(const type& lhs, relational_operator op,
     return caf::holds_alternative<string_type>(x)
            && caf::holds_alternative<pattern>(y);
   };
+  auto numeric = [](auto& x, auto& y) {
+    return (caf::holds_alternative<int64_type>(x)
+            or caf::holds_alternative<uint64_type>(x)
+            or caf::holds_alternative<double_type>(x))
+           and (caf::holds_alternative<int64_t>(y)
+                or caf::holds_alternative<uint64_t>(y)
+                or caf::holds_alternative<double>(y));
+  };
   switch (op) {
     case relational_operator::equal:
     case relational_operator::not_equal:
       return !lhs || caf::holds_alternative<caf::none_t>(rhs)
-             || string_and_pattern(lhs, rhs) || congruent(lhs, rhs);
+             || numeric(lhs, rhs) || string_and_pattern(lhs, rhs)
+             || congruent(lhs, rhs);
     case relational_operator::less:
     case relational_operator::less_equal:
     case relational_operator::greater:
     case relational_operator::greater_equal:
-      return congruent(lhs, rhs);
+      return congruent(lhs, rhs) or numeric(lhs, rhs);
     case relational_operator::in:
     case relational_operator::not_in:
       if (caf::holds_alternative<string_type>(lhs))

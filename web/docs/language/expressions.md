@@ -80,9 +80,9 @@ available types. Each letter in a cell denotes a set of operators:
 | | **Bool** | **Int64** | **UInt64** | **Double** | **Duration** | **Time** | **String** | **Pattern** | **IP** | **Subnet** | **Enum** | **List**
 ---|---|---|---|---|---|---|---|---|---|---|---|--
  **Bool** | E |  |  |  |  |  |  |  |  |  |  | M
- **Int64** |  | ER |  |  |  |  |  |  |  |  |  | M
- **UInt64** |  |  | ER |  |  |  |  |  |  |  |  | M
- **Double** |  |  |  | ER |  |  |  |  |  |  |  | M
+ **Int64** |  | ER | ER | ER |  |  |  |  |  |  |  | M
+ **UInt64** |  | ER | ER | ER |  |  |  |  |  |  |  | M
+ **Double** |  | ER | ER | ER |  |  |  |  |  |  |  | M
  **Duration** |  |  |  |  | ER |  |  |  |  |  |  | M
  **Time** |  |  |  |  |  | ER |  |  |  |  |  | M
  **String** |  |  |  |  |  |  | EM | EM |  |  |  | M

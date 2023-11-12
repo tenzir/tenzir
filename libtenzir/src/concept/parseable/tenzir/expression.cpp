@@ -105,6 +105,50 @@ struct expander {
 /// 1. Convert the data instance x to T(x) == x
 /// 2. Apply type-specific expansion that results in a compound expression
 static expression expand(data x) {
+  // If the type is a numeric type we do a special expansion that binds to all
+  // three numeric types. It's unfortunate to have this much logic during
+  // parsing, but this is where we currently expand value predicates so we can
+  // only do this here.
+  auto try_expand_numeric_literal = []<class T>(const T& lit) -> expression {
+    auto result = disjunction{};
+    if constexpr (std::is_same_v<T, int64_t>) {
+      result.push_back(predicate{type_extractor{int64_type{}},
+                                 relational_operator::equal, data{lit}});
+      if (lit >= 0) {
+        result.push_back(predicate{type_extractor{uint64_type{}},
+                                   relational_operator::equal,
+                                   data{static_cast<uint64_t>(lit)}});
+      }
+      result.push_back(predicate{type_extractor{double_type{}},
+                                 relational_operator::equal,
+                                 data{static_cast<double>(lit)}});
+    } else if constexpr (std::is_same_v<T, uint64_t>) {
+      if (lit <= std::numeric_limits<int64_t>::max()) {
+        result.push_back(predicate{type_extractor{int64_type{}},
+                                   relational_operator::equal,
+                                   data{static_cast<int64_t>(lit)}});
+      }
+      result.push_back(predicate{type_extractor{uint64_type{}},
+                                 relational_operator::equal, data{lit}});
+      result.push_back(predicate{type_extractor{double_type{}},
+                                 relational_operator::equal,
+                                 data{static_cast<double>(lit)}});
+    } else if constexpr (std::is_same_v<T, double>) {
+      result.push_back(predicate{type_extractor{int64_type{}},
+                                 relational_operator::equal,
+                                 data{static_cast<int64_t>(lit)}});
+      result.push_back(predicate{type_extractor{uint64_type{}},
+                                 relational_operator::equal,
+                                 data{static_cast<uint64_t>(lit)}});
+      result.push_back(predicate{type_extractor{double_type{}},
+                                 relational_operator::equal, data{lit}});
+    }
+    return result.empty() ? expression{} : expression{std::move(result)};
+  };
+  if (auto expr = caf::visit(try_expand_numeric_literal, x);
+      expr != expression{}) {
+    return expr;
+  }
   auto infer_type = [](const auto& d) -> type {
     return type::infer(d).value_or(type{});
   };
