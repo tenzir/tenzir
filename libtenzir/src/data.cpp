@@ -726,11 +726,11 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
     case simdjson::dom::element_type::STRING: {
       auto str = elem.get_string().value();
       data result;
-      // Attempt some type inference.
-      if (parsers::boolean(str, result))
-        return result;
-      // Attempt maximum type inference.
-      if (parsers::data(str, result))
+      // Attempt type inference for values that are usually stored in a string
+      // when printed as JSON.
+      const auto p
+        = parsers::ip | parsers::net | parsers::time | parsers::duration;
+      if (p(str, result))
         return result;
       // Take the input as-is if nothing worked.
       return std::string{str};
