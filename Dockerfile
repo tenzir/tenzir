@@ -222,7 +222,7 @@ USER tenzir:tenzir
 COPY demo-node /demo-node
 env TENZIR_AUTOMATIC_REBUILD=0
 env TENZIR_ALLOW_UNSAFE_PIPELINES=true
-RUN /demo-node/import.bash
+RUN /demo-node/setup.bash
 
 ENTRYPOINT ["tenzir-node"]
 
