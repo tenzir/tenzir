@@ -8,7 +8,7 @@ license = "BSD-3-Clause"
 [tool.poetry.dependencies]
 python = "^3.10"
 nbconvert = "^7.11.0"
-ipykernel = "^6.25.2"
+ipykernel = "^6.26.0"
 bash_kernel = "^0.9.1"
 jupyter = "^1.0.0"
 
