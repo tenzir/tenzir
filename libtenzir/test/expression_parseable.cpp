@@ -164,14 +164,39 @@ TEST(parseable - expression) {
 TEST(parseable - value predicate) {
   expression expr;
   CHECK(parsers::expr("42"s, expr));
-  auto pred = caf::get_if<predicate>(&expr);
-  REQUIRE(pred);
-  auto extractor = caf::get_if<type_extractor>(&pred->lhs);
-  REQUIRE(extractor);
-  CHECK(caf::holds_alternative<uint64_type>(extractor->type));
-  CHECK(caf::holds_alternative<data>(pred->rhs));
-  CHECK_EQUAL(pred->op, relational_operator::equal);
-  CHECK(caf::get<data>(pred->rhs) == data{42u});
+  auto disj = caf::get_if<disjunction>(&expr);
+  REQUIRE(disj);
+  REQUIRE_EQUAL(disj->size(), 3u);
+  {
+    auto pred = caf::get_if<predicate>(&(*disj)[0]);
+    REQUIRE(pred);
+    auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+    REQUIRE(extractor);
+    CHECK(caf::holds_alternative<int64_type>(extractor->type));
+    CHECK(caf::holds_alternative<data>(pred->rhs));
+    CHECK_EQUAL(pred->op, relational_operator::equal);
+    CHECK(caf::get<data>(pred->rhs) == data{int64_t{42}});
+  }
+  {
+    auto pred = caf::get_if<predicate>(&(*disj)[1]);
+    REQUIRE(pred);
+    auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+    REQUIRE(extractor);
+    CHECK(caf::holds_alternative<uint64_type>(extractor->type));
+    CHECK(caf::holds_alternative<data>(pred->rhs));
+    CHECK_EQUAL(pred->op, relational_operator::equal);
+    CHECK(caf::get<data>(pred->rhs) == data{42u});
+  }
+  {
+    auto pred = caf::get_if<predicate>(&(*disj)[2]);
+    REQUIRE(pred);
+    auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+    REQUIRE(extractor);
+    CHECK(caf::holds_alternative<double_type>(extractor->type));
+    CHECK(caf::holds_alternative<data>(pred->rhs));
+    CHECK_EQUAL(pred->op, relational_operator::equal);
+    CHECK(caf::get<data>(pred->rhs) == data{42.0});
+  }
 }
 
 TEST(parseable - field extractor predicate) {
