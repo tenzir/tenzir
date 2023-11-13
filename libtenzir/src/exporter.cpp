@@ -95,8 +95,8 @@ void attach_result_stream(
                   {"query",
                    fmt::to_string(state.self_ptr->state.query_context.id)}},
             };
-            state.self->send(state.self_ptr->state.accountant, atom::metrics_v,
-                             std::move(r));
+            state.self_ptr->send(state.self_ptr->state.accountant,
+                                 atom::metrics_v, std::move(r));
           }
           shutdown_stream(state.self_ptr->state.result_stream);
         }
