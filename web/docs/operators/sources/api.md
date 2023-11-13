@@ -1,11 +1,11 @@
 # api
 
-Use Tenzir's REST API directly from within a pipeline.
+Use Tenzir's REST API directly from a pipeline.
 
 ## Synopsis
 
 ```
-api <endpoint> [<key=value>...]
+api <endpoint> [<request-body>]
 ```
 
 ## Description
@@ -20,27 +20,23 @@ endpoints.
 
 ### `<endpoint>`
 
-The endpoint to query, e.g., `/pipeline/list` to list all pipelines created
+The endpoint to request, e.g., `/pipeline/list` to list all pipelines created
 through the `/pipeline/create` endpoint.
 
-### `[<key=value>...]`
+### `[<request-body>]`
 
-A space-separated list of key-value pairs. To set nested values, use a dot to
-separate the keys.
+A single string containing the JSON request body to send with the request.
 
 ## Examples
-
-Create a new pipeline and start it immediately.
-
-```
-api /pipeline/create
-    autostart.created=true
-    "name=Suricata Import"
-    "definition=from file /tmp/eve.sock read suricata | import"
-```
 
 List all running pipelines:
 
 ```
 api /pipeline/list
+```
+
+Create a new pipeline and start it immediately.
+
+```
+api /pipeline/create '{"name": "Suricata Import", "definition": "from file /tmp/eve.sock read suricata", "autostart": {"created": true}}'
 ```

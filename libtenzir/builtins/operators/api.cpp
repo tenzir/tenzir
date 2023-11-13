@@ -103,40 +103,14 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto endpoint = std::string{};
-    if (auto arg = p.accept_shell_arg()) {
-      endpoint = std::move(arg->inner);
-    } else {
-      auto endpoints = std::unordered_set<std::string>{};
-      for (const auto& plugin : plugins::get<rest_endpoint_plugin>()) {
-        for (const auto& endpoint : plugin->rest_endpoints()) {
-          endpoints.insert(endpoint.path);
-        }
-      }
-      diagnostic::error("endpoint must be specified")
-        .note("must be one of {}", fmt::join(endpoints, ", "))
-        .docs("https://docs.tenzir.com/next/operators/sources/api")
-        .throw_();
-    }
-    // TODO: We're using a `caf::settings` here over `record` because that
-    // supports inserting `autostart.created=true` as a nested value directly.
-    // Since we're just working with strings here there is no loss of precision,
-    // but it's still not ideal to have to do this roundtrip.
-    auto request_body = caf::settings{};
-    while (auto arg = p.accept_shell_arg()) {
-      auto kvp = detail::split_escaped(arg->inner, "=", "\\", 1);
-      TENZIR_ASSERT(kvp.size() == 2);
-      caf::put(request_body, kvp[0], std::move(kvp[1]));
-    }
-    auto request_body_json
-      = to_json(to_data(request_body), {.style = no_style(), .oneline = true});
-    if (not request_body_json) {
-      diagnostic::error("failed to format request body: {}",
-                        request_body_json.error())
-        .docs("https://docs.tenzir.com/next/operators/sources/api")
-        .throw_();
-    }
-    return std::make_unique<api_operator>(std::move(endpoint),
-                                          std::move(*request_body_json));
+    auto request_body = std::optional<std::string>{};
+    auto parser = argument_parser{"shell", "https://docs.tenzir.com/next/"
+                                           "operators/transformations/shell"};
+    parser.add(endpoint, "<command>");
+    parser.add(request_body, "<request-body>");
+    parser.parse(p);
+    return std::make_unique<api_operator>(
+      std::move(endpoint), request_body ? std::move(*request_body) : "{}");
   }
 };
 
