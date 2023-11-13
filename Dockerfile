@@ -213,19 +213,18 @@ ENTRYPOINT ["tenzir-node"]
 
 FROM tenzir-ce AS tenzir-demo
 
-USER root:root
+USER root
 RUN apt-get update && \
-    apt install -y \
-        curl \
-        jq \
-        procps \
-        zstd && \
+    apt-get -y --no-install-recommends install jq && \
     rm -rf /var/lib/apt/lists/*
+
+USER tenzir:tenzir
 COPY demo-node /demo-node
-ENV SURICATA_PIPE='load https https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst | decompress zstd | read suricata | where #schema != "suricata.stats" | import'
-ENV ZEEK_PIPE='load https https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst | decompress zstd | read zeek-tsv | import'
+env TENZIR_AUTOMATIC_REBUILD=0
+env TENZIR_ALLOW_UNSAFE_PIPELINES=true
 RUN /demo-node/import.bash
-ENTRYPOINT ["/demo-node/entrypoint.bash"]
+
+ENTRYPOINT ["tenzir-node"]
 
 # -- tenzir-ee -------------------------------------------------------------------
 
