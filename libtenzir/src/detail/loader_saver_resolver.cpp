@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/concept/parseable/tenzir/identifier.hpp>
 #include <tenzir/detail/loader_saver_resolver.hpp>
 
 namespace tenzir::detail {
@@ -17,6 +18,9 @@ class prepend_token final : public parser_interface {
 public:
   prepend_token(located<String> token, parser_interface& next)
     : token_{std::move(token)}, next_{next} {
+  }
+  prepend_token(std::nullopt_t, parser_interface& next)
+    : token_{std::nullopt}, next_{next} {
   }
 
   auto accept_shell_arg() -> std::optional<located<std::string>> override {
@@ -123,16 +127,12 @@ struct try_plugin_by_uri_result {
   }
 };
 
-auto plugin_name_for_scheme(std::string_view scheme) -> std::string_view {
-  using namespace std::string_view_literals;
-  constexpr auto scheme_to_plugin_map = std::array{std::pair{"gs"sv, "gcs"sv}};
-  auto map_it
-    = std::ranges::find(scheme_to_plugin_map, scheme, [](const auto& pair) {
-        return pair.first;
-      });
-  if (map_it == scheme_to_plugin_map.end())
-    return scheme;
-  return map_it->second;
+template <typename Plugin>
+auto find_plugin_by_scheme(std::string_view scheme) -> const Plugin* {
+  for (auto&& plugin : plugins::get<Plugin>())
+    if (plugin->supported_uri_scheme() == scheme)
+      return plugin;
+  return nullptr;
 }
 
 template <typename Plugin>
@@ -154,42 +154,62 @@ auto try_plugin_by_uri(const located<std::string>& src)
     // We need to skip that before forwarding it to the loader
     non_scheme_offset += 2;
   result.non_scheme = make_located_string_view(src, non_scheme_offset);
-  result.plugin
-    = plugins::find<Plugin>(plugin_name_for_scheme(result.scheme.inner));
+  result.plugin = find_plugin_by_scheme<Plugin>(result.scheme.inner);
   return result;
 }
 
 template <typename ParserPlugin, typename Plugin, typename Parse>
 auto resolve_impl(parser_interface& parser, const located<std::string>& name,
-                  Parse&& parse)
-  -> std::pair<std::unique_ptr<Plugin>, located<std::string_view>> {
-  if (auto plugin = plugins::find<ParserPlugin>(name.inner)) {
-    // Matches a plugin name, use that
-    return {parse(plugin, parser), make_located_string_view(name)};
-  }
+                  Parse&& parse) -> resolve_loader_saver_result<Plugin> {
   if (auto uri = try_plugin_by_uri<ParserPlugin>(name); uri.plugin_found()) {
     // Valid URI, with a matching plugin name
-    auto r = prepend_token{uri.non_scheme, parser};
+    if (uri.scheme.inner == uri.plugin->name()) {
+      // URI scheme is identical to the plugin name:
+      // Pass the URI along _without_ the scheme
+      // This is to support URIs like file://foo,
+      // which will be transformed to `file foo`
+      auto r = prepend_token{uri.non_scheme, parser};
+      auto parsed = parse(uri.plugin, r);
+      TENZIR_DIAG_ASSERT(r.at_end());
+      return {std::move(parsed), make_located_string_view(uri.scheme), true};
+    }
+    // URI scheme is different from the plugin name:
+    // Assume that the URI scheme is special, and needs to be passed along
+    // This is to support the `gcs`-connector, which needs
+    // the `gs://` scheme
+    auto r = prepend_token{name, parser};
     auto parsed = parse(uri.plugin, r);
     TENZIR_DIAG_ASSERT(r.at_end());
-    return {std::move(parsed), make_located_string_view(uri.scheme)};
+    return {std::move(parsed), make_located_string_view(uri.scheme), true};
   } else if (uri.valid_uri_parsed()) {
     // Valid URI, but no matching plugin name -> error
-    return {nullptr, make_located_string_view(uri.scheme)};
+    return {nullptr, make_located_string_view(uri.scheme), true};
   }
-  // Try `file` loader, may be a path
+  // Check if `name` could be a valid plugin name
+  if (parsers::plugin_name(name.inner)) {
+    // It could be a plugin name
+    if (auto plugin = plugins::find<ParserPlugin>(name.inner)) {
+      // Matches a plugin name, use that
+      return {parse(plugin, parser), make_located_string_view(name), false};
+    }
+    // Not a loaded plugin, but it could've been ->
+    // assume that it was a typo, or a plugin that's not loaded -> error
+    return {nullptr, make_located_string_view(name), false};
+  }
+  // Try `file` loader, may be a path,
+  // since it's not a URI or a valid plugin name
   auto plugin = plugins::find<ParserPlugin>("file");
   TENZIR_DIAG_ASSERT(plugin);
   auto name_sv = make_located_string_view(name);
   auto r = prepend_token{name_sv, parser};
   auto parsed = parse(plugin, r);
   TENZIR_DIAG_ASSERT(r.at_end());
-  return {std::move(parsed), name_sv};
+  return {std::move(parsed), name_sv, false};
 }
 } // namespace
 
 auto resolve_loader(parser_interface& parser, const located<std::string>& name)
-  -> std::pair<std::unique_ptr<plugin_loader>, located<std::string_view>> {
+  -> resolve_loader_saver_result<plugin_loader> {
   return resolve_impl<loader_parser_plugin, plugin_loader>(
     parser, name, [](const loader_parser_plugin* plugin, parser_interface& p) {
       return plugin->parse_loader(p);
@@ -197,7 +217,7 @@ auto resolve_loader(parser_interface& parser, const located<std::string>& name)
 }
 
 auto resolve_saver(parser_interface& parser, const located<std::string>& name)
-  -> std::pair<std::unique_ptr<plugin_saver>, located<std::string_view>> {
+  -> resolve_loader_saver_result<plugin_saver> {
   return resolve_impl<saver_parser_plugin, plugin_saver>(
     parser, name, [](const saver_parser_plugin* plugin, parser_interface& p) {
       return plugin->parse_saver(p);

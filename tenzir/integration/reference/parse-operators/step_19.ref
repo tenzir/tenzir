@@ -1,8 +1,8 @@
-error: loader for `scheme` scheme could not be found
+error: loader `filee` could not be found
  --> <input>:1:6
   |
-1 | from scheme:foo.json read json
-  |      ^^^^^^ 
+1 | load filee | read json
+  |      ^^^^^ 
   |
   = hint: must be one of -, file, ftp, ftps, http, https, s3, stdin
   = docs: https://docs.tenzir.com/next/connectors

@@ -42,11 +42,22 @@ namespace {
 }
 
 template <typename String>
-[[noreturn]] void throw_saver_not_found(const located<String>& x) {
+[[noreturn]] void
+throw_saver_not_found(const located<String>& x, bool use_uri_schemes) {
   auto available = std::vector<std::string>{};
   for (auto p : plugins::get<saver_parser_plugin>()) {
-    available.push_back(p->name());
+    if (use_uri_schemes) {
+      available.push_back(p->supported_uri_scheme());
+    } else {
+      available.push_back(p->name());
+    }
   }
+  if (use_uri_schemes)
+    diagnostic::error("saver for `{}` scheme could not be found", x.inner)
+      .primary(x.source)
+      .hint("must be one of {}", fmt::join(available, ", "))
+      .docs("https://docs.tenzir.com/next/connectors")
+      .throw_();
   diagnostic::error("saver `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
@@ -242,15 +253,15 @@ auto get_saver(parser_interface& p, const char* usage, const char* docs)
   -> std::unique_ptr<plugin_saver> {
   auto s_name = p.accept_shell_arg();
   if (not s_name) {
-    diagnostic::error("expected printer name")
+    diagnostic::error("expected saver name")
       .primary(p.current_span())
       .usage(usage)
       .docs(docs)
       .throw_();
   }
-  auto [saver, name] = detail::resolve_saver(p, *s_name);
+  auto [saver, name, is_uri] = detail::resolve_saver(p, *s_name);
   if (not saver) {
-    throw_saver_not_found(name);
+    throw_saver_not_found(name, is_uri);
   }
   return std::move(saver);
 }

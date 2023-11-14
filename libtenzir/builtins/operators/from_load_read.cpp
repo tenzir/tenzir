@@ -146,11 +146,22 @@ auto parse_default_parser(std::string definition)
 }
 
 template <typename String>
-[[noreturn]] void throw_loader_not_found(const located<String>& x) {
+[[noreturn]] void
+throw_loader_not_found(const located<String>& x, bool use_uri_schemes) {
   auto available = std::vector<std::string>{};
   for (auto const* p : plugins::get<loader_parser_plugin>()) {
-    available.push_back(p->name());
+    if (use_uri_schemes) {
+      available.push_back(p->supported_uri_scheme());
+    } else {
+      available.push_back(p->name());
+    }
   }
+  if (use_uri_schemes)
+    diagnostic::error("loader for `{}` scheme could not be found", x.inner)
+      .primary(x.source)
+      .hint("must be one of {}", fmt::join(available, ", "))
+      .docs("https://docs.tenzir.com/next/connectors")
+      .throw_();
   diagnostic::error("loader `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
@@ -180,9 +191,9 @@ auto get_loader(parser_interface& p, const char* usage, const char* docs)
       .docs(docs)
       .throw_();
   }
-  auto [loader, name] = detail::resolve_loader(p, *l_name);
+  auto [loader, name, is_uri] = detail::resolve_loader(p, *l_name);
   if (not loader) {
-    throw_loader_not_found(name);
+    throw_loader_not_found(name, is_uri);
   }
   return std::move(loader);
 }

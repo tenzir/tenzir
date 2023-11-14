@@ -13,10 +13,17 @@
 
 namespace tenzir::detail {
 
+template <typename Plugin>
+struct resolve_loader_saver_result {
+  std::unique_ptr<Plugin> plugin;
+  located<std::string_view> name;
+  bool matched_uri;
+};
+
 auto resolve_loader(parser_interface& parser, const located<std::string>& name)
-  -> std::pair<std::unique_ptr<plugin_loader>, located<std::string_view>>;
+  -> resolve_loader_saver_result<plugin_loader>;
 
 auto resolve_saver(parser_interface& parser, const located<std::string>& name)
-  -> std::pair<std::unique_ptr<plugin_saver>, located<std::string_view>>;
+  -> resolve_loader_saver_result<plugin_saver>;
 
 } // namespace tenzir::detail

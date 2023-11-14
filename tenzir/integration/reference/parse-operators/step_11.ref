@@ -1,8 +1,16 @@
-error: loader `schema` could not be found
- --> <input>:1:6
-  |
-1 | from schema://foo.json read json
-  |      ^^^^^^ 
-  |
-  = hint: must be one of -, file, ftp, ftps, http, https, s3, stdin
-  = docs: https://docs.tenzir.com/next/connectors
+{
+  "b": true,
+  "e": "A"
+}
+{
+  "b": false,
+  "e": "B"
+}
+{
+  "b": false,
+  "e": "C"
+}
+{
+  "b": false,
+  "e": "D"
+}

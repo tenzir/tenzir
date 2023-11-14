@@ -434,6 +434,8 @@ public:
   virtual auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader>
     = 0;
+
+  virtual auto supported_uri_scheme() const -> std::string;
 };
 
 using loader_serialization_plugin = serialization_plugin<plugin_loader>;
@@ -586,6 +588,8 @@ public:
   virtual auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver>
     = 0;
+
+  virtual auto supported_uri_scheme() const -> std::string;
 };
 
 using saver_serialization_plugin = serialization_plugin<plugin_saver>;
