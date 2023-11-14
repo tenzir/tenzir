@@ -758,6 +758,32 @@ public:
     = 0;
 };
 
+// -- context plugin -----------------------------------------------------------
+
+class context {
+public:
+  virtual ~context() noexcept = default;
+
+  /// Emits context information for every event in `slice` in order.
+  virtual auto apply(table_slice slice, record parameters) const
+    -> caf::expected<typed_array>
+    = 0;
+
+  /// Inspects the context.
+  virtual auto status(status_verbosity v) const -> record = 0;
+
+  /// Updates the context.
+  virtual auto update(table_slice slice, record parameters) -> caf::error = 0;
+};
+
+class context_plugin : public virtual plugin {
+public:
+  /// Create a context
+  [[nodiscard]] virtual auto make_context(record parameters) const
+    -> caf::expected<std::unique_ptr<context>>
+    = 0;
+};
+
 // -- aspect plugin ------------------------------------------------------------
 
 class aspect_plugin : public virtual plugin {
