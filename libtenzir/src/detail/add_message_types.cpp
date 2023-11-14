@@ -44,6 +44,7 @@
 #include "tenzir/table_slice_column.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/type.hpp"
+#include "tenzir/typed_array.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/init_global_meta_objects.hpp>

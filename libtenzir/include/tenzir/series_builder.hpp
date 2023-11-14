@@ -10,6 +10,7 @@
 
 #include "tenzir/data.hpp"
 #include "tenzir/type.hpp"
+#include "tenzir/typed_array.hpp"
 #include "tenzir/variant.hpp"
 #include "tenzir/view.hpp"
 
@@ -25,7 +26,6 @@ class builder_ref;
 class record_ref;
 class series_builder;
 struct data_view2;
-struct typed_array;
 
 namespace detail {
 
@@ -154,23 +154,6 @@ private:
   std::unique_ptr<detail::series_builder_impl> impl_;
 
   friend class builder_ref;
-};
-
-/// A temporary series representation (until we have a proper one).
-struct typed_array {
-  typed_array() = default;
-
-  template <type_or_concrete_type Type>
-  typed_array(Type type, std::shared_ptr<arrow::Array> array)
-    : type{std::move(type)}, array{std::move(array)} {
-  }
-
-  auto length() const -> int64_t {
-    return array ? array->length() : 0;
-  }
-
-  tenzir::type type;
-  std::shared_ptr<arrow::Array> array;
 };
 
 /// A temporary alternative to `data_view`.

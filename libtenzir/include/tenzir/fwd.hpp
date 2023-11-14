@@ -246,6 +246,7 @@ struct status;
 struct taxonomies;
 struct type_extractor;
 struct type_set;
+struct typed_array;
 
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
@@ -445,6 +446,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::type))
   TENZIR_ADD_TYPE_ID((tenzir::type_extractor))
   TENZIR_ADD_TYPE_ID((tenzir::type_set))
+  TENZIR_ADD_TYPE_ID((tenzir::typed_array))
   TENZIR_ADD_TYPE_ID((tenzir::uuid))
   TENZIR_ADD_TYPE_ID((tenzir::wah_bitmap))
 
