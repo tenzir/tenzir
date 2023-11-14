@@ -224,7 +224,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
     },
-    // Decomissions all active partitions, effectively flushing them to disk.
+    // Push buffered slices downstream to make the data available.
     [self](atom::flush) -> caf::result<void> {
       auto rp = self->make_response_promise<void>();
       self->state.stage->out().fan_out_flush();
