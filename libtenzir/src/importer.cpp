@@ -224,6 +224,19 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
     },
+    // Decomissions all active partitions, effectively flushing them to disk.
+    [self](atom::flush) -> caf::result<void> {
+      auto rp = self->make_response_promise<void>();
+      self->state.stage->out().fan_out_flush();
+      self->state.stage->out().force_emit_batches();
+      // The stream flushing only takes effect after we've returned to the
+      // scheduler, so we delegate to the index only after doing that with an
+      // immediately scheduled action.
+      detail::weak_run_delayed(self, duration::zero(), [self, rp]() mutable {
+        rp.delegate(self->state.index, atom::flush_v);
+      });
+      return rp;
+    },
     // -- stream_sink_actor<table_slice> ---------------------------------------
     [self](caf::stream<table_slice> in) {
       // NOTE: Architecturally it would make more sense to put the transformer

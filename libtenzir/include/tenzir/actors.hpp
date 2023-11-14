@@ -234,7 +234,9 @@ using importer_actor = typed_actor_fwd<
   auto(stream_sink_actor<table_slice>)
     ->caf::result<caf::outbound_stream_slot<table_slice>>,
   // Register a FLUSH LISTENER actor.
-  auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>>
+  auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
+  // Decomissions all active partitions, effectively flushing them to disk.
+  auto(atom::flush)->caf::result<void>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STREAM SINK actor for table slices with a
