@@ -250,6 +250,16 @@ load(const std::vector<std::string>& bundled_plugins,
       return std::move(plugin.error());
     }
   }
+  // Remove plugins that are explicitly disabled.
+  const auto disabled_plugins
+    = caf::get_or(cfg, "tenzir.disable-plugins", std::vector<std::string>{""});
+  const auto is_disabled_plugin = [&](const auto& plugin) {
+    return std::find(disabled_plugins.begin(), disabled_plugins.end(), plugin)
+           != disabled_plugins.end();
+  };
+  get_mutable().erase(std::remove_if(get_mutable().begin(), get_mutable().end(),
+                                     is_disabled_plugin),
+                      get_mutable().end());
   // Sort loaded plugins by name (case-insensitive).
   std::sort(get_mutable().begin(), get_mutable().end());
   return loaded_plugin_paths;
