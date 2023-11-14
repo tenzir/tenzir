@@ -1,8 +1,8 @@
 error: expected 1 positional arguments, but got 0
- --> <input>:1:14
+ --> <input>:1:13
   |
-1 | export | rare | to stdout
-  |              ^ 
+1 | export | top | to stdout
+  |             ^ 
   |
-  = usage: rare <str> [-c|--count-field <str>]
-  = docs: https://docs.tenzir.com/docs/next/operators/transformations/rare
+  = usage: top <str> [-c|--count-field <str>]
+  = docs: https://docs.tenzir.com/docs/next/operators/transformations/top

@@ -30,9 +30,6 @@ while [[ "${done}" != "true" ]] ; do
   done=$(tenzir -q "api /pipeline/list" | jq ".pipelines | all(.state != \"running\")")
 done
 
-echo "Flushing demo data import"
-tenzir-ctl flush
-
 echo "Rebulding demo data import"
 tenzir-ctl rebuild --undersized --all --parallel=4
 
