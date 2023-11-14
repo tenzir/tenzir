@@ -220,15 +220,13 @@ RUN apt-get update && \
 
 USER tenzir:tenzir
 COPY demo-node /demo-node
+COPY --from=tenzir-ce --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir
 ENV TENZIR_AUTOMATIC_REBUILD=0 \
     TENZIR_ALLOW_UNSAFE_PIPELINES=true \
-    TENZIR_DB_DIRECTORY="/var/lib/tenzir-demo"
-COPY --from=tenzir-ce --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir
-COPY --from=tenzir-ce --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir-demo
+    TENZIR_DB_DIRECTORY="/var/lib/tenzir"
 RUN /demo-node/setup.bash
-ENV TENZIR_DB_DIRECTORY="/var/lib/tenzir"
 
-ENTRYPOINT ["sh", "-c", "2>&1 echo Copying demo data... && cp -rf /var/lib/tenzir-demo/. /var/lib/tenzir/ && tenzir-node"]
+ENTRYPOINT ["tenzir-node"]
 
 # -- tenzir-ee -------------------------------------------------------------------
 
