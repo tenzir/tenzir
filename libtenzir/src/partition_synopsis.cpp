@@ -75,10 +75,11 @@ std::optional<double> get_field_fprate(const index_config& config,
         return fprate;
     }
   }
-  if (caf::holds_alternative<bool_type>(field.type())) {
-    return config.default_fp_rate;
-  }
-  if (caf::holds_alternative<time_type>(field.type())) {
+  auto use_default_fprate = []<concrete_type T>(const T&) {
+    return detail::is_any_v<T, bool_type, int64_type, uint64_type, double_type,
+                            duration_type, time_type>;
+  };
+  if (caf::visit(use_default_fprate, field.type())) {
     return config.default_fp_rate;
   }
   return std::nullopt;
