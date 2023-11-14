@@ -1,6 +1,9 @@
-error: invalid duplicate field value `count` for count and value fields
+error: invalid duplicate field value `id.orig_h` for count and value fields
  --> <input>:1:14
   |
-1 | export | top count | to stdout
-  |              ^^^^^ 
+1 | export | top id.orig_h --count-field=id.orig_h | to stdout
+  |              ^^^^^^^^^ 
+  ⋮
+1 | export | top id.orig_h --count-field=id.orig_h | to stdout
+  |                                      ^^^^^^^^^ 
   |

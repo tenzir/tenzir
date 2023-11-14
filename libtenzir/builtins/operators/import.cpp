@@ -88,7 +88,10 @@ public:
     auto num_events = uint64_t{};
     auto source = caf::detail::make_stream_source<import_source_driver>(
       &ctrl.self(), input, num_events, ctrl);
-    source->add_outbound_path(importer);
+    // TODO: Properly name the import for logging; maybe we can expose the
+    // pipeline name via the control plane for that?
+    source->add_outbound_path(importer,
+                              std::make_tuple(std::string{"import operator"}));
     for (const auto& plugin : plugins::get<analyzer_plugin>()) {
       // We can safely assert that the analyzer was already initialized. The
       // pipeline API guarantees that remote operators run after the node was
@@ -107,6 +110,21 @@ public:
     source->out().fan_out_flush();
     source->out().force_emit_batches();
     source->stop();
+    // We yield once to the scheduler as the stream flushing only takes effect
+    // then.
+    co_yield {};
+    // We implicitly flush at the importer.
+    ctrl.self()
+      .request(importer, caf::infinite, atom::flush_v)
+      .await(
+        []() {
+          // nop
+        },
+        [&](const caf::error& err) {
+          diagnostic::error("failed to flush import: {}", err)
+            .emit(ctrl.diagnostics());
+        });
+    co_yield {};
     const auto elapsed = std::chrono::steady_clock::now() - start_time;
     const auto rate
       = static_cast<double>(num_events)

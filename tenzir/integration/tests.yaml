@@ -175,18 +175,6 @@ tests:
       - command: and that is not a command
         expected_result: error
 
-  Flush:
-    tags: [server, import, flush]
-    fixture: ServerTester
-    steps:
-      - command: import zeek
-        input: data/zeek/conn.log.gz
-      - command: status catalog
-        transformation: jq -ec '.catalog."num-partitions"'
-      - command: flush
-      - command: status catalog
-        transformation: jq -ec '.catalog."num-partitions"'
-
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
@@ -622,12 +610,8 @@ tests:
       - command: exec 'read cef | import'
         input: data/cef/cynet.log
       - command: exec 'export | to stdout'
-      - command: flush
-      - command: exec 'export | to stdout'
       - command: exec 'read cef | import'
         input: data/cef/checkpoint.log
-      - command: exec 'export | to stdout'
-      - command: flush
       - command: exec 'export | to stdout'
         transformation: jq length
       - command: exec 'export | where device_product == "VPN-1 & FireWall-1" | to stdout'
@@ -893,7 +877,6 @@ tests:
     steps:
       - command: exec 'read cef | import'
         input: data/cef/forcepoint.log
-      - command: flush
       - command: exec 'export | sort signature_id asc | write json'
       - command: exec 'export | sort uid asc | head 10 | write json'
 
@@ -922,7 +905,6 @@ tests:
     steps:
       - command: exec 'read zeek-tsv | import'
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: exec 'export | top id.orig_h | to stdout'
       - command: exec 'export | rare id.orig_h | to stdout'
       - command: exec 'export | top id.orig_h --count-field=amount | to stdout'
@@ -1126,7 +1108,6 @@ tests:
     steps:
       - command: exec 'read suricata | where :blob != null | import'
         input: data/suricata/eve.json
-      - command: flush
       - command: exec 'export | where :blob != null'
       - command: exec 'export | write csv'
       - command: exec 'export | write json'
