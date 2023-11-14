@@ -88,7 +88,10 @@ public:
     auto num_events = uint64_t{};
     auto source = caf::detail::make_stream_source<import_source_driver>(
       &ctrl.self(), input, num_events, ctrl);
-    source->add_outbound_path(importer);
+    // TODO: Properly name the import for logging; maybe we can expose the
+    // pipeline name via the control plane for that?
+    source->add_outbound_path(importer,
+                              std::make_tuple(std::string{"import operator"}));
     for (const auto& plugin : plugins::get<analyzer_plugin>()) {
       // We can safely assert that the analyzer was already initialized. The
       // pipeline API guarantees that remote operators run after the node was
