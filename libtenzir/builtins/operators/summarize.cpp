@@ -19,6 +19,7 @@
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
 
@@ -538,6 +539,20 @@ public:
   /// Returns the summarization results after the input is done.
   auto finish(
     const configuration& config) && -> generator<caf::expected<table_slice>> {
+    if (config.group_by_extractors.empty() && buckets.empty()) {
+      // This `summarize` has no `by` clause. In the case where the operator
+      // did not receive any input, the user still expects a result. For
+      // example, `summarize count(foo)` should return 0.
+      auto b = series_builder{};
+      auto r = b.record();
+      for (auto& aggr : config.aggregations) {
+        r.field(aggr.output, aggr.function->aggregation_default());
+      }
+      for (auto&& slice : b.finish_as_table_slice("tenzir.summarize")) {
+        co_yield std::move(slice);
+      }
+      co_return;
+    }
     // Most summarizations yield events with equal output schemas. Hence, we
     // first "group the groups" by their output schema, and then create one
     // builder with potentially multiple rows for each output schema.
@@ -727,7 +742,6 @@ private:
     /// a type clash between columns. We store `nullptr` if we have only seen
     /// schemas where the input column is missing, which means that we don't
     /// know which type to use until we get schema where the column exists.
-    // TODO
     std::vector<aggregation> aggregations;
   };
 
