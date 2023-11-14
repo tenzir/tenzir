@@ -5,6 +5,8 @@ Produces events by combining a [connector][connectors] and a [format][formats].
 ## Synopsis
 
 ```
+from <uri> [read <format>]
+from <path> [read <format>]
 from <connector> [read <format>]
 ```
 
@@ -51,10 +53,20 @@ from - read json
 Read bytes from the file `path/to/eve.json` and parse them as Suricata.
 Note that the `file` connector automatically assigns the Suricata parser for
 `eve.json` files when no other parser is specified.
+Also, when directly passed a filesystem path, the `file` connector is automatically used.
 
 ```
+from path/to/eve.json
 from file path/to/eve.json
 from file path/to/eve.json read suricata
+```
+
+Read bytes from the URI `https://example.com/data.json` over HTTPS and parse them as JSON.
+Note that when `from` is passed a URI directly, the `https` connector is automatically used.
+
+```
+from https://example.com/data.json read json
+from https example.com/data.json read json
 ```
 
 [connectors]: ../../connectors.md

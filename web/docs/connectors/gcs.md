@@ -43,10 +43,12 @@ credentials.
 
 ## Examples
 
-Read JSON from an object `log.json` in the folder `logs` in `bucket`:
+Read JSON from an object `log.json` in the folder `logs` in `bucket`.
+Note how the `gcs` loader is used automatically, when the URI scheme is `gs://`.
 
 ```
 from gcs gs://bucket/logs/log.json
+from gs://bucket/logs/log.json
 ```
 
 Read JSON from an object `test.json` in `bucket`, but using a different

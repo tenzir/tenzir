@@ -5,6 +5,8 @@ Consumes events by combining a [connector][connectors] and a [format][formats].
 ## Synopsis
 
 ```
+to <uri> [write <format>]
+to <path> [write <format>]
 to <connector> [write <format>]
 ```
 
@@ -48,6 +50,7 @@ to stdout write csv
 Write events to the file `path/to/eve.json` formatted as JSON.
 
 ```
+to path/to/eve.json write json
 to file path/to/eve.json write json
 ```
 

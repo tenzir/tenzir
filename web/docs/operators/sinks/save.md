@@ -10,6 +10,8 @@ operator. Only use this if you need to operate on raw bytes.
 ## Synopsis
 
 ```
+save <uri>
+save <path>
 save <connector>
 ```
 
@@ -39,5 +41,6 @@ save stdin
 Write bytes to the file `path/to/eve.json`:
 
 ```
+save path/to/eve.json
 save file path/to/eve.json
 ```
