@@ -12,14 +12,6 @@ export [--live]
 
 The `export` operator retrieves events from a Tenzir node.
 
-:::note Flush to disk
-Pipelines starting with the `export` operator do not access events that are not
-written to disk.
-
-We recommend running `tenzir-ctl flush` before exporting events to make sure
-they're available for downstream consumption.
-:::
-
 ### `--live`
 
 Work on all events that are imported with `import` operators in real-time
