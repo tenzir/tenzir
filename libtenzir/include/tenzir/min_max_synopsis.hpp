@@ -91,7 +91,8 @@ public:
   }
 
 private:
-  [[nodiscard]] bool lookup_impl(relational_operator op, const T x) const {
+  [[nodiscard]] auto lookup_impl(relational_operator op, const T x) const
+    -> std::optional<bool> {
     // Let *min* and *max* constitute the LHS of the lookup operation and *rhs*
     // be the value to compare with on the RHS. Then, there are 5 possible
     // scenarios to differentiate for the inputs:
@@ -115,11 +116,24 @@ private:
     switch (op) {
       default:
         TENZIR_ASSERT(!"unsupported operator");
-        return false;
+        return {};
       case relational_operator::equal:
-        return min_ <= x && x <= max_;
+        // If the value is either the min or the max we know that it must be
+        // contained.
+        if (x == min_ or x == max_)
+          return true;
+        // If the value is outside of the range then it must not be contained.
+        if (x < min_ or x > max_)
+          return false;
+        // Otherwise we cannot tell.
+        return {};
       case relational_operator::not_equal:
-        return !(min_ <= x && x <= max_);
+        // We have at least one inequal value if the value is outside of the
+        // range.
+        if (x < min_ or x > max_)
+          return true;
+        // Otherwise we cannot tell.
+        return {};
       case relational_operator::less:
         return min_ < x;
       case relational_operator::less_equal:

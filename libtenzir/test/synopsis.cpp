@@ -41,13 +41,13 @@ TEST(min - max synopsis) {
   verify(zero, {N, N, N, N, F, T, F, F, T, T});
   MESSAGE("[4,7] op 4");
   time four = epoch + 4s;
-  verify(four, {N, N, N, N, T, F, F, T, T, T});
+  verify(four, {N, N, N, N, T, N, F, T, T, T});
   MESSAGE("[4,7] op 6");
   time six = epoch + 6s;
-  verify(six, {N, N, N, N, T, F, T, T, T, T});
+  verify(six, {N, N, N, N, N, N, T, T, T, T});
   MESSAGE("[4,7] op 7");
   time seven = epoch + 7s;
-  verify(seven, {N, N, N, N, T, F, T, T, F, T});
+  verify(seven, {N, N, N, N, T, N, T, T, F, T});
   MESSAGE("[4,7] op 9");
   time nine = epoch + 9s;
   verify(nine, {N, N, N, N, F, T, T, T, F, F});

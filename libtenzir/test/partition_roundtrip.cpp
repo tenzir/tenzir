@@ -203,7 +203,9 @@ TEST(empty partition roundtrip) {
       REQUIRE_EQUAL(candidates.candidate_infos.size(), 1ull);
       const auto& partition_infos
         = candidates.candidate_infos.begin()->second.partition_infos;
-      REQUIRE(partition_infos.empty());
+      REQUIRE_EQUAL(partition_infos.size(), 1ull);
+      const auto& candidate_partition = partition_infos.front();
+      CHECK_EQUAL(candidate_partition.uuid, state.data.id);
     },
     [=](const caf::error& err) {
       FAIL(err);
