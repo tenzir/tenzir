@@ -1,0 +1,8 @@
+error: could not parse regex: invalid perl operator: (?=
+ --> <input>:1:15
+  |
+1 | parse line kv "foo(?=bar)" ""
+  |               ^^^^^^^^^^^^ 
+  |
+  = note: regex must be supported by RE2
+  = docs: https://github.com/google/re2/wiki/Syntax

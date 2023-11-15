@@ -253,7 +253,8 @@ endif ()
 # The FindCURL module from CMake doesn't expose the link dependencies of libcurl.a
 # correctly, so we use pkg-config instead.
 pkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\npkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\npkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)")
 target_link_libraries(libtenzir PUBLIC PkgConfig::PC_CURL)
 dependency_summary("CURL" PkgConfig::PC_CURL "Dependencies")
 

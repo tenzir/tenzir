@@ -1,0 +1,4 @@
+CATEGORY: Initialization HELLO: World: 123 ID: XSD-3141-84
+CATEGORY: Access FILE: C:\foo\bar.exe ARGUMENTS: [--qux] ID:XER-8343-12
+CATEGORY: Shutdown BYE:
+BYE
