@@ -205,9 +205,8 @@ public:
                           operator_name(Mode), extractor)));
             continue;
           }
-          for (const auto& index :
-               layout.resolve_key_suffix(extractor, slice.schema().name())) {
-            index_to_operand.emplace_back(index, &*operand);
+          if (auto index = layout.resolve_key(extractor)) {
+            index_to_operand.emplace_back(std::move(*index), &*operand);
           }
           for (const auto& index : layout.resolve_type_extractor(extractor)) {
             index_to_operand.emplace_back(index, &*operand);

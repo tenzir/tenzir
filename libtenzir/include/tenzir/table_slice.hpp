@@ -392,7 +392,8 @@ filter(const table_slice& slice, const ids& hints);
 auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
   -> data;
 
-/// Resolve an operand into an Array for a given table slice.
+/// Resolve an operand into an Array for a given table slice. Note that this
+/// already uses prefix matching instead of suffix matching.
 auto resolve_operand(const table_slice& slice, const operand& op)
   -> std::pair<type, std::shared_ptr<arrow::Array>>;
 
