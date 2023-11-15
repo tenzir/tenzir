@@ -188,7 +188,7 @@ async function createConfig() {
           indexName: 'vast',
         },
         colorMode: {
-          disableSwitch: true,
+          disableSwitch: false,
           respectPrefersColorScheme: true,
         },
         navbar: {

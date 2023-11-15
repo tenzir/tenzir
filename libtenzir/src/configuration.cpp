@@ -454,7 +454,8 @@ caf::error configuration::parse(int argc, char** argv) {
   // command line. This needs to happen before the regular parsing of the
   // command line since plugins may add additional commands and schemas.
   auto is_not_plugin_opt = [](auto& x) {
-    return !x.starts_with("--plugins=") && !x.starts_with("--plugin-dirs=")
+    return !x.starts_with("--plugins=") && !x.starts_with("--disable-plugins=")
+           && !x.starts_with("--plugin-dirs=")
            && !x.starts_with("--schema-dirs=");
   };
   auto plugin_opt = std::stable_partition(
@@ -464,10 +465,18 @@ caf::error configuration::parse(int argc, char** argv) {
   // environment equivalents early. We do so by going through the
   // caf::config_option_set parser such that they use the same syntax as
   // command-line options. We also get escaping for free this way.
-  if (auto tenzir_plugin_dirs = detail::getenv("TENZIR_PLUGINS")) {
-    plugin_args.push_back(fmt::format("--plugins={}", *tenzir_plugin_dirs));
-  } else if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGINS")) {
-    plugin_args.push_back(fmt::format("--plugins={}", *vast_plugin_dirs));
+  if (auto tenzir_plugins = detail::getenv("TENZIR_PLUGINS")) {
+    plugin_args.push_back(fmt::format("--plugins={}", *tenzir_plugins));
+  } else if (auto vast_plugin = detail::getenv("VAST_PLUGINS")) {
+    plugin_args.push_back(fmt::format("--plugins={}", *vast_plugin));
+  }
+  if (auto tenzir_disable_plugins = detail::getenv("TENZIR_DISABLE_PLUGINS")) {
+    plugin_args.push_back(
+      fmt::format("--disable-plugins={}", *tenzir_disable_plugins));
+  } else if (auto vast_disable_plugins
+             = detail::getenv("VAST_DISABLE_PLUGINS")) {
+    plugin_args.push_back(
+      fmt::format("--disable-plugins={}", *vast_disable_plugins));
   }
   if (auto tenzir_plugin_dirs = detail::getenv("TENZIR_PLUGIN_DIRS")) {
     plugin_args.push_back(fmt::format("--plugin-dirs={}", *tenzir_plugin_dirs));
@@ -486,7 +495,8 @@ caf::error configuration::parse(int argc, char** argv) {
     = config_options{}
         .add<std::vector<std::string>>("?tenzir", "schema-dirs", "")
         .add<std::vector<std::string>>("?tenzir", "plugin-dirs", "")
-        .add<std::vector<std::string>>("?tenzir", "plugins", "");
+        .add<std::vector<std::string>>("?tenzir", "plugins", "")
+        .add<std::vector<std::string>>("?tenzir", "disabled-plugins", "");
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   if (ec != caf::pec::success) {
     TENZIR_ASSERT(it != plugin_args.end());

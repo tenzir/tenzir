@@ -93,8 +93,8 @@ private:
 /// A key-value pair passed on the command line.
 struct request_item {
   std::string_view type;
-  std::string_view key;
-  std::string_view value;
+  std::string key;
+  std::string value;
 };
 
 /// Parses a request item like HTTPie.

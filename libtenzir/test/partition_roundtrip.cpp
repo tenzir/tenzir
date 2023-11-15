@@ -201,8 +201,10 @@ TEST(empty partition roundtrip) {
   rp2.receive(
     [&](const tenzir::catalog_lookup_result& candidates) {
       REQUIRE_EQUAL(candidates.candidate_infos.size(), 1ull);
-      auto candidate_partition
-        = candidates.candidate_infos.begin()->second.partition_infos.front();
+      const auto& partition_infos
+        = candidates.candidate_infos.begin()->second.partition_infos;
+      REQUIRE_EQUAL(partition_infos.size(), 1ull);
+      const auto& candidate_partition = partition_infos.front();
       CHECK_EQUAL(candidate_partition.uuid, state.data.id);
     },
     [=](const caf::error& err) {

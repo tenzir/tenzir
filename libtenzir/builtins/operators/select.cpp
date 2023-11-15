@@ -58,10 +58,11 @@ public:
   auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     auto indices = state_type{};
-    for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
-             field, schema.name()))
-        indices.push_back(std::move(index));
+    for (const auto& field : config_.fields) {
+      if (auto index = caf::get<record_type>(schema).resolve_key(field)) {
+        indices.push_back(std::move(*index));
+      }
+    }
     std::sort(indices.begin(), indices.end());
     return indices;
   }

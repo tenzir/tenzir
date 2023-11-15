@@ -24,13 +24,13 @@ caf::message flush_command(const invocation&, caf::actor_system& sys) {
     return caf::make_message(node_opt.error());
   const auto& node = *node_opt;
   // Get the index actor.
-  auto components = get_node_components<index_actor>(self, node);
+  auto components = get_node_components<importer_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
-  auto [index] = std::move(*components);
+  auto [importer] = std::move(*components);
   // Flush!
   auto result = caf::message{};
-  self->request(index, caf::infinite, atom::flush_v)
+  self->request(importer, caf::infinite, atom::flush_v)
     .receive(
       []() {
         // nop

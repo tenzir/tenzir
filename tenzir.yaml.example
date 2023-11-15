@@ -85,6 +85,13 @@ tenzir:
   # to load the example plugin.
   plugins: []
 
+  # Names of plugins and builtins to explicitly forbid from being used in
+  # Tenzir. For example, adding `shell` will prohibit use of the `shell`
+  # operator builtin, and adding `kafka` will prohibit use of the `kafka`
+  # connector plugin. This allows more fine-grained control than the
+  # `tenzir.allow-unsafe-pipelines` option.
+  disable-plugins: []
+
   # The unique ID of this node.
   node-id: "node"
 

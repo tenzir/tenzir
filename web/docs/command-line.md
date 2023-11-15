@@ -232,3 +232,17 @@ You can get the list of available plugins using the
 ```bash
 tenzir 'show plugins'
 ```
+
+### Block plugins
+
+As part of your Tenzir deployment, you can selectively disable plugins by name.
+For example, if you do not want the `shell` operator and the `kafka` connector
+to be available, set this in your configuration:
+
+```yaml
+# <configdir>/tenzir/tenzir.yaml
+tenzir:
+  disable-plugins
+    - shell
+    - kafka
+```

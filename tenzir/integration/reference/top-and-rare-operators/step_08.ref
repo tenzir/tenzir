@@ -1,9 +1,8 @@
-error: invalid duplicate field value `id.orig_h` for count and value fields
- --> <input>:1:15
+error: expected 1 positional arguments, but got 0
+ --> <input>:1:14
   |
-1 | export | rare id.orig_h -c id.orig_h | to stdout
-  |               ^^^^^^^^^ 
-  ⋮
-1 | export | rare id.orig_h -c id.orig_h | to stdout
-  |                            ^^^^^^^^^ 
+1 | export | rare | to stdout
+  |              ^ 
   |
+  = usage: rare <str> [-c|--count-field <str>]
+  = docs: https://docs.tenzir.com/docs/next/operators/transformations/rare

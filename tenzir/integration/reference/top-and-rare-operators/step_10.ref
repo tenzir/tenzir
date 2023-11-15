@@ -1,8 +1,1 @@
-error: expected 1 positional arguments, but got 0
- --> <input>:1:13
-  |
-1 | export | top | to stdout
-  |             ^ 
-  |
-  = usage: top <str> [-c|--count-field <str>]
-  = docs: https://docs.tenzir.com/docs/next/operators/transformations/top
+error: !! parse_error: could not parse pipeline: [{severity: error, message: "could not parse `summarize` operator", annotations: [{primary: true, text: "", source: {begin: 0, end: 0}}], notes: [{kind: note, message: "!! syntax_error: failed to parse summarize operator: ' count=count() by  | sort count desc'"}]}]

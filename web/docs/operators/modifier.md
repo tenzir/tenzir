@@ -42,3 +42,15 @@ overrides:
    tenzir:
      allow-unsafe-pipelines: true
    ```
+
+   If you want more fine-grained control about which operators, operator
+   modifiers, formats, and connectors are available, you can selectively disable
+   them in the configuration:
+
+   ```yaml {0} title="tenzir.yaml"
+   tenzir:
+     allow-unsafe-pipelines: true
+     disable-plugins:
+       - shell
+       - remote
+   ```

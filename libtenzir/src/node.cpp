@@ -552,11 +552,24 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
            http_request_description& desc) -> caf::result<rest_response> {
       TENZIR_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
-      if (!handler)
-        // TODO: Distinguish between 404 (unknown path) and 500 (failed to
-        // spawn) here.
-        return rest_response::make_error(500, "failed to get rest handler",
-                                         caf::error{});
+      if (!handler) {
+        auto canonical_paths = std::unordered_set<std::string>{};
+        for (const auto& plugin : plugins::get<rest_endpoint_plugin>()) {
+          for (const auto& endpoint : plugin->rest_endpoints()) {
+            canonical_paths.insert(endpoint.canonical_path());
+          }
+        }
+        if (not canonical_paths.contains(desc.canonical_path)) {
+          return rest_response::make_error(
+            404, fmt::format("unknown path {}", desc.canonical_path),
+            caf::make_error(ec::invalid_argument,
+                            fmt::format("available paths: {}",
+                                        fmt::join(canonical_paths, ", "))));
+        }
+        return rest_response::make_error(
+          500, "internal server error",
+          caf::make_error(ec::logic_error, "failed to spawn endpoint handler"));
+      }
       auto unparsed_params = http_parameter_map::from_json(desc.json_body);
       if (!unparsed_params)
         return rest_response::make_error(400, "invalid json",

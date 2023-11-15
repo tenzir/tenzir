@@ -85,9 +85,9 @@ fluent-bit splunk port=8088
 ```
 
 Handle [ElasticSearch &
-OpenSearch](https://docs.fluentbit.io/manual/pipeline/outputs/elasticsearch)
+OpenSearch](https://docs.fluentbit.io/manual/pipeline/inputs/elasticsearch)
 Bulk API requests or ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat):
 
 ```
-fluent-bit es port=9200
+fluent-bit elasticsearch port=9200
 ```

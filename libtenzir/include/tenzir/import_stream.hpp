@@ -106,7 +106,9 @@ public:
         }
         self_state->result = std::move(err);
       });
-    source_->add_outbound_path(sink);
+    // TODO: Use proper name.
+    source_->add_outbound_path(sink,
+                               std::make_tuple(std::string{"import_stream"}));
     for (const auto& plugin : plugins::get<analyzer_plugin>()) {
       // We can safely assert that the analyzer was already initialized. The
       // pipeline API guarantees that remote operators run after the node was

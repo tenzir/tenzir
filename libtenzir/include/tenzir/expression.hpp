@@ -85,6 +85,9 @@ auto inspect(Inspector& f, field_extractor& x) {
 /// Extracts one or more values according to a given type.
 struct type_extractor : detail::totally_ordered<type_extractor> {
   explicit type_extractor(tenzir::type t = {});
+  explicit type_extractor(concrete_type auto t)
+    : type_extractor(tenzir::type{std::move(t)}) {
+  }
 
   tenzir::type type;
 };

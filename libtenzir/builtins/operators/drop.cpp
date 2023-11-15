@@ -78,10 +78,11 @@ public:
       return {};
     };
     auto transformations = std::vector<indexed_transformation>{};
-    for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
-             field, schema.name()))
-        transformations.push_back({std::move(index), transform_fn});
+    for (const auto& field : config_.fields) {
+      if (auto index = caf::get<record_type>(schema).resolve_key(field)) {
+        transformations.push_back({std::move(*index), transform_fn});
+      }
+    }
     // transform_columns requires the transformations to be sorted, and that may
     // not necessarily be true if we have multiple fields configured, so we sort
     // again in that case.

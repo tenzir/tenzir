@@ -403,9 +403,11 @@ caf::expected<expression>
 type_resolver::operator()(const type_extractor& ex, const data& d) {
   if (!ex.type) {
     auto matches = [&](const type& t) {
-      for (const auto& name : t.names())
-        if (name == ex.type.name())
+      for (const auto& name : t.names()) {
+        if (name == ex.type.name()) {
           return compatible(t, op_, d);
+        }
+      }
       return false;
     };
     return resolve_extractor(matches, d);
@@ -428,8 +430,9 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
   auto suffixes = schema_.resolve_key_suffix(ex.field, schema_name_);
   for (auto&& offset : suffixes) {
     const auto f = schema_.field(offset);
-    if (!compatible(f.type, op_, d))
+    if (not compatible(f.type, op_, d)) {
       continue;
+    }
     auto x = data_extractor{schema_, offset};
     connective.emplace_back(predicate{std::move(x), op_, d});
   }
