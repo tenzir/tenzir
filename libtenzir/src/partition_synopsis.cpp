@@ -66,13 +66,21 @@ void partition_synopsis::shrink() {
 // TODO: Use a more efficient data structure for rule lookup.
 std::optional<double> get_field_fprate(const index_config& config,
                                        const qualified_record_field& field) {
-  for (const auto& [targets, fprate, _] : config.rules)
-    for (const auto& name : targets)
+  for (const auto& [targets, fprate, _] : config.rules) {
+    for (const auto& name : targets) {
       if (name.size()
             == field.field_name().size() + field.schema_name().size() + 1
           && name.starts_with(field.schema_name())
           && name.ends_with(field.field_name()))
         return fprate;
+    }
+  }
+  if (caf::holds_alternative<bool_type>(field.type())) {
+    return config.default_fp_rate;
+  }
+  if (caf::holds_alternative<time_type>(field.type())) {
+    return config.default_fp_rate;
+  }
   return std::nullopt;
 }
 
