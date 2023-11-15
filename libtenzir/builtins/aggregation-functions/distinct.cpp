@@ -111,7 +111,7 @@ class plugin : public virtual aggregation_function_plugin {
   }
 
   auto aggregation_default() const -> data override {
-    return caf::none;
+    return list{};
   }
 };
 
