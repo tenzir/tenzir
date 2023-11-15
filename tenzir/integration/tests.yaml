@@ -1174,3 +1174,11 @@ tests:
         input: data/suricata/rrdata-eve.json
       - command: exec 'read suricata | yield dns.answers[].soa'
         input: data/suricata/rrdata-eve.json
+
+  Syslog format:
+    tags: [pipelines, syslog]
+    steps:
+      - command: exec 'from - read syslog'
+        input: data/syslog/syslog.log
+      - command: exec 'from - read syslog'
+        input: data/syslog/syslog-rfc3164.log
