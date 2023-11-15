@@ -25,7 +25,7 @@ public:
 
   auto accept_shell_arg() -> std::optional<located<std::string>> override {
     if (token_) {
-      auto tmp = make_located_string();
+      auto tmp = located<std::string>{std::move(*token_)};
       token_ = std::nullopt;
       return tmp;
     }
@@ -34,7 +34,7 @@ public:
 
   auto peek_shell_arg() -> std::optional<located<std::string>> override {
     if (token_) {
-      return make_located_string();
+      return located<std::string>{*token_};
     }
     return next_.peek_shell_arg();
   }
@@ -91,26 +91,16 @@ public:
   }
 
 private:
-  auto make_located_string() const -> located<std::string> {
-    TENZIR_ASSERT(token_);
-    return {std::string{token_->inner}, token_->source};
-  }
-
   std::optional<located<String>> token_;
   parser_interface& next_;
 };
 
-template <typename String>
-auto make_located_string_view(const located<String>& str, size_t pos = 0,
-                              size_t count = std::string::npos)
+auto make_located_string_view(located<std::string_view> src, size_t pos = 0,
+                              size_t count = std::string_view::npos)
   -> located<std::string_view> {
-  auto sub = std::string_view{str.inner}.substr(pos, count);
-  auto source = location::unknown;
-  if (str.source && (str.source.end - str.source.begin) == str.inner.size()) {
-    source.begin = str.source.begin + pos;
-    source.end = source.begin + sub.length();
-  }
-  return {sub, source};
+  auto sv = src.inner.substr(pos, count);
+  auto loc = src.source.subloc(pos, count);
+  return {sv, loc};
 }
 
 template <typename Plugin>
