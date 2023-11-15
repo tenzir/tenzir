@@ -31,8 +31,6 @@ teardown() {
 @test "import and export commands" {
   < "$DATADIR/suricata/eve.json" \
     check tenzir 'read suricata | import'
-  # TODO: Flushing should not be necessary!
-  tenzir-ctl flush
 
   check tenzir-ctl count
 }
@@ -77,10 +75,45 @@ teardown() {
 #   check tenzir-ctl count '#schema == "zeek.conn"'
 #   check tenzir-ctl count
 # }
+# =======
+# @test "parallel imports" {
+#   # The imports arrays hold pids of import client processes so we can wait for
+#   # them at any point.
+#   local suri_imports=()
+#   local zeek_imports=()
+#   # The `check' function must be called with -c "pipe | line" for shell pipes.
+#   # Note that we will use the decompress operator in other places, this is just
+#   # an exposition.
+#   check --bg zeek_imports -c \
+#     "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
+#      | tenzir 'read zeek-tsv | import'"
+#   # Simple input redirection can be done by wrapping the full invocation with
+#   # curly braces.
+#   { check --bg suri_imports \
+#     tenzir 'read suricata | import'; \
+#   } < "$DATADIR/suricata/eve.json"
+#   # We can also use `import -r` in this case.
+#   check --bg suri_imports \
+#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
+#   check --bg suri_imports \
+#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
+#   check --bg zeek_imports \
+#     tenzir "load file $DATADIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
+#   check --bg suri_imports \
+#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
+#   # Now we can block until all suricata ingests are finished.
+#   wait_all "${suri_imports[@]}"
+#   debug 1 "suri imports"
+#   check tenzir-ctl count '#schema == /suricata.*/'
+#   # And now we wait for the zeek imports.
+#   wait_all "${zeek_imports[@]}"
+#   debug 1 "zeek imports"
+#   check tenzir-ctl count '#schema == "zeek.conn"'
+#   check tenzir-ctl count
+# }
 
 @test "batch size" {
   check tenzir "load file $DATADIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
-  tenzir-ctl flush
 
   check --sort tenzir 'export | where resp_h == 192.168.1.104 | write ssv'
 

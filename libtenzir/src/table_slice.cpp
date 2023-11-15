@@ -880,9 +880,8 @@ auto resolve_operand(const table_slice& slice, const operand& op)
       bind_value(value);
     },
     [&](const field_extractor& ex) {
-      for (const auto& index :
-           layout.resolve_key_suffix(ex.field, slice.schema().name())) {
-        bind_array(index);
+      if (auto index = layout.resolve_key(ex.field)) {
+        bind_array(*index);
         return;
       }
       bind_value({});

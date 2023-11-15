@@ -87,9 +87,8 @@ public:
     auto field_transformations = std::vector<indexed_transformation>{};
     if (!config_.fields.empty()) {
       for (const auto& field : config_.fields) {
-        for (const auto& index :
-             caf::get<record_type>(schema).resolve_key_suffix(field.from,
-                                                              schema.name())) {
+        if (auto index
+            = caf::get<record_type>(schema).resolve_key(field.from)) {
           auto transformation
             = [&](struct record_type::field old_field,
                   std::shared_ptr<arrow::Array> array) noexcept
@@ -99,7 +98,8 @@ public:
               {{field.to, old_field.type}, array},
             };
           };
-          field_transformations.push_back({index, std::move(transformation)});
+          field_transformations.push_back(
+            {std::move(*index), std::move(transformation)});
         }
       }
       std::sort(field_transformations.begin(), field_transformations.end());
