@@ -83,10 +83,6 @@
   "x": null
 }
 {
-  "_path": null,
-  "x": null
-}
-{
   "_path": "corelight_metrics_system",
   "x": null
 }
@@ -132,6 +128,10 @@
 }
 {
   "_path": "corelight_metrics_disk",
+  "x": null
+}
+{
+  "_path": null,
   "x": null
 }
 warning: group-by column `_path` does not exist for schema `tenzir.json`

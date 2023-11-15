@@ -1,4 +1,8 @@
 {
+  "_path": null,
+  "x": null
+}
+{
   "_path": "sip",
   "x": [
     "sip"
@@ -195,10 +199,6 @@
   "x": [
     "corelight_metrics_disk"
   ]
-}
-{
-  "_path": null,
-  "x": null
 }
 warning: group-by column `_path` does not exist for schema `tenzir.json`
 warning: aggregation column `_path` does not exist for schema `tenzir.json`

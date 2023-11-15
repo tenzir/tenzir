@@ -1,4 +1,21 @@
 {
+  "id.orig_h": null,
+  "x": [
+    "corelight_metrics_bro",
+    "corelight_metrics_cpu",
+    "corelight_metrics_disk",
+    "corelight_metrics_iface",
+    "corelight_metrics_memory",
+    "corelight_metrics_system",
+    "dhcp",
+    "files",
+    "pe",
+    "reporter",
+    "software",
+    "weird.123.190"
+  ]
+}
+{
   "id.orig_h": "193.10.255.99",
   "x": null
 }
@@ -127,23 +144,6 @@
   "id.orig_h": "106.75.22.216",
   "x": [
     "radius"
-  ]
-}
-{
-  "id.orig_h": null,
-  "x": [
-    "corelight_metrics_bro",
-    "corelight_metrics_cpu",
-    "corelight_metrics_disk",
-    "corelight_metrics_iface",
-    "corelight_metrics_memory",
-    "corelight_metrics_system",
-    "dhcp",
-    "files",
-    "pe",
-    "reporter",
-    "software",
-    "weird.123.190"
   ]
 }
 warning: aggregation column `_path` does not exist for schema `tenzir.json`
