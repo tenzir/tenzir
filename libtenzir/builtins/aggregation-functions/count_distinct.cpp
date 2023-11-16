@@ -103,6 +103,10 @@ class plugin : public virtual aggregation_function_plugin {
     };
     return caf::visit(f, input_type);
   }
+
+  auto aggregation_default() const -> data override {
+    return uint64_t{0};
+  }
 };
 
 } // namespace

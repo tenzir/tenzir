@@ -70,6 +70,10 @@ class plugin : public virtual aggregation_function_plugin {
                                        "support type {}",
                                        input_type));
   }
+
+  auto aggregation_default() const -> data override {
+    return false;
+  }
 };
 
 } // namespace

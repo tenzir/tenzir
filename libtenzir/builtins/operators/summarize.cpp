@@ -19,6 +19,7 @@
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
 
@@ -538,6 +539,20 @@ public:
   /// Returns the summarization results after the input is done.
   auto finish(
     const configuration& config) && -> generator<caf::expected<table_slice>> {
+    if (config.group_by_extractors.empty() && buckets.empty()) {
+      // This `summarize` has no `by` clause. In the case where the operator
+      // did not receive any input, the user still expects a result. For
+      // example, `summarize count(foo)` should return 0.
+      auto b = series_builder{};
+      auto r = b.record();
+      for (auto& aggr : config.aggregations) {
+        r.field(aggr.output, aggr.function->aggregation_default());
+      }
+      for (auto&& slice : b.finish_as_table_slice("tenzir.summarize")) {
+        co_yield std::move(slice);
+      }
+      co_return;
+    }
     // Most summarizations yield events with equal output schemas. Hence, we
     // first "group the groups" by their output schema, and then create one
     // builder with potentially multiple rows for each output schema.
@@ -546,24 +561,20 @@ public:
     for (auto it = buckets.begin(); it != buckets.end(); ++it) {
       const auto& bucket = it->second;
       TENZIR_ASSERT(config.aggregations.size() == bucket->aggregations.size());
-      // When building the output schema, we use the `string` type if the
-      // associated column was not present in the input schema. This is because
-      // we have to pick a type for the `null` values.
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(config.group_by_extractors.size()
                      + config.aggregations.size());
       for (auto&& [extractor, group] :
            zip_equal(config.group_by_extractors, bucket->group_by_types)) {
-        // Since there is no `null` type, we use `string` as a fallback here.
         fields.emplace_back(extractor, group.is_active() ? group.get_active()
-                                                         : type{string_type{}});
+                                                         : type{null_type{}});
       }
       for (auto&& [aggr, cfg] :
            zip_equal(bucket->aggregations, config.aggregations)) {
         // Same as above.
         fields.emplace_back(cfg.output, aggr.is_active()
                                           ? aggr.get_active()->output_type()
-                                          : type{string_type{}});
+                                          : type{null_type{}});
       }
       auto output_schema = type{"tenzir.summarize", record_type{fields}};
       // This creates a new entry if it does not exist yet.
@@ -727,7 +738,6 @@ private:
     /// a type clash between columns. We store `nullptr` if we have only seen
     /// schemas where the input column is missing, which means that we don't
     /// know which type to use until we get schema where the column exists.
-    // TODO
     std::vector<aggregation> aggregations;
   };
 
