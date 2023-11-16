@@ -18,6 +18,14 @@ tenzir:
   # The file system path used for persistent state.
   db-directory: "tenzir.db"
 
+  # The file system path used for persistent state.
+  # Defaults to one of the following paths, selecting the first that is
+  # available:
+  #   - $XDG_CACHE_HOME
+  #   - $XDG_HOME_DIR/.cache/tenzir or
+  #   - $TMPDIR/tenzir/cache
+  #cache-directory:
+
   # The file system path used for log files.
   log-file: "<db-directory>/server.log"
 
