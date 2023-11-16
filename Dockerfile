@@ -109,6 +109,8 @@ RUN apt-get update && \
       libzmq5 \
       lsb-release \
       openssl \
+      python3 \
+      python3-venv \
       robin-map-dev \
       wget && \
     wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \

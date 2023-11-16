@@ -464,6 +464,11 @@ if (TARGET tenzir-schema)
   add_dependencies(libtenzir tenzir-schema)
 endif ()
 
+# Runtime dependencies for the python operator.
+if (TARGET tenzir-python-wheel)
+  add_dependencies(libtenzir tenzir-python-wheel)
+endif ()
+
 # Install libtenzir in PREFIX/lib and headers in PREFIX/include/tenzir. We also
 # install the static libtenzir_builtins archive for development targets because
 # the plugin unit test binaries need to be able to link against it.

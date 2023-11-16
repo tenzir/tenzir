@@ -1,0 +1,8 @@
+POST / HTTP/1.1
+Accept-Encoding: gzip, deflate, br
+Accept: */*
+Connection: keep-alive
+Content-Length: 7
+Content-Type: application/x-www-form-urlencoded
+
+a=1&b=2
