@@ -45,7 +45,7 @@ look at what's going on:
   available from the `/serve` API endpoint.
 - `types`: shows all known types at a remote node.
 
-When no aspect is not specified, all are shown.
+When no aspect is specified, all are shown.
 
 ## Examples
 
